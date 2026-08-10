@@ -262,8 +262,9 @@ const INTEROP_ZIP_ENTRY_RE = /\.(csv|html?|txt)$/i;
 // Parse every recognizable text entry and concatenate the rows — the zip-level
 // mirror of the text branch in importAllData. Archiver metadata (__MACOSX/…)
 // and hidden files are skipped; filename order keeps multi-part exports
-// (part_000000.csv, part_000001.csv, …) in sequence. A zipped Brace.to export
-// routes through here too, since it detects per entry like anything else.
+// (part_000000.csv, part_000001.csv, …) in sequence. Brace.to itself exports a
+// bare .txt, never a zip — but a user who zips that .txt lands here anyway, and
+// the entry sniffs as `brace` like any other (detection runs per entry).
 function parseInteropZip(byName: Map<string, Uint8Array>): ImportedBundle {
   const decoder = new TextDecoder();
   const candidates = [...byName.entries()]
