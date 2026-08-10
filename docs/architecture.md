@@ -577,8 +577,9 @@ the target to merge onto (as `@nx/next` does for bracemark-web's `build`):
   so `--env` is required.
 - **build** — `wrangler deploy --env staging --dry-run --outdir dist`: bundles
   and validates without deploying (no auth needed). Real deploys use the
-  `deploy` target (`wrangler deploy --env staging|production`); the accounts and
-  credentials each tier deploys into are in `docs/hosting.md`.
+  `deploy` target (`wrangler deploy --env staging|production`); what each tier's
+  hosts and bindings are called, and why the two tiers are isolated accounts, is
+  in `docs/hosting.md`.
 - **typecheck** — `tsc --noEmit` (wrangler/esbuild don't type-check); this is the
   type gate. Declared as an explicit `typecheck` **npm script** in
   `package.json` (`tsc --noEmit -p tsconfig.app.json && … -p tsconfig.spec.json`,

@@ -1,9 +1,10 @@
 ## brand assets — the mark, the lockup, the lines, the licence
 
-The **invariants** that keep the brand consistent across seven surfaces and five
-apps: what the mark is, where its copies live and why they must not drift, the
-one set of lockup measurements, the two meanings the 45° fold is allowed to
-carry, the three brand lines, and what the public repo entitles us to claim.
+The **invariants** that keep the brand consistent across seven surfaces and the
+four apps that carry the mark: what the mark is, where its copies live and why
+they must not drift, the one set of lockup measurements, the two meanings the 45°
+fold is allowed to carry, the three brand lines, and what the public repo
+entitles us to claim.
 
 Every rule here is enforced by nothing but this file. There is no test that
 compares two SVG paths, no lint rule that catches a hand-typed lockup, and no
@@ -24,13 +25,13 @@ one-path/`currentColor` invariant and the 38×44 grid it is constructed on. That
 comment is the source of truth for _what the shape is doing_ and is not repeated
 here; this page owns the inventory and the rules that span files.
 
-**Two source components and 30 raster assets:**
+**Two source components and 29 raster assets:**
 
-| where                                                                                                                                                                  | what                                                                                                                                                      |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/web-ui/src/components/icons/bracemark-icon.tsx`                                                                                                              | the source of truth                                                                                                                                       |
-| `apps/bracemark-expo/src/components/icons/bracemark-icon.tsx`                                                                                                          | the RN port — **byte-identical path and viewBox**, colour from `useCSSVariable` because `react-native-svg` takes fill as a prop and has no `currentColor` |
-| `bracemark-web/public/` (10), `bracemark-web/src/app/` (4), `bracemark-site/src/app/` (4), `bracemark-expo/assets/images/` (8), `bracemark-extension/public/icon/` (4) | 30 PNG/ICO files rendered from that path                                                                                                                  |
+| where                                                                                                                                                                                          | what                                                                                                                                                      |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/web-ui/src/components/icons/bracemark-icon.tsx`                                                                                                                                      | the source of truth                                                                                                                                       |
+| `apps/bracemark-expo/src/components/icons/bracemark-icon.tsx`                                                                                                                                  | the RN port — **byte-identical path and viewBox**, colour from `useCSSVariable` because `react-native-svg` takes fill as a prop and has no `currentColor` |
+| `apps/bracemark-web/public/` (9), `apps/bracemark-web/src/app/` (4), `apps/bracemark-site/src/app/` (4), `apps/bracemark-expo/assets/images/` (8), `apps/bracemark-extension/public/icon/` (4) | 29 PNG/ICO files rendered from that path                                                                                                                  |
 
 ⚠ **The two components must not drift, and nothing enforces it** — no test
 compares the two `d` strings. A retouch of the mark is a **two-file** change plus
@@ -49,6 +50,17 @@ a re-render of every raster.
   transparent, near-white mark, 55%; iOS composites them over its own backdrop.
 - **The two `favicon.ico`** (bracemark-web, bracemark-site) — three frames each,
   16/32/48, following the favicon rule above.
+- **The three expo rasters the platform composites itself** (`adaptive-icon.png`,
+  `splash-icon.png`, `splash-icon-dark.png`, all 1024²) — transparent, because
+  their background is set in `app.config.ts` rather than baked in: Android's
+  adaptive icon sits on `#ffffff`, and the splash pair on `#ffffff` / `#0a0a0a`
+  at `imageWidth: 200`, `resizeMode: 'contain'`. Editing the background is an
+  `app.config.ts` change, not a re-render — and `adaptive-icon.png` is a
+  **maskable** foreground, so it is bound by the 64.2% ceiling below.
+
+Only mark rasters are counted above. `apps/bracemark-web/public/` also holds
+store screenshots (`ss-*`) and an OG image, which are not brand assets and are
+not governed here.
 
 **Maskable padding is a measured number: 64.2%.** The mark fits Android's 80%
 safe circle at that ink height and no larger — a property of the 0.863 aspect
@@ -158,11 +170,11 @@ The two platforms draw it differently, and on RN the technique is chosen by
 `packages/shared/src/stores/listing-copy.ts` because five consoles and three apps
 have to agree and nothing else enforces that.
 
-| line           | text                                                   | for                                           |
-| -------------- | ------------------------------------------------------ | --------------------------------------------- |
-| **descriptor** | End-to-end encrypted bookmark manager                  | directories, categories, anywhere with no wit |
-| **tagline**    | The bookmark manager that can't read your bookmarks    | hero, OG title, X bio, press                  |
-| **slogan**     | We don't promise not to look. We built it so we can't. | sign-offs, ads, the inverted band             |
+| line           | text                                                   | for                                                                      |
+| -------------- | ------------------------------------------------------ | ------------------------------------------------------------------------ |
+| **descriptor** | End-to-end encrypted bookmark manager                  | directories, categories, any surface that supplies no context of its own |
+| **tagline**    | The bookmark manager that can't read your bookmarks    | hero, OG title, X bio, press                                             |
+| **slogan**     | We don't promise not to look. We built it so we can't. | sign-offs, ads, the inverted band                                        |
 
 The tagline is the asset: it names the category and the mechanism in one clause
 and states the mechanism as an **inability rather than an intention**, which no
