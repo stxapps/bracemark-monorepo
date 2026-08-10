@@ -1,0 +1,28 @@
+{
+  "extends": ["../../tsconfig.base.json", "./.wxt/tsconfig.json"],
+  "compilerOptions": {
+    "lib": ["es2022", "dom", "dom.iterable"],
+    "allowImportingTsExtensions": true,
+    "jsx": "react-jsx",
+    "composite": false,
+    "declarationMap": false,
+    "emitDeclarationOnly": false
+  },
+  "references": [
+    {
+      "path": "../../packages/web-crypto"
+    },
+    {
+      "path": "../../packages/react"
+    },
+    {
+      "path": "../../packages/shared"
+    },
+    {
+      "path": "../../packages/web-ui"
+    },
+    {
+      "path": "../../packages/web-react"
+    }
+  ]
+}

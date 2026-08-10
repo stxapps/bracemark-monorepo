@@ -1,0 +1,20 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": false,
+    "declarationMap": false,
+    "emitDeclarationOnly": false,
+    "noEmit": true,
+    "outDir": "./out-tsc/vitest",
+    "types": ["@cloudflare/workers-types", "node"]
+  },
+  // Compile the app sources DIRECTLY (src/**/*.ts covers app code + specs) rather
+  // than pulling app types via a project reference to the composite tsconfig.app.json
+  // — same rationale as bracemark-api: a `tsc -p` reference resolves the composite
+  // project's types from its emitted dist/*.d.ts, which this --noEmit typecheck never
+  // writes, so a reference makes `npx nx typecheck @stxapps/bracemark-extractor` fail
+  // (TS6305) on a clean/changed tree. Compiling from source keeps this pass self-
+  // contained. The strict app-only pass (tsconfig.app.json, no "node" types) stays the
+  // portability gate; this pass adds the specs + node / cloudflare:test types.
+  "include": ["src/**/*.ts", "test/**/*.ts", "vitest.config.ts"]
+}

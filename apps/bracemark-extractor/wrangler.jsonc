@@ -1,0 +1,142 @@
+{
+  // Cloudflare Workers config for bracemark-extractor — the opt-in, anonymous link-
+  // metadata fetcher on its OWN origin (extractor.bracemark.com), deliberately SEPARATE
+  // from the blind sync broker on api.bracemark.com so that "api.bracemark.com only ever sees
+  // ciphertext" stays code-provable: the extractor is the one component that
+  // `fetch`es arbitrary, user-supplied URLs. See docs/link-extraction.md ("server
+  // extraction") and docs/architecture.md.
+  //
+  // Note the deliberately MINIMAL binding set vs. bracemark-api: NO D1, NO R2, NO
+  // Durable Objects. The extractor is a PURE FUNCTION — it holds no key, persists
+  // nothing, writes no blob — so it has no storage bindings to leak through. Its
+  // only bindings are CORS config + native rate limiters. Workers is a good fit
+  // precisely because its sandbox can't reach a private network or cloud IMDS
+  // (169.254.169.254), which neutralizes the classic server-side-fetch SSRF.
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "bracemark-extractor",
+  // Workers entry: src/worker.ts default-exports the Hono app; the runtime calls
+  // fetch(request, env, ctx) on it.
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-06-01",
+  "observability": {
+    "enabled": true,
+  },
+  // Pin a distinct local port so it can run alongside bracemark-api (8787) under
+  // `wrangler dev` without colliding / silently drifting to a random port. The
+  // V8 `inspector_port` (default 9229) is a SEPARATE socket not covered by
+  // `port`, so pin a distinct one too — otherwise it collides with bracemark-api's
+  // 9229 ("Address already in use (127.0.0.1:9229)").
+  "dev": {
+    "port": 8788,
+    "inspector_port": 9230,
+  },
+  // --- per-tier environments -------------------------------------------------
+  // Bindings (`vars`, `ratelimits`) are NOT inherited from the top level — each
+  // environment declares its own. Each tier is a SEPARATE Cloudflare account
+  // (account_id differs). Worker names auto-suffix to bracemark-extractor-staging /
+  // bracemark-extractor-production. There are no secrets here: v1 is ANONYMOUS (no
+  // session, no key), so there's nothing to `wrangler secret put`.
+  "env": {
+    // Local-only — used by `wrangler dev --env development`, never deployed (no
+    // account_id).
+    "development": {
+      "vars": {
+        // Comma-separated exact origins (corsOrigins() splits on ','). The web app
+        // (bracemark-web) is the browser caller that needs CORS; the extension and the
+        // future mobile app are NOT browser-CORS-bound (extension background fetch
+        // is exempt; native has no CORS), so don't add extension/native origins.
+        "CORS_ORIGINS": "http://localhost:3000",
+      },
+      // Native rate-limit bindings, one per volume tier (middleware/rate-limit.ts).
+      // period is 10 or 60 only; 'tight' (10/10s ≈ 1 req/s) is the strictest the
+      // native binding allows. Both fetch endpoints fetch arbitrary URLs — an
+      // anonymous open-fetch endpoint is an open proxy / DDoS reflector by default,
+      // so the IP rate limit is load-bearing, not a nicety (the per-response byte
+      // ceiling + timeout in the fetch path are the other half). /v1/extract runs on
+      // 'tight' (one batched request per page); /v1/image runs on the higher-burst
+      // 'image' tier (30/10s) because a page fans out to one image fetch per link —
+      // but 'standard' (60/60s) on the same path still governs its sustained egress.
+      // namespace_id is any unique positive integer.
+      "ratelimits": [
+        {
+          "name": "API_RATE_LIMIT",
+          "namespace_id": "2001",
+          "simple": { "limit": 60, "period": 60 },
+        },
+        {
+          "name": "API_RATE_LIMIT_TIGHT",
+          "namespace_id": "2002",
+          "simple": { "limit": 10, "period": 10 },
+        },
+        {
+          "name": "API_RATE_LIMIT_IMAGE",
+          "namespace_id": "2003",
+          "simple": { "limit": 30, "period": 10 },
+        },
+      ],
+    },
+    "staging": {
+      "account_id": "TODO: staging Cloudflare account id",
+      "vars": {
+        // Web origins ONLY (see development note). The web app is the CORS caller.
+        // Staging lives on its OWN registrable domain (dryrunbase.com), not a
+        // subdomain of bracemark.com — docs/hosting.md, _why staging is a
+        // separate domain_.
+        "CORS_ORIGINS": "https://dryrunbase.com,https://app.dryrunbase.com",
+      },
+      "ratelimits": [
+        {
+          "name": "API_RATE_LIMIT",
+          "namespace_id": "2001",
+          "simple": { "limit": 60, "period": 60 },
+        },
+        {
+          "name": "API_RATE_LIMIT_TIGHT",
+          "namespace_id": "2002",
+          "simple": { "limit": 10, "period": 10 },
+        },
+        {
+          "name": "API_RATE_LIMIT_IMAGE",
+          "namespace_id": "2003",
+          "simple": { "limit": 30, "period": 10 },
+        },
+      ],
+      // The extractor's own origin — its whole point is to be SEPARATE from
+      // api.dryrunbase.com. dryrunbase.com is registered; uncomment once that zone
+      // exists in the staging account (docs/hosting.md — _why staging is a separate registrable domain_):
+      // "routes": [{ "pattern": "extractor.dryrunbase.com", "custom_domain": true }]
+      //
+      // IMPORTANT — never log the URL. The proxy's ?url= lands in the request line,
+      // so default Cloudflare request logs / Logpush would PERSIST exactly the URLs
+      // the design promises not to retain. If Logpush is enabled on this account,
+      // strip the query string at the edge (or disable request-line logging for
+      // this Worker). Observability above is aggregate-only by default; see
+      // docs/link-extraction.md ("Never log the URL").
+    },
+    "production": {
+      "account_id": "TODO: production Cloudflare account id",
+      "vars": {
+        "CORS_ORIGINS": "https://bracemark.com,https://app.bracemark.com",
+      },
+      "ratelimits": [
+        {
+          "name": "API_RATE_LIMIT",
+          "namespace_id": "2001",
+          "simple": { "limit": 60, "period": 60 },
+        },
+        {
+          "name": "API_RATE_LIMIT_TIGHT",
+          "namespace_id": "2002",
+          "simple": { "limit": 10, "period": 10 },
+        },
+        {
+          "name": "API_RATE_LIMIT_IMAGE",
+          "namespace_id": "2003",
+          "simple": { "limit": 30, "period": 10 },
+        },
+      ],
+      // "routes": [{ "pattern": "extractor.bracemark.com", "custom_domain": true }]
+      // See the staging note on stripping ?url= from request logs.
+    },
+  },
+}

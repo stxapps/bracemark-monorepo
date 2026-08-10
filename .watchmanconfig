@@ -1,0 +1,29 @@
+{
+  "ignore_dirs": [
+    ".nx",
+    "coverage",
+    "tmp",
+    "apps/bracemark-web/.next",
+    "apps/bracemark-web/dist",
+    "apps/bracemark-extension/.output",
+    "apps/bracemark-api/dist",
+    "apps/bracemark-api/.wrangler",
+    "apps/bracemark-extractor/dist",
+    "apps/bracemark-extractor/.wrangler",
+    "apps/bracemark-expo/dist",
+    "apps/bracemark-expo/.expo",
+    "apps/bracemark-expo/out-tsc",
+    "apps/bracemark-expo/ios/build",
+    "apps/bracemark-expo/ios/Pods",
+    "apps/bracemark-expo/android/build",
+    "apps/bracemark-expo/android/.gradle",
+    "packages/shared/out-tsc",
+    "packages/react/out-tsc",
+    "packages/web-ui/out-tsc",
+    "packages/web-crypto/out-tsc",
+    "packages/web-react/out-tsc",
+    "packages/expo-crypto/out-tsc",
+    "packages/expo-react/out-tsc"
+  ],
+  "fsevents_try_resync": true
+}

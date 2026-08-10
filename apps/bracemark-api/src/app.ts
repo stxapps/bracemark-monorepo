@@ -1,0 +1,95 @@
+import { Hono } from 'hono';
+import { cors } from 'hono/cors';
+
+import type { AppEnv, Bindings } from './lib/env';
+import { errorHandler } from './lib/errors';
+import { rateLimit } from './middleware/rate-limit';
+import { authRoutes } from './routes/auth';
+import { dataRoutes } from './routes/data';
+import {
+  APPSTORE_NOTIFY_PATH,
+  iapRoutes,
+  PADDLE_WEBHOOK_PATH,
+  PLAYSTORE_NOTIFY_PATH,
+} from './routes/iap';
+import { localR2Routes } from './routes/local-r2';
+import { syncRoutes } from './routes/sync';
+
+// Comma-separated allow-list from the Workers binding. `env` is only undefined
+// off-Workers (e.g. app.request() in a test that passes no env); a missing
+// binding yields an empty list, which denies all cross-origin — fail secure.
+function corsOrigins(env: Bindings | undefined): string[] {
+  return env?.CORS_ORIGINS?.split(',') ?? [];
+}
+
+export const app = new Hono<AppEnv>();
+
+// Centralized error handling: middleware/handlers `throw new HttpError(...)` and
+// this turns every error into a uniform JSON body. See lib/errors.ts.
+app.onError(errorHandler);
+
+// Browser clients are cross-origin (bracemark-web dev on :3000, the extension from
+// its own origin), so allow CORS. The allow-list is resolved per-request from
+// the runtime env; credentials require echoing the specific origin (not '*').
+app.use(
+  '*',
+  cors({
+    origin: (origin, c) => {
+      const allow = corsOrigins(c.env as Bindings | undefined);
+      return allow.includes(origin) ? origin : null;
+    },
+    credentials: true,
+    // Let browser JS read the 429's Retry-After (middleware/rate-limit.ts) — a
+    // non-safelisted response header is invisible to a CORS caller otherwise.
+    exposeHeaders: ['Retry-After'],
+  }),
+);
+
+// Baseline rate limit on every endpoint EXCEPT the provider webhooks (standard
+// tier, ~60 req/60s per IP+path; configured in wrangler.jsonc). Sensitive routes
+// stack the 'tight' tier on top at the route level, e.g. rateLimit('tight').
+// No-ops when the binding is absent (tests / unconfigured env). See
+// middleware/rate-limit.ts.
+//
+// The webhooks are exempt from THIS baseline: each provider's deliveries arrive
+// from a small set of provider IPs onto one path, so they'd share a single
+// IP+path bucket — a burst or redelivery storm could 429 legitimate events
+// (which the provider then just redelivers into the same saturated bucket).
+// They aren't left uncapped, though: each carries the wider 'webhook' tier at
+// the route level (routes/iap.ts) as its sole request cap. Their real auth is
+// not a request count — Paddle's is the Paddle-Signature HMAC over the raw
+// body; the store notify routes re-fetch authoritative state from the store's
+// API instead of trusting the payload (see routes/iap.ts), so a forged flood
+// costs an attacker a rate-limited no-op.
+const WEBHOOK_PATHS = new Set([PADDLE_WEBHOOK_PATH, APPSTORE_NOTIFY_PATH, PLAYSTORE_NOTIFY_PATH]);
+const standardRateLimit = rateLimit('standard');
+app.use('*', (c, next) => (WEBHOOK_PATHS.has(c.req.path) ? next() : standardRateLimit(c, next)));
+
+app.get('/', (c) => {
+  return c.json({ message: 'Welcome to bracemark-api' });
+});
+
+app.get('/health', (c) => {
+  return c.json({ status: 'ok' });
+});
+
+app.route('/', authRoutes);
+
+// Subscription surface: status/verify/portal (contract-typed) + the Paddle
+// webhook (HMAC-authenticated, no bearer). See routes/iap.ts.
+app.route('/', iapRoutes);
+
+// Local-first sync control plane (ops/list, ops/commit, files/list, files/sign).
+// All four are protected and namespace every path under the authed user; see
+// routes/sync.ts and docs/local-first-sync.md.
+app.route('/', syncRoutes);
+
+// Data lifecycle (delete-all). Protected, destructive, whole-namespace — beside
+// the sync plane, not in it. See routes/data.ts and docs/data-lifecycle.md.
+app.route('/', dataRoutes);
+
+// DEV-ONLY blob proxy (routes/local-r2.ts). Always mounted but self-gates to 404
+// off the local miniflare env, so it's inert in staging/prod (which presign R2
+// directly). It stands in for direct browser↔R2 transfer under `wrangler dev`,
+// where the emulated bucket has no presignable S3 endpoint.
+app.route('/', localR2Routes);

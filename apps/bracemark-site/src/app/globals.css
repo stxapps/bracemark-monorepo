@@ -1,0 +1,157 @@
+@import '@stxapps/web-ui/styles.css';
+
+@source '../../../../packages/web-ui/src';
+
+/*
+ * The marketing site's own layer on top of the shared shadcn sheet.
+ *
+ * Everything structural still comes from `@stxapps/web-ui/styles.css` — the same
+ * tokens bracemark-web renders against, so the two properties can't drift into
+ * different greys. What is added here is only what a marketing page needs and an
+ * app doesn't: two extra typefaces, one accent colour, and the prose styling the
+ * two long legal documents would otherwise carry as class soup on every element.
+ *
+ * Nothing here is pushed back into web-ui: a token the app never uses does not
+ * belong in the app's sheet.
+ */
+
+@theme {
+  /*
+   * Three voices, and each has a job:
+   *   - display  Bricolage Grotesque, headlines only. Sculpted, slightly
+   *              engineered letterforms that read as built rather than branded.
+   *              NOT narrow — this said "narrow" for a long time and it was
+   *              simply wrong. At default width Bricolage is WIDER than the
+   *              body face: its B measures 0.83 w/h against Inter's 0.75, on a
+   *              larger x-height (0.80 of cap, against 0.75). What it actually
+   *              has is a deeper waist — 66% of glyph width where Inter stops
+   *              at 71% — so the joins look cut rather than drawn, and that is
+   *              the "engineered" quality, not the width.
+   *
+   *              The `wdth` axis (75..100) is NOT requested, so this stays at
+   *              100. Narrowing it is the one change here that would move the
+   *              logo: the wordmark beside the mark in site-header.tsx is set
+   *              in this face, and at wdth 87 the B goes to 0.66 w/h, which
+   *              means re-cutting the mark against a different letter. A
+   *              display face wider and more sculpted than the body face is
+   *              also the calmer contrast; narrow-over-wide is the magazine
+   *              move and it is not what this site is saying. `opsz` IS
+   *              requested (see layout.tsx) — that sharpens headlines without
+   *              touching the 18px wordmark.
+   *   - sans     Inter, inherited from web-ui — all running text, so the site and
+   *              the app read as one product.
+   *   - mono     IBM Plex Mono, the INSTRUMENT voice: eyebrows, file paths, the
+   *              ciphertext panel, plan limits. Bracemark's own material is keys,
+   *              paths and encrypted bytes, so mono is subject matter here rather
+   *              than decoration — which is exactly why it is rationed to labels.
+   */
+  --font-display: var(--font-bricolage), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /*
+   * The one colour on an otherwise achromatic site. Every token in web-ui's sheet
+   * is `oklch(L 0 0)` — literally zero chroma — and that suits a product whose
+   * whole claim is that the server sees nothing. So the accent is rationed to the
+   * places where something is genuinely YOURS or genuinely ON: prose links, the
+   * included-feature marks, the featured plan, the plaintext half of the hero.
+   *
+   * Deep petrol, not the category's usual blue (Raindrop), red (Pocket) or purple
+   * (Obsidian) — near enough to the near-black brand mark's cool cast to sit with
+   * it, far enough from every neighbour to be ours.
+   */
+  --color-signal: oklch(0.43 0.062 205);
+  --color-signal-strong: oklch(0.36 0.062 205);
+  --color-signal-soft: oklch(0.968 0.014 205);
+  --color-signal-line: oklch(0.9 0.028 205);
+}
+
+@layer components {
+  /*
+   * A full-bleed page section, and the hairline that opens it. The page is a
+   * stack of these: hero, trust strip, capture, library, pricing, close, footer.
+   *
+   * The line is the ONLY thing separating two consecutive untinted sections —
+   * on the home page that is capture → library → pricing → close → footer, five
+   * in a row on the same ground, which without a seam read as one very long
+   * section. Where a band brings its own fill (`bg-muted/40`, the inverted claim
+   * block) the fill already does that work and the line just rides the edge of
+   * it, so this stays unconditional rather than growing a modifier.
+   *
+   * It is a named class rather than the `border-border border-t` written inline
+   * elsewhere in this app because these five are a page-level RHYTHM, not five
+   * independent rules — the eyebrow below names the band, and the two want to
+   * move together. Padding is deliberately not here: each band sets its own,
+   * and `px-safe` has to sit on the same element as the border so the line
+   * reaches the physical edge while the type stays inset (docs/safe-area.md).
+   */
+  .band {
+    @apply border-border border-t;
+  }
+
+  /*
+   * The small mono label that opens a section. Wide tracking + uppercase makes it
+   * read as an annotation on a drawing rather than a heading, which is the point:
+   * it names the band, the display type states the claim.
+   */
+  .eyebrow {
+    @apply text-muted-foreground font-mono text-[0.6875rem] font-medium tracking-[0.18em] uppercase;
+  }
+
+  /*
+   * /terms and /privacy are long documents of plain h2/h3/p/ul markup. Styling
+   * them here rather than at every element keeps those two files readable as
+   * DOCUMENTS — which matters, because they get edited by whoever is answering a
+   * store reviewer, not only by whoever is comfortable in Tailwind.
+   */
+  .legal-prose {
+    @apply text-muted-foreground text-base leading-7;
+  }
+  .legal-prose h2 {
+    @apply font-display text-foreground mt-14 text-2xl font-semibold tracking-tight;
+  }
+  .legal-prose h3 {
+    @apply text-foreground mt-8 text-base font-semibold;
+  }
+  .legal-prose p {
+    @apply mt-4;
+  }
+  .legal-prose ul,
+  .legal-prose ol {
+    @apply mt-4 space-y-3 pl-6;
+  }
+  .legal-prose ul {
+    @apply list-disc;
+  }
+  .legal-prose ol {
+    @apply list-[lower-alpha];
+  }
+  /* Legible rather than decorative: the (a)/(b)/(c) markers in the subscription
+     and dispute sections are referenced by the clauses around them, so they have
+     to be readable — a hairline-grey marker is not. */
+  .legal-prose li::marker {
+    @apply text-muted-foreground;
+  }
+  .legal-prose strong {
+    @apply text-foreground font-semibold;
+  }
+  /* The all-caps liability blocks these documents carry by convention. Set
+     smaller and looser so a wall of capitals stays readable instead of shouting. */
+  .legal-prose .caps {
+    @apply text-sm leading-6 tracking-wide;
+  }
+  .legal-prose a {
+    @apply text-signal decoration-signal-line hover:decoration-signal underline underline-offset-2;
+  }
+}
+
+/*
+ * NO page-load animation, and that is a decision rather than an omission.
+ *
+ * A staggered fade-up on the hero was built and then removed: with
+ * `animation-fill-mode: both` the hero — headline, buttons, and the whole
+ * encrypted-bookmark panel — starts at `opacity: 0`, so anything that reads the
+ * page at first paint sees nothing. That is a real cost (crawler snapshots, a
+ * print, a slow first frame) for an effect that added nothing the hero panel
+ * wasn't already doing. Hover and focus transitions stay; they respond to a
+ * person, which is what motion is for here.
+ */

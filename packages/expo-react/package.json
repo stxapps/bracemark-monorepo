@@ -1,0 +1,51 @@
+{
+  "name": "@stxapps/expo-react",
+  "version": "0.0.1",
+  "private": true,
+  "nx": {
+    "tags": [
+      "type:react",
+      "platform:expo"
+    ]
+  },
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./data/share-store": {
+      "types": "./src/data/share-store.ts",
+      "import": "./src/data/share-store.ts",
+      "default": "./src/data/share-store.ts"
+    },
+    "./lib/auth-api-client": {
+      "types": "./src/lib/auth-api-client.ts",
+      "import": "./src/lib/auth-api-client.ts",
+      "default": "./src/lib/auth-api-client.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@stxapps/expo-crypto": "*",
+    "@stxapps/react": "*",
+    "@stxapps/shared": "*",
+    "drizzle-orm": "^0.45.2",
+    "fflate": "^0.8.2",
+    "zod": "^4.4.3"
+  },
+  "peerDependencies": {
+    "@react-native-community/netinfo": "*",
+    "@tanstack/react-query": "^5.101.0",
+    "expo-file-system": "*",
+    "expo-image-manipulator": "*",
+    "expo-local-authentication": "*",
+    "expo-secure-store": "*",
+    "expo-sqlite": "*",
+    "react": "^19.0.0",
+    "react-native": "*"
+  }
+}

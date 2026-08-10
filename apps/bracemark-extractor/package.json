@@ -1,0 +1,59 @@
+{
+  "name": "@stxapps/bracemark-extractor",
+  "version": "0.0.1",
+  "private": true,
+  "nx": {
+    "tags": [
+      "type:app",
+      "platform:worker"
+    ],
+    "targets": {
+      "test": {
+        "executor": "nx:run-commands",
+        "cache": true,
+        "options": {
+          "command": "vitest run",
+          "cwd": "apps/bracemark-extractor"
+        }
+      },
+      "build": {
+        "executor": "nx:run-commands",
+        "outputs": [
+          "{projectRoot}/dist"
+        ],
+        "options": {
+          "command": "wrangler deploy --env staging --dry-run --outdir dist",
+          "cwd": "apps/bracemark-extractor"
+        }
+      },
+      "deploy": {
+        "executor": "nx:run-commands",
+        "options": {
+          "command": "wrangler deploy --env staging",
+          "cwd": "apps/bracemark-extractor"
+        },
+        "configurations": {
+          "production": {
+            "command": "wrangler deploy --env production"
+          }
+        }
+      }
+    }
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --env development",
+    "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.spec.json"
+  },
+  "dependencies": {
+    "@hono/zod-validator": "^0.8.0",
+    "hono": "^4.12.23",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.16.13",
+    "@cloudflare/workers-types": "^4.20260605.1",
+    "vitest": "^4.1.8",
+    "wrangler": "^4.98.0"
+  }
+}

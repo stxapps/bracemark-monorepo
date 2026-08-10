@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Save link to Bracemark</title>
+    <meta name="manifest.type" content="browser_action" />
+    <!--
+      The pre-paint theme FOUC script is injected into <head> at build time from the
+      shared `themeInitScript()` (see wxt.config.ts `themeFoucPlugin`) — one source,
+      shared with bracemark-web, instead of a hand-copied inline script here.
+    -->
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="./main.tsx"></script>
+  </body>
+</html>

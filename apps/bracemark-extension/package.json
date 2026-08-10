@@ -1,0 +1,108 @@
+{
+  "name": "@stxapps/bracemark-extension",
+  "description": "manifest.json description",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "nx": {
+    "tags": [
+      "type:app",
+      "platform:web"
+    ],
+    "targets": {
+      "build": {
+        "cache": true,
+        "inputs": [
+          "production",
+          "^production"
+        ],
+        "outputs": [
+          "{projectRoot}/.output/chrome-mv3"
+        ]
+      },
+      "build:staging": {
+        "cache": true,
+        "inputs": [
+          "production",
+          "^production"
+        ],
+        "outputs": [
+          "{projectRoot}/.output/chrome-mv3-staging"
+        ]
+      },
+      "build:firefox": {
+        "cache": true,
+        "inputs": [
+          "production",
+          "^production"
+        ],
+        "outputs": [
+          "{projectRoot}/.output/firefox-mv3"
+        ]
+      },
+      "build:firefox:staging": {
+        "cache": true,
+        "inputs": [
+          "production",
+          "^production"
+        ],
+        "outputs": [
+          "{projectRoot}/.output/firefox-mv3-staging"
+        ]
+      },
+      "zip": {
+        "cache": true,
+        "inputs": [
+          "production",
+          "^production"
+        ],
+        "outputs": [
+          "{projectRoot}/.output/*-chrome.zip"
+        ]
+      },
+      "zip:firefox": {
+        "cache": true,
+        "inputs": [
+          "production",
+          "^production"
+        ],
+        "outputs": [
+          "{projectRoot}/.output/*-firefox.zip",
+          "{projectRoot}/.output/*-sources.zip"
+        ]
+      }
+    }
+  },
+  "scripts": {
+    "dev": "wxt",
+    "dev:firefox": "wxt -b firefox",
+    "build": "wxt build",
+    "build:staging": "wxt build --mode staging",
+    "build:firefox": "wxt build -b firefox",
+    "build:firefox:staging": "wxt build -b firefox --mode staging",
+    "zip": "wxt zip",
+    "zip:firefox": "wxt zip -b firefox",
+    "typecheck": "tsc --noEmit",
+    "postinstall": "wxt prepare"
+  },
+  "dependencies": {
+    "@mozilla/readability": "^0.6.0",
+    "@stxapps/react": "*",
+    "@stxapps/shared": "*",
+    "@stxapps/web-crypto": "*",
+    "@stxapps/web-react": "*",
+    "@stxapps/web-ui": "*",
+    "@tanstack/react-query": "^5.101.0",
+    "dexie": "^4.4.3",
+    "dexie-react-hooks": "^4.4.0",
+    "lucide-react": "^1.17.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.0",
+    "@wxt-dev/module-react": "^1.1.5",
+    "tailwindcss": "^4.3.0",
+    "wxt": "^0.20.26"
+  }
+}

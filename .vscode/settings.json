@@ -1,0 +1,13 @@
+{
+  "js/ts.tsdk.path": "node_modules/typescript/lib",
+  "files.associations": {
+    "*.css": "tailwindcss"
+  },
+  // The Gradle Build Server imports every build.gradle it finds, including the
+  // ~35 under node_modules. Those are expo/RN library subprojects: they declare
+  // `plugins { id 'com.android.library' }` with no version, which only resolves
+  // when included from apps/bracemark-expo/android/settings.gradle (pluginManagement
+  // + the expo version catalog). Imported standalone they fail to configure.
+  // Nothing here needs the import — android/ is generated and gitignored.
+  "java.gradle.buildServer.enabled": "off"
+}

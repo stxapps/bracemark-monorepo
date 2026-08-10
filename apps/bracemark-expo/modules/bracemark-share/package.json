@@ -1,0 +1,6 @@
+{
+  "name": "bracemark-share",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Android share target for bracemark-expo: the translucent ShareActivity hosting the RN share sheet, plus the BracemarkShare close() module. Local Expo module, autolinked from apps/bracemark-expo/modules (docs/share-sheet.md); Android-only — iOS uses expo-share-extension."
+}

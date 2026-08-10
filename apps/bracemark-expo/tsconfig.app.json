@@ -1,0 +1,53 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "types": ["node"],
+    "rootDir": "src",
+    "jsx": "react-jsx",
+    "noUnusedLocals": false,
+    "tsBuildInfoFile": "dist/tsconfig.app.tsbuildinfo"
+  },
+  "files": ["../../node_modules/@nx/expo/typings/svg.d.ts"],
+  "exclude": [
+    "out-tsc",
+    "dist",
+    // The Expo app config has to sit at the project root, but `include`'s
+    // **/*.ts glob would then pull it in against rootDir: "src" and fail the
+    // build with TS6059. (The other root-level config files escape only because
+    // they're .js and allowJs is off.) Excluded here — it's typed by its own
+    // `ExpoConfig` annotation, and `npx expo config` is the real check.
+    "app.config.ts",
+    "**/*.test.ts",
+    "**/*.spec.ts",
+    "**/*.test.tsx",
+    "**/*.spec.tsx",
+    "**/*.test.js",
+    "**/*.spec.js",
+    "**/*.test.jsx",
+    "**/*.spec.jsx",
+    "src/testing/setup.ts",
+    "jest.config.ts",
+    "jest.config.cts",
+    "src/**/*.spec.ts",
+    "src/**/*.test.ts",
+    "eslint.config.js",
+    "eslint.config.cjs",
+    "eslint.config.mjs"
+  ],
+  "include": ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx", ".expo/types/**/*.ts", "expo-env.d.ts"],
+  "references": [
+    {
+      "path": "../../packages/shared/tsconfig.lib.json"
+    },
+    {
+      "path": "../../packages/react/tsconfig.lib.json"
+    },
+    {
+      "path": "../../packages/expo-react/tsconfig.lib.json"
+    },
+    {
+      "path": "../../packages/expo-crypto/tsconfig.lib.json"
+    }
+  ]
+}

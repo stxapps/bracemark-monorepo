@@ -1,0 +1,59 @@
+// Web-only React-logic layer: auth + sync providers, the local-first data layer
+// (Dexie store, mutations, queries, projection, pending/sync stores — the decode
+// cache lives in @stxapps/shared now, shared with expo-react), the hand-rolled
+// sync engine, and the editor/auth hooks. Shared by bracemark-web and
+// bracemark-extension; the app provides the configured api client via @stxapps/react's
+// ApiClientProvider (the seam these modules read through useApiClient / SyncDeps.api).
+export * from './contexts/auth-provider';
+export * from './contexts/extraction-provider';
+export * from './contexts/favicon-provider';
+export * from './contexts/file-content-provider';
+export * from './contexts/lock-provider';
+export * from './contexts/sync-provider';
+export * from './data/clear-data';
+export * from './data/db';
+export * from './data/delete-all-data';
+export * from './data/export-all-data';
+export * from './data/favicon-store';
+export * from './data/import-all-data';
+export * from './data/local-settings-store';
+export * from './data/lock-store';
+export * from './data/mutations';
+export * from './data/pending-store';
+export * from './data/projection';
+export * from './data/queries';
+export * from './data/session-store';
+export * from './data/sidebar-view-store';
+export * from './data/subscription-store';
+export * from './data/sweep-dangling-extractions';
+export * from './data/sync-store';
+export * from './hooks/use-change-password';
+export * from './hooks/use-create-account';
+export * from './hooks/use-delete-account';
+export * from './hooks/use-delete-all-data';
+export * from './hooks/use-entitlements';
+export * from './hooks/use-export-all-data';
+export * from './hooks/use-extraction-counts';
+export * from './hooks/use-favicon-url';
+export * from './hooks/use-has-recovery-door';
+export * from './hooks/use-image-file-url';
+export * from './hooks/use-import-all-data';
+export * from './hooks/use-link-mutations';
+export * from './hooks/use-link-quota';
+export * from './hooks/use-list-mutations';
+export * from './hooks/use-lists';
+export * from './hooks/use-pending-changes-count';
+export * from './hooks/use-pin-mutations';
+export * from './hooks/use-recovery-code';
+export * from './hooks/use-setting-mutations';
+export * from './hooks/use-settings';
+export * from './hooks/use-sign-in';
+export * from './hooks/use-sign-in-with-recovery';
+export * from './hooks/use-sign-out';
+export * from './hooks/use-tag-mutations';
+export * from './hooks/use-tags';
+export * from './lib/auth-api-client';
+export * from './lib/resize-image';
+export * from './lib/server-extraction';
+export * from './sync/engine';
+export * from './sync/r2';

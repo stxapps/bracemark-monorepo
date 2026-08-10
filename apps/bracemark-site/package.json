@@ -1,0 +1,55 @@
+{
+  "name": "@stxapps/bracemark-site",
+  "version": "0.0.1",
+  "private": true,
+  "nx": {
+    "tags": [
+      "type:app",
+      "platform:web"
+    ],
+    "targets": {
+      "build": {
+        "configurations": {
+          "staging": {
+            "envFile": "apps/bracemark-site/.env.staging"
+          }
+        },
+        "outputs": [
+          "{projectRoot}/.next/!(cache)/**/*",
+          "{projectRoot}/.next/!(cache)",
+          "{projectRoot}/out"
+        ]
+      },
+      "dev": {
+        "options": {
+          "command": "next dev --port 3001"
+        }
+      },
+      "start": {
+        "options": {
+          "command": "serve out -p 3001"
+        }
+      },
+      "serve-static": {
+        "options": {
+          "command": "serve out -p 3001"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@stxapps/shared": "*",
+    "@stxapps/web-ui": "*",
+    "next": "~16.1.6",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.0",
+    "serve": "^14.2.6",
+    "tailwindcss": "^4.3.0"
+  }
+}

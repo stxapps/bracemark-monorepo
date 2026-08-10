@@ -1,0 +1,126 @@
+@import 'tailwindcss';
+@import 'uniwind';
+
+/* Workspace packages ship raw TS source, so any package this app renders
+   classNames from must be scanned too — the Tailwind v4 replacement for the
+   old tailwind.config.js `content` glob. */
+@source '../../packages/expo-react/src/**/*.{js,jsx,ts,tsx}';
+
+/*
+ * ─────────────────────────────────────────────────────────────────────────
+ * Design tokens — MIRROR of packages/web-ui/src/styles.css (`:root` + `.dark`).
+ *
+ * web-ui is platform:web and cannot be imported here (platform boundary + its
+ * CSS is full of web-only constructs — Radix data-variant bridges, env()
+ * safe-area, scrollbar-gutter, the `.dark` ancestor selector). So the shared
+ * shadcn design system is re-declared natively instead. Keep the `oklch()`
+ * VALUES byte-identical to the web source so drift is a trivial diff; Uniwind
+ * converts oklch→rgb at build time (culori), so React Native never sees it.
+ *
+ * If you change a token here, change it in web-ui/src/styles.css too (and
+ * vice-versa). Every theme must define the same variables — if you add one to
+ * `light`, add it to `dark`.
+ *
+ * The web↔native structural differences:
+ *   • web's two layers (`--background` raw token + `@theme inline
+ *     --color-background: var(--background)`) collapse into Uniwind's
+ *     `@variant`: declare `--color-*` directly, once per theme.
+ *   • the `.dark` class toggle becomes Uniwind's light/dark theme variants
+ *     (system color scheme by default; override with `Uniwind.setTheme(...)`).
+ *   • web-only chrome is intentionally dropped: safe-area utilities (use
+ *     react-native-safe-area-context), scrollbar-gutter, the button cursor
+ *     opt-in. Inter is handled the native way instead of web's `@font-face`:
+ *     the file is embedded natively via the expo-font config plugin (app.json)
+ *     and named for the `font-sans` utility by the `--font-sans` token below.
+ *     `sidebar-*` tokens are mirrored for shadcn parity even though
+ *     mobile has no sidebar, so react-native-reusables components resolve.
+ * ─────────────────────────────────────────────────────────────────────────
+ */
+
+/* Invariant tokens (same in every theme) register the utility scale. */
+@theme {
+  /* Names the family for the `font-sans` utility → fontFamily: 'Inter'. The
+     font FILE itself is embedded natively via the expo-font config plugin
+     (app.json), under the key "Inter"; this token only tells Tailwind/Uniwind
+     which family that utility should emit. Keep the key and this name in sync. */
+  --font-sans: 'Inter';
+  --radius: 0.625rem;
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+/* Per-theme color values. Declaring `--color-background` here generates the
+   `bg-background` / `text-background` / `border-background` utilities. */
+@layer theme {
+  :root {
+    @variant light {
+      --color-background: oklch(1 0 0);
+      --color-foreground: oklch(0.145 0 0);
+      --color-card: oklch(1 0 0);
+      --color-card-foreground: oklch(0.145 0 0);
+      --color-popover: oklch(1 0 0);
+      --color-popover-foreground: oklch(0.145 0 0);
+      --color-primary: oklch(0.205 0 0);
+      --color-primary-foreground: oklch(0.985 0 0);
+      --color-secondary: oklch(0.97 0 0);
+      --color-secondary-foreground: oklch(0.205 0 0);
+      --color-muted: oklch(0.97 0 0);
+      --color-muted-foreground: oklch(0.556 0 0);
+      --color-accent: oklch(0.97 0 0);
+      --color-accent-foreground: oklch(0.205 0 0);
+      --color-destructive: oklch(0.577 0.245 27.325);
+      --color-border: oklch(0.922 0 0);
+      --color-input: oklch(0.922 0 0);
+      --color-ring: oklch(0.708 0 0);
+      --color-chart-1: oklch(0.646 0.222 41.116);
+      --color-chart-2: oklch(0.6 0.118 184.704);
+      --color-chart-3: oklch(0.398 0.07 227.392);
+      --color-chart-4: oklch(0.828 0.189 84.429);
+      --color-chart-5: oklch(0.769 0.188 70.08);
+      --color-sidebar: oklch(0.985 0 0);
+      --color-sidebar-foreground: oklch(0.145 0 0);
+      --color-sidebar-primary: oklch(0.205 0 0);
+      --color-sidebar-primary-foreground: oklch(0.985 0 0);
+      --color-sidebar-accent: oklch(0.97 0 0);
+      --color-sidebar-accent-foreground: oklch(0.205 0 0);
+      --color-sidebar-border: oklch(0.922 0 0);
+      --color-sidebar-ring: oklch(0.708 0 0);
+    }
+
+    @variant dark {
+      --color-background: oklch(0.145 0 0);
+      --color-foreground: oklch(0.985 0 0);
+      --color-card: oklch(0.205 0 0);
+      --color-card-foreground: oklch(0.985 0 0);
+      --color-popover: oklch(0.205 0 0);
+      --color-popover-foreground: oklch(0.985 0 0);
+      --color-primary: oklch(0.922 0 0);
+      --color-primary-foreground: oklch(0.205 0 0);
+      --color-secondary: oklch(0.269 0 0);
+      --color-secondary-foreground: oklch(0.985 0 0);
+      --color-muted: oklch(0.269 0 0);
+      --color-muted-foreground: oklch(0.708 0 0);
+      --color-accent: oklch(0.269 0 0);
+      --color-accent-foreground: oklch(0.985 0 0);
+      --color-destructive: oklch(0.704 0.191 22.216);
+      --color-border: oklch(1 0 0 / 10%);
+      --color-input: oklch(1 0 0 / 15%);
+      --color-ring: oklch(0.556 0 0);
+      --color-chart-1: oklch(0.488 0.243 264.376);
+      --color-chart-2: oklch(0.696 0.17 162.48);
+      --color-chart-3: oklch(0.769 0.188 70.08);
+      --color-chart-4: oklch(0.627 0.265 303.9);
+      --color-chart-5: oklch(0.645 0.246 16.439);
+      --color-sidebar: oklch(0.205 0 0);
+      --color-sidebar-foreground: oklch(0.985 0 0);
+      --color-sidebar-primary: oklch(0.488 0.243 264.376);
+      --color-sidebar-primary-foreground: oklch(0.985 0 0);
+      --color-sidebar-accent: oklch(0.269 0 0);
+      --color-sidebar-accent-foreground: oklch(0.985 0 0);
+      --color-sidebar-border: oklch(1 0 0 / 10%);
+      --color-sidebar-ring: oklch(0.556 0 0);
+    }
+  }
+}

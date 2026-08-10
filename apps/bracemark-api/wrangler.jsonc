@@ -1,0 +1,378 @@
+{
+  // Cloudflare Workers config for bracemark-api. The code is wired — `wrangler` is
+  // installed, `src/worker.ts` is the entry, and `app.ts` reads `c.env`. What
+  // remains is filling the `TODO` values and provisioning the resources. See
+  // docs/hosting.md and docs/env-files.md#bracemark-api.
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "bracemark-api",
+  // Workers entry: src/worker.ts default-exports the Hono app; the runtime calls
+  // fetch(request, env, ctx) on it.
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-06-01",
+  // Add only if a dependency needs Node built-ins (Hono + zod don't):
+  // "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true,
+  },
+  // Pin the local `wrangler dev` port. Without this, wrangler treats 8787 as a
+  // *default* and silently falls back to a random port (8788, …) when 8787 is
+  // already taken — e.g. a leftover/zombie wrangler, or running `npm run dev`
+  // while a standalone `nx run bracemark-api:dev` is up. bracemark-web is hardcoded to
+  // http://localhost:8787 (see apps/bracemark-web/.env.development), so any drift
+  // makes the API "unreachable". Setting `port` explicitly makes wrangler bind
+  // 8787 or fail loudly (EADDRINUSE) instead of drifting.
+  //
+  // `inspector_port` (the V8 debugger socket) ALSO defaults to a fixed value —
+  // 9229 — and is NOT covered by `port`, so two `wrangler dev`s collide on it
+  // even with distinct HTTP ports. Under `npm run dev` bracemark-api + bracemark-extractor
+  // run side by side, so pin a distinct inspector_port per app too (9229/9230,
+  // mirroring 8787/8788) to avoid "Address already in use (127.0.0.1:9229)".
+  "dev": {
+    "port": 8787,
+    "inspector_port": 9229,
+  },
+  // --- per-tier environments -------------------------------------------------
+  // Bindings (`vars`, `d1_databases`, `r2_buckets`) are NOT inherited from the
+  // top level — each environment must declare its own. Each tier is a SEPARATE
+  // Cloudflare account, so `account_id` differs. Worker names auto-suffix to
+  // `bracemark-api-staging` / `bracemark-api-production`. Deploy with:
+  //   wrangler deploy --env staging      (staging account's API token)
+  //   wrangler deploy --env production   (production account's API token)
+  //
+  // Secrets are NOT stored here — set them per env:
+  //   wrangler secret put <NAME> --env staging|production
+  // Non-secret config (e.g. CORS_ORIGINS) lives in `vars` below — including the
+  // local-only `development` env that `wrangler dev` uses, so it's committed and
+  // shared. `.dev.vars` (gitignored) is only for local *secrets* you can't put
+  // in this committed file.
+  "env": {
+    // Local-only — used by `wrangler dev --env development`, never deployed (no
+    // account_id). D1/R2 are emulated by miniflare (state under .wrangler/). The
+    // ids here are placeholders (no real Cloudflare DB is hit locally) BUT they
+    // must be DISTINCT: miniflare keys each local D1 store by `database_id`, so
+    // reusing one id (e.g. "local") collapses all three roles into a single
+    // physical SQLite db. That bites both `wrangler dev` and the Workers test
+    // pool — e.g. `applyD1Migrations` dedupes by migration name in a shared
+    // `d1_migrations` table, so identically-named migrations across roles get
+    // skipped. Keep one id per role.
+    "development": {
+      "vars": {
+        // Both Next dev servers: bracemark-web on 3000, bracemark-site on 3001.
+        // The two deployed tiers below list the same pair as `app.*` + apex.
+        "CORS_ORIGINS": "http://localhost:3000,http://localhost:3001",
+        // R2 S3-API credentials for presigning (lib/r2-presign.ts). LOCAL-ONLY
+        // placeholders — `wrangler dev` and the Workers test pool emulate R2 with
+        // miniflare, so these never authenticate against real R2; the presigned
+        // URLs they produce are only ever shape-checked locally, never fetched.
+        // In staging/prod the key pair are SECRETS, not vars (see those envs).
+        "R2_ACCOUNT_ID": "local-account-id",
+        "R2_ACCESS_KEY_ID": "local-access-key-id",
+        "R2_SECRET_ACCESS_KEY": "local-secret-access-key",
+        "R2_USER_FILES_BUCKET": "bracemark-user-files-dev",
+        // Paddle Billing (routes/iap.ts). Local dev talks to the SANDBOX; the
+        // price ids are your sandbox catalog's pri_… ids (placeholders until the
+        // sandbox products exist). The webhook secret + API key are SECRETS —
+        // put them in .dev.vars locally:
+        //   PADDLE_WEBHOOK_SECRET=pdl_ntfset_…   PADDLE_API_KEY=pdl_sdbx_apikey_…
+        "PADDLE_API_BASE": "https://sandbox-api.paddle.com",
+        // COMMA-SEPARATED lists: every price a plan may be billed at, the one
+        // on sale FIRST. The read side accepts them all (an unrecognized price
+        // is a permanent drop — the subscriber pays and is never entitled), the
+        // checkout sells the first. Add, never replace.
+        "PADDLE_PRICE_ID_PLUS": "TODO: sandbox pri_… id for Plus (yearly)",
+        "PADDLE_PRICE_ID_PRO": "TODO: sandbox pri_… id for Pro (yearly)",
+        // Store IAP (routes/iap.ts verify + notify; lib/appstore.ts,
+        // lib/playstore.ts). Local dev talks to the App Store SANDBOX host. The
+        // private keys + the Play push token are SECRETS — put them in .dev.vars
+        // locally: APPSTORE_PRIVATE_KEY, PLAY_SA_PRIVATE_KEY, PLAY_NOTIFY_TOKEN
+        // (multiline PEMs in .dev.vars: quote the value and use \n escapes).
+        // Store product ids are NOT env config — they're shared constants
+        // (@stxapps/shared iap/store-products.ts), identical across envs.
+        "APPSTORE_API_BASE": "https://api.storekit-sandbox.itunes.apple.com",
+        "APPSTORE_ISSUER_ID": "TODO: App Store Connect issuer id (Integrations)",
+        "APPSTORE_KEY_ID": "TODO: In-App Purchase key id",
+        "APPSTORE_BUNDLE_ID": "com.bracemark.app",
+        "PLAY_PACKAGE_NAME": "com.bracemark.app",
+        "PLAY_SA_EMAIL": "TODO: Play service account client_email",
+      },
+      // DIRECTORY_DB: global username directory (usernames). ACCOUNTS_DB_1: first
+      // account shard (users, account_keys). SESSIONS_DB: bearer-token sessions
+      // (separate, high-churn, non-Tier-0). Bindings are STATIC. migrations_dir is
+      // per-binding — each role has its own history
+      // (src/db/migrations/{directory,accounts,sessions}); durable objects migrate
+      // in code. See src/db/migrations/README.md.
+      "d1_databases": [
+        {
+          "binding": "DIRECTORY_DB",
+          "database_name": "bracemark-directory-db-dev",
+          "database_id": "directory-db-local",
+          "migrations_dir": "src/db/migrations/directory",
+        },
+        {
+          "binding": "ACCOUNTS_DB_1",
+          "database_name": "bracemark-accounts-db-1-dev",
+          "database_id": "accounts-db-1-local",
+          "migrations_dir": "src/db/migrations/accounts",
+        },
+        {
+          "binding": "SESSIONS_DB",
+          "database_name": "bracemark-sessions-db-dev",
+          "database_id": "sessions-db-local",
+          "migrations_dir": "src/db/migrations/sessions",
+        },
+      ],
+      "r2_buckets": [
+        {
+          "binding": "USER_FILES",
+          "bucket_name": "bracemark-user-files-dev",
+        },
+      ],
+      // Per-user SQLite store. One DO instance per user (addressed by
+      // idFromName(userId)); the `migrations` tag below makes the class
+      // SQLite-backed (ctx.storage.sql). DO *schema* migrations are NOT here —
+      // they run in code (src/do/user-data.ts). Locally these run in miniflare
+      // (state under .wrangler/).
+      "durable_objects": {
+        "bindings": [{ "name": "USER_DATA", "class_name": "UserDataDO" }],
+      },
+      "migrations": [{ "tag": "v1", "new_sqlite_classes": ["UserDataDO"] }],
+      // Native rate-limit bindings, one per volume tier (config/rate-limits.ts).
+      // period is 10 or 60 only; 'tight' (10/10s ≈ 1 req/s) is the strictest the
+      // native binding allows. namespace_id is any unique positive integer.
+      "ratelimits": [
+        {
+          "name": "API_RATE_LIMIT",
+          "namespace_id": "1001",
+          "simple": { "limit": 60, "period": 60 },
+        },
+        {
+          "name": "API_RATE_LIMIT_TIGHT",
+          "namespace_id": "1002",
+          "simple": { "limit": 10, "period": 10 },
+        },
+        {
+          // WIDE tier — sole limiter for the Paddle webhook, which is exempt from
+          // the 'standard' baseline (all of Paddle's deliveries share one IP+path
+          // bucket). See middleware/rate-limit.ts (`webhook` tier).
+          "name": "API_RATE_LIMIT_WEBHOOK",
+          "namespace_id": "1003",
+          "simple": { "limit": 100, "period": 10 },
+        },
+      ],
+    },
+    "staging": {
+      "account_id": "TODO: staging Cloudflare account id",
+      "vars": {
+        // Comma-separated exact origins (corsOrigins() splits on ','). No
+        // wildcards — the matcher compares literally, so list each subdomain.
+        // Web origins ONLY. Extensions and the future mobile app authenticate
+        // with a bearer token (Authorization header), not cookies, and are NOT
+        // browser-CORS-bound: MV3 extensions exempt background fetches to their
+        // host_permissions origin (see bracemark-extension/wxt.config.ts), and
+        // native apps have no CORS. So do NOT add chrome-extension://,
+        // moz-extension://, or safari-web-extension:// origins here.
+        // Staging lives on its OWN registrable domain (dryrunbase.com), not a
+        // subdomain of bracemark.com — docs/hosting.md, _why staging is a
+        // separate domain_. Apex = bracemark-site, app. = bracemark-web.
+        "CORS_ORIGINS": "https://dryrunbase.com,https://app.dryrunbase.com",
+        // R2 presigning config (lib/r2-presign.ts). account_id + bucket are
+        // non-secret vars; the key PAIR are secrets, set separately:
+        //   wrangler secret put R2_ACCESS_KEY_ID --env staging
+        //   wrangler secret put R2_SECRET_ACCESS_KEY --env staging
+        // Mint the keys in the R2 dashboard (Manage R2 API Tokens) scoped to the
+        // bucket below. See docs/hosting.md.
+        "R2_ACCOUNT_ID": "TODO: staging Cloudflare account id (same as account_id)",
+        "R2_USER_FILES_BUCKET": "bracemark-user-files-staging",
+        // Paddle Billing — staging uses the Paddle SANDBOX (separate account,
+        // separate pri_… catalog from live). Secrets, set separately:
+        //   wrangler secret put PADDLE_WEBHOOK_SECRET --env staging
+        //   wrangler secret put PADDLE_API_KEY --env staging
+        // Register the webhook in the sandbox dashboard pointing at
+        // https://api.dryrunbase.com/v1/iap/paddle/webhook.
+        "PADDLE_API_BASE": "https://sandbox-api.paddle.com",
+        // COMMA-SEPARATED lists: every price a plan may be billed at, the one
+        // on sale FIRST. The read side accepts them all (an unrecognized price
+        // is a permanent drop — the subscriber pays and is never entitled), the
+        // checkout sells the first. Add, never replace.
+        "PADDLE_PRICE_ID_PLUS": "TODO: sandbox pri_… id for Plus (yearly)",
+        "PADDLE_PRICE_ID_PRO": "TODO: sandbox pri_… id for Pro (yearly)",
+        // Store IAP — staging verifies against the App Store SANDBOX. Secrets,
+        // set separately:
+        //   wrangler secret put APPSTORE_PRIVATE_KEY --env staging
+        //   wrangler secret put PLAY_SA_PRIVATE_KEY --env staging
+        //   wrangler secret put PLAY_NOTIFY_TOKEN --env staging
+        // Register the webhooks per env: App Store Connect → App Store Server
+        // Notifications V2 (sandbox URL) → https://api.dryrunbase.com/v1/iap/appstore/notify;
+        // Play Console RTDN Pub/Sub push →
+        // https://api.dryrunbase.com/v1/iap/playstore/notify?token=<PLAY_NOTIFY_TOKEN>.
+        "APPSTORE_API_BASE": "https://api.storekit-sandbox.itunes.apple.com",
+        "APPSTORE_ISSUER_ID": "TODO: App Store Connect issuer id (Integrations)",
+        "APPSTORE_KEY_ID": "TODO: In-App Purchase key id",
+        "APPSTORE_BUNDLE_ID": "com.bracemark.app",
+        "PLAY_PACKAGE_NAME": "com.bracemark.app",
+        "PLAY_SA_EMAIL": "TODO: Play service account client_email",
+      },
+      "d1_databases": [
+        {
+          "binding": "DIRECTORY_DB",
+          "database_name": "bracemark-directory-db-staging",
+          "database_id": "TODO: `wrangler d1 create bracemark-directory-db-staging` → paste id",
+          "migrations_dir": "src/db/migrations/directory",
+        },
+        {
+          "binding": "ACCOUNTS_DB_1",
+          "database_name": "bracemark-accounts-db-1-staging",
+          "database_id": "TODO: `wrangler d1 create bracemark-accounts-db-1-staging` → paste id",
+          "migrations_dir": "src/db/migrations/accounts",
+        },
+        {
+          "binding": "SESSIONS_DB",
+          "database_name": "bracemark-sessions-db-staging",
+          "database_id": "TODO: `wrangler d1 create bracemark-sessions-db-staging` → paste id",
+          "migrations_dir": "src/db/migrations/sessions",
+        },
+      ],
+      "r2_buckets": [
+        {
+          "binding": "USER_FILES",
+          "bucket_name": "bracemark-user-files-staging",
+        },
+      ],
+      // Per-user SQLite store (see development env for notes). DO *schema*
+      // migrations run in code (src/do/user-data.ts), not here; the `migrations`
+      // tag only declares the class as SQLite-backed.
+      "durable_objects": {
+        "bindings": [{ "name": "USER_DATA", "class_name": "UserDataDO" }],
+      },
+      "migrations": [{ "tag": "v1", "new_sqlite_classes": ["UserDataDO"] }],
+      // Not inherited from the top level — each env declares its own.
+      "ratelimits": [
+        {
+          "name": "API_RATE_LIMIT",
+          "namespace_id": "1001",
+          "simple": { "limit": 60, "period": 60 },
+        },
+        {
+          "name": "API_RATE_LIMIT_TIGHT",
+          "namespace_id": "1002",
+          "simple": { "limit": 10, "period": 10 },
+        },
+        {
+          // WIDE tier — sole limiter for the Paddle webhook, which is exempt from
+          // the 'standard' baseline (all of Paddle's deliveries share one IP+path
+          // bucket). See middleware/rate-limit.ts (`webhook` tier).
+          "name": "API_RATE_LIMIT_WEBHOOK",
+          "namespace_id": "1003",
+          "simple": { "limit": 100, "period": 10 },
+        },
+      ],
+      // Custom domain. dryrunbase.com is registered; uncomment once that zone
+      // exists in the staging account — a Workers custom domain needs its zone in
+      // THIS account, which is why staging is its own registrable domain rather
+      // than a subdomain of bracemark.com (docs/hosting.md — _why staging is a separate registrable domain_):
+      // "routes": [{ "pattern": "api.dryrunbase.com", "custom_domain": true }]
+    },
+    "production": {
+      "account_id": "TODO: production Cloudflare account id",
+      "vars": {
+        // Comma-separated exact origins (corsOrigins() splits on ','). No
+        // wildcards — the matcher compares literally, so list each subdomain.
+        // Web origins ONLY. Extensions and the future mobile app authenticate
+        // with a bearer token (Authorization header), not cookies, and are NOT
+        // browser-CORS-bound: MV3 extensions exempt background fetches to their
+        // host_permissions origin (see bracemark-extension/wxt.config.ts), and
+        // native apps have no CORS. So do NOT add chrome-extension://,
+        // moz-extension://, or safari-web-extension:// origins here.
+        "CORS_ORIGINS": "https://bracemark.com,https://app.bracemark.com",
+        // R2 presigning config (lib/r2-presign.ts). account_id + bucket are
+        // non-secret vars; the key PAIR are secrets, set separately:
+        //   wrangler secret put R2_ACCESS_KEY_ID --env production
+        //   wrangler secret put R2_SECRET_ACCESS_KEY --env production
+        // Mint the keys in the R2 dashboard (Manage R2 API Tokens) scoped to the
+        // bucket below. See docs/hosting.md.
+        "R2_ACCOUNT_ID": "TODO: production Cloudflare account id (same as account_id)",
+        "R2_USER_FILES_BUCKET": "bracemark-user-files-production",
+        // Paddle Billing — LIVE Paddle. Secrets, set separately:
+        //   wrangler secret put PADDLE_WEBHOOK_SECRET --env production
+        //   wrangler secret put PADDLE_API_KEY --env production
+        // Register the webhook in the live dashboard pointing at
+        // https://api.bracemark.com/v1/iap/paddle/webhook.
+        "PADDLE_API_BASE": "https://api.paddle.com",
+        // COMMA-SEPARATED lists, on sale FIRST — see the development env.
+        "PADDLE_PRICE_ID_PLUS": "TODO: live pri_… id for Plus (yearly)",
+        "PADDLE_PRICE_ID_PRO": "TODO: live pri_… id for Pro (yearly)",
+        // Store IAP — production verifies against the PRODUCTION App Store host
+        // (with the code-level sandbox fallback on 404 for App Review — see
+        // lib/appstore.ts). Secrets, set separately:
+        //   wrangler secret put APPSTORE_PRIVATE_KEY --env production
+        //   wrangler secret put PLAY_SA_PRIVATE_KEY --env production
+        //   wrangler secret put PLAY_NOTIFY_TOKEN --env production
+        // Register the webhooks: App Store Connect → App Store Server
+        // Notifications V2 (production URL) → https://api.bracemark.com/v1/iap/appstore/notify;
+        // Play Console RTDN Pub/Sub push →
+        // https://api.bracemark.com/v1/iap/playstore/notify?token=<PLAY_NOTIFY_TOKEN>.
+        "APPSTORE_API_BASE": "https://api.storekit.itunes.apple.com",
+        "APPSTORE_ISSUER_ID": "TODO: App Store Connect issuer id (Integrations)",
+        "APPSTORE_KEY_ID": "TODO: In-App Purchase key id",
+        "APPSTORE_BUNDLE_ID": "com.bracemark.app",
+        "PLAY_PACKAGE_NAME": "com.bracemark.app",
+        "PLAY_SA_EMAIL": "TODO: Play service account client_email",
+      },
+      "d1_databases": [
+        {
+          "binding": "DIRECTORY_DB",
+          "database_name": "bracemark-directory-db-production",
+          "database_id": "TODO: `wrangler d1 create bracemark-directory-db-production` → paste id",
+          "migrations_dir": "src/db/migrations/directory",
+        },
+        {
+          "binding": "ACCOUNTS_DB_1",
+          "database_name": "bracemark-accounts-db-1-production",
+          "database_id": "TODO: `wrangler d1 create bracemark-accounts-db-1-production` → paste id",
+          "migrations_dir": "src/db/migrations/accounts",
+        },
+        {
+          "binding": "SESSIONS_DB",
+          "database_name": "bracemark-sessions-db-production",
+          "database_id": "TODO: `wrangler d1 create bracemark-sessions-db-production` → paste id",
+          "migrations_dir": "src/db/migrations/sessions",
+        },
+      ],
+      "r2_buckets": [
+        {
+          "binding": "USER_FILES",
+          "bucket_name": "bracemark-user-files-production",
+        },
+      ],
+      // Per-user SQLite store (see development env for notes). DO *schema*
+      // migrations run in code (src/do/user-data.ts), not here; the `migrations`
+      // tag only declares the class as SQLite-backed.
+      "durable_objects": {
+        "bindings": [{ "name": "USER_DATA", "class_name": "UserDataDO" }],
+      },
+      "migrations": [{ "tag": "v1", "new_sqlite_classes": ["UserDataDO"] }],
+      // Not inherited from the top level — each env declares its own.
+      "ratelimits": [
+        {
+          "name": "API_RATE_LIMIT",
+          "namespace_id": "1001",
+          "simple": { "limit": 60, "period": 60 },
+        },
+        {
+          "name": "API_RATE_LIMIT_TIGHT",
+          "namespace_id": "1002",
+          "simple": { "limit": 10, "period": 10 },
+        },
+        {
+          // WIDE tier — sole limiter for the Paddle webhook, which is exempt from
+          // the 'standard' baseline (all of Paddle's deliveries share one IP+path
+          // bucket). See middleware/rate-limit.ts (`webhook` tier).
+          "name": "API_RATE_LIMIT_WEBHOOK",
+          "namespace_id": "1003",
+          "simple": { "limit": 100, "period": 10 },
+        },
+      ],
+      // "routes": [{ "pattern": "api.bracemark.com", "custom_domain": true }]
+    },
+  },
+}

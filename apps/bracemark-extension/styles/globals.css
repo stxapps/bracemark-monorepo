@@ -1,0 +1,66 @@
+@import '@stxapps/web-ui/styles.css';
+
+@source '../../../packages/web-ui/src';
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  font-named-instance: 'Regular';
+  src: url('../assets/fonts/InterVariable.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: swap;
+  font-named-instance: 'Italic';
+  src: url('../assets/fonts/InterVariable-Italic.woff2') format('woff2');
+}
+
+:root {
+  --font-inter: 'Inter';
+}
+
+/* Base element chrome only. Component surfaces (popup, settings, sync) are styled
+   inline with Tailwind utilities on the components themselves — same as bracemark-web.
+
+   Inter is the ONLY face here. bracemark-site carries three (Bricolage for display,
+   Plex Mono for its instrument voice) because it has headlines and specimen panels
+   to set; the extension has neither, and every byte it ships is paid for on every
+   popup open. Where the site would reach for mono — a host, a path — this surface
+   reaches for size and colour instead. */
+body {
+  margin: 0;
+  font-family: var(--font-inter), system-ui, sans-serif;
+}
+
+/*
+ * THE DOG-EAR.
+ *
+ * The brand mark is a B whose top-right corner is cut away at 45°, the way a page
+ * corner is turned down to keep a place (see web-ui's bracemark-icon.tsx). These
+ * two utilities apply that same cut to the popup's page tile, and the difference
+ * between them IS the save: an unsaved page sits square, and the moment it lands
+ * in the library its corner is taken off. The product's own gesture, performed on
+ * the thing the user just kept — no check mark, no colour, no second component.
+ *
+ * They are a PAIR, and both are 5-point polygons on purpose: `corner-square`
+ * duplicates its top-right vertex so the two shapes have matching point counts,
+ * which is the condition for `clip-path` to interpolate. That makes the cut
+ * animatable as a transition on one property rather than a keyframed overlay.
+ * If you retouch either, keep the point counts equal or the change will snap.
+ *
+ * 0.75rem (12px) on the 44px tile is the mark's own ratio, near enough: an
+ * 11-unit cut on a 38-unit-wide grid is 29%, and 12 of 44 is 27%. Measured
+ * against the icon at 5× the pair reads as the same gesture. Don't shrink it
+ * much below this — at 11px the cut was already marginal at 1×, and the tile is
+ * only ever rendered at 1×.
+ */
+@utility corner-square {
+  clip-path: polygon(0 0, 100% 0, 100% 0, 100% 100%, 0 100%);
+}
+@utility corner-cut {
+  clip-path: polygon(0 0, calc(100% - 0.75rem) 0, 100% 0.75rem, 100% 100%, 0 100%);
+}

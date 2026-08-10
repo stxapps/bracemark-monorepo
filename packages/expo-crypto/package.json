@@ -1,0 +1,43 @@
+{
+  "name": "@stxapps/expo-crypto",
+  "version": "0.0.1",
+  "private": true,
+  "nx": {
+    "tags": [
+      "type:crypto",
+      "platform:expo"
+    ]
+  },
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./lib/ids": {
+      "types": "./src/lib/ids.ts",
+      "import": "./src/lib/ids.ts",
+      "default": "./src/lib/ids.ts"
+    },
+    "./lib/shared-keychain": {
+      "types": "./src/lib/shared-keychain.ts",
+      "import": "./src/lib/shared-keychain.ts",
+      "default": "./src/lib/shared-keychain.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@craftzdog/react-native-buffer": "^6.1.2",
+    "@noble/ed25519": "^3.1.0",
+    "@noble/hashes": "^1.4.0",
+    "@stxapps/shared": "*"
+  },
+  "peerDependencies": {
+    "expo-modules-core": "*",
+    "react-native": "*",
+    "react-native-quick-crypto": "*"
+  }
+}

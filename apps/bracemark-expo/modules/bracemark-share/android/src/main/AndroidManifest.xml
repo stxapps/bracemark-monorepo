@@ -1,0 +1,30 @@
+<!-- Merged into the app manifest at build time (library manifest merge) — this
+     is the whole reason the Android share target needs NO config plugin
+     (docs/share-sheet.md). The activity floats translucent over the CALLER's
+     app: taskAffinity="" keeps it out of Bracemark's own task, excludeFromRecents
+     keeps the transient sheet out of the app switcher, exported="true" is
+     required for an intent-filter target on API 31+.
+
+     windowSoftInputMode="adjustResize" does NOT resize this window: edge-to-edge
+     is process-global and RN core applies it to every ReactActivity (see
+     share-screen.tsx's Sheet), and a translucent window never resized for the
+     keyboard anyway. It stays because it suppresses the default adjustPan —
+     without it the system would pan the whole translucent window (backdrop and
+     all) upward. The sheet moves itself in JS (Sheet's KeyboardAvoidingView). -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <application>
+    <activity
+      android:name="com.bracemark.share.ShareActivity"
+      android:exported="true"
+      android:theme="@style/BracemarkShareTheme"
+      android:excludeFromRecents="true"
+      android:taskAffinity=""
+      android:windowSoftInputMode="adjustResize">
+      <intent-filter>
+        <action android:name="android.intent.action.SEND" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <data android:mimeType="text/plain" />
+      </intent-filter>
+    </activity>
+  </application>
+</manifest>

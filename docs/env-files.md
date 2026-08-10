@@ -1,0 +1,323 @@
+## env files
+
+How each app gets its configuration per environment. There are **three
+environments everywhere**, with the same names across every app and (eventually)
+every piece of infrastructure:
+
+| name          | what it is                          |
+| ------------- | ----------------------------------- |
+| `development` | local dev on your machine           |
+| `staging`     | the testing deploy (pre-production) |
+| `production`  | the live deploy                     |
+
+`development` is the odd one out conceptually: it's the local mode the bundlers
+already call "development", not a deploy target. The two deploy tiers are
+`staging` and `production` — use exactly those two words everywhere (env files,
+Nx configurations, wrangler envs, bucket / D1 names, domains, CI) so nothing
+drifts.
+
+For the hosts these values point at — which origin each app answers, and why the
+two tiers sit on two registrable domains — see [hosting.md](./hosting.md), a
+separate doc because that's topology, not config.
+
+### the one constraint that explains everything: bake-time vs run-time
+
+- **bracemark-web** (Next.js static export) and **bracemark-extension** (packaged
+  extension) **inline their public vars at _build_ time** — the value is frozen
+  into the shipped artifact. So each environment is a _separate build_, and
+  **nothing here can be secret**: every var ends up in code the client
+  downloads. These apps use `.env` files.
+- **bracemark-api** reads its config **at _run_ time** from the host (Node
+  `process.env` today, Cloudflare Workers bindings later). This is where secrets
+  live, and they are **never committed and never bundled**. This app uses
+  host-provided vars/secrets, not committed `.env` files.
+
+So: frontends → build-time `.env` files; backend → runtime host config. The rest
+of this doc is just the per-app spelling of that.
+
+### bracemark-web — Next.js, static export
+
+Next.js auto-loads `.env.<mode>` from the app dir based on `NODE_ENV`. Public
+vars need the **`NEXT_PUBLIC_`** prefix and are baked into the static bundle.
+
+`staging` is the wrinkle: it is a _production-mode_ build (`NODE_ENV=production`,
+same as `production`), so Next can't pick it by mode. Nx supplies it via the
+**`envFile`** option on the build target's `staging` configuration. `envFile` is
+an **Nx `run-commands` option, not a Next feature** — Nx loads the file into
+`process.env` before `next build` runs, and that overrides Next's
+auto-loaded `.env.production`.
+
+Files in `apps/bracemark-web/` (committed except `*.local`):
+
+| file               | used by                             | loaded by    |
+| ------------------ | ----------------------------------- | ------------ |
+| `.env.development` | `nx dev bracemark-web`              | Next (auto)  |
+| `.env.production`  | `nx build bracemark-web`            | Next (auto)  |
+| `.env.staging`     | `nx build bracemark-web -c staging` | Nx `envFile` |
+
+Current vars:
+
+- `NEXT_PUBLIC_API_URL` → the matching bracemark-api URL.
+- `NEXT_PUBLIC_EXTRACTOR_URL` → the matching bracemark-extractor URL.
+- `NEXT_PUBLIC_SITE_URL` → the matching **bracemark-site** origin (the apex), read
+  by `src/lib/site.ts`. The app links out to pages that live on the marketing
+  site — support, terms, privacy — and those are a different origin, so a
+  relative `/support` would resolve against `app.*` and 404.
+- `NEXT_PUBLIC_PADDLE_*` → the checkout SDK's env + client token (see
+  [iap.md](./iap.md)).
+
+Adding a new var = add the line to all three files (the symmetry is deliberate:
+there is no config hiding in `package.json`).
+
+### bracemark-site — Next.js, static export
+
+Identical mechanics to bracemark-web above — same auto-loaded `.env.<mode>`, same
+`NEXT_PUBLIC_` bake, same `staging` wrinkle solved the same way (Nx `envFile` on
+the build target's `staging` configuration).
+
+Files in `apps/bracemark-site/` (committed except `*.local`):
+
+| file               | used by                              | loaded by    |
+| ------------------ | ------------------------------------ | ------------ |
+| `.env.development` | `nx dev bracemark-site`              | Next (auto)  |
+| `.env.production`  | `nx build bracemark-site`            | Next (auto)  |
+| `.env.staging`     | `nx build bracemark-site -c staging` | Nx `envFile` |
+
+Two vars:
+
+- `NEXT_PUBLIC_API_URL` → the matching bracemark-api URL. The apex calls the api
+  for **public data only** (stats, health check) — it has no session and no
+  crypto.
+- `NEXT_PUBLIC_APP_URL` → the matching **bracemark-web** origin. Every "Sign in"
+  and "Get Started" link crosses from the apex to the app, and that target is
+  per-tier: `app.bracemark.com`, `app.dryrunbase.com`, or
+  `localhost:3000` in dev. Hard-coding it would make a staging build of the site
+  send visitors into production's app.
+
+`npm run dev:site` (= `nx dev @stxapps/bracemark-site`) serves on **port 3001**,
+so it can run beside bracemark-web's 3000.
+
+It is deliberately **not** in `npm run dev`, which is the app stack — api + web +
+extractor, three projects that are useless apart (no api means no auth or sync;
+no extractor means no link previews). The site is only loosely coupled: it links
+to the app by URL and calls the api for public data at most. Same reasoning as
+`dev:ext`, which keeps the browser extension out of the default stack too.
+
+The one dev-time consequence: bracemark-web's Support link points at
+`localhost:3001`, so it fails unless `dev:site` is also running. That's a rare
+click while working on the app, and paying for a fourth always-on Next dev server
+to cover it isn't worth it.
+
+#### the local port map
+
+| dev server                              | port   | pinned in                                | consumed by                            |
+| --------------------------------------- | ------ | ---------------------------------------- | -------------------------------------- |
+| bracemark-web (`npm run dev`)           | `3000` | `apps/bracemark-web/package.json`        | site's `NEXT_PUBLIC_APP_URL`, api CORS |
+| bracemark-site (`npm run dev:site`)     | `3001` | `apps/bracemark-site/package.json`       | web + expo `*_SITE_URL`, api CORS      |
+| bracemark-extension (`npm run dev:ext`) | `3002` | `apps/bracemark-extension/wxt.config.ts` | nothing                                |
+| bracemark-api (`npm run dev`)           | `8787` | wrangler default                         | every frontend's `*_API_URL`           |
+
+**3000 and 3001 are contractual; 3002 is not.** The two Next ports are baked into
+`.env.development` files and into bracemark-api's dev `CORS_ORIGINS`, so moving
+either means editing five files. The browser extension's port is HMR transport
+only — its pages load from `chrome-extension://` and its api calls are CORS-exempt
+via `host_permissions`, so nothing references it. When a port clashes, **3002 is
+the one that moves.** (It started at 3001, which collided with `dev:site` — the
+one pairing that could not run side by side.)
+
+The `nx start` / `serve-static` preview servers reuse 3000 and 3001, so run the
+preview or the dev server for a given app, not both — see
+[hosting.md](./hosting.md#previewing-a-production-build-locally--nx-start).
+
+### bracemark-extension — wxt / Vite
+
+wxt builds through Vite, which loads `.env` / `.env.<mode>`. Public vars need the
+**`WXT_PUBLIC_`** prefix and are read via `import.meta.env.WXT_PUBLIC_*` — baked
+into the bundle just like bracemark-web. The mode is chosen with `--mode`, and unlike
+bracemark-web's `staging` (which needs the Nx `envFile` indirection because Next
+can't pick a production-mode build by mode) wxt selects the file natively:
+
+| command                    | mode          | env file           |
+| -------------------------- | ------------- | ------------------ |
+| `wxt` (dev)                | `development` | `.env.development` |
+| `wxt build`                | `production`  | `.env.production`  |
+| `wxt build --mode staging` | `staging`     | `.env.staging`     |
+
+Files in `apps/bracemark-extension/` (all committed — every value is public):
+
+| file               | used by                                                                       |
+| ------------------ | ----------------------------------------------------------------------------- |
+| `.env.development` | `nx dev @stxapps/bracemark-extension`                                         |
+| `.env.production`  | `nx build @stxapps/bracemark-extension`                                       |
+| `.env.staging`     | `nx build:staging @stxapps/bracemark-extension` (and `build:firefox:staging`) |
+
+Current var: `WXT_PUBLIC_API_URL` → the matching bracemark-api URL.
+
+**Two consumers, one source of truth.** Unlike bracemark-web (one consumer,
+`lib/api.ts`), the extension reads the URL in two places that must never drift —
+the manifest `host_permissions` grant has to match the origin the client fetches,
+or the MV3 background worker's CORS-exempt requests break. Both derive from the
+same `WXT_PUBLIC_API_URL`:
+
+- `utils/api.ts` reads `import.meta.env.WXT_PUBLIC_API_URL` (bundled context).
+- `wxt.config.ts` can't use `import.meta.env` in its `manifest` function (it runs
+  at config time, before the bundle env exists), so it reads the same `.env.<mode>`
+  via Vite's `loadEnv(mode, process.cwd(), 'WXT_PUBLIC_')` and derives the host
+  match pattern as `new URL(apiUrl).origin + '/*'`.
+
+Both throw if the var is unset, mirroring bracemark-web's missing-`NEXT_PUBLIC_API_URL`
+guard. The `staging` build is a plain `--mode staging` npm script + Nx target
+(`build:staging`, `build:firefox:staging`) — no Nx `envFile` needed.
+
+### bracemark-expo — Expo / Metro
+
+Expo builds through Metro, which loads `.env` / `.env.<mode>` via `@expo/env`.
+Public vars need the **`EXPO_PUBLIC_`** prefix and are read via
+`process.env.EXPO_PUBLIC_*` — Metro **inlines** them into the JS bundle at build
+time, exactly like bracemark-web's `NEXT_PUBLIC_` and bracemark-extension's
+`WXT_PUBLIC_`, so nothing secret belongs here. The mode is `NODE_ENV`: `expo
+start` is `development`, `expo export` / a release build is `production`. Expo has
+**no `--mode` flag** — it only ever auto-selects `development` or `production` by
+`NODE_ENV`:
+
+| command                                         | mode          | env file           |
+| ----------------------------------------------- | ------------- | ------------------ |
+| `nx dev @stxapps/bracemark-expo` (`expo start`) | `development` | `.env.development` |
+| release build / `expo export`                   | `production`  | `.env.production`  |
+
+`staging` is the same wrinkle it is for bracemark-web: a staging build is a
+_production-mode_ build (`NODE_ENV=production`), so Expo won't pick `.env.staging`
+by mode. And unlike bracemark-web there's no Nx `envFile` seam to lean on — the Expo
+build isn't an `nx build` running a bundler in `process.env`. **We don't use EAS**
+— there is no `eas.json` and none is needed; builds are local (`npx expo
+prebuild` + Xcode / Gradle, or `expo export`). So a staging build is made by
+supplying the var inline (`EXPO_PUBLIC_API_URL=… expo export`), which takes
+precedence over `.env.production`; `.env.staging` is committed as the single
+source of that URL to paste from. `.env.development` and `.env.production` are
+the two that work by auto-selection today.
+
+Files in `apps/bracemark-expo/` (committed except `.env.local`):
+
+| file               | used by                                           | loaded by   |
+| ------------------ | ------------------------------------------------- | ----------- |
+| `.env.development` | `nx dev @stxapps/bracemark-expo`, `expo prebuild` | Expo (auto) |
+| `.env.production`  | release build / `expo export`                     | Expo (auto) |
+| `.env.staging`     | a staging build (var supplied inline)             | you         |
+| `.env.local`       | every mode — signing creds (gitignored)           | Expo (auto) |
+
+Current public vars:
+
+- `EXPO_PUBLIC_API_URL` → the matching bracemark-api URL. Read once in
+  `src/lib/api-client.ts`, which throws if unset (mirroring bracemark-web's and
+  the browser extension's missing-URL guards) and binds it into
+  `@stxapps/expo-react`'s `createAuthApiClient`.
+- `EXPO_PUBLIC_SITE_URL` → the matching **bracemark-site** origin (the apex),
+  read by `features/links/more-options-menu.tsx` for the Support item, which
+  opens in the system browser. It is deliberately **not** the bracemark-web
+  origin: the pages a native app links out to (support, terms, privacy) live on
+  the marketing site. (This var was `EXPO_PUBLIC_WEB_URL` and pointed at
+  `app.*`, which was wrong — bracemark-web has no `/support` route.)
+
+Adding a new var = add the line to all three files, same deliberate symmetry as
+the other frontends.
+
+**The non-`EXPO_PUBLIC_` vars are the native signing credentials**, all in
+`.env.local` and all read at config-evaluation time by `expo prebuild` rather
+than at runtime: `APPLE_TEAM_ID` (iOS, below) and the four `BRACEMARK_UPLOAD_*` vars
+that carry the Android Play upload key into `signingConfigs.release` (see
+[expo-build.md](./expo-build.md) — _android release signing_). The three bullets below
+apply to both groups verbatim — same file, same mode-agnostic reason, same
+no-prefix reason, same falsy-skip safety.
+
+`APPLE_TEAM_ID` is the reason this app's config is `app.config.ts` and not
+`app.json` — `ios.appleTeamId` has to come from the environment, and JSON has no
+interpolation. At prebuild,
+`@expo/config-plugins`' `withDevelopmentTeam` writes it into `DEVELOPMENT_TEAM`
+for **every** native target in the pbxproj — the app _and_ the share extension —
+which is what keeps local device signing from needing a manual team pick in
+Xcode after each regenerate of `ios/`. Three things follow:
+
+- **It lives in `.env.local`**, not one of the committed files. `.env*.local` is
+  gitignored, and the value is per-developer-account rather than per-tier.
+- **It's mode-agnostic on purpose.** `expo prebuild` calls
+  `setNodeEnv('development')` _before_ `@expo/env.load()`, so it reads
+  `.env.development`, never `.env.production` — a var only in the latter would
+  be invisible to the one command that needs it. `.env.local` is loaded in every
+  mode.
+- **No `EXPO_PUBLIC_` prefix.** That prefix means "inline into the JS bundle";
+  this is a config-time value and never belongs in shipped JS.
+
+Unset is safe: `withDevelopmentTeam` skips a falsy id and leaves the pbxproj
+alone, so a fresh clone still prebuilds — you just pick the team in Xcode.
+
+### bracemark-api — Hono on Cloudflare Workers
+
+Server-side: config is read at **runtime**, never baked. bracemark-api runs **only**
+on Workers (`src/worker.ts`, `export default app`) — there is no Node entry.
+
+**Config read.** `src/app.ts` resolves `CORS_ORIGINS` per-request:
+`c.env.CORS_ORIGINS` (the Workers binding) first, then the `[]`
+default. On Workers `c.env` is the source; the `process.env` fallback only covers
+non-Workers callers like `app.request()` in jest tests. `globalThis.process`
+(not bare `process`) keeps it safe on Workers, which has no `process` global.
+
+**Per-environment values live in `wrangler.jsonc`**, as three wrangler
+environments matching the project's tiers — `development` / `staging` /
+`production` (staging & production each pin their own Cloudflare account via
+`account_id`; `development` has none — it's never deployed):
+
+- non-secret vars (e.g. `CORS_ORIGINS`) → `vars` under each `env.*`. The
+  `development` env sets `CORS_ORIGINS=http://localhost:3000` so local dev needs
+  no extra file.
+- secrets → `wrangler secret put <NAME> --env staging|production` (never
+  committed).
+- D1 / R2 → per-env `d1_databases` / `r2_buckets` bindings. `development`'s are
+  emulated locally by miniflare (state under `.wrangler/`), so its ids are
+  placeholders.
+- **`.dev.vars`** (gitignored) is **only for local secrets** you can't commit to
+  `wrangler.jsonc` — not for `CORS_ORIGINS`, which lives in the `development`
+  env's `vars`. Loaded by `wrangler dev`, it overrides committed `vars` locally.
+
+Local dev is `wrangler dev --env development` (the `dev` target); it uses the
+`development` env above with locally emulated D1/R2. There are no
+`NEXT_PUBLIC_`-style committed files here because nothing is public.
+
+### wiring the frontends to the backend
+
+Each frontend environment points at the matching bracemark-api environment, and
+bracemark-api allows the matching frontend origin back:
+
+| environment   | frontend `*_API_URL` →       | bracemark-api `CORS_ORIGINS` allows                    |
+| ------------- | ---------------------------- | ------------------------------------------------------ |
+| `development` | `http://localhost:8787`      | `http://localhost:3000`, `http://localhost:3001`       |
+| `staging`     | `https://api.dryrunbase.com` | `https://dryrunbase.com`, `https://app.dryrunbase.com` |
+| `production`  | `https://api.bracemark.com`  | `https://bracemark.com`, `https://app.bracemark.com`   |
+
+**Staging is on its own registrable domain, `dryrunbase.com`** — not a subdomain
+of `bracemark.com`. Each tier is its own Cloudflare account, a Workers custom
+domain requires its zone in the same account, and a subdomain can't be an
+independent zone off Enterprise; so `api.staging.bracemark.com` and friends
+could never have existed. The staging hosts are `dryrunbase.com` (site),
+`app.dryrunbase.com` (web), `api.dryrunbase.com`, `extractor.dryrunbase.com`.
+See [hosting.md](./hosting.md#why-staging-is-a-separate-registrable-domain).
+
+CORS is never `*` — each API environment allows only its own frontend
+origin(s). Each tier allows **two** web origins: the `app.*` host (bracemark-web)
+and the apex (bracemark-site, which also calls the api for public data like
+stats / health). Both are apps in this monorepo. In `development` those are
+localhost:3000 and localhost:3001 — the two Next dev servers. See
+[hosting.md](./hosting.md#the-hosts) for the host naming scheme.
+
+The `CORS_ORIGINS` column is **web-only**: bracemark-expo hits the same
+`*_API_URL` per tier, but a native RN `fetch` sends no `Origin` header and
+isn't subject to browser CORS, so the app needs no entry in the allowlist — it
+points at the matching bracemark-api URL and that's the whole story. (Only the
+browser frontends — bracemark-web and bracemark-site — need an allowed origin.)
+
+### what's committed vs ignored
+
+- **committed:** `.env.development`, `.env.staging`, `.env.production` for the
+  frontends — every value in them is public.
+- **gitignored:** `.env*.local` (frontend personal overrides — and bracemark-expo's
+  `APPLE_TEAM_ID`, above), `.dev.vars` (bracemark-api Workers local), and all real
+  secrets. These never enter git.

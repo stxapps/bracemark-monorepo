@@ -1,0 +1,101 @@
+{
+  "name": "@stxapps/bracemark-expo",
+  "version": "0.0.0",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "prebuild": "expo prebuild --clean",
+    "start": "expo start",
+    "android": "expo run:android",
+    "android:release": "expo run:android --variant release",
+    "ios": "expo run:ios"
+  },
+  "nx": {
+    "tags": [
+      "type:app",
+      "platform:expo"
+    ],
+    "targets": {
+      "start": {
+        "continuous": true
+      },
+      "android": {
+        "continuous": true
+      },
+      "ios": {
+        "continuous": true
+      }
+    }
+  },
+  "dependencies": {
+    "@craftzdog/react-native-buffer": "*",
+    "@expo/metro-config": "*",
+    "@hookform/resolvers": "*",
+    "@react-native-community/netinfo": "*",
+    "@react-navigation/drawer": "*",
+    "@react-navigation/native": "*",
+    "@rn-primitives/alert-dialog": "*",
+    "@rn-primitives/checkbox": "*",
+    "@rn-primitives/dialog": "*",
+    "@rn-primitives/dropdown-menu": "*",
+    "@rn-primitives/portal": "*",
+    "@rn-primitives/radio-group": "*",
+    "@rn-primitives/slot": "*",
+    "@rn-primitives/tabs": "*",
+    "@shopify/flash-list": "*",
+    "@stxapps/expo-crypto": "*",
+    "@stxapps/expo-react": "*",
+    "@stxapps/react": "*",
+    "@stxapps/shared": "*",
+    "@tanstack/react-query": "*",
+    "@testing-library/react-native": "*",
+    "@zxcvbn-ts/core": "*",
+    "@zxcvbn-ts/language-common": "*",
+    "class-variance-authority": "*",
+    "clsx": "*",
+    "expo": "*",
+    "expo-build-properties": "*",
+    "expo-clipboard": "*",
+    "expo-constants": "*",
+    "expo-dev-client": "*",
+    "expo-document-picker": "*",
+    "expo-file-system": "*",
+    "expo-font": "*",
+    "expo-iap": "*",
+    "expo-image": "*",
+    "expo-image-manipulator": "*",
+    "expo-image-picker": "*",
+    "expo-linking": "*",
+    "expo-local-authentication": "*",
+    "expo-router": "*",
+    "expo-secure-store": "*",
+    "expo-share-extension": "*",
+    "expo-sharing": "*",
+    "expo-splash-screen": "*",
+    "expo-sqlite": "*",
+    "expo-status-bar": "*",
+    "expo-system-ui": "*",
+    "jest-expo": "*",
+    "lucide-react-native": "*",
+    "metro-config": "*",
+    "metro-resolver": "*",
+    "react": "*",
+    "react-hook-form": "*",
+    "react-native": "*",
+    "react-native-gesture-handler": "*",
+    "react-native-keyboard-controller": "*",
+    "react-native-nitro-modules": "*",
+    "react-native-quick-base64": "*",
+    "react-native-quick-crypto": "*",
+    "react-native-reanimated": "*",
+    "react-native-safe-area-context": "*",
+    "react-native-screens": "*",
+    "react-native-svg": "*",
+    "react-native-svg-transformer": "*",
+    "react-native-web": "*",
+    "react-native-worklets": "*",
+    "tailwind-merge": "*",
+    "tailwindcss": "^4.3.0",
+    "uniwind": "*"
+  }
+}

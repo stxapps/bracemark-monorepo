@@ -1,0 +1,45 @@
+#!/bin/sh
+# Refuse any commit that would put `internal/` into this public repo.
+#
+# `internal/` is a private folder nested at the workspace root.
+# It is gitignored here, but an ignore rule is
+# one edited line away from being gone. A leak into a public repo cannot be undone
+# — forks, clones, and GitHub's own caches keep the blob reachable after any
+# force-push — so the rule gets a second, independent enforcement point here.
+#
+# Installed via core.hooksPath by the root `prepare` script, so a fresh clone gets
+# it from `npm install` with no extra step. `npm run check:private` runs the same
+# check without git's hook machinery, for CI (a hook is local to one clone, and
+# `git commit --no-verify` skips it).
+#
+# What is actually at risk, which is not what it looks like. While `internal/.git`
+# may exist, git will not descend into it: `git add -f internal/some-file` stages
+# NOTHING and exits 0, so the private *contents* cannot reach this index by that
+# route. What `git add -f internal` does instead is stage the directory as a
+# gitlink (mode 160000) holding a nested repo's HEAD sha — no file contents,
+# but a commit id and a submodule entry that no clone can resolve.
+# And if the nested `.git` is ever removed, the same command stages every file.
+#
+# So the check is on the index, not on the diff: one `git ls-files` covers the
+# gitlink, freshly staged files, and files left tracked by an earlier mistake, and
+# unlike `git diff --cached` it is also correct on an unborn branch (this repo's
+# first commit, exactly when the rule matters most). The pathspec has NO trailing
+# slash on purpose — `internal/` misses the gitlink, whose path is `internal`.
+
+set -e
+
+exec 1>&2
+
+leaked=$(git ls-files --cached -- internal)
+[ -n "$leaked" ] || exit 0
+
+echo
+echo "BLOCKED: this commit would add the private internal/ folder to the public repo."
+echo
+echo "Entries staged under internal/:"
+echo "$leaked" | sed 's/^/  /'
+echo
+echo "Drop them from the index (the files stay on disk):"
+echo "  git rm -r --cached --force internal"
+echo
+exit 1

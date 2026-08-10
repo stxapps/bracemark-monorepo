@@ -1,0 +1,72 @@
+{
+  "name": "@stxapps/bracemark-web",
+  "version": "0.0.1",
+  "private": true,
+  "nx": {
+    "tags": [
+      "type:app",
+      "platform:web"
+    ],
+    "targets": {
+      "build": {
+        "options": {
+          "command": "next build && serwist build serwist.config.mjs"
+        },
+        "configurations": {
+          "staging": {
+            "envFile": "apps/bracemark-web/.env.staging"
+          }
+        },
+        "outputs": [
+          "{projectRoot}/.next/!(cache)/**/*",
+          "{projectRoot}/.next/!(cache)",
+          "{projectRoot}/out"
+        ]
+      },
+      "dev": {
+        "options": {
+          "command": "next dev --port 3000"
+        }
+      },
+      "start": {
+        "options": {
+          "command": "serve out -p 3000"
+        }
+      },
+      "serve-static": {
+        "options": {
+          "command": "serve out -p 3000"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
+    "@paddle/paddle-js": "^1.6.4",
+    "@serwist/next": "^9.5.11",
+    "@stxapps/shared": "*",
+    "@stxapps/web-crypto": "*",
+    "@stxapps/web-ui": "*",
+    "@tanstack/react-query": "^5.101.0",
+    "@tanstack/react-virtual": "^3.14.2",
+    "dexie": "^4.4.3",
+    "dexie-react-hooks": "^4.4.0",
+    "lucide-react": "^1.17.0",
+    "next": "~16.1.6",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "serwist": "9.5.11",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@serwist/cli": "^9.5.11",
+    "@tailwindcss/postcss": "^4.3.0",
+    "serve": "^14.2.6",
+    "tailwindcss": "^4.3.0"
+  }
+}

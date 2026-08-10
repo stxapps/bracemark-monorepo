@@ -1,0 +1,43 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compileOnSave": false,
+  "files": [],
+  "references": [
+    {
+      "path": "./apps/bracemark-api"
+    },
+    {
+      "path": "./apps/bracemark-web"
+    },
+    {
+      "path": "./packages/shared"
+    },
+    {
+      "path": "./packages/web-ui"
+    },
+    {
+      "path": "./packages/react"
+    },
+    {
+      "path": "./packages/web-crypto"
+    },
+    {
+      "path": "./packages/web-react"
+    },
+    {
+      "path": "./apps/bracemark-extractor"
+    },
+    {
+      "path": "./apps/bracemark-expo"
+    },
+    {
+      "path": "./packages/expo-crypto"
+    },
+    {
+      "path": "./packages/expo-react"
+    },
+    {
+      "path": "./apps/bracemark-site"
+    }
+  ]
+}

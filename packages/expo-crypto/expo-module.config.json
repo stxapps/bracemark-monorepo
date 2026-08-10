@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "modules": ["BracemarkFileCryptoModule", "BracemarkSharedKeychainModule"]
+  },
+  "android": {
+    "modules": ["com.bracemark.filecrypto.BracemarkFileCryptoModule"]
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "singleQuote": true,
+  "printWidth": 100,
+  "plugins": ["prettier-plugin-tailwindcss"],
+  "overrides": [
+    {
+      "files": ["apps/bracemark-web/**", "apps/bracemark-extension/**", "packages/web-ui/**"],
+      "options": {
+        "tailwindStylesheet": "packages/web-ui/src/styles.css"
+      }
+    },
+    {
+      "files": ["apps/bracemark-expo/**", "packages/expo-react/**"],
+      "options": {
+        "tailwindStylesheet": "apps/bracemark-expo/global.css"
+      }
+    }
+  ]
+}

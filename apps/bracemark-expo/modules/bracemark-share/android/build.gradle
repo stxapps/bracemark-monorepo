@@ -1,0 +1,28 @@
+apply plugin: 'com.android.library'
+
+group = 'com.bracemark.share'
+version = '0.0.1'
+
+def expoModulesCorePlugin = new File(project(":expo-modules-core").projectDir.absolutePath, "ExpoModulesCorePlugin.gradle")
+apply from: expoModulesCorePlugin
+applyKotlinExpoModulesCorePlugin()
+useCoreDependencies()
+useExpoPublishing()
+useDefaultAndroidSdkVersions()
+
+android {
+  namespace "com.bracemark.share"
+  defaultConfig {
+    versionCode 1
+    versionName "0.0.1"
+  }
+  lintOptions {
+    abortOnError false
+  }
+}
+
+dependencies {
+  // ShareActivity extends ReactActivity; the version is substituted by the
+  // React Native gradle plugin in the app build.
+  implementation 'com.facebook.react:react-android'
+}
