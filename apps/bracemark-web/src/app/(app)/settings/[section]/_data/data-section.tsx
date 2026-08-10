@@ -259,7 +259,7 @@ function ImportView({ onBack }: { onBack: () => void }) {
       <SettingsHeader
         back={{ label: 'Data', onClick: onBack }}
         title="Import data"
-        description="Import from a file — a Bracemark backup (.zip), an HTML bookmarks file (web browsers, LinkWarden, Karakeep), a Pocket export (.zip or .csv), a Raindrop.io CSV, or a plain list of links. The format is detected automatically; links you already have are skipped. Large imports may take a few minutes."
+        description="Import from a file — a Bracemark backup (.zip), a Brace.to export (.txt), an HTML bookmarks file (web browsers, LinkWarden, Karakeep), a Pocket export (.zip or .csv), a Raindrop.io CSV, or a plain list of links. The format is detected automatically; links you already have are skipped. Large imports may take a few minutes."
       />
       <input
         ref={inputRef}

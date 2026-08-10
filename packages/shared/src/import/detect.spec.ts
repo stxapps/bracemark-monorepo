@@ -9,6 +9,20 @@ describe('isZipBytes', () => {
 });
 
 describe('detectTextImportFormat', () => {
+  it('routes a Brace.to export ahead of every text sniff', () => {
+    const brace =
+      '[\n  {\n    "path": "links/My List/1700000000000-abcd-efgh.json",\n    "data": {}';
+    expect(detectTextImportFormat(brace)).toBe('brace');
+    // Brace names its export `.txt`; the filename must not pull it back to text.
+    expect(detectTextImportFormat(brace, 'Brace.to data 2026-08-10.txt')).toBe('brace');
+    // A stored page title carrying markup must not win the anchor test below.
+    expect(
+      detectTextImportFormat('[{"path":"links/My List/1-a-b.json","data":{"url":"</a>"}}]'),
+    ).toBe('brace');
+    // A JSON array that isn't one still falls through.
+    expect(detectTextImportFormat('[{"url":"https://example.com"}]')).toBe('text');
+  });
+
   it('routes on the Netscape doctype or any closing anchor', () => {
     expect(detectTextImportFormat('<!DOCTYPE NETSCAPE-Bookmark-file-1>\n<DL><p>')).toBe('netscape');
     expect(detectTextImportFormat('<DT><A HREF="https://x.com">x</A>')).toBe('netscape');

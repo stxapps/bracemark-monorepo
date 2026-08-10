@@ -17,6 +17,13 @@
 // ([] → the importer's default list), `tagNames` are raw names to resolve/create,
 // timestamps are epoch ms like everywhere else in the sync system (converted
 // from each format's convention — Netscape seconds, CSV ISO 8601).
+//
+// The four optional fields below the timestamps are the RICHER signal a structured
+// export carries and a bookmarks file doesn't. Only brace.ts fills them today, but
+// none of them is Brace-shaped — they name concepts several services have (Pocket's
+// CSV `status: archive` column is exactly `systemList`, and Raindrop has a Trash
+// collection), so a future importer sets the same fields and the orchestrators need
+// no new branch. A parser that has nothing to say simply leaves them undefined.
 export interface ImportedLink {
   url: string;
   title?: string;
@@ -25,4 +32,39 @@ export interface ImportedLink {
   folderPath: string[];
   createdAt?: number;
   updatedAt?: number;
+  // A DELIBERATE title the user typed in the source app (Brace's `custom.title`),
+  // as opposed to the page title that merely rode along in `title`. It lands in
+  // `link.customTitle`, above the provisional `extraction.title` in the display
+  // fold — the one exception to "an imported title is provisional", and only
+  // because the source distinguishes the two the same way we do.
+  customTitle?: string;
+  // The link belongs to a SYSTEM list rather than a folder — named, not
+  // name-matched: `ListResolver` resolves folders by name, so a `['Archive']`
+  // chain would mint a duplicate list on an account whose Archive has been
+  // renamed, and Trash is deliberately unmatchable there (right for a bookmarks
+  // folder called "Trash", wrong for a real one). When set, `folderPath` is
+  // ignored. The orchestrator maps it to ARCHIVE_ID / TRASH_ID.
+  systemList?: 'archive' | 'trash';
+  // Present ⇒ the link is pinned. The value is an OPAQUE sortable key from the
+  // source (Brace stores LexoRank); only its ORDER is meaningful — the
+  // orchestrator sorts the pinned rows by it and mints fresh ranks in this
+  // library's own keyspace (sync/rank.ts), never stores it.
+  pinRank?: string;
+  // The user's custom link image, as a key into `ImportedBundle.images`. Kept as
+  // a REFERENCE rather than inline bytes so a row stays cheap to copy and two
+  // rows can share one blob. The orchestrator writes the bytes as a
+  // `files/{id}.enc` and points `link.customImageId` at it.
+  imageRef?: string;
+}
+
+// What one import FILE yields: its rows plus any blobs they reference. The
+// interop parsers (netscape/csv/text) never carry bytes and return an empty map;
+// a structured export does. Bundling the two is what lets `parseImportText` stay
+// the single dispatch point — the alternative is each orchestrator special-casing
+// the formats that have blobs, which is the duplication parse.ts exists to stop.
+export interface ImportedBundle {
+  links: ImportedLink[];
+  // Keyed by whatever the source calls the blob (`ImportedLink.imageRef` holds
+  // the same string) — the keyspace is the parser's business, not the caller's.
+  images: Map<string, Uint8Array>;
 }

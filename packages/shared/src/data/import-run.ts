@@ -6,8 +6,13 @@
 // in two copies that can only agree by luck. Beside backup.ts in the
 // data-lifecycle namespace (docs/data-lifecycle.md).
 
-// The running phases, in order. `sync` and `parse` are indeterminate; `items`
-// counts entity writes, `files` counts blob restores (bracemark backup only).
+// The running phases. `sync` and `parse` are indeterminate; `items` counts entity
+// writes and `files` counts blob writes. The two blob-carrying branches order the
+// last pair differently, on purpose: a bracemark backup restores its entities and
+// then their blobs, while an import that MINTS links (a Brace.to export's custom
+// images) writes the blobs first — content before metadata, so a run that dies
+// between the two leaves an unreferenced blob rather than a link pointing at bytes
+// that never arrived. `files` is skipped entirely when there are none.
 export interface ImportProgress {
   step: 'sync' | 'parse' | 'items' | 'files';
   done?: number;

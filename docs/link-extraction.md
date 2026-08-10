@@ -1125,10 +1125,15 @@ carried in the export seeds **`extraction.title` (provisional)**, not
 `customTitle` — the user didn't deliberately name it, so extraction may still
 upgrade it to the real og:title; it's just a better placeholder than a bare host
 meanwhile (see _manual overrides_). The exception: when the export marks a title
-**user-edited** (some Pocket/Raindrop fields do), route _that_ one to sticky
-`customTitle` instead, so a deliberate rename survives re-extraction — the
-default-provisional / sticky-only-with-a-user-authored-signal rule from _manual
-overrides_. This is the one case an import writes an
+**user-edited**, route _that_ one to sticky `customTitle` instead, so a
+deliberate rename survives re-extraction — the default-provisional /
+sticky-only-with-a-user-authored-signal rule from _manual overrides_. The
+Brace.to importer is the live instance: its export carries `custom.title` (what
+the user typed) beside `extractedResult.title` (what its extractor found), so
+the two route to `customTitle` and `extraction.title` respectively —
+`ImportedLink` has a field for each, and any future importer with the same
+signal uses them (see [data-lifecycle.md](./data-lifecycle.md), _importing from
+Brace.to_). This is the one case an import writes an
 `extractions/` file up front — the pending signal then is the **absent `titleImage`
 facet**, not an absent file (the queue query already keys on the facet).
 

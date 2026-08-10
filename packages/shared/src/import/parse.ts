@@ -7,8 +7,14 @@
 // Bytes-vs-text stays the caller's call: a Bracemark backup is a zip, so callers
 // check isZipBytes (detect.ts) FIRST and only decode to text on the other
 // branch.
+//
+// The return is an ImportedBundle (rows + any blobs they reference), not bare
+// rows: the three interop parsers never carry bytes and yield an empty map, but
+// a Brace.to export does. Widening the ONE dispatch keeps the alternative —
+// every caller special-casing the formats that have blobs — from coming back.
 
-import type { ImportedLink } from './bundle';
+import { parseBraceExport } from './brace';
+import type { ImportedBundle, ImportedLink } from './bundle';
 import { parseRaindropCsv } from './csv';
 import { detectTextImportFormat } from './detect';
 import { parseNetscapeHtml } from './netscape';
@@ -16,9 +22,14 @@ import { parseUrlText } from './text';
 
 // `filename` only breaks ties in detection (see detect.ts — content decides);
 // pass the zip entry's name when parsing inside an archive.
-export function parseImportText(text: string, filename = ''): ImportedLink[] {
+export function parseImportText(text: string, filename = ''): ImportedBundle {
   const format = detectTextImportFormat(text, filename);
-  if (format === 'netscape') return parseNetscapeHtml(text);
-  if (format === 'csv') return parseRaindropCsv(text);
-  return parseUrlText(text);
+  if (format === 'brace') return parseBraceExport(text);
+
+  let links: ImportedLink[];
+  if (format === 'netscape') links = parseNetscapeHtml(text);
+  else if (format === 'csv') links = parseRaindropCsv(text);
+  else links = parseUrlText(text);
+
+  return { links, images: new Map() };
 }

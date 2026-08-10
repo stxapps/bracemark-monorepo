@@ -151,6 +151,14 @@ then a content-first text sniff (filenames only break ties — files get renamed
 to `.txt` in transit, and a misroute degrades gracefully to the URL-extracting
 text parser).
 
+Both halves land through **one projection** — `import/project.ts`
+`projectImportedLinks` — which turns parsed rows into the entities to write:
+list/tag resolution, the deliberate-vs-provisional title split, custom-image
+blobs, pin ranks. It's pure and shared, taking `newId` as an argument like the
+resolvers, because every one of those is a **user-visible behaviour that must be
+identical on web and mobile**; only the store reads, the chunked writes, and the
+progress ticks stay in the two orchestrators.
+
 The policy, decided once:
 
 - **Interop imports dedup by canonical URL identity** (`canonicalUrlKey`, the
@@ -167,7 +175,8 @@ The policy, decided once:
   request: a partial import is indistinguishable from a corrupt one at the far
   end, and the user can split the file or upgrade.
 - A file-carried title is **provisional**: it seeds `extraction.title` (which
-  extraction may later upgrade), never `customTitle`.
+  extraction may later upgrade), never `customTitle` — unless the source marks it
+  user-authored, which only the Brace.to export does today (below).
 - Folder paths **find-or-create lists** by case-insensitive name walk; without
   the `nestedLists` entitlement a nested path flattens to one root-level list.
   Trash never matches a folder name.
@@ -176,10 +185,85 @@ Only the platform-bound half of that lives in each orchestrator (the store
 reads, the zip library, the file API). The rest is shared, so the two can't
 drift: the archive contract is `data/backup.ts` (above), the outcome/progress
 vocabulary and the quota gate are `data/import-run.ts`, the format→parser
-dispatch is `import/parse.ts`, and the folder/tag find-or-create walks are
-`import/resolve.ts` — the resolvers take `newId` as a constructor argument,
-since id minting is the one genuinely platform-specific piece (`web-crypto` vs.
-`expo-crypto`, neither reachable from `shared`).
+dispatch is `import/parse.ts`, the rows→entities projection is
+`import/project.ts`, and the folder/tag find-or-create walks are
+`import/resolve.ts` — the last two take `newId` as an argument, since id minting
+is the one genuinely platform-specific piece (`web-crypto` vs. `expo-crypto`,
+neither reachable from `shared`).
+
+### importing from Brace.to
+
+Brace.to is this project's predecessor, so its export is the one interop input
+that is a **foreign app's whole backup** rather than a bookmarks file: a `.txt`
+holding a pretty-printed JSON array of `{path, data}` — a raw dump of its Gaia
+files across six path families (`links/`, `sslts/`, `pins/`, `tags/`,
+`settings…`, `images/`). Import only; nothing exports _to_ Brace.to.
+
+It gets its own parser (`import/brace.ts`) rather than a tolerant reading of the
+text one because three properties of that layout make URL-scraping actively
+wrong:
+
+- **history.** A Brace id is `<addedDT>-<r4>-<r4>` with an optional fourth
+  `<updatedDT>` segment, and an edited link keeps _every_ revision as its own
+  file. They share a "main id" (the first two segments); only the greatest
+  `updatedDT` is live. Import them all and a much-edited link lands five times.
+- **indirection.** A link's list is whatever its newest `sslts/` entry says —
+  not the `listName` in its own path, which is only where it was first filed.
+- **opaque names.** The `<listName>`/`<tagName>` path segments are ids; the
+  display names live in the newest `settings…` file's `listNameMap`/
+  `tagNameMap`.
+
+Detection is a **structural probe** over the head of the file (a leading `[`
+then a `"path"` key naming one of the six namespaces), not a `JSON.parse` —
+detection runs on every import and this file can be tens of MB. It is checked
+_before_ the Netscape `</a>` test, since a stored page title can contain any
+markup the page's `<title>` did. This ordering is what closes a silent failure:
+Brace names its export `.txt`, so it used to sniff as plain text and the URL
+regex mined the raw JSON — every dead revision, every `extractedResult` image
+URL, every favicon — producing a plausible-looking mess rather than an error.
+
+What crosses, and what deliberately doesn't:
+
+| Brace.to                             | Bracemark                                     |
+| ------------------------------------ | --------------------------------------------- |
+| `url`, `addedDT`, id's 4th segment   | `url`, `createdAt`, `updatedAt`               |
+| `custom.title`                       | **`customTitle`** — deliberate                |
+| `extractedResult.title`              | `extraction.title` — provisional              |
+| `custom.image` (`cdroot/images/…`)   | a `files/{id}.enc` blob + `customImageId`     |
+| list `My List` / `Archive` / `Trash` | `MY_LIST_ID` / `ARCHIVE_ID` / `TRASH_ID`      |
+| any other list                       | folder path of display names, find-or-created |
+| tags (ordered by rank)               | tags, find-or-created                         |
+| pins (LexoRank)                      | pins, re-ranked into this library's keyspace  |
+| `extractedResult.image`/`favicon`    | **dropped**                                   |
+| `decor`, every non-name setting      | **dropped**                                   |
+
+`custom.title` → `customTitle` is the **one exception** to "a file-carried title
+is provisional", and it earns it: Brace draws the deliberate/discovered line in
+exactly the same place we do, so the distinction survives instead of being
+flattened. `extractedResult.image` is dropped because it's a remote URL while
+our `extraction.imageId` is a _downloaded_ blob — and fetching at import would
+announce the user's whole library to every host in it. Writing no facets leaves
+each link pending, so our own extractor derives a real image and may upgrade the
+title. Settings beyond the two name maps are another product's preferences, and
+`doExtractContents` is worse than noise: it's a privacy consent, which has to be
+given here rather than inherited.
+
+The system lists are carried as **named ids, not matched names**
+(`ImportedLink.systemList`): resolving `['Archive']` by name would mint a
+duplicate on an account whose Archive has been renamed, and `ListResolver`
+deliberately refuses to match "Trash" at all — right for a bookmarks folder with
+that name, wrong for a real one. Brace's mobile export writes an absolute
+on-device path for image blobs instead of the `images/<fname>` key its own
+importer expects; we re-key off the `images/` tail so a phone-made export isn't
+silently stripped of every custom image.
+
+Custom-image blobs are written **before** the links that name them (content
+before metadata — a run that dies between the two leaves an unreferenced blob,
+never a link pointing at bytes that never arrived), and stored **verbatim**: a
+restore or migration keeps what it's given, and only a fresh pick in the editor
+goes through `resizeImage`. The whole export is one JSON string parsed at once —
+the same in-memory ceiling the bracemark backup has on mobile, failing loudly
+rather than guarded, so a very large library wants the desktop app.
 
 ### delete all data — one server-side wipe, not a client delete loop
 

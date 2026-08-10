@@ -20,10 +20,28 @@ export function isZipBytes(bytes: Uint8Array): boolean {
   );
 }
 
-export type TextImportFormat = 'netscape' | 'csv' | 'text';
+export type TextImportFormat = 'brace' | 'netscape' | 'csv' | 'text';
+
+// A Brace.to export: a JSON array whose first entry is `{ "path": "<namespace>…`
+// (the exporter always writes `path` before `data`, and always writes the link
+// files first). A STRUCTURAL probe over the head of the file, not a JSON.parse —
+// detection runs on every import and the file can be tens of MB, which the parser
+// then reads in full exactly once.
+//
+// Brace names its export `.txt`, so without this the file sniffs as plain text and
+// the URL regex mines the raw JSON: every dead revision, every `extractedResult`
+// image URL, every favicon. It degrades to a plausible-looking mess rather than an
+// error, which is what makes the structural check worth its precision.
+// A leading \uFEFF is the UTF-8 BOM some editors/transfers prepend (written as
+// an escape, not a literal — a bare BOM in source is invisible and lint-flagged).
+const BRACE_HEAD_RE = /^\uFEFF?\s*\[\s*\{\s*"path"\s*:\s*"(links|sslts|pins|tags|images|settings)/;
 
 export function detectTextImportFormat(text: string, filename = ''): TextImportFormat {
   const lower = filename.toLowerCase();
+
+  // Ahead of the anchor test below: a Brace link's stored title can contain any
+  // markup the page's <title> did, so `</a>` is not the stronger signal here.
+  if (BRACE_HEAD_RE.test(text.slice(0, 4096))) return 'brace';
 
   // Netscape HTML: the doctype every browser/Karakeep/LinkWarden export opens
   // with, or any anchor tag at all (a links CSV/text file never contains one —

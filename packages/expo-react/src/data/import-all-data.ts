@@ -1,7 +1,7 @@
 // Import-all-data orchestrator — the expo sibling of web-react's
 // data/import-all-data.ts, and the write-side mirror of export-all-data.ts
 // (web's file is the canonical doc: format detection — Bracemark-backup zip
-// restored verbatim vs. interop rows becoming new links, and the POLICY —
+// restored verbatim vs. interop/Brace.to rows becoming new links, and the POLICY —
 // dedupe by canonical URL, skip-existing by path, the upfront quota gate, a
 // file-carried title seeding the PROVISIONAL extraction title, folder paths
 // find-or-created with the nestedLists flatten). Everything lands through the
@@ -27,7 +27,7 @@
 import { File } from 'expo-file-system';
 
 import { newId } from '@stxapps/expo-crypto';
-import type { BundleEntry, Extraction, ImportOutcome, ImportProgress, Link } from '@stxapps/shared';
+import type { BundleEntry, ImportOutcome, ImportProgress } from '@stxapps/shared';
 import {
   assertUnderImportQuota,
   BACKUP_ITEMS_ENTRY,
@@ -35,29 +35,25 @@ import {
   backupFileEntry,
   canonicalUrlKey,
   classifyBundleLine,
-  cleanTitle,
   EXTRACTIONS_PREFIX,
-  extractionSchema,
   FILES_PREFIX,
   idFromPath,
+  type ImportedBundle,
   type ImportedLink,
   isZipBytes,
-  LINK_NOTE_MAX,
   LINKS_PREFIX,
-  linkSchema,
-  ListResolver,
   parseBackupManifest,
   parseImportText,
   pathFromId,
   PINS_PREFIX,
+  projectImportedLinks,
   referencedFileIds,
-  TagResolver,
 } from '@stxapps/shared';
 
 import { runIncrementalSync, type SyncDeps } from '../sync/engine';
 import { bulkGetItems, namespaceRows } from './item-store';
 import { bulkWriteEntities, type RawEntityEntry } from './mutations';
-import { readLists, readTags } from './queries';
+import { readLists, readPins, readTags } from './queries';
 
 // The picked file to import — expo-document-picker's asset, narrowed to what
 // the orchestrator needs. `name` feeds format detection (extension hints).
@@ -96,7 +92,7 @@ function readExistingLinks(): ExistingLinks {
 
 async function importInterop(
   username: string,
-  parsed: ImportedLink[],
+  bundle: ImportedBundle,
   maxLinks: number | null,
   nestedLists: boolean,
   onProgress: (progress: ImportProgress) => void,
@@ -106,64 +102,43 @@ async function importInterop(
   // Dedupe against the library and within the file, by canonical identity.
   const seen = new Set(existing.urlKeys);
   const rows: ImportedLink[] = [];
-  for (const row of parsed) {
+  for (const row of bundle.links) {
     const key = canonicalUrlKey(row.url) ?? row.url;
     if (seen.has(key)) continue;
     seen.add(key);
     rows.push(row);
   }
-  const skippedCount = parsed.length - rows.length;
+  const skippedCount = bundle.links.length - rows.length;
 
   assertUnderImportQuota(rows.length, existing.count, maxLinks);
 
-  const now = Date.now();
-  const lists = new ListResolver(await readLists(), now, newId);
-  const tags = new TagResolver(await readTags(), now, newId);
+  // Rows → entities: which list each lands in, deliberate vs. provisional
+  // titles, custom-image blobs, pin ranks. All of it is shared with web
+  // (@stxapps/shared import/project.ts) — only the store reads around it and the
+  // chunked writes below are this platform's.
+  const projected = projectImportedLinks({
+    rows,
+    lists: await readLists(),
+    tags: await readTags(),
+    existingPinRanks: (await readPins()).map((pin) => pin.rank),
+    images: bundle.images,
+    nestedLists,
+    newId,
+    now: Date.now(),
+  });
 
-  let invalidCount = 0;
-  let linkCount = 0;
-  const linkEntries: RawEntityEntry[] = [];
-  for (let i = 0; i < rows.length; i++) {
-    const row = rows[i];
-    // Undated rows get descending stamps from `now`, so the file's order IS the
-    // library's newest-first display order after import.
-    const createdAt = row.createdAt ?? now - i;
-    const updatedAt = Math.max(row.updatedAt ?? createdAt, createdAt);
-    const folderPath = nestedLists
-      ? row.folderPath
-      : row.folderPath.length > 0
-        ? [row.folderPath.join('/')]
-        : [];
-
-    const id = newId();
-    const link: Link = {
-      url: row.url,
-      listId: lists.resolve(folderPath),
-      tagIds: tags.resolve(row.tagNames),
-      createdAt,
-      updatedAt,
-    };
-    if (row.note !== undefined) link.note = row.note.slice(0, LINK_NOTE_MAX);
-    if (!linkSchema.safeParse(link).success) {
-      invalidCount += 1;
-      continue;
-    }
-    linkEntries.push({ path: pathFromId(id, LINKS_PREFIX), data: link });
-    linkCount += 1;
-
-    const title = cleanTitle(row.title);
-    if (title !== undefined) {
-      const extraction: Extraction = { id, title, facets: {}, createdAt, updatedAt };
-      if (extractionSchema.safeParse(extraction).success) {
-        linkEntries.push({ path: pathFromId(id, EXTRACTIONS_PREFIX), data: extraction });
-      }
+  // Blobs first (content before metadata), one at a time — they can be MB-sized,
+  // unlike the small entity rows that follow. Their bytes land on DISK through
+  // bulkWriteEntities' content path, not in the row.
+  if (projected.files.length > 0) {
+    onProgress({ step: 'files', done: 0, total: projected.files.length });
+    for (let i = 0; i < projected.files.length; i++) {
+      await bulkWriteEntities(username, [projected.files[i]]);
+      onProgress({ step: 'files', done: i + 1, total: projected.files.length });
     }
   }
 
-  // Lists and tags land first so no chunk boundary leaves a link pointing at a
-  // list/tag that isn't stored yet (a dangling ref is survivable, but free to
-  // avoid here). Progress counts entity writes.
-  const entries = [...lists.created, ...tags.created, ...linkEntries];
+  const entries: RawEntityEntry[] = projected.entries;
   onProgress({ step: 'items', done: 0, total: entries.length });
   for (let i = 0; i < entries.length; i += WRITE_CHUNK) {
     await bulkWriteEntities(username, entries.slice(i, i + WRITE_CHUNK));
@@ -175,12 +150,12 @@ async function importInterop(
   }
 
   return {
-    linkCount,
-    listCount: lists.created.length,
-    tagCount: tags.created.length,
-    fileCount: 0,
+    linkCount: projected.linkCount,
+    listCount: projected.listCount,
+    tagCount: projected.tagCount,
+    fileCount: projected.files.length,
     skippedCount,
-    invalidCount,
+    invalidCount: projected.invalidCount,
   };
 }
 
@@ -287,8 +262,9 @@ const INTEROP_ZIP_ENTRY_RE = /\.(csv|html?|txt)$/i;
 // Parse every recognizable text entry and concatenate the rows — the zip-level
 // mirror of the text branch in importAllData. Archiver metadata (__MACOSX/…)
 // and hidden files are skipped; filename order keeps multi-part exports
-// (part_000000.csv, part_000001.csv, …) in sequence.
-function parseInteropZip(byName: Map<string, Uint8Array>): ImportedLink[] {
+// (part_000000.csv, part_000001.csv, …) in sequence. A zipped Brace.to export
+// routes through here too, since it detects per entry like anything else.
+function parseInteropZip(byName: Map<string, Uint8Array>): ImportedBundle {
   const decoder = new TextDecoder();
   const candidates = [...byName.entries()]
     .filter(([name]) => {
@@ -304,11 +280,14 @@ function parseInteropZip(byName: Map<string, Uint8Array>): ImportedLink[] {
     );
   }
 
-  const parsed: ImportedLink[] = [];
+  const links: ImportedLink[] = [];
+  const images = new Map<string, Uint8Array>();
   for (const [name, bytes] of candidates) {
-    parsed.push(...parseImportText(decoder.decode(bytes), name));
+    const parsed = parseImportText(decoder.decode(bytes), name);
+    links.push(...parsed.links);
+    for (const [key, blob] of parsed.images) images.set(key, blob);
   }
-  return parsed;
+  return { links, images };
 }
 
 // The zip dispatch: one unzip, one entry map. manifest.json marks a Bracemark
