@@ -398,7 +398,7 @@ async function incrementalCycle(
   let cursorUpdatedAt = since;
   let cursorPath = sincePath;
   let page = first;
-  for (; ;) {
+  for (;;) {
     for (const op of page.ops) {
       serverOps.set(op.path, op);
       cursorUpdatedAt = op.updatedAt;

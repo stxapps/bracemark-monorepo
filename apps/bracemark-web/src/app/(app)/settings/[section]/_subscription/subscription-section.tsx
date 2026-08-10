@@ -203,20 +203,20 @@ export function SubscriptionSection() {
             <span className="text-sm text-muted-foreground">
               {plan === 'free'
                 ? // NOT "without previews": free stores preview images like every
-                // plan, it just needs a client to extract them — and in a web tab
-                // CORS means that client is the browser extension. What Plus buys
-                // is `serverExtraction`, i.e. previews for links no device fetched
-                // (see docs/link-extraction.md, _the web-only gap_).
-                `Encrypted saving, sync, lists and tags — up to ${entitlementsOf('free').maxLinks} links, with previews from the browser extension.`
+                  // plan, it just needs a client to extract them — and in a web tab
+                  // CORS means that client is the browser extension. What Plus buys
+                  // is `serverExtraction`, i.e. previews for links no device fetched
+                  // (see docs/link-extraction.md, _the web-only gap_).
+                  `Encrypted saving, sync, lists and tags — up to ${entitlementsOf('free').maxLinks} links, with previews from the browser extension.`
                 : expiresAt === null
                   ? 'Never expires.'
                   : // A trial's period end is the FIRST CHARGE, not a renewal —
-                  // say that, rather than letting "Renews on" imply they have
-                  // already paid. Canceling mid-trial gets its own sentence
-                  // too: the generic "it won't renew" is accurate but leaves
-                  // the question they actually cancelled over — am I being
-                  // charged? — unanswered.
-                  status === 'trialing'
+                    // say that, rather than letting "Renews on" imply they have
+                    // already paid. Canceling mid-trial gets its own sentence
+                    // too: the generic "it won't renew" is accurate but leaves
+                    // the question they actually cancelled over — am I being
+                    // charged? — unanswered.
+                    status === 'trialing'
                     ? willRenew
                       ? `Free trial — your first payment is on ${formatDate(expiresAt)}.`
                       : `Free trial ends on ${formatDate(expiresAt)} — you won't be charged.`

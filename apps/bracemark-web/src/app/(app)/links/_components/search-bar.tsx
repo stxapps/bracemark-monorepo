@@ -204,12 +204,13 @@ function TriCheckList({
               <Checkbox
                 checked={state === 'include' ? true : state === 'exclude' ? 'indeterminate' : false}
                 onCheckedChange={() => cycle(o.id)}
-                aria-label={`${o.name}: ${state === 'include'
-                  ? 'included'
-                  : state === 'exclude'
-                    ? 'excluded'
-                    : 'not selected'
-                  }`}
+                aria-label={`${o.name}: ${
+                  state === 'include'
+                    ? 'included'
+                    : state === 'exclude'
+                      ? 'excluded'
+                      : 'not selected'
+                }`}
               />
               <span
                 className={

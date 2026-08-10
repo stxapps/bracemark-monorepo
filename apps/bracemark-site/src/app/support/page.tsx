@@ -26,8 +26,8 @@ export const metadata: Metadata = {
 // every message, which is true and is the part people actually want.
 //
 // The "what we can't do" block is the most useful thing on the page. Password
-// recovery is the single most common support request an E2E app receives, 
-// and the answer is always no — so it is stated before someone writes in hoping 
+// recovery is the single most common support request an E2E app receives,
+// and the answer is always no — so it is stated before someone writes in hoping
 // otherwise.
 
 const INCLUDE = [
