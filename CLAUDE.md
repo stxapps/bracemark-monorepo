@@ -88,6 +88,16 @@ self-contained and cross-links its neighbours.
 Rules whose violation is **silent** — no lint error, no type error, no failing
 test. Check the linked doc before acting on any of these.
 
+- **`internal/` must never appear in a file this repo tracks.** A private folder
+  sits at the workspace root — gitignored here, backed by its own private repo.
+  Nothing from it may cross into anything this repo tracks: no path, no filename,
+  no quoted line, no number, no date — in docs, source comments, or commit
+  messages. `tools/git-hooks/pre-commit` and `npm run check:private` only stop the
+  _directory_ from being committed; a sentence copied out of it passes every
+  check, and once pushed to a public repo it is unrecoverable (forks, caches,
+  mirrors). Default search won't surface the folder either — ripgrep respects
+  `.gitignore` — so the failure mode is writing the reference by hand. The folder
+  carries its own instructions; nothing about its contents belongs in this file.
 - **Dependency versions on the Expo side.** Root `package.json` pins the
   version; `bracemark-expo` declares `*`; packages declare a peer `*` (a real floor
   only where it means something). Never declare `expo-modules-core` anywhere;
