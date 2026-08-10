@@ -3,11 +3,27 @@
   "files.associations": {
     "*.css": "tailwindcss"
   },
-  // The Gradle Build Server imports every build.gradle it finds, including the
-  // ~35 under node_modules. Those are expo/RN library subprojects: they declare
-  // `plugins { id 'com.android.library' }` with no version, which only resolves
-  // when included from apps/bracemark-expo/android/settings.gradle (pluginManagement
-  // + the expo version catalog). Imported standalone they fail to configure.
-  // Nothing here needs the import — android/ is generated and gitignored.
-  "java.gradle.buildServer.enabled": "off"
+  // Nothing in the editor needs Gradle to run: apps/bracemark-expo/android/ is
+  // generated and gitignored, and every real Android build goes through the CLI
+  // (`npm run -w @stxapps/bracemark-expo android`, prebuild, EAS). The failures
+  // come from the ~96 build.gradle files under node_modules — expo/RN library
+  // subprojects that declare `plugins { id 'com.android.library' }` with no
+  // version, which only resolves when included from android/settings.gradle
+  // (pluginManagement + the expo version catalog). Configured standalone they fail.
+  //
+  // The "Gradle for Java" extension (vscjava.vscode-gradle) has TWO independent
+  // ways to configure a build on window open, so both must be turned off:
+  //   - the Gradle Build Server importer, and
+  //   - task auto-detection, which calls the Tooling API (a real Gradle daemon)
+  //     for every project root it discovers. Guarded only by gradle.autoDetect,
+  //     which defaults to "on" — disabling the build server alone does nothing
+  //     to it.
+  // Both settings are folder-scoped, so this file is the right place for them.
+  // Belt and braces: disable the extension for this workspace in the Extensions
+  // view (that can't be expressed in settings.json).
+  "java.gradle.buildServer.enabled": "off",
+  "gradle.autoDetect": "off",
+  // Default is already false; pinned so an "enable nested projects" prompt can't
+  // quietly pull the node_modules subprojects back in.
+  "gradle.nestedProjects": false
 }
