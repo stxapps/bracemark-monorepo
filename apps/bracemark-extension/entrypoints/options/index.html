@@ -5,6 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Bracemark — Settings</title>
     <!--
+      Load-bearing, not a redundant default. `open_in_tab: false` is what makes this
+      page render INSIDE its host — Chrome's options dialog on chrome://extensions,
+      Firefox's Preferences tab in about:addons — and both hosts draw the icon, the
+      name and a close affordance directly above this document. Shell.tsx therefore
+      ships no header of its own. Flip this to true and the page becomes a bare tab
+      with no host chrome at all: nothing names the product, and nothing tells it
+      apart from bracemark-web's Settings, which carries the same title and could
+      then sit in the next tab over. Restore the header in the same change if you
+      ever do. WXT reads `manifest.*` meta tags as per-entrypoint config; false is
+      also its default, written out so the choice is visible where it'd be changed.
+    -->
+    <meta name="manifest.open_in_tab" content="false" />
+    <!--
       The pre-paint theme FOUC script is injected into <head> at build time from the
       shared `themeInitScript()` (see wxt.config.ts `themeFoucPlugin`) — one source,
       shared with bracemark-web, instead of a hand-copied inline script here.

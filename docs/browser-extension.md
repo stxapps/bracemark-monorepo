@@ -41,15 +41,27 @@ silent visual regression, so they're written down:
 
 - **The frame owns the geometry.** `popup/Shell.tsx` declares the popup's width
   (`w-90` — 360px), the header, the 16px body padding and the footer slot;
-  `options/Shell.tsx` declares the topbar, the `max-w-2xl px-6` measure and the
+  `options/Shell.tsx` declares the `max-w-2xl px-6` measure, the footer and the
   section rhythm. Screens compose them and set no width of their own. Before
   this, six components each carried `w-85 p-4` and had already drifted.
+- **The options page has no header, and that's the config's doing.**
+  `options/index.html` pins `manifest.open_in_tab: false`, so the page only ever
+  renders embedded — Chrome's options dialog on `chrome://extensions`, Firefox's
+  Preferences tab in `about:addons` — reached solely through the popup's
+  `runtime.openOptionsPage()`. Both hosts already draw the icon, the name and a
+  close affordance above the document, so the topbar this page used to carry (icon
+  + wordmark + a "Browser extension" label) was a second copy of the host's own
+  chrome, disambiguating it from bracemark-web's Settings in a place where the two
+  cannot sit side by side. The meta tag carries the reasoning; **turning it on
+  means restoring the header in the same change**, because a bare options tab has
+  no chrome naming the product at all.
 - **The options page mirrors bracemark-web's settings scale exactly** — same
   measure, `text-xl font-semibold` page heading, `text-base font-medium`
   sections, `text-sm text-muted-foreground` descriptions, the same
-  `has-data-checked:` radio rows. Both are "Settings" for one product and can sit
-  in adjacent tabs; only the topbar's "Browser extension" label distinguishes
-  them, and that's deliberate. **The other side of that mirror is now a real
+  `has-data-checked:` radio rows. Both are "Settings" for one product, so a user
+  who has seen one shouldn't be able to tell they've changed apps. Note that
+  neither host gives the embedded page the full 672px — the measure is a ceiling
+  kept for parity, not a width the page reaches today. **The other side of that mirror is now a real
   component**, not a convention two files agree to follow by hand:
   `bracemark-web/src/app/(app)/settings/_components/settings-kit.tsx` owns the
   measure, the heading steps, the bordered row and the notice tones for all

@@ -1,44 +1,44 @@
 import { ArrowUpRight } from 'lucide-react';
 
-import { BracemarkIcon } from '@stxapps/web-ui/components/icons/bracemark-icon';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { WEB_APP_URL } from '@/utils/web-app-url';
 
-// Chrome for the Settings page. Unlike the popup, this is a real full-width tab,
-// so the frame's job is the opposite one: not to fit a tiny window, but to stop a
-// short page from floating in a wide one.
+// Chrome for the Settings page — and deliberately less of it than a page gets. This
+// is NOT a standalone tab: index.html pins `manifest.open_in_tab: false` and the only
+// way in is the popup's `runtime.openOptionsPage()`, so the document always renders
+// EMBEDDED inside its host — Chrome's options dialog on chrome://extensions, or the
+// Preferences tab of the browser extension's about:addons entry in Firefox. Each host
+// already draws the icon, the name and a close affordance immediately above this
+// document, so a header here would be the second copy of both, and a label
+// distinguishing this Settings page from bracemark-web's would answer a question a
+// user embedded in about:addons cannot be asking. index.html carries the reasoning
+// at the point where someone would undo it.
 //
 // THE MEASURE IS bracemark-web's. `max-w-2xl` with `px-6` is exactly what a
 // settings pane there is set to, and the headings below match its scale step for
 // step (`text-xl font-semibold` for the page, `text-base font-medium` for a
 // section, `text-sm text-muted-foreground` for the line under either). The two
 // pages are the same product's settings, reached from two places; a user who has
-// seen one should not be able to tell they've changed apps. The 460px column this
-// replaced was neither the app's measure nor a comfortable one.
-//
-// The topbar names the surface on the right — "Browser extension". Both this page
-// and bracemark-web's are titled "Settings", they can be open in adjacent tabs, and
-// only one of them is where the theme for THIS browser gets set. One label in the
-// corner is cheaper than the wrong tab getting edited.
+// seen one should not be able to tell they've changed apps. Neither host hands this
+// document the full 672px, so the measure is a ceiling rather than a target — it's
+// here for the parity, and for whatever room a host gives it later.
 
+// `min-h-dvh` SURVIVES the header's removal, and it isn't the same assumption. It
+// does one job: hold the footer against the bottom of whatever frame the host gives
+// this document. Chrome's options dialog has a definite height, so on a short screen
+// — the signed-out state especially — dropping this would drag the footer's `border-t`
+// up into the middle of the dialog with dead space under it, reading as a page that
+// ended early. Firefox sizes its about:addons iframe to the content, so there the
+// declaration is simply inert; it's not Chrome-specific by intent, just by which host
+// hands out a viewport. It is NOT what paints the background — web-ui's `body` rule
+// does that, and CSS propagates it to the canvas whatever this div measures. `dvh`
+// over `vh` is house idiom only: the two differ where a mobile browser's URL bar
+// collapses — the reason bracemark-web cites — and no surface in the browser
+// extension has one.
 export function OptionsShell({ children }: { children: React.ReactNode }) {
   return (
     <div className={cn('flex min-h-dvh flex-col bg-background text-foreground')}>
-      <header
-        className={cn(
-          'sticky top-0 z-20 shrink-0 border-b border-border bg-background/90 backdrop-blur-md',
-        )}
-      >
-        <div className={cn('mx-auto flex h-14 max-w-2xl items-center gap-2.5 px-6')}>
-          <BracemarkIcon className={cn('h-5 w-auto shrink-0')} aria-hidden="true" />
-          <span className={cn('text-[0.9375rem] leading-none font-semibold tracking-tight')}>
-            Bracemark
-          </span>
-          <span className={cn('ml-auto text-xs text-muted-foreground')}>Browser extension</span>
-        </div>
-      </header>
-
       <main className={cn('mx-auto w-full max-w-2xl flex-1 px-6 py-10')}>{children}</main>
 
       <Footer />
