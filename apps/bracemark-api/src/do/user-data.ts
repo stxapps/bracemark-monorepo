@@ -40,8 +40,10 @@ export type CommitEntry = {
 // `schema_version` table (NOT `PRAGMA user_version`: workerd's DO SQLite
 // authorizer rejects that PRAGMA with SQLITE_AUTH) and apply any pending
 // statements on construction, before the instance serves a request
-// (blockConcurrencyWhile). The schema snapshot in do/README.md mirrors this for
-// at-a-glance reference only and is not applied by any tool. See do/README.md.
+// (blockConcurrencyWhile). The MIGRATIONS array below is the SOLE source of truth
+// for this schema — a DO has no create-from-snapshot path (it is only ever built
+// by replaying the array), so there is deliberately no snapshot to drift out of
+// lockstep with, in do/README.md or anywhere else. See do/README.md.
 
 // Ordered schema versions: entry i upgrades schema_version i -> i+1. APPEND ONLY
 // — never edit a shipped entry (DOs already past it won't re-run it). Each entry
@@ -49,11 +51,18 @@ export type CommitEntry = {
 const MIGRATIONS: string[][] = [
   // 0 -> 1: initial append-only op log. AUTOINCREMENT (not bare rowid) so seq is
   // strictly increasing and never reused even after compaction deletes old rows.
-  // the keyset cursor index + the durable per-path size map. The op-list
+  // Then the keyset cursor index + the durable per-path size map. The op-list
   // pull is a keyset scan ordered by (updated_at, path) (op-logs.ts listSince), so
   // index that exact tuple. `file_sizes` is the quota's source of truth — set on
   // every committed put, read-and-subtracted on delete (file-sizes.ts) — kept
   // separate from the compactable op log so it never undercounts.
+  //
+  // `idx_op_logs_cursor` is the ONLY index op_logs carries, deliberately. There is
+  // no index on `path` alone: nothing reads the log by path (op-logs.ts has only
+  // listSince/bounds/append/clear), and an index here is paid on `append` — the
+  // hottest write in the system, once per committed put and delete. Compaction
+  // (dedupe-by-path, not built yet) is the one plausible reader; add it in a new
+  // MIGRATIONS entry then, alongside the code that uses it.
   [
     `CREATE TABLE IF NOT EXISTS op_logs (
        seq        INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -61,7 +70,6 @@ const MIGRATIONS: string[][] = [
        path       TEXT NOT NULL,
        updated_at INTEGER NOT NULL
      )`,
-    `CREATE INDEX IF NOT EXISTS idx_op_logs_path ON op_logs(path)`,
     `CREATE INDEX IF NOT EXISTS idx_op_logs_cursor ON op_logs(updated_at, path)`,
     `CREATE TABLE IF NOT EXISTS file_sizes (
        path TEXT PRIMARY KEY,

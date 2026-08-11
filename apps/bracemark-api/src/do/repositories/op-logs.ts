@@ -76,12 +76,26 @@ export function opLogsRepo(sql: SqlStorage) {
     // mark table needed (unlike a seq): compaction trims oldest-first and never
     // removes the newest row, so MAX(updated_at) is always the true newest-ever.
     // A never-written log yields { null, null }.
+    //
+    // TWO SCALAR SUBQUERIES, NOT `SELECT MIN(...), MAX(...)`. SQLite's min/max
+    // optimization — rewriting the aggregate into a one-row seek at an end of an
+    // index — only fires for a query with EXACTLY ONE aggregate. Asking for both
+    // in a single SELECT disqualifies it and degrades to a full scan of
+    // idx_op_logs_cursor. Split this way each subquery is its own single-aggregate
+    // query and gets the seek (verified: `SCAN` becomes two `SEARCH`es; ~8.7ms ->
+    // ~0.005ms at 200k rows). This is called on EVERY pull AND every commit
+    // (../user-data.ts listOps/commitOps), in the DO's serialized single thread, and
+    // the log grows unbounded until compaction lands — so the scan's cost is
+    // per-request and rises with the user's whole history.
     bounds(): OpLogBounds {
       const row = sql
         .exec<{
           oldest: number | null;
           newest: number | null;
-        }>(`SELECT MIN(updated_at) AS oldest, MAX(updated_at) AS newest FROM op_logs`)
+        }>(
+          `SELECT (SELECT MIN(updated_at) FROM op_logs) AS oldest,
+                  (SELECT MAX(updated_at) FROM op_logs) AS newest`,
+        )
         .one();
       return { oldestUpdatedAt: row.oldest, newestUpdatedAt: row.newest };
     },
