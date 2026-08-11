@@ -50,11 +50,11 @@ silent visual regression, so they're written down:
   Preferences tab in `about:addons` — reached solely through the popup's
   `runtime.openOptionsPage()`. Both hosts already draw the icon, the name and a
   close affordance above the document, so the topbar this page used to carry (icon
-  + wordmark + a "Browser extension" label) was a second copy of the host's own
-  chrome, disambiguating it from bracemark-web's Settings in a place where the two
-  cannot sit side by side. The meta tag carries the reasoning; **turning it on
-  means restoring the header in the same change**, because a bare options tab has
-  no chrome naming the product at all.
+  - wordmark + a "Browser extension" label) was a second copy of the host's own
+    chrome, disambiguating it from bracemark-web's Settings in a place where the two
+    cannot sit side by side. The meta tag carries the reasoning; **turning it on
+    means restoring the header in the same change**, because a bare options tab has
+    no chrome naming the product at all.
 - **The options page mirrors bracemark-web's settings scale exactly** — same
   measure, `text-xl font-semibold` page heading, `text-base font-medium`
   sections, `text-sm text-muted-foreground` descriptions, the same
@@ -196,10 +196,10 @@ install consent screen. It has been mandatory for new extensions since
 `npm run dev:firefox` until it's set), and the honest list for this extension is
 three `required` types with no `optional` ones:
 
-| type                 | what leaves the device                                                                   |
-| -------------------- | ---------------------------------------------------------------------------------------- |
-| `authenticationInfo` | the username + password-derived proof of _the extension runs its own sign-in_ above       |
-| `browsingActivity`   | the saved link's specific URL                                                              |
+| type                 | what leaves the device                                                                        |
+| -------------------- | --------------------------------------------------------------------------------------------- |
+| `authenticationInfo` | the username + password-derived proof of _the extension runs its own sign-in_ above           |
+| `browsingActivity`   | the saved link's specific URL                                                                 |
 | `websiteContent`     | title, `og:image` bytes, viewport screenshot, read-mode + page-copy HTML (`utils/capture.ts`) |
 
 Three things about that table are easy to get wrong later:
@@ -228,11 +228,11 @@ saying the same thing.
 look like taste and aren't. **Both are the highest floor our dependencies
 impose, and nothing more:**
 
-| floor            | Firefox | Chrome | why                                                                                  |
-| ---------------- | ------- | ------ | ------------------------------------------------------------------------------------ |
-| Vite's JS target | 114     | 111    | `baseline-widely-available`; re-check on a Vite major, it moves                       |
+| floor            | Firefox | Chrome | why                                                                                         |
+| ---------------- | ------- | ------ | ------------------------------------------------------------------------------------------- |
+| Vite's JS target | 114     | 111    | `baseline-widely-available`; re-check on a Vite major, it moves                             |
 | Tailwind v4 CSS  | 128     | 111    | `@property` / `color-mix()` — the oklch token system, so below it the popup _renders wrong_ |
-| the disclosure   | 140     | —      | `data_collection_permissions` is ignored below it (Android: 142)                     |
+| the disclosure   | 140     | —      | `data_collection_permissions` is ignored below it (Android: 142)                            |
 
 Firefox 140 is also the current ESR, so every version it excludes is both
 unsupported by Mozilla and already broken by Tailwind. Chrome has no third row —
