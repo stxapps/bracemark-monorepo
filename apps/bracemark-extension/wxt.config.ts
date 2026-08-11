@@ -174,11 +174,87 @@ export default defineConfig({
       ...(isFirefox
         ? {
             browser_specific_settings: {
-              gecko: { id: 'addon@bracemark.com', strict_min_version: '114.0' },
+              gecko: {
+                id: 'addon@bracemark.com',
+                // DERIVED, not a support policy — see minimum_chrome_version below for
+                // why a rolling "latest minus N" is the wrong shape for these two fields.
+                // Three floors stack here, and 140 is the highest:
+                //   114 — Vite's default `baseline-widely-available` JS target (it emits
+                //         firefox114 syntax; bumped on each Vite major, so re-check on
+                //         a Vite upgrade — ESBUILD_BASELINE_WIDELY_AVAILABLE_TARGET).
+                //   128 — Tailwind v4's stated CSS floor. Below it the popup INSTALLS
+                //         AND RENDERS WRONG (no @property/color-mix, so the oklch token
+                //         system collapses) — the worst failure of the three.
+                //   140 — where data_collection_permissions below is honored. On 128–139
+                //         it installs and works, but Firefox silently skips the consent
+                //         screen, i.e. ships the disclosure without disclosing.
+                // 140 is also the current ESR (140.13 as of 2026-08; ESR-next is 153), so
+                // it's the oldest Firefox still receiving security updates at all. Every
+                // version this excludes is both unsupported by Mozilla and broken by
+                // Tailwind. Raising it is the expensive direction — AMO stops serving
+                // updates to anyone below the floor, silently — so it should move only
+                // when a dependency's floor actually moves.
+                strict_min_version: '140.0',
+                // Required on every NEW Firefox extension from 2025-11-03 — AMO rejects a
+                // submission without it, and WXT warns on every `wxt -b firefox` until
+                // it's set. It is a DISCLOSURE, not a capability: these strings are
+                // rendered verbatim on Firefox's install consent screen, so a wrong list
+                // is a false claim made to the user — same standard as the licence and
+                // the "no trackers" line in listing-copy.ts, not a lint nit.
+                //
+                // All `required`, no `optional`: none of it is a toggle, because putting
+                // a saved page into the user's account IS the extension.
+                //   authenticationInfo — the extension runs its own sign-in (see
+                //     docs/browser-extension.md), sending a username + password-derived
+                //     proof to bracemark-api. Mozilla's definition covers "registration
+                //     information for extensions that offer account-based services".
+                //   browsingActivity   — the saved link's specific URL leaves the device.
+                //   websiteContent     — title, og:image bytes, the viewport screenshot,
+                //     read-mode HTML and page-copy HTML (utils/capture.ts).
+                // Every byte of that is end-to-end encrypted before upload, which changes
+                // nothing here: Mozilla's test is transmission off the device, not whether
+                // we can read it. Adding a facet that sends something new to bracemark-api
+                // means revisiting this list in the same change.
+                //
+                // Two deliberate omissions:
+                //   bookmarksInfo — scoped to FIREFOX bookmarks (the `bookmarks` API, which
+                //     this extension neither requests nor calls). Claiming it for our own
+                //     saved links would tell users we read their bookmark tree — a worse
+                //     disclosure, not a safer one.
+                //   technicalAndInteraction — no analytics, no telemetry, no crash
+                //     reporting anywhere in this app. It's optional-only by spec, and
+                //     listing it would contradict listing-copy.ts's store copy.
+                //
+                // https://extensionworkshop.com/documentation/develop/firefox-builtin-data-consent/
+                data_collection_permissions: {
+                  required: ['authenticationInfo', 'browsingActivity', 'websiteContent'],
+                },
+              },
+              // Firefox for Android tracks the gecko floor unless given its own, and
+              // Android got data_collection_permissions two releases later than desktop
+              // (142 vs 140) — so without this the disclosure is silently skipped on
+              // Android 140–141, and `web-ext lint` says so. Both are long past on a
+              // channel now at 153, so the two-version gap costs nothing.
+              gecko_android: { strict_min_version: '142.0' },
             },
           }
         : {
-            minimum_chrome_version: '93',
+            // Chrome 111 (Mar 2023), and it is DERIVED the same way gecko's floor is:
+            // it's exactly where Vite's default JS target and Tailwind v4's CSS floor
+            // both land, and nothing in the graph needs newer (Dexie feature-detects
+            // Promise.withResolvers rather than requiring it; CompressionStream never
+            // reaches this bundle). Chrome has no equivalent of the Firefox 140 rule —
+            // its data disclosure is the Web Store dashboard's Privacy tab, not a
+            // manifest key — so the two numbers differ by three years and that's fine.
+            //
+            // Do NOT track this to "latest minus a few". These fields gate INSTALL AND
+            // UPDATE DELIVERY, not testing: a browser below the floor silently stops
+            // receiving new versions, so every bump strands whoever installed under the
+            // old one. Set it once at the real floor and leave it. Too HIGH costs reach
+            // for no quality gain; too LOW is the actual bug, and it was — the previous
+            // '93' let Chrome ship a popup whose CSS Tailwind v4 cannot render and whose
+            // JS Vite no longer targets.
+            minimum_chrome_version: '111',
           }),
     };
   },

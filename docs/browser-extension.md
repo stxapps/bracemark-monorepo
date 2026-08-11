@@ -186,3 +186,67 @@ seam — `useApiClient()` in the hooks, `SyncDeps.api` (threaded from the
 provider) in the engine — so each app binds its own baseUrl. bracemark-web's
 `lib/api.ts` stays app-local (it owns `NEXT_PUBLIC_API_URL`); the extension's
 `utils/api.ts` is its counterpart (base URL from the build mode).
+
+### the Firefox data-collection disclosure
+
+`browser_specific_settings.gecko.data_collection_permissions` in `wxt.config.ts`
+is **store copy, not config** — Firefox renders those strings verbatim on the
+install consent screen. It has been mandatory for new extensions since
+2025-11-03 (AMO rejects a submission without it; WXT warns on every
+`npm run dev:firefox` until it's set), and the honest list for this extension is
+three `required` types with no `optional` ones:
+
+| type                 | what leaves the device                                                                   |
+| -------------------- | ---------------------------------------------------------------------------------------- |
+| `authenticationInfo` | the username + password-derived proof of _the extension runs its own sign-in_ above       |
+| `browsingActivity`   | the saved link's specific URL                                                              |
+| `websiteContent`     | title, `og:image` bytes, viewport screenshot, read-mode + page-copy HTML (`utils/capture.ts`) |
+
+Three things about that table are easy to get wrong later:
+
+- **End-to-end encryption doesn't shorten it.** Mozilla's test is transmission
+  off the device, not whether we can read what we transmit.
+- **`bookmarksInfo` is not ours to claim.** It means _Firefox_ bookmarks — the
+  `bookmarks` API, which this extension neither requests nor calls. Declaring it
+  for our own saved links tells users we read their bookmark tree: a worse
+  disclosure, not a more cautious one.
+- **`technicalAndInteraction` must stay off.** There is no analytics, telemetry
+  or crash reporting in this app, and listing it would contradict "No ads, no
+  trackers, no analytics" in `packages/shared/src/stores/listing-copy.ts`.
+
+The list is a claim about the API surface, so **a facet that sends something new
+to bracemark-api revisits it in the same change** — nothing in the build can
+notice that it has gone stale. Full definitions:
+[Firefox built-in data consent](https://extensionworkshop.com/documentation/develop/firefox-builtin-data-consent/).
+Chrome's equivalent isn't a manifest key at all — it's the Privacy tab in the
+Web Store dashboard, filled in by hand at submission; keep the two answers
+saying the same thing.
+
+### the browser floors are derived, not a support policy
+
+`strict_min_version` (140.0, Android 142.0) and `minimum_chrome_version` (111)
+look like taste and aren't. **Both are the highest floor our dependencies
+impose, and nothing more:**
+
+| floor            | Firefox | Chrome | why                                                                                  |
+| ---------------- | ------- | ------ | ------------------------------------------------------------------------------------ |
+| Vite's JS target | 114     | 111    | `baseline-widely-available`; re-check on a Vite major, it moves                       |
+| Tailwind v4 CSS  | 128     | 111    | `@property` / `color-mix()` — the oklch token system, so below it the popup _renders wrong_ |
+| the disclosure   | 140     | —      | `data_collection_permissions` is ignored below it (Android: 142)                     |
+
+Firefox 140 is also the current ESR, so every version it excludes is both
+unsupported by Mozilla and already broken by Tailwind. Chrome has no third row —
+its disclosure lives in the Web Store dashboard — which is why the two numbers
+sit three years apart. That asymmetry is correct; don't "align" them.
+
+**Do not track these to the latest release minus a few.** They gate install and
+_update delivery_, not testing: a browser below the floor silently stops
+receiving new versions, so every bump strands whoever installed under the old
+one — which makes raising a floor the expensive direction and a rolling window
+the worst of both. Too high costs reach and buys no quality; too low is the real
+bug, and it was one — `minimum_chrome_version` was `'93'`, three CSS generations
+under what Tailwind v4 needs, so Chrome would have installed the extension and
+drawn an unstyled popup. Set each floor at the true minimum, and move it only
+when a dependency's own floor moves. `npx web-ext lint --source-dir
+.output/firefox-mv3` is the check on the Firefox side: it flags any manifest key
+newer than the declared minimum (`KEY_FIREFOX_*UNSUPPORTED_BY_MIN_VERSION`).
