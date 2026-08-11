@@ -184,8 +184,22 @@ plain JS. Single source, no hand-copied duplicate of the resolver.
 - **bracemark-expo** — the model is identical (four modes, the sync/device split,
   the same `useSettings`/`useSettingMutations` seam in `@stxapps/expo-react`),
   and the picker is Settings → Misc (`features/settings/misc-section.tsx`), the
-  same tab shape as web. Only the **read/apply half** differs, because RN has no
-  DOM class and no pre-paint `<script>`. The `ThemeProvider`
+  same tab shape as web. Two things differ, both because RN lacks a browser
+  affordance rather than by design.
+
+  The first is the **`custom`-mode crossover times**. Web uses
+  `<Input type="time">`, whose load-bearing property is not its popup but that
+  the browser only ever emits a complete `"HH:mm"` — and `coerceThemeState` at
+  the read edge discards anything else, so a free-text RN field could never
+  reach a new time (every intermediate keystroke is invalid and coerced away
+  mid-edit). RN's stand-in is the platform's native time picker, wrapped in
+  `features/settings/time-field.tsx` — a button showing the time, opening
+  Android's dialog or, on iOS, a spinner in our `Dialog`. See
+  [expo-native-deps.md](./expo-native-deps.md) —
+  _@react-native-community/datetimepicker_.
+
+  The second is the **read/apply half**, because RN has no DOM class and no
+  pre-paint `<script>`. The `ThemeProvider`
   (`apps/bracemark-expo/src/components/theme-provider.tsx`) is the port of web-ui's:
   it consumes the already-resolved `useSettings().theme`, exposes
   `useTheme().effectiveTheme`, and re-resolves on each mode's trigger. It mounts

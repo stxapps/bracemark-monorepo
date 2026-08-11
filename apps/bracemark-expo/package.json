@@ -31,6 +31,7 @@
     "@craftzdog/react-native-buffer": "*",
     "@expo/metro-config": "*",
     "@hookform/resolvers": "*",
+    "@react-native-community/datetimepicker": "*",
     "@react-native-community/netinfo": "*",
     "@react-navigation/drawer": "*",
     "@react-navigation/native": "*",

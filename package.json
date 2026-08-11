@@ -88,6 +88,7 @@
     "@expo/metro-config": "~54.0.9",
     "@expo/metro-runtime": "~6.1.2",
     "@hookform/resolvers": "^5.4.0",
+    "@react-native-community/datetimepicker": "8.4.4",
     "@react-native-community/netinfo": "11.4.1",
     "@react-navigation/drawer": "^7.13.4",
     "@rn-primitives/alert-dialog": "^1.5.2",

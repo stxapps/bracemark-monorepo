@@ -104,6 +104,37 @@ Run → Options → StoreKit Configuration), and schemes live under `ios/`, whic
 re-select it after each prebuild — or test on a device with a sandbox account
 and skip it.
 
+#### @react-native-community/datetimepicker
+
+The two **theme crossover-time** fields in Settings → Misc (`custom` mode —
+[theme.md](./theme.md)). Added per the normal convention (`npx expo install`
+inside `apps/bracemark-expo`, then `*` in the app and the real pin — `8.4.4`,
+what `expo/bundledNativeModules.json` names for SDK 54 — in the root
+`package.json`). Native module, so `npx expo prebuild` is required.
+
+It is here because web's control for these fields is `<Input type="time">`, and
+the property that makes that work is **not** the popup — it's that the browser
+only ever emits a complete `"HH:mm"`. The times are validated at the read edge
+by `coerceThemeState`, which falls back to `DEFAULT_THEME` on any malformed
+value, so a free-text RN field can't reach a new time at all: each intermediate
+keystroke is invalid and gets coerced away mid-edit (and on the Sync tab, each
+one is its own `writeSettingsGeneral` + sync kick). A native picker restores the
+commit-once-with-a-valid-value property that `type="time"` had. The wrapper is
+`features/settings/time-field.tsx`; its header is canonical.
+
+Two notes that aren't in the package's README:
+
+- **Never pass `is24Hour` on Android.** Omitted, `RNTimePickerDialogFragment`
+  defaults it to `DateFormat.is24HourFormat(context)` — the device's own
+  "Use 24-hour format" setting. Any value passed there overrides the user's
+  choice, so the app carries no 12h/24h flag of its own (iOS follows the locale;
+  the button label goes through `toLocaleTimeString`).
+- **The config plugin is listed in `app.config.ts` but does nothing.** It only
+  restyles the Android dialogs, and every branch early-returns without an
+  `android` option. It's named so `expo-doctor` doesn't flag an unlisted config
+  plugin and `expo install` stops re-prompting for it — not because the pickers
+  need configuring.
+
 #### expo-router
 
 File-based routing, the RN analogue of bracemark-web's Next.js App Router — routes

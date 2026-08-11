@@ -5,8 +5,9 @@
 // inherently device-only — no tabs, just set/remove through LockPasswordDialog,
 // enforced by AppLockGate in the (app) layout). RN divergences: the radio rows
 // are Pressables wrapping the primitive (no htmlFor label association), and the
-// custom-theme crossover times are plain HH:MM text inputs (RN has no
-// `type="time"` input).
+// custom-theme crossover times go through `TimeField` — RN has no `type="time"`
+// input, so the native picker stands in for the browser's (its header carries
+// why a text input can't work here).
 
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
@@ -47,7 +48,6 @@ import {
 import { LockPasswordDialog } from '../../components/lock-password-dialog';
 import { Button } from '../../components/ui/button';
 import { Icon } from '../../components/ui/icon';
-import { Input } from '../../components/ui/input';
 import { RadioGroup, RadioGroupItem } from '../../components/ui/radio-group';
 import { Switch } from '../../components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
@@ -55,6 +55,7 @@ import { Text } from '../../components/ui/text';
 import { usePaywall } from '../../contexts/paywall-provider';
 import { cn } from '../../lib/utils';
 import { SettingsGroup, SettingsHeader, SettingsNotice, SettingsPane } from './settings-kit';
+import { TimeField } from './time-field';
 
 const LAYOUT_OPTIONS: Record<LinksLayout, { label: string; hint: string; icon: LucideIcon }> = {
   list: { label: 'List', hint: 'A dense, single-column list.', icon: List },
@@ -200,28 +201,16 @@ function ThemeControls({
 
       {value.mode === 'custom' && (
         <View className="mt-4 flex-row flex-wrap gap-4">
-          <View className="gap-1.5">
-            <Text className="text-sm font-medium">Light starts</Text>
-            <Input
-              value={value.lightStart}
-              placeholder="06:00"
-              keyboardType="numbers-and-punctuation"
-              autoCorrect={false}
-              onChangeText={(text) => onChange({ ...value, lightStart: text })}
-              className="w-36"
-            />
-          </View>
-          <View className="gap-1.5">
-            <Text className="text-sm font-medium">Dark starts</Text>
-            <Input
-              value={value.darkStart}
-              placeholder="18:00"
-              keyboardType="numbers-and-punctuation"
-              autoCorrect={false}
-              onChangeText={(text) => onChange({ ...value, darkStart: text })}
-              className="w-36"
-            />
-          </View>
+          <TimeField
+            label="Light starts"
+            value={value.lightStart}
+            onChange={(lightStart) => onChange({ ...value, lightStart })}
+          />
+          <TimeField
+            label="Dark starts"
+            value={value.darkStart}
+            onChange={(darkStart) => onChange({ ...value, darkStart })}
+          />
         </View>
       )}
     </View>

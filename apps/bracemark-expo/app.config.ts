@@ -117,6 +117,14 @@ const config: ExpoConfig = {
         },
       },
     ],
+    // The theme crossover-time pickers (docs/theme.md). Listed bare, and it is a
+    // deliberate NO-OP: this plugin exists only to restyle the Android dialogs,
+    // and every one of its branches early-returns without an `android` option —
+    // so the pickers keep the platform's own appearance, which is what we want.
+    // It's named here anyway because `expo-doctor` flags a package whose config
+    // plugin is missing from the config, and without the entry the next
+    // `expo install` re-prompts for it.
+    '@react-native-community/datetimepicker',
     // Play upload-key signing for release builds. Local plugin because there is
     // no signing surface in app config or expo-build-properties, and `android/`
     // is wiped by `prebuild --clean`. No-ops when the BRACEMARK_UPLOAD_* vars are
