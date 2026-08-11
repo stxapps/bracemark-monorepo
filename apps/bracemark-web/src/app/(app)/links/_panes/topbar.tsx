@@ -134,7 +134,14 @@ export function Topbar() {
           <SearchBar />
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
+        {/* `ml-auto` because the search slot above freezes at its cap: past
+            that width the bar has leftover space, and flex-start would leave it
+            all to the RIGHT of these buttons, floating them mid-bar. The auto
+            margin banks it on the left instead, so the actions stay in the
+            corner at every width — matching where they already sit below `md`
+            (no search slot to cap) and where the bulk-edit toolbar's own right
+            group sits in the bar directly beneath this one. */}
+        <div className="ml-auto flex shrink-0 items-center gap-2">
           <Button
             variant={searchVisible ? 'secondary' : 'ghost'}
             size="icon-sm"
