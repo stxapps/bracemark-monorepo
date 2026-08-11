@@ -338,7 +338,13 @@ changes is mechanical, and only the substrate forces it:
   `WHERE … ORDER BY <sort column>, path` — the explicit `path` tiebreak
   reproduces the primary-key order Dexie gives equal-timestamp rows for free —
   and the sparse "rows without the sort column never appear" property becomes an
-  explicit `IS NOT NULL` on that column.
+  explicit `IS NOT NULL` on that column. The tiebreak has to be spelled out in
+  **both** places: each sqlite compound index ends in `path` as well, because the
+  implicit ordering Dexie provides is a property of its index, and an index that
+  stopped at the sort column would leave the planner block-sorting every group of
+  rows sharing a timestamp — free when timestamps are distinct, the whole group
+  per page after a bulk import stamps thousands of links the same millisecond.
+  The reasoning and the measurements are in `db.ts`, above the DDL.
 - **multiEntry tag index → junction table.** Tag membership is the
   `item_tag_ids` junction (db.ts): the tag driver selects candidate paths from
   it, and the tag predicates read a junction-built `path → tagIds` map instead of

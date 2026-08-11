@@ -118,7 +118,12 @@ export const items = sqliteTable('items', {
 // `*itemTagIds` multiEntry analogue — one row per (link path, tag id), written
 // in the same transaction as the `items` row (see header). The tag_id index
 // answers membership ("links carrying tag X"); like web, the matched subset is
-// ordered in a second step.
+// ordered in a second step. That index carries `path` as its second column so
+// the tag driver's `SELECT DISTINCT path WHERE tag_id IN (…)` (queries.ts
+// readRest) reads as a COVERING scan — every column it wants is in the index, so
+// it never touches the table. (The DISTINCT still builds a temp b-tree: a
+// multi-value `IN` visits one tag's rows at a time and so can't dedupe by index
+// order alone.)
 export const itemTagIds = sqliteTable(
   'item_tag_ids',
   {
@@ -320,11 +325,40 @@ export function prefixEnd(prefix: string): string {
 export const DB_NAME = 'bracemark-data.db';
 
 // Idempotent DDL, run on every open (the greenfield no-migrations policy —
-// header). Index set mirrors web-react db.ts's Dexie stores line: `updated_at`
-// is the engine's reconcile scan; the four compound indexes are the two
-// orderings (date modified / date added) over the two groupings (per type /
-// per list); url and url-key are the exact-lookup indexes. All the sparse ones
-// are partial so non-carrying rows (e.g. `files/` content) stay out.
+// header). Index set mirrors web-react db.ts's Dexie stores line: the four
+// compound indexes are the two orderings (date modified / date added) over the
+// two groupings (per type / per list); url and url-key are the exact-lookup
+// indexes. All the sparse ones are partial so non-carrying rows (e.g. `files/`
+// content) stay out.
+//
+// EVERY COMPOUND INDEX ENDS IN `path`, and that is not decoration. A Dexie
+// compound index orders equal-key records by the primary key INHERENTLY — the
+// tiebreak is a property of the index, not of the query. A sqlite index has no
+// such implicit trailing column, so the ported reads have to spell the tiebreak
+// out (`ORDER BY <sort column>, path` — queries.ts rangeFastPath/scanChunk/
+// scanUnsettledLinks), and an index stopping at the sort column can't serve it:
+// the planner falls back to `USE TEMP B-TREE FOR LAST TERM OF ORDER BY` and
+// block-sorts every group of rows sharing a timestamp. That group is normally
+// one row and the sort is free — but a bulk import stamps thousands of links the
+// same millisecond (queries.ts `LinkScanCursor` names this), and there the sort
+// is the whole group, per page, on the JS thread, behind a live query that
+// re-runs on every `items` change. Measured at 30k links with a 15k-row import
+// group: 5.3ms -> 0.07ms for one page, 224ms -> 39ms to keyset-walk the group.
+// One ASC index serves both sort directions because the ORDER BY is uniform (the
+// sort column and `path` always move together).
+//
+// Mind the `IF NOT EXISTS` when EDITING an index here: on a database that has
+// already been opened, a changed column list is a SILENT NO-OP (same name, old
+// columns, no error). Recreate the dev database — delete the app / clear its
+// data — as the greenfield policy in the header says, or the change won't take.
+//
+// There is deliberately NO index on `updated_at`. It reads like it should have
+// one (it is the sync clock), but nothing drives on it: the engine's reconcile
+// reads every row unconditionally (item-store.ts listItemUpdatedAts — a plain
+// table SCAN, which is the right plan for a whole-table projection) and the only
+// other reader compares it as a residual inside a primary-key point update
+// (markItemDataFileIfCurrent). An index would be pure write cost on the busiest
+// table in the app — every pulled record, every local edit, every imported row.
 //
 // Exported for the store specs, which run it against an in-memory sqlite
 // (item-store.spec.ts) so the guarded writes are tested over the REAL schema —
@@ -348,16 +382,14 @@ export const DDL = `
     item_url TEXT,
     item_url_key TEXT
   );
-  CREATE INDEX IF NOT EXISTS idx_items_updated_at
-    ON items(updated_at);
   CREATE INDEX IF NOT EXISTS idx_items_type_item_updated_at
-    ON items(item_type, item_updated_at) WHERE item_type IS NOT NULL;
+    ON items(item_type, item_updated_at, path) WHERE item_type IS NOT NULL;
   CREATE INDEX IF NOT EXISTS idx_items_type_item_created_at
-    ON items(item_type, item_created_at) WHERE item_type IS NOT NULL;
+    ON items(item_type, item_created_at, path) WHERE item_type IS NOT NULL;
   CREATE INDEX IF NOT EXISTS idx_items_list_item_updated_at
-    ON items(item_list_id, item_updated_at) WHERE item_list_id IS NOT NULL;
+    ON items(item_list_id, item_updated_at, path) WHERE item_list_id IS NOT NULL;
   CREATE INDEX IF NOT EXISTS idx_items_list_item_created_at
-    ON items(item_list_id, item_created_at) WHERE item_list_id IS NOT NULL;
+    ON items(item_list_id, item_created_at, path) WHERE item_list_id IS NOT NULL;
   CREATE INDEX IF NOT EXISTS idx_items_url
     ON items(item_url) WHERE item_url IS NOT NULL;
   CREATE INDEX IF NOT EXISTS idx_items_url_key
@@ -368,7 +400,7 @@ export const DDL = `
     PRIMARY KEY (path, tag_id)
   );
   CREATE INDEX IF NOT EXISTS idx_item_tag_ids_tag_id
-    ON item_tag_ids(tag_id);
+    ON item_tag_ids(tag_id, path);
   CREATE TABLE IF NOT EXISTS item_facet_statuses (
     path TEXT NOT NULL,
     token TEXT NOT NULL,

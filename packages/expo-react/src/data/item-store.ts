@@ -216,9 +216,13 @@ export function deleteItemsTx(tx: DbTx, paths: string[]): void {
 }
 
 // One projection-only pass over the whole table: path → updatedAt with no `data`
-// blob deserialized (only the two columns are selected, served by the covering
-// `idx_items_updated_at` + rowid). Feeds both reconcile directions of the
-// engine's fallback cycle — the expo analogue of web's IndexedDB key-cursor scan.
+// blob deserialized (only the two columns are selected, so the BLOB is never read
+// off the page). A plain table SCAN, and deliberately so — there is no predicate
+// to narrow and every row is wanted, which is exactly the shape a sequential scan
+// serves best; an index here would add a seek per row on top of the same reads.
+// This is the reason `updated_at` carries no index of its own (db.ts, above the
+// DDL). Feeds both reconcile directions of the engine's fallback cycle — the expo
+// analogue of web's IndexedDB key-cursor scan.
 export async function listItemUpdatedAts(): Promise<Map<string, number>> {
   const rows = getDb().select({ path: items.path, updatedAt: items.updatedAt }).from(items).all();
   return new Map(rows.map((r) => [r.path, r.updatedAt]));
