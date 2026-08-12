@@ -4,9 +4,10 @@
 // initial props into the one payload shape and renders the screen; keeping it
 // this thin is what lets the two hosts share every pixel below it.
 
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 
 import { ShareScreen } from './share-screen';
+import { applyShareTheme } from './share-theme';
 import { payloadFromInitialProps, type ShareInitialProps } from './share-url';
 
 // Uniwind wants its CSS imported once at the top of the rendered tree; the
@@ -52,6 +53,20 @@ import '../../../global.css';
 // nothing.
 
 export function ShareRoot(props: ShareInitialProps) {
+  // The theme, applied DURING the first render rather than from an effect: an
+  // effect runs after the first paint, so the sheet would arrive in the OS
+  // theme and then flip to the user's. What it reads is a synchronous ~90-byte
+  // file the app mirrors for exactly this (share-theme.ts, and
+  // @stxapps/expo-react's data/share-theme.ts behind it) — the sheet can reach
+  // neither settings source itself. A ref, not an effect and not module scope:
+  // Android imports this file from index.js at APP startup, where a
+  // module-level apply would fire before the app's own provider.
+  const themed = useRef(false);
+  if (!themed.current) {
+    themed.current = true;
+    applyShareTheme();
+  }
+
   const payload = useMemo(() => payloadFromInitialProps(props), [props]);
   return <ShareScreen url={payload.url} title={payload.title} />;
 }

@@ -238,11 +238,55 @@ dark` token sets (the native mirror of web-ui's `:root`/`.dark`).
     (hold the splash until the settings live read first resolves), not a cache.
 
   The **iOS/Android share sheet** (`features/share/share-root.tsx`) mounts outside
-  the router tree — a separate process on iOS — and deliberately carries **no
-  `ThemeProvider`**: it follows Uniwind's default (system) appearance, so it needs
-  zero theme code (the token sets come free from its own `global.css` import).
-  Wiring sqlite + settings decryption to honor a device-pinned theme for a
-  transient sheet isn't worth it.
+  the router tree — a separate process on iOS — so it carries **no
+  `ThemeProvider`**: no `useSettings` to read (it can open neither settings
+  source), no `effectiveTheme` context (nothing under it consumes one —
+  `ui/input.tsx` takes the keyboard appearance from `useUniwind()`), and no
+  re-resolve triggers, since Uniwind's own `Appearance` listener still covers an
+  OS flip and a `custom` crossover cannot land inside the three seconds the sheet
+  exists.
+
+  What it does carry is the **apply step, once, during its first render**
+  (`features/share/share-theme.ts`). It reads the preference from a **file
+  mirror** the app writes as it applies its own theme (`@stxapps/expo-react`
+  `data/share-theme.ts`) — the App Group container on iOS, the document
+  directory on Android — and runs the same shared `resolveTheme`. Four things
+  about that shape are load-bearing:
+
+  - **The mirror carries the `ThemeState`, not the resolved light/dark.** A
+    sheet opened at 20:00 must read dark even if the app last ran at noon, so
+    `custom` is resolved at OPEN time. The file therefore never needs rewriting
+    on a crossover — only on a real preference change.
+  - **The read is synchronous, and applied during render, not in an effect.**
+    An effect runs after the first paint: the sheet would arrive in the OS theme
+    and flip. `File.textSync()` is the same lever the taxonomy snapshot already
+    pulls (`docs/share-sheet.md`), and it is why the old objection — "wiring
+    sqlite + settings decryption isn't worth it for a transient sheet" — no
+    longer applies: neither is involved.
+  - **Every failure degrades to `system`**, i.e. to the OS-following behaviour
+    this replaces: no file, an unreadable one, bad JSON, an unknown mode. Nothing
+    on this path throws, because a throw during the sheet's first render is a
+    blank sheet.
+  - **The app claims ownership before it applies** (`claimAppTheme()`, called
+    from `ThemeProvider`'s effect), and the sheet defers to a claim. This is
+    Android-only in effect: its share activity runs in the app's process and
+    shares the warm React host, so `ThemeProvider` may already have pinned
+    Uniwind — and pinning calls `Appearance.setColorScheme`, which is
+    process-wide. Without the claim, a stale mirror could re-theme the RUNNING
+    APP from a sheet floating over another app, with no path back (the
+    provider's effect re-runs on `theme` changes only). The flag is
+    per-JS-context, which is the right grain: the iOS extension is a separate
+    process and never sees a claim.
+
+  This also settles an asymmetry the sheet had before the mirror existed: warm
+  Android inherited the app's pinned theme through that shared host while cold
+  Android and iOS followed the OS — the same device and setting, two results.
+
+  The sign-out teardown needs no entry for the mirror. iOS's copy sits under the
+  App Group's `share/` subtree, which `clearShareData()` removes wholesale; on
+  Android, sign-out drops the `localSettings` row, `useSettings` re-emits
+  `DEFAULT_THEME`, and the provider rewrites the file with it. It holds no
+  account data either way — a mode and two clock times.
 
 - **bracemark-site** — the marketing site is **light-only, deliberately**, and it is
   the one property with no theme code at all: no `ThemeProvider`, no

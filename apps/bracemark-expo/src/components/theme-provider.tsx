@@ -28,8 +28,10 @@ import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { Appearance } from 'react-native';
 import { Uniwind } from 'uniwind';
 
-import { useSettings } from '@stxapps/expo-react';
+import { useSettings, writeShareTheme } from '@stxapps/expo-react';
 import { type EffectiveTheme, msUntilNextThemeSwitch, resolveTheme } from '@stxapps/shared';
+
+import { claimAppTheme } from '../features/share/share-theme';
 
 interface ThemeContextValue {
   /** What's actually rendered right now (light | dark). */
@@ -47,6 +49,19 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   // Resolve + apply on every state change, and re-resolve on the triggers each
   // mode depends on: `system` → OS appearance change; `custom` → next crossover.
   useEffect(() => {
+    // This JS context now has an app tree applying the theme, so the share
+    // sheet defers to it rather than re-applying from its file mirror — which
+    // matters only on Android, where the share activity shares this process
+    // (features/share/share-theme.ts). Claimed before the first apply so a
+    // sheet opened in the same tick can't slip in between.
+    claimAppTheme();
+    // Mirror the PREFERENCE for the sheet, which can reach neither settings
+    // source at first hand (data/share-theme.ts). The state, not the resolved
+    // value: the sheet runs `resolveTheme` itself, so a `custom` crossover is
+    // right at open time without this file being rewritten on a timer. Outside
+    // `apply` on purpose — the OS/crossover triggers below re-resolve, they
+    // don't change what the user picked.
+    writeShareTheme(theme);
     const apply = () => {
       if (theme.mode === 'system') {
         // Hand system to Uniwind: it clears any override and tracks the OS, so

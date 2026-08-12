@@ -22,6 +22,7 @@ export * from './data/projection';
 export * from './data/queries';
 export * from './data/session-store';
 export * from './data/share-store';
+export * from './data/share-theme';
 export * from './data/share-upload';
 export * from './data/sidebar-view-store';
 export * from './data/subscription-store';
