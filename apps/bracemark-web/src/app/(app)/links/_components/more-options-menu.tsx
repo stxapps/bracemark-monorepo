@@ -65,7 +65,7 @@ export function MoreOptionsMenu() {
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
-          size="icon-sm"
+          size="icon"
           className="relative"
           aria-label={
             syncError
@@ -75,11 +75,17 @@ export function MoreOptionsMenu() {
                 : 'More options'
           }
         >
-          <MoreHorizontal className="size-4" />
+          {/* The one glyph on the page that isn't `size-4`. Three dots at the
+              vertical centre carry a fraction of the ink of Search or SquarePen
+              beside it, so at a matching 16 it reads smaller than they do —
+              20 makes it weigh the same. Optical, not a new size step: the
+              bulk-edit toolbar's own overflow trigger is bumped to match, since
+              that bar swaps into the slot below this one. */}
+          <MoreHorizontal className="size-5" />
           {(syncError || blocked) && (
             <span
               aria-hidden="true"
-              className={`absolute top-1 right-1 size-1.5 rounded-full ${
+              className={`absolute top-1.5 right-1.5 size-1.5 rounded-full ${
                 syncError ? 'bg-destructive' : 'bg-muted-foreground'
               }`}
             />

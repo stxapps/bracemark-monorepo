@@ -140,11 +140,18 @@ export function Topbar() {
             margin banks it on the left instead, so the actions stay in the
             corner at every width — matching where they already sit below `md`
             (no search slot to cap) and where the bulk-edit toolbar's own right
-            group sits in the bar directly beneath this one. */}
+            group sits in the bar directly beneath this one.
+
+            Every control in this group is 36 tall — `icon` for the square ones,
+            `default` for Add — matching the search box beside it, so the bar
+            reads as one band rather than a tall field next to short buttons.
+            The icons stay `size-4`: 16 is the grid the sidebar, the drawer and
+            the bulk-edit toolbar all use, and that toolbar swaps into the slot
+            directly below, where a mismatch would show as a jump. */}
         <div className="ml-auto flex shrink-0 items-center gap-2">
           <Button
             variant={searchVisible ? 'secondary' : 'ghost'}
-            size="icon-sm"
+            size="icon"
             // The name states what pressing it DOES, which also keeps every
             // state collision-free: closed, it is the only "Search links" on
             // screen (the inline box is `display:none` below `md`, so it isn't
@@ -163,7 +170,7 @@ export function Topbar() {
           <LinkAddPopover />
           <Button
             variant={bulkEditing ? 'secondary' : 'ghost'}
-            size="icon-sm"
+            size="icon"
             aria-label="Bulk edit"
             aria-pressed={bulkEditing}
             onClick={() => (bulkEditing ? exitBulkEdit() : enterBulkEdit())}

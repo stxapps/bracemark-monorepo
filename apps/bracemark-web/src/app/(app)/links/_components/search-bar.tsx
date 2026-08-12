@@ -329,10 +329,16 @@ function AdvancedSearch() {
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon-sm" aria-label="Advanced search" className="relative">
+        {/* `icon` (36) rather than `icon-sm`: the trigger sits in one flex row with
+            the h-9 box, so matching its height keeps the pair reading as a single
+            search widget in both slots — inline and in the summoned row. */}
+        <Button variant="ghost" size="icon" aria-label="Advanced search" className="relative">
           <SlidersHorizontal className="size-4" />
           {hasAdvancedFilters(query) && (
-            <span aria-hidden className="absolute top-1 right-1 size-1.5 rounded-full bg-primary" />
+            <span
+              aria-hidden
+              className="absolute top-1.5 right-1.5 size-1.5 rounded-full bg-primary"
+            />
           )}
         </Button>
       </PopoverTrigger>

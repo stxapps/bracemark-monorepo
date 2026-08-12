@@ -222,14 +222,30 @@ export function LinkAddPopover({
             topbar's four actions plus a title need the width more than the
             primary action needs its word, and a filled ＋ is the one control on
             this page that reads without one. `aria-label` carries the name in
-            both states (and contains the visible text, so the two agree). */}
+            both states (and contains the visible text, so the two agree).
+
+            Both instances are `default` (h-9): in the topbar that's the height
+            of the search box and the icon buttons flanking it, so `prominent`
+            now varies only the word, the padding and the popover's alignment —
+            not the size.
+
+            `data-icon="inline-start"` is what arms the size variant's
+            `has-data-[icon=inline-start]:pl-2.5` (button.tsx) — the rule is
+            `:has([data-icon=inline-start])`, so without the attribute on the
+            icon it never matches and the leading padding stays the symmetric
+            px-3. With it, the label-bearing state gets 10px before the ＋ and
+            12px after the word, which is the optical balance the variant is
+            for. Hence `sm:pr-3` rather than `sm:px-3`: the left side is the
+            has-data rule's to set (it outranks a plain utility — `:has()`
+            carries its argument's specificity), so naming px there would
+            describe a padding that isn't applied. */}
         <Button
           variant="default"
-          size={prominent ? 'default' : 'sm'}
+          size="default"
           aria-label="Add link"
           className={cn(!prominent && 'px-2.5 sm:px-3')}
         >
-          <Plus className="size-4" />
+          <Plus data-icon="inline-start" className="size-4" />
           <span className={cn(!prominent && 'hidden sm:inline')}>Add</span>
         </Button>
       </PopoverTrigger>

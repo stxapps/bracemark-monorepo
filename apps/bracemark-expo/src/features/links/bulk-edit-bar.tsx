@@ -244,7 +244,14 @@ export function BulkEditBar({ links }: { links: LinkView[] }) {
                   aria-label="More actions"
                   disabled={disabled || actionable.length === 0}
                 >
-                  <Icon as={MoreHorizontal} className="size-4" />
+                  {/* 20, the one glyph in this bar that isn't 16. Three dots at
+                      the vertical centre carry a fraction of the ink of the
+                      Copy and Move-to glyphs beside them, so at a matching 16
+                      this — the only icon here with no word to lean on — reads
+                      lighter than they do. Optical, not a new size step; the
+                      topbar's ⋯ (more-options-menu.tsx) is at 20 for the same
+                      reason, as is web's. */}
+                  <Icon as={MoreHorizontal} className="size-5" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-44">

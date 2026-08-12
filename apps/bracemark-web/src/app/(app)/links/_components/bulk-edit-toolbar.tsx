@@ -388,7 +388,9 @@ export function BulkEditToolbar({ links }: { links: LinkView[] }) {
                     title="More actions"
                     disabled={disabled || actionable.length === 0}
                   >
-                    <MoreHorizontal className="size-4" />
+                    {/* 20, matching the topbar's overflow trigger — same glyph,
+                        same optical correction (more-options-menu.tsx). */}
+                    <MoreHorizontal className="size-5" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-40">

@@ -87,8 +87,14 @@ export function MoreOptionsMenu() {
           {(syncError || blocked) && (
             <View
               aria-hidden
+              // 6px in, not 4: a size-5 glyph centred in a size-9 box leaves 8
+              // free on each side, so 4 floats the dot off the mark it belongs
+              // to. Same inset as the search bar's advanced-filter dot, which
+              // sits in a larger (size-10) button — the dot tracks the glyph,
+              // not the button. Web's trigger resolved to the same geometry and
+              // the same 1.5.
               className={cn(
-                'absolute top-1 right-1 size-1.5 rounded-full',
+                'absolute top-1.5 right-1.5 size-1.5 rounded-full',
                 syncError ? 'bg-destructive' : 'bg-muted-foreground',
               )}
             />
