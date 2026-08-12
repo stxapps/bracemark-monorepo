@@ -326,6 +326,34 @@ dark` token sets (the native mirror of web-ui's `:root`/`.dark`).
   ~30 of web-ui's dark tokens, which is exactly the drift that sheet's own header
   warns against, and it leaves the `dark:` variants inside web-ui components inert.
 
+### the token shim the formatter needs
+
+bracemark-expo declares its color tokens the Uniwind way — inside
+`@variant light` / `@variant dark` under `@layer theme`, not in `@theme`. That
+is correct for the build, but it makes the tokens **invisible to
+`prettier-plugin-tailwindcss`**, which compiles the stylesheet with stock
+tailwind and reads theme keys only from `@theme`. Utilities like `bg-primary`,
+`text-muted-foreground` and `border-input` therefore generate no css, the plugin
+files them as unknown classes, and unknown classes sort to the FRONT of a class
+list. Left alone, every whole-workspace `npm run fix` reorders the entire expo
+tree — ~56 files of pure churn that no lint or type error catches, burying the
+real change in it.
+
+`tools/prettier/expo-tailwind.css` is the fix: a **formatter-only** stylesheet
+that imports `global.css` and re-declares the same `--color-*` NAMES in a real
+`@theme` block. The root `.prettierrc` points the expo/expo-react override at it
+instead of at `global.css`. Nothing else references it — metro names its entry
+explicitly (`cssEntryFile: './global.css'`), so it cannot reach a native build.
+Its values are placeholders, because sorting depends on a token's name and never
+its value; mirroring the real `oklch()` values would only add a third copy to
+drift against `global.css` and `web-ui/src/styles.css`.
+
+**Adding a `--color-*` token to `global.css` means adding its name to that file
+too.** Nothing enforces it; the symptom is class-order churn reappearing for
+utilities built on the new token. web-ui needs no equivalent — its `@theme
+inline` block already declares every `--color-*`, which is why the churn was
+expo-only.
+
 ### extending
 
 - **A new mode** — add it to `THEME_MODES` (`theme/theme.ts`), handle it in

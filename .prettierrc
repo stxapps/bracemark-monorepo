@@ -12,7 +12,7 @@
     {
       "files": ["apps/bracemark-expo/**", "packages/expo-react/**"],
       "options": {
-        "tailwindStylesheet": "apps/bracemark-expo/global.css"
+        "tailwindStylesheet": "tools/prettier/expo-tailwind.css"
       }
     }
   ]

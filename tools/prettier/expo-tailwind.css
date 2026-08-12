@@ -1,0 +1,77 @@
+/*
+ * ─────────────────────────────────────────────────────────────────────────
+ * FORMATTER-ONLY stylesheet. Nothing builds, bundles, or ships this file.
+ *
+ * It exists solely so `prettier-plugin-tailwindcss` can sort class lists in
+ * bracemark-expo / expo-react the same way it does on the web side. It is
+ * wired up by the `tailwindStylesheet` option in the root `.prettierrc`, and
+ * by nothing else — metro names its real entry explicitly
+ * (`metro.config.js`, `cssEntryFile: './global.css'`), so this file can never
+ * reach a native build.
+ *
+ * WHY IT'S NEEDED
+ * The plugin compiles the stylesheet with STOCK tailwind, which only registers
+ * theme variables declared in `@theme`. bracemark-expo's color tokens are
+ * Uniwind-shaped instead — `@layer theme { :root { @variant light {
+ * --color-primary: … } } }` — a form stock tailwind parses happily but does
+ * not read theme keys from. So `bg-primary`, `text-muted-foreground`,
+ * `border-input` and friends generate NO css, the plugin classes them as
+ * unknown, and unknown classes are hoisted to the FRONT of every list. The
+ * result is a whole-tree reordering on every `npm run fix` — ~56 files of pure
+ * churn, no lint or type error to catch it. Re-declaring the same names in a
+ * real `@theme` block below is what makes the plugin recognise them.
+ *
+ * web-ui/src/styles.css needs no such shim: its `@theme inline` block already
+ * declares every `--color-*`, which is why the churn was expo-only.
+ *
+ * THE VALUES BELOW ARE DELIBERATELY MEANINGLESS.
+ * Sorting depends on a token's NAME, never its value, and this file is never
+ * rendered — so every entry is the same placeholder. Do NOT mirror the real
+ * oklch() values here: that would be a third copy to keep in sync with
+ * global.css and web-ui/src/styles.css, drifting silently and buying nothing.
+ *
+ * KEEPING IT IN SYNC
+ * Only the NAME LIST matters. Add a `--color-*` token to `global.css` and you
+ * must add it here, or class lists containing its utilities start sorting
+ * wrong. Nothing enforces this — the failure mode is formatting churn, not an
+ * error. See docs/theme.md, `the token shim the formatter needs`.
+ * ─────────────────────────────────────────────────────────────────────────
+ */
+
+@import '../../apps/bracemark-expo/global.css';
+
+/* Every `--color-*` name declared under `@variant light` / `@variant dark` in
+   global.css. Placeholder values — see the header. */
+@theme {
+  --color-background: oklch(0 0 0);
+  --color-foreground: oklch(0 0 0);
+  --color-card: oklch(0 0 0);
+  --color-card-foreground: oklch(0 0 0);
+  --color-popover: oklch(0 0 0);
+  --color-popover-foreground: oklch(0 0 0);
+  --color-primary: oklch(0 0 0);
+  --color-primary-foreground: oklch(0 0 0);
+  --color-secondary: oklch(0 0 0);
+  --color-secondary-foreground: oklch(0 0 0);
+  --color-muted: oklch(0 0 0);
+  --color-muted-foreground: oklch(0 0 0);
+  --color-accent: oklch(0 0 0);
+  --color-accent-foreground: oklch(0 0 0);
+  --color-destructive: oklch(0 0 0);
+  --color-border: oklch(0 0 0);
+  --color-input: oklch(0 0 0);
+  --color-ring: oklch(0 0 0);
+  --color-chart-1: oklch(0 0 0);
+  --color-chart-2: oklch(0 0 0);
+  --color-chart-3: oklch(0 0 0);
+  --color-chart-4: oklch(0 0 0);
+  --color-chart-5: oklch(0 0 0);
+  --color-sidebar: oklch(0 0 0);
+  --color-sidebar-foreground: oklch(0 0 0);
+  --color-sidebar-primary: oklch(0 0 0);
+  --color-sidebar-primary-foreground: oklch(0 0 0);
+  --color-sidebar-accent: oklch(0 0 0);
+  --color-sidebar-accent-foreground: oklch(0 0 0);
+  --color-sidebar-border: oklch(0 0 0);
+  --color-sidebar-ring: oklch(0 0 0);
+}

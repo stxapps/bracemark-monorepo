@@ -111,6 +111,14 @@ test. Check the linked doc before acting on any of these.
   native change belongs in `app.config.ts` or a config plugin. A hand-edit in
   Xcode leaves a _clean_ working tree and is destroyed by the next
   `expo prebuild --clean`. → `expo-build.md`
+- **A new `--color-*` token in `apps/bracemark-expo/global.css` must also be
+  named in `tools/prettier/expo-tailwind.css`.** The expo tokens live under
+  `@variant light`/`@variant dark`, where `prettier-plugin-tailwindcss` cannot
+  see them, so that formatter-only stylesheet re-declares the names in a real
+  `@theme` block. Miss one and its utilities become "unknown" classes, which
+  prettier hoists to the front of every class list they appear in — the symptom
+  is `npm run fix` churning files you never touched, with no lint or type error.
+  → `theme.md`, _the token shim the formatter needs_.
 - **Greenfield — no migrations.** There is no production data. Edit persisted
   schemas in place (Dexie `version(1)`, the expo-sqlite DDL); don't add a
   migration step.
