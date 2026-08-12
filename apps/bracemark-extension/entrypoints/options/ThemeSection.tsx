@@ -89,6 +89,11 @@ function OptionRow({
 // The four mode radios for one source, plus the two crossover-time inputs revealed
 // only in `custom` mode. Source-agnostic: the parent binds `value`/`onChange` to the
 // synced or the device ThemeState, and each edit emits a whole new ThemeState.
+//
+// No top margin on the wrapper. This renders inside a TabsContent, and `Tabs` already
+// spaces the strip from its panel by 8; a `mt-4` on top of that pushed it to 24, so
+// the Sync/Device pills sat further from the radios they govern than from the section
+// heading above. The div stays because the custom-time block needs a sibling.
 function ThemeControls({
   value,
   onChange,
@@ -97,7 +102,7 @@ function ThemeControls({
   onChange: (theme: ThemeState) => void;
 }) {
   return (
-    <div className={cn('mt-4')}>
+    <div>
       <RadioGroup
         value={value.mode}
         onValueChange={(v) => onChange({ ...value, mode: v as ThemeMode })}

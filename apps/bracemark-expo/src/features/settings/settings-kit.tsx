@@ -35,13 +35,22 @@ import { cn } from '../../lib/utils';
 // that navigate carry the chevron as their whole affordance.
 
 // The column every section renders into, inside the page's ScrollView
-// (scroll-host.tsx). `gap-6` is the rhythm between a section's top-level blocks,
+// (scroll-host.tsx). `gap-8` is the rhythm between a section's top-level blocks,
 // so no section adds its own top margin to the ones it happens to have — the
 // spacing is a property of the page, not of whoever wrote the block. Nest a
 // plain View for anything that needs to sit tighter than that.
+//
+// The four steps are 32 / 16 / 8 / 12 — section, heading-to-content
+// (SettingsGroup), tab-strip-to-panel (the Tabs `gap-2`), row-to-row (the
+// RadioGroup `gap-3`), and they are web's four, because the measure is not the
+// only thing the three surfaces hold in common. They were 24 / 12 / 8 / 12: two
+// values wearing four hats, where a whole section break measured the same as a
+// heading's own content and a heading sat no closer to its first row than two
+// rows sat to each other. Spacing is the only thing grouping these blocks — no
+// dividers, no cards — so each level has to be legibly its own size.
 export function SettingsPane({ className, children }: { className?: string; children: ReactNode }) {
   return (
-    <View className={cn('w-full max-w-2xl gap-6 self-center px-6 py-8', className)}>
+    <View className={cn('w-full max-w-2xl gap-8 self-center px-6 py-8', className)}>
       {children}
     </View>
   );
@@ -85,7 +94,10 @@ export function SettingsHeader({
 // One block within a section — "Link layout", "Theme", "App lock". The heading
 // step (`text-base font-medium`) is one below SettingsHeader and one above body
 // text, and the gap between the heading and its controls is fixed here so four
-// blocks in a row can't each pick their own.
+// blocks in a row can't each pick their own. `gap-4` has to stay clear of
+// whatever the content spaces its OWN items by — a RadioGroup's rows are 12
+// apart, so at the `gap-3` this once was, the heading read as just another row
+// in the list.
 export function SettingsGroup({
   title,
   description,
@@ -98,7 +110,7 @@ export function SettingsGroup({
   children: ReactNode;
 }) {
   return (
-    <View className={cn('gap-3', className)}>
+    <View className={cn('gap-4', className)}>
       <View className="gap-1">
         <Text role="heading" aria-level="2" className="text-base font-medium">
           {title}

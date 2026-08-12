@@ -37,8 +37,11 @@ function App() {
         <SignedOut />
       ) : (
         <>
-          <AccountSection className={cn('mt-10')} />
-          <ThemeSection className={cn('mt-10')} />
+          {/* 32 between sections — bracemark-web's SettingsPane gap. This page has
+              no flex column to hold a `gap`, so the step is a margin here instead of
+              a gap there; the number is the one that has to match, not the mechanism. */}
+          <AccountSection className={cn('mt-8')} />
+          <ThemeSection className={cn('mt-8')} />
         </>
       )}
     </OptionsShell>

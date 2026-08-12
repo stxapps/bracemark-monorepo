@@ -74,7 +74,17 @@ silent visual regression, so they're written down:
   `OptionsShell` here, and one kit per app — and **nothing enforces their
   agreement**: no shared package, no test, and neither build can fail on the
   difference. If a scale step moves in one, move it in all three; this bullet is
-  the only thing holding them together.
+  the only thing holding them together. **The steps are 32 / 16 / 8 / 12** —
+  section to section, a block's heading to its content, a tab strip to the panel
+  it heads, one row to the next — written as `gap-8` on the pane and `gap-4` on
+  the group in both kits, and as `mt-8` on the sections here, since this page has
+  no flex column to hold a gap. The last two come free from `Tabs` and
+  `RadioGroup` and only need leaving alone: they were being overridden by a `mt-4`
+  inside each tab panel, which put the Sync/Device pills further from the radios
+  they govern than from the heading above. Prior to that fix the scale was
+  24 / 12 / 8 / 12, in which a section break and a heading's own content measured
+  the same — with no dividers and no cards, spacing is the only thing grouping
+  these blocks, so each step has to be legibly its own size.
 - **The page specimen is one component across the save.** `popup/PageSpecimen.tsx`
   renders the active tab in the editor and the saved link on the complete screen,
   and it does not move between them — the controls around it change instead. Its

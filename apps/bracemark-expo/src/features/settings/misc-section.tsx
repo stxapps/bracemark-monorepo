@@ -143,11 +143,7 @@ function LayoutRadioGroup({
   onChange: (layout: LinksLayout) => void;
 }) {
   return (
-    <RadioGroup
-      value={value}
-      onValueChange={(v) => onChange(v as LinksLayout)}
-      className="mt-4 gap-3"
-    >
+    <RadioGroup value={value} onValueChange={(v) => onChange(v as LinksLayout)} className="gap-3">
       {LINKS_LAYOUTS.map((layout) => {
         const { label, hint, icon } = LAYOUT_OPTIONS[layout];
         return (
@@ -169,6 +165,13 @@ function LayoutRadioGroup({
 // The four mode radios for one source, plus the two crossover-time inputs
 // revealed only in `custom` mode. Source-agnostic like LayoutRadioGroup; each
 // edit emits a whole new ThemeState (the mutations take the full object).
+//
+// No top margin on the wrapper — nor on LayoutRadioGroup above. These render
+// inside a TabsContent, and `Tabs` already spaces the strip from its panel by 8;
+// a `mt-4` on top of that pushed it to 24, so the Sync/Device pills sat further
+// from the radios they govern than from the section heading above, and exactly
+// as far as one whole section sits from the next. The View stays because the
+// custom-time block needs a sibling.
 function ThemeControls({
   value,
   onChange,
@@ -177,7 +180,7 @@ function ThemeControls({
   onChange: (theme: ThemeState) => void;
 }) {
   return (
-    <View className="mt-4">
+    <View>
       <RadioGroup
         value={value.mode}
         onValueChange={(v) => onChange({ ...value, mode: v as ThemeMode })}
@@ -332,7 +335,10 @@ export function MiscSection() {
           </RadioGroup>
         </View>
 
-        <View className="mt-4">
+        {/* No `mt-4` here: this is a direct child of SettingsGroup, so the group's
+            own gap already spaces it off the "Sort by" block above — the margin was
+            adding to that gap, not setting it. Web's peer is a bare div. */}
+        <View>
           <Text className="text-sm font-medium">Order</Text>
           <RadioGroup
             value={sortOrder}

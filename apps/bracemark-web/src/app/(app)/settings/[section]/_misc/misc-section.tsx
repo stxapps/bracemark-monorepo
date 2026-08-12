@@ -185,7 +185,7 @@ function LayoutRadioGroup({
   onChange: (layout: LinksLayout) => void;
 }) {
   return (
-    <RadioGroup value={value} onValueChange={(v) => onChange(v as LinksLayout)} className="mt-4">
+    <RadioGroup value={value} onValueChange={(v) => onChange(v as LinksLayout)}>
       {LINKS_LAYOUTS.map((layout) => {
         const { label, hint, icon } = LAYOUT_OPTIONS[layout];
         return (
@@ -207,6 +207,13 @@ function LayoutRadioGroup({
 // only in `custom` mode. Source-agnostic like LayoutRadioGroup: the parent binds
 // `value`/`onChange` to the synced or the device ThemeState. Each edit emits a whole
 // new ThemeState (the mutations take the full object).
+//
+// No top margin on the wrapper — neither here nor on LayoutRadioGroup's RadioGroup.
+// These render inside a TabsContent, and `Tabs` already spaces the strip from its
+// panel by 8; a `mt-4` on top of that pushed to 24, so the Sync/Device pills ended
+// up further from the radios they govern than from the section heading above, and
+// exactly as far as one whole section sits from the next. The div stays because the
+// custom-time block below needs something to be a sibling of.
 function ThemeControls({
   value,
   onChange,
@@ -215,7 +222,7 @@ function ThemeControls({
   onChange: (theme: ThemeState) => void;
 }) {
   return (
-    <div className="mt-4">
+    <div>
       <RadioGroup
         value={value.mode}
         onValueChange={(v) => onChange({ ...value, mode: v as ThemeMode })}

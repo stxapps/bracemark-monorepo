@@ -19,10 +19,18 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 // The two are the same product's settings reached from two places; keep them
 // equal, and change them together.
 
-// The scrolling column every section renders into. `gap-6` is the rhythm between
+// The scrolling column every section renders into. `gap-8` is the rhythm between
 // a section's top-level blocks, so no section adds its own `mt-*` to the ones it
 // happens to have — the spacing is a property of the page, not of whoever wrote
 // the block. Nest a plain div for anything that needs to sit tighter than that.
+//
+// The four steps on this surface are 32 / 16 / 8 / 12 — section, heading-to-content
+// (SettingsGroup), tab-strip-to-panel (the Tabs default `gap-2`), row-to-row (the
+// RadioGroup default `gap-3`). They were 24 / 12 / 8 / 12, which is two values
+// wearing four hats: a whole section break measured the same as a heading's own
+// content, and a heading sat no closer to its first row than two rows sat to each
+// other. Spacing is the only thing grouping these blocks — no dividers, no cards —
+// so each level has to be legibly its own size.
 export function SettingsPane({
   className,
   children,
@@ -31,7 +39,7 @@ export function SettingsPane({
   children: React.ReactNode;
 }) {
   return (
-    <div className={cn('mx-auto flex w-full max-w-2xl flex-col gap-6 px-6 py-8', className)}>
+    <div className={cn('mx-auto flex w-full max-w-2xl flex-col gap-8 px-6 py-8', className)}>
       {children}
     </div>
   );
@@ -72,7 +80,9 @@ export function SettingsHeader({
 // One block within a section — "Link layout", "Theme", "App lock". The `h2` step
 // (`text-base font-medium`) is one below SettingsHeader and one above body text,
 // and the gap between the heading and its controls is fixed here so four blocks
-// in a row can't each pick their own.
+// in a row can't each pick their own. `gap-4` has to stay clear of whatever the
+// content spaces its OWN items by — a RadioGroup's rows are 12 apart, so at the
+// `gap-3` this once was, the heading read as just another row in the list.
 export function SettingsGroup({
   title,
   description,
@@ -85,7 +95,7 @@ export function SettingsGroup({
   children: React.ReactNode;
 }) {
   return (
-    <section className={cn('flex flex-col gap-3', className)}>
+    <section className={cn('flex flex-col gap-4', className)}>
       <div className={cn('flex flex-col gap-1')}>
         <h2 className={cn('text-base font-medium')}>{title}</h2>
         {description ? <p className={cn('text-sm text-muted-foreground')}>{description}</p> : null}
