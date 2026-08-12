@@ -281,7 +281,7 @@ function Row({
     <DragRow
       onLayout={onLayout}
       className={cn(
-        'border-border/60 flex-row items-center gap-1 border-b px-1 py-1',
+        'flex-row items-center gap-1 border-b border-border/60 px-1 py-1',
         lifted && 'rounded-md border-transparent bg-background',
       )}
       // The indent in px (not a class) so it matches the px the drag projection

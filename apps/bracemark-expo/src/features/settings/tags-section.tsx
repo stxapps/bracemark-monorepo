@@ -124,7 +124,7 @@ function Row({
       style={style}
       onLayout={onLayout}
       className={cn(
-        'border-border/60 flex-row items-center gap-1 border-b px-1 py-1',
+        'flex-row items-center gap-1 border-b border-border/60 px-1 py-1',
         lifted && 'rounded-md border-transparent bg-background',
       )}
     >
