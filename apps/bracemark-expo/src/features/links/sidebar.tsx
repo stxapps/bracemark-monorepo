@@ -499,7 +499,17 @@ export function Sidebar({ closeDrawer }: { closeDrawer: () => void }) {
                 />
               ))
             ) : (
-              <Text className="px-2 py-1 text-xs text-muted-foreground/60">No matching lists</Text>
+              // `pl-6` parks the text under the section header's LABEL rather
+              // than under the rows it stands in for — an empty section has no
+              // row to align to, and a row's own text sits at 36px (matches) or
+              // 72px (tree rows, past the chevron slot), both of which read as
+              // indented for a one-line placeholder. Web parity: the same 24px
+              // there, though this header's chevron is `size-3.5` to web's
+              // `size-3`, so the label itself starts 2px further right here —
+              // matching web's number is worth more than chasing that 2px.
+              <Text className="py-1 pr-2 pl-6 text-xs text-muted-foreground/60">
+                No matching lists
+              </Text>
             )
           ) : (
             <NavTree
@@ -536,10 +546,12 @@ export function Sidebar({ closeDrawer }: { closeDrawer: () => void }) {
                 />
               ))
             ) : (
-              <Text className="px-2 py-1 text-xs text-muted-foreground/60">No matching tags</Text>
+              <Text className="py-1 pr-2 pl-6 text-xs text-muted-foreground/60">
+                No matching tags
+              </Text>
             )
           ) : tags.length === 0 ? (
-            <Text className="px-2 py-1 text-xs text-muted-foreground/60">No tags yet</Text>
+            <Text className="py-1 pr-2 pl-6 text-xs text-muted-foreground/60">No tags yet</Text>
           ) : (
             <NavTree
               nodes={tags}

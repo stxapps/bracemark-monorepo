@@ -550,7 +550,13 @@ export function SidebarBody({
                 />
               ))
             ) : (
-              <p className="px-2 py-1 text-xs text-muted-foreground/60">No matching lists</p>
+              // `pl-6` parks the text under the section header's LABEL (its
+              // `px-2` + `size-3` chevron + `gap-1` = 24px), not under the rows
+              // it stands in for — an empty section has no row to align to, and
+              // a row's own text sits at 32px (matches) or 60px (tree rows,
+              // past the chevron slot), both of which read as indented for a
+              // one-line placeholder. Same on bracemark-expo's sidebar.
+              <p className="py-1 pr-2 pl-6 text-xs text-muted-foreground/60">No matching lists</p>
             )
           ) : (
             <NavTree
@@ -585,10 +591,10 @@ export function SidebarBody({
                 />
               ))
             ) : (
-              <p className="px-2 py-1 text-xs text-muted-foreground/60">No matching tags</p>
+              <p className="py-1 pr-2 pl-6 text-xs text-muted-foreground/60">No matching tags</p>
             )
           ) : tags.length === 0 ? (
-            <p className="px-2 py-1 text-xs text-muted-foreground/60">No tags yet</p>
+            <p className="py-1 pr-2 pl-6 text-xs text-muted-foreground/60">No tags yet</p>
           ) : (
             <NavTree
               nodes={tags}
