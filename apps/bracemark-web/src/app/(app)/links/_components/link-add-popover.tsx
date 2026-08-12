@@ -3,10 +3,10 @@
 // Quick-add for links: the popover behind the topbar's "Add" button. It's an
 // EPHEMERAL action, not a view — so it lives in local state, never the URL (the
 // page-provider header explains the split: shareable state goes in the URL,
-// transient/private state does not). Anchored to its trigger (`align="end"`)
-// rather than centered as a dialog, because it's launched from one specific
-// button and should stay in that context; a heavier full editor (page copy, page
-// content) is the future dialog/route, not this.
+// transient/private state does not). Anchored to its trigger rather than
+// centered as a dialog, because it's launched from one specific button and
+// should stay in that context; a heavier full editor (page copy, page content)
+// is the future dialog/route, not this.
 //
 // Shape: a URL field always visible, an "Advanced" disclosure that reveals the
 // list picker + tag editor + note, and Save/Cancel. Saving writes one
@@ -80,9 +80,10 @@ function useDefaultListId(): string {
 export function LinkAddPopover({
   // The empty pane renders a second instance of this popover as its call to
   // action, where the trigger is the only control on screen rather than one of
-  // four in a bar — so it gets full size and keeps its label at every width.
-  // Everything behind the trigger is identical, which is the point: one add
-  // form, wherever it is summoned from.
+  // four in a bar — so it gets full size, keeps its label at every width, and
+  // hangs its content centred under itself. That's the whole difference: the
+  // trigger's size and where the panel hangs from it, never the form behind it,
+  // which is one add form wherever it is summoned from.
   prominent = false,
 }: {
   prominent?: boolean;
@@ -233,8 +234,17 @@ export function LinkAddPopover({
         </Button>
       </PopoverTrigger>
       {/* Never wider than the viewport it's anchored in — `w-80` is 20rem, which
-          is a 320px phone edge to edge. */}
-      <PopoverContent align="end" className="w-[min(20rem,calc(100vw-2rem))]">
+          is a 320px phone edge to edge.
+
+          Alignment follows the trigger's own position, since the two instances
+          sit in opposite places: the topbar's button is in the bar's right
+          corner, so `end` keeps the form inside the frame instead of jutting
+          past it, while the empty pane's CTA is horizontally centred, where
+          `end` would hang the whole form off to its left. */}
+      <PopoverContent
+        align={prominent ? 'center' : 'end'}
+        className="w-[min(20rem,calc(100vw-2rem))]"
+      >
         {atLimit && max !== null ? (
           <LinkQuotaBanner
             count={count}
