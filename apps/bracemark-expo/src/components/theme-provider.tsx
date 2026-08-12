@@ -56,11 +56,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     // sheet opened in the same tick can't slip in between.
     claimAppTheme();
     // Mirror the PREFERENCE for the sheet, which can reach neither settings
-    // source at first hand (data/share-theme.ts). The state, not the resolved
-    // value: the sheet runs `resolveTheme` itself, so a `custom` crossover is
-    // right at open time without this file being rewritten on a timer. Outside
-    // `apply` on purpose — the OS/crossover triggers below re-resolve, they
-    // don't change what the user picked.
+    // source at first hand (data/share-theme-store.ts). The state, not the
+    // resolved value: the sheet runs `resolveTheme` itself, so a `custom`
+    // crossover is right at open time without this file being rewritten on a
+    // timer. Outside `apply` on purpose — the OS/crossover triggers below
+    // re-resolve, they don't change what the user picked.
     writeShareTheme(theme);
     const apply = () => {
       if (theme.mode === 'system') {

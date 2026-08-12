@@ -11,7 +11,7 @@ import { Uniwind } from 'uniwind';
 import type { ThemeState } from '@stxapps/shared';
 
 const mockRead = jest.fn<ThemeState, []>();
-jest.mock('@stxapps/expo-react/data/share-theme', () => ({
+jest.mock('@stxapps/expo-react/data/share-theme-store', () => ({
   readShareTheme: () => mockRead(),
 }));
 

@@ -30,7 +30,7 @@ import { Uniwind } from 'uniwind';
 // (share-root.tsx's header). `@stxapps/shared` is exempt from that rule and
 // share-screen.tsx already imports it: it is pure, and `resolveTheme` is the
 // same resolver every other surface runs.
-import { readShareTheme } from '@stxapps/expo-react/data/share-theme';
+import { readShareTheme } from '@stxapps/expo-react/data/share-theme-store';
 import { resolveTheme } from '@stxapps/shared';
 
 let appOwnsTheme = false;

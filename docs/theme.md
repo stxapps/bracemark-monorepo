@@ -249,7 +249,7 @@ dark` token sets (the native mirror of web-ui's `:root`/`.dark`).
   What it does carry is the **apply step, once, during its first render**
   (`features/share/share-theme.ts`). It reads the preference from a **file
   mirror** the app writes as it applies its own theme (`@stxapps/expo-react`
-  `data/share-theme.ts`) — the App Group container on iOS, the document
+  `data/share-theme-store.ts`) — the App Group container on iOS, the document
   directory on Android — and runs the same shared `resolveTheme`. Four things
   about that shape are load-bearing:
 

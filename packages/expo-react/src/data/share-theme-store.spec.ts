@@ -1,5 +1,5 @@
-// Specs for share-theme: where each platform's mirror file lands, and — the
-// part that actually matters — that every unreadable shape degrades to
+// Specs for share-theme-store: where each platform's mirror file lands, and —
+// the part that actually matters — that every unreadable shape degrades to
 // `system`, which is the OS-following behaviour this mirror replaces. A theme
 // mirror that threw, or that returned a half-parsed state, would take down the
 // share sheet's FIRST RENDER (share-root.tsx applies it during render), so the
@@ -11,7 +11,7 @@ import { Platform } from 'react-native';
 
 import { DEFAULT_THEME, type ThemeState } from '@stxapps/shared';
 
-import { readShareTheme, writeShareTheme } from './share-theme';
+import { readShareTheme, writeShareTheme } from './share-theme-store';
 
 const mockFiles = new Map<string, string>();
 

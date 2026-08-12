@@ -22,10 +22,10 @@
       "import": "./src/data/share-store.ts",
       "default": "./src/data/share-store.ts"
     },
-    "./data/share-theme": {
-      "types": "./src/data/share-theme.ts",
-      "import": "./src/data/share-theme.ts",
-      "default": "./src/data/share-theme.ts"
+    "./data/share-theme-store": {
+      "types": "./src/data/share-theme-store.ts",
+      "import": "./src/data/share-theme-store.ts",
+      "default": "./src/data/share-theme-store.ts"
     },
     "./lib/auth-api-client": {
       "types": "./src/lib/auth-api-client.ts",

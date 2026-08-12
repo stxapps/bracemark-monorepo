@@ -57,9 +57,9 @@ export function ShareRoot(props: ShareInitialProps) {
   // effect runs after the first paint, so the sheet would arrive in the OS
   // theme and then flip to the user's. What it reads is a synchronous ~90-byte
   // file the app mirrors for exactly this (share-theme.ts, and
-  // @stxapps/expo-react's data/share-theme.ts behind it) — the sheet can reach
-  // neither settings source itself. A ref, not an effect and not module scope:
-  // Android imports this file from index.js at APP startup, where a
+  // @stxapps/expo-react's data/share-theme-store.ts behind it) — the sheet can
+  // reach neither settings source itself. A ref, not an effect and not module
+  // scope: Android imports this file from index.js at APP startup, where a
   // module-level apply would fire before the app's own provider.
   const themed = useRef(false);
   if (!themed.current) {
