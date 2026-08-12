@@ -317,7 +317,7 @@ function LinkEditForm({
                   size="sm"
                   onClick={() => fileInputRef.current?.click()}
                 >
-                  <ImagePlus className="size-4" />
+                  <ImagePlus data-icon="inline-start" className="size-4" />
                   Choose image
                 </Button>
                 {(image.kind === 'pick' || (image.kind === 'keep' && link.customImageId)) && (
@@ -327,7 +327,7 @@ function LinkEditForm({
                     size="sm"
                     onClick={() => setImage({ kind: 'clear' })}
                   >
-                    <ImageOff className="size-4" />
+                    <ImageOff data-icon="inline-start" className="size-4" />
                     Reset to extracted
                   </Button>
                 )}

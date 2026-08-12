@@ -43,7 +43,7 @@ export default function Error({
       <div className={cn('flex flex-wrap items-center gap-3')}>
         <Button size="lg" onClick={() => reset()}>
           Try again
-          <ArrowGlyph className={cn('size-4')} />
+          <ArrowGlyph data-icon="inline-end" className={cn('size-4')} />
         </Button>
         <Button asChild size="lg" variant="ghost">
           <Link href="/">Go to the home page</Link>

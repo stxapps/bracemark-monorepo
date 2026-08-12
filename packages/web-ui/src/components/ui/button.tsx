@@ -4,6 +4,24 @@ import { Slot } from 'radix-ui';
 
 import { cn } from '@stxapps/web-ui/lib/utils';
 
+// The `has-data-[icon=inline-start|inline-end]` rules in the padded sizes below
+// trim the padding on whichever edge an icon sits against, so a glyph at the
+// edge doesn't read as heavier than the text at the other one. They are opt-in
+// and invisible when you forget: the selector is `:has([data-icon=…])`, so the
+// CALL SITE must put `data-icon="inline-start"` (or `inline-end`) on the icon it
+// renders at that edge — nothing here can infer it. No attribute, no effect, no
+// error. Icon-only sizes (`icon`, `icon-*`) have no padding to trim, so the
+// attribute is inert there and harmless on a button that sheds its label at a
+// breakpoint.
+//
+// A marker is needed HERE, rather than deriving the edges from the children the
+// way the native sibling does, because this Button renders through Slot: under
+// `asChild` the icon is a grandchild of the button (every CTA on the marketing
+// site is `<Button asChild><a>…<Icon/></a></Button>`), and only a depth-agnostic
+// selector reaches it. apps/bracemark-expo/src/components/ui/button.tsx applies
+// the SAME RULE — the icon's edge gets the smaller padding, icon-only stays
+// symmetric — by deriving it in JS, since native has no `:has()`. Two
+// mechanisms, one rule: change one and read the other's header.
 const buttonVariants = cva(
   "group/button inline-flex shrink-0 items-center justify-center rounded-4xl border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {

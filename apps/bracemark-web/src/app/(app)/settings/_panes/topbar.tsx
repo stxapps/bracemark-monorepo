@@ -45,9 +45,21 @@ function SectionMenu() {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="sm" className={cn('-ml-2 gap-1.5')}>
-          {active?.icon}
+          {/* `data-icon` sits on a wrapper rather than on the icon itself: the
+              node comes from the SETTINGS_SECTIONS table, which also renders it
+              in the rail and in this menu's items, and whether it leads a
+              button is this call site's business, not the table's. `contents`
+              means the wrapper generates no box, so the svg stays the Button's
+              own flex item. Conditional so an unmatched path — which falls back
+              to a bare "Settings" with no icon — doesn't leave an empty marker
+              claiming the tighter padding. */}
+          {active?.icon ? (
+            <span data-icon="inline-start" className={cn('contents')}>
+              {active.icon}
+            </span>
+          ) : null}
           <span className={cn('truncate font-semibold')}>{active?.label ?? 'Settings'}</span>
-          <ChevronDown className={cn('size-4 text-muted-foreground')} />
+          <ChevronDown data-icon="inline-end" className={cn('size-4 text-muted-foreground')} />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className={cn('w-56')}>

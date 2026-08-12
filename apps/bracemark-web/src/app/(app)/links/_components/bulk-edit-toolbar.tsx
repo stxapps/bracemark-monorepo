@@ -262,14 +262,14 @@ export function BulkEditToolbar({ links }: { links: LinkView[] }) {
   const secondaryActions: SecondaryAction[] = [
     {
       key: 'tags',
-      icon: <Tags className="size-4" />,
+      icon: <Tags data-icon="inline-start" className="size-4" />,
       label: 'Edit tags',
       disabled: disabled || actionable.length === 0,
       run: () => requestRetag(actionable),
     },
     {
       key: 'pin',
-      icon: <Pin className="size-4" />,
+      icon: <Pin data-icon="inline-start" className="size-4" />,
       label: busy === 'pin' ? 'Pinning…' : 'Pin',
       disabled: disabled || toPin.length === 0,
       // Reversed so the first-selected link ends up topmost: pin() inserts each
@@ -279,7 +279,7 @@ export function BulkEditToolbar({ links }: { links: LinkView[] }) {
     },
     {
       key: 'unpin',
-      icon: <PinOff className="size-4" />,
+      icon: <PinOff data-icon="inline-start" className="size-4" />,
       label: busy === 'unpin' ? 'Unpinning…' : 'Unpin',
       disabled: disabled || toUnpin.length === 0,
       run: () => void runBulk('unpin', toUnpin, (link) => unpin(link)),
@@ -287,7 +287,7 @@ export function BulkEditToolbar({ links }: { links: LinkView[] }) {
     inArchive
       ? {
           key: 'archive',
-          icon: <ArchiveRestore className="size-4" />,
+          icon: <ArchiveRestore data-icon="inline-start" className="size-4" />,
           label: busy === 'archive' ? 'Unarchiving…' : 'Unarchive',
           disabled,
           run: () =>
@@ -297,7 +297,7 @@ export function BulkEditToolbar({ links }: { links: LinkView[] }) {
         }
       : {
           key: 'archive',
-          icon: <Archive className="size-4" />,
+          icon: <Archive data-icon="inline-start" className="size-4" />,
           label: busy === 'archive' ? 'Archiving…' : 'Archive',
           disabled: disabled || toArchive.length === 0,
           run: () =>
@@ -330,7 +330,7 @@ export function BulkEditToolbar({ links }: { links: LinkView[] }) {
       </div>
       <div className="flex items-center gap-2">
         <ActionButton
-          icon={<Copy className="size-4" />}
+          icon={<Copy data-icon="inline-start" className="size-4" />}
           label={copied ? 'Copied' : count === 1 ? 'Copy link' : 'Copy links'}
           iconOnly={iconOnly}
           disabled={disabled}
@@ -339,7 +339,7 @@ export function BulkEditToolbar({ links }: { links: LinkView[] }) {
         {inTrash ? (
           <>
             <ActionButton
-              icon={<Undo2 className="size-4" />}
+              icon={<Undo2 data-icon="inline-start" className="size-4" />}
               label={busy === 'restore' ? 'Restoring…' : 'Restore'}
               iconOnly={iconOnly}
               disabled={disabled}
@@ -351,7 +351,7 @@ export function BulkEditToolbar({ links }: { links: LinkView[] }) {
             />
             <ActionButton
               variant="destructive"
-              icon={<Trash2 className="size-4" />}
+              icon={<Trash2 data-icon="inline-start" className="size-4" />}
               label="Delete permanently"
               iconOnly={iconOnly}
               disabled={disabled}
@@ -363,7 +363,7 @@ export function BulkEditToolbar({ links }: { links: LinkView[] }) {
             <DropdownMenu open={moveOpen} onOpenChange={setMoveOpen}>
               <DropdownMenuTrigger asChild>
                 <ActionButton
-                  icon={<FolderInput className="size-4" />}
+                  icon={<FolderInput data-icon="inline-start" className="size-4" />}
                   label={busy === 'move' ? 'Moving…' : 'Move to'}
                   iconOnly={iconOnly}
                   disabled={disabled || actionable.length === 0}
@@ -422,7 +422,7 @@ export function BulkEditToolbar({ links }: { links: LinkView[] }) {
             )}
             <ActionButton
               variant="destructive"
-              icon={<Trash2 className="size-4" />}
+              icon={<Trash2 data-icon="inline-start" className="size-4" />}
               label={busy === 'remove' ? 'Removing…' : 'Remove'}
               iconOnly={iconOnly}
               disabled={disabled || actionable.length === 0}

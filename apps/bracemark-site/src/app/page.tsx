@@ -258,7 +258,7 @@ export default function Page() {
                 <Button asChild size="lg">
                   <a href={CREATE_ACCOUNT_URL}>
                     Create your account
-                    <ArrowGlyph className={cn('size-4')} />
+                    <ArrowGlyph data-icon="inline-end" className={cn('size-4')} />
                   </a>
                 </Button>
                 <Button asChild size="lg" variant="ghost">
@@ -426,7 +426,7 @@ export default function Page() {
           <Button asChild variant="outline" size="lg">
             <Link href="/pricing">
               Compare plans
-              <ArrowGlyph className={cn('size-4')} />
+              <ArrowGlyph data-icon="inline-end" className={cn('size-4')} />
             </Link>
           </Button>
         </div>
@@ -449,7 +449,7 @@ export default function Page() {
           <Button asChild size="lg" className={cn('mt-9')}>
             <a href={CREATE_ACCOUNT_URL}>
               Create your account
-              <ArrowGlyph className={cn('size-4')} />
+              <ArrowGlyph data-icon="inline-end" className={cn('size-4')} />
             </a>
           </Button>
         </div>

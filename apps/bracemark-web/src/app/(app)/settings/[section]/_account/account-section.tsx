@@ -187,9 +187,9 @@ function DeleteAccountView({ onBack }: { onBack: () => void }) {
             disabled={isPending || password.length === 0 || subscriptionBlocks}
           >
             {isPending ? (
-              <Loader2 className="size-4 animate-spin" />
+              <Loader2 data-icon="inline-start" className="size-4 animate-spin" />
             ) : (
-              <Trash2 className="size-4" />
+              <Trash2 data-icon="inline-start" className="size-4" />
             )}
             {isPending ? 'Deleting account…' : 'Delete account forever'}
           </Button>
@@ -438,7 +438,9 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
 
         <div>
           <Button type="submit" disabled={changePassword.isPending || !newOk || !proofReady}>
-            {changePassword.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
+            {changePassword.isPending ? (
+              <Loader2 data-icon="inline-start" className="size-4 animate-spin" />
+            ) : null}
             {changePassword.isPending ? 'Changing…' : 'Change password'}
           </Button>
         </div>
@@ -567,7 +569,9 @@ function RecoveryCodeView({ onBack, hasRecovery }: { onBack: () => void; hasReco
         </div>
         <div>
           <Button type="submit" disabled={recovery.isPending || currentPassword === ''}>
-            {recovery.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
+            {recovery.isPending ? (
+              <Loader2 data-icon="inline-start" className="size-4 animate-spin" />
+            ) : null}
             {recovery.isPending
               ? 'Generating…'
               : hadRecovery
@@ -623,7 +627,9 @@ function SignOutOtherDevicesView({ onBack }: { onBack: () => void }) {
           </p>
           <div>
             <Button onClick={onConfirm} disabled={signOutOthers.isPending}>
-              {signOutOthers.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
+              {signOutOthers.isPending ? (
+                <Loader2 data-icon="inline-start" className="size-4 animate-spin" />
+              ) : null}
               {signOutOthers.isPending ? 'Signing out…' : 'Sign out other devices'}
             </Button>
           </div>

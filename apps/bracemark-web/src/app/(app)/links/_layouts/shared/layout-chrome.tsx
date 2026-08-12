@@ -210,7 +210,7 @@ export function RefreshPill({ show, onClick }: RefreshPillProps) {
   return (
     <div className="pointer-events-none absolute inset-x-0 top-2 z-10 flex justify-center">
       <Button size="sm" onClick={onClick} className="pointer-events-auto rounded-full shadow-md">
-        <RefreshCw className="size-4" />
+        <RefreshCw data-icon="inline-start" className="size-4" />
         New updates
       </Button>
     </div>

@@ -8,11 +8,16 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 // exactly one page stays in that page instead of landing here.
 //
 // All of them inherit `currentColor` and take a `className`, so colour and size
-// are the caller's business.
+// are the caller's business. Remaining svg props pass through for the same
+// reason — in practice `data-icon`, which is what arms web-ui Button's
+// `has-data-[icon=…]` padding rules when a glyph sits at a button's edge. The
+// hardcoded attributes below are written after the spread, so a caller can't
+// accidentally unset the viewBox or un-hide a decorative glyph.
 
-export function CheckGlyph({ className }: { className?: string }) {
+export function CheckGlyph({ className, ...props }: React.ComponentProps<'svg'>) {
   return (
     <svg
+      {...props}
       className={cn(className)}
       viewBox="0 0 20 20"
       fill="none"
@@ -27,9 +32,10 @@ export function CheckGlyph({ className }: { className?: string }) {
   );
 }
 
-export function ArrowGlyph({ className }: { className?: string }) {
+export function ArrowGlyph({ className, ...props }: React.ComponentProps<'svg'>) {
   return (
     <svg
+      {...props}
       className={cn(className)}
       viewBox="0 0 20 20"
       fill="none"
@@ -46,9 +52,10 @@ export function ArrowGlyph({ className }: { className?: string }) {
 
 // The disclosure chevron on the FAQ. Rotates via the parent `<details>`' open
 // state — see the `group-open:` rule at the call site.
-export function ChevronGlyph({ className }: { className?: string }) {
+export function ChevronGlyph({ className, ...props }: React.ComponentProps<'svg'>) {
   return (
     <svg
+      {...props}
       className={cn(className)}
       viewBox="0 0 20 20"
       fill="none"

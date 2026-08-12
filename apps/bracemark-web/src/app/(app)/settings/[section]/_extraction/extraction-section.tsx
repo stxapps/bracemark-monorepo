@@ -165,7 +165,7 @@ export function ExtractionSection() {
           <div>
             {isExtractingAll ? (
               <Button variant="outline" onClick={pause}>
-                <Pause className="size-4" />
+                <Pause data-icon="inline-start" className="size-4" />
                 {isRunning ? 'Generating… Pause' : 'Pause'}
               </Button>
             ) : confirming ? (
@@ -187,7 +187,7 @@ export function ExtractionSection() {
                 disabled={pendingCount === 0}
                 onClick={() => setConfirming(true)}
               >
-                <Sparkles className="size-4" />
+                <Sparkles data-icon="inline-start" className="size-4" />
                 Generate all
               </Button>
             )}

@@ -226,7 +226,7 @@ export function SubscriptionSection() {
             </span>
           </div>
           <Button variant="ghost" size="sm" disabled={busy !== null} onClick={refreshStatus}>
-            <RefreshCw className="size-4" />
+            <RefreshCw data-icon="inline-start" className="size-4" />
             Refresh
           </Button>
         </div>
@@ -241,7 +241,7 @@ export function SubscriptionSection() {
         {plan !== 'free' && source === 'paddle' && (
           <div className="mt-3">
             <Button variant="outline" disabled={busy !== null} onClick={openPortal}>
-              <ExternalLink className="size-4" />
+              <ExternalLink data-icon="inline-start" className="size-4" />
               {busy === 'portal' ? 'Opening…' : 'Manage billing'}
             </Button>
             <p className="mt-2 text-xs text-muted-foreground">

@@ -108,7 +108,7 @@ export function ListSelect({
           ) : (
             <span className="text-muted-foreground">Choose a list</span>
           )}
-          <ChevronsUpDownIcon className="text-muted-foreground" />
+          <ChevronsUpDownIcon data-icon="inline-end" className="text-muted-foreground" />
         </Button>
       </PopoverTrigger>
       {/* Not portalled: this picker also opens inside the edit Dialog, whose

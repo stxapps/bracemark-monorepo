@@ -139,7 +139,7 @@ export default function Page() {
                 <Button asChild>
                   <a href={CREATE_ACCOUNT_URL}>
                     Create your account
-                    <ArrowGlyph className={cn('size-4')} />
+                    <ArrowGlyph data-icon="inline-end" className={cn('size-4')} />
                   </a>
                 </Button>
               </div>

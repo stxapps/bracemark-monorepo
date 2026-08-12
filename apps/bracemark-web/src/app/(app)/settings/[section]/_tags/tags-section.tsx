@@ -363,7 +363,7 @@ export function TagsSection() {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="sm" disabled={tags.length === 0}>
-                <ArrowUpDown className="size-4" /> Sort
+                <ArrowUpDown data-icon="inline-start" className="size-4" /> Sort
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">

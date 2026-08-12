@@ -269,7 +269,7 @@ function ImportView({ onBack }: { onBack: () => void }) {
         onChange={onFilePicked}
       />
       <Button variant="outline" onClick={() => inputRef.current?.click()} disabled={running}>
-        <Upload className="size-4" />
+        <Upload data-icon="inline-start" className="size-4" />
         Choose a file
       </Button>
 
@@ -429,7 +429,7 @@ function ExportView({ onBack }: { onBack: () => void }) {
 
       <div>
         <Button variant="outline" onClick={() => run(format, lockedListIds)} disabled={running}>
-          <Download className="size-4" />
+          <Download data-icon="inline-start" className="size-4" />
           Export all data
         </Button>
       </div>
@@ -537,7 +537,7 @@ function DeleteView({ onBack }: { onBack: () => void }) {
 
       <div>
         <Button variant="destructive" onClick={onDelete} disabled={running || done}>
-          <Trash2 className="size-4" />
+          <Trash2 data-icon="inline-start" className="size-4" />
           Delete all data
         </Button>
       </div>

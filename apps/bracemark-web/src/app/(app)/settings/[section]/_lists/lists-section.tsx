@@ -644,7 +644,7 @@ export function ListsSection() {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="sm">
-                <ArrowUpDown className="size-4" /> Sort
+                <ArrowUpDown data-icon="inline-start" className="size-4" /> Sort
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">

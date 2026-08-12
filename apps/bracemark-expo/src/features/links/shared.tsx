@@ -240,7 +240,7 @@ function LinksSkeleton({ variant }: { variant: 'list' | 'card' }) {
             {Array.from({ length: count }, (_, i) => (
               <View
                 key={i}
-                className="h-[4.375rem] flex-row items-center gap-3 border-b border-border pr-2 pl-4"
+                className="h-17.5 flex-row items-center gap-3 border-b border-border pr-2 pl-4"
               >
                 <Bone className="h-10 w-16 shrink-0" />
                 <View className="min-w-0 flex-1 gap-2">

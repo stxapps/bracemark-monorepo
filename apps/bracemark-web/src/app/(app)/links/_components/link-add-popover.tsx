@@ -301,6 +301,7 @@ export function LinkAddPopover({
             >
               Advanced
               <ChevronDown
+                data-icon="inline-end"
                 className={cn('size-4 transition-transform', openAdvanced && 'rotate-180')}
               />
             </Button>
