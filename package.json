@@ -147,5 +147,10 @@
     "tailwind-merge": "^3.6.0",
     "tslib": "^2.3.0",
     "uniwind": "^1.10.0"
+  },
+  "overrides": {
+    "@nx/expo": {
+      "@expo/metro": "~54.2.0"
+    }
   }
 }

@@ -432,6 +432,38 @@ would still be required, so the change buys nothing. A comment at that call site
 records it. If you ever bump the SDK far enough that expo's pins leave those
 tilde windows, widen the ranges rather than deleting the lines.
 
+**The `@expo/metro` override — an `@nx/expo` peer from a future SDK.**
+`@nx/expo@23.1.1` targets SDK 55+, where Metro ships as `@expo/metro`, and
+declares it as an **optional** peer at `">= 55.0.0"`. On SDK 54 nothing can
+satisfy that: `expo`, `@expo/cli`, and `@expo/metro-config` all depend on
+`@expo/metro@~54.2.0`. Optional only means npm won't _install_ it — the range
+still constrains the **root position**, so npm refuses to hoist `54.2.0` there
+and pushes a copy down into each of the three consumers. Hence:
+
+```json
+"overrides": { "@nx/expo": { "@expo/metro": "~54.2.0" } }
+```
+
+It rewrites that one stale peer edge to the window the SDK actually ships; it is
+not a fourth opinion on the version, and it changes no resolved version (all four
+consumers already got `54.2.0`) — only npm's placement. Without it a plain
+`npm install` silently re-nests three copies and rewrites the lockfile;
+`npm ci` does not, because it replays the lockfile instead of re-solving, which
+is why the duplication appears only after someone runs `npm install`.
+
+Two properties worth knowing. **It prevents, it does not repair:** once a lockfile
+has the nested layout, adding the override does not re-hoist it — restore the
+hoisted lockfile (`git checkout -- package-lock.json`) and re-solve from there,
+the same asymmetry `npm dedupe` has above. And **the damage is latent, not
+immediate:** `@nx/expo` reaches `@expo/metro` through a `try`/`catch` that falls
+back to the standalone `metro-config`/`metro-resolver` (the reason both are root
+devDeps), and uniwind's only `@expo/metro` reference is an `import type` in
+unshipped `src/`. So nesting breaks nothing today — it just drifts the tree away
+from one copy, which is the invariant this whole section exists to hold.
+
+Drop the override when the SDK reaches 55+ and expo's own `~5x` range satisfies
+`>= 55.0.0` on its own; until then widen it alongside the tilde ranges above.
+
 So an Expo SDK bump edits **one** file: the root `package.json`.
 
 **Checking alignment.** The authority for "what does this SDK want" is
