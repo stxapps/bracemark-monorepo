@@ -49,6 +49,7 @@ export * from './sync/link-query';
 export * from './sync/lock-coverage';
 export * from './sync/paths';
 export * from './sync/rank';
+export * from './sync/sort';
 export * from './sync/status';
 export * from './sync/system-lists';
 export * from './sync/tree';

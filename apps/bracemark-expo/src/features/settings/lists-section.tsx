@@ -19,14 +19,18 @@
 //    disabled, "Top level" target) are web's, verbatim.
 //  - Rename focuses via a ref after the menu closes (no Radix
 //    onCloseAutoFocus on native).
+//
+// What this file does NOT contain is everything it shares with the Tags table —
+// the create row, the rename field, the sort menu, the error runner — which live
+// in table-kit.tsx. What's left here is the nesting: depth, projection, "Move
+// to", locks. That's the whole difference between the two sections.
 
-import { useMemo, useRef, useState } from 'react';
-import { Pressable, TextInput, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { Pressable, View } from 'react-native';
 import {
   Archive,
   ArrowDownAZ,
   ArrowDownZA,
-  ArrowUpDown,
   ChevronDown,
   ChevronRight,
   ChevronUp,
@@ -52,11 +56,17 @@ import {
   useLockMutations,
   useLocks,
 } from '@stxapps/expo-react';
-import { ARCHIVE_ID, isSystemListId, type ListItem, MY_LIST_ID, TRASH_ID } from '@stxapps/shared';
+import {
+  ARCHIVE_ID,
+  isSystemListId,
+  MY_LIST_ID,
+  type SortDir,
+  sortedByName,
+  TRASH_ID,
+} from '@stxapps/shared';
 
 import { ListCommand } from '../../components/links/list-command';
 import { LockPasswordDialog } from '../../components/lock-password-dialog';
-import { Button } from '../../components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog';
 import {
   DropdownMenu,
@@ -66,7 +76,6 @@ import {
   DropdownMenuTrigger,
 } from '../../components/ui/dropdown-menu';
 import { Icon } from '../../components/ui/icon';
-import { Input } from '../../components/ui/input';
 import { Text } from '../../components/ui/text';
 import { usePaywall } from '../../contexts/paywall-provider';
 import { cn } from '../../lib/utils';
@@ -78,52 +87,17 @@ import {
   PROJECTION_OPTIONS,
 } from './dnd-helpers';
 import { DragHandle, DragRow, type DragSort, useDragSort } from './drag-sort';
-import { CreateRow } from './rows';
 import { SettingsHeader, SettingsNotice, SettingsPane } from './settings-kit';
+import { CreateRow, RenameField, SortMenu, useOpRunner, useRenameFocus } from './table-kit';
 import { childrenOf, flattenToRows, forbiddenParentIds, type ListRow } from './tree-helpers';
 
 const NO_COLLAPSED_IDS: ReadonlySet<string> = new Set();
-
-type SortDir = 'asc' | 'desc';
-
-// Alphabetical by name, tie-broken by id so the order is deterministic and
-// stable across re-sorts — web's rule, verbatim.
-function sortedByName<T extends { name: string; id: string }>(items: T[], dir: SortDir): T[] {
-  return [...items].sort((a, b) => {
-    const byName = a.name.localeCompare(b.name);
-    if (byName !== 0) return dir === 'asc' ? byName : -byName;
-    return a.id.localeCompare(b.id);
-  });
-}
 
 function listIcon(id: string): LucideIcon {
   if (id === MY_LIST_ID) return Inbox;
   if (id === ARCHIVE_ID) return Archive;
   if (id === TRASH_ID) return Trash2;
   return Folder;
-}
-
-// Inline rename. Uncontrolled so typing never round-trips through the store;
-// commits when editing ends (blur or return). `key`ed by the stored name in the
-// parent so an external rename (another device) refreshes the field.
-function RenameField({
-  list,
-  onRename,
-  inputRef,
-}: {
-  list: ListItem;
-  onRename: (name: string) => void;
-  inputRef?: React.RefObject<TextInput | null>;
-}) {
-  return (
-    <Input
-      ref={inputRef}
-      defaultValue={list.name}
-      aria-label="List name"
-      className="h-9 border-transparent bg-transparent px-2 shadow-none"
-      onEndEditing={(e) => onRename(e.nativeEvent.text)}
-    />
-  );
 }
 
 // The per-row overflow menu: rename, reorder within siblings, reparent, lock
@@ -300,20 +274,14 @@ function Row({
   onToggleBiometric: () => void;
   onDelete: () => void;
 }) {
-  // Focus the inline name field when Rename is picked from the kebab. The menu
-  // closes on select; defer one beat so focus isn't stolen by its teardown.
-  const nameRef = useRef<TextInput | null>(null);
-  const focusName = () => {
-    setTimeout(() => nameRef.current?.focus(), 50);
-  };
-
+  const { nameRef, focusName } = useRenameFocus();
   const { pan, style, onLayout } = drag.useRow(dragIndex);
 
   return (
     <DragRow
       onLayout={onLayout}
       className={cn(
-        'flex-row items-center gap-1 border-b border-border/60 px-1 py-1',
+        'border-border/60 flex-row items-center gap-1 border-b px-1 py-1',
         lifted && 'rounded-md border-transparent bg-background',
       )}
       // The indent in px (not a class) so it matches the px the drag projection
@@ -345,7 +313,8 @@ function Row({
         <RenameField
           key={`${row.item.id}:${row.item.name}`}
           inputRef={nameRef}
-          list={row.item}
+          name={row.item.name}
+          label="List name"
           onRename={onRename}
         />
       </View>
@@ -438,8 +407,9 @@ export function ListsSection() {
   const { listLocks, unlockList, biometricAvailable, biometricLabel } = useLocks();
   const { addListLock, removeListLock, setListBiometric } = useLockMutations();
 
+  const { error, run, runAwait } = useOpRunner();
+
   const [collapsedIds, setCollapsedIds] = useState<ReadonlySet<string>>(NO_COLLAPSED_IDS);
-  const [error, setError] = useState<string | null>(null);
   // The pending lock intent from a row's kebab — drives the single hoisted
   // LockPasswordDialog below (web's page-level pattern).
   const [lockDialog, setLockDialog] = useState<{
@@ -479,11 +449,6 @@ export function ListsSection() {
   // a no-op.
   const sortGroup = (parentId: string | null, dir: SortDir) =>
     run(reorder(sortedByName(childrenOf(lists, parentId), dir)));
-
-  const run = (op: Promise<unknown>) => {
-    setError(null);
-    void op.catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
-  };
 
   const moveTo = (row: ListRow, parentId: string | null) => {
     setMovingId(null);
@@ -569,42 +534,14 @@ export function ListsSection() {
 
       {error && <SettingsNotice tone="error">{error}</SettingsNotice>}
 
-      <View className="-mb-1 flex-row justify-end">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm">
-              <Icon as={ArrowUpDown} className="size-4" />
-              <Text>Sort</Text>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onPress={() => sortGroup(null, 'asc')}>
-              <Icon as={ArrowDownAZ} className="size-4" />
-              <Text>A → Z</Text>
-            </DropdownMenuItem>
-            <DropdownMenuItem onPress={() => sortGroup(null, 'desc')}>
-              <Icon as={ArrowDownZA} className="size-4" />
-              <Text>Z → A</Text>
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </View>
+      <SortMenu onSort={(dir) => sortGroup(null, dir)} />
 
       <View className="rounded-lg border border-border">
+        {/* runAwait, not run: CreateRow awaits this to clear its field only on
+            success, so the error has to surface AND re-throw. */}
         <CreateRow
-          placeholder="New list"
-          onCreate={async (name) => {
-            // Not run() like the other ops: CreateRow awaits this to clear its
-            // field only on success, so we surface the error here and re-throw
-            // to keep the typed value.
-            setError(null);
-            try {
-              await create(name, null, childrenOf(lists, null), 0);
-            } catch (e) {
-              setError(e instanceof Error ? e.message : String(e));
-              throw e;
-            }
-          }}
+          noun="list"
+          onCreate={(name) => runAwait(() => create(name, null, childrenOf(lists, null), 0))}
         />
 
         {displayRows.map((row, index) => (

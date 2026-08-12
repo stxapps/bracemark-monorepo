@@ -10,25 +10,19 @@
 // but the drop is the same one-liner web's is: arrayMove the flat group and hand
 // it to `reorder`. Flat means no depth projection: the horizontal axis is ignored
 // entirely, so `useDragSort` gets no `indentWidth` and the drag never re-renders.
+//
+// What this file does NOT contain is everything it shares with the Lists table —
+// the create row, the rename field, the sort menu, the error runner — which live
+// in table-kit.tsx. What's left here is the flatness: that's the whole difference
+// between the two sections.
 
-import { useMemo, useRef, useState } from 'react';
-import { Pressable, TextInput, View } from 'react-native';
-import {
-  ArrowDownAZ,
-  ArrowDownZA,
-  ArrowUpDown,
-  ChevronDown,
-  ChevronUp,
-  MoreHorizontal,
-  Pencil,
-  Tag,
-  Trash2,
-} from 'lucide-react-native';
+import { useMemo } from 'react';
+import { Pressable, View } from 'react-native';
+import { ChevronDown, ChevronUp, MoreHorizontal, Pencil, Tag, Trash2 } from 'lucide-react-native';
 
 import { useTagMutations, useTags } from '@stxapps/expo-react';
-import { arrayMove, type TagItem } from '@stxapps/shared';
+import { arrayMove, sortedByName, type TagItem } from '@stxapps/shared';
 
-import { Button } from '../../components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -37,44 +31,11 @@ import {
   DropdownMenuTrigger,
 } from '../../components/ui/dropdown-menu';
 import { Icon } from '../../components/ui/icon';
-import { Input } from '../../components/ui/input';
 import { Text } from '../../components/ui/text';
 import { cn } from '../../lib/utils';
 import { DragHandle, DragRow, type DragSort, useDragSort } from './drag-sort';
-import { CreateRow } from './rows';
 import { SettingsHeader, SettingsNotice, SettingsPane } from './settings-kit';
-
-type SortDir = 'asc' | 'desc';
-
-// Alphabetical by name, tie-broken by id — the same rule the Lists section uses.
-function sortedByName(items: TagItem[], dir: SortDir): TagItem[] {
-  return [...items].sort((a, b) => {
-    const byName = a.name.localeCompare(b.name);
-    if (byName !== 0) return dir === 'asc' ? byName : -byName;
-    return a.id.localeCompare(b.id);
-  });
-}
-
-// Inline rename — the Lists section's RenameField, for a tag.
-function RenameField({
-  tag,
-  onRename,
-  inputRef,
-}: {
-  tag: TagItem;
-  onRename: (name: string) => void;
-  inputRef?: React.RefObject<TextInput | null>;
-}) {
-  return (
-    <Input
-      ref={inputRef}
-      defaultValue={tag.name}
-      aria-label="Tag name"
-      className="h-9 border-transparent bg-transparent px-2 shadow-none"
-      onEndEditing={(e) => onRename(e.nativeEvent.text)}
-    />
-  );
-}
+import { CreateRow, RenameField, SortMenu, useOpRunner, useRenameFocus } from './table-kit';
 
 // The per-row overflow menu: rename, reorder within the group, delete. No
 // "Move to" (flat taxonomy — nowhere to move to) and no system-tag guard
@@ -156,19 +117,14 @@ function Row({
   onDelete: () => void;
 }) {
   const { pan, style, onLayout } = drag.useRow(index);
-  // Focus the inline name field when Rename is picked — same deferred focus as
-  // the Lists section's Row.
-  const nameRef = useRef<TextInput | null>(null);
-  const focusName = () => {
-    setTimeout(() => nameRef.current?.focus(), 50);
-  };
+  const { nameRef, focusName } = useRenameFocus();
 
   return (
     <DragRow
       style={style}
       onLayout={onLayout}
       className={cn(
-        'flex-row items-center gap-1 border-b border-border/60 px-1 py-1',
+        'border-border/60 flex-row items-center gap-1 border-b px-1 py-1',
         lifted && 'rounded-md border-transparent bg-background',
       )}
     >
@@ -180,7 +136,8 @@ function Row({
         <RenameField
           key={`${tag.id}:${tag.name}`}
           inputRef={nameRef}
-          tag={tag}
+          name={tag.name}
+          label="Tag name"
           onRename={onRename}
         />
       </View>
@@ -201,7 +158,7 @@ export function TagsSection() {
   const tree = useTags();
   const { create, rename, move, destroy, reorder } = useTagMutations();
 
-  const [error, setError] = useState<string | null>(null);
+  const { error, run, runAwait } = useOpRunner();
 
   // The flat, ordered tag list. `useTags` nests by `parentId`, but nothing
   // nests tags, so the top level is the whole set — take its items in rank order.
@@ -225,11 +182,6 @@ export function TagsSection() {
     },
   });
 
-  const run = (op: Promise<unknown>) => {
-    setError(null);
-    void op.catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
-  };
-
   return (
     // `px-4` for the same reason the Lists table uses it — see the note there.
     <SettingsPane className="px-4">
@@ -240,43 +192,15 @@ export function TagsSection() {
 
       {error && <SettingsNotice tone="error">{error}</SettingsNotice>}
 
-      <View className="-mb-1 flex-row justify-end">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm" disabled={tags.length === 0}>
-              <Icon as={ArrowUpDown} className="size-4" />
-              <Text>Sort</Text>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onPress={() => run(reorder(sortedByName(tags, 'asc')))}>
-              <Icon as={ArrowDownAZ} className="size-4" />
-              <Text>A → Z</Text>
-            </DropdownMenuItem>
-            <DropdownMenuItem onPress={() => run(reorder(sortedByName(tags, 'desc')))}>
-              <Icon as={ArrowDownZA} className="size-4" />
-              <Text>Z → A</Text>
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </View>
+      <SortMenu
+        disabled={tags.length === 0}
+        onSort={(dir) => run(reorder(sortedByName(tags, dir)))}
+      />
 
       <View className="rounded-lg border border-border">
-        <CreateRow
-          placeholder="New tag"
-          onCreate={async (name) => {
-            // Not run() like the other ops: CreateRow awaits this to clear its
-            // field only on success, so we surface the error here and re-throw to
-            // keep the typed value.
-            setError(null);
-            try {
-              await create(name, null, tags, 0);
-            } catch (e) {
-              setError(e instanceof Error ? e.message : String(e));
-              throw e;
-            }
-          }}
-        />
+        {/* runAwait, not run: CreateRow awaits this to clear its field only on
+            success, so the error has to surface AND re-throw. */}
+        <CreateRow noun="tag" onCreate={(name) => runAwait(() => create(name, null, tags, 0))} />
 
         {tags.length === 0 ? (
           <Text className="px-3 py-6 text-center text-sm text-muted-foreground">No tags yet.</Text>

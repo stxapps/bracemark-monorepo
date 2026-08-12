@@ -113,6 +113,21 @@ draft; each keystroke commits or reverts in place):
   complete non-drag fallback, and both route a nesting drop through the
   `nestedLists` paywall rather than clamping the projection.
 
+  **What the two tables share is factored, once per platform.** The projection
+  math is shared across platforms (above), but the _chrome_ can't be — a `<div>`
+  and a `<View>` have no common ancestor — so each platform keeps one
+  `table-kit.tsx` holding what its own two tables have in common: the create row,
+  the inline rename field, the sort menu, the error runner (`useOpRunner`), the
+  rename-focus dance, and on web the drag grip (expo's lives with its drag layer
+  in `drag-sort.tsx`). Web's is `settings/_components/table-kit.tsx`, beside the
+  `settings-kit.tsx` that owns the settings design system proper — the kit is the
+  section-level system, the table kit is these two tables. Expo's is
+  `features/settings/table-kit.tsx`, component for component. The split is the one
+  this whole entry describes: what both tables agree on lives in the kit, what
+  they disagree about (nesting) stays in the section. Pure ordering is neither
+  platform's business and goes one level further out — `sortedByName` / `SortDir`
+  in `@stxapps/shared` (`sync/sort.ts`), one copy behind all four tables.
+
   **Lists nest, tags are deliberately flat — and that's a UI decision, not a
   schema one.** Tags carry the _same_ `parentId`/`rank` fields as lists
   (`entities.ts` — both are the same ranked-tree entity), so the store could nest
