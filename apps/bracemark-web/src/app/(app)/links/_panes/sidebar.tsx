@@ -95,13 +95,23 @@ const SECTION_LISTS = 'section:lists';
 const SECTION_TAGS = 'section:tags';
 
 // Fired by any row that COMMITS A NAVIGATION — a filter selection or a Manage
-// link — never by a chevron, which only reveals more of this nav. The rail
-// leaves it undefined (there is nothing to dismiss); the drawer passes its close
-// so picking a list gets you to the links instead of leaving you looking at the
-// panel you picked it from. A context rather than a prop because the rows sit
-// three components deep (Section → NavTree → NavItem) and none of the layers
-// between them has any other use for it.
-const NavigateContext = createContext<(() => void) | undefined>(undefined);
+// link — never by a chevron, which only reveals more of this nav. A context
+// rather than a prop because the rows sit three components deep (Section →
+// NavTree → NavItem) and none of the layers between them has any other use for
+// it.
+//
+// EXPORTED, and supplied by the HOST rather than through a `SidebarBody` prop:
+// the rail leaves it undefined (there is nothing to dismiss), the drawer wraps
+// the body in a Provider carrying its close, so picking a list gets you to the
+// links instead of leaving you looking at the panel you picked it from. It
+// enters this way round because this file is a `'use client'` ENTRY file — the
+// links page is a server component and imports `Sidebar` from here — and Next's
+// TS plugin warns (ts71007) on a function-typed prop of any component exported
+// from an entry file unless the name claims Server Action (`action`, `*Action`).
+// bracemark-web is `output: 'export'`, a static export with no server to run one
+// on, so there is no honest way to wear that name. Context isn't props, so the
+// callback crosses no boundary the rule is watching.
+export const SidebarNavigateContext = createContext<(() => void) | undefined>(undefined);
 
 // The shared focus ring for this nav's hand-rolled controls (rows, chevrons,
 // section headers, footer links) — the same one the settings rail uses, so a
@@ -227,7 +237,7 @@ function NavItem({
   showSlot?: boolean;
 }) {
   const { selection: current, setSimpleQuery } = useLinksPage();
-  const onNavigate = useContext(NavigateContext);
+  const onNavigate = useContext(SidebarNavigateContext);
   const active = isActive(current, selection);
 
   return (
@@ -381,7 +391,7 @@ function Section({
 // the nav items above but it's an <a>, so it navigates (and Back returns here to
 // keep organizing) rather than calling setSimpleQuery.
 function FooterLink({ href, icon, label }: { href: string; icon: React.ReactNode; label: string }) {
-  const onNavigate = useContext(NavigateContext);
+  const onNavigate = useContext(SidebarNavigateContext);
 
   return (
     <Link
@@ -403,11 +413,11 @@ function FooterLink({ href, icon, label }: { href: string; icon: React.ReactNode
 // the rail below and by the drawer (sidebar-drawer.tsx) at the same time it is
 // hidden. Both hosts supply their own outer box (a bordered `aside`, a sheet
 // panel); everything inside the box is here.
+// Dismissal on navigation is not a prop — the host provides
+// SidebarNavigateContext (see there for why it has to come in that way).
 export function SidebarBody({
-  onNavigate,
   action,
 }: {
-  onNavigate?: () => void;
   // Trailing control for the brand row. The rail has nothing to put there; the
   // drawer puts its dismiss there, so the panel closes from the same row it
   // announces itself in rather than from a button floating over the trees.
@@ -491,7 +501,7 @@ export function SidebarBody({
   }, [selection, lists, tags, expand]);
 
   return (
-    <NavigateContext.Provider value={onNavigate}>
+    <>
       {/* The lockup, at the same `h-14` as the topbar so the two hairlines meet
           across the frame — and identical to the settings rail's and the browser
           extension's options page (mark `h-5`, wordmark `text-[0.9375rem]
@@ -634,7 +644,7 @@ export function SidebarBody({
           </div>
         )}
       </nav>
-    </NavigateContext.Provider>
+    </>
   );
 }
 

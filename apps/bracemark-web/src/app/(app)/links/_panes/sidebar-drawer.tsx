@@ -12,8 +12,10 @@
 // to look for. The chevron is the affordance; `aria-expanded` and
 // `aria-haspopup="dialog"` are what say it to a screen reader.
 //
-// Selecting a list/tag dismisses the sheet (SidebarBody's `onNavigate`) — the
-// point of the tap was the links, not the panel. Expanding a subtree does not.
+// Selecting a list/tag dismisses the sheet — the point of the tap was the links,
+// not the panel. Expanding a subtree does not. That close reaches the rows
+// through SidebarNavigateContext, which this component provides (sidebar.tsx
+// explains why the body takes it from context rather than as a prop).
 //
 // Mounted only while OPEN (Radix unmounts closed content), so in the common
 // case — the drawer shut, or a desktop that never opens it — there is exactly
@@ -32,12 +34,12 @@ import {
 } from '@stxapps/web-ui/components/ui/sheet';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
-import { SidebarBody } from './sidebar';
+import { SidebarBody, SidebarNavigateContext } from './sidebar';
 
 export function SidebarDrawer({ label }: { label: string }) {
   const [open, setOpen] = useState(false);
-  // Identity-stable so SidebarBody's context value doesn't change every render
-  // of this component.
+  // Identity-stable so the context value below doesn't change every render of
+  // this component.
   const close = useCallback(() => setOpen(false), []);
 
   return (
@@ -69,16 +71,17 @@ export function SidebarDrawer({ label }: { label: string }) {
         className="w-72 max-w-[85vw]"
       >
         <SheetTitle className="sr-only">Lists and tags</SheetTitle>
-        <SidebarBody
-          onNavigate={close}
-          action={
-            <SheetClose asChild>
-              <Button variant="ghost" size="icon-sm" aria-label="Close navigation">
-                <X className="size-4" />
-              </Button>
-            </SheetClose>
-          }
-        />
+        <SidebarNavigateContext.Provider value={close}>
+          <SidebarBody
+            action={
+              <SheetClose asChild>
+                <Button variant="ghost" size="icon-sm" aria-label="Close navigation">
+                  <X className="size-4" />
+                </Button>
+              </SheetClose>
+            }
+          />
+        </SidebarNavigateContext.Provider>
       </SheetContent>
     </Sheet>
   );
