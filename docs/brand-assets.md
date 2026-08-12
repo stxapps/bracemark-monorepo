@@ -21,7 +21,7 @@ the user has.
 A solid geometric B with its top-right corner cut away at 45°, the way a page
 corner is turned down to keep a place. **The shape itself is documented at the
 top of `packages/web-ui/src/components/icons/bracemark-icon.tsx`** — the
-one-path/`currentColor` invariant and the 38×44 grid it is constructed on. That
+one-path/`currentColor` invariant and the 428×512 grid it is constructed on. That
 comment is the source of truth for _what the shape is doing_ and is not repeated
 here; this page owns the inventory and the rules that span files.
 
@@ -40,32 +40,39 @@ a re-render of every raster.
 **The raster conventions, which are a rule and not a per-file judgement:**
 
 - **Favicons and toolbar icons** (`logo16/32/48/64`, the browser extension's
-  `icon/16|32|48|128`, `icon1`/`icon2`, expo `favicon.png`) — transparent
-  background, mark in `#0a0a0a`, **ink height = 7N/8 of an N×N canvas**, centred,
-  natural 38:44 aspect.
+  `icon/16|32|48|128`, `icon1`/`icon2` in bracemark-web and the marketing site,
+  expo `favicon.png`) — mark in `#0a0a0a` on an **opaque white tile cut tight to
+  the mark**: on an N×N canvas the tile is **7N/8 wide × N tall, centred, with an
+  N/8 corner radius**, and the mark sits inside it at **ink height 7N/8**, centred,
+  natural 428:512 aspect. The canvas corners outside the tile's radius stay
+  transparent, so the tile reads as a rounded chip and not as a square.
 - **App and PWA tiles** (`logo192/512`, `*-maskable`, `apple-touch-icon`,
   `apple-icon`, expo `icon.png`/`ios-light.png`) — opaque **white** tile, mark
   `#0a0a0a`, ink height 50–55%.
 - **The expo dark and tinted variants** (`ios-dark.png`, `ios-tinted.png`) —
   transparent, near-white mark, 55%; iOS composites them over its own backdrop.
-- **The two `favicon.ico`** (bracemark-web, bracemark-site) — three frames each,
-  16/32/48, following the favicon rule above.
+- **The two `favicon.ico`** (bracemark-web, bracemark-site) — four frames each,
+  16/32/48/64, following the favicon rule above, tile included.
 - **The three expo rasters the platform composites itself** (`adaptive-icon.png`,
   `splash-icon.png`, `splash-icon-dark.png`, all 1024²) — transparent, because
   their background is set in `app.config.ts` rather than baked in: Android's
   adaptive icon sits on `#ffffff`, and the splash pair on `#ffffff` / `#0a0a0a`
   at `imageWidth: 200`, `resizeMode: 'contain'`. Editing the background is an
   `app.config.ts` change, not a re-render — and `adaptive-icon.png` is a
-  **maskable** foreground, so it is bound by the 64.2% ceiling below.
+  **maskable** foreground, so it is bound by the 65.2% ceiling below.
 
 Only mark rasters are counted above. `apps/bracemark-web/public/` also holds
 store screenshots (`ss-*`) and an OG image, which are not brand assets and are
 not governed here.
 
-**Maskable padding is a measured number: 64.2%.** The mark fits Android's 80%
-safe circle at that ink height and no larger — a property of the 0.863 aspect
-plus the corner radii. The `-maskable` files ship at 50%, comfortably inside it;
-the non-maskable tiles at 55% are **not** maskable and must not be substituted.
+**Maskable padding is a measured number: 65.2%.** The mark fits Android's 80%
+safe circle at that ink height and no larger — a property of the 0.836 aspect
+plus the corner radii. Re-measure it whenever the path changes: the number is
+`0.4 × 512 ÷ R`, where `R` is the largest distance from the centre of the mark's
+bounding box to its outline — currently ~314 units, on the rounded bottom-left
+corner, which is the point that binds. The `-maskable` files ship at 50%,
+comfortably inside it; the non-maskable tiles at 55% are **not** maskable and
+must not be substituted.
 
 There is **no committed generator** for any of this, so the rules above are the
 only thing that makes the rasters reproducible. Two consequences before you
@@ -74,12 +81,23 @@ fresh render from the same path differs from the committed file by up to ~26%
 alpha on edge pixels alone, because a different rasteriser drew it — so a
 re-render is never a byte-clean diff.
 
-**Known gap: the browser extension's toolbar icons have no dark-theme variant.**
-`#0a0a0a` on Chrome's dark toolbar is close to invisible. MV3 has no
-manifest-level light/dark icon switch (Firefox's `theme_icons` is Firefox-only)
-and the service worker has no `matchMedia` to drive `action.setIcon` from, so the
-fix needs an extension page or content script to drive it. Tracked here and
-nowhere else.
+**The white tile is what makes that first class survive a dark browser**, and it
+is why those files are no longer transparent. They are the only rasters a
+_browser_ paints into its own chrome — a toolbar button, a tab strip, a bookmarks
+bar — at a colour it chooses and never tells us, and `#0a0a0a` on Chrome's dark
+toolbar is close to invisible. A per-theme variant was never actually available:
+MV3 has no manifest-level light/dark icon switch (Firefox's `theme_icons` is
+Firefox-only) and the service worker has no `matchMedia` to drive
+`action.setIcon` from, so it would need an extension page or content script to
+drive it — and a favicon or a PWA manifest icon has no such hook at all. One
+opaque tile covers every surface in the class, in every browser, with no runtime
+code; the cost is that the mark no longer floats free on light chrome.
+
+⚠ **The class is all-tiled or all-transparent — never mixed.** Restoring
+transparency on one file because it looks better in one browser puts a white chip
+behind the mark in bracemark-web's tab and none behind the same mark on the
+toolbar button beside it. The app and PWA tiles are a different class and keep
+their full-bleed square: nothing paints _them_ onto an unknown colour.
 
 ### the lockup
 
@@ -117,7 +135,7 @@ surface is not About, it is a carrier.
 
 The fold is also used away from the mark, and it carries **exactly two
 meanings**. No use renders the mark — each cuts the same corner off a rectangle,
-at a size set against the object rather than against the mark's 29% ratio, which
+at a size set against the object rather than against the mark's 30% ratio, which
 only reads as a silhouette on ~40px objects.
 
 | where                                                                       | cut     | what it means                                                                                                               |

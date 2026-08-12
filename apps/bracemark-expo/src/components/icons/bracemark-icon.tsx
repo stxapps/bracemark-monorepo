@@ -9,7 +9,7 @@ import { useCSSVariable } from 'uniwind';
 //
 // Kept in-app (not a package) since bracemark-expo is the only expo surface, like
 // the react-native-reusables copies. Defaults to web's `h-6` render size (24px
-// tall), preserving the 38:44 viewBox aspect.
+// tall), preserving the 428:512 viewBox aspect.
 //
 // react-native-svg takes the fill as a PROP, not a className, so `currentColor`
 // — which is all the web copy needs — has nothing to resolve against here; the
@@ -26,9 +26,9 @@ export function BracemarkIcon({ height = 24 }: { height?: number }) {
   const [foreground] = useCSSVariable(['--color-foreground']);
 
   return (
-    <Svg width={(height * 38) / 44} height={height} viewBox="0 0 38 44" fill="none">
+    <Svg width={(height * 428) / 512} height={height} viewBox="0 0 428 512" fill="none">
       <Path
-        d="M4 0H22L33 11V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H21A5.5 5.5 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z"
+        d="M254.101 0L382.101 128C385.101 168 360.1 223.5 324.101 241C458.6 248.001 466.6 502.499 324.101 512H48C21.4903 512 0 490.51 0 464V48C0 21.4903 21.4903 0 48 0H254.101ZM103.101 443H286.101C328.074 443 362.101 408.973 362.101 367C362.101 325.027 328.074 291 286.101 291H103.101V443ZM103.101 198H245.101C280.447 198 309.101 169.346 309.101 134C309.101 98.6539 280.447 70.0003 245.101 70H103.101V198Z"
         fillRule="evenodd"
         fill={asColor(foreground)}
       />

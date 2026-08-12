@@ -23,21 +23,32 @@ import * as React from 'react';
 // near-black body on a dark background left four floating dots. Those tokens are
 // gone from styles.css — don't reintroduce them.
 //
-// Geometry lives on a 38×44 grid: 9-wide stem, 6-wide bars, an 11-unit corner
-// cut. Keep the viewBox if you retouch it — `bracemark-expo`'s port copies these
-// numbers, and the icon PNGs are rendered from this path.
+// Geometry lives on a 428×512 grid — 512 is the size the largest icon PNG
+// renders at, so the path is authored at raster scale and the numbers stay
+// whole-ish: a 103-wide stem, bars 66–93 deep, a 128-unit corner cut (exactly
+// 45°, 30% of the width), and a 48-unit radius on the three corners that are not
+// cut. The two bowls bulge past the stem's grid as free cubics, while the
+// counters they enclose are exact circular caps (r=64 upper, r=76 lower) — so
+// the outer silhouette is drawn by eye and the holes are drawn by compass; don't
+// "regularise" the outer curves to match the inner ones.
+//
+// Aspect is 428:512 ≈ 0.836 — every call site sizes by height (`h-5 w-auto`, or
+// the `height` prop on native), so the width follows from the viewBox and no
+// call site has to know that number. Keep the viewBox if you retouch it —
+// `bracemark-expo`'s port copies these numbers, and the icon PNGs are rendered
+// from this path.
 export function BracemarkIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg
-      width="38"
-      height="44"
-      viewBox="0 0 38 44"
+      width="428"
+      height="512"
+      viewBox="0 0 428 512"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       {...props}
     >
       <path
-        d="M4 0H22L33 11V16A5 5 0 0 1 28 21A9 11.5 0 0 1 28 44H4A4 4 0 0 1 0 40V4A4 4 0 0 1 4 0ZM9 6H21A5.5 5.5 0 0 1 21 17H9ZM9 25H24.5A6.5 6.5 0 0 1 24.5 38H9Z"
+        d="M254.101 0L382.101 128C385.101 168 360.1 223.5 324.101 241C458.6 248.001 466.6 502.499 324.101 512H48C21.4903 512 0 490.51 0 464V48C0 21.4903 21.4903 0 48 0H254.101ZM103.101 443H286.101C328.074 443 362.101 408.973 362.101 367C362.101 325.027 328.074 291 286.101 291H103.101V443ZM103.101 198H245.101C280.447 198 309.101 169.346 309.101 134C309.101 98.6539 280.447 70.0003 245.101 70H103.101V198Z"
         fillRule="evenodd"
         fill="currentColor"
       />
