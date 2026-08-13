@@ -1,12 +1,14 @@
-// Quick-add for links — the expo port of bracemark-web's LinkAddPopover
-// (`(app)/links/_components/link-add-popover.tsx`, the canonical doc for the
+// Quick-add for links — the expo port of bracemark-web's LinkAddSurface
+// (`(app)/links/_components/link-add-surface.tsx`, the canonical doc for the
 // behavior: the two-tier validation — a HARD empty-URL error vs the SOFT
 // malformed/duplicate/trashed warnings that relabel Save → Confirm; why the
 // trashed ground alone offers Restore; why the quota banner REPLACES the form;
-// the advancedDirty close guard). A phone has no topbar slot to anchor a
-// popover to, so the surface is a modal-presented router screen summoned by
-// the links screen's FAB (add-link-fab.tsx) — deliberately a ROUTER screen,
-// not an RN `Modal` like AdvancedSearch:
+// the advancedDirty close guard). Web anchors that form to a popover only at
+// `md` and up; below it the form fills a bottom sheet, for the same reason this
+// screen exists — a phone-height surface with the keyboard up has no room to
+// hang a form off a topbar corner. Here the surface is a modal-presented router
+// screen summoned by the links screen's FAB (add-link-fab.tsx) — deliberately a
+// ROUTER screen, not an RN `Modal` like AdvancedSearch:
 //
 //  - It stays in the root view tree, so keyboard-controller's
 //    KeyboardAwareScrollView works (docs/safe-area.md — "decide the

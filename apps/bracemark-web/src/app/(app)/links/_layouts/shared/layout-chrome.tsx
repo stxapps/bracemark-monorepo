@@ -9,7 +9,7 @@ import { ARCHIVE_ID, DEFAULT_LIST_ID, TRASH_ID } from '@stxapps/shared';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
-import { LinkAddPopover } from '../../_components/link-add-popover';
+import { LinkAddSurface } from '../../_components/link-add-surface';
 import { type Selection, useLinksPage } from '../../_contexts/page-provider';
 
 // An empty pane is not one state, it's seven, and they want different words.
@@ -110,7 +110,7 @@ export function EmptyState({
       </div>
       {cta && (
         <div className="mt-1">
-          <LinkAddPopover prominent />
+          <LinkAddSurface prominent />
         </div>
       )}
     </div>

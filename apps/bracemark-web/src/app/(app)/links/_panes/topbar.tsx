@@ -40,7 +40,7 @@ import { useLists, useTags } from '@stxapps/web-react';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
-import { LinkAddPopover } from '../_components/link-add-popover';
+import { LinkAddSurface } from '../_components/link-add-surface';
 import { MoreOptionsMenu } from '../_components/more-options-menu';
 import { SearchBar } from '../_components/search-bar';
 import { useLinksPage } from '../_contexts/page-provider';
@@ -167,7 +167,7 @@ export function Topbar() {
           >
             <Search className="size-4" />
           </Button>
-          <LinkAddPopover />
+          <LinkAddSurface />
           <Button
             variant={bulkEditing ? 'secondary' : 'ghost'}
             size="icon"

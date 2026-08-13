@@ -292,6 +292,27 @@ breakpoint math.
    (`useVisualViewport` already excludes the scrollbar and reflects zoom, so you
    don't subtract `useScrollbarWidth()` here — that's for layout-viewport math.)
 
+3. **A surface pinned to the bottom edge with a focused input in it needs (2)
+   even though it's a Radix component.** `position: fixed` resolves against the
+   **layout** viewport, so `bottom-0` is _under_ the soft keyboard, and Radix
+   can't help — Floating UI measures the same layout viewport, so an anchored
+   `PopoverContent`'s `--radix-popover-content-available-height` overstates the
+   room by the keyboard's height too. Lift by the occluded band and cap to what's
+   visible:
+
+   ```ts
+   const vv = useVisualViewport();
+   const layout = useWindowSize(); // layout viewport — keyboard-blind, on purpose
+   // Skip the lift while pinch-zoomed: `scale > 1` shrinks vv the same way a
+   // keyboard does and the subtraction can't tell them apart.
+   const keyboardInset = Math.max(0, layout.height - vv.height - vv.offsetTop);
+   // → style={{ bottom: keyboardInset, maxHeight: vv.height - gutter }}
+   ```
+
+   Live use: the links topbar's quick-add, which is an anchored popover at `md`
+   and up and a keyboard-lifted bottom `Sheet` below it
+   (`links/_components/link-add-surface.tsx`, [editors.md](./editors.md)).
+
 ### performance note
 
 `useMediaQuery` is cheap to use per-component: `change` fires only at the breakpoint

@@ -28,7 +28,7 @@ overrides). Create collects a strict subset of edit's fields.
 | surface                    | file                                                            | kind      | fields                                             |
 | -------------------------- | --------------------------------------------------------------- | --------- | -------------------------------------------------- |
 | extension save editor      | `apps/bracemark-extension/entrypoints/popup/Editor.tsx`         | create    | list, tags, note (URL is the tab's, read-only)     |
-| web quick-add popover      | `apps/bracemark-web/.../links/_components/link-add-popover.tsx` | create    | URL, then list/tags/note behind "Advanced"         |
+| web quick-add              | `apps/bracemark-web/.../links/_components/link-add-surface.tsx` | create    | URL, then list/tags/note behind "Advanced"         |
 | web edit dialog            | `apps/bracemark-web/.../links/_components/link-edit-dialog.tsx` | full edit | title, image, list, tags, note                     |
 | bracemark-expo quick-add   | `apps/bracemark-expo/src/features/links/link-add-screen.tsx`    | create    | URL, then list/tags/note behind "Advanced"         |
 | bracemark-expo edit screen | `apps/bracemark-expo/src/features/links/link-edit-screen.tsx`   | full edit | title, image, list, tags, note                     |
@@ -52,6 +52,27 @@ the first half of the only route back under the limit. Import has its own check
 ([data-lifecycle.md](./data-lifecycle.md)). The **share sheet** is the one
 exception, on iOS-process grounds rather than principle
 ([share-sheet.md](./share-sheet.md)). A new create surface inherits the rule.
+
+**Web quick-add is one form in two containers, split at `md`.** Above the
+breakpoint it is a popover anchored to the topbar's Add button; below it, the same
+form fills a bottom sheet. The split is about the **soft keyboard**, not the width.
+The URL field is `autoFocus`, and `PopoverContent`'s height cap is computed by
+Floating UI against the **layout** viewport — the one the keyboard does not shrink
+([safe-area.md](./safe-area.md), _what's provided_). So an anchored popover believes
+it has the whole screen, and with "Advanced" open its Save button — the control that
+completes the task — sits under the keyboard, inside a scroll container that doesn't
+know it's clipped. A bottom sheet does not fix that by itself, since `position:
+fixed` anchors to that same layout viewport; what fixes it is lifting the sheet by
+the occluded height measured off `useVisualViewport` ([safe-area.md](./safe-area.md),
+_popups & dialogs_ (2) — the hand-rolled-geometry case). Two consequences worth
+keeping: all draft state lives **above** the container fork, so crossing `md`
+mid-edit (a rotation, a resized window) swaps the shell without dropping the draft;
+and the sheet supplies its **own** close X wired to the unguarded close, because the
+built-in `SheetClose` routes through the dirty guard below (invariant 3) and would
+silently no-op on a dirty draft. The **trigger** does not move — Add stays in the
+topbar at every width. bracemark-expo's FAB is a different affordance for a
+different frame; the two clients agree on the form, not on where it is summoned
+from.
 
 The two bracemark-expo in-app editors are the web pair's behavioral twins (same
 validation, same quota banner on create, same dirty close guard — swipe-down /
@@ -173,7 +194,7 @@ editors pass and the move-to menus below must not. The rows themselves are
 
 - **Why inline, rather than a "Manage lists" link out to Settings → Lists** (the
   shape the sidebar's `FooterLink` uses): the sidebar holds no draft, and every
-  editor does. Navigating away destroys it — the quick-add popover would drop the
+  editor does. Navigating away destroys it — web quick-add would drop the
   very URL/note its `advancedDirty` guard exists to protect (invariant 3), and the
   extension popup would be killed outright by `tabs.create`, since a popup
   dismisses on focus loss uninterceptably. "Add a list" is a **sub-task of the
@@ -330,7 +351,7 @@ the form, and a stray click can drop the form.
 **1. On open, copy values into draft state — don't bind to the store.** The edit
 dialog snapshots `link.customTitle`/`listId`/`tagIds`/`note` into `useState` at
 mount, and is `key`-remounted per open (and per retarget) so the draft always
-starts fresh from the link. The quick-add popover resets its fields on
+starts fresh from the link. Web quick-add resets its fields on
 `onOpenChange(next=true)`. The reason is the writer-split + LWW: a background
 extraction or another device can write the link mid-edit; a draft snapshot means
 Save computes a **minimal patch** against the freshest blob
@@ -366,9 +387,9 @@ resurrecting stale fields.
   full-fidelity, not thumbnailed — resize's 1024px/JPEG spec is a preview spec,
   wrong for a faithful visual record.
 
-**3. Guard the close so a stray click can't lose work.** The dialog and the
-popover both compute a `dirty` flag that mirrors the patch Save would write
-(`isDirty` in the dialog, `advancedDirty` in the popover), and **swallow only the
+**3. Guard the close so a stray click can't lose work.** The edit dialog and web
+quick-add both compute a `dirty` flag that mirrors the patch Save would write
+(`isDirty` in the dialog, `advancedDirty` in quick-add), and **swallow only the
 accidental close vectors** — backdrop click, Escape, the corner X — while dirty.
 The explicit **Cancel** button calls `onClose`/`onOpenChange(false)` directly,
 bypassing the guard, so a deliberate discard stays one click. Note the dirty check

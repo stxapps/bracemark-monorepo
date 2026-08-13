@@ -117,7 +117,7 @@ pure function of `query`, the two can never disagree: the sidebar can't claim yo
 in "My List" while the pane shows global results.
 
 The `none` arm is the null-object of the union: consumers already branch on
-`selection.kind`, so most (`link-add-popover`, `bulk-edit-toolbar`, `main`'s lock
+`selection.kind`, so most (`link-add-surface`, `bulk-edit-toolbar`, `main`'s lock
 gate, the sidebar's ancestor-expand effect) simply do nothing for `none`, which is
 correct — there's no list/tag context during a search. Only two needed an explicit
 `none` branch: `isActive` (sidebar — a kind match is enough for `all`/`none`) and
