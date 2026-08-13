@@ -277,18 +277,42 @@ export function LinkAddScreen() {
               ) : null}
             </Field>
 
-            <Pressable
+            {/* Web's disclosure, ported (link-add-surface.tsx carries the full
+                reasoning): quiet by WEIGHT rather than size or colour, so the
+                label drops to normal weight at full contrast; the chevron sits
+                WITH the word rather than pinned to the far edge of a mostly empty
+                row; and `self-start` keeps the pressed background on the control
+                instead of painting a bar the width of the form.
+
+                A `Button variant="ghost" size="sm"` rather than the hand-rolled
+                Pressable this used to be, so the numbers come from the same RULE
+                as web's rather than being matched by hand: `px-3` (hence the same
+                `-ml-3` to put "Advanced" on the Field labels' text edge), the
+                trailing-icon padding trim derived from the children, and the icon
+                colour inherited through TextClassContext the way web's inherits
+                from the button. `h-9` on a phone, `h-8` from `sm:` — the size
+                variant already draws that touch/pointer split, which is exactly
+                the h-9-vs-web's-h-8 this hand-rolled one was reproducing. The
+                press background is unchanged: ghost uses `accent`, and this theme
+                defines `--color-accent` and `--color-muted` to the same value.
+
+                `font-normal` on the label because buttonTextVariants' base is
+                `text-sm font-medium` — the native analogue of overriding the web
+                Button's own `font-medium`. Web additionally cancels an
+                `aria-expanded:bg-muted`; nothing to do here, since `active:` is
+                press-only and RN has no attribute-driven styling. The
+                `aria-expanded` prop stays either way — it announces the state. */}
+            <Button
+              variant="ghost"
+              size="sm"
               onPress={() => setOpenAdvanced((v) => !v)}
               aria-expanded={openAdvanced}
               aria-label="Advanced"
-              className="h-9 flex-row items-center justify-between rounded-md px-2 active:bg-muted"
+              className="-ml-3 self-start"
             >
-              <Text className="text-sm font-medium">Advanced</Text>
-              <Icon
-                as={openAdvanced ? ChevronUp : ChevronDown}
-                className="size-4 text-muted-foreground"
-              />
-            </Pressable>
+              <Text className="font-normal">Advanced</Text>
+              <Icon as={openAdvanced ? ChevronUp : ChevronDown} className="size-4" />
+            </Button>
 
             {openAdvanced && (
               <View className="gap-4">

@@ -69,7 +69,7 @@ export function ShowOnceSecret({
 
       <Label
         htmlFor={id}
-        className="flex items-start gap-3 rounded-lg border border-border p-3 text-sm font-normal"
+        className="flex items-start gap-3 rounded-lg border border-border p-3 text-sm"
       >
         <Checkbox
           id={id}

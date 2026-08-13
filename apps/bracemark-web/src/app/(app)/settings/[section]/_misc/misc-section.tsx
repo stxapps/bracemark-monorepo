@@ -160,7 +160,7 @@ function OptionRow({
           {icon}
           {label}
         </span>
-        <span className="text-sm font-normal text-muted-foreground">{hint}</span>
+        <span className="text-sm text-muted-foreground">{hint}</span>
       </span>
     </Label>
   );
@@ -357,7 +357,10 @@ export function MiscSection() {
             directly. The RadioGroup value is the raw persisted string, so an unknown
             future value simply shows nothing selected (like the layout radios). */}
         <div>
-          <Label className="text-sm font-medium">Sort by</Label>
+          {/* `font-medium` against Label's normal default: these two are headings
+              over the OptionRows below, whose own titles are medium. Left to
+              inherit, the heading would be lighter than the options it heads. */}
+          <Label className="font-medium">Sort by</Label>
           <RadioGroup
             value={sortOn}
             onValueChange={(v) => run(setSortOn(v as LinkSortOn))}
@@ -380,7 +383,7 @@ export function MiscSection() {
         </div>
 
         <div>
-          <Label className="text-sm font-medium">Order</Label>
+          <Label className="font-medium">Order</Label>
           <RadioGroup
             value={sortOrder}
             onValueChange={(v) => run(setSortOrder(v as LinkSortOrder))}

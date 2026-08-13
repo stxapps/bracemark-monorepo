@@ -341,7 +341,9 @@ export function LinkAddSurface({
     ) : (
       <form className="flex flex-col gap-4" onSubmit={onSubmit} noValidate>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="link-url">URL</Label>
+          <Label htmlFor="link-url" density="dense">
+            URL
+          </Label>
           <Input
             id="link-url"
             type="url"
@@ -374,12 +376,58 @@ export function LinkAddSurface({
           ) : null}
         </div>
 
+        {/* A quiet disclosure, made quiet by WEIGHT rather than size or colour:
+            `font-normal` against the Button base's `text-sm font-medium`.
+            Shrinking the type costs legibility on the one control in the form
+            that isn't self-evident, and muting the colour reads as disabled next
+            to the Input it sits under — it's a real control, just not the loud
+            one, so full contrast at normal weight is the whole adjustment.
+
+            `self-start` so the button sizes to its content: as a flex-column child
+            it would otherwise stretch, and the ghost background is the button, so a
+            stretched one paints a full-width bar on hover. Hit area and hover
+            background are the same rectangle, so this does trade the full-width
+            target for one that ends at the chevron.
+
+            `-ml-3` cancels the size's `px-3` EXACTLY, which is what puts the word
+            on the form's text edge — level with the labels above it and with the
+            Input's border box. A ghost button aligns by its label, not by its box,
+            so the background is meant to overhang: 12px into a container that gives
+            16px either side (the sheet body's `px-4`, PopoverContent's `p-4`), so
+            it stays inside both. Only the left is pulled — the right margin would
+            move nothing on a `self-start`, content-sized box.
+
+            The two `aria-expanded:` overrides cancel the ghost variant's
+            `aria-expanded:bg-muted` (button.tsx). That rule is for POPUP triggers —
+            list-select and tags-field, where the trigger should stay lit while its
+            popover is open, because the popup is a separate layer that needs tying
+            back to what summoned it. This is an IN-PLACE disclosure: the revealed
+            fields are their own feedback, so a persistent highlight just competes
+            with the inputs it just uncovered. The `aria-expanded` ATTRIBUTE stays —
+            it's the only thing announcing collapsed/expanded to a screen reader,
+            and the repo's other in-place disclosures (sidebar.tsx's two) keep it
+            while dodging this styling by not being a `Button` at all. The second
+            override is not redundant: with the variant's rule merged away, a bare
+            `hover:bg-muted` and `aria-expanded:bg-transparent` tie on specificity,
+            so which one won while expanded AND hovered would come down to Tailwind's
+            variant emission order. Stacking the two variants outranks both.
+
+            The chevron sits WITH the word for the same reason it rotates with it.
+            It keeps `data-icon="inline-end"` — which arms
+            `has-data-[icon=inline-end]:pr-2` (button.tsx) — because `self-start`
+            sizes the button to its content, so the glyph IS against the trailing
+            padding edge and should get that edge's smaller padding: 12px before
+            the word, 8px after the glyph. (The marker is only wrong for a
+            STRETCHED button whose icon floats mid-row, which is what this was
+            between dropping `justify-between` and adding `self-start`.)
+            bracemark-expo derives the same trim from its children instead — see
+            the port in link-add-screen.tsx. */}
         <Button
           type="button"
           variant="ghost"
           size="sm"
           aria-expanded={openAdvanced}
-          className="-mx-1 justify-between"
+          className="-ml-3 self-start font-normal aria-expanded:bg-transparent aria-expanded:hover:bg-muted"
           onClick={() => setOpenAdvanced((v) => !v)}
         >
           Advanced
@@ -392,7 +440,9 @@ export function LinkAddSurface({
         {openAdvanced && (
           <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="link-list">List</Label>
+              <Label htmlFor="link-list" density="dense">
+                List
+              </Label>
               {/* No Trash target: it's the deletion staging area, never a place
                   to add new links (same rule as the default-list fallback).
                   Locked/hidden lists stay pickable — hiding only declutters the
@@ -407,12 +457,16 @@ export function LinkAddSurface({
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="link-tag">Tags</Label>
+              <Label htmlFor="link-tag" density="dense">
+                Tags
+              </Label>
               <TagsField id="link-tag" value={tagIds} onChange={setTagIds} />
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="link-note">Note</Label>
+              <Label htmlFor="link-note" density="dense">
+                Note
+              </Label>
               <Textarea
                 id="link-note"
                 maxLength={LINK_NOTE_MAX}
@@ -475,7 +529,23 @@ export function LinkAddSurface({
           className="max-h-[85dvh] rounded-t-2xl"
           style={sheetGeometry ?? undefined}
         >
-          <SheetHeader className="px-4 pt-4 pb-2">
+          {/* Both paddings here are derived, not eyeballed.
+
+              `pt-5` is what levels the title with the close button below. That
+              button is `top-3` at `icon-sm` (size-8), so its centre sits at
+              12 + 16 = 28px; the title is `text-base leading-none` (sheet.tsx), a
+              16px box, so it needs to start at 20px to centre on the same line.
+              The title moves rather than the button because `top-3 right-3` is
+              where sheet.tsx puts its own close — ours stands in for it (see
+              above), so it should sit where every other sheet's does.
+
+              `pb-6` is the whole gap between the title and the form's first
+              label: SheetContent sets no gap between its children and the
+              scroll container below has no top padding. 6 because that's the
+              `gap-6` DialogContent puts between its header and body — the edit
+              dialog renders the same Label/Input stack, so the two forms open
+              with the same air. */}
+          <SheetHeader className="px-4 pt-5 pb-6">
             <SheetTitle>Add link</SheetTitle>
           </SheetHeader>
           {/* `min-h-0` so this can actually shrink inside the flex column —

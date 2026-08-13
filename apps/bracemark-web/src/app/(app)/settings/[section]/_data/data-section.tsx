@@ -411,7 +411,7 @@ function ExportView({ onBack }: { onBack: () => void }) {
                 {option.icon}
                 {option.label}
               </span>
-              <span className="text-sm font-normal text-muted-foreground">{option.hint}</span>
+              <span className="text-sm text-muted-foreground">{option.hint}</span>
             </span>
           </Label>
         ))}
@@ -526,9 +526,7 @@ function DeleteView({ onBack }: { onBack: () => void }) {
           }}
           className="mt-0.5"
         />
-        <span className="text-sm font-normal">
-          Yes, I&apos;m absolutely sure I want to delete all my data.
-        </span>
+        <span className="text-sm">Yes, I&apos;m absolutely sure I want to delete all my data.</span>
       </Label>
 
       {nudge && (

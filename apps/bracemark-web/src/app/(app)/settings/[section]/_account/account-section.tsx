@@ -170,7 +170,7 @@ function DeleteAccountView({ onBack }: { onBack: () => void }) {
             }}
             className="mt-0.5"
           />
-          <span className="text-sm font-normal">
+          <span className="text-sm">
             Yes, I understand my account and all my data will be permanently deleted, with no way
             back.
           </span>

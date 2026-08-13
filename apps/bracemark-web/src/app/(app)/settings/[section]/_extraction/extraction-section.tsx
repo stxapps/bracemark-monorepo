@@ -124,6 +124,10 @@ export function ExtractionSection() {
 
       <SettingsRow
         title={
+          // `font-medium` against Label's normal default: SettingsRow wraps a
+          // plain-text title in `font-medium` (settings-kit.tsx), and a Label
+          // brings its own weight, so without this the one row whose title is a
+          // Label would render lighter than every other row's.
           <Label htmlFor="server-extraction" className="font-medium">
             Server-side previews
           </Label>

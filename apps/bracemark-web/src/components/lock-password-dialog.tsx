@@ -97,9 +97,7 @@ export function LockPasswordDialog({
                 checked={checked}
                 onCheckedChange={(v) => setChecked(v === true)}
               />
-              <Label htmlFor="lock-dialog-checkbox" className="font-normal">
-                {checkboxLabel}
-              </Label>
+              <Label htmlFor="lock-dialog-checkbox">{checkboxLabel}</Label>
             </div>
           )}
 

@@ -154,7 +154,9 @@ export function Editor({
 
       <div className={cn('flex flex-col gap-3.5')}>
         <div className={cn('flex flex-col gap-1.5')}>
-          <Label htmlFor="list">List</Label>
+          <Label htmlFor="list" density="dense">
+            List
+          </Label>
           {/* No Trash target: a fresh save never lands in the deletion staging area.
               allowCreate matters most here: the popup can't link out to the web app's
               list settings without killing itself and the draft with it. */}
@@ -168,12 +170,16 @@ export function Editor({
         </div>
 
         <div className={cn('flex flex-col gap-1.5')}>
-          <Label htmlFor="tag">Tags</Label>
+          <Label htmlFor="tag" density="dense">
+            Tags
+          </Label>
           <TagsField id="tag" value={tagIds} onChange={setTagIds} />
         </div>
 
         <div className={cn('flex flex-col gap-1.5')}>
-          <Label htmlFor="note">Note</Label>
+          <Label htmlFor="note" density="dense">
+            Note
+          </Label>
           {/* resize-none: the drag handle is a trap in a window the browser sizes to
               its content — pulling it down grows the popup past what fits. */}
           <Textarea

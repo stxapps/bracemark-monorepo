@@ -1,3 +1,36 @@
+// The Field system — shadcn's form-layout kit, vendored. `Field` is the column
+// (label, control, description, error) and the rest are its slots.
+//
+// WHAT `FieldLabel` ADDS OVER `Label` — it wraps label.tsx rather than competing
+// with it, and everything it adds is meaningful only inside a `Field`:
+//
+//   - `data-slot="field-label"`, which the wrapper targets from outside
+//     (`*:data-[slot=field-label]:flex-auto`, horizontal/responsive orientations)
+//   - `group-data-[disabled=true]/field:opacity-50` — disabled cascades from the
+//     Field, not from the control
+//   - `has-[>[data-slot=field]]:rounded-xl … border` — the pattern where the label
+//     WRAPS a whole field card, which is how a checkbox/radio row is built
+//   - and via `Field`'s own `data-[invalid=true]:text-destructive`, one attribute
+//     on the wrapper colours label and description together
+//
+// So the boundary is COMPOSITION, not `<form>` vs not — a reading the code
+// disproves in both directions. link-add-surface's real `<form>` uses a bare
+// `Label` with its own column; the advanced-search panel that uses `FieldLabel`
+// is a div inside a popover (search-bar.tsx's only `<form>` is the basic box
+// below it).
+//
+// `FieldLabel` takes Label's props, so `density` (label.tsx — the standard/dense
+// tiers) passes straight through it; the advanced-search panel is the one caller
+// that uses it.
+//
+// Reach for this kit when you want the invalid/disabled cascade and the
+// description/error slots: the auth forms (create-account-form, sign-in-form) are
+// the reference use, and they carry no class overrides at all, which is the sign
+// it's being used as designed. A plain `Label` over an `Input` in a
+// `flex flex-col gap-1.5` stays a deliberate alternative, not a lapse — it's what
+// the link editors and the settings sections use, and migrating them here would
+// buy machinery they don't need.
+
 import { useMemo } from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 

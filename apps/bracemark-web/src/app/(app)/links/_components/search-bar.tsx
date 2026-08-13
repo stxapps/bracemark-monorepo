@@ -350,18 +350,35 @@ function AdvancedSearch() {
         onInteractOutside={(e) => gated && e.preventDefault()}
         onFocusOutside={(e) => gated && e.preventDefault()}
       >
-        <div className="flex flex-col gap-3">
-          <p className="text-sm font-medium">Advanced search</p>
+        {/* `gap-3.5` (14px), between the add form's `gap-4` and the 12px this
+            panel used to run at. The dense tier is about TYPE — small labels over
+            short controls — not about crowding the stack; at 12px each field's
+            label sat nearly as close to the control above it as to its own, which
+            is what dissolves the grouping when the labels are only 12px to begin
+            with. 14px against `Field`'s internal `gap-1` gives a 1:3.5 ratio, and
+            being a half-step down from the form still pays for itself in a panel
+            that's `max-h-[70vh]` with nine children stacked in it. */}
+        <div className="flex flex-col gap-3.5">
+          {/* The app's ONE panel-title style, the same string SheetTitle and
+              DialogTitle carry (sheet.tsx, dialog.tsx). This popover is a titled
+              surface like they are, so it takes their title rather than inventing
+              a third size for the role — at `text-sm` it was separated from the
+              body only by weight, which is precisely how a title stops reading as
+              one. Dense fields under a full-size title is also what the expo port
+              of this panel does (its modal keeps the native screen-title rung over
+              `text-xs` WordField labels). */}
+          <p className="text-base leading-none font-medium">Advanced search</p>
           {!entitlements.searchEditor && <LockedBanner />}
           {/* The word trio (Google-advanced-search shape) over the combined
               url⊕title haystack — text.all / text.any / text.none. Because the
               haystack contains the url, "None of these words" also covers the
-              practical exclude-a-domain case. */}
+              practical exclude-a-domain case.
+
+              `density="dense"` (label.tsx) over `h-8` controls, matching the
+              checklist labels and hint block below. Don't promote these five to
+              standard — they'd out-weigh the checklists they sit above. */}
           <Field className="gap-1">
-            <FieldLabel
-              htmlFor="adv-text-all"
-              className="text-xs font-normal text-muted-foreground"
-            >
+            <FieldLabel htmlFor="adv-text-all" density="dense">
               All of these words (URL or title)
             </FieldLabel>
             <Input
@@ -373,10 +390,7 @@ function AdvancedSearch() {
             />
           </Field>
           <Field className="gap-1">
-            <FieldLabel
-              htmlFor="adv-text-any"
-              className="text-xs font-normal text-muted-foreground"
-            >
+            <FieldLabel htmlFor="adv-text-any" density="dense">
               Any of these words
             </FieldLabel>
             <Input
@@ -388,10 +402,7 @@ function AdvancedSearch() {
             />
           </Field>
           <Field className="gap-1">
-            <FieldLabel
-              htmlFor="adv-text-none"
-              className="text-xs font-normal text-muted-foreground"
-            >
+            <FieldLabel htmlFor="adv-text-none" density="dense">
               None of these words
             </FieldLabel>
             <Input
@@ -403,7 +414,7 @@ function AdvancedSearch() {
             />
           </Field>
           <Field className="gap-1">
-            <FieldLabel htmlFor="adv-url" className="text-xs font-normal text-muted-foreground">
+            <FieldLabel htmlFor="adv-url" density="dense">
               URL contains
             </FieldLabel>
             <Input
@@ -414,7 +425,7 @@ function AdvancedSearch() {
             />
           </Field>
           <Field className="gap-1">
-            <FieldLabel htmlFor="adv-title" className="text-xs font-normal text-muted-foreground">
+            <FieldLabel htmlFor="adv-title" density="dense">
               Title contains
             </FieldLabel>
             <Input

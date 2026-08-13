@@ -259,7 +259,9 @@ function LinkEditForm({
               overflow-y-auto doesn't clip them at the edges. */}
           <div className="-mx-1 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-1">
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="edit-title">Title</Label>
+              <Label htmlFor="edit-title" density="dense">
+                Title
+              </Label>
               <Input
                 ref={titleRef}
                 id="edit-title"
@@ -292,7 +294,9 @@ function LinkEditForm({
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="edit-image">Image</Label>
+              <Label htmlFor="edit-image" density="dense">
+                Image
+              </Label>
               {previewUrl ? (
                 <img
                   src={previewUrl}
@@ -335,7 +339,9 @@ function LinkEditForm({
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="edit-list">List</Label>
+              <Label htmlFor="edit-list" density="dense">
+                List
+              </Label>
               {/* No Trash target: trashing is the menu's Remove, never a "move".
                   Locked/hidden lists stay pickable — hiding only declutters the
                   sidebar, it never blocks filing into a list you know exists. */}
@@ -349,12 +355,16 @@ function LinkEditForm({
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="edit-tag">Tags</Label>
+              <Label htmlFor="edit-tag" density="dense">
+                Tags
+              </Label>
               <TagsField ref={tagsRef} id="edit-tag" value={tagIds} onChange={setTagIds} />
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="edit-note">Note</Label>
+              <Label htmlFor="edit-note" density="dense">
+                Note
+              </Label>
               {/* The row menu's "View note" lands here (focus === 'note'): the
                   note has no read-only surface — the layouts are fixed-height, so
                   a row can only badge it — and at LINK_NOTE_MAX a textarea reads

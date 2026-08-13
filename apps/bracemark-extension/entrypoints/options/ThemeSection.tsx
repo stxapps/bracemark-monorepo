@@ -80,7 +80,7 @@ function OptionRow({
           {icon}
           {label}
         </span>
-        <span className={cn('text-sm font-normal text-muted-foreground')}>{hint}</span>
+        <span className={cn('text-sm text-muted-foreground')}>{hint}</span>
       </span>
     </Label>
   );
