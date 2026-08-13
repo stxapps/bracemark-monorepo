@@ -19,6 +19,13 @@ import { Topbar } from './_panes/topbar';
 // border-box element the insets come out of the 100dvh instead of adding to it,
 // which a wrapper one level up could not do (docs/safe-area.md).
 //
+// `data-no-scrollbar-gutter` follows from the same `overflow-hidden`: this frame
+// can never scroll the document, so web-ui's blanket `scrollbar-gutter: stable`
+// would reserve a strip at the window's right edge that nothing can ever use —
+// sitting just outside the `main` pane's own scrollbar below, so a long section
+// appears to have two. It belongs on THIS element and not on a `min-h-dvh`
+// screen, which does scroll. web-ui/src/styles.css carries the full note.
+//
 // The active section lives in the URL PATH now (`/settings/lists`, …), not React
 // state — so a section is a real, linkable destination: open `/settings/lists`
 // straight from the links page, manage your lists, and Back returns you to
@@ -30,7 +37,7 @@ import { Topbar } from './_panes/topbar';
 // already gates this behind auth + first sync.
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex h-dvh overflow-hidden safe-area">
+    <div data-no-scrollbar-gutter="" className="flex h-dvh overflow-hidden safe-area">
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar />

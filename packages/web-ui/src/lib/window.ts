@@ -39,11 +39,14 @@ export const getWindowInsets = (): Insets => {
   };
 };
 
-/**
- * Width of the classic scrollbar in CSS pixels (0 for overlay scrollbars). The
- * gap between the breakpoint-relevant `innerWidth` and the layout `clientWidth`.
- */
-export const getScrollbarWidth = (): number => {
-  if (typeof window === 'undefined' || typeof document === 'undefined') return 0;
-  return Math.max(0, window.innerWidth - document.documentElement.clientWidth);
-};
+// There is deliberately no `getScrollbarWidth()` here, and re-adding one is a
+// trap. The obvious implementation — `innerWidth - documentElement.clientWidth`
+// — does not measure the platform's scrollbar; it measures whatever the ROOT
+// scroll container is currently reserving, which this repo varies per route:
+// `styles.css` reserves a gutter with `scrollbar-gutter: stable` but releases it
+// under `[data-no-scrollbar-gutter]`, so the same browser answers 15 on /sign-in
+// and 0 on /links. Worse, that flip happens on a client-side navigation, which
+// fires no `resize` — so any cached value is stale with no event to invalidate
+// it. Measure the specific element you care about with `useElementWidth`
+// instead: its content box already excludes that element's own scrollbar, which
+// is the number layout math actually wants. → docs/safe-area.md.

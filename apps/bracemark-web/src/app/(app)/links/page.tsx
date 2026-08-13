@@ -35,6 +35,14 @@ import { Topbar } from './_panes/topbar';
 // bottom edge below the fold by the top+bottom insets, undoing the paragraph
 // above. Nothing in here needs its own inset as a result. docs/safe-area.md.
 //
+// `data-no-scrollbar-gutter` follows from the same `overflow-hidden`: a frame
+// that is exactly one screen tall can never scroll the document, so web-ui's
+// blanket `scrollbar-gutter: stable` would reserve a strip at the window's right
+// edge that nothing can ever use — sitting just outside the list pane's own
+// scrollbar, so the page appears to have two. It belongs on THIS element and not
+// on a `min-h-dvh` screen, which does scroll. web-ui/src/styles.css carries the
+// full note.
+//
 // No 'use client' here — this is pure composition of client components, with no
 // hooks or handlers of its own. The provider owns its own Suspense boundary (it
 // reads the selection from the URL via useSearchParams), so this stays a plain
@@ -43,7 +51,7 @@ import { Topbar } from './_panes/topbar';
 export default function LinksPage() {
   return (
     <LinksPageProvider>
-      <div className="flex h-dvh overflow-hidden safe-area">
+      <div data-no-scrollbar-gutter="" className="flex h-dvh overflow-hidden safe-area">
         <Sidebar />
         <LinksViewStateProvider>
           <div className="flex min-w-0 flex-1 flex-col">

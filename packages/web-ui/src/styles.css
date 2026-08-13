@@ -170,10 +170,43 @@
   /*
    * Reserve the scrollbar gutter so its width is constant: layout no longer
    * shifts when a scrollbar appears/disappears, which also keeps JS width math
-   * and CSS media-query breakpoints in agreement.
+   * and CSS media-query breakpoints in agreement. Wanted by every surface where
+   * the DOCUMENT is what scrolls — the marketing site's pages, bracemark-web's
+   * `min-h-dvh` screens (sign-in, the lock gate, the sync gate, 404), and the
+   * browser extension's popup, which has no inner scroll container at all
+   * (Chrome grows the popup to its content and scrolls the document past 600px).
    */
   html {
     scrollbar-gutter: stable;
+  }
+
+  /*
+   * ...and the opt-out, for a screen that is its own viewport-sized frame.
+   *
+   * A `h-dvh overflow-hidden` frame (bracemark-web's /links and /settings) can
+   * never scroll the document, so the reserved gutter is dead space that can
+   * never be used — and because the frame's width is `html`'s content box MINUS
+   * that gutter, the pane's own `overflow-y-auto` scrollbar lands at the frame's
+   * right edge with the inert gutter beyond it. Two vertical strips, one of them
+   * fake. On /links the virtual list is nearly always scrollable, so it is
+   * visible nearly always.
+   *
+   * Mark ONLY an element that establishes such a frame — one that sets both a
+   * viewport height and `overflow-hidden` on itself. On a `min-h-dvh` surface,
+   * which does scroll the document, this silently reinstates the layout shift the
+   * rule above exists to remove, with no lint or type error. The attribute is
+   * named for its EFFECT rather than for the frame so that misapplying it reads
+   * as wrong at the point of writing it.
+   *
+   * A presence selector is correct here, unlike the `data-*` state variants
+   * elsewhere in this package: the marker is static, never toggled from state,
+   * and the JSX spells it `data-no-scrollbar-gutter=""` so no "true"/"false"
+   * string can ever appear. Do not "fix" it to `[data-no-scrollbar-gutter=true]`.
+   *
+   * Specificity (0,1,1) beats the bare `html` above within this same layer.
+   */
+  html:has([data-no-scrollbar-gutter]) {
+    scrollbar-gutter: auto;
   }
 
   /*

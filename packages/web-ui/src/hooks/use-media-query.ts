@@ -10,11 +10,16 @@ import { useEffect, useState } from 'react';
  * SSR: starts `false` and corrects after mount. The boolean is stable across
  * renders, so it won't loop; but for content that would visibly flash, gate it
  * behind a separate `mounted` flag.
+ *
+ * The `false` seed is unconditional ON PURPOSE — it must NOT read `matchMedia`
+ * even when `window` exists. A `useState` initializer runs on the client's
+ * HYDRATION render too, so seeding from the real value makes the first client
+ * render disagree with the server HTML for every visitor the query matches,
+ * which is a hydration mismatch rather than a head start. The one frame of
+ * `false` is the price, and it is what the `mounted` advice above is for.
  */
 export function useMediaQuery(query: string): boolean {
-  const [matches, setMatches] = useState(() =>
-    typeof window !== 'undefined' ? window.matchMedia(query).matches : false,
-  );
+  const [matches, setMatches] = useState(false);
 
   useEffect(() => {
     const mql = window.matchMedia(query);

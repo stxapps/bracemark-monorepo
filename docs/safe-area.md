@@ -82,7 +82,22 @@ Without it, none of the `safe-area` utilities or `useWindowInsets` do anything.
 
 - `scrollbar-gutter: stable` on `html` — reserves the scrollbar gutter so its
   width is constant; layout stops shifting and JS width math stays in sync with
-  CSS breakpoints.
+  CSS breakpoints. It is for surfaces where the **document** is what scrolls:
+  bracemark-site's pages, bracemark-web's `min-h-dvh` screens (sign-in, the lock
+  gate, the sync gate, the 404), and bracemark-extension's popup — which has no
+  inner scroll container at all, since Chrome grows the popup to its content and
+  scrolls the document itself past 600px.
+- `html:has([data-no-scrollbar-gutter]) { scrollbar-gutter: auto }` — the opt-out,
+  for a screen that is its own viewport-sized frame. A `h-dvh overflow-hidden`
+  frame (`/links`, `/settings`) can never scroll the document, so the reserved
+  gutter is dead space; and since the frame's width is `html`'s content box minus
+  that gutter, the pane's own `overflow-y-auto` scrollbar lands at the frame's
+  right edge with the inert gutter beyond it — reading as two scrollbars.
+  **Mark only an element that sets both a viewport height and `overflow-hidden`
+  on itself.** On a `min-h-dvh` surface it silently reinstates the layout shift,
+  with no lint or type error. Spell the attribute `data-no-scrollbar-gutter=""`
+  so no `"true"`/`"false"` string is ever emitted; the presence selector is
+  correct here because the marker is static, never toggled from state.
 - `@utility safe-area` — pads all four sides with the insets.
 - `@utility pt-safe / pr-safe / pb-safe / pl-safe` — per-side variants to mix with
   normal spacing.
@@ -95,22 +110,38 @@ Without it, none of the `safe-area` utilities or `useWindowInsets` do anything.
   `env(...)` string. Use `getWindowInsets()` instead, which measures a probe
   element's resolved padding.
 
+Neither scrollbar-gutter rule is observable on macOS with the default overlay
+scrollbars, where `scrollbar-gutter` is spec'd to have no effect. Both the layout
+shift and the doubled gutter only appear with classic scrollbars — Chrome/Firefox
+on Windows and Linux — so neither can be checked on a Mac at default settings.
+
 **Utils** (`@stxapps/web-ui/lib/window`)
 
 - `getWindowInsets(): Insets` — safe-area insets in px (probe-element based,
   SSR-safe → zeros). One-shot; not reactive.
-- `getScrollbarWidth(): number` — `innerWidth - clientWidth`, 0 for overlay
-  scrollbars.
+
+There is deliberately **no `getScrollbarWidth()` / `useScrollbarWidth()`**, and
+re-adding one is a trap. The obvious `innerWidth - documentElement.clientWidth`
+does not measure the platform's scrollbar — it measures what the root scroll
+container is currently reserving, which is per-route here: the same browser
+answers ~15 on `/sign-in` and 0 on `/links`, because of the opt-out above. The
+flip happens on a client-side navigation, which fires no `resize`, so a cached
+value would be stale with no event to invalidate it. Measure the element you
+actually care about with `useElementWidth` — its content box already excludes
+that element's own scrollbar.
 
 **Hooks** (`@stxapps/web-ui/hooks/use-media-query`, `…/use-window-metrics`)
 
 - `useMediaQuery(query)` — SSR-safe `matchMedia` subscription. Pass the _same_
-  string Tailwind uses, e.g. `'(min-width: 48rem)'` for `md:`.
-- `useWindowInsets()`, `useWindowSize()`, `useVisualViewport()`,
-  `useScrollbarWidth()` — reactive, backed by **one shared store**: a single
-  subscription and a single DOM read per event regardless of how many components
-  call them, with per-slice reference stability so a component only re-renders
-  when the value it reads changes.
+  string Tailwind uses, e.g. `'(min-width: 48rem)'` for `md:`. Seeds `false`
+  unconditionally and corrects in an effect: a `useState` initializer runs on the
+  client's **hydration** render too, so reading `matchMedia` there would make the
+  first client render disagree with the server HTML for every visitor the query
+  matches. Gate anything that would visibly flash behind a `mounted` flag.
+- `useWindowInsets()`, `useWindowSize()`, `useVisualViewport()` — reactive,
+  backed by **one shared store**: a single subscription and a single DOM read per
+  event regardless of how many components call them, with per-slice reference
+  stability so a component only re-renders when the value it reads changes.
 
 `useWindowSize` vs `useVisualViewport`: the former is the **layout** viewport
 (`innerWidth/innerHeight`, scrollbar included, matches CSS breakpoints, _unaffected
@@ -289,8 +320,8 @@ breakpoint math.
    // position within the visible region: add vv.offsetLeft / vv.offsetTop
    ```
 
-   (`useVisualViewport` already excludes the scrollbar and reflects zoom, so you
-   don't subtract `useScrollbarWidth()` here — that's for layout-viewport math.)
+   (`useVisualViewport` already excludes the scrollbar and reflects zoom, so
+   there is nothing further to subtract for it.)
 
 3. **A surface pinned to the bottom edge with a focused input in it needs (2)
    even though it's a Radix component.** `position: fixed` resolves against the

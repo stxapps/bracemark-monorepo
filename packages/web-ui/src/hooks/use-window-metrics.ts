@@ -1,7 +1,7 @@
 'use client';
 import { useSyncExternalStore } from 'react';
 
-import { getScrollbarWidth, getWindowInsets, type Insets } from '../lib/window';
+import { getWindowInsets, type Insets } from '../lib/window';
 
 export interface WindowSize {
   width: number;
@@ -28,21 +28,21 @@ const ZERO_VISUAL: VisualViewport = { width: 0, height: 0, offsetLeft: 0, offset
 
 /*
  * One store, one subscription, one DOM read per event — shared by every
- * `useWindowInsets` / `useWindowSize` / `useVisualViewport` / `useScrollbarWidth`
- * consumer in the app. `getWindowInsets`/`getScrollbarWidth` both touch layout
- * (`getComputedStyle`, `clientWidth`), so we measure every slice together once
- * per event rather than once per component.
+ * `useWindowInsets` / `useWindowSize` / `useVisualViewport` consumer in the app.
+ * `getWindowInsets` touches layout (`getComputedStyle` on a probe element), so we
+ * measure every slice together once per event rather than once per component.
  *
  * Each slice keeps a stable reference until its own value changes; `useSync-
  * ExternalStore` bails out of re-rendering a component whose slice is `Object.is`
  * unchanged. So a keyboard opening (which moves only the visual viewport)
  * re-renders `useVisualViewport` consumers, not inset or window-size consumers.
+ * That reference stability is why `recompute` is the ONLY writer, seeding
+ * included — see its note.
  */
 const listeners = new Set<() => void>();
 let insetsSnapshot: Insets = ZERO_INSETS;
 let sizeSnapshot: WindowSize = ZERO_SIZE;
 let visualSnapshot: VisualViewport = ZERO_VISUAL;
-let scrollbarSnapshot = 0;
 let started = false;
 
 const sameInsets = (a: Insets, b: Insets) =>
@@ -76,13 +76,18 @@ const readVisual = (): VisualViewport => {
   };
 };
 
-const readAll = () => {
-  insetsSnapshot = getWindowInsets();
-  sizeSnapshot = { width: window.innerWidth, height: window.innerHeight };
-  visualSnapshot = readVisual();
-  scrollbarSnapshot = getScrollbarWidth();
-};
-
+/*
+ * The only writer, used both to seed on first subscribe and to react to an
+ * event. It assigns a slice ONLY when that slice's value actually changed, which
+ * is what preserves the reference stability the store promises above — an
+ * unconditional `snapshot = {...}` seeder (which this used to have, alongside
+ * this function) re-renders every consumer on a resubscribe even when nothing
+ * moved, because `Object.is` sees a fresh object literal.
+ *
+ * Snapshots deliberately survive teardown rather than being reset to the ZERO_*
+ * constants: a remount that finds the window unchanged then keeps its references
+ * and re-renders nobody.
+ */
 const recompute = () => {
   let changed = false;
 
@@ -105,19 +110,15 @@ const recompute = () => {
     changed = true;
   }
 
-  const scrollbar = getScrollbarWidth();
-  if (scrollbar !== scrollbarSnapshot) {
-    scrollbarSnapshot = scrollbar;
-    changed = true;
-  }
-
   if (changed) for (const notify of listeners) notify();
 };
 
 const subscribe = (onStoreChange: () => void): (() => void) => {
   if (!started) {
     started = true;
-    readAll();
+    // Seeds before `listeners.add` below, so the notify inside is a no-op; React
+    // re-reads the snapshot right after subscribing and picks the value up.
+    recompute();
     window.addEventListener('resize', recompute);
     window.addEventListener('orientationchange', recompute);
     window.visualViewport?.addEventListener('resize', recompute);
@@ -176,14 +177,7 @@ export function useVisualViewport(): VisualViewport {
   );
 }
 
-/**
- * Reactive classic-scrollbar width in CSS pixels (0 for overlay scrollbars).
- * Returns 0 during SSR.
- */
-export function useScrollbarWidth(): number {
-  return useSyncExternalStore(
-    subscribe,
-    () => scrollbarSnapshot,
-    () => 0,
-  );
-}
+// No `useScrollbarWidth` here — see the note where `getScrollbarWidth` used to
+// live, in ../lib/window.ts. Short version: the root scroll container's reserved
+// width is per-route in this repo and changes on a client-side navigation, which
+// fires none of the events above, so a cached value would silently go stale.
