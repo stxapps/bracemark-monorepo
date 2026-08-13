@@ -255,7 +255,31 @@ export function SortMenu({
     <div className="flex justify-end">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="sm" disabled={disabled}>
+          {/* Quiet by WEIGHT, not by size or colour — the same adjustment, for
+              the same reason, as the "Advanced" disclosure in
+              links/_components/link-add-surface.tsx (read its comment for the
+              full argument). `font-normal` against the Button base's `text-sm
+              font-medium`. This control is alone on its line above a table whose
+              every row is normal-weight input text, so medium weight made the
+              one word here the boldest ink in the block. Shrinking it instead
+              (`size="xs"`) would take the label to 12px and the glyph to size-3,
+              which is the legibility cost this rule exists to dodge, and muting
+              the colour would put it next to the disabled state it already has
+              (`disabled` on an empty table → opacity-50).
+
+              `-mr-3` cancels the size's `px-3` EXACTLY, which puts the word on
+              the table's right border rather than 12px inside it — the mirror of
+              the `-ml-3` that lands "Advanced" on its form's text edge. A ghost
+              button aligns by its label, not by its box, so the hover background
+              is meant to overhang: 12px into the 16px both table sections narrow
+              the pane to (`px-4` — see either section's pane for why), leaving
+              4px to the edge. Tight, and the reason the inset and this margin
+              have to be read together; expo's peer lands on the same 4px. Only
+              the right is pulled — the left margin would move nothing in a
+              `justify-end` row.
+              The leading icon keeps `data-icon="inline-start"`, so the trim is
+              still 10px before the glyph and 12px after the word. */}
+          <Button variant="ghost" size="sm" disabled={disabled} className="-mr-3 font-normal">
             <ArrowUpDown data-icon="inline-start" className="size-4" /> Sort
           </Button>
         </DropdownMenuTrigger>

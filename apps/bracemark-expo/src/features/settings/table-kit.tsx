@@ -209,9 +209,25 @@ export function SortMenu({
     <View className="-mb-1 flex-row justify-end">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="sm" disabled={disabled}>
+          {/* Quiet by WEIGHT, not by size or colour, and aligned by its label
+              rather than its box — web's peer carries the full argument for both.
+              `font-normal` sits on the LABEL here because the weight lives in
+              buttonTextVariants' `text-sm font-medium`, not on the Pressable —
+              the same split the "Advanced" disclosure makes in
+              features/links/link-add-screen.tsx.
+
+              `-mr-3` cancels the size variant's `px-3` exactly, as it does on
+              web, so the word lands on the table's right border. The press
+              background overhangs by those 12px into the 16px both table
+              sections narrow the pane to (`px-4` — see lists-section.tsx's pane
+              for why), leaving 4px to the screen edge: tight, and the reason the
+              inset and this margin have to be read together. Web's peer lands on
+              the same 4px, so the two platforms agree. The leading icon keeps the
+              padding trim the Button derives from its children, so it stays 10px
+              before the glyph and 12px after the word. */}
+          <Button variant="ghost" size="sm" disabled={disabled} className="-mr-3">
             <Icon as={ArrowUpDown} className="size-4" />
-            <Text>Sort</Text>
+            <Text className="font-normal">Sort</Text>
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">

@@ -184,6 +184,13 @@ export function TagsSection() {
 
   return (
     // `px-4` for the same reason the Lists table uses it — see the note there.
+    // `px-4` rather than the pane's `px-6`, for CONSISTENCY rather than need —
+    // the argument lives at the head of lists-section.tsx's pane, where the
+    // inset is earned. This table is flat, so a row has no indent to pay for and
+    // ~217px of name field at `px-4` against ~201px at `px-6` on a 375pt screen:
+    // ample either way. It matches because Lists and Tags are one screen for two
+    // collections, and the four copies (two sections × two platforms) move
+    // together.
     <SettingsPane className="px-4">
       <SettingsHeader
         title="Tags"
