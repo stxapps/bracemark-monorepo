@@ -7,5 +7,12 @@
         "repo": "nrwl/nx-ai-agents-config"
       }
     }
+  },
+  "permissions": {
+    "deny": [
+      "Read(apps/bracemark-expo/credentials/**)",
+      "Read(apps/bracemark-expo/.env.local)",
+      "Read(apps/bracemark-expo/android/gradle.properties)"
+    ]
   }
 }
