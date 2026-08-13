@@ -374,7 +374,13 @@ function Section({
         onClick={() => onToggle(id)}
         aria-expanded={!isCollapsed}
         className={cn(
-          'flex w-full items-center gap-1 rounded-md px-2 pt-3 pb-1 text-muted-foreground/70 transition-colors hover:text-foreground',
+          // `px-1.5`, not the `px-2` the rows below use: the header's chevron is
+          // `size-3` against the rows' `size-6` slot, so 6px + 6px puts its
+          // centre at 12px — exactly the rows' chevron centre (the slot sits at
+          // x=0, the row div carries no padding). At `px-2` it sat 2px right of
+          // every chevron under it. Both are children of the same `nav.px-2`,
+          // so that one origin is what makes the two numbers comparable.
+          'flex w-full items-center gap-1 rounded-md px-1.5 pt-3 pb-1 text-muted-foreground/70 transition-colors hover:text-foreground',
           FOCUS_RING,
         )}
       >
@@ -560,13 +566,15 @@ export function SidebarBody({
                 />
               ))
             ) : (
-              // `pl-6` parks the text under the section header's LABEL (its
-              // `px-2` + `size-3` chevron + `gap-1` = 24px), not under the rows
-              // it stands in for — an empty section has no row to align to, and
-              // a row's own text sits at 32px (matches) or 60px (tree rows,
-              // past the chevron slot), both of which read as indented for a
-              // one-line placeholder. Same on bracemark-expo's sidebar.
-              <p className="py-1 pr-2 pl-6 text-xs text-muted-foreground/60">No matching lists</p>
+              // `pl-5.5` parks the text under the section header's LABEL (its
+              // `px-1.5` + `size-3` chevron + `gap-1` = 22px), not under the
+              // rows it stands in for — an empty section has no row to align
+              // to, and a row's own text sits at 32px (matches) or 60px (tree
+              // rows, past the chevron slot), both of which read as indented
+              // for a one-line placeholder. Tracks the header's padding, so it
+              // moves whenever that does. bracemark-expo's sidebar makes the
+              // same choice against its own header.
+              <p className="py-1 pr-2 pl-5.5 text-xs text-muted-foreground/60">No matching lists</p>
             )
           ) : (
             <NavTree
@@ -601,10 +609,10 @@ export function SidebarBody({
                 />
               ))
             ) : (
-              <p className="py-1 pr-2 pl-6 text-xs text-muted-foreground/60">No matching tags</p>
+              <p className="py-1 pr-2 pl-5.5 text-xs text-muted-foreground/60">No matching tags</p>
             )
           ) : tags.length === 0 ? (
-            <p className="py-1 pr-2 pl-6 text-xs text-muted-foreground/60">No tags yet</p>
+            <p className="py-1 pr-2 pl-5.5 text-xs text-muted-foreground/60">No tags yet</p>
           ) : (
             <NavTree
               nodes={tags}

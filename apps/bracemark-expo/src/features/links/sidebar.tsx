@@ -503,10 +503,12 @@ export function Sidebar({ closeDrawer }: { closeDrawer: () => void }) {
               // than under the rows it stands in for — an empty section has no
               // row to align to, and a row's own text sits at 36px (matches) or
               // 72px (tree rows, past the chevron slot), both of which read as
-              // indented for a one-line placeholder. Web parity: the same 24px
-              // there, though this header's chevron is `size-3.5` to web's
-              // `size-3`, so the label itself starts 2px further right here —
-              // matching web's number is worth more than chasing that 2px.
+              // indented for a one-line placeholder. This header's label starts
+              // at 26px (`px-2` + `size-3.5` chevron + `gap-1`), so 24px is the
+              // near miss we accept. Web makes the same CHOICE against its own
+              // header but lands on a different NUMBER (`pl-5.5`, 22px) — this
+              // side's chrome is a size up throughout, so the two files agree on
+              // the rule, not on the value. Don't sync them by hand.
               <Text className="py-1 pr-2 pl-6 text-xs text-muted-foreground/60">
                 No matching lists
               </Text>
