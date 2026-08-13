@@ -119,6 +119,17 @@ test. Check the linked doc before acting on any of these.
   prettier hoists to the front of every class list they appear in — the symptom
   is `npm run fix` churning files you never touched, with no lint or type error.
   → `theme.md`, _the token shim the formatter needs_.
+- **A bare `data-x:` variant on a React-set `data-*` attribute matches when it is
+  false.** Tailwind compiles `data-selected:` to the presence selector
+  `[data-selected]`, but React stringifies false-valued `data-*` — cmdk's
+  `data-selected={!!selected}` emits `data-selected="false"` on every unselected
+  row, which `[data-selected]` matches. The symptom is a state style stuck on
+  permanently (every `CommandItem` wearing the highlight, so no row looks picked
+  and hover appears dead). Spell it `data-[selected=true]:` whenever the attribute
+  comes from **our** JSX or a library that passes a boolean; the bare form is only
+  safe on Radix, which omits the attribute when off. The `@custom-variant` bridges
+  at the top of `packages/web-ui/src/styles.css` cover the `data-state`/
+  `data-orientation` shorthands and nothing else. → `theme.md`.
 - **Greenfield — no migrations.** There is no production data. Edit persisted
   schemas in place (Dexie `version(1)`, the expo-sqlite DDL); don't add a
   migration step.

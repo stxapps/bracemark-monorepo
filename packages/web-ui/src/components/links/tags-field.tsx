@@ -102,7 +102,12 @@ export function TagsField({
             chosen.map((t) => (
               <span
                 key={t.id}
-                className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs"
+                // `bg-input` (not `bg-muted`) so the chip separates from the
+                // trigger's own `bg-input/30` well in BOTH themes: light, the
+                // opaque token is denser than the 30% wash; dark, `--input` is
+                // `white/15%`, so it composites lighter. `--muted` (0.97) sits
+                // above `--input` (0.922) in light, which is why it vanished.
+                className="inline-flex items-center gap-1 rounded-full bg-input px-2 py-0.5 text-xs"
               >
                 {t.name}
                 <button

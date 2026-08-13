@@ -58,8 +58,10 @@ function CommandInput({
   className,
   ...props
 }: React.ComponentProps<typeof CommandPrimitive.Input>) {
+  // The wrapper takes a full `p-1`, not `pb-0`: CommandList has no padding of its
+  // own, so without the bottom inset the first row butts against the field.
   return (
-    <div data-slot="command-input-wrapper" className="p-1 pb-0">
+    <div data-slot="command-input-wrapper" className="p-1">
       <InputGroup className="h-9 bg-input/30">
         <CommandPrimitive.Input
           data-slot="command-input"
@@ -132,6 +134,14 @@ function CommandSeparator({
   );
 }
 
+// The highlight MUST be spelled `data-[selected=true]:`, never the bare
+// `data-selected:`. cmdk renders `data-selected={!!selected}` and React
+// stringifies false-valued `data-*`, so an unselected row still carries
+// `data-selected="false"` — and the bare variant compiles to a presence
+// selector, `[data-selected]`, which matches it. The symptom is every row
+// wearing the highlight at once (so no row looks picked, and there appears to be
+// no hover response), with no lint or type error. The pointer highlight IS this
+// same attribute — cmdk's onPointerMove selects — so no separate `hover:` rule.
 function CommandItem({
   className,
   children,
@@ -141,7 +151,7 @@ function CommandItem({
     <CommandPrimitive.Item
       data-slot="command-item"
       className={cn(
-        "group/command-item relative flex cursor-default items-center gap-2 rounded-lg px-3 py-2 text-sm outline-hidden select-none in-data-[slot=dialog-content]:rounded-2xl data-selected:bg-muted data-selected:text-foreground data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 data-selected:*:[svg]:text-foreground",
+        "group/command-item relative flex cursor-default items-center gap-2 rounded-lg px-3 py-2 text-sm outline-hidden select-none in-data-[slot=dialog-content]:rounded-2xl data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 data-[selected=true]:bg-muted data-[selected=true]:text-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 data-[selected=true]:*:[svg]:text-foreground",
         className,
       )}
       {...props}
@@ -157,7 +167,8 @@ function CommandShortcut({ className, ...props }: React.ComponentProps<'span'>) 
     <span
       data-slot="command-shortcut"
       className={cn(
-        'ml-auto text-xs tracking-widest text-muted-foreground group-data-selected/command-item:text-foreground',
+        // Bracket form for the same reason as CommandItem's highlight.
+        'ml-auto text-xs tracking-widest text-muted-foreground group-data-[selected=true]/command-item:text-foreground',
         className,
       )}
       {...props}

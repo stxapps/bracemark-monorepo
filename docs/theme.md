@@ -354,6 +354,47 @@ utilities built on the new token. web-ui needs no equivalent — its `@theme
 inline` block already declares every `--color-*`, which is why the churn was
 expo-only.
 
+### the state variants — and when the bare form lies
+
+`packages/web-ui/src/styles.css` opens with a block of `@custom-variant`
+declarations that bridge the shadcn shorthands onto the attributes Radix actually
+emits: `data-checked:` → `[data-state="checked"]`, `data-open:`, `data-active:`,
+`data-horizontal:`, and so on. Without them each shorthand compiles to a bare
+presence selector that never matches, and the style silently never applies. That
+block is the whole list; anything not in it falls through to Tailwind's built-in
+`data-*` handling, which is a **presence** selector — `data-selected:` compiles to
+`[data-selected]`, matching whenever the attribute exists at all.
+
+That is safe on Radix, which omits an attribute when the state is off. It is
+**not** safe on an attribute React writes, because React stringifies false-valued
+`data-*`: `data-selected={false}` renders `data-selected="false"`, and
+`[data-selected]` matches it. cmdk sets its highlight exactly that way
+(`data-selected={!!selected}`), so the bare-variant `bg-muted` highlight painted
+every `CommandItem` at once — the list read as a solid slab on the white popover,
+no row looked picked, and the pointer highlight looked broken because it was
+indistinguishable from the resting state. Nothing catches this: the class is
+valid, the css is emitted, the selector is real.
+
+A note on writing this section down, learned writing it: **do not spell a
+complete bare-variant utility anywhere in `docs/` or in a source comment.** The
+scanner is plain text over the whole repo — every app's css entry auto-detects
+sources from the workspace root — so a documented example is extracted as a real
+candidate and the dead rule is re-emitted into every app's stylesheet. Name the
+variant and the utility separately, as above.
+
+**So: `data-[selected=true]:` — the value-matching form — for any attribute set
+from our own JSX or by a library that passes a boolean.** The bare shorthand is
+for the bridged Radix states above. The same rule governs `data-checked` on
+`CommandItem` (ours, set from `value.includes(id)`), which is why the check mark
+is keyed on `group-data-[checked=true]/command-item:` — and note the bare
+`data-checked:` would not even have meant the right attribute there, since the
+bridge redirects it to `data-state`.
+
+While you're in cmdk: its pointer highlight and its keyboard highlight are the
+same `data-selected` attribute (`onPointerMove` selects the row under the
+cursor), so a `CommandItem` needs no separate `hover:` fill. Adding one gives two
+rows a highlight at once — the hovered one and the keyboard-selected one.
+
 ### extending
 
 - **A new mode** — add it to `THEME_MODES` (`theme/theme.ts`), handle it in
