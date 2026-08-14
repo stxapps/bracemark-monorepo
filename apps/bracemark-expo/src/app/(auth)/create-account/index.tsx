@@ -28,8 +28,9 @@ import { CreateAccountForm } from '../../../features/auth/create-account-form';
 // The consent line stays on the SCREEN even though the header left, because the
 // reason differs: it has to hold at EVERY step, so it must not be step-aware. It
 // names the act, so it is true from the first step instead of being sprung on
-// someone three steps in, beside the one control (Skip for now) that most needs a
-// clear head. Web's page carries the identical placement and the longer argument.
+// someone three steps in, beside the one control ("Create account without a
+// recovery code") that most needs a clear head. Web's page carries the identical
+// placement and the longer argument.
 export default function CreateAccountScreen() {
   return (
     <AuthScreen

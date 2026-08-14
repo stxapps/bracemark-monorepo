@@ -44,5 +44,6 @@ description: How to build, launch, and drive this repo's apps to verify a change
   sign-in, give the initial sync ~2s before asserting on content.
 - Creating an account headless: fill `#username`, press "Choose my own" (the
   generated-password step gates Continue behind a saved-it checkbox), fill
-  `#password`, Continue, fill `#confirm`, Continue, then "Skip for now" on the
-  recovery step. Argon2 makes the submit take a few seconds.
+  `#password`, Continue, fill `#confirm`, Continue, then "Create account without
+  a recovery code" on the recovery step (the primary there is disabled until the
+  saved-it checkbox is ticked). Argon2 makes the submit take a few seconds.

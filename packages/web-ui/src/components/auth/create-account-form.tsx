@@ -23,6 +23,7 @@ import { Button } from '@stxapps/web-ui/components/ui/button';
 import {
   Field,
   FieldDescription,
+  FieldError,
   FieldGroup,
   FieldLabel,
 } from '@stxapps/web-ui/components/ui/field';
@@ -329,10 +330,14 @@ export function CreateAccountForm() {
               if (confirmError) setConfirmError(false);
             }}
           />
+          {/* FieldError, not a `text-destructive` FieldDescription: it renders
+              `role="alert"`, so mounting it ANNOUNCES. Both errors on this form
+              arrive as the result of a click and nothing else changes on screen —
+              a plain <p> leaves a screen-reader user with a button that silently
+              re-enables and no idea why. Same reason sign-in-form uses it for
+              `errors.root`. */}
           {confirmError ? (
-            <FieldDescription className="text-destructive">
-              That doesn&apos;t match. Check what you saved and try again.
-            </FieldDescription>
+            <FieldError>That doesn&apos;t match. Check what you saved and try again.</FieldError>
           ) : null}
         </Field>
         <Field>
@@ -372,6 +377,33 @@ export function CreateAccountForm() {
         />
       </Field>
 
+      {/* TWO WAYS TO CREATE THE ACCOUNT, and the second one has to say so. It read
+          "Skip for now — I'll set this up later" as an underlined text link, which
+          described neither what it does nor what it is: `submit(false)` creates the
+          account — the same irreversible act as the button above it, minus the
+          recovery door. With the primary greyed out until the checkbox is ticked,
+          the only LIVE control on the screen was one labelled "skip" and painted in
+          the register this app reserves for NAVIGATION (AuthAltAction's "Sign in"),
+          so the honest reading was "leave without an account". Naming the outcome
+          makes the pair differ in what's true afterwards, not in whether anything
+          happens at all.
+
+          GHOST, not outline or secondary: the primary sits at `disabled:opacity-50`
+          in the state every user ARRIVES in, so a bordered or filled alternative
+          would be the strongest thing on screen exactly where the recommended path
+          should lead. Ghost keeps the button geometry — a real hit target and focus
+          ring, which a 20px line of text is not, and the native twin is under
+          Apple's 44pt floor — while staying subordinate at rest.
+
+          Still skippable, and mandatory is NOT the fix: `recoverySaved` is an
+          attestation, not proof. Forcing it moves the exit into the checkbox, and an
+          account whose owner ticked a box without saving the code is worse than one
+          that knowingly has no second door. Settings → Account mints one later
+          (`_account/account-section.tsx`), which is why dropping "I'll set this up
+          later" costs nothing — that clause sold the exit, and the counter's note
+          below explains why this step doesn't. Step one's "Choose my own" /
+          "Generate one instead" stay text links on purpose: those are reversible
+          mode switches, not a second submit. */}
       <Field>
         <Button
           type="button"
@@ -381,17 +413,23 @@ export function CreateAccountForm() {
         >
           {pending ? 'Creating account…' : 'Create account'}
         </Button>
-        <button
+        <Button
           type="button"
-          onClick={() => submit(false)}
+          variant="ghost"
+          className="w-full text-muted-foreground"
           disabled={pending}
-          className="mt-1 text-sm text-muted-foreground underline hover:text-foreground disabled:opacity-50"
+          onClick={() => submit(false)}
         >
-          Skip for now — I&apos;ll set this up later
-        </button>
-        {submitError ? (
-          <FieldDescription className="text-destructive">{submitError}</FieldDescription>
-        ) : null}
+          Create account without a recovery code
+        </Button>
+        {/* BELOW the pair, not above it. This error is a RESULT — it exists only
+            because one of those two buttons was just clicked, and "try again"
+            invites clicking the same one. Above them, mounting it would push both
+            buttons down ~33px with the pointer still resting on the one the user
+            meant, so the retry click lands on the message instead. Below, nothing
+            moves. (See the confirm step for why it's FieldError — it announces,
+            and it renders null on its own when there's nothing to say.) */}
+        <FieldError>{submitError}</FieldError>
       </Field>
     </FieldGroup>
   );
@@ -421,17 +459,17 @@ export function CreateAccountForm() {
 // The counter stays a plain line of text. Its real job is on step ONE, where it's
 // the only thing that says a recovery code is coming — by step 3 the user has seen
 // two screens and can infer the shape. On the recovery step it then reads as "one
-// screen left", which is the number that competes with that step's "Skip for now"
-// escape hatch.
+// screen left", which is the number that competes with that step's recovery-less
+// way out ("Create account without a recovery code").
 //
 // Deliberately NOT dots, a progress bar, or a coloured capsule strip: dots imply
 // steps you can click back to, which this ceremony doesn't offer past a single
 // Back, and an accented indicator would outshout the primary button on the one
-// screen (recovery) where that button is racing a Skip link. With the title now
+// screen (recovery) where that button is racing a second submit. With the title now
 // changing per step, "something changed" is carried by the largest text on the
 // screen and the counter is left with the smaller job of saying how much is left.
 // And deliberately no "(optional)" on step 3 even though it is skippable — the
-// Skip link below already offers the exit; pre-announcing it in the counter just
+// ghost button below already offers the exit; pre-announcing it in the counter just
 // discourages setting up the second door. See docs/account.md, _generated password_.
 function StepHeader({ step, onBack }: { step: Step; onBack?: () => void }) {
   const { title, description } = STEP_HEADINGS[step];

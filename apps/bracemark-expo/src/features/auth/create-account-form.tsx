@@ -297,8 +297,13 @@ export function CreateAccountForm() {
               if (confirmError) setConfirmError(false);
             }}
           />
+          {/* `role="alert"` on both of this form's errors — the twin's `FieldError`
+              (which is what web gets it from) mounts with the same role. Each one
+              arrives as the result of a press with nothing else changing on screen,
+              so without it VoiceOver/TalkBack gets a button that silently
+              re-enables and no reason why. */}
           {confirmError ? (
-            <Text className="text-sm text-destructive">
+            <Text role="alert" className="text-sm text-destructive">
               That doesn&apos;t match. Check what you saved and try again.
             </Text>
           ) : null}
@@ -336,20 +341,31 @@ export function CreateAccountForm() {
         />
       </View>
 
-      <View className="gap-1">
+      {/* TWO WAYS TO CREATE THE ACCOUNT, and the second one has to say so — the
+          web twin's note carries the argument (why the outcome is the label rather
+          than "Skip for now", why ghost rather than outline or secondary, and why
+          mandatory isn't the fix). The native-specific half: this was a bare
+          `Pressable` around a line of `text-sm`, a ~20pt target against Apple's
+          44pt floor, on the second-most-important control of the screen. `Button`
+          at the default size is h-10 and already handles the disabled dimming, so
+          the manual `opacity-50` goes with it. `gap-3` matches the web Field the
+          stack mirrors; the old `gap-1` was compensating for the Pressable's own
+          `py-2`. */}
+      <View className="gap-3">
         <Button disabled={!recoverySaved || pending} onPress={() => submit(true)}>
           <Text>{pending ? 'Creating account…' : 'Create account'}</Text>
         </Button>
-        <Pressable
-          onPress={() => submit(false)}
-          disabled={pending}
-          className={cn('items-center py-2', pending && 'opacity-50')}
-        >
-          <Text className="text-sm text-muted-foreground underline">
-            Skip for now — I&apos;ll set this up later
+        <Button variant="ghost" disabled={pending} onPress={() => submit(false)}>
+          <Text className="text-muted-foreground">Create account without a recovery code</Text>
+        </Button>
+        {/* Below the pair, matching web: the message is the RESULT of pressing one
+            of them, so putting it above would shift both buttons down under a
+            thumb that's about to retry. */}
+        {submitError ? (
+          <Text role="alert" className="text-sm text-destructive">
+            {submitError}
           </Text>
-        </Pressable>
-        {submitError ? <Text className="text-sm text-destructive">{submitError}</Text> : null}
+        ) : null}
       </View>
     </View>
   );

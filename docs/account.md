@@ -455,12 +455,27 @@ their own only behind a strength gate. As built:
 - the counter stays plain text. It earns its place on step **one**, where it's the
   only thing that tells the user a recovery code is coming. By the recovery step it
   reads as "one screen left", which is the number that competes with that step's
-  Skip link — so it deliberately does **not** say "(optional)" there, even though
-  the step is. Not dots, a progress bar, or a coloured capsule strip: dots imply
-  steps you can click back to, and an accented indicator would outshout the primary
-  button on the one screen where it races a Skip link. With the title changing per
-  step, the counter is left the smaller job of saying how much is left. Mirrored in
-  `bracemark-expo`'s `features/auth/create-account-form.tsx`.
+  recovery-less exit — so it deliberately does **not** say "(optional)" there, even
+  though the step is. Not dots, a progress bar, or a coloured capsule strip: dots
+  imply steps you can click back to, and an accented indicator would outshout the
+  primary button on the one screen where it races a second submit. With the title
+  changing per step, the counter is left the smaller job of saying how much is
+  left. Mirrored in `bracemark-expo`'s `features/auth/create-account-form.tsx`;
+- the recovery step offers **two ways to create the account**, and the second is
+  labelled by its outcome — **"Create account without a recovery code"**, a
+  full-width `ghost` button under the primary. It is not a "skip": `submit(false)`
+  performs the same irreversible act, minus the door. The earlier wording ("Skip
+  for now — I'll set this up later") as an underlined text link named neither, and
+  since the primary is disabled until the checkbox is ticked, the only **live**
+  control on arrival was one that read as leaving without an account. Ghost rather
+  than `outline`/`secondary` because the primary sits at 50% opacity in that same
+  arrival state, so a bordered or filled alternative would be the strongest thing
+  on screen precisely where the recommended path should lead — and rather than a
+  text link because it is a submit, and needs a submit's hit target (the native
+  twin's was under Apple's 44pt floor). Mandatory is **not** the alternative:
+  `recoverySaved` is an attestation, not proof, so forcing it only moves the exit
+  into the checkbox, and an account whose owner ticked a box without saving the
+  code is worse off than one that knowingly has no second door.
 
 This keeps the promise: a user _can_ pick their own username and password (good
 UX), but the **safe path is the default path** (wallet-grade entropy), rather

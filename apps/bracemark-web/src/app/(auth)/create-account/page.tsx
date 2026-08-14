@@ -37,7 +37,8 @@ export default function CreateAccountPage() {
             advances setup → confirm → recovery, and only the last step's button
             actually creates anything — but a line that appeared there would
             spring the terms on someone three screens in, next to the one control
-            (Skip for now) that most needs a clear head. Naming the ACT rather
+            ("Create account without a recovery code") that most needs a clear
+            head. Naming the ACT rather
             than the button lets it be true from the first screen, which is where
             a disclosure belongs.
 
