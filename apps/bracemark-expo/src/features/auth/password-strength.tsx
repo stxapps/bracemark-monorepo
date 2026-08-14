@@ -84,15 +84,27 @@ export function usePasswordStrength(
   }, [scoreFn, password, inputsKey, minLength]);
 }
 
+// The two status pairs the message line and the meter BOTH use, named once because
+// they have to match: the message sits directly above the meter's label on the same
+// card, so a second amber or a second green there would read as a second meaning.
+// Both maps below reference these instead of repeating the strings — which is also
+// the answer to why `MESSAGE_TONE` lives in this file rather than beside the ladder
+// it serves. It shares its definitions with the meter. Same shape as the web twin.
+const AMBER = 'text-amber-600 dark:text-amber-500';
+const EMERALD = 'text-emerald-600 dark:text-emerald-500';
+
 // How a FieldMessage's tone paints on this platform. The WORDS live in
 // `@stxapps/react` (lib/field-messages.ts), shared with web; only this map is
-// platform-specific, and it lives here because its green is the meter's green.
+// platform-specific.
 //
 // Unlike web, `muted` carries a real class: a native <Text> has no inherited
-// muted-foreground to fall back on.
+// muted-foreground to fall back on. And `warn` is the same amber as
+// `ErrorText tone="warning"`, which is this side's existing name for the same idea
+// (proceed-able / not-your-fault, as against `error`).
 export const MESSAGE_TONE: Record<FieldMessage['tone'], string> = {
   error: 'text-destructive',
-  ok: 'text-emerald-600 dark:text-emerald-500',
+  warn: AMBER,
+  ok: EMERALD,
   muted: 'text-muted-foreground',
 };
 
@@ -104,12 +116,14 @@ const LABELS = ['Very weak', 'Weak', 'Fair', 'Strong'] as const;
 // meter had no success signal). Raw palette colours, not a new `--color-*` token:
 // a token would have to be declared under `@variant light`/`@variant dark` in
 // `global.css` AND mirrored into `tools/prettier/expo-tailwind.css`, and this needs
-// neither (see the tripwire in CLAUDE.md).
+// neither (see the tripwire in CLAUDE.md). The two label colours come from the shared
+// pairs above, so the top band and a passing message are one string, not two that
+// agree.
 const TONES = [
   { bar: 'bg-destructive', text: 'text-destructive' },
   { bar: 'bg-destructive', text: 'text-destructive' },
-  { bar: 'bg-amber-500', text: 'text-amber-600 dark:text-amber-500' },
-  { bar: 'bg-emerald-500', text: 'text-emerald-600 dark:text-emerald-500' },
+  { bar: 'bg-amber-500', text: AMBER },
+  { bar: 'bg-emerald-500', text: EMERALD },
 ] as const;
 
 // A four-segment meter with a text label. Purely presentational — it renders the

@@ -382,6 +382,29 @@ Rough entropy targets, for calibration:
 > "Checking availability…" and submit is closed, because the button should agree with
 > the sentence rather than with a cached answer the line no longer stands behind.
 >
+> **`tone` carries two signals, and is not a severity scale.** `ok` is the gate
+> above. `error` is separately what both forms spell `aria-invalid` / `data-invalid`
+> as — a claim to a screen reader that the value the user _typed_ is rejected
+> ("Username, invalid entry"), plus the destructive border. So the rung for an
+> availability request that **failed** — offline, server down, non-2xx — is `warn`
+> (the app's status-amber, the meter's "Fair" pair and expo's
+> `ErrorText tone="warning"`), which is neither: it blocks, because the name can't be
+> confirmed, but it must not mark a possibly-free name invalid and send the user to
+> re-type the one thing that isn't wrong. `muted` is the resting and in-flight rungs,
+> which also block but clear themselves — and that is why `warn` exists rather than
+> reusing it, since leaving a stuck state `muted` made it look exactly like the two
+> that need nothing from the user.
+>
+> That failure rung reads `isError` specifically, which is what separates it from the
+> **unsettled** one underneath: no data and no error is the frame between mount and
+> fetch start, or a request aborted by a newer keystroke, and it says "Checking
+> availability…" like the debounce rung above rather than claiming anything broke. It
+> is worth knowing why there is no third case here — `enabled` gates on the canonical
+> name while the ladder parses the raw one, but `usernameSchema` is ASCII-only and
+> canonicalizes inside its own reserved check, so trim→NFKC→lowercase is identity on
+> anything that already parsed. A raw pass is a canonical pass, and a **disabled**
+> query can therefore only sit behind the invalid-format rung, never reach these two.
+>
 > Two caveats worth knowing. zxcvbn models an unmatched password as **10^length**
 > guesses — ~3.32 bits/char, **independent of charset** — so it _underestimates_
 > truly random strings (a 16-char CSPRNG password is ~95 bits but models as 53, and

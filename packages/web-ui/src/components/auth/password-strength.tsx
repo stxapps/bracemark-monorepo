@@ -90,16 +90,30 @@ export function usePasswordStrength(
   }, [scoreFn, password, inputsKey, minLength]);
 }
 
+// The two status pairs the message line and the meter BOTH use, named once because
+// they have to match: the message sits directly above the meter's label on the same
+// card, so a second amber or a second green there would read as a second meaning.
+// Both maps below reference these instead of repeating the strings — which is also
+// the answer to why `MESSAGE_TONE` lives in this file rather than beside the ladder
+// it serves. It shares its definitions with the meter.
+//
+// (Both pairs are under 4.5:1 at text-sm in light mode. That floor is one question
+// about the app's status colours as a set — these, the bar fills, the amber in
+// `ErrorText` — not one to reopen on a single rung.)
+const AMBER = 'text-amber-600 dark:text-amber-500';
+const EMERALD = 'text-emerald-600 dark:text-emerald-500';
+
 // How a FieldMessage's tone paints on this platform. The WORDS live one layer down in
 // `@stxapps/react` (lib/field-messages.ts) so web and native can't drift; only this
-// map is platform-specific, and it lives here because its green is the meter's green —
-// one success signal across both halves of the field, from one place.
+// map is platform-specific.
 //
 // `muted` adds no class where the host element is already muted-foreground (a
-// FieldDescription); callers that own a bare <p> add it themselves.
+// FieldDescription); callers that own a bare <p> add it themselves. `warn` is the
+// app's one status-amber — expo's `ErrorText tone="warning"` is the same pair.
 export const MESSAGE_TONE: Record<FieldMessage['tone'], string> = {
   error: 'text-destructive',
-  ok: 'text-emerald-600 dark:text-emerald-500',
+  warn: AMBER,
+  ok: EMERALD,
   muted: '',
 };
 
@@ -113,14 +127,15 @@ const LABELS = ['Very weak', 'Weak', 'Fair', 'Strong'] as const;
 // as an inert track, and in dark mode a full row of near-white bars is hardest of all
 // to tell from the unlit `bg-border` it replaces. Green is what every comment in this
 // file already claimed the full meter showed. Raw palette colours here rather than a
-// `--color-success` token, matching the existing `bg-amber-500` and
-// `text-amber-600 dark:text-amber-500` status colours elsewhere — and note that adding
-// a token would drag `tools/prettier/expo-tailwind.css` in for the native twin.
+// `--color-success` token, matching the `bg-amber-500` status colours elsewhere — and
+// note that adding a token would drag `tools/prettier/expo-tailwind.css` in for the
+// native twin. The two label colours come from the shared pairs above, so the top
+// band and a passing message are one string, not two that agree.
 const TONES = [
   { bar: 'bg-destructive', text: 'text-destructive' },
   { bar: 'bg-destructive', text: 'text-destructive' },
-  { bar: 'bg-amber-500', text: 'text-amber-600 dark:text-amber-500' },
-  { bar: 'bg-emerald-500', text: 'text-emerald-600 dark:text-emerald-500' },
+  { bar: 'bg-amber-500', text: AMBER },
+  { bar: 'bg-emerald-500', text: EMERALD },
 ] as const;
 
 // A four-segment meter with a text label. Purely presentational — it renders the
