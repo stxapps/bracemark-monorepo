@@ -69,12 +69,27 @@ function FieldLegend({
   );
 }
 
+// `gap-6`, not the vendored `gap-7` — the one value in this file changed from
+// stock. The auth cards are the only callers, and 28px inside the group was wider
+// than every step OUT of it: 24px from the submit button down to LegalConsent
+// (`mt-6`), 24px from there to the card's hairline (Card's own `gap-6`), 24px
+// below it to the alt action. Fine print about the page sitting tighter to the
+// button than the form's own fields sit to each other is backwards, and 28-vs-24
+// is too small a delta to read as a tier anyway — it bought no hierarchy, just an
+// odd value. At `gap-6` the whole card is one 12/24 scale: 12 inside a Field
+// (`gap-3` — label, control, message, the tier that means "belongs to this
+// control"), 24 between every block above it. Grouping is carried by type size,
+// the filled button and the hairline instead.
+//
+// The submit button rides this same 24 as a plain `Field`, deliberately. It must
+// not be tighter than the field-to-field gap: it acts on EVERY field above it, and
+// proximity would read it as a third control of the last one.
 function FieldGroup({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
       data-slot="field-group"
       className={cn(
-        'group/field-group @container/field-group flex w-full flex-col gap-7 data-[slot=checkbox-group]:gap-3 *:data-[slot=field-group]:gap-4',
+        'group/field-group @container/field-group flex w-full flex-col gap-6 data-[slot=checkbox-group]:gap-3 *:data-[slot=field-group]:gap-4',
         className,
       )}
       {...props}
@@ -85,7 +100,18 @@ function FieldGroup({ className, ...props }: React.ComponentProps<'div'>) {
 const fieldVariants = cva('group/field flex w-full gap-3 data-[invalid=true]:text-destructive', {
   variants: {
     orientation: {
-      vertical: 'flex-col *:w-full [&>.sr-only]:w-auto',
+      // `gap-2`, overriding the base `gap-3` — vertical ONLY, because the base
+      // gap runs sideways in the other two orientations (checkbox to its label),
+      // where 8px is cramped. Stock 12px inside a Field against the group's 24px
+      // between them is a 1:2 ratio: a label sits nearly as close to the control
+      // ABOVE it as to its own, which is what dissolves the grouping. 8px makes it
+      // 1:3. Both other surfaces in this repo had already gone tighter on their
+      // own rather than take the stock value — settings' change-password form runs
+      // a standard Label over an Input at `gap-2`, and the advanced-search panel
+      // overrides every Field to `gap-1` (search-bar.tsx, whose note makes this
+      // same ratio argument). This puts the auth forms on that footing instead of
+      // leaving them the one holdout.
+      vertical: 'flex-col gap-2 *:w-full [&>.sr-only]:w-auto',
       horizontal:
         'flex-row items-center has-[>[data-slot=field-content]]:items-start *:data-[slot=field-label]:flex-auto has-[>[data-slot=field-content]]:[&>[role=checkbox],[role=radio]]:mt-px',
       responsive:

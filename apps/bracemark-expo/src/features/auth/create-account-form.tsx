@@ -353,10 +353,11 @@ export function CreateAccountForm() {
           `Pressable` around a line of `text-sm`, a ~20pt target against Apple's
           44pt floor, on the second-most-important control of the screen. `Button`
           at the default size is h-10 and already handles the disabled dimming, so
-          the manual `opacity-50` goes with it. `gap-3` matches the web Field the
-          stack mirrors; the old `gap-1` was compensating for the Pressable's own
-          `py-2`. */}
-      <View className="gap-3">
+          the manual `opacity-50` goes with it. `gap-2` matches the web Field this
+          stack mirrors (field.tsx's vertical variant — 8px, and the note there
+          carries why); an earlier `gap-1` was compensating for the Pressable's own
+          `py-2`, which the Button doesn't need. */}
+      <View className="gap-2">
         <Button disabled={!recoverySaved || pending} onPress={() => submit(true)}>
           <Text>{pending ? 'Creating account…' : 'Create account'}</Text>
         </Button>
