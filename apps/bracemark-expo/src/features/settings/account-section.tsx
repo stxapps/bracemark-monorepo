@@ -57,7 +57,11 @@ function DeleteAccountView({ onBack }: { onBack: () => void }) {
   const { mutate, isPending, error, reset } = useDeleteAccount();
   const [password, setPassword] = useState('');
   const [confirmed, setConfirmed] = useState(false);
-  // Reveal the "tick the box first" nudge only after a submit without the box.
+  // Reveal each "you still need to…" nudge only after a submit that was missing it.
+  // The checkbox already worked this way; the password now matches it rather than
+  // holding the button down (docs/account.md, _when a submit is allowed to be
+  // `disabled`_).
+  const [passwordNudge, setPasswordNudge] = useState(false);
   const [nudge, setNudge] = useState(false);
 
   // The same rule the server enforces with its 409: a subscription that would
@@ -68,11 +72,11 @@ function DeleteAccountView({ onBack }: { onBack: () => void }) {
 
   const onSubmit = () => {
     if (isPending) return;
-    if (!confirmed) {
-      setNudge(true);
-      return;
-    }
-    setNudge(false);
+    // Report BOTH misses at once — a user who submits an empty form should not have
+    // to discover the second requirement after satisfying the first.
+    setPasswordNudge(password.length === 0);
+    setNudge(!confirmed);
+    if (password.length === 0 || !confirmed) return;
     mutate({ password });
   };
 
@@ -131,11 +135,14 @@ function DeleteAccountView({ onBack }: { onBack: () => void }) {
           autoComplete="current-password"
           value={password}
           editable={!isPending}
+          className={cn(passwordNudge && 'border-destructive')}
           onChangeText={(text) => {
             setPassword(text);
+            setPasswordNudge(false);
             if (error) reset();
           }}
         />
+        {passwordNudge && <ErrorText>Please enter your password to confirm.</ErrorText>}
       </View>
 
       {/* The row IS the checkbox to a screen reader, not a button wrapping one:
@@ -170,11 +177,10 @@ function DeleteAccountView({ onBack }: { onBack: () => void }) {
       {nudge && <ErrorText className="mt-2">Please tick the box above to confirm.</ErrorText>}
 
       <View className="mt-6 flex-row">
-        <Button
-          variant="destructive"
-          disabled={isPending || password.length === 0 || subscriptionBlocks}
-          onPress={onSubmit}
-        >
+        {/* `subscriptionBlocks` is the one disable this view keeps: the
+            SettingsNotice above states it in full and links where to fix it, so the
+            dimmed button sits under its own explanation. */}
+        <Button variant="destructive" disabled={isPending || subscriptionBlocks} onPress={onSubmit}>
           <Icon as={Trash2} className="size-4" />
           <Text>{isPending ? 'Deleting account…' : 'Delete account forever'}</Text>
         </Button>
@@ -242,7 +248,16 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
   };
 
   const onSubmit = async () => {
-    if (changePassword.isPending || !newOk || !proofReady) return;
+    // `newOk` still returns silently: the button IS disabled for it, and legibly so
+    // — generated mode blocks on the labelled checkbox in ShowOnceSecret, typed mode
+    // on the permanent message line under the field, which is the gate itself. An
+    // empty proof field had neither, so it says so instead (docs/account.md, _when a
+    // submit is allowed to be `disabled`_). Same slot as "Incorrect password." below.
+    if (changePassword.isPending || !newOk) return;
+    if (!proofReady) {
+      setError(useRecovery ? 'Enter your recovery code.' : 'Enter your current password.');
+      return;
+    }
     setError(null);
     try {
       await changePassword.mutateAsync({
@@ -403,10 +418,7 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
         )}
 
         <View className="flex-row">
-          <Button
-            disabled={changePassword.isPending || !newOk || !proofReady}
-            onPress={() => void onSubmit()}
-          >
+          <Button disabled={changePassword.isPending || !newOk} onPress={() => void onSubmit()}>
             <Text>{changePassword.isPending ? 'Changing…' : 'Change password'}</Text>
           </Button>
         </View>
@@ -440,7 +452,13 @@ function RecoveryCodeView({ onBack, hasRecovery }: { onBack: () => void; hasReco
   const [hadRecovery] = useState(hasRecovery);
 
   const onSubmit = async () => {
-    if (recovery.isPending || currentPassword === '') return;
+    if (recovery.isPending) return;
+    // Empty answers out loud rather than holding the button down; the slot below
+    // the button is the same one "Incorrect password." uses.
+    if (currentPassword === '') {
+      setError('Enter your current password.');
+      return;
+    }
     setError(null);
     try {
       const result = await recovery.mutateAsync({
@@ -513,10 +531,7 @@ function RecoveryCodeView({ onBack, hasRecovery }: { onBack: () => void; hasReco
           />
         </View>
         <View className="flex-row">
-          <Button
-            disabled={recovery.isPending || currentPassword === ''}
-            onPress={() => void onSubmit()}
-          >
+          <Button disabled={recovery.isPending} onPress={() => void onSubmit()}>
             <Text>
               {recovery.isPending
                 ? 'Generating…'

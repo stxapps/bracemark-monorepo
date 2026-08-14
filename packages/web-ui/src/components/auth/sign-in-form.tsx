@@ -2,8 +2,8 @@
 
 import * as React from 'react';
 
-import { useSignInForm } from '@stxapps/react';
-import type { SignInValues } from '@stxapps/shared';
+import { useRecoverySignInForm, useSignInForm } from '@stxapps/react';
+import type { RecoverySignInValues, SignInValues } from '@stxapps/shared';
 import {
   InvalidCredentialsError,
   InvalidRecoveryCodeError,
@@ -83,8 +83,13 @@ function PasswordSignIn({ onUseRecovery }: { onUseRecovery: () => void }) {
           <FieldError errors={errors.password ? [errors.password] : undefined} />
         </Field>
         <Field>
+          {/* The label carries the pending state, like every other submit in the
+              auth ceremony. While `isSubmitting` the button is `disabled`, which
+              is `pointer-events-none` and out of the tab order — it announces
+              nothing on its own, so without this the only signal that a sign-in
+              is in flight is a greyed-out rectangle. */}
           <Button type="submit" className="w-full" disabled={isSubmitting}>
-            Sign in
+            {isSubmitting ? 'Signing in…' : 'Sign in'}
           </Button>
           <FieldError errors={errors.root ? [errors.root] : undefined} />
           <button
@@ -100,47 +105,67 @@ function PasswordSignIn({ onUseRecovery }: { onUseRecovery: () => void }) {
   );
 }
 
+// THE SAME FORM AS PasswordSignIn ABOVE, DOOR SWAPPED — and it is built the same
+// way on purpose. It used to hand-roll two `useState` fields plus a `string | null`
+// error, which is how it drifted into being the only submit in either auth form
+// that sat `disabled` on empty input with nothing on screen saying why: no checkbox
+// above it, no permanent message line under the fields (contrast create-account's
+// setup step, where the ladder IS the gate — docs/account.md). A disabled button is
+// silent in every channel — `disabled:pointer-events-none` kills hover, the
+// attribute drops it from the tab order, and nothing is announced — and everyone
+// who reaches THIS screen has already lost their password, so a dead control with
+// no explanation is the worst thing to hand them.
+//
+// On the shared resolver (`recoverySignInSchema`) empty input submits and answers
+// per-field, in the same announcing FieldError slots the password path uses, and
+// the button is live whenever a request isn't in flight. See docs/account.md,
+// _when a submit is allowed to be `disabled`_.
 function RecoverySignIn({ onUsePassword }: { onUsePassword: () => void }) {
+  const {
+    register,
+    handleSubmit,
+    setError,
+    clearErrors,
+    formState: { errors, isSubmitting },
+  } = useRecoverySignInForm();
   const signIn = useSignInWithRecovery();
-  const [username, setUsername] = React.useState('');
-  const [recoveryCode, setRecoveryCode] = React.useState('');
-  const [error, setError] = React.useState<string | null>(null);
 
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (signIn.isPending) return;
-    setError(null);
+  // Same as the password path: the failure is a submit-level `root` error, not tied
+  // to a field, so onChange re-validation never clears it.
+  const clearRootError = () => {
+    if (errors.root) clearErrors('root');
+  };
+
+  async function onSubmit(values: RecoverySignInValues) {
     try {
-      await signIn.mutateAsync({ username, recoveryCode });
+      await signIn.mutateAsync(values);
       // Signed in on the same keys as a password sign-in. The reason you're here is
       // a lost password, so set a new one in Settings → Account → Change password.
     } catch (err) {
       if (err instanceof InvalidRecoveryCodeError) {
-        setError('That recovery code didn’t work. Check it and try again.');
+        setError('root', { message: 'That recovery code didn’t work. Check it and try again.' });
       } else {
-        setError('Could not sign in. Please try again.');
+        setError('root', { message: 'Could not sign in. Please try again.' });
       }
     }
   }
 
   return (
-    <form onSubmit={onSubmit} noValidate>
+    <form onSubmit={handleSubmit(onSubmit)} noValidate>
       <FieldGroup>
-        <Field>
+        <Field data-invalid={!!errors.username}>
           <FieldLabel htmlFor="rec-username">Username</FieldLabel>
           <Input
             id="rec-username"
             type="text"
             autoComplete="username"
             autoFocus
-            value={username}
-            onChange={(e) => {
-              setUsername(e.target.value);
-              if (error) setError(null);
-            }}
+            aria-invalid={!!errors.username}
+            {...register('username', { onChange: clearRootError })}
           />
+          <FieldError errors={errors.username ? [errors.username] : undefined} />
         </Field>
-        <Field>
+        <Field data-invalid={!!errors.recoveryCode}>
           <FieldLabel htmlFor="rec-code">Recovery code</FieldLabel>
           <Input
             id="rec-code"
@@ -149,22 +174,16 @@ function RecoverySignIn({ onUsePassword }: { onUsePassword: () => void }) {
             autoCapitalize="characters"
             spellCheck={false}
             className="font-mono"
-            value={recoveryCode}
-            onChange={(e) => {
-              setRecoveryCode(e.target.value);
-              if (error) setError(null);
-            }}
+            aria-invalid={!!errors.recoveryCode}
+            {...register('recoveryCode', { onChange: clearRootError })}
           />
+          <FieldError errors={errors.recoveryCode ? [errors.recoveryCode] : undefined} />
         </Field>
         <Field>
-          <Button
-            type="submit"
-            className="w-full"
-            disabled={signIn.isPending || username === '' || recoveryCode === ''}
-          >
-            {signIn.isPending ? 'Signing in…' : 'Sign in with recovery code'}
+          <Button type="submit" className="w-full" disabled={isSubmitting}>
+            {isSubmitting ? 'Signing in…' : 'Sign in with recovery code'}
           </Button>
-          <FieldError>{error}</FieldError>
+          <FieldError errors={errors.root ? [errors.root] : undefined} />
           <button
             type="button"
             onClick={onUsePassword}

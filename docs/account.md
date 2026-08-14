@@ -547,6 +547,48 @@ the intended follow-up is to set a new one (change-password accepts the recovery
 opener). _Nice-to-have not yet wired: forcing that set-new-password step
 immediately after a recovery sign-in; today the user does it from Settings._
 
+### when a submit is allowed to be `disabled`
+
+The rule across every credential surface — the two auth forms and Settings →
+Account alike: **disable only when something else on screen already says why,
+permanently and adjacently.** A disabled button is silent in every channel —
+`disabled` drops it from the tab order, `disabled:pointer-events-none` kills
+hover, and nothing is announced — so it is only honest when the blocker is either
+a **permanent message line** under the offending field (the setup step, where the
+ladder _is_ the gate) or a **labelled checkbox** immediately above it
+(`passphraseSaved`, `recoverySaved`, delete-account's confirm box). Everything
+else stays live and answers the click with an announced error, which is the one
+channel a disabled button doesn't have
+([accessibility.md](./accessibility.md), _the one rule_).
+
+An in-flight request is the third allowed case, and there the **label** carries
+the state ("Signing in…", "Deleting account…") — the greyed rectangle announces
+nothing by itself.
+
+So: the confirm step's Continue is always live (gating it on a live match would
+make the button a hint oracle for the password being re-typed); password sign-in
+submits empty and lets validation speak — its fields are RHF-uncontrolled, so an
+emptiness gate read through `watch` can also go stale against a password-manager
+fill; and **no submit disables on an empty required field any more**. Five did,
+each with nothing on screen explaining it — recovery sign-in, delete-account's
+password, change-password's proof field, the recovery-code mint's password, and
+their expo twins. They now submit and answer in the slot that field's other errors
+already use. Delete-account reports the empty password and the unticked box in the
+same pass, so satisfying one doesn't reveal the other. The one emptiness gate that
+_stays_ is delete-account's `subscriptionBlocks`, which has a `SettingsNotice`
+above it stating the block in full and linking where to fix it.
+
+Recovery sign-in was the worst of the five and got the deepest fix: it hand-rolled
+two `useState` fields plus a `string | null` error, which is how it drifted from
+its password twin in the first place. It now runs the same react-hook-form setup
+over a shared **`recoverySignInSchema`** (`useRecoverySignInForm` in
+`@stxapps/react`), so it has per-field errors and a submit-level `root` like the
+password path. The `recoveryCodeSchema` inside it is deliberately as permissive as
+`passwordSchema`: it checks only that something survives `normalizeRecoveryCode`,
+with **no length equality against the canonical 52 chars**. This is the door you
+reach for when the password is already gone, the GCM tag is a free exact check
+seconds later, and a format rule is the kind of thing that outlives the format.
+
 ### the two identifiers
 
 A common source of confusion: an account has **one identifier and one

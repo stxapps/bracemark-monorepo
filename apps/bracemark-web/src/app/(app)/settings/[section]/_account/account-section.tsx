@@ -70,7 +70,13 @@ function DeleteAccountView({ onBack }: { onBack: () => void }) {
   const { mutate, isPending, error, reset } = useDeleteAccount();
   const [password, setPassword] = useState('');
   const [confirmed, setConfirmed] = useState(false);
-  // Reveal the "tick the box first" nudge only after a submit without the box.
+  // Reveal each "you still need to…" nudge only after a submit that was missing it.
+  // The checkbox already worked this way; the password now matches it rather than
+  // holding the button down (docs/account.md, _when a submit is allowed to be
+  // `disabled`_). Both mount above the button, which does shift it — but the retry
+  // target for either is the control ABOVE the message (the field, the box), not
+  // the button the pointer just left, so nothing moves out from under the cursor.
+  const [passwordNudge, setPasswordNudge] = useState(false);
   const [nudge, setNudge] = useState(false);
 
   // The same rule the server enforces with its 409: a subscription that would
@@ -83,11 +89,11 @@ function DeleteAccountView({ onBack }: { onBack: () => void }) {
   const onSubmit = (event: React.FormEvent) => {
     event.preventDefault();
     if (isPending) return;
-    if (!confirmed) {
-      setNudge(true);
-      return;
-    }
-    setNudge(false);
+    // Report BOTH misses at once — a user who submits an empty form should not have
+    // to discover the second requirement after satisfying the first.
+    setPasswordNudge(password.length === 0);
+    setNudge(!confirmed);
+    if (password.length === 0 || !confirmed) return;
     mutate({ password });
   };
 
@@ -145,11 +151,18 @@ function DeleteAccountView({ onBack }: { onBack: () => void }) {
             autoComplete="current-password"
             value={password}
             disabled={isPending}
+            aria-invalid={passwordNudge}
             onChange={(event) => {
               setPassword(event.target.value);
+              setPasswordNudge(false);
               if (error) reset();
             }}
           />
+          {passwordNudge && (
+            <p role="alert" className="text-sm text-destructive">
+              Please enter your password to confirm.
+            </p>
+          )}
         </div>
 
         <Label
@@ -179,11 +192,11 @@ function DeleteAccountView({ onBack }: { onBack: () => void }) {
         )}
 
         <div className="mt-6">
-          <Button
-            type="submit"
-            variant="destructive"
-            disabled={isPending || password.length === 0 || subscriptionBlocks}
-          >
+          {/* `subscriptionBlocks` is the one disable this view keeps: the
+              SettingsNotice above states it in full and links where to fix it, so
+              the greyed-out button sits under its own explanation. An empty
+              password had no such line — it now answers on submit instead. */}
+          <Button type="submit" variant="destructive" disabled={isPending || subscriptionBlocks}>
             {isPending ? (
               <Loader2 data-icon="inline-start" className="size-4 animate-spin" />
             ) : (
@@ -255,7 +268,17 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
 
   const onSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (changePassword.isPending || !newOk || !proofReady) return;
+    // `newOk` still returns silently: the button IS disabled for it, and legibly so
+    // — generated mode blocks on the labelled checkbox in ShowOnceSecret, typed mode
+    // on the permanent message line under the field, which is the gate itself. An
+    // empty proof field had neither, so it says so instead (docs/account.md, _when a
+    // submit is allowed to be `disabled`_). The message lands in the same slot as
+    // "Incorrect password." below — same field, same voice.
+    if (changePassword.isPending || !newOk) return;
+    if (!proofReady) {
+      setError(useRecovery ? 'Enter your recovery code.' : 'Enter your current password.');
+      return;
+    }
     setError(null);
     try {
       await changePassword.mutateAsync({
@@ -421,7 +444,7 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
         )}
 
         <div>
-          <Button type="submit" disabled={changePassword.isPending || !newOk || !proofReady}>
+          <Button type="submit" disabled={changePassword.isPending || !newOk}>
             {changePassword.isPending ? (
               <Loader2 data-icon="inline-start" className="size-4 animate-spin" />
             ) : null}
@@ -472,7 +495,13 @@ function RecoveryCodeView({ onBack, hasRecovery }: { onBack: () => void; hasReco
 
   const onSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (recovery.isPending || currentPassword === '') return;
+    if (recovery.isPending) return;
+    // Empty answers out loud rather than holding the button down; the slot below
+    // the button is the same one "Incorrect password." uses.
+    if (currentPassword === '') {
+      setError('Enter your current password.');
+      return;
+    }
     setError(null);
     try {
       const result = await recovery.mutateAsync({
@@ -552,7 +581,7 @@ function RecoveryCodeView({ onBack, hasRecovery }: { onBack: () => void; hasReco
           />
         </div>
         <div>
-          <Button type="submit" disabled={recovery.isPending || currentPassword === ''}>
+          <Button type="submit" disabled={recovery.isPending}>
             {recovery.isPending ? (
               <Loader2 data-icon="inline-start" className="size-4 animate-spin" />
             ) : null}

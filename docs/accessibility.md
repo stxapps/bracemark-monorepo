@@ -69,6 +69,20 @@ nothing to compose with and no reason to have more than one spelling.
 bare `<p>` on web, so the name would promise a twin that isn't there — and this
 repo leans hard on twin comments, so a false lead costs real time.
 
+### the corollary: a `disabled` button says nothing either
+
+The rule above is about the message that appears. Its mirror image is the message
+that never gets a chance to: a submit that sits `disabled` because a required
+field is empty tells a screen-reader user nothing at all — `disabled` drops it
+from the tab order, `disabled:pointer-events-none` kills hover, and there is no
+state change to announce. It is the same failure as an unannounced error, one step
+earlier. So a submit is only allowed to be disabled when something adjacent and
+permanent already states the blocker (a message line, a labelled checkbox, a
+notice), or while its own request is in flight — and then the pending state rides
+in the **label**, not in the dimming. The full rule, and the audit of the credential
+surfaces it came from, is in [account.md](./account.md), _when a submit is allowed
+to be `disabled`_.
+
 ### what must NOT announce
 
 `role="alert"` is assertive: it interrupts. Applying it to text that changes

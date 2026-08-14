@@ -1,8 +1,10 @@
+import { generateRecoveryCode } from '../crypto/recovery-code';
 import {
   NEW_PASSWORD_MIN_LENGTH,
   newPasswordSchema,
   PASSWORD_MIN_GUESSES_LOG10,
   passwordSchema,
+  recoveryCodeSchema,
   RESERVED_USERNAMES,
   usernameSchema,
 } from './credentials';
@@ -60,6 +62,31 @@ describe('newPasswordSchema (create / change — policy floor)', () => {
   // documented to be (a shorter password would fail on entropy with a vaguer message).
   it('keeps the length floor consistent with the entropy floor', () => {
     expect(NEW_PASSWORD_MIN_LENGTH).toBeGreaterThanOrEqual(PASSWORD_MIN_GUESSES_LOG10);
+  });
+});
+
+// The same permissive-on-purpose split as passwordSchema above, one notch further:
+// this is the door for a user whose password is already gone, so the schema only
+// pre-filters empty input and leaves every judgement about the code itself to the
+// GCM tag at unwrap time.
+describe('recoveryCodeSchema (recovery sign-in — permissive)', () => {
+  it('accepts a generated code in its displayed, hyphenated form', () => {
+    expect(recoveryCodeSchema.safeParse(generateRecoveryCode()).success).toBe(true);
+  });
+
+  it('accepts a code typed without the display grouping, in any case', () => {
+    const canonical = generateRecoveryCode().replace(/-/g, '');
+    expect(recoveryCodeSchema.safeParse(canonical.toLowerCase()).success).toBe(true);
+  });
+
+  it('rejects input with no code characters left after normalizing', () => {
+    for (const v of ['', '   ', '-- --']) {
+      expect(recoveryCodeSchema.safeParse(v).success).toBe(false);
+    }
+  });
+
+  it('does NOT enforce the canonical 52-char length — the GCM tag is the real check', () => {
+    expect(recoveryCodeSchema.safeParse('ABC12').success).toBe(true);
   });
 });
 

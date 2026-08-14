@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { canonicalizeUsername } from '../crypto/params';
+import { normalizeRecoveryCode } from '../crypto/recovery-code';
 
 // Credential validation shared by every consumer: the web/extension forms
 // (client-side UX) and bracemark-api (server-side gate). Keep this schema PURE and
@@ -169,9 +170,36 @@ export const lockPasswordSchema = z
   .min(1, 'Please enter a password')
   .max(128, 'At most 128 characters.');
 
+// SIGN-IN recovery-code schema — permissive for the same reason `passwordSchema`
+// is, and then some: this is the door you reach for when the password is ALREADY
+// lost, so a client-side reject is the last thing standing between a user and an
+// account that has no other way in. It gates on the NORMALIZED form
+// (normalizeRecoveryCode drops the display hyphens and repairs the Crockford
+// confusables O→0, I/L→1), so a correctly-transcribed code can never fail here on
+// punctuation or case, and it asks only that something survives — a wrong
+// character is the GCM tag's business at unwrap time, not this schema's. Hence no
+// length equality against the canonical 52 chars either: the real check is free
+// and exact, and a format rule is the kind of thing that outlives the format.
+// The ceiling is only a bound on paste accidents.
+export const recoveryCodeSchema = z
+  .string()
+  .max(256, 'At most 256 characters.')
+  .refine((value) => normalizeRecoveryCode(value).length > 0, 'Enter your recovery code.');
+
 export const signInSchema = z.object({
   username: usernameSchema,
   password: passwordSchema,
+});
+
+// The recovery sign-in pair. A separate schema rather than a variant of
+// `signInSchema` because the two forms are two doors, not one form with a swapped
+// field — and giving this path a schema is what lets it use the same
+// react-hook-form setup, the same per-field errors and the same announced submit
+// error as the password path, instead of hand-rolled emptiness checks that drifted
+// (docs/account.md, _when a submit is allowed to be `disabled`_).
+export const recoverySignInSchema = z.object({
+  username: usernameSchema,
+  recoveryCode: recoveryCodeSchema,
 });
 
 export const createAccountSchema = z.object({
@@ -180,6 +208,7 @@ export const createAccountSchema = z.object({
 });
 
 export type SignInValues = z.infer<typeof signInSchema>;
+export type RecoverySignInValues = z.infer<typeof recoverySignInSchema>;
 export type CreateAccountValues = z.infer<typeof createAccountSchema>;
 
 // The create-account submit input: the validated form values PLUS an optional

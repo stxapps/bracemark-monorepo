@@ -6,6 +6,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import {
   createAccountSchema,
   type CreateAccountValues,
+  recoverySignInSchema,
+  type RecoverySignInValues,
   signInSchema,
   type SignInValues,
 } from '@stxapps/shared';
@@ -19,6 +21,18 @@ export function useSignInForm(): UseFormReturn<SignInValues> {
   return useForm<SignInValues>({
     resolver: zodResolver(signInSchema),
     defaultValues: { username: '', password: '' },
+  });
+}
+
+// The other sign-in door. It gets the same treatment as the password one — same
+// resolver setup, so the same per-field errors and the same submit-level `root`
+// error — rather than the hand-rolled useState pair it used to carry, which is how
+// it ended up the only submit in the auth forms that disabled itself on empty
+// input with nothing on screen saying why (docs/account.md).
+export function useRecoverySignInForm(): UseFormReturn<RecoverySignInValues> {
+  return useForm<RecoverySignInValues>({
+    resolver: zodResolver(recoverySignInSchema),
+    defaultValues: { username: '', recoveryCode: '' },
   });
 }
 

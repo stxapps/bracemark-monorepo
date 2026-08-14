@@ -8,8 +8,8 @@ import {
   useSignIn,
   useSignInWithRecovery,
 } from '@stxapps/expo-react';
-import { useSignInForm } from '@stxapps/react';
-import type { SignInValues } from '@stxapps/shared';
+import { useRecoverySignInForm, useSignInForm } from '@stxapps/react';
+import type { RecoverySignInValues, SignInValues } from '@stxapps/shared';
 
 import { ErrorText } from '../../components/error-text';
 import { Button } from '../../components/ui/button';
@@ -124,24 +124,36 @@ function PasswordSignIn({ onUseRecovery }: { onUseRecovery: () => void }) {
   );
 }
 
+// The same form as PasswordSignIn above with the door swapped, and built the same
+// way — react-hook-form over the shared `recoverySignInSchema`, per-field errors,
+// a submit-level `root`. It used to hand-roll two useState fields and disable
+// itself on empty input, which made it the only submit in either auth form that
+// went dead with nothing on screen saying why; see the web twin and
+// docs/account.md, _when a submit is allowed to be `disabled`_.
 function RecoverySignIn({ onUsePassword }: { onUsePassword: () => void }) {
+  const {
+    control,
+    handleSubmit,
+    setError,
+    clearErrors,
+    formState: { errors, isSubmitting },
+  } = useRecoverySignInForm();
   const signIn = useSignInWithRecovery();
-  const [username, setUsername] = React.useState('');
-  const [recoveryCode, setRecoveryCode] = React.useState('');
-  const [error, setError] = React.useState<string | null>(null);
 
-  async function onSubmit() {
-    if (signIn.isPending) return;
-    setError(null);
+  const clearRootError = () => {
+    if (errors.root) clearErrors('root');
+  };
+
+  async function onSubmit(values: RecoverySignInValues) {
     try {
-      await signIn.mutateAsync({ username, recoveryCode });
+      await signIn.mutateAsync(values);
       // Signed in on the same keys as a password sign-in. The reason you're here is
       // a lost password, so set a new one in Settings → Account → Change password.
     } catch (err) {
       if (err instanceof InvalidRecoveryCodeError) {
-        setError('That recovery code didn’t work. Check it and try again.');
+        setError('root', { message: 'That recovery code didn’t work. Check it and try again.' });
       } else {
-        setError('Could not sign in. Please try again.');
+        setError('root', { message: 'Could not sign in. Please try again.' });
       }
     }
   }
@@ -150,42 +162,56 @@ function RecoverySignIn({ onUsePassword }: { onUsePassword: () => void }) {
     <View className="gap-6">
       <View className="gap-2">
         <Text className="text-sm font-medium">Username</Text>
-        <Input
-          autoComplete="username"
-          autoCapitalize="none"
-          autoCorrect={false}
-          autoFocus
-          value={username}
-          onChangeText={(text) => {
-            setUsername(text);
-            if (error) setError(null);
-          }}
+        <Controller
+          control={control}
+          name="username"
+          render={({ field }) => (
+            <Input
+              autoComplete="username"
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoFocus
+              className={cn(errors.username && 'border-destructive')}
+              value={field.value}
+              onBlur={field.onBlur}
+              onChangeText={(text) => {
+                field.onChange(text);
+                clearRootError();
+              }}
+            />
+          )}
         />
+        {errors.username ? <ErrorText>{errors.username.message}</ErrorText> : null}
       </View>
 
       <View className="gap-2">
         <Text className="text-sm font-medium">Recovery code</Text>
-        <Input
-          autoComplete="off"
-          autoCapitalize="characters"
-          autoCorrect={false}
-          className="font-mono"
-          value={recoveryCode}
-          onChangeText={(text) => {
-            setRecoveryCode(text);
-            if (error) setError(null);
-          }}
+        <Controller
+          control={control}
+          name="recoveryCode"
+          render={({ field }) => (
+            <Input
+              autoComplete="off"
+              autoCapitalize="characters"
+              autoCorrect={false}
+              className={cn('font-mono', errors.recoveryCode && 'border-destructive')}
+              value={field.value}
+              onBlur={field.onBlur}
+              onChangeText={(text) => {
+                field.onChange(text);
+                clearRootError();
+              }}
+            />
+          )}
         />
+        {errors.recoveryCode ? <ErrorText>{errors.recoveryCode.message}</ErrorText> : null}
       </View>
 
       <View className="gap-1">
-        <Button
-          disabled={signIn.isPending || username === '' || recoveryCode === ''}
-          onPress={onSubmit}
-        >
-          <Text>{signIn.isPending ? 'Signing in…' : 'Sign in with recovery code'}</Text>
+        <Button disabled={isSubmitting} onPress={handleSubmit(onSubmit)}>
+          <Text>{isSubmitting ? 'Signing in…' : 'Sign in with recovery code'}</Text>
         </Button>
-        {error ? <ErrorText>{error}</ErrorText> : null}
+        {errors.root ? <ErrorText>{errors.root.message}</ErrorText> : null}
         <Pressable role="button" onPress={onUsePassword} className="items-center py-2">
           <Text className="text-sm text-muted-foreground underline">Use your password instead</Text>
         </Pressable>
