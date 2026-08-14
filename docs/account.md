@@ -373,6 +373,34 @@ Rough entropy targets, for calibration:
 > (`MESSAGE_TONE`, beside each platform's strength meter, so a passing message is the
 > same green as a passing meter).
 >
+> **Every rung has a width budget of ~33 characters, and nothing enforces it.** The
+> permanent slot removes reflow only while every state renders on ONE line, and line
+> count is a property of string × width, not of the string — so the budget has to be
+> set by the narrowest surface, which is not the one the card is designed against.
+> Web's auth card is `max-w-sm`, so its message slot is 334px only above a ~430px
+> viewport; it tracks the viewport below that (293px at 390px, 223px at 320px — and
+> 320px is the reflow width [WCAG 1.4.10] as well as what 200% zoom on a 640px window
+> gives). Native is narrower still and scales text to 1.3× on top
+> ([accessibility.md](./accessibility.md), _font scaling_), leaving ~185px effective.
+> A rung over budget wraps, and a slot that changes height walks the submit button
+> down the form — the exact failure the permanent slot exists to prevent, reintroduced
+> on the surfaces least able to spare the space. Nothing catches it: lint, types and
+> tests all pass, and the symptom only appears on a phone.
+>
+> Eight of the fifteen strings were over when this was first measured, the widest at
+> 337px, and the passing rung cleared the old (mistaken) ~335px reading of the rule by
+> a single pixel. Two consequences worth keeping: the messages on the credential
+> schemas in `shared` are bare predicates rather than sentences with a subject ("At
+> least 3 characters." over "Username must be at least 3 characters") because they
+> only ever render under the field that already carries the label; and the **passing**
+> rung says `Save it somewhere safe.` rather than naming a password manager or
+> repeating the meter's verdict. The meter is always directly above the line and owns
+> the verdict — doubling it also overclaims, since zxcvbn is a weakness detector, not
+> a strength certificate — and prescribing a manager both presumes the user has one
+> and is narrower than the app's own answer (the marketing site's FAQ: a manager is
+> best, a locking notes app or paper both work). "Somewhere safe" is the phrase the
+> rest of the ceremony already uses.
+>
 > **Each ladder is also the gate for its field.** `tone === 'ok'` is exactly
 > `newPasswordSchema` passing _and_ `guessesLog10 >= PASSWORD_MIN_GUESSES_LOG10` for
 > the password, and a valid, settled, CURRENT "available" for the username. Callers

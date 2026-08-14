@@ -136,12 +136,23 @@ const TONES = [
 // independently: `w-16` keeps the column (so the bars don't stretch into it), and
 // `min-h-4` keeps the ROW a full text-xs line box — without it the row is only as tall
 // as the 6px bars while the label is empty, and grows the moment a word appears.
+//
+// The `mt-1` is the same OPTICAL correction as the web twin, and carried here for the
+// same reason it lives in the component there: both call sites (create-account and
+// settings → change password) hang this row directly under a PasswordInput in an 8px
+// column, where matching the column's NUMBER reads as too tight. The input's bottom
+// border and this row are both full-width, fully inked horizontals, so the channel
+// between them reads at exactly its height, while the text gaps around it are padded
+// by leading. See the web twin for the measurements. One difference: web's Field kit
+// pulls the message up 4px under this row (`nth-last-2:-mt-1` in field.tsx) and
+// nothing does that here, so native lands at 17px above / a full 8px below rather
+// than 17/9 — still tighter below, which is what keeps meter and message one readout.
 export function PasswordStrengthMeter({ displayScore }: { displayScore: number | null }) {
   const tone = displayScore === null ? null : TONES[displayScore];
   const filled = displayScore === null ? 0 : displayScore + 1; // displayScore 0 → 1 segment lit
 
   return (
-    <View className="flex-row items-center gap-2" aria-live="polite">
+    <View className="mt-1 flex-row items-center gap-2" aria-live="polite">
       <View className="flex-1 flex-row gap-1">
         {[0, 1, 2, 3].map((i) => (
           <View

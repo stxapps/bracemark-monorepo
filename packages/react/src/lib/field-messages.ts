@@ -25,9 +25,16 @@ import {
 //      turns a missing state into missing code.
 //
 // These are ladders, not lookups: order is significance, most specific first. And each
-// string must fit ONE line at card width on the narrowest surface (~335px on web's
-// auth card) — a message that wraps to two reintroduces the jump the slot exists to
-// remove, just a smaller one.
+// string must fit ONE line in the slot — a message that wraps to two reintroduces the
+// jump the slot exists to remove, just a smaller one.
+//
+// Budget the width against a PHONE, not the card's maximum. Web's auth card is
+// `max-w-sm`, so the slot is 334px only once the viewport clears ~430px; below that it
+// tracks the viewport — measured at 293px in a 390px window and 223px at 320px, and
+// native is narrower still. ~220px is the honest ceiling, which is roughly 33
+// characters at text-sm. The rung this note was written under ("Looks strong — save it
+// in your password manager.", 334px) passed the old ~335px reading of the rule by a
+// single pixel and wrapped on every phone.
 //
 // Only the WORDS live here. The tone→class map is per-platform (MESSAGE_TONE, beside
 // each platform's strength meter, which shares the same green).
@@ -81,7 +88,10 @@ export function usernameMessage(
   return takenOnSubmit
     ? { text: 'Username is taken', tone: 'error' }
     : username === ''
-      ? { text: '3–32 letters, numbers, or underscores.', tone: 'muted' }
+      ? // Spelling the charset out ("letters, numbers, or underscores") ran 257px and
+        // wrapped below a ~430px viewport. `_` is the character itself, which is what
+        // the rule is about, and it survives the width budget at 176px.
+        { text: '3–32 letters, numbers, or _', tone: 'muted' }
       : !parse.success
         ? // Reuse the schema's own message so the rule that actually failed (length,
           // charset, or reserved name) shows through instead of one catch-all string.
@@ -101,7 +111,14 @@ export function usernameMessage(
                   // and announcing "invalid entry" about a name that may be perfectly
                   // free points at the one repair that fixes nothing. The words name the
                   // CHECK, not the name, for the same reason.
-                  { text: 'Could not check that name. Try again in a moment.', tone: 'warn' }
+                  //
+                  // Both halves survive the width budget, and both had to: the old
+                  // wording ("Could not check that name. Try again in a moment.") was
+                  // the widest string either ladder could print at 337px, wrapping to
+                  // two lines below a ~500px viewport. Shortening to just the subject
+                  // was tempting and wrong — the instruction is the half this rung owes,
+                  // per the paragraph above. 173px.
+                  { text: "Couldn't check. Try again.", tone: 'warn' }
                 : // No data and no error: the query is enabled but hasn't settled — the
                   // frame between mount and fetch start, or a request aborted by a newer
                   // keystroke (`signal`), both of which leave `isFetching` false for a
@@ -125,7 +142,9 @@ export function usernameMessage(
 // from the CANONICAL one, which is what usePasswordStrength wants anyway.
 export function newPasswordMessage(password: string, guessesLog10: number | null): FieldMessage {
   const parse = newPasswordSchema.safeParse(password);
-  // Length first — the schema owns its own message — then the entropy floor, otherwise
+  // Length first — the schema owns its own message, and that message is now the SAME
+  // sentence as the resting rung below, so an empty field and a too-short one state one
+  // rule in one voice — then the entropy floor, otherwise
   // a long-but-predictable password fails with a silent "Fair" meter and no way to know
   // what to change. The `guessesLog10 === null` rung is the estimator still loading:
   // submit is disabled through that window too, so it has to say so rather than sit
@@ -137,6 +156,36 @@ export function newPasswordMessage(password: string, guessesLog10: number | null
       : guessesLog10 === null
         ? { text: 'Checking strength…', tone: 'muted' }
         : guessesLog10 < PASSWORD_MIN_GUESSES_LOG10
-          ? { text: 'Too predictable — add a few more words.', tone: 'error' }
-          : { text: 'Looks strong — save it in your password manager.', tone: 'ok' };
+          ? // The FIX, not the diagnosis. "Too predictable — add a few more words." ran
+            // 276px and wrapped on every phone, and the half worth keeping is the half
+            // the user can act on: the meter directly above is already showing red at
+            // "Very weak"/"Weak", which is the verdict this dropped.
+            { text: 'Add a few more words.', tone: 'error' }
+          : // The passing rung says what the METER CAN'T. Every one of the four callers
+            // renders PasswordStrengthMeter directly above this line, and the meter's
+            // own label is the verdict — so "Looks strong" here was the same word in the
+            // same green 13px apart, and the meter row is the `aria-live` one, so a
+            // screen reader heard the verdict from it either way. Worse, doubling it
+            // overclaims: zxcvbn is a weakness detector, not a strength certificate
+            // (docs/account.md), and the banded meter is the hedged form of that reading
+            // — a sentence agreeing with it reads as a second, more confident source.
+            // What's left for this line is the one thing nothing else on the field says:
+            // save it.
+            //
+            // NOT "in your password manager", which was the old wording. It names a tool
+            // instead of the outcome, and "your" presumes one — a user without a manager
+            // is told to use a thing they don't have at the moment they most need to act,
+            // and the app's own answer is broader anyway (the marketing site's FAQ,
+            // _where should I keep my passphrase_: a manager is best, a notes app that
+            // locks or paper both work). It was also least apt HERE, since this rung only
+            // shows on the typed-your-own path; the generated path's helper text is where
+            // that advice belongs. "Somewhere safe" is the phrase the rest of the app
+            // already uses — both ShowOnceSecret confirm labels, all the recovery-code
+            // copy — so this stops being the one surface that says it differently.
+            //
+            // The why is deliberately not repeated: this step's header ("no password
+            // reset — your password is the key to your links") and the helper paragraph
+            // under this very field both carry it. Adding a clause here would be a third
+            // telling AND would wrap on a phone (see the width budget above).
+            { text: 'Save it somewhere safe.', tone: 'ok' };
 }

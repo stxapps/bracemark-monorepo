@@ -336,8 +336,8 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
           <View className="gap-2">
             <Text className="text-sm font-medium">New password</Text>
             <Text className="text-sm text-muted-foreground">
-              We generated a strong password for you. Save it in your password manager — there is no
-              way to reset it if it&apos;s lost.
+              We generated a strong password for you. Save it in a password manager, or anywhere
+              you&apos;ll still have it later — there is no way to reset it if it&apos;s lost.
             </Text>
             <ShowOnceSecret
               secret={passphrase}

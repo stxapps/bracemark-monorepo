@@ -154,12 +154,24 @@ const TONES = [
 // this component exists to avoid. `min-h` rather than an `&nbsp;` placeholder: this
 // is a live region, so a hard space is real content announced to a screen reader,
 // and it's the kind of invisible hack a later edit deletes as a typo.
+//
+// The `mt-1` is an OPTICAL correction, and it belongs here rather than at the call
+// sites — all four (create-account and settings → change password, web and expo
+// alike) hang this row directly under a PasswordInput in an 8px column. By
+// measurement the bars already had the widest gaps on that column — 13px of white
+// above, about the same down to the message's cap line below — and still read as
+// stuck to the field: the input's bottom border and this row are both full-width,
+// fully inked horizontals, so the channel between them reads at exactly its height,
+// while every text gap around it is padded by leading and ragged glyph edges.
+// Matching this row to the column's NUMBER is what made it look wrong. 4px puts the
+// channel at 17px, which unsticks it from the input while leaving it tighter to the
+// message below (9px) — meter and message are one readout, and should group.
 export function PasswordStrengthMeter({ displayScore }: { displayScore: number | null }) {
   const tone = displayScore === null ? null : TONES[displayScore];
   const filled = displayScore === null ? 0 : displayScore + 1; // displayScore 0 → 1 segment lit
 
   return (
-    <div className="flex items-center gap-2" aria-live="polite">
+    <div className="mt-1 flex items-center gap-2" aria-live="polite">
       <div className="flex flex-1 gap-1">
         {[0, 1, 2, 3].map((i) => (
           <span

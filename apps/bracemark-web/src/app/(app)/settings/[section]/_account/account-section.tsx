@@ -350,8 +350,8 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
           <div className="flex flex-col gap-2">
             <Label>New password</Label>
             <p className="text-sm text-muted-foreground">
-              We generated a strong password for you. Save it in your password manager — there is no
-              way to reset it if it&apos;s lost.
+              We generated a strong password for you. Save it in a password manager, or anywhere
+              you&apos;ll still have it later — there is no way to reset it if it&apos;s lost.
             </p>
             <ShowOnceSecret
               id="cp-passphrase-saved"

@@ -74,12 +74,28 @@ export const RESERVED_USERNAMES: ReadonlySet<string> = new Set([
   'everyone',
 ]);
 
+// THE MESSAGES ON THESE SCHEMAS HAVE A WIDTH BUDGET, and nothing enforces it. They
+// are not log strings: the credential forms print `issues[0].message` straight into a
+// one-line slot — the permanent message line under the create-account fields (the
+// ladders in `@stxapps/react`, lib/field-messages.ts) and the FieldError on sign-in.
+// That slot is 223px on web at a 320px viewport (WCAG reflow), and ~185px effective on
+// native, where the card is narrower AND text scales to 1.3× (expo caps it there;
+// docs/accessibility.md). So: **~33 characters**, or the message wraps to two lines and
+// walks the submit button down the form on exactly the surfaces least able to spare it.
+// Nothing here fails when that budget is blown — it lints, types and tests clean, and
+// the symptom only appears on a phone.
+//
+// That's why these read as bare predicates rather than sentences with a subject
+// ("At least 3 characters." over "Username must be at least 3 characters"): they only
+// ever render directly under the field they describe, which already carries its label.
+// The password floor is deliberately the SAME string as its ladder's resting rung, so
+// the empty field and the too-short field state one rule in one voice.
 export const usernameSchema = z
   .string()
   .trim()
-  .min(3, 'Username must be at least 3 characters')
-  .max(32, 'Username must be at most 32 characters')
-  .regex(/^[a-zA-Z0-9_]+$/, 'Use only letters, numbers, and underscores')
+  .min(3, 'At least 3 characters.')
+  .max(32, 'At most 32 characters.')
+  .regex(/^[a-zA-Z0-9_]+$/, 'Use letters, numbers, or _')
   .refine((u) => !RESERVED_USERNAMES.has(canonicalizeUsername(u)), {
     message: 'This username is reserved',
   });
@@ -98,8 +114,8 @@ export const usernameSchema = z
 export const passwordSchema = z
   .string()
   .trim()
-  .min(8, 'Password must be at least 8 characters')
-  .max(128, 'Password must be at most 128 characters');
+  .min(8, 'At least 8 characters.')
+  .max(128, 'At most 128 characters.');
 
 // The policy floor for CREATING or CHANGING a password (the typed-your-own path).
 // A hard length floor is defense-in-depth BEHIND the zxcvbn strength gate — zxcvbn
@@ -141,8 +157,8 @@ export const PASSWORD_MIN_GUESSES_LOG10 = 18;
 export const newPasswordSchema = z
   .string()
   .trim()
-  .min(NEW_PASSWORD_MIN_LENGTH, `Password must be at least ${NEW_PASSWORD_MIN_LENGTH} characters`)
-  .max(128, 'Password must be at most 128 characters');
+  .min(NEW_PASSWORD_MIN_LENGTH, `At least ${NEW_PASSWORD_MIN_LENGTH} characters.`)
+  .max(128, 'At most 128 characters.');
 
 // Lock passwords (the device-local app/list locks) are a convenience gate over
 // already-decrypted local data, not the account credential — so no minimum-length
@@ -151,7 +167,7 @@ export const newPasswordSchema = z
 export const lockPasswordSchema = z
   .string()
   .min(1, 'Please enter a password')
-  .max(128, 'Password must be at most 128 characters');
+  .max(128, 'At most 128 characters.');
 
 export const signInSchema = z.object({
   username: usernameSchema,

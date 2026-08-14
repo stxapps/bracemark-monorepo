@@ -233,8 +233,8 @@ export function CreateAccountForm() {
           <Field>
             <FieldLabel>Your password</FieldLabel>
             <FieldDescription>
-              We generated a strong password for you. Save it in your password manager — there is no
-              way to reset it if it&apos;s lost.
+              We generated a strong password for you. Save it in a password manager, or anywhere
+              you&apos;ll still have it later — there is no way to reset it if it&apos;s lost.
             </FieldDescription>
             <ShowOnceSecret
               id="passphrase-saved"
