@@ -30,6 +30,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshControl, useWindowDimensions, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FlashList, type FlashListRef, type ViewToken } from '@shopify/flash-list';
 
 import { type LinkView, useExtraction, useLocks, useSettings, useSync } from '@stxapps/expo-react';
@@ -172,10 +173,18 @@ function UnlockedMain() {
   useEffect(() => () => reportRef.current([]), []);
 
   const { name, Item, columns, contentPadding } = LAYOUTS[linksLayout] ?? LIST_LAYOUT;
-  // Window width, not a measured container: the pane fills the screen, and the
-  // window value is available synchronously — no DEFAULT_COLUMNS flash to paper
-  // over (web's useElementWidth dance isn't needed here).
-  const numColumns = columns(useWindowDimensions().width);
+  // Window width MINUS what the pane doesn't get, rather than a measured
+  // container: the window value is available synchronously, so there's no
+  // DEFAULT_COLUMNS flash to paper over (web's useElementWidth dance isn't
+  // needed here). Two subtractions keep it honest — the screen's horizontal
+  // safe-area insets (the screen wraps this in an all-edges SafeAreaView; they
+  // are 0 in portrait, but the column math shouldn't silently depend on
+  // app.config.ts's orientation lock) and the grid's own content padding, which
+  // is inside the list and so is space no column can use. Feed the raw window
+  // width instead and MIN_CARD_WIDTH stops being the guarantee it exists to be.
+  const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const numColumns = columns(width - insets.left - insets.right - contentPadding * 2);
 
   // FlashList compares extraData by reference to decide whether items must
   // re-render; memoized so scroll-flag renders of this pane don't force a
