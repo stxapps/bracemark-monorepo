@@ -15,9 +15,23 @@ description: How to build, launch, and drive this repo's apps to verify a change
 
 ## Drive bracemark-web (GUI surface)
 
-- No Playwright in the workspace, but browsers are cached at
-  `~/Library/Caches/ms-playwright/`. In a scratch dir: `npm i playwright-core`,
-  then `chromium.launch({ executablePath: '<cache>/chromium_headless_shell-*/chrome-headless-shell-mac-arm64/chrome-headless-shell' })`.
+- No Playwright in the workspace, and **don't count on the `~/Library/Caches/ms-playwright/`
+  browser cache** — it has been empty (no download ever runs; nothing in the repo
+  installs it). Drive the system Chrome instead, which is present:
+
+  ```js
+  // in a scratch dir, after `npm i playwright-core`
+  import { chromium } from 'playwright-core';
+  const browser = await chromium.launch({
+    executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  });
+  ```
+
+  Headless is the default, and `deviceScaleFactor: 2` on the context makes
+  screenshots legible at this repo's type sizes. `/Applications/Chromium.app/Contents/MacOS/Chromium`
+  works the same way if Chrome is gone. Only fall back to the ms-playwright cache
+  if it's actually populated.
+
 - Flows that worked headless: create account at `/create-account`
   (Username/Password labels, button /create/i — Argon2 makes this take a few
   seconds; wait for URL /links/), add links via the topbar `Add` popover
