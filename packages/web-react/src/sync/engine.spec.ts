@@ -11,16 +11,26 @@
 // puts it after the snapshot and before the apply, deterministically, with no timers.
 
 import {
+  ApiError,
+  DEFAULT_LIST_ID,
   filesListEndpoint,
   filesSignEndpoint,
   opsCommitEndpoint,
   opsListEndpoint,
   SETTINGS_GENERAL_PATH,
+  TRASH_ID,
   utf8,
 } from '@stxapps/shared';
 
 import { db } from '../data/db';
-import { writeExtraction } from '../data/mutations';
+import {
+  deleteExtraction,
+  deleteFile,
+  deleteLink,
+  deletePin,
+  writeExtraction,
+  writeLink,
+} from '../data/mutations';
 import { enqueuePut } from '../data/pending-store';
 import { toItemRecord } from '../data/projection';
 import { loadEntityContent, runIncrementalSync, type SyncDeps } from './engine';
@@ -75,8 +85,10 @@ interface Handlers {
     Promise<{ path: string; updatedAt: number }[]> | { path: string; updatedAt: number }[];
   // Called with the paths being signed — the hook a test uses to land a write
   // mid-cycle. Returning an array signs only those (a test for the unsigned-path
-  // branch); returning nothing signs them all.
-  filesSign?: (paths: string[]) => Promise<string[] | void> | string[] | void;
+  // branch); returning nothing signs them all. `op` is passed so a handler can
+  // refuse PUT signing while leaving GETs alone, the way the quota gate does
+  // (bracemark-api lib/quota.ts gates puts only).
+  filesSign?: (paths: string[], op: 'put' | 'get') => Promise<string[] | void> | string[] | void;
   // The other mid-cycle hook: runs when the drain commits, i.e. after its bytes are
   // already on R2 — the window a re-edit of the same path falls into.
   opsCommit?: (paths: string[]) => Promise<void> | void;
@@ -110,7 +122,7 @@ function makeApi(handlers: Handlers = {}): SyncDeps['api'] {
       }
       if (endpoint === filesSignEndpoint) {
         const paths = input.paths as string[];
-        const granted = (await handlers.filesSign?.(paths)) ?? paths;
+        const granted = (await handlers.filesSign?.(paths, input.op as 'put' | 'get')) ?? paths;
         return { urls: granted.map((path) => ({ path, url: urlFor(path) })) };
       }
       if (endpoint === opsCommitEndpoint) {
@@ -674,6 +686,134 @@ describe('a dropped orphan’s server copy', () => {
 
     expect(await pendingPaths()).toEqual([]);
     expect(await db.items.get(LINK_PATH)).toBeUndefined();
+  });
+});
+
+// --- the over-quota escape hatch ---------------------------------------------
+
+// docs/iap.md promises an over-quota account "read-only-plus-delete, never data
+// loss". Whether the DELETE half is actually reachable rests on a chain nothing
+// else covers end to end, and every link in it is silently breakable:
+//
+//   1. "Delete permanently" is offered only on links already in Trash
+//      (link-row-menu.tsx / bulk-edit-toolbar.tsx, both keyed on `inTrash`);
+//   2. getting a link there is `update({ listId: TRASH_ID })` — a `links/` put,
+//      exactly what the quota gate refuses;
+//   3. it works anyway because the move is LOCAL-FIRST (useLinkMutations.update
+//      writes Dexie and calls requestSync() without awaiting it), so the link is
+//      in Trash and offering its destroy whatever the server said; and
+//   4. the destroy's `enqueueDelete` OVERWRITES the refused put in place
+//      (put→delete, new writeId — data/pending-store.ts) rather than queueing
+//      behind it, so the deletes ride `ops/commit`, which is ungated.
+//
+// Break any of those — gate the destroy on the trashed state having synced, make
+// the Trash move await its push, queue the delete alongside the put instead of
+// over it — and an account that is out of space can no longer get back under,
+// with no test failing and no error to see. The whole point of the spec below is
+// that it exercises the sequence a user performs, not the units.
+describe('an over-quota account clearing space', () => {
+  // What `files/sign` answers at the ceiling: 403 with bracemark-api's code, the
+  // one the engine tells apart from an auth 403 (shared apiErrorCode).
+  const QUOTA_EXCEEDED = new ApiError(403, JSON.stringify({ error: 'quota_exceeded' }));
+  const refusePutSigning = (_paths: string[], op: 'put' | 'get'): never | void => {
+    if (op === 'put') throw QUOTA_EXCEEDED;
+  };
+  // An op log with nothing new in it that still brackets the cursor, so the cycle
+  // stays INCREMENTAL — an empty log would route to the fallback, whose reconcile
+  // is a different subject.
+  const quietLog = () => ({
+    ops: [],
+    oldestUpdatedAt: 500,
+    newestUpdatedAt: 1500,
+    hasMore: false,
+  });
+
+  const LINK_ID = 'l_a'; // LINK_PATH / EXTRACTION_PATH are this id's two halves
+  const IMAGE_ID = 'f_a'; // FILE_PATH — the preview blob the link references
+  const PIN_PATH = 'pins/l_a.enc';
+  const linkBlob = {
+    url: 'https://example.test/article',
+    listId: DEFAULT_LIST_ID,
+    tagIds: [],
+    customImageId: IMAGE_ID,
+    createdAt: 1000,
+    updatedAt: 1000,
+  };
+  const listIdAt = async (path: string): Promise<string> =>
+    (JSON.parse((await bodyAt(path)) ?? '{}') as { listId?: string }).listId ?? '';
+
+  it('trashes locally under a refused push, then frees space by destroying', async () => {
+    // A synced library: the link, its machine half, and the blob it references.
+    await seedSynced(LINK_PATH, JSON.stringify(linkBlob), 1500);
+    await seedSynced(EXTRACTION_PATH, JSON.stringify({ id: LINK_ID, facets: {} }), 1500);
+    await seedSynced(FILE_PATH, 'preview bytes', 1500);
+
+    // 1. Remove → Trash. The write edge does not consult the server, so this
+    //    resolves and the row moves whatever the quota gate would say.
+    await writeLink(USER, { path: LINK_PATH, ...linkBlob }, { listId: TRASH_ID });
+    expect(await listIdAt(LINK_PATH)).toBe(TRASH_ID);
+
+    // 2. The push of that move is refused — and the CYCLE STILL COMPLETES. A
+    //    throw here would be the wedge signPushable exists to prevent.
+    const refused = await runIncrementalSync(
+      deps({ opsList: quietLog, filesSign: refusePutSigning }),
+    );
+
+    expect(refused.blocked).toBe(true);
+    expect(refused.blockedCount).toBe(1);
+    // Nothing committed, nothing dropped: the trashed state stands locally and its
+    // op is still queued, which is what "never data loss" means here.
+    expect(committedPaths()).toEqual([]);
+    expect(await listIdAt(LINK_PATH)).toBe(TRASH_ID);
+    expect(await pendingPaths()).toEqual([LINK_PATH]);
+
+    // 3. The row is in Trash, so it now offers "Delete permanently". Destroy in
+    //    useLinkMutations.destroy's order: content, then the satellites, then the
+    //    link (an absent pin still queues its tombstone).
+    await deleteFile(USER, IMAGE_ID);
+    await deleteExtraction(USER, LINK_ID);
+    await deletePin(USER, LINK_ID);
+    await deleteLink(USER, { path: LINK_PATH, ...linkBlob });
+
+    // The refused put was FLIPPED to a delete in place — one row for the path, not
+    // a delete queued behind a put that can never drain.
+    const queued = await db.pendingOps.where('username').equals(USER).toArray();
+    expect(queued.filter((o) => o.path === LINK_PATH).map((o) => o.op)).toEqual(['delete']);
+
+    // 4. Still over quota — every put is still refused — but deletes never reach
+    //    files/sign, so the space comes back and the queue drains to empty.
+    commits = [];
+    const freed = await runIncrementalSync(
+      deps({ opsList: quietLog, filesSign: refusePutSigning }),
+    );
+
+    expect(freed.blocked).toBe(false); // nothing left that the gate could refuse
+    expect(commits.flat().every((o) => o.op === 'delete')).toBe(true);
+    expect(committedPaths().sort()).toEqual(
+      [EXTRACTION_PATH, FILE_PATH, LINK_PATH, PIN_PATH].sort(),
+    );
+    expect(await pendingPaths()).toEqual([]);
+    expect(await db.items.get(LINK_PATH)).toBeUndefined();
+  });
+
+  it('refuses the put without touching the deletes in the same cycle', async () => {
+    // The control: a cycle carrying BOTH is not all-or-nothing. Deletes commit
+    // (phase 1+2, before any signing), the put is refused, and the two outcomes
+    // don't contaminate each other — which is what lets step 3 above be one user
+    // gesture rather than a sequence they have to get right.
+    await seedSynced(LINK_PATH, JSON.stringify(linkBlob), 1500);
+    await seedSynced(OTHER_LINK_PATH, JSON.stringify(linkBlob), 1500);
+
+    await writeLink(USER, { path: LINK_PATH, ...linkBlob }, { listId: TRASH_ID });
+    await deleteLink(USER, { path: OTHER_LINK_PATH, ...linkBlob });
+
+    const outcome = await runIncrementalSync(
+      deps({ opsList: quietLog, filesSign: refusePutSigning }),
+    );
+
+    expect(outcome.blocked).toBe(true);
+    expect(committedPaths()).toEqual([OTHER_LINK_PATH]);
+    expect(await pendingPaths()).toEqual([LINK_PATH]);
   });
 });
 

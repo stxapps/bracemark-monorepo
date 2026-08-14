@@ -12,7 +12,7 @@ import { userDataStub } from '../do/user-data';
 import type { Bindings } from '../lib/env';
 import { checkPutQuota } from '../lib/quota';
 import { userFilesRepo } from '../r2/user-files';
-import { getEntitlements } from './iap';
+import { getQuotaCeilings } from './iap';
 
 // Service layer for the sync endpoints. It holds the POLICY and the cross-store
 // orchestration — TTLs, the quota gate, the op→method mapping, and the R2-then-DO
@@ -54,19 +54,22 @@ export async function signUserFileUrls(
 ): Promise<SignedUrl[]> {
   if (op === 'put') {
     // The put gate is a plan-aware COST BACKSTOP — byte and object ceilings from
-    // the account's entitlements (services/iap.ts → the shared entitlementsOf),
-    // applied by checkPutQuota (lib/quota.ts). It does not count links: the free
-    // tier's cap is client-side now, and lib/quota.ts's header carries why.
+    // the shared entitlements table, applied by checkPutQuota (lib/quota.ts). It
+    // does not count links: the free tier's cap is client-side now, and
+    // lib/quota.ts's header carries why. The ceilings come from the account's
+    // HIGH-WATER plan, not its current one (services/iap.ts foldQuotaCeilings),
+    // so a lapsed subscription never makes an already-uploaded library
+    // unwritable — the one reason this reads ceilings rather than entitlements.
     //
     // Two independent reads — one DO RPC and one D1 read — so fetch in parallel.
     // Note the check needs nothing about `paths` beyond the fact that this is a
     // put: it compares CURRENT usage against the ceilings, which is what freed
     // this path from the per-batch existence check it used to make.
-    const [usage, entitlements] = await Promise.all([
+    const [usage, ceilings] = await Promise.all([
       userDataStub(env, userId).usage(),
-      getEntitlements(env, userId),
+      getQuotaCeilings(env, userId),
     ]);
-    checkPutQuota(entitlements, usage);
+    checkPutQuota(ceilings, usage);
   }
 
   const method = op === 'put' ? 'PUT' : 'GET';

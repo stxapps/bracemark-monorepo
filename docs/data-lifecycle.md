@@ -235,9 +235,13 @@ well as here:
 - **Being over the cap is not a lockout.** `useLinkQuota`'s `atLimit` is
   `count >= max`, so an account that lands above the cap (a lapsed trial, most
   realistically) keeps reading, searching, editing, deleting and exporting — only
-  new links stop. Note the separate ceiling underneath: `maxFiles` **is**
-  server-hard, so a library above _that_ is read-only-plus-delete until it comes
-  down (`bracemark-api` `lib/quota.ts`, and [iap.md](./iap.md) _enforcement_).
+  new links stop. The `maxFiles` / `maxBytes` ceilings underneath **are**
+  server-hard, and a library above one of those is read-only-plus-delete until
+  it comes down — but a lapsed trial can no longer get there, because those two
+  ceilings are sized by the account's high-water plan rather than its current
+  one. A library imported under Plus stays writable after the trial ends; what
+  ends is the ability to add to it (`bracemark-api` `lib/quota.ts`, and
+  [iap.md](./iap.md) _enforcement_).
 
 ### importing from Brace.to
 

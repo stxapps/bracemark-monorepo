@@ -68,7 +68,10 @@
 //     see docs/iap.md, _open follow-ups_.
 //   - a TRIAL is a subscription STATE: a trialing account is entitled to exactly
 //     `plus`, so entitlementsOf() is already correct for it and the fold already
-//     treats `trialing` as entitled. Only its LENGTH is data (TRIAL_DAYS).
+//     treats `trialing` as entitled. Only its LENGTH is data (TRIAL_DAYS). A
+//     trial that LAPSES drops every gate below back to free — except the two
+//     storage ceilings, which stick at the high-water plan so the library the
+//     trial imported stays writable (see maxFiles/maxBytes).
 //   - LIFETIME is a one-time purchase of the `plus` entitlement with no expiry —
 //     the fold's `expiresAt: null` case. It is a PRICE and a policy, not a tier.
 
@@ -108,8 +111,11 @@ export type Entitlements = {
   // server-side; the byte quota is the backstop.
   maxPageCopies: number | null;
   // Hard object-count cap — an abuse bound, not a product lever (see the byte
-  // ceiling for what actually bites). Generous on paid plans: ~5 000 bookmarks
-  // at 2-3 files each stays well under it.
+  // ceiling for what actually bites). It counts PATHS, not links, and the server
+  // counts them namespace-blind: a link is 2 objects (`links/` + `extractions/`)
+  // before its preview image makes 3, so 5 000 files is ~1 600-2 500 links, not
+  // 5 000. Generous on paid plans: ~5 000 bookmarks at 2-3 files each stays well
+  // under 200 000.
   maxFiles: number;
   // Total stored bytes (the storage quota). The real
   // server-hard wall on EVERY plan — and, with maxFiles, now the ONLY one: it is
@@ -117,6 +123,14 @@ export type Entitlements = {
   // that ignores the honor-system link cap. A maxed 200-link free library of
   // client-extracted preview images is ~16 MB, well under the free ceiling.
   maxBytes: number;
+  // NOT RETROACTIVE — the two ceilings above are the one part of this table the
+  // server does NOT resolve from the account's CURRENT plan. It resolves them
+  // from the highest plan the account has ever held (services/iap.ts
+  // `foldQuotaCeilings`), so a library uploaded while entitled never becomes
+  // unwritable when the entitlement ends. Everything else here — maxLinks, every
+  // feature flag — snaps straight back to `free` on a downgrade, which is the
+  // conversion pressure; the ceilings are a cost backstop and were never doing
+  // that job. See lib/quota.ts and docs/iap.md, _enforcement_.
   // Whether the account MAY opt in to `bracemark-extractor` (the separate synced
   // `serverExtraction` preference in settingsGeneralSchema is the user's opt-in;
   // this is the plan gate over it).

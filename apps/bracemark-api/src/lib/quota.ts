@@ -7,8 +7,29 @@
 // THIS IS A COST BACKSTOP, NOT A PRODUCT GATE. It answers exactly one question —
 // is this account writing more than we are willing to store for it — with one
 // error code, `quota_exceeded` (403), which the client maps to "storage full".
-// The limits come from the account's plan via the shared `entitlementsOf()`
-// (iap/plans.ts), resolved per request by services/iap.ts.
+// The limits come from the shared `entitlementsOf()` table (iap/plans.ts),
+// resolved per request by services/iap.ts.
+//
+// THE CEILINGS ARE NOT RETROACTIVE. services/iap.ts resolves them from the
+// account's HIGH-WATER plan — the best plan it has ever held — not the plan it
+// holds today (foldQuotaCeilings). Every other entitlement snaps back to `free`
+// the moment a subscription lapses; these two do not, because a backstop sized
+// for what we are willing to STORE should never turn data we already accepted
+// into data the owner cannot edit. Any account whose library outgrew the free
+// ceilings while it was entitled — a canceled subscriber, or a trial that
+// imported a switcher's library and then ended — would otherwise wake up the
+// day after in a state where every put is refused: no retitle, no retag, and
+// not even move-to-Trash (a `links/` put), leaving permanent irreversible
+// delete as the only route back under. Note how little of that is about cost:
+// the R2 bill for those blobs is the same whether or not we let their owner
+// rename one, and deleting is always free. `maxLinks` is the gate that carries
+// the downgrade, and it still snaps back.
+//
+// This opens no abuse surface, which is the whole reason it can be this simple.
+// A raised ceiling requires a purchase row, a purchase row requires a completed
+// Paddle/store checkout, and a checkout requires a payment method — the exact
+// cost that makes account-farming uneconomic. An abuser willing to spend a real
+// card per account was never who 100 MiB was defending against.
 //
 // The free tier's 200-link cap is NOT here, deliberately. It used to be: the
 // gate counted `links/` paths and answered `upgrade_required`, which meant it
@@ -31,7 +52,9 @@
 // nobody legitimately sits at 5 000 files / 100 MB (free) or 200 000 / 5 GB
 // (paid). The 200-link cap was the opposite case — a limit every free account is
 // DESIGNED to live at — which is precisely why it needed the distinction and why
-// it doesn't belong in a backstop.
+// it doesn't belong in a backstop. The high-water rule above is what keeps that
+// premise true: the one population that DID legitimately sit at a ceiling was
+// the downgraded account, whose library was sized under a plan it no longer has.
 //
 // Puts are the ONLY gated op. GETs are reading your own data, and deletes ride
 // ops/commit ungated — so an over-quota account (e.g. after a downgrade) is
@@ -42,12 +65,19 @@ import type { Entitlements } from '@stxapps/shared';
 import type { FileUsage } from '../do/user-data';
 import { HttpError } from './errors';
 
+// The two numbers this gate enforces, and deliberately NOT the whole
+// `Entitlements` object: they are resolved from a different plan than every
+// other field (the high-water one, above), so a mixed object would be a trap for
+// anything that read a feature flag off it. Narrowing the parameter makes that
+// structurally impossible — there is nothing here to misread.
+export type QuotaCeilings = Pick<Entitlements, 'maxFiles' | 'maxBytes'>;
+
 // Gate one `files/sign` put batch against what the account is already storing.
-export function checkPutQuota(ent: Entitlements, usage: FileUsage): void {
-  if (usage.fileCount >= ent.maxFiles) {
+export function checkPutQuota(ceilings: QuotaCeilings, usage: FileUsage): void {
+  if (usage.fileCount >= ceilings.maxFiles) {
     throw new HttpError(403, 'quota_exceeded', 'File-count quota exceeded');
   }
-  if (usage.totalBytes >= ent.maxBytes) {
+  if (usage.totalBytes >= ceilings.maxBytes) {
     throw new HttpError(403, 'quota_exceeded', 'Storage quota exceeded');
   }
 }

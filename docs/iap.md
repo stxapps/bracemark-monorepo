@@ -28,21 +28,21 @@ device that can sync can ask.
 
 ### the pieces
 
-| layer          | piece                                    | role                                                                                                                                                                             |
-| -------------- | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| shared         | `iap/plans.ts`                           | `PLANS`, `entitlementsOf(plan)` — the entitlements as data, read by BOTH the client paywall and the server gate (the `LINK_TITLE_MAX` move)                                      |
-| shared         | `iap/endpoints.ts`                       | contracts: `iap/status`, `iap/checkout`, `iap/prices`, `iap/portal`, `iap/verify` + `subscriptionStatusSchema`                                                                   |
-| bracemark-api  | `purchases` table (DIRECTORY_DB)         | one row per provider subscription, `UNIQUE(source, external_id)`                                                                                                                 |
-| bracemark-api  | `services/iap.ts`                        | the purchases→status **fold** (grace windows, plan rank), webhook application, the staleness refresh (below), Paddle API calls                                                   |
-| bracemark-api  | `routes/iap.ts`                          | the contract routes + `POST /v1/iap/paddle/webhook` (HMAC-authenticated, log-and-ACK)                                                                                            |
-| bracemark-api  | `lib/quota.ts`                           | `checkPutQuota(entitlements, usage)` at `files/sign` — the byte/object backstop only                                                                                             |
-| react          | `useSubscriptionStatus`                  | the TanStack query on `iap/status`                                                                                                                                               |
-| shared         | `iap/store-products.ts`                  | the store product-id ↔ plan catalog, read by the expo client AND the server verifiers (ids are ours, identical sandbox/production)                                               |
-| bracemark-api  | `lib/appstore.ts`, `lib/playstore.ts`    | provider-vocab edges (lib/paddle.ts's siblings): store-API auth, authoritative fetch, status normalization                                                                       |
-| bracemark-api  | `lib/store.ts`, `lib/jwt.ts`             | what those two edges share so neither imports the other: the normalized `StoreSubscriptionSnapshot`/`StoreSource`, and the base64url + PKCS#8 PEM helpers behind both store JWTs |
-| web-react      | `useEntitlements`                        | + device-local last-known copy; cleared on sign-out                                                                                                                              |
-| bracemark-web  | `lib/paddle.ts`, settings → Subscription | Paddle.js overlay checkout + plan cards + portal + `usePaddlePrices` (the localized price preview — app-level, since it calls app code; see _currency_)                          |
-| bracemark-expo | `lib/iap.ts`, settings → Subscription    | expo-iap store sheet + `iap/verify` + plan cards + restore + store-manage deep link (expo-react's `useEntitlements` caches in sqlite)                                            |
+| layer          | piece                                    | role                                                                                                                                                                                                             |
+| -------------- | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| shared         | `iap/plans.ts`                           | `PLANS`, `entitlementsOf(plan)` — the entitlements as data, read by BOTH the client paywall and the server gate (the `LINK_TITLE_MAX` move)                                                                      |
+| shared         | `iap/endpoints.ts`                       | contracts: `iap/status`, `iap/checkout`, `iap/prices`, `iap/portal`, `iap/verify` + `subscriptionStatusSchema`                                                                                                   |
+| bracemark-api  | `purchases` table (DIRECTORY_DB)         | one row per provider subscription, `UNIQUE(source, external_id)`                                                                                                                                                 |
+| bracemark-api  | `services/iap.ts`                        | the purchases→status **fold** (grace windows, plan rank), the second purchases→**ceilings** fold (`foldQuotaCeilings`, high-water — below), webhook application, the staleness refresh (below), Paddle API calls |
+| bracemark-api  | `routes/iap.ts`                          | the contract routes + `POST /v1/iap/paddle/webhook` (HMAC-authenticated, log-and-ACK)                                                                                                                            |
+| bracemark-api  | `lib/quota.ts`                           | `checkPutQuota(ceilings, usage)` at `files/sign` — the byte/object backstop only                                                                                                                                 |
+| react          | `useSubscriptionStatus`                  | the TanStack query on `iap/status`                                                                                                                                                                               |
+| shared         | `iap/store-products.ts`                  | the store product-id ↔ plan catalog, read by the expo client AND the server verifiers (ids are ours, identical sandbox/production)                                                                               |
+| bracemark-api  | `lib/appstore.ts`, `lib/playstore.ts`    | provider-vocab edges (lib/paddle.ts's siblings): store-API auth, authoritative fetch, status normalization                                                                                                       |
+| bracemark-api  | `lib/store.ts`, `lib/jwt.ts`             | what those two edges share so neither imports the other: the normalized `StoreSubscriptionSnapshot`/`StoreSource`, and the base64url + PKCS#8 PEM helpers behind both store JWTs                                 |
+| web-react      | `useEntitlements`                        | + device-local last-known copy; cleared on sign-out                                                                                                                                                              |
+| bracemark-web  | `lib/paddle.ts`, settings → Subscription | Paddle.js overlay checkout + plan cards + portal + `usePaddlePrices` (the localized price preview — app-level, since it calls app code; see _currency_)                                                          |
+| bracemark-expo | `lib/iap.ts`, settings → Subscription    | expo-iap store sheet + `iap/verify` + plan cards + restore + store-manage deep link (expo-react's `useEntitlements` caches in sqlite)                                                                            |
 
 `purchases` is **global** (DIRECTORY*DB, not an account shard) because webhook
 events after the first arrive keyed by the \_provider's* subscription id with no
@@ -123,7 +123,7 @@ walls exactly where the cost is):
 
 | limit                                     | enforced                                                                                                                                                                                                                      |
 | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| storage bytes (free 100 MiB / 5 / 20 GiB) | **server-hard** — `files/sign`; on free it's the only backstop on preview-image blobs (with the count cap)                                                                                                                    |
+| storage bytes (free 100 MiB / 5 / 20 GiB) | **server-hard** — `files/sign`; on free it's the only backstop on preview-image blobs (with the count cap). Sized by the account's **high-water** plan, not its current one (below)                                           |
 | free: 200 `links/`                        | **client-only** — every create surface refuses at the cap (see below); the server does not count links                                                                                                                        |
 | free: preview-image `files/` blobs        | **allowed** — no per-namespace plan gate: a preview image is an opaque `files/` blob the server can't tell from a heavy one, so it's bounded only by the bytes/count backstop; the heavy-blob facets are client-gated (below) |
 | Plus page-copy meter (last 50)            | client-only — a page copy is indistinguishable from any other `files/` blob server-side; bytes backstop                                                                                                                       |
@@ -134,6 +134,30 @@ One error code at the gate: `quota_exceeded` (403), a **capacity** refusal on
 any plan — the client says "storage full". Puts are the only gated op: GETs and
 deletes always work, so an over-quota or downgraded account degrades to
 **read-only-plus-delete, never data loss**.
+
+**And the delete half is reachable from the UI, which is less obvious than it
+sounds.** "Delete permanently" is offered only on links already in Trash
+(`link-row-menu.tsx`, `bulk-edit-toolbar.tsx`, both keyed on `inTrash`), and
+move-to-Trash is an `update({ listId })` — a `links/` put, the very thing being
+refused. Two properties are what keep that from being a trap, and both are load-
+bearing: the move is **local-first** (`useLinkMutations.update` writes Dexie and
+calls `requestSync()` without awaiting it, so the link lands in Trash and offers
+its destroy immediately, whatever the server says), and `enqueueDelete`
+**overwrites a pending put for the same path in place** (put→delete, new
+`writeId`), so the destroy's deletes replace the refused put rather than queueing
+behind it. Deletes ride `ops/commit` ungated, the freed sizes come off the map,
+and the next put fits. All the user sees in between is one cycle reporting that
+some changes aren't syncing. Gate "Delete permanently" on the trashed state
+having _synced_, make the Trash move await its push, or queue the delete beside
+the put rather than over it, and the hatch closes with nothing to show for it —
+which is why the sequence is pinned as a sequence, in `web-react`
+`sync/engine.spec.ts`, _an over-quota account clearing space_.
+
+Note this is about the byte/count ceilings only. Over `maxLinks` nothing is
+refused server-side at all: `useLinkQuota` gates the create surfaces, and moving
+a link to Trash is not a create. (Trashing does not lower that count either — it
+is deliberately trash-inclusive, since a trashed link still has its blob — so
+there too the route back under is `destroy`, with Trash as its staging step.)
 
 **Why the link cap is not here.** It used to be, answering a second code
 (`upgrade_required`). Enforcing it server-side meant the gate also had to tell a
@@ -149,8 +173,10 @@ The trade is that the two gates were never defending the same thing:
 
 - **`maxBytes` / `maxFiles`** is the only thing between one scripted client and
   an unbounded R2 bill. It stays server-hard, and it is deliberately
-  namespace-blind and current-usage-only — a limit no legitimate account reaches
-  needs no create-vs-update subtlety.
+  namespace-blind, current-usage-only, and sized by the high-water plan — a
+  limit no legitimate account reaches needs no create-vs-update subtlety, and
+  the one population that _did_ legitimately reach it (the downgraded account)
+  is exactly what the high-water rule below removes.
 - **`maxLinks`** is a conversion gate. Bypassing it costs a few hundred KB of
   metadata and is still bounded by `maxBytes`. So it is **honor-system**: the
   create surfaces refuse at the cap, and devtools or a patched extension build
@@ -169,11 +195,51 @@ conversion gate nobody knows about converts nobody. An account that does hit the
 byte ceiling learns it from the `quota_exceeded` → "storage full" surfaces, which
 is where a capacity refusal belongs.
 
-The **downgraded** account still lands where it always did. `useLinkQuota` reads
-`count >= max`, so an over-cap library is refused new links by the same gate that
-refuses a full one; every link they already own was uploaded while entitled, and
-in-place edits were never counted by anything. Read-only-plus-delete holds, now
-by client construction rather than by server subtraction.
+The **downgraded** account lands on the client gate, where it always did.
+`useLinkQuota` reads `count >= max`, so an over-cap library is refused new links
+by the same gate that refuses a full one; every link they already own was
+uploaded while entitled, and in-place edits were never counted by anything. That
+is the conversion pressure, and it is deliberate.
+
+**The two ceilings are not retroactive, and that is what keeps the paragraph
+above true.** `maxFiles` / `maxBytes` are resolved from the **high-water plan** —
+the best plan the account has ever held — not the plan it holds today:
+`services/iap.ts` folds the same purchase rows a second way
+(`foldQuotaCeilings`), taking the highest `plan` on any row regardless of its
+status, expiry or cancellation, and `files/sign` gates against that. Everything
+else snaps back to `free` the instant a subscription lapses.
+
+Without it, a downgrade did not degrade to read-only-plus-delete so much as
+**strand** the account, and it did so far sooner than the numbers look.
+`maxFiles` counts paths namespace-blind, and one link is 2 objects (`links/` +
+`extractions/`) before its preview image makes 3 — so free's 5 000 files is
+~1 600–2 500 links, not 5 000, and free's 100 MiB can bind earlier still on a
+library whose links carry preview images. Past either ceiling every put is
+refused: no retitle, no retag, and **not even move-to-Trash**, which is itself a
+`links/` put. The only surviving route back under is permanent `destroy`, which
+is irreversible. Both routes into that state are ordinary rather than exotic —
+a canceled subscriber whose library outgrew the free ceilings while they were
+paying, and a trial that imported a switcher's library and then ended.
+
+Three reasons the rule is shaped this way rather than by moving a number:
+
+- **It's the honest ceiling.** The backstop asks what we are willing to store,
+  and we already agreed to store this — the blobs arrived while the account was
+  entitled and the R2 bill is the same either way. Deleting is always free, so
+  the account can shed them whenever it likes.
+- **It opens no abuse surface.** A raised ceiling needs a purchase row, a
+  purchase row needs a completed checkout, and a checkout needs a payment
+  method — the exact cost that makes account-farming uneconomic. 100 MiB was
+  never defending against someone willing to spend a card per account.
+- **It's monotonic.** The ceiling can only rise, so a dunning window, an
+  out-of-order webhook or a clock skew can never make a library that fit
+  yesterday not fit today — the failure mode a status-aware rule would have.
+
+The trade accepted with it: a trial-then-chargeback keeps the Plus ceiling. That
+costs storage on an account that has already been through a chargeback (a
+traceable, expensive move for the abuser) and buys the simplicity of a rule with
+no expiry logic in it. Revisit only if it shows up in the numbers; the honest
+place to put it back is `foldQuotaCeilings`.
 
 ### the purchase flow (store IAP — bracemark-expo)
 
@@ -793,7 +859,9 @@ a crossgrade inside the existing subscription rather than a second purchase.
   upgraded, came back, and still read "Some changes aren't syncing" until they
   reloaded. Both subscription sections call `requestSync()` at the moment the
   plan actually widens — web when `pollActivation` sees the webhook land, expo on
-  a completed store purchase AND on a successful restore.
+  a completed store purchase AND on a successful restore. There is no mirror of
+  this on the way down: the ceiling never narrows again (see _enforcement_), so
+  a lapse can't turn a syncing library into a refused one.
 
   The **bracemark-expo share sheet** runs the cap gate on **both** platforms now
   (`isAtLinkCap` in expo-react's `data/share-store.ts`; the sheet reports

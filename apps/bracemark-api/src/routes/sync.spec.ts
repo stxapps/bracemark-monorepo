@@ -407,6 +407,42 @@ describe('sync control plane', () => {
       expect(get.status).toBe(200);
     });
 
+    it('a LAPSED plus account keeps writing past the free ceiling', async () => {
+      // The high-water rule through the real route: same usage as the test above
+      // (exactly free's whole byte allowance), same free `plan` on iap/status —
+      // but this account has a spent Plus row, so the gate sizes it against
+      // Plus. Without this it would wake up read-only-plus-delete over a library
+      // it uploaded while paying. See services/iap.ts foldQuotaCeilings.
+      const { userId, auth } = await authFor('sync-sign-lapsed-plus');
+      await purchasesRepo(env.DIRECTORY_DB).upsertFromProvider({
+        id: newId(),
+        userId,
+        source: 'paddle',
+        externalId: `test-lapsed-${userId}`,
+        plan: 'plus',
+        status: 'canceled',
+        providerCustomerId: null,
+        expiresAt: Date.now() - 24 * 60 * 60 * 1000,
+        canceledAt: Date.now() - 24 * 60 * 60 * 1000,
+        eventOccurredAt: Date.now(),
+      });
+      await userDataStub(env, userId).commitOps([
+        {
+          op: 'put',
+          path: 'files/huge.enc',
+          updatedAt: 1000,
+          size: entitlementsOf('free').maxBytes,
+        },
+      ]);
+
+      const res = await app.request(
+        filesSignEndpoint.path,
+        json(auth, { op: 'put', paths: ['links/still-editable.enc'] }),
+        env,
+      );
+      expect(res.status).toBe(200);
+    });
+
     it('mints GET URLs in batch', async () => {
       const { userId, auth } = await authFor('sync-sign-2');
       const res = await app.request(

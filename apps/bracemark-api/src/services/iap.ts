@@ -1,6 +1,5 @@
 import {
   AVAILABLE_PAID_PLANS,
-  type Entitlements,
   entitlementsOf,
   type IapPricesResponse,
   type IapVerifyRequest,
@@ -30,13 +29,15 @@ import {
   paddleTimeToMs,
 } from '../lib/paddle';
 import { acknowledgePlaystorePurchase, fetchPlaystoreSubscription } from '../lib/playstore';
+import type { QuotaCeilings } from '../lib/quota';
 import type { StoreSource, StoreSubscriptionSnapshot } from '../lib/store';
 
 // Subscription/entitlement service. Purchases land in DIRECTORY_DB (written by
 // the provider webhooks / future store verifiers); this service owns the FOLD
 // from those rows to the account's single SubscriptionStatus — what `iap/status`
-// returns, and what the `files/sign` quota gate derives its limits from
-// (lib/quota.ts). Clients never see purchase rows, only the fold.
+// returns. The same rows fold a SECOND way for the `files/sign` quota gate
+// (foldQuotaCeilings → lib/quota.ts), which reads the account's high-water plan
+// instead of its current one. Clients never see purchase rows, only the fold.
 
 // How long a `past_due` subscription stays entitled past its period end while
 // the provider retries payment (Paddle dunning runs up to ~2 weeks). Yanking
@@ -118,6 +119,32 @@ export function foldSubscriptionStatus(
       best.canceledAt === null &&
       best.expiresAt !== null,
   };
+}
+
+// The SECOND fold over the same rows, and the one the put gate reads: the two
+// storage ceilings, resolved from the HIGH-WATER plan — the best plan this
+// account has ever held — rather than the one `foldSubscriptionStatus` says it
+// holds now. Pure, same as the fold above.
+//
+// Deliberately blind to `isEntitled`: a row's expiry, cancellation and status
+// are all irrelevant here, because the question is not "what may this account do
+// today" but "what did we already agree to store for it". A canceled Plus row
+// still testifies that its 4 GB arrived legitimately. That also makes the rule
+// monotonic — the ceiling can only ever rise, so no lapse, dunning window, or
+// out-of-order webhook can make a library that fit yesterday not fit today.
+//
+// Why this is safe, in one line: a raised ceiling needs a purchase row, a
+// purchase row needs a completed checkout, and a checkout needs a payment
+// method. lib/quota.ts's header carries the full argument, and the reason only
+// these two fields are grandfathered while `maxLinks` and every feature flag
+// snap back to free.
+export function foldQuotaCeilings(purchases: PurchaseEntity[]): QuotaCeilings {
+  let plan: Plan = 'free';
+  for (const p of purchases) {
+    if (PLAN_RANK[p.plan] > PLAN_RANK[plan]) plan = p.plan;
+  }
+  const { maxFiles, maxBytes } = entitlementsOf(plan);
+  return { maxFiles, maxBytes };
 }
 
 // --- staleness refresh — the missed-webhook backstop -------------------------
@@ -465,7 +492,7 @@ async function resolvePendingCheckouts(
 // already-subscribed guard in createPaddleTransaction (a stale row buys them a
 // second subscription), and deleteAccount's billing gate (an irreversible
 // deletion that leaves the provider still charging). Everyone else reads the
-// stored fold — getEntitlements on the `files/sign` hot path above all, where a
+// stored rows — getQuotaCeilings on the `files/sign` hot path above all, where a
 // provider's latency would become upload latency.
 //
 // Note it is pointless right after an apply: upsertFromProvider stamps
@@ -509,11 +536,15 @@ export async function getSubscriptionStatus(
   return foldSubscriptionStatus(await repo.listByUserId(userId));
 }
 
-// What the quota gate reads on the `files/sign` put path (services/sync.ts):
-// plan → limits via the shared entitlementsOf, so the server enforces exactly
-// the numbers the client paywall displays. Never refreshes — see above.
-export async function getEntitlements(env: Bindings, userId: string): Promise<Entitlements> {
-  return entitlementsOf((await getSubscriptionStatus(env, userId)).plan);
+// What the quota gate reads on the `files/sign` put path (services/sync.ts) —
+// the same one indexed D1 query as a status read, folded the other way
+// (foldQuotaCeilings, not foldSubscriptionStatus), so the ceilings follow the
+// account's high-water plan rather than its current one. It returns ONLY those
+// two numbers: nothing on this path may read a feature flag, since the rest of
+// the entitlements table belongs to the current plan and would disagree.
+// Never refreshes — see above.
+export async function getQuotaCeilings(env: Bindings, userId: string): Promise<QuotaCeilings> {
+  return foldQuotaCeilings(await purchasesRepo(env.DIRECTORY_DB).listByUserId(userId));
 }
 
 // --- paddle (web overlay checkout) ----------------------------------

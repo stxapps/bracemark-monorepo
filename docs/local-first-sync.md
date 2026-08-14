@@ -942,6 +942,16 @@ batch is about to add — the same conservatism the byte check always had, since
 new object's size is unknown until it's uploaded, so growth is charged on the next
 batch. One DO RPC (`usage()`) and one D1 read, in parallel, per put batch.
 
+Namespace-blind means `fileCount` counts **paths, not links** — one link is 2
+objects (`links/` + `extractions/`) before its preview image makes 3 — so the
+ceilings bite at a fraction of their face value in links. And **the plan they
+come from is the account's high-water one**, not its current one: the D1 read
+folds the purchase rows through `foldQuotaCeilings` (services/iap.ts), which
+takes the best plan the account has ever held. A lapsed subscription therefore
+never turns an already-uploaded library read-only — which matters here because
+over the ceiling even a move-to-Trash is refused (it is a `links/` put), leaving
+only irreversible delete. The reasoning is in docs/iap.md, _enforcement_.
+
 That simplicity is recent and was bought by moving the free tier's **200-link cap
 off the server**. While the gate counted `links/` it also
 had to tell a **create** from an **in-place update** — an account at its cap must
