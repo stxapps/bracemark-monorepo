@@ -60,9 +60,11 @@ export function LinkCard({
     // (main.tsx CARD_GRID_PADDING), edges and inter-card gaps both come to 16 —
     // web's p-4 container + gap-4 grid.
     <View className="p-2">
+      {/* Two meanings, two roles — see the twin comment in link-row.tsx. */}
       <Pressable
+        role={selectMode ? 'checkbox' : 'link'}
+        aria-checked={selectMode ? selected : undefined}
         onPress={() => (selectMode ? onToggle() : void Linking.openURL(link.url))}
-        accessibilityState={selectMode ? { selected } : undefined}
         style={{ height: cardHeight }}
         className={`overflow-hidden rounded-lg border border-border ${
           selected ? 'bg-muted' : 'active:bg-muted/50'

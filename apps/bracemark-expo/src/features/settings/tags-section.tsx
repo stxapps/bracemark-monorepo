@@ -60,6 +60,7 @@ function RowActions({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Pressable
+          role="button"
           aria-label="Tag actions"
           className="size-9 items-center justify-center rounded-md"
         >

@@ -119,6 +119,7 @@ export function CreateRow({
   return (
     <View className="flex-row items-center gap-1 border-b border-border px-1 py-1.5">
       <Pressable
+        role="button"
         aria-label={active ? 'Cancel' : `New ${noun}`}
         className="size-9 items-center justify-center rounded-md"
         // Whichever icon is showing, do what it says: cancel, or start an item by
@@ -146,6 +147,7 @@ export function CreateRow({
       />
       {active && (
         <Pressable
+          role="button"
           aria-label={`Create ${noun}`}
           className="size-9 items-center justify-center rounded-md"
           onPress={() => void confirm()}

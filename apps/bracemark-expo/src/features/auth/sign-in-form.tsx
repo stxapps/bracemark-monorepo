@@ -11,6 +11,7 @@ import {
 import { useSignInForm } from '@stxapps/react';
 import type { SignInValues } from '@stxapps/shared';
 
+import { ErrorText } from '../../components/error-text';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Text } from '../../components/ui/text';
@@ -84,9 +85,7 @@ function PasswordSignIn({ onUseRecovery }: { onUseRecovery: () => void }) {
             />
           )}
         />
-        {errors.username ? (
-          <Text className="text-sm text-destructive">{errors.username.message}</Text>
-        ) : null}
+        {errors.username ? <ErrorText>{errors.username.message}</ErrorText> : null}
       </View>
 
       <View className="gap-2">
@@ -107,19 +106,15 @@ function PasswordSignIn({ onUseRecovery }: { onUseRecovery: () => void }) {
             />
           )}
         />
-        {errors.password ? (
-          <Text className="text-sm text-destructive">{errors.password.message}</Text>
-        ) : null}
+        {errors.password ? <ErrorText>{errors.password.message}</ErrorText> : null}
       </View>
 
       <View className="gap-1">
         <Button disabled={isSubmitting} onPress={handleSubmit(onSubmit)}>
           <Text>{isSubmitting ? 'Signing in…' : 'Sign in'}</Text>
         </Button>
-        {errors.root ? (
-          <Text className="text-sm text-destructive">{errors.root.message}</Text>
-        ) : null}
-        <Pressable onPress={onUseRecovery} className="items-center py-2">
+        {errors.root ? <ErrorText>{errors.root.message}</ErrorText> : null}
+        <Pressable role="button" onPress={onUseRecovery} className="items-center py-2">
           <Text className="text-sm text-muted-foreground underline">
             Forgot your password? Use a recovery code
           </Text>
@@ -190,8 +185,8 @@ function RecoverySignIn({ onUsePassword }: { onUsePassword: () => void }) {
         >
           <Text>{signIn.isPending ? 'Signing in…' : 'Sign in with recovery code'}</Text>
         </Button>
-        {error ? <Text className="text-sm text-destructive">{error}</Text> : null}
-        <Pressable onPress={onUsePassword} className="items-center py-2">
+        {error ? <ErrorText>{error}</ErrorText> : null}
+        <Pressable role="button" onPress={onUsePassword} className="items-center py-2">
           <Text className="text-sm text-muted-foreground underline">Use your password instead</Text>
         </Pressable>
       </View>

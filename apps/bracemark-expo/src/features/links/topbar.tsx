@@ -103,6 +103,7 @@ export function Topbar() {
   return (
     <View className="h-14 shrink-0 flex-row items-center gap-2 border-b border-border px-3">
       <Pressable
+        role="button"
         onPress={() => navigation.dispatch(DrawerActions.openDrawer())}
         aria-label="Open navigation"
         className="-ml-1 size-9 items-center justify-center rounded-md active:bg-muted"
@@ -122,6 +123,7 @@ export function Topbar() {
       </Text>
       <View className="flex-row items-center gap-1">
         <Pressable
+          role="button"
           onPress={toggleSearch}
           // The name states what pressing it DOES, which keeps every state
           // collision-free: closed it is the only "Search links" on screen; open,

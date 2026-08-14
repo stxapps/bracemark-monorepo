@@ -12,6 +12,7 @@ import {
   NEW_PASSWORD_MIN_LENGTH,
 } from '@stxapps/shared';
 
+import { ErrorText } from '../../components/error-text';
 import { Button } from '../../components/ui/button';
 import { Icon } from '../../components/ui/icon';
 import { Input } from '../../components/ui/input';
@@ -234,13 +235,14 @@ export function CreateAccountForm() {
               actions={
                 <View className="flex-row items-center justify-between">
                   <Pressable
+                    role="button"
                     onPress={regeneratePassphrase}
                     className="flex-row items-center gap-1.5 py-1"
                   >
                     <Icon as={RefreshCw} className="size-3.5 text-muted-foreground" />
                     <Text className="text-sm text-muted-foreground">Regenerate</Text>
                   </Pressable>
-                  <Pressable onPress={() => setMode('own')} className="py-1">
+                  <Pressable role="button" onPress={() => setMode('own')} className="py-1">
                     <Text className="text-sm text-muted-foreground underline">Choose my own</Text>
                   </Pressable>
                 </View>
@@ -264,7 +266,11 @@ export function CreateAccountForm() {
               A password of random words is stronger than most passwords you&apos;d type. If you use
               your own, make it long and unique — there is no way to reset it if it&apos;s lost.
             </Text>
-            <Pressable onPress={() => setMode('generated')} className="self-start py-1">
+            <Pressable
+              role="button"
+              onPress={() => setMode('generated')}
+              className="self-start py-1"
+            >
               <Text className="text-sm text-muted-foreground underline">Generate one instead</Text>
             </Pressable>
           </View>
@@ -297,15 +303,13 @@ export function CreateAccountForm() {
               if (confirmError) setConfirmError(false);
             }}
           />
-          {/* `role="alert"` on both of this form's errors — the twin's `FieldError`
-              (which is what web gets it from) mounts with the same role. Each one
-              arrives as the result of a press with nothing else changing on screen,
-              so without it VoiceOver/TalkBack gets a button that silently
+          {/* ErrorText for both of this form's errors — it carries the
+              `role="alert"` that web gets from its twin's `FieldError`. Each one
+              arrives as the result of a press with nothing else changing on
+              screen, so without it TalkBack gets a button that silently
               re-enables and no reason why. */}
           {confirmError ? (
-            <Text role="alert" className="text-sm text-destructive">
-              That doesn&apos;t match. Check what you saved and try again.
-            </Text>
+            <ErrorText>That doesn&apos;t match. Check what you saved and try again.</ErrorText>
           ) : null}
         </View>
         <Button onPress={goRecovery}>
@@ -331,6 +335,7 @@ export function CreateAccountForm() {
           confirmLabel="I've saved my recovery code somewhere safe."
           actions={
             <Pressable
+              role="button"
               onPress={regenerateRecovery}
               className="flex-row items-center gap-1.5 self-start py-1"
             >
@@ -361,11 +366,7 @@ export function CreateAccountForm() {
         {/* Below the pair, matching web: the message is the RESULT of pressing one
             of them, so putting it above would shift both buttons down under a
             thumb that's about to retry. */}
-        {submitError ? (
-          <Text role="alert" className="text-sm text-destructive">
-            {submitError}
-          </Text>
-        ) : null}
+        {submitError ? <ErrorText>{submitError}</ErrorText> : null}
       </View>
     </View>
   );
@@ -387,7 +388,7 @@ function StepHeader({ step, onBack }: { step: Step; onBack?: () => void }) {
     <View className="gap-3">
       <View className="flex-row items-center justify-between gap-2">
         {onBack ? (
-          <Pressable onPress={onBack} className="flex-row items-center gap-1 py-1">
+          <Pressable role="button" onPress={onBack} className="flex-row items-center gap-1 py-1">
             <Icon as={ChevronLeft} className="size-4 text-muted-foreground" />
             <Text className="text-sm text-muted-foreground">Back</Text>
           </Pressable>

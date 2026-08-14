@@ -30,9 +30,11 @@ import { cn } from '../../lib/utils';
 // WHAT IS NOT PORTED: web's `focus-visible:` rings, which have no meaning
 // without a keyboard, and its `hover:` states, which have no meaning without a
 // pointer. Both become `active:` — the press feedback that IS the native
-// affordance. The gap that leaves is real and is filled elsewhere: web's rows
-// are `<button>`s that announce themselves; these are Pressables, so the ones
-// that navigate carry the chevron as their whole affordance.
+// affordance. The gap that leaves is real and is filled twice over: web's rows
+// are `<button>`s that announce themselves, so these Pressables declare
+// `role="button"` to say the same thing (docs/accessibility.md — a Pressable
+// inherits no role), and the ones that navigate carry the chevron as their
+// visible affordance.
 
 // The column every section renders into, inside the page's ScrollView
 // (scroll-host.tsx). `gap-8` is the rhythm between a section's top-level blocks,
@@ -191,6 +193,7 @@ export function SettingsRow({
   if (onPress) {
     return (
       <Pressable
+        role="button"
         onPress={onPress}
         className={cn(
           'w-full flex-row items-center gap-3 rounded-lg border border-border p-4 active:bg-muted/40',
@@ -227,6 +230,12 @@ export function SettingsRow({
 //   - `info`    — a standing fact or a caution. Bordered, body colour, quiet.
 //   - `error`   — something failed. Tinted, and the only tone that uses red.
 //   - `pending` — a transient status the user is waiting on.
+//
+// `error` also carries `role="alert"` (see components/error-text.tsx for why, and
+// for the iOS caveat) — the same thing the web twin's SettingsNotice does. The
+// other two tones must NOT have it: they're standing text, not events. The role
+// rides the message Text, so a NON-string child has to carry its own; every
+// current error caller passes a string.
 export function SettingsNotice({
   tone = 'info',
   icon,
@@ -252,6 +261,7 @@ export function SettingsNotice({
       <View className="min-w-0 flex-1">
         {typeof children === 'string' ? (
           <Text
+            role={tone === 'error' ? 'alert' : undefined}
             className={cn(
               'text-sm',
               tone === 'error' ? 'text-destructive' : 'text-muted-foreground',
@@ -280,6 +290,7 @@ export function SettingsBackLink({
 }) {
   return (
     <Pressable
+      role="button"
       onPress={onPress}
       className={cn('-ml-1 flex-row items-center gap-1 self-start rounded-sm', className)}
     >

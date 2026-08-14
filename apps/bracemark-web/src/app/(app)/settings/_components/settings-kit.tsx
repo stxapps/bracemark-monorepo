@@ -221,6 +221,12 @@ export function SettingsRow({
 //   - `info`    — a standing fact or a caution. Bordered, body colour, quiet.
 //   - `error`   — something failed. Tinted, and the only tone that uses red.
 //   - `pending` — a transient status the user is waiting on.
+//
+// `error` also carries `role="alert"`, so mounting it ANNOUNCES — the same thing
+// web-ui's `FieldError` does for the auth forms. Every error tone here arrives as
+// the result of a click with nothing else changing on screen, which leaves a
+// screen-reader user with a button that silently re-enables and no reason why.
+// The other two tones must NOT have it: they're standing text, not events.
 export function SettingsNotice({
   tone = 'info',
   icon,
@@ -234,6 +240,7 @@ export function SettingsNotice({
 }) {
   return (
     <p
+      role={tone === 'error' ? 'alert' : undefined}
       className={cn(
         'flex items-start gap-2 rounded-lg px-3 py-2.5 text-sm',
         tone === 'info' && 'border border-border text-muted-foreground',

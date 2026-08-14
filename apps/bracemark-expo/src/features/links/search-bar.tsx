@@ -365,6 +365,7 @@ function AdvancedSearch() {
   return (
     <>
       <Pressable
+        role="button"
         onPress={openSheet}
         aria-label="Advanced search"
         className="relative size-10 items-center justify-center rounded-md"
@@ -394,6 +395,7 @@ function AdvancedSearch() {
             <View className="h-14 flex-row items-center justify-between border-b border-border pr-2 pl-4">
               <Text className="text-lg font-semibold">Advanced search</Text>
               <Pressable
+                role="button"
                 onPress={() => setOpen(false)}
                 aria-label="Close advanced search"
                 className="size-10 items-center justify-center rounded-md"
@@ -467,9 +469,18 @@ function AdvancedSearch() {
                       <Text className="text-[10px] text-muted-foreground">Match</Text>
                       {(['any', 'all'] as const).map((mode) => (
                         <Pressable
+                          // A two-option exclusive picker, so `radio` rather than
+                          // `button` — and `aria-checked`, which is the state
+                          // `radio` carries (`aria-selected` belongs to tabs and
+                          // options; jsx-a11y rejects it here).
+                          role="radio"
                           key={mode}
                           onPress={() => setDraft((d) => ({ ...d, tagsMode: mode }))}
-                          aria-selected={draft.tagsMode === mode}
+                          aria-checked={draft.tagsMode === mode}
+                          // The visible word is just "any"/"all"; the "Match"
+                          // label beside it is a sibling node, so each option
+                          // has to carry the whole phrase itself.
+                          aria-label={`Match ${mode}`}
                           className={cn(
                             'h-6 items-center justify-center rounded-md px-2',
                             draft.tagsMode === mode ? 'bg-secondary' : 'active:bg-muted',
@@ -566,6 +577,7 @@ export function SearchBar() {
         {text.length > 0 && (
           <View className="absolute inset-y-0 right-1 justify-center">
             <Pressable
+              role="button"
               onPress={clearBasic}
               aria-label="Clear search"
               className="size-7 items-center justify-center rounded"

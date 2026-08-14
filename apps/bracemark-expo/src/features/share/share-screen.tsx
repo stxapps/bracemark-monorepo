@@ -68,6 +68,7 @@ import {
 } from '@stxapps/expo-react/data/share-store';
 import { DEFAULT_LIST_ID, rankBetween } from '@stxapps/shared';
 
+import { ErrorText } from '../../components/error-text';
 import { LinkQuotaBanner } from '../../components/links/link-quota-banner';
 import { Button } from '../../components/ui/button';
 import { Icon } from '../../components/ui/icon';
@@ -454,9 +455,7 @@ export function ShareScreen({ url, title }: SharePayload) {
 
       {error !== null && (
         <View className="rounded-lg bg-destructive/10 px-3 py-2.5">
-          <Text testID="share-error" className="text-sm text-destructive">
-            {error}
-          </Text>
+          <ErrorText testID="share-error">{error}</ErrorText>
         </View>
       )}
 

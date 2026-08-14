@@ -36,6 +36,7 @@ export function Topbar({ section }: { section: SettingsSectionId }) {
   return (
     <View className="h-14 shrink-0 flex-row items-center gap-2 border-b border-border px-3">
       <Pressable
+        role="button"
         onPress={() => navigation.dispatch(DrawerActions.openDrawer())}
         aria-label="Open settings navigation"
         className="-ml-1 size-9 items-center justify-center rounded-md active:bg-muted"
@@ -46,6 +47,7 @@ export function Topbar({ section }: { section: SettingsSectionId }) {
         {label}
       </Text>
       <Pressable
+        role="button"
         onPress={() => router.push('/links')}
         aria-label="Close settings"
         className="-mr-1 size-9 items-center justify-center rounded-md active:bg-muted"

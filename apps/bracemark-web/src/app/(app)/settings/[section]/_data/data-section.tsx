@@ -187,7 +187,7 @@ function ImportStatus({ state }: { state: ImportState }) {
 
   if (state.phase === 'error') {
     return (
-      <p className="mt-3 flex items-start gap-2 text-sm text-destructive">
+      <p role="alert" className="mt-3 flex items-start gap-2 text-sm text-destructive">
         <CircleAlert className="mt-0.5 size-4 shrink-0" />
         <span className="wrap-break-words">Import failed: {state.message}</span>
       </p>
@@ -405,7 +405,7 @@ function ExportStatus({ state, excludedCount }: { state: ExportState; excludedCo
 
   if (state.phase === 'error') {
     return (
-      <p className="mt-3 flex items-start gap-2 text-sm text-destructive">
+      <p role="alert" className="mt-3 flex items-start gap-2 text-sm text-destructive">
         <CircleAlert className="mt-0.5 size-4 shrink-0" />
         <span className="wrap-break-words">Export failed: {state.message}</span>
       </p>
@@ -521,7 +521,7 @@ function DeleteStatus({ state }: { state: DeleteAllState }) {
 
   if (state.phase === 'error') {
     return (
-      <p className="mt-3 flex items-start gap-2 text-sm text-destructive">
+      <p role="alert" className="mt-3 flex items-start gap-2 text-sm text-destructive">
         <CircleAlert className="mt-0.5 size-4 shrink-0" />
         <span className="wrap-break-words">
           Delete failed: {state.message} Nothing was removed from this device — please try again.
@@ -594,7 +594,9 @@ function DeleteView({ onBack }: { onBack: () => void }) {
       </Label>
 
       {nudge && (
-        <p className="mt-2 text-sm text-destructive">Please tick the box above to confirm.</p>
+        <p role="alert" className="mt-2 text-sm text-destructive">
+          Please tick the box above to confirm.
+        </p>
       )}
 
       <div>

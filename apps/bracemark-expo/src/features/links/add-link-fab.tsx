@@ -36,6 +36,7 @@ export function AddLinkFab() {
 
   return (
     <Pressable
+      role="button"
       onPress={() => router.push({ pathname: '/add-link', params: { listId } })}
       aria-label="Add link"
       className="absolute right-4 bottom-4 z-10 size-14 items-center justify-center rounded-full bg-primary shadow-lg shadow-black/20 active:opacity-90"

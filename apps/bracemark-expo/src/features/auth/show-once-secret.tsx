@@ -94,6 +94,8 @@ export function ShowOnceSecret({
       </Button>
 
       <Pressable
+        role="checkbox"
+        aria-checked={saved}
         onPress={() => onSavedChange(!saved)}
         className="flex-row items-start gap-3 rounded-lg border border-border p-3"
       >

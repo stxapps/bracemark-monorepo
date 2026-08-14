@@ -43,11 +43,17 @@ function NavItem({
 
   return (
     <Pressable
+      role="button"
       onPress={() => {
         router.push(href);
         onSelected();
       }}
-      aria-current={active}
+      // NOT `aria-current`, which the web twin uses: RN declares 14 `aria-*`
+      // props and that isn't one of them, so it was inert here and the active
+      // section announced no differently from the rest. `accessibilityState`
+      // is the spelling that maps (→ the selected trait on both platforms);
+      // `aria-selected` would map too, but jsx-a11y rejects it on `button`.
+      accessibilityState={{ selected: active }}
       className={cn(
         'w-full flex-row items-center gap-2 rounded-md px-2 py-2 active:bg-muted',
         active && 'bg-muted',
@@ -82,6 +88,7 @@ export function Sidebar({ closeDrawer }: { closeDrawer: () => void }) {
         <BrandLockup
           action={
             <Pressable
+              role="button"
               onPress={() => router.push('/links')}
               aria-label="Back to links"
               className="-mr-2 size-9 items-center justify-center rounded-md active:bg-muted"

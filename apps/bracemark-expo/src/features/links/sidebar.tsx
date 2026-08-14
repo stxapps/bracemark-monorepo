@@ -194,6 +194,7 @@ function NavItem({
     >
       {onToggle ? (
         <Pressable
+          role="button"
           onPress={onToggle}
           aria-expanded={expanded}
           aria-label={expanded ? 'Collapse' : 'Expand'}
@@ -208,11 +209,15 @@ function NavItem({
         <View className="size-8 shrink-0" />
       ) : null}
       <Pressable
+        role="button"
         onPress={() => {
           setSimpleQuery(selection);
           onSelected();
         }}
-        aria-current={active}
+        // `accessibilityState`, not the web twin's `aria-current` — RN doesn't
+        // declare that prop, so it announced nothing. See the twin comment in
+        // features/settings/sidebar.tsx.
+        accessibilityState={{ selected: active }}
         className={cn(
           'min-w-0 flex-1 flex-row items-center gap-2 rounded-md px-2 py-2',
           active && 'bg-muted',
@@ -320,6 +325,7 @@ function Section({
   return (
     <View className="flex-col gap-0.5">
       <Pressable
+        role="button"
         onPress={() => onToggle(id)}
         aria-expanded={!isCollapsed}
         className="w-full flex-row items-center gap-1 rounded-md px-2 pt-4 pb-1"
@@ -353,6 +359,7 @@ function FooterLink({
   const router = useRouter();
   return (
     <Pressable
+      role="button"
       onPress={() => {
         router.push(href);
         onSelected();
@@ -427,6 +434,7 @@ export function Sidebar({ closeDrawer }: { closeDrawer: () => void }) {
     if (!info || info.locked) return undefined;
     return (
       <Pressable
+        role="button"
         aria-label="Lock list"
         onPress={() => lockList(id)}
         className="size-8 shrink-0 items-center justify-center rounded-md"

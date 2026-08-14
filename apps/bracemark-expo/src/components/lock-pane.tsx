@@ -17,6 +17,7 @@ import { Button } from './ui/button';
 import { Icon } from './ui/icon';
 import { Input } from './ui/input';
 import { Text } from './ui/text';
+import { ErrorText } from './error-text';
 
 export function LockPane({
   title,
@@ -121,7 +122,7 @@ export function LockPane({
           }}
           onSubmitEditing={() => void submit()}
         />
-        {error && <Text className="text-sm text-destructive">{error}</Text>}
+        {error && <ErrorText>{error}</ErrorText>}
         <Button onPress={() => void submit()} disabled={busy}>
           <Text>{busy ? 'Unlocking…' : 'Unlock'}</Text>
         </Button>

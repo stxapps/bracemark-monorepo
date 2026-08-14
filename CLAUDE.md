@@ -70,6 +70,7 @@ self-contained and cross-links its neighbours.
 | import/export, delete all data, delete account                   | `data-lifecycle.md`             |
 | subscriptions — Paddle, store IAP, the entitlement fold          | `iap.md`                        |
 | app lock + list locks                                            | `locks.md`                      |
+| **error messages, labels, roles, font scaling**                  | `accessibility.md` ⚠            |
 | light/dark theme                                                 | `theme.md`                      |
 | safe-area insets, viewport sizing, popup positioning             | `safe-area.md`                  |
 | `bracemark-extension` auth flow                                  | `browser-extension.md`          |
@@ -130,6 +131,17 @@ test. Check the linked doc before acting on any of these.
   safe on Radix, which omits the attribute when off. The `@custom-variant` bridges
   at the top of `packages/web-ui/src/styles.css` cover the `data-state`/
   `data-orientation` shorthands and nothing else. → `theme.md`.
+- **An error message that MOUNTS must carry `role="alert"`.** Nothing catches its
+  absence — no lint rule, no type error, no test — and you cannot see the symptom
+  without driving the app through a screen reader: the button finishes and
+  re-enables, a line of red text appears, and nothing is announced. It was missed
+  at 13 of `bracemark-expo`'s 17 error sites before the carriers below existed,
+  and at a comparable share on web. Web spells it
+  `<FieldError>` inside the Field kit, `<SettingsNotice tone="error">` in
+  settings, and a bare `<p role="alert">` elsewhere; expo has exactly one carrier,
+  `components/error-text.tsx`. The inverse is equally a bug: text that was already
+  on screen, or that re-words as the user types (the password-strength verdict),
+  must NOT announce. → `accessibility.md`
 - **Greenfield — no migrations.** There is no production data. Edit persisted
   schemas in place (Dexie `version(1)`, the expo-sqlite DDL); don't add a
   migration step.

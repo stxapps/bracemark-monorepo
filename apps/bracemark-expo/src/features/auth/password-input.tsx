@@ -30,6 +30,7 @@ export function PasswordInput({
         {...props}
       />
       <Pressable
+        role="button"
         onPress={() => setShow((s) => !s)}
         aria-label={show ? 'Hide password' : 'Show password'}
         className="absolute inset-y-0 right-0 justify-center px-3"

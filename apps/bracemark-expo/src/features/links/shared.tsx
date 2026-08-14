@@ -270,6 +270,7 @@ export function RefreshPill({ show, onPress }: { show: boolean; onPress: () => v
       className="absolute inset-x-0 top-2 z-10 flex-row justify-center"
     >
       <Pressable
+        role="button"
         onPress={onPress}
         className="flex-row items-center gap-2 rounded-full bg-primary px-4 py-2 shadow-md"
       >

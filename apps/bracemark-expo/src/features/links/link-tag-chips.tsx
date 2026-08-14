@@ -60,6 +60,7 @@ export function LinkTagChips({
     <View className={`flex-row items-center gap-1 overflow-hidden ${className}`}>
       {chips.slice(0, MAX_CHIPS).map((chip) => (
         <Pressable
+          role="button"
           key={chip.id}
           onPress={() => onTagPress(chip.id)}
           className={`shrink ${TAG_CHIP_CLASS}`}
@@ -71,13 +72,18 @@ export function LinkTagChips({
       ))}
       {overflow.length > 0 &&
         (bulkEditing ? (
-          <Pressable onPress={() => toggleSelected(link)} className={`shrink-0 ${TAG_CHIP_CLASS}`}>
+          <Pressable
+            role="button"
+            onPress={() => toggleSelected(link)}
+            className={`shrink-0 ${TAG_CHIP_CLASS}`}
+          >
             <Text className="text-xs text-muted-foreground">+{overflow.length}</Text>
           </Pressable>
         ) : (
           <DropdownMenu onOpenChange={onOverflowOpenChange}>
             <DropdownMenuTrigger asChild>
               <Pressable
+                role="button"
                 aria-label={`Show ${overflow.length} more ${overflow.length === 1 ? 'tag' : 'tags'}`}
                 className={`shrink-0 ${TAG_CHIP_CLASS}`}
               >

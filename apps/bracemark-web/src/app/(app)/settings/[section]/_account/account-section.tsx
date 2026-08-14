@@ -173,7 +173,9 @@ function DeleteAccountView({ onBack }: { onBack: () => void }) {
         </Label>
 
         {nudge && (
-          <p className="mt-2 text-sm text-destructive">Please tick the box above to confirm.</p>
+          <p role="alert" className="mt-2 text-sm text-destructive">
+            Please tick the box above to confirm.
+          </p>
         )}
 
         <div className="mt-6">
@@ -192,7 +194,7 @@ function DeleteAccountView({ onBack }: { onBack: () => void }) {
         </div>
 
         {errorText && (
-          <p className="mt-3 flex items-start gap-2 text-sm text-destructive">
+          <p role="alert" className="mt-3 flex items-start gap-2 text-sm text-destructive">
             <CircleAlert className="mt-0.5 size-4 shrink-0" />
             <span className="wrap-break-words">{errorText}</span>
           </p>
@@ -427,7 +429,7 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
           </Button>
         </div>
         {error ? (
-          <p className="flex items-start gap-2 text-sm text-destructive">
+          <p role="alert" className="flex items-start gap-2 text-sm text-destructive">
             <CircleAlert className="mt-0.5 size-4 shrink-0" />
             {error}
           </p>
@@ -562,7 +564,7 @@ function RecoveryCodeView({ onBack, hasRecovery }: { onBack: () => void; hasReco
           </Button>
         </div>
         {error ? (
-          <p className="flex items-start gap-2 text-sm text-destructive">
+          <p role="alert" className="flex items-start gap-2 text-sm text-destructive">
             <CircleAlert className="mt-0.5 size-4 shrink-0" />
             {error}
           </p>
@@ -616,7 +618,7 @@ function SignOutOtherDevicesView({ onBack }: { onBack: () => void }) {
             </Button>
           </div>
           {error ? (
-            <p className="flex items-start gap-2 text-sm text-destructive">
+            <p role="alert" className="flex items-start gap-2 text-sm text-destructive">
               <CircleAlert className="mt-0.5 size-4 shrink-0" />
               {error}
             </p>

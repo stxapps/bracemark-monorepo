@@ -172,6 +172,7 @@ export function BulkEditBar({ links }: { links: LinkView[] }) {
       <View className="h-10 flex-row items-center justify-between">
         <View className="flex-row items-center gap-3">
           <Pressable
+            role="button"
             aria-label="Exit bulk edit"
             onPress={exitBulkEdit}
             className="size-10 items-center justify-center rounded-md"
@@ -181,6 +182,7 @@ export function BulkEditBar({ links }: { links: LinkView[] }) {
           <Text className="text-sm text-muted-foreground">{count} selected</Text>
         </View>
         <Pressable
+          role="button"
           aria-label="Select all"
           disabled={links.length === 0}
           onPress={() => (allSelected ? clearSelected() : selectAll(links))}

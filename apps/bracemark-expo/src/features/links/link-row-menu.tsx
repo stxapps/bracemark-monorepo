@@ -108,6 +108,7 @@ export function LinkRowMenu({
       <DropdownMenu onOpenChange={onMenuOpenChange}>
         <DropdownMenuTrigger asChild>
           <Pressable
+            role="button"
             aria-label="Link options"
             className="size-8 shrink-0 items-center justify-center rounded-md"
           >

@@ -199,6 +199,8 @@ carrying one. Three rules hold them together:
   "List: Reading" / "Tags: alpha, beta". Dropping a word of type from a 520pt
   sheet is a visual decision, and it does not extend to dropping the semantics —
   without this the row reads as a bare value with no hint of what it changes.
+  ([accessibility.md](./accessibility.md) collects the cross-cutting rules; the
+  sheet's save failure uses the `ErrorText` carrier described there.)
 - **One primary button in the whole sheet**, and it is Save. Every other button
   on every screen is an outline.
 - **The verb is "Save" the whole way through** — button, progress ("Saving…"),

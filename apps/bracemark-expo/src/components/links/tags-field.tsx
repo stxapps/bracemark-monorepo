@@ -113,6 +113,7 @@ export function TagsField({
           })}
           {canCreate && (
             <Pressable
+              role="button"
               disabled={creating}
               onPress={() => void submit()}
               aria-label={`Create tag ${trimmed}`}

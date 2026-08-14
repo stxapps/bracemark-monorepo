@@ -16,11 +16,20 @@ import { useWindowDimensions } from 'react-native';
 // fixed heights absorb.
 //
 // Applied at the two component chokepoints — `components/ui/text.tsx` and
-// `components/ui/input.tsx` — which between them cover every rendered Text and
-// TextInput in the app EXCEPT the share tree, which reaches for them directly
-// (features/share/*, whose bundle boundary is its own story — see
-// share-root.tsx). Per-call sites can still override: both chokepoints spread
-// `{...props}` after the default.
+// `components/ui/input.tsx` — which between them cover EVERY rendered Text and
+// TextInput in the app. Nothing renders a bare `react-native` Text or TextInput,
+// and nothing should: the cap is only one of four things these wrappers add (the
+// others are `font-sans`, TextClassContext, and the heading roles — see
+// docs/accessibility.md).
+//
+// The share tree is covered like everything else. It differs only in HOW it
+// imports them — by direct path rather than through a barrel, because its bundle
+// is executed on every cold share (features/share/*, whose boundary is its own
+// story — see share-root.tsx and docs/share-sheet.md). That is an import-style
+// rule, not an exemption from this ceiling.
+//
+// Per-call sites can still override: both chokepoints spread `{...props}` after
+// the default.
 //
 // NOTE: the old global `Text.defaultProps = { maxFontSizeMultiplier }` trick is
 // NOT available here. React 19 removed defaultProps for function components,

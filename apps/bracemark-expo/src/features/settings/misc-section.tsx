@@ -112,6 +112,7 @@ function OptionRow({
 }) {
   return (
     <Pressable
+      role="radio"
       onPress={onSelect}
       aria-checked={selected}
       className={cn(

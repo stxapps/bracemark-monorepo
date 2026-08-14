@@ -144,6 +144,7 @@ function RowActions({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Pressable
+          role="button"
           aria-label="List actions"
           className="size-9 items-center justify-center rounded-md"
         >
@@ -294,6 +295,7 @@ function Row({
 
       {row.hasChildren ? (
         <Pressable
+          role="button"
           aria-label={collapsedIds.has(row.item.id) ? 'Expand' : 'Collapse'}
           className="size-9 items-center justify-center rounded-md"
           onPress={onToggle}

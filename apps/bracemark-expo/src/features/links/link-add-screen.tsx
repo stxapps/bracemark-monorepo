@@ -49,6 +49,7 @@ import {
   TRASH_ID,
 } from '@stxapps/shared';
 
+import { ErrorText } from '../../components/error-text';
 import { LinkQuotaBanner } from '../../components/links/link-quota-banner';
 import { ListSelect } from '../../components/links/list-select';
 import { TagsField } from '../../components/links/tags-field';
@@ -208,6 +209,7 @@ export function LinkAddScreen() {
       <View className="h-14 shrink-0 flex-row items-center justify-between border-b border-border pr-2 pl-4">
         <Text className="text-lg font-semibold">Add a link</Text>
         <Pressable
+          role="button"
           onPress={close}
           aria-label="Close add link"
           className="size-10 items-center justify-center rounded-md"
@@ -263,17 +265,15 @@ export function LinkAddScreen() {
                 autoCorrect={false}
               />
               {urlError !== null ? (
-                <Text role="alert" className="text-xs text-destructive">
-                  {urlError}
-                </Text>
+                <ErrorText className="text-xs">{urlError}</ErrorText>
               ) : urlWarning !== null ? (
-                <Text role="alert" className="text-xs text-amber-600 dark:text-amber-500">
+                <ErrorText tone="warning" className="text-xs">
                   {urlWarning === 'malformed'
                     ? 'This doesn’t look like a valid URL. Tap Confirm to save it anyway.'
                     : urlWarning === 'trashed'
                       ? 'This link is in your Trash. Restore it, or tap Confirm to save a new copy.'
                       : 'You’ve already saved this link. Tap Confirm to save it again.'}
-                </Text>
+                </ErrorText>
               ) : null}
             </Field>
 

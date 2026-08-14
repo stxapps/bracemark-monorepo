@@ -50,10 +50,17 @@ export function LinkRow({
   selected,
   onToggle,
 }: LinkItemProps) {
+  // The role follows the press, because the press has two meanings. In bulk-edit
+  // the whole row IS the checkbox — Pressable is `accessible`, so it collapses the
+  // inner Checkbox's semantics into itself and has to re-declare them
+  // (docs/accessibility.md, the same rule as the settings confirmation rows).
+  // Otherwise the press leaves the app for the browser, which is a link, not a
+  // button.
   return (
     <Pressable
+      role={selectMode ? 'checkbox' : 'link'}
+      aria-checked={selectMode ? selected : undefined}
       onPress={() => (selectMode ? onToggle() : void Linking.openURL(link.url))}
-      accessibilityState={selectMode ? { selected } : undefined}
       className="flex-row items-center gap-3 border-b border-border py-3 pr-2 pl-4 active:bg-muted/50"
     >
       {selectMode && (

@@ -51,6 +51,7 @@ import {
   syncBlockedDetail,
 } from '@stxapps/shared';
 
+import { ErrorText } from '../../components/error-text';
 import { Button } from '../../components/ui/button';
 import { Checkbox } from '../../components/ui/checkbox';
 import { Icon } from '../../components/ui/icon';
@@ -178,12 +179,9 @@ function ImportStatus({ state }: { state: ImportState }) {
 
   if (state.phase === 'error') {
     return (
-      <View className="mt-3 flex-row items-start gap-2">
-        <Icon as={CircleAlert} className="mt-0.5 size-4 shrink-0 text-destructive" />
-        <Text className="min-w-0 flex-1 text-sm text-destructive">
-          Import failed: {state.message}
-        </Text>
-      </View>
+      <ErrorText className="mt-3" icon={CircleAlert}>
+        Import failed: {state.message}
+      </ErrorText>
     );
   }
 
@@ -413,12 +411,9 @@ function ExportStatus({ state, excludedCount }: { state: ExportState; excludedCo
 
   if (state.phase === 'error') {
     return (
-      <View className="mt-3 flex-row items-start gap-2">
-        <Icon as={CircleAlert} className="mt-0.5 size-4 shrink-0 text-destructive" />
-        <Text className="min-w-0 flex-1 text-sm text-destructive">
-          Export failed: {state.message}
-        </Text>
-      </View>
+      <ErrorText className="mt-3" icon={CircleAlert}>
+        Export failed: {state.message}
+      </ErrorText>
     );
   }
 
@@ -499,6 +494,7 @@ function ExportView({ onBack }: { onBack: () => void }) {
         {EXPORT_FORMAT_OPTIONS.map((option) => (
           <Pressable
             key={option.value}
+            role="radio"
             disabled={running}
             onPress={() => setFormat(option.value)}
             aria-checked={format === option.value}
@@ -560,12 +556,9 @@ function DeleteStatus({ state }: { state: DeleteAllState }) {
 
   if (state.phase === 'error') {
     return (
-      <View className="mt-3 flex-row items-start gap-2">
-        <Icon as={CircleAlert} className="mt-0.5 size-4 shrink-0 text-destructive" />
-        <Text className="min-w-0 flex-1 text-sm text-destructive">
-          Delete failed: {state.message} Nothing was removed from this device — please try again.
-        </Text>
-      </View>
+      <ErrorText className="mt-3" icon={CircleAlert}>
+        Delete failed: {state.message} Nothing was removed from this device — please try again.
+      </ErrorText>
     );
   }
 
@@ -615,7 +608,11 @@ function DeleteView({ onBack }: { onBack: () => void }) {
         This action cannot be undone.
       </Text>
 
+      {/* role + state on the ROW, not the inner Checkbox — see the twin comment in
+          account-section.tsx's delete confirmation. */}
       <Pressable
+        role="checkbox"
+        aria-checked={confirmed}
         className="mt-6 flex-row items-start gap-3 rounded-lg border border-border p-3"
         onPress={() => {
           if (running || done) return;
@@ -637,9 +634,7 @@ function DeleteView({ onBack }: { onBack: () => void }) {
         </Text>
       </Pressable>
 
-      {nudge && (
-        <Text className="mt-2 text-sm text-destructive">Please tick the box above to confirm.</Text>
-      )}
+      {nudge && <ErrorText className="mt-2">Please tick the box above to confirm.</ErrorText>}
 
       <View className="mt-6 flex-row">
         <Button variant="destructive" onPress={onDelete} disabled={running || done}>

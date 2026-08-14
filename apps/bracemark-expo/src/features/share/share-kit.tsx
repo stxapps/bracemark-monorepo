@@ -99,7 +99,12 @@ export function ShareSheet({ children }: { children: ReactNode }) {
 
   return (
     <KeyboardAvoidingView behavior="padding" className="flex-1 justify-end">
+      {/* `accessible={false}`, NOT `role="button"`: this is a full-bleed dismiss
+          target behind the sheet, and as a focus stop it would announce as one
+          enormous unlabelled control sitting over everything. The sheet's own
+          close control (share-close, below) is the announced way out. */}
       <Pressable
+        accessible={false}
         testID="share-backdrop"
         onPress={closeShareSheet}
         className="absolute top-0 right-0 bottom-0 left-0 bg-black/40"

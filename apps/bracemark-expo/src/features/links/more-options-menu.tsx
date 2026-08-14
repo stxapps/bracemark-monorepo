@@ -71,6 +71,7 @@ export function MoreOptionsMenu() {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Pressable
+          role="button"
           aria-label={
             syncError
               ? 'More options (sync failed)'

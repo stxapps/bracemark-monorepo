@@ -277,6 +277,7 @@ function LinkEditForm({ link, focus }: { link: LinkItem; focus?: EditFocus }) {
           </Text>
         </View>
         <Pressable
+          role="button"
           onPress={close}
           aria-label="Close edit link"
           className="size-10 shrink-0 items-center justify-center rounded-md"
@@ -308,7 +309,11 @@ function LinkEditForm({ link, focus }: { link: LinkItem; focus?: EditFocus }) {
               Leave blank to use the page’s own title.
             </Text>
             {title.trim() === '' && extractedTitle && (
-              <Pressable onPress={() => setTitle(extractedTitle)} className="shrink-0">
+              <Pressable
+                role="button"
+                onPress={() => setTitle(extractedTitle)}
+                className="shrink-0"
+              >
                 <Text className="text-xs text-primary">Edit it instead</Text>
               </Pressable>
             )}

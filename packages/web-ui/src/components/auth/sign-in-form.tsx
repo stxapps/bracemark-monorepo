@@ -164,7 +164,7 @@ function RecoverySignIn({ onUsePassword }: { onUsePassword: () => void }) {
           >
             {signIn.isPending ? 'Signing in…' : 'Sign in with recovery code'}
           </Button>
-          {error ? <p className="text-sm text-destructive">{error}</p> : null}
+          <FieldError>{error}</FieldError>
           <button
             type="button"
             onClick={onUsePassword}

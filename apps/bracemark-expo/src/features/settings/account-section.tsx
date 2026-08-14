@@ -33,6 +33,7 @@ import {
 import { hasRecoveryDoorQueryKey, newPasswordMessage, useSignOutOthers } from '@stxapps/react';
 import { canonicalizePassword, generatePassphrase, NEW_PASSWORD_MIN_LENGTH } from '@stxapps/shared';
 
+import { ErrorText } from '../../components/error-text';
 import { Button } from '../../components/ui/button';
 import { Checkbox } from '../../components/ui/checkbox';
 import { Icon } from '../../components/ui/icon';
@@ -137,7 +138,13 @@ function DeleteAccountView({ onBack }: { onBack: () => void }) {
         />
       </View>
 
+      {/* The row IS the checkbox to a screen reader, not a button wrapping one:
+          Pressable defaults to `accessible`, which collapses the inner Checkbox's
+          own semantics into this node — so the role and the checked state have to
+          be re-declared here or the whole row announces as untyped text. */}
       <Pressable
+        role="checkbox"
+        aria-checked={confirmed}
         className="mt-4 flex-row items-start gap-3 rounded-lg border border-border p-3"
         onPress={() => {
           if (isPending) return;
@@ -160,9 +167,7 @@ function DeleteAccountView({ onBack }: { onBack: () => void }) {
         </Text>
       </Pressable>
 
-      {nudge && (
-        <Text className="mt-2 text-sm text-destructive">Please tick the box above to confirm.</Text>
-      )}
+      {nudge && <ErrorText className="mt-2">Please tick the box above to confirm.</ErrorText>}
 
       <View className="mt-6 flex-row">
         <Button
@@ -315,6 +320,7 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
           </View>
         )}
         <Pressable
+          role="button"
           onPress={() => {
             setUseRecovery((v) => !v);
             setError(null);
@@ -342,6 +348,7 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
               actions={
                 <View className="flex-row items-center justify-between">
                   <Pressable
+                    role="button"
                     onPress={regeneratePassphrase}
                     disabled={changePassword.isPending}
                     className="flex-row items-center gap-1.5"
@@ -350,6 +357,7 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
                     <Text className="text-sm text-muted-foreground">Regenerate</Text>
                   </Pressable>
                   <Pressable
+                    role="button"
                     onPress={() => {
                       setMode('own');
                       if (error) setError(null);
@@ -402,12 +410,7 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
             <Text>{changePassword.isPending ? 'Changing…' : 'Change password'}</Text>
           </Button>
         </View>
-        {error ? (
-          <View className="flex-row items-start gap-2">
-            <Icon as={CircleAlert} className="mt-0.5 size-4 shrink-0 text-destructive" />
-            <Text className="min-w-0 flex-1 text-sm text-destructive">{error}</Text>
-          </View>
-        ) : null}
+        {error ? <ErrorText icon={CircleAlert}>{error}</ErrorText> : null}
 
         {/* Honest boundary of what a password change is: a door rotation, not a
             DEK rotation (docs/account.md) — see web for the full note. */}

@@ -26,6 +26,7 @@ import {
 } from './ui/dialog';
 import { Input } from './ui/input';
 import { Text } from './ui/text';
+import { ErrorText } from './error-text';
 
 export function LockPasswordDialog({
   onOpenChange,
@@ -95,6 +96,8 @@ export function LockPasswordDialog({
 
           {checkboxLabel && (
             <Pressable
+              role="checkbox"
+              aria-checked={checked}
               className="flex-row items-center gap-2"
               onPress={() => setChecked((v) => !v)}
             >
@@ -103,7 +106,7 @@ export function LockPasswordDialog({
             </Pressable>
           )}
 
-          {error && <Text className="text-sm text-destructive">{error}</Text>}
+          {error && <ErrorText>{error}</ErrorText>}
 
           <DialogFooter>
             <Button variant="outline" onPress={() => onOpenChange(false)}>
