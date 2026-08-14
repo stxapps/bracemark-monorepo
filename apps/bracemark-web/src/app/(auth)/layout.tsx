@@ -25,8 +25,20 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             Both halves are literal (docs/account.md, "a password-derived
             wallet"): the DEK never leaves the client, and the server stores a
             wrapped key it cannot unwrap. Don't inflate this into a marketing
-            line — it's load-bearing context for the next thing the user does. */}
-        <p className={cn('text-xs leading-5 text-balance text-muted-foreground')}>
+            line — it's load-bearing context for the next thing the user does.
+
+            `px-6` matches the card's own inset, and it is what puts this line on
+            the SAME text axis as everything else on the screen: the wordmark, the
+            card title, the field labels, the alt-action sentence. Without it the
+            note is the only text on the page hanging 24px out to the left, against
+            the card's OUTER edge — an edge nothing else sets type to. Centring it
+            is worse than either: `text-balance` evens the two lines, so a centred
+            block lands a few px off the axis with a ragged left edge and reads as
+            a mistake rather than a choice. Not shared with the card in code — this
+            <p> is a sibling of DogEaredCard, not a child — so the two 1.5rem
+            values have to be kept level by hand. Same slot, same classes, in
+            `app/not-found.tsx` and `app/error.tsx`. */}
+        <p className={cn('px-6 text-xs leading-5 text-balance text-muted-foreground')}>
           Your links are encrypted on your device before they&apos;re stored. Bracemark&apos;s
           servers never see your password.
         </p>

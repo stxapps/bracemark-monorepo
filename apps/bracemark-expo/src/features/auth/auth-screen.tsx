@@ -110,7 +110,11 @@ export function AuthScreen({
               wallet"): the DEK never leaves the device, and the server stores a
               wrapped key it cannot unwrap. Don't inflate this into a marketing
               line — it's load-bearing context for the next thing the user does. */}
-          <Text className="text-xs leading-5 text-muted-foreground">
+          {/* `px-6` matches DogEaredCard's own p-6, putting this line on the same
+              text axis as the wordmark and the card's content instead of hanging
+              against the card's outer edge — the argument is in bracemark-web's
+              `(auth)/layout.tsx`. */}
+          <Text className="px-6 text-xs leading-5 text-muted-foreground">
             Your links are encrypted on your device before they&apos;re stored. Bracemark&apos;s
             servers never see your password.
           </Text>

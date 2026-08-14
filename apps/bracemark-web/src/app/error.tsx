@@ -102,8 +102,10 @@ export default function Error({
 
       {/* Same slot and same quiet step as the auth pages' encryption note and the
           404's. Support is on the marketing site — a DIFFERENT ORIGIN — so the URL
-          is absolute and env-configured (lib/site.ts). */}
-      <p className={cn('text-xs leading-5 text-balance text-muted-foreground')}>
+          is absolute and env-configured (lib/site.ts). `px-6` matches the card's
+          inset so the line sits on the same text axis as the wordmark and the
+          card's content — the argument is in `(auth)/layout.tsx`. */}
+      <p className={cn('px-6 text-xs leading-5 text-balance text-muted-foreground')}>
         Your links are stored on this device and sync encrypted, so an error here can’t lose them.
         If it keeps happening,{' '}
         <a

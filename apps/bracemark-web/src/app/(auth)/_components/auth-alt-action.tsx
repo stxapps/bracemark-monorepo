@@ -13,9 +13,18 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 // are the same size, the same muted colour and both underlined — a stack of two
 // look-alike links where one stays on this page and the other leaves it. The
 // hairline says which is which: everything above it acts on the form you're
-// looking at, the line below it goes somewhere else. Full-bleed (`-mx-6 px-6`, on
-// CardHeader/Content/Footer's shared 1.5rem inset) so it reads as the card's own
-// division rather than a short stroke floating in the padding.
+// looking at, the line below it goes somewhere else. It runs the full width of the
+// card, so it reads as the card's own division rather than a short stroke floating
+// in the padding — and that needs NO extra classes: Card has no horizontal padding
+// of its own (`py-6` only), the 1.5rem inset lives on CardHeader/Content/Footer
+// individually, so CardFooter's own box already spans edge to edge. Don't reach for
+// `-mx-6 px-6` here. It double-counts an inset the card never applied: the footer
+// hangs 1.5rem past each side (clipped by the card's `overflow-hidden`, so the rule
+// still LOOKS right) while the sentence gets dragged 1.5rem left of everything
+// above it. Leaving the padding to CardFooter also keeps `size="sm"`'s px-4 working.
+// The expo twin (`bracemark-expo/src/features/auth/auth-alt-action.tsx`) DOES carry
+// `-mx-6 px-6`, and correctly — its DogEaredCard puts a real `p-6` on the card. Same
+// component, opposite class list; don't sync one onto the other.
 //
 // The link is `text-foreground` + underline rather than a colour: bracemark-web has
 // no accent token, and in the light theme `--primary` is very nearly the body
@@ -35,7 +44,7 @@ export function AuthAltAction({
   action: string;
 }) {
   return (
-    <CardFooter className={cn('-mx-6 border-t px-6 pt-6')}>
+    <CardFooter className={cn('border-t pt-6')}>
       <p className={cn('text-sm text-muted-foreground')}>
         {prompt}{' '}
         <Link

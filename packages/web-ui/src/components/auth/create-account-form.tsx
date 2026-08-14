@@ -3,20 +3,18 @@
 import * as React from 'react';
 import { ChevronLeft, RefreshCw } from 'lucide-react';
 
-import { useUsernameAvailable } from '@stxapps/react';
+import { newPasswordMessage, usernameMessage, useUsernameAvailable } from '@stxapps/react';
 import {
   canonicalizePassword,
   canonicalizeUsername,
   generatePassphrase,
   generateRecoveryCode,
   NEW_PASSWORD_MIN_LENGTH,
-  newPasswordSchema,
-  PASSWORD_MIN_GUESSES_LOG10,
-  usernameSchema,
 } from '@stxapps/shared';
 import { useCreateAccount, UsernameTakenError } from '@stxapps/web-react';
 import { PasswordInput } from '@stxapps/web-ui/components/auth/password-input';
 import {
+  MESSAGE_TONE,
   PasswordStrengthMeter,
   usePasswordStrength,
 } from '@stxapps/web-ui/components/auth/password-strength';
@@ -79,6 +77,18 @@ const STEP_HEADINGS: Record<Step, { title: string; description: string }> = {
   },
 };
 
+// BOTH fields on the setup step keep a message line permanently, and every state
+// fills it. The ladders that produce those messages — `usernameMessage` and
+// `newPasswordMessage` — live in `@stxapps/react` (lib/field-messages.ts), shared with
+// the native twin and with Settings → change password; that file carries the full
+// reasoning (no reflow, and a slot that must always speak turns a missing state into
+// missing code). Only the tone→class map is ours, and it comes from password-strength
+// so a passing message is the same green as a passing meter.
+//
+// Each ladder is also THE GATE for its field: `tone === 'ok'` is the whole pass, so
+// Continue is derived from the two sentences rather than from a second copy of their
+// conditions, and can't end up disabled under a line that says everything looks fine.
+
 export function CreateAccountForm() {
   const createAccount = useCreateAccount();
 
@@ -112,14 +122,14 @@ export function CreateAccountForm() {
 
   const password = mode === 'generated' ? passphrase : ownPassword;
 
-  // Live username validation + availability (the hook debounces + gates on a valid
-  // format internally, like the old form). Parse once and reuse the schema's own
-  // message so the specific rule that failed (length, charset, or reserved name)
-  // shows through instead of one catch-all string.
-  const usernameParse = usernameSchema.safeParse(username);
-  const usernameValid = usernameParse.success;
+  // Live username validation + availability (the hook debounces and gates on a valid
+  // format internally). Both fields work the same way from here: one ladder produces
+  // the message, and the message IS the gate — `tone === 'ok'` is the full pass, so
+  // Continue can't disagree with the sentence under the field it's blocked on. See
+  // usernameMessage for what "ok" costs (a settled, CURRENT answer, not a debounce-
+  // stale one).
   const availability = useUsernameAvailable(username);
-  const usernameAvailable = availability.data?.available === true;
+  const usernameMsg = usernameMessage(username, availability, usernameTaken);
 
   // Strength only matters on the typed path (the generated passphrase is ~77 bits
   // by construction). Score the CANONICAL form (canonicalizePassword) — the exact
@@ -130,19 +140,14 @@ export function CreateAccountForm() {
     [username],
     NEW_PASSWORD_MIN_LENGTH,
   );
-  // Parse once and reuse the schema's own message, like the username field above —
-  // the meter alone says "Weak" without naming the rule that's blocking, which sends
-  // people reaching for symbols when length is what's missing.
-  const ownPasswordParse = newPasswordSchema.safeParse(ownPassword);
-  // Gate on the raw guess estimate; `displayScore` is the meter's, not the policy's
-  // (see PASSWORD_MIN_GUESSES_LOG10).
-  // null = estimator still loading; stay closed until it's ready.
-  const ownPasswordOk =
-    ownPasswordParse.success && guessesLog10 !== null && guessesLog10 >= PASSWORD_MIN_GUESSES_LOG10;
+  // Note it's `guessesLog10` the ladder gates on, never `displayScore` — that one is
+  // the meter's, not the policy's (see PASSWORD_MIN_GUESSES_LOG10) — and that null,
+  // the estimator still loading, keeps the gate shut until it's ready.
+  const passwordMsg = newPasswordMessage(ownPassword, guessesLog10);
 
   const passwordChosen =
-    mode === 'generated' ? passphrase !== '' && passphraseSaved : ownPasswordOk;
-  const canContinueSetup = usernameValid && usernameAvailable && passwordChosen;
+    mode === 'generated' ? passphrase !== '' && passphraseSaved : passwordMsg.tone === 'ok';
+  const canContinueSetup = usernameMsg.tone === 'ok' && passwordChosen;
 
   const regeneratePassphrase = () => {
     setPassphrase(generatePassphrase());
@@ -194,48 +199,33 @@ export function CreateAccountForm() {
 
   // --- step: setup ----------------------------------------------------------
   if (step === 'setup') {
-    const usernameError = usernameTaken
-      ? 'Username is taken'
-      : username !== '' && !usernameValid
-        ? (usernameParse.error?.issues[0]?.message ?? 'Invalid username')
-        : null;
-
-    // Only once they've typed something. Length first (the schema owns its own
-    // message), then the entropy floor — otherwise a long-but-predictable password
-    // would fail with a silent "Fair" meter and no way to know what to change.
-    const ownPasswordError =
-      ownPassword === ''
-        ? null
-        : !ownPasswordParse.success
-          ? (ownPasswordParse.error?.issues[0]?.message ?? 'Invalid password')
-          : guessesLog10 !== null && guessesLog10 < PASSWORD_MIN_GUESSES_LOG10
-            ? 'Too predictable — add a few more words, or generate a password instead.'
-            : null;
+    const usernameInvalid = usernameMsg.tone === 'error';
+    const passwordInvalid = passwordMsg.tone === 'error';
 
     return (
       <FieldGroup>
         <StepHeader step="setup" />
-        <Field data-invalid={!!usernameError}>
+        <Field data-invalid={usernameInvalid}>
           <FieldLabel htmlFor="username">Username</FieldLabel>
           <Input
             id="username"
             type="text"
             autoComplete="username"
             autoFocus
-            aria-invalid={!!usernameError}
+            aria-invalid={usernameInvalid}
             value={username}
             onChange={(e) => {
               setUsername(e.target.value);
               setUsernameTaken(false);
             }}
           />
-          {usernameError ? (
-            <FieldDescription className="text-destructive">{usernameError}</FieldDescription>
-          ) : usernameValid && availability.isFetching ? (
-            <FieldDescription>Checking availability…</FieldDescription>
-          ) : usernameValid && usernameAvailable ? (
-            <FieldDescription>Username is available</FieldDescription>
-          ) : null}
+          {/* `aria-live` so the availability verdict is announced when it lands —
+              it arrives without the user typing anything, and it's now a permanent
+              node rather than one that mounts, which is what makes a live region
+              the right tool here. */}
+          <FieldDescription aria-live="polite" className={MESSAGE_TONE[usernameMsg.tone]}>
+            {usernameMsg.text}
+          </FieldDescription>
         </Field>
 
         {mode === 'generated' ? (
@@ -252,39 +242,46 @@ export function CreateAccountForm() {
               saved={passphraseSaved}
               onSavedChange={setPassphraseSaved}
               confirmLabel="I've saved my password somewhere safe."
+              // Both of these change WHICH password you end up with, so they ride
+              // in the panel's `actions` slot — directly under the value, above
+              // Copy. Regenerate also clears the saved checkbox further down;
+              // sitting above it is what makes that reset look like cause and
+              // effect rather than the box emptying itself.
+              actions={
+                <div className="flex items-center justify-between">
+                  <button
+                    type="button"
+                    onClick={regeneratePassphrase}
+                    className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+                  >
+                    <RefreshCw className="size-3.5" />
+                    Regenerate
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMode('own')}
+                    className="text-sm text-muted-foreground underline hover:text-foreground"
+                  >
+                    Choose my own
+                  </button>
+                </div>
+              }
             />
-            <div className="flex items-center justify-between">
-              <button
-                type="button"
-                onClick={regeneratePassphrase}
-                className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-              >
-                <RefreshCw className="size-3.5" />
-                Regenerate
-              </button>
-              <button
-                type="button"
-                onClick={() => setMode('own')}
-                className="text-sm text-muted-foreground underline hover:text-foreground"
-              >
-                Choose my own
-              </button>
-            </div>
           </Field>
         ) : (
-          <Field data-invalid={!!ownPasswordError}>
+          <Field data-invalid={passwordInvalid}>
             <FieldLabel htmlFor="password">Password</FieldLabel>
             <PasswordInput
               id="password"
               autoComplete="new-password"
-              aria-invalid={!!ownPasswordError}
+              aria-invalid={passwordInvalid}
               value={ownPassword}
               onChange={(e) => setOwnPassword(e.target.value)}
             />
             <PasswordStrengthMeter displayScore={displayScore} />
-            {ownPasswordError ? (
-              <FieldDescription className="text-destructive">{ownPasswordError}</FieldDescription>
-            ) : null}
+            <FieldDescription className={MESSAGE_TONE[passwordMsg.tone]}>
+              {passwordMsg.text}
+            </FieldDescription>
             <FieldDescription>
               A password of random words is stronger than most passwords you&apos;d type. If you use
               your own, make it long and unique — there is no way to reset it if it&apos;s lost.{' '}
@@ -362,15 +359,17 @@ export function CreateAccountForm() {
           saved={recoverySaved}
           onSavedChange={setRecoverySaved}
           confirmLabel="I've saved my recovery code somewhere safe."
+          actions={
+            <button
+              type="button"
+              onClick={regenerateRecovery}
+              className="inline-flex items-center gap-1.5 self-start text-sm text-muted-foreground hover:text-foreground"
+            >
+              <RefreshCw className="size-3.5" />
+              Regenerate
+            </button>
+          }
         />
-        <button
-          type="button"
-          onClick={regenerateRecovery}
-          className="inline-flex items-center gap-1.5 self-start text-sm text-muted-foreground hover:text-foreground"
-        >
-          <RefreshCw className="size-3.5" />
-          Regenerate
-        </button>
       </Field>
 
       <Field>

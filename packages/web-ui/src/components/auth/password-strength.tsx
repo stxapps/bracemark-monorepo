@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import type { FieldMessage } from '@stxapps/react';
 import { PASSWORD_MIN_GUESSES_LOG10 } from '@stxapps/shared';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
@@ -89,24 +90,58 @@ export function usePasswordStrength(
   }, [scoreFn, password, inputsKey, minLength]);
 }
 
+// How a FieldMessage's tone paints on this platform. The WORDS live one layer down in
+// `@stxapps/react` (lib/field-messages.ts) so web and native can't drift; only this
+// map is platform-specific, and it lives here because its green is the meter's green —
+// one success signal across both halves of the field, from one place.
+//
+// `muted` adds no class where the host element is already muted-foreground (a
+// FieldDescription); callers that own a bare <p> add it themselves.
+export const MESSAGE_TONE: Record<FieldMessage['tone'], string> = {
+  error: 'text-destructive',
+  ok: 'text-emerald-600 dark:text-emerald-500',
+  muted: '',
+};
+
 // One label per band, so a full meter reads "Strong" exactly when the gate passes.
 const LABELS = ['Very weak', 'Weak', 'Fair', 'Strong'] as const;
 
-// A four-segment meter with a text label. Purely presentational — it renders the
-// hook's `displayScore` and knows nothing about the policy behind it. Renders
-// nothing until there's a score to show (empty password / estimator still loading).
-export function PasswordStrengthMeter({ displayScore }: { displayScore: number | null }) {
-  if (displayScore === null) return null;
+// Bar fill and label share ONE tone per band, so the two halves of the meter can't
+// disagree. The top band is GREEN, not `bg-primary`: `--primary` is a neutral
+// (oklch(0.205 0 0) light / oklch(0.922 0 0) dark — chroma 0), so a passing meter
+// filled black-on-white and white-on-black carried no success signal at all; it read
+// as an inert track, and in dark mode a full row of near-white bars is hardest of all
+// to tell from the unlit `bg-border` it replaces. Green is what every comment in this
+// file already claimed the full meter showed. Raw palette colours here rather than a
+// `--color-success` token, matching the existing `bg-amber-500` and
+// `text-amber-600 dark:text-amber-500` status colours elsewhere — and note that adding
+// a token would drag `tools/prettier/expo-tailwind.css` in for the native twin.
+const TONES = [
+  { bar: 'bg-destructive', text: 'text-destructive' },
+  { bar: 'bg-destructive', text: 'text-destructive' },
+  { bar: 'bg-amber-500', text: 'text-amber-600 dark:text-amber-500' },
+  { bar: 'bg-emerald-500', text: 'text-emerald-600 dark:text-emerald-500' },
+] as const;
 
-  // Segments 1–4 fill as the score climbs (0 fills the first, in red). Color steps
-  // destructive → amber → primary; only the top band reads as passing.
-  const tone =
-    displayScore >= TOP_BAND
-      ? 'bg-primary'
-      : displayScore === TOP_BAND - 1
-        ? 'bg-amber-500'
-        : 'bg-destructive';
-  const filled = displayScore + 1; // displayScore 0 → 1 segment lit
+// A four-segment meter with a text label. Purely presentational — it renders the
+// hook's `displayScore` and knows nothing about the policy behind it.
+//
+// A null score (empty password, or the estimator still loading) renders the EMPTY
+// TRACK, not nothing: the meter is a fixed part of the typed-password field, so
+// appearing on the first keystroke would shove the message and the helper text below
+// it down the card exactly as the user starts typing.
+//
+// The label slot holds BOTH its axes for that same reason, and each needs its own
+// class because an empty label collapses on each independently: `w-16` keeps the
+// column (so the bars don't stretch into it), and `min-h-4` keeps the ROW a full
+// text-xs line box (1rem) — without it the row is only as tall as the 6px bars while
+// the label is empty, and gains 10px the moment a word appears, which is the jump
+// this component exists to avoid. `min-h` rather than an `&nbsp;` placeholder: this
+// is a live region, so a hard space is real content announced to a screen reader,
+// and it's the kind of invisible hack a later edit deletes as a typo.
+export function PasswordStrengthMeter({ displayScore }: { displayScore: number | null }) {
+  const tone = displayScore === null ? null : TONES[displayScore];
+  const filled = displayScore === null ? 0 : displayScore + 1; // displayScore 0 → 1 segment lit
 
   return (
     <div className="flex items-center gap-2" aria-live="polite">
@@ -114,17 +149,12 @@ export function PasswordStrengthMeter({ displayScore }: { displayScore: number |
         {[0, 1, 2, 3].map((i) => (
           <span
             key={i}
-            className={cn('h-1.5 flex-1 rounded-full', i < filled ? tone : 'bg-border')}
+            className={cn('h-1.5 flex-1 rounded-full', i < filled ? tone?.bar : 'bg-border')}
           />
         ))}
       </div>
-      <span
-        className={cn(
-          'w-16 shrink-0 text-right text-xs',
-          displayScore >= TOP_BAND ? 'text-muted-foreground' : 'text-destructive',
-        )}
-      >
-        {LABELS[displayScore]}
+      <span className={cn('min-h-4 w-16 shrink-0 text-right text-xs', tone?.text)}>
+        {displayScore === null ? '' : LABELS[displayScore]}
       </span>
     </div>
   );

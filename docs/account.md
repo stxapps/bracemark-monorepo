@@ -349,6 +349,39 @@ Rough entropy targets, for calibration:
 > sub-passing whenever either floor blocks submit, so meter and gate stay one signal
 > (no "green meter, disabled button").
 >
+> **The meter's top band is green, and the field always says something.** The bands
+> run destructive → amber → emerald, bar fill and label sharing one tone per band;
+> the top band is a literal green rather than `bg-primary`, which is a chroma-0
+> neutral and so filled a _passing_ meter with black on white (and near-white on
+> black in dark mode, where it barely separates from the unlit track) — no success
+> signal at all. Underneath it, username and password each keep a permanent message
+> line whose every state is filled, resting state included: the states cycle on
+> almost every keystroke, so a message that only exists sometimes reflows the card
+> under the user's hands, and — the substantive half — a conditional chain hides its
+> own gaps. The old one had two: a username the server reported **taken** printed
+> nothing while Continue sat disabled, and so did a valid-length password while
+> zxcvbn was still loading. A slot that must always say something turns both into
+> code you can see. The live availability verdict is also gated on the query
+> answering the name **currently** in the field — it lags by the 400ms debounce, and
+> "Username is available" about a name already typed past is the one direction that
+> line must never be wrong in.
+>
+> Both ladders live in `@stxapps/react` (`lib/field-messages.ts`) —
+> `usernameMessage` and `newPasswordMessage`, one copy for web and native alike, so
+> the same input can't be described differently on two platforms or between
+> create-account and change-password. Only the tone→class map is per-platform
+> (`MESSAGE_TONE`, beside each platform's strength meter, so a passing message is the
+> same green as a passing meter).
+>
+> **Each ladder is also the gate for its field.** `tone === 'ok'` is exactly
+> `newPasswordSchema` passing _and_ `guessesLog10 >= PASSWORD_MIN_GUESSES_LOG10` for
+> the password, and a valid, settled, CURRENT "available" for the username. Callers
+> read the verdict off the message instead of re-deriving those conditions beside it,
+> so a disabled button can't end up under a line saying everything looks fine. Note
+> what this makes strict on purpose: while availability is refetching, the field says
+> "Checking availability…" and submit is closed, because the button should agree with
+> the sentence rather than with a cached answer the line no longer stands behind.
+>
 > Two caveats worth knowing. zxcvbn models an unmatched password as **10^length**
 > guesses — ~3.32 bits/char, **independent of charset** — so it _underestimates_
 > truly random strings (a 16-char CSPRNG password is ~95 bits but models as 53, and
@@ -377,9 +410,22 @@ their own only behind a strength gate. As built:
   high-entropy `password` and flow through the password door unchanged — **no
   derivation change**, only UI;
 - presented wallet-style: shown once, **Copy** + an **"I've saved this"** checkbox
-  that gates continuing, a **reveal toggle** instead of a confirm-password field,
-  and a plain "there is no reset" warning. A **"type my own"** escape hatch swaps
-  to the zxcvbn-gated typed path above;
+  that gates continuing, and a plain "there is no reset" warning. A **"type my
+  own"** escape hatch swaps to the zxcvbn-gated typed path above. The panel is one
+  action per row, and **the row order is the script**: the secret full-width →
+  the controls that change WHICH secret you get (Regenerate, "Choose my own") →
+  **Copy, full-width** → the checkbox → the step's primary button. Two reasons it
+  is not the ordinary "field with a copy glyph beside it". Copy is not a
+  convenience here, it IS the step — the panel exists to get the secret into a
+  password manager, so it gets a full-width labelled button rather than the
+  weakest affordance in the kit, and the label carries the "Copied" state in words
+  instead of only in an `aria-label`. And Regenerate goes **above** Copy because it
+  silently invalidates a copy already taken: the clipboard would still hold the
+  old secret with nothing on screen saying so. Settle, then commit. (Regenerating
+  also resets both the checkbox and the "Copied" affordance.) The panel is
+  `ShowOnceSecret` in `web-ui/components/auth/` with a native twin in
+  `bracemark-expo/src/features/auth/`; the settle controls are passed in per call
+  site through its `actions` slot, since the recovery panel in Settings has none;
 - a **confirm step** re-enters the password (verifying the user can reproduce it —
   there is no reset), then a **skippable recovery-code step** (show-once, same
   wallet panel). Skipping starts the account password-only; a **"no recovery set"

@@ -30,14 +30,8 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 
-import { hasRecoveryDoorQueryKey, useSignOutOthers } from '@stxapps/react';
-import {
-  canonicalizePassword,
-  generatePassphrase,
-  NEW_PASSWORD_MIN_LENGTH,
-  newPasswordSchema,
-  PASSWORD_MIN_GUESSES_LOG10,
-} from '@stxapps/shared';
+import { hasRecoveryDoorQueryKey, newPasswordMessage, useSignOutOthers } from '@stxapps/react';
+import { canonicalizePassword, generatePassphrase, NEW_PASSWORD_MIN_LENGTH } from '@stxapps/shared';
 import {
   InvalidCredentialsError,
   InvalidRecoveryCodeError,
@@ -51,6 +45,7 @@ import {
 } from '@stxapps/web-react';
 import { PasswordInput } from '@stxapps/web-ui/components/auth/password-input';
 import {
+  MESSAGE_TONE,
   PasswordStrengthMeter,
   usePasswordStrength,
 } from '@stxapps/web-ui/components/auth/password-strength';
@@ -59,6 +54,7 @@ import { Button } from '@stxapps/web-ui/components/ui/button';
 import { Checkbox } from '@stxapps/web-ui/components/ui/checkbox';
 import { Input } from '@stxapps/web-ui/components/ui/input';
 import { Label } from '@stxapps/web-ui/components/ui/label';
+import { cn } from '@stxapps/web-ui/lib/utils';
 
 import {
   SettingsHeader,
@@ -239,31 +235,15 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
     [],
     NEW_PASSWORD_MIN_LENGTH,
   );
-  // Parse once so the schema's own message can surface under the field — the meter
-  // says "Weak" without naming the rule that's blocking, which sends people reaching
-  // for symbols when length is what's missing.
-  const ownPasswordParse = newPasswordSchema.safeParse(ownPassword);
-  // Gate on the raw guess estimate; `displayScore` is the meter's, not the policy's
-  // (see PASSWORD_MIN_GUESSES_LOG10).
-  // null = estimator still loading; stay closed until it's ready.
+  // Same permanent message slot as create-account, from the same ladder, and it IS the
+  // gate: `tone === 'ok'` is the schema floor and the entropy floor both passing (see
+  // newPasswordMessage). A conditional error line here would reflow the form on nearly
+  // every keystroke and leave the estimator's loading window saying nothing while the
+  // button stayed disabled.
+  const passwordMessage = newPasswordMessage(ownPassword, guessesLog10);
+  const passwordInvalid = passwordMessage.tone === 'error';
   const newOk =
-    mode === 'generated'
-      ? passphrase !== '' && passphraseSaved
-      : ownPasswordParse.success &&
-        guessesLog10 !== null &&
-        guessesLog10 >= PASSWORD_MIN_GUESSES_LOG10;
-
-  // Only once they've typed something. Length first (the schema owns its own message),
-  // then the entropy floor — otherwise a long-but-predictable password would fail with
-  // a silent "Fair" meter and no way to know what to change.
-  const ownPasswordError =
-    ownPassword === ''
-      ? null
-      : !ownPasswordParse.success
-        ? (ownPasswordParse.error?.issues[0]?.message ?? 'Invalid password')
-        : guessesLog10 !== null && guessesLog10 < PASSWORD_MIN_GUESSES_LOG10
-          ? 'Too predictable — add a few more words, or generate a password instead.'
-          : null;
+    mode === 'generated' ? passphrase !== '' && passphraseSaved : passwordMessage.tone === 'ok';
   const proofReady = useRecovery ? recoveryCode !== '' : currentPassword !== '';
 
   const regeneratePassphrase = () => {
@@ -378,28 +358,30 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
               saved={passphraseSaved}
               onSavedChange={setPassphraseSaved}
               confirmLabel="I've saved my new password somewhere safe."
+              actions={
+                <div className="flex items-center justify-between">
+                  <button
+                    type="button"
+                    onClick={regeneratePassphrase}
+                    disabled={changePassword.isPending}
+                    className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground disabled:opacity-50"
+                  >
+                    <RefreshCw className="size-3.5" />
+                    Regenerate
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMode('own');
+                      if (error) setError(null);
+                    }}
+                    className="text-sm text-muted-foreground underline hover:text-foreground"
+                  >
+                    Choose my own
+                  </button>
+                </div>
+              }
             />
-            <div className="flex items-center justify-between">
-              <button
-                type="button"
-                onClick={regeneratePassphrase}
-                disabled={changePassword.isPending}
-                className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground disabled:opacity-50"
-              >
-                <RefreshCw className="size-3.5" />
-                Regenerate
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setMode('own');
-                  if (error) setError(null);
-                }}
-                className="text-sm text-muted-foreground underline hover:text-foreground"
-              >
-                Choose my own
-              </button>
-            </div>
           </div>
         ) : (
           <div className="flex flex-col gap-2">
@@ -407,7 +389,7 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
             <PasswordInput
               id="cp-new"
               autoComplete="new-password"
-              aria-invalid={!!ownPasswordError}
+              aria-invalid={passwordInvalid}
               value={ownPassword}
               disabled={changePassword.isPending}
               onChange={(e) => {
@@ -416,9 +398,9 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
               }}
             />
             <PasswordStrengthMeter displayScore={displayScore} />
-            {ownPasswordError ? (
-              <p className="text-sm text-destructive">{ownPasswordError}</p>
-            ) : null}
+            <p className={cn('text-sm text-muted-foreground', MESSAGE_TONE[passwordMessage.tone])}>
+              {passwordMessage.text}
+            </p>
             <p className="text-sm text-muted-foreground">
               A password of random words is stronger than most passwords you&apos;d type. If you use
               your own, make it long and unique.{' '}

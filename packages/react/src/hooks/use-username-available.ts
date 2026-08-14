@@ -38,8 +38,19 @@ export function usernameAvailableQueryOptions(client: ApiClient, username: strin
 // Live availability for the create-account field. Debounces internally and is
 // purely for inline feedback; the authoritative gate is a fetchQuery on submit
 // (with the exact, non-debounced value) and the server re-check at creation.
+//
+// `current` is the query result's expiry date, and callers MUST check it before
+// showing `data`. The query answers the DEBOUNCED name, so for the ~400ms after a
+// keystroke `data` still describes the PREVIOUS one — while `isFetching` is false,
+// because no request is in flight yet. Rendering `data.available` unguarded
+// therefore says "Username is available" about a name the user has already typed
+// past, which is the one direction this message must never be wrong in.
 export function useUsernameAvailable(username: string) {
   const client = useApiClient();
   const debounced = useDebouncedValue(username);
-  return useQuery(usernameAvailableQueryOptions(client, debounced));
+  const query = useQuery(usernameAvailableQueryOptions(client, debounced));
+  // Compare CANONICAL forms, matching what the query keys on — `Alice` typed over
+  // `alice` is the same question and shouldn't re-open a "checking…" window.
+  const current = canonicalizeUsername(debounced) === canonicalizeUsername(username);
+  return { ...query, current };
 }

@@ -55,8 +55,12 @@ export default function NotFound() {
           itself shouldn't spend a paragraph on. Support lives on the marketing
           site, a DIFFERENT ORIGIN from this app, so it's an absolute env-configured
           URL and a plain <a> — a relative `/support` would resolve here and 404
-          from the 404 page (lib/site.ts). */}
-      <p className={cn('text-xs leading-5 text-balance text-muted-foreground')}>
+          from the 404 page (lib/site.ts).
+
+          `px-6` matches the card's inset so this line sits on the same text axis
+          as the wordmark and the card's own content — see `(auth)/layout.tsx` for
+          the argument, and keep the three copies level. */}
+      <p className={cn('px-6 text-xs leading-5 text-balance text-muted-foreground')}>
         If a link inside Bracemark brought you here, that’s our bug, not yours —{' '}
         <a
           className={cn(
