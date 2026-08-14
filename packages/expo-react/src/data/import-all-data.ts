@@ -40,6 +40,7 @@ import {
   idFromPath,
   type ImportedBundle,
   type ImportedLink,
+  type ImportQuotaResolver,
   isZipBytes,
   LINKS_PREFIX,
   parseBackupManifest,
@@ -48,6 +49,7 @@ import {
   PINS_PREFIX,
   projectImportedLinks,
   referencedFileIds,
+  resolveImportQuota,
 } from '@stxapps/shared';
 
 import { runIncrementalSync, type SyncDeps } from '../sync/engine';
@@ -96,6 +98,7 @@ async function importInterop(
   maxLinks: number | null,
   nestedLists: boolean,
   onProgress: (progress: ImportProgress) => void,
+  onQuotaPrompt?: ImportQuotaResolver,
 ): Promise<Omit<ImportOutcome, 'syncFailed'>> {
   const existing = readExistingLinks();
 
@@ -110,14 +113,22 @@ async function importInterop(
   }
   const skippedCount = bundle.links.length - rows.length;
 
-  assertUnderImportQuota(rows.length, existing.count, maxLinks);
+  // Over the cap, this SUSPENDS the run on the user's answer (take what fits, or
+  // cancel — which throws ImportQuotaError like it always did). Nothing has been
+  // written yet, and nothing will be if they back out. `keep` is the whole row
+  // count in every other case.
+  const keep = await resolveImportQuota(rows.length, existing.count, maxLinks, onQuotaPrompt);
+  const notImportedCount = rows.length - keep;
+  // Truncate BEFORE projection, so the lists and tags created are only the ones
+  // the kept rows actually need — an imported-but-empty list would be litter.
+  const kept = notImportedCount > 0 ? rows.slice(0, keep) : rows;
 
   // Rows → entities: which list each lands in, deliberate vs. provisional
   // titles, custom-image blobs, pin ranks. All of it is shared with web
   // (@stxapps/shared import/project.ts) — only the store reads around it and the
   // chunked writes below are this platform's.
   const projected = projectImportedLinks({
-    rows,
+    rows: kept,
     lists: await readLists(),
     tags: await readTags(),
     existingPinRanks: (await readPins()).map((pin) => pin.rank),
@@ -156,6 +167,7 @@ async function importInterop(
     fileCount: projected.files.length,
     skippedCount,
     invalidCount: projected.invalidCount,
+    notImportedCount,
   };
 }
 
@@ -199,6 +211,9 @@ async function importBracemarkBackup(
 
   const existing = readExistingLinks();
   const freshLinks = fresh.filter((entry) => entry.kind === 'link');
+  // Whole-file refusal, deliberately NOT the interop path's prompt: a backup
+  // restored to 200 of its 1,200 links, with its lists and pins pointing at the
+  // 1,000 that aren't there, is the corrupt-looking far end the rule exists for.
   assertUnderImportQuota(freshLinks.length, existing.count, maxLinks);
 
   // A pin/extraction whose link is neither imported nor already local is a
@@ -250,6 +265,8 @@ async function importBracemarkBackup(
     fileCount,
     skippedCount,
     invalidCount,
+    // A backup either fits or is refused whole — it never truncates.
+    notImportedCount: 0,
   };
 }
 
@@ -300,6 +317,7 @@ async function importZip(
   maxLinks: number | null,
   nestedLists: boolean,
   onProgress: (progress: ImportProgress) => void,
+  onQuotaPrompt?: ImportQuotaResolver,
 ): Promise<Omit<ImportOutcome, 'syncFailed'>> {
   const { unzipSync } = await import('fflate');
 
@@ -314,7 +332,7 @@ async function importZip(
     return importBracemarkBackup(username, byName, maxLinks, onProgress);
   }
   const parsed = parseInteropZip(byName);
-  return importInterop(username, parsed, maxLinks, nestedLists, onProgress);
+  return importInterop(username, parsed, maxLinks, nestedLists, onProgress, onQuotaPrompt);
 }
 
 // --- the flow -----------------------------------------------------------------------
@@ -327,8 +345,11 @@ export async function importAllData(options: {
   // Whether folder paths may create nested lists (entitlements.nestedLists).
   nestedLists: boolean;
   onProgress?: (progress: ImportProgress) => void;
+  // Asked when an INTEROP file would pass `maxLinks`: take what fits, or cancel.
+  // Omitted (or a backup file) means the old behaviour — refuse the whole file.
+  onQuotaPrompt?: ImportQuotaResolver;
 }): Promise<ImportOutcome> {
-  const { file, deps, maxLinks, nestedLists } = options;
+  const { file, deps, maxLinks, nestedLists, onQuotaPrompt } = options;
   const onProgress = options.onProgress ?? (() => undefined);
 
   // Refresh first so dedupe, skip-existing, and the quota gate see the account,
@@ -345,11 +366,25 @@ export async function importAllData(options: {
   onProgress({ step: 'parse' });
   const bytes = await new File(file.uri).bytes();
   if (isZipBytes(bytes)) {
-    const outcome = await importZip(deps.username, bytes, maxLinks, nestedLists, onProgress);
+    const outcome = await importZip(
+      deps.username,
+      bytes,
+      maxLinks,
+      nestedLists,
+      onProgress,
+      onQuotaPrompt,
+    );
     return { ...outcome, syncFailed };
   }
 
   const parsed = parseImportText(new TextDecoder().decode(bytes), file.name);
-  const outcome = await importInterop(deps.username, parsed, maxLinks, nestedLists, onProgress);
+  const outcome = await importInterop(
+    deps.username,
+    parsed,
+    maxLinks,
+    nestedLists,
+    onProgress,
+    onQuotaPrompt,
+  );
   return { ...outcome, syncFailed };
 }

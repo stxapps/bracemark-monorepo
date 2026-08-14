@@ -166,14 +166,11 @@ The policy, decided once:
   within the file; skips are reported, never errors.
 - **The bracemark backup merges skip-existing by path** — a path already in the
   local store is never touched, so a restore can't clobber newer local edits.
-- **The plan's link cap is enforced up front**: if the surviving new links
-  would pass `maxLinks`, the import fails _before anything is written_
-  (`ImportQuotaError`). This is one of the places that enforce the cap at all —
-  it is client-side (see [iap.md](./iap.md), _enforcement_), so `files/sign`
-  would accept an over-cap import without complaint. Refusing the whole file
-  rather than importing to the cap and truncating is the honest reading of the
-  request: a partial import is indistinguishable from a corrupt one at the far
-  end, and the user can split the file or upgrade.
+- **The plan's link cap is enforced up front**, _before anything is written_ —
+  see _the import's quota gate_ below for the shape, which differs between an
+  interop file and a backup. This is one of the places that enforce the cap at
+  all — it is client-side (see [iap.md](./iap.md), _enforcement_), so
+  `files/sign` would accept an over-cap import without complaint.
 - A file-carried title is **provisional**: it seeds `extraction.title` (which
   extraction may later upgrade), never `customTitle` — unless the source marks it
   user-authored, which only the Brace.to export does today (below).
@@ -190,6 +187,57 @@ dispatch is `import/parse.ts`, the rows→entities projection is
 `import/resolve.ts` — the last two take `newId` as an argument, since id minting
 is the one genuinely platform-specific piece (`web-crypto` vs. `expo-crypto`,
 neither reachable from `shared`).
+
+### the import's quota gate
+
+The gate runs at the same moment for every format — after the parse and the
+dedupe, before the first write — but it ends in one of two different places, and
+which one depends on what kind of file it is.
+
+**An interop file asks.** `resolveImportQuota` (`data/import-run.ts`) hands the
+counts to an `onQuotaPrompt` resolver and **suspends the run on the answer**:
+take the first `room` links, or cancel (which throws `ImportQuotaError`, exactly
+as the gate always did). Both orchestrators thread the resolver down from the
+hook, where the `quota` phase parks the pending promise in a ref and the Data →
+Import view renders the two buttons. Nothing has been written when the question
+is asked, and nothing is written if the user backs out — including on the zip
+branch, where the reader is deliberately held open across the prompt because it
+reads an in-memory blob.
+
+**A backup is still refused whole.** `assertUnderImportQuota` survives unchanged
+on the bracemark-backup path, and that path never prompts. The old reasoning — a
+partial import is indistinguishable from a corrupt one at the far end — is
+_true of a backup_ and only of a backup: restoring 200 of 1,200 links leaves the
+lists, pins and extractions in the archive pointing at 1,000 links that aren't
+there, and the whole promise of a backup is that restoring it returns you to a
+known state. An interop file is a **migration**, not a restore; "some of it, and
+here is the number that didn't fit" is a coherent thing to want, and the far end
+is a library the user is watching fill up.
+
+Why it became a question at all: the cap and the invitation to bring an existing
+library are in direct tension, and the import is the one moment they meet — a
+free account pointed at a 1,200-link Raindrop CSV is exactly the user the import
+path is _for_. The file is parsed on the device either way, so the exact count is
+known while nothing has happened yet; spending it on a decision rather than a
+refusal costs nothing and is the difference between a route and a wall. The
+truncation is deliberately dumb (the first `room` surviving rows in file order,
+after dedupe) because any cleverness would be us guessing which of someone's
+bookmarks matter, and a wrong guess is invisible to them.
+
+Two consequences worth stating where they're read rather than inferred, which is
+why they're on the marketing site's `import-over-cap` and `free-cap` answers as
+well as here:
+
+- **A truncated import is resumable.** Interop dedupes by canonical URL against
+  the library, so re-importing the same file after upgrading brings in the rest
+  and skips what's already there. `ImportOutcome.notImportedCount` carries the
+  number, and both Data sections lead the receipt with it.
+- **Being over the cap is not a lockout.** `useLinkQuota`'s `atLimit` is
+  `count >= max`, so an account that lands above the cap (a lapsed trial, most
+  realistically) keeps reading, searching, editing, deleting and exporting — only
+  new links stop. Note the separate ceiling underneath: `maxFiles` **is**
+  server-hard, so a library above _that_ is read-only-plus-delete until it comes
+  down (`bracemark-api` `lib/quota.ts`, and [iap.md](./iap.md) _enforcement_).
 
 ### importing from Brace.to
 

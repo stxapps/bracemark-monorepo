@@ -143,7 +143,10 @@ const CARDS: PricingCard[] = [
     price: `$${PLAN_USD_PER_YEAR[plan]}`,
     cadence: '/year',
     priceNote: `${monthlyEquivalent(PLAN_USD_PER_YEAR[plan])} a month, billed annually`,
-    trialNote: `${TRIAL_DAYS}-day free trial · cancel any time`,
+    // Names the payment method. The Free card two columns left says "no card
+    // required" and means it, which is exactly why this one cannot stay silent:
+    // read together, the omission would be doing work the truth doesn't.
+    trialNote: `${TRIAL_DAYS}-day free trial · takes a card · cancel any time`,
     blurb,
     features,
     // Only the entry paid tier needs this line: every card above it already says

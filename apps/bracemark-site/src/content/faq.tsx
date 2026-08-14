@@ -395,19 +395,53 @@ export const FAQ_GROUPS: FaqGroup[] = [
           <>
             Nothing is deleted and nothing is locked away. You keep reading, searching, editing,
             deleting and exporting the whole library; new links stop saving until you upgrade or
-            make room. Upgrading lifts the cap straight away.
+            make room. Upgrading lifts the cap straight away. That is also what happens if a trial
+            ends with more than {FREE_LINKS} links in your library — they all stay, and stay
+            exportable; you just cannot add new ones until you are back under the cap or on{' '}
+            {PLAN_LABELS.plus}.
           </>
         ),
       },
       {
+        // The question every switcher asks and no surface used to answer. The
+        // honest version is unflattering in one clause (the file does not all
+        // fit) and reassuring in the rest (nothing is written until you say so,
+        // and re-importing later finishes the job) — see docs/data-lifecycle.md,
+        // _the import's quota gate_.
+        id: 'import-over-cap',
+        q: `What if I import more than ${FREE_LINKS} links?`,
+        a: (
+          <>
+            The file is read on your device and counted before anything is saved, so you find out up
+            front rather than halfway through. If it holds more new links than your plan has room
+            for, Bracemark tells you both numbers and asks: bring in the ones that fit, or stop and
+            import the whole file once you have room. Nothing is written until you pick, and the
+            file on your device is never changed. If you take the ones that fit, importing the same
+            file again later brings in the rest — the links already saved are skipped as duplicates.
+            One exception: a Bracemark backup (.zip) is all-or-nothing, because a half-restored
+            backup is worse than none.
+          </>
+        ),
+      },
+      {
+        // The advice branches because the old single answer ("start it when the
+        // free plan begins to pinch") is right for someone starting fresh and
+        // wrong for everyone arriving with a library — for them it pinches at
+        // minute one, and the import is the decision. The card sentence is here
+        // because a trial that takes a payment method should say so on a site
+        // that makes a point of saying "no card" everywhere it is true.
         id: 'trial',
         q: 'Is there a free trial?',
         a: (
           <>
-            Yes — {PLAN_LABELS.plus} starts with {TRIAL_DAYS} days free, and cancelling before the
-            end means no charge. Start it when the free plan begins to pinch rather than on day one:
-            the question the trial answers is whether the extra structure is worth it for your
-            library, and you need a library to answer that.
+            Yes — {PLAN_LABELS.plus} starts with {TRIAL_DAYS} days free, on the annual plan, and
+            cancelling before the end means no charge. Starting it goes through checkout, so it
+            takes a payment method; nothing is charged unless the trial runs to the end. When to
+            start it depends on which door you came in: if you are arriving with a library to
+            import, day one — the cap is the first thing you will meet, and whether the structure
+            suits your links is a question your own library answers. If you are starting fresh, wait
+            until the free plan begins to pinch, because the trial demos things a twelve-link
+            library cannot feel yet.
           </>
         ),
       },
@@ -591,8 +625,13 @@ export const FAQ_GROUPS: FaqGroup[] = [
         a: (
           <>
             Both. Import a browser bookmarks export, a Raindrop CSV or a plain list of URLs — the
-            file is read on your device and never uploaded. Export gives you the whole library as a
-            full backup or in the formats other apps read, on every plan.
+            file is read on your device and never uploaded. If it holds more links than your plan
+            has room for, you are asked before anything is saved (see{' '}
+            <PageLink href="/faq#import-over-cap">
+              what if I import more than {FREE_LINKS} links
+            </PageLink>
+            ). Export gives you the whole library as a full backup or in the formats other apps
+            read, on every plan.
           </>
         ),
       },
@@ -613,7 +652,16 @@ export const FAQ_GROUPS: FaqGroup[] = [
 
 // The subset /pricing repeats next to the plan cards — the questions a buyer asks
 // with a card in their hand, in the order they ask them. Ids, not copies.
-export const PRICING_FAQ_IDS = ['free-cap', 'trial', 'stop-paying', 'refunds'] as const;
+// `import-over-cap` earns its place here: on the pricing page the cap is the
+// number a switcher is reading, and "what happens to my 1,200 links" is the
+// question it raises.
+export const PRICING_FAQ_IDS = [
+  'free-cap',
+  'import-over-cap',
+  'trial',
+  'stop-paying',
+  'refunds',
+] as const;
 
 export function faqById(id: string): FaqItem | undefined {
   for (const group of FAQ_GROUPS) {

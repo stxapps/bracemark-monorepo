@@ -190,7 +190,12 @@ const CAPTURE = [
   {
     name: 'Import',
     where: 'One file',
-    body: 'Bring the library you already have: a browser bookmarks export, a Raindrop CSV, or a plain list of URLs. It is read on your device, so the file never uploads.',
+    // The over-cap sentence is the answer to the question this card raises and
+    // the free tier contradicts — a library bigger than the cap was the one
+    // thing the invitation didn't cover. It states the real behaviour (count
+    // first, ask, nothing written until you answer) rather than the outcome, so
+    // it reads as a route and not a wall.
+    body: `Bring the library you already have: a browser bookmarks export, a Raindrop CSV, or a plain list of URLs. It is read on your device, so the file never uploads. Bringing more than ${FREE_LINKS} links? It counts them first and asks — take the first ${FREE_LINKS} now, or start the ${TRIAL_DAYS}-day trial and bring all of it.`,
   },
 ];
 
@@ -405,7 +410,7 @@ export default function Page() {
       <Band
         label="Pricing"
         title="Free until your library outgrows free."
-        lede={`Start with ${FREE_LINKS} links and no card. Upgrade when the cap starts to pinch — with a ${TRIAL_DAYS}-day trial, and the same encryption, sync and export on both plans.`}
+        lede={`Start with ${FREE_LINKS} links and no card. Upgrade when the cap starts to pinch — on day one if you are arriving with a library, later if you are starting fresh — with a ${TRIAL_DAYS}-day trial, and the same encryption, sync and export on both plans.`}
       >
         <div className={cn('flex flex-wrap items-end gap-x-16 gap-y-8')}>
           <div>
@@ -440,11 +445,17 @@ export default function Page() {
               'font-display mx-auto max-w-2xl text-3xl leading-[1.1] font-semibold tracking-tight text-balance md:text-5xl',
             )}
           >
-            Start with an empty library that is already private.
+            Start empty, or bring the library you already have.
           </h2>
+          {/* Two doors on purpose. The old closer named only the empty one,
+              which dismissed the switcher the Import card had just courted —
+              the last line on the page addressed to a person who has no
+              library. Both secrets are named here too: the passphrase and the
+              recovery code are what the account rests on, and the closer is the
+              last place before the ceremony to say so. */}
           <p className={cn('text-muted-foreground mx-auto mt-5 max-w-lg text-lg leading-8')}>
-            Pick a username, save the passphrase we generate for you, and save your first link a
-            minute later.
+            Pick a username, save the passphrase we generate for you and the recovery code beside
+            it, and save your first link a minute later.
           </p>
           <Button asChild size="lg" className={cn('mt-9')}>
             <a href={CREATE_ACCOUNT_URL}>

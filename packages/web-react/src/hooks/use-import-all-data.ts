@@ -5,11 +5,24 @@
 // One run at a time. On success it kicks the SyncProvider's requestSync so the
 // freshly-queued pending ops drain through the normal engine cycle (and the sync
 // status card shows it), rather than running a private sync of its own.
+//
+// The one non-linear bit is the `quota` phase: an interop file that would pass
+// the plan's link cap suspends the run and hands the counts to the view, which
+// answers with `answerQuota`. The orchestrator is literally awaiting that answer
+// (data/import-all-data.ts → shared resolveImportQuota), so the promise it
+// blocks on is parked in a ref here rather than in React state — nothing
+// re-renders on it, and resolving it twice is impossible because the ref is
+// cleared as it fires.
 
 import { useCallback, useRef, useState } from 'react';
 
 import { useApiClient } from '@stxapps/react';
-import type { ImportOutcome, ImportProgress } from '@stxapps/shared';
+import type {
+  ImportOutcome,
+  ImportProgress,
+  ImportQuotaAnswer,
+  ImportQuotaPrompt,
+} from '@stxapps/shared';
 
 import { useAuth } from '../contexts/auth-provider';
 import { useSync } from '../contexts/sync-provider';
@@ -21,6 +34,9 @@ import { useEntitlements } from './use-entitlements';
 export type ImportState =
   | { phase: 'idle' }
   | ({ phase: 'running' } & ImportProgress)
+  // Parsed, counted, nothing written: the file holds more new links than the
+  // plan has room for. Waiting on answerQuota.
+  | { phase: 'quota'; prompt: ImportQuotaPrompt }
   | { phase: 'done'; outcome: ImportOutcome }
   | { phase: 'error'; message: string };
 
@@ -29,6 +45,10 @@ export interface UseImportAllDataResult {
   // Start an import from the picked file; no-op while one is running. Format is
   // detected from the file itself (zip magic → Bracemark backup, else sniffed text).
   run: (file: File) => void;
+  // Answer the `quota` phase. 'import-what-fits' resumes the run with the first
+  // `prompt.room` links; 'cancel' fails it with the quota message. A no-op in
+  // any other phase.
+  answerQuota: (answer: ImportQuotaAnswer) => void;
 }
 
 export function useImportAllData(): UseImportAllDataResult {
@@ -41,6 +61,18 @@ export function useImportAllData(): UseImportAllDataResult {
   const [state, setState] = useState<ImportState>({ phase: 'idle' });
   // Re-entrancy guard that doesn't wait for the state update to land.
   const runningRef = useRef(false);
+  // The suspended orchestrator's resolve fn while the `quota` phase is on screen.
+  const quotaResolveRef = useRef<((answer: ImportQuotaAnswer) => void) | null>(null);
+
+  const answerQuota = useCallback((answer: ImportQuotaAnswer) => {
+    const resolve = quotaResolveRef.current;
+    if (resolve === null) return;
+    quotaResolveRef.current = null;
+    // Back to a running spinner on both answers — 'cancel' throws inside the
+    // orchestrator, which lands on the error phase a tick later.
+    setState({ phase: 'running', step: 'items' });
+    resolve(answer);
+  }, []);
 
   const run = useCallback(
     (file: File) => {
@@ -61,6 +93,11 @@ export function useImportAllData(): UseImportAllDataResult {
         maxLinks: entitlements.maxLinks,
         nestedLists: entitlements.nestedLists,
         onProgress: (progress) => setState({ phase: 'running', ...progress }),
+        onQuotaPrompt: (prompt) =>
+          new Promise((resolve) => {
+            quotaResolveRef.current = resolve;
+            setState({ phase: 'quota', prompt });
+          }),
       })
         .then(
           (outcome) => {
@@ -78,10 +115,13 @@ export function useImportAllData(): UseImportAllDataResult {
         )
         .finally(() => {
           runningRef.current = false;
+          // A run that ended without the prompt being answered (any other
+          // failure while it was on screen) must not leave a live resolve behind.
+          quotaResolveRef.current = null;
         });
     },
     [username, api, entitlements.maxLinks, entitlements.nestedLists, requestSync],
   );
 
-  return { state, run };
+  return { state, run, answerQuota };
 }

@@ -32,10 +32,13 @@ import {
   Trash2,
   Upload,
 } from 'lucide-react';
+import Link from 'next/link';
 
 import {
   formatSyncedAt,
   getSyncPhase,
+  type ImportQuotaAnswer,
+  type ImportQuotaPrompt,
   SYNC_PHASE_LABELS,
   syncBlockedDetail,
 } from '@stxapps/shared';
@@ -165,7 +168,8 @@ const IMPORT_STEP_LABELS: Record<'sync' | 'parse' | 'items' | 'files', string> =
 // counts + any warnings when done, the failure (quota message verbatim) when
 // errored — the import twin of ExportStatus.
 function ImportStatus({ state }: { state: ImportState }) {
-  if (state.phase === 'idle') return null;
+  // 'quota' has its own surface (ImportQuotaChoice) — a decision, not a status.
+  if (state.phase === 'idle' || state.phase === 'quota') return null;
 
   if (state.phase === 'running') {
     const counts =
@@ -202,6 +206,12 @@ function ImportStatus({ state }: { state: ImportState }) {
     );
   }
 
+  // Leads the notes, and names the number rather than saying "some": this is the
+  // one outcome where the library deliberately does not match the file, and the
+  // user chose it several seconds ago — they need to see it confirmed, not
+  // discover it by counting.
+  const truncated = outcome.notImportedCount > 0;
+
   const created: string[] = [];
   if (outcome.listCount > 0) {
     created.push(`${outcome.listCount} ${outcome.listCount === 1 ? 'list' : 'lists'}`);
@@ -210,6 +220,11 @@ function ImportStatus({ state }: { state: ImportState }) {
     created.push(`${outcome.tagCount} ${outcome.tagCount === 1 ? 'tag' : 'tags'}`);
   }
   const notes: string[] = [];
+  if (truncated) {
+    notes.push(
+      `${outcome.notImportedCount} more ${outcome.notImportedCount === 1 ? 'link' : 'links'} in the file ${outcome.notImportedCount === 1 ? 'was' : 'were'} left out — your plan was full. Import the same file again after upgrading and the rest will come in; the ones already here are skipped as duplicates.`,
+    );
+  }
   if (created.length > 0) notes.push(`Added ${created.join(' and ')}.`);
   if (outcome.skippedCount > 0) {
     // "duplicates", not "links": for a Bracemark-backup merge the count covers every
@@ -230,7 +245,11 @@ function ImportStatus({ state }: { state: ImportState }) {
   }
   return (
     <div className="mt-3 flex items-start gap-2 text-sm">
-      <CircleCheck className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+      {truncated ? (
+        <CircleAlert className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+      ) : (
+        <CircleCheck className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+      )}
       <span className="text-muted-foreground">
         Imported {outcome.linkCount} {outcome.linkCount === 1 ? 'link' : 'links'}
         {outcome.fileCount > 0
@@ -242,10 +261,51 @@ function ImportStatus({ state }: { state: ImportState }) {
   );
 }
 
+// The over-cap pre-flight: the file has been parsed and counted, nothing has
+// been written, and the run is suspended on this answer. Deliberately a CHOICE
+// and not the hoisted paywall dialog — the file is already picked and the user
+// is mid-task, so the two things they might actually want (take what fits now,
+// or stop and go get room) belong on screen next to the number that decides it.
+// The plans link is the third door, not the only one; see docs/data-lifecycle.md
+// (_the import's quota gate_) for why the interop path offers this at all and
+// the backup path still refuses whole.
+function ImportQuotaChoice({
+  prompt,
+  onAnswer,
+}: {
+  prompt: ImportQuotaPrompt;
+  onAnswer: (answer: ImportQuotaAnswer) => void;
+}) {
+  const { newCount, existingCount, maxLinks, room } = prompt;
+  return (
+    <div className="mt-3 flex flex-col gap-3 rounded-lg border border-border px-3 py-2.5 text-sm">
+      <p className="text-muted-foreground">
+        This file has {newCount} new {newCount === 1 ? 'link' : 'links'}. Your plan holds {maxLinks}{' '}
+        and you already have {existingCount}, so there is room for {room} more.
+      </p>
+      <p className="text-muted-foreground">
+        Nothing has been imported yet. You can bring in the first {room}, or stop here and import
+        the whole file once you have room — the file on your device is untouched either way.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <Button variant="outline" size="sm" onClick={() => onAnswer('import-what-fits')}>
+          Import {room} {room === 1 ? 'link' : 'links'}
+        </Button>
+        <Button variant="ghost" size="sm" onClick={() => onAnswer('cancel')}>
+          Cancel
+        </Button>
+        <Button variant="ghost" size="sm" asChild>
+          <Link href="/settings/subscription">See plans</Link>
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function ImportView({ onBack }: { onBack: () => void }) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const { state, run } = useImportAllData();
-  const running = state.phase === 'running';
+  const { state, run, answerQuota } = useImportAllData();
+  const running = state.phase === 'running' || state.phase === 'quota';
 
   const onFilePicked = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -259,7 +319,7 @@ function ImportView({ onBack }: { onBack: () => void }) {
       <SettingsHeader
         back={{ label: 'Data', onClick: onBack }}
         title="Import data"
-        description="Import from a file — a Bracemark backup (.zip), a Brace.to export (.txt), an HTML bookmarks file (web browsers, LinkWarden, Karakeep), a Pocket export (.zip or .csv), a Raindrop.io CSV, or a plain list of links. The format is detected automatically; links you already have are skipped. Large imports may take a few minutes."
+        description="Import from a file — a Bracemark backup (.zip), a Brace.to export (.txt), an HTML bookmarks file (web browsers, LinkWarden, Karakeep), a Pocket export (.zip or .csv), a Raindrop.io CSV, or a plain list of links. The format is detected automatically; links you already have are skipped. If the file holds more links than your plan has room for, we’ll count them and ask before importing anything. Large imports may take a few minutes."
       />
       <input
         ref={inputRef}
@@ -273,7 +333,11 @@ function ImportView({ onBack }: { onBack: () => void }) {
         Choose a file
       </Button>
 
-      <ImportStatus state={state} />
+      {state.phase === 'quota' ? (
+        <ImportQuotaChoice prompt={state.prompt} onAnswer={answerQuota} />
+      ) : (
+        <ImportStatus state={state} />
+      )}
     </>
   );
 }
