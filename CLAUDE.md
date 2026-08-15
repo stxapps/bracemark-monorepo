@@ -77,6 +77,7 @@ self-contained and cross-links its neighbours.
 | `bracemark-expo` share sheet (iOS + Android)                     | `share-sheet.md`                |
 | an expo dependency — router, uniwind, expo-image, fonts, IAP     | `expo-native-deps.md`           |
 | prebuild, `app.config.ts`, the npm scripts, R8, signing          | `expo-build.md`                 |
+| test layers, jest vs vitest, driving an app to see a change      | `testing.md`                    |
 | env vars, per app and per mode                                   | `env-files.md`                  |
 | which host each app answers, the CSP, `nx start` preview         | `hosting.md`                    |
 | **the public repo, the AGPL licence, what we claim about it**    | `brand-assets.md` ⚠             |

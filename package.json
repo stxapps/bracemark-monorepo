@@ -69,6 +69,7 @@
     "metro-config": "~0.83.0",
     "metro-resolver": "~0.83.0",
     "nx": "23.1.1",
+    "playwright-core": "^1.62.1",
     "postcss": "8.4.38",
     "prettier": "^3.8.1",
     "prettier-plugin-tailwindcss": "^0.8.0",
