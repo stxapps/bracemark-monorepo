@@ -3,21 +3,15 @@
 import * as React from 'react';
 import { ChevronLeft, RefreshCw } from 'lucide-react';
 
-import { newPasswordMessage, usernameMessage, useUsernameAvailable } from '@stxapps/react';
-import {
-  canonicalizePassword,
-  canonicalizeUsername,
-  generatePassphrase,
-  generateRecoveryCode,
-  NEW_PASSWORD_MIN_LENGTH,
-} from '@stxapps/shared';
+import { usernameMessage, useUsernameAvailable } from '@stxapps/react';
+import { canonicalizePassword, canonicalizeUsername, generateRecoveryCode } from '@stxapps/shared';
 import { useCreateAccount, UsernameTakenError } from '@stxapps/web-react';
-import { PasswordInput } from '@stxapps/web-ui/components/auth/password-input';
 import {
-  MESSAGE_TONE,
-  PasswordStrengthMeter,
-  usePasswordStrength,
-} from '@stxapps/web-ui/components/auth/password-strength';
+  NewPasswordField,
+  useNewPassword,
+} from '@stxapps/web-ui/components/auth/new-password-field';
+import { PasswordInput } from '@stxapps/web-ui/components/auth/password-input';
+import { MESSAGE_TONE } from '@stxapps/web-ui/components/auth/password-strength';
 import { ShowOnceSecret } from '@stxapps/web-ui/components/auth/show-once-secret';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import {
@@ -48,7 +42,6 @@ import { Input } from '@stxapps/web-ui/components/ui/input';
 // note on StepHeader for why it has to be the form that owns it.
 
 type Step = 'setup' | 'confirm' | 'recovery';
-type Mode = 'generated' | 'own';
 
 // Source of truth for the step COUNT as well as the order: StepHeader derives
 // "n of 3" by index, so adding a step to the ceremony renumbers the indicator
@@ -89,6 +82,9 @@ const STEP_HEADINGS: Record<Step, { title: string; description: string }> = {
 // Each ladder is also THE GATE for its field: `tone === 'ok'` is the whole pass, so
 // Continue is derived from the two sentences rather than from a second copy of their
 // conditions, and can't end up disabled under a line that says everything looks fine.
+// The password half of that — the generated/typed choice, its meter, its message and
+// its gate — is `NewPasswordField`, shared with Settings → change password, which
+// renders the same block; only the username field is this form's own.
 
 export function CreateAccountForm() {
   const createAccount = useCreateAccount();
@@ -97,12 +93,10 @@ export function CreateAccountForm() {
   const [username, setUsername] = React.useState('');
   const [usernameTaken, setUsernameTaken] = React.useState(false);
 
-  const [mode, setMode] = React.useState<Mode>('generated');
-  // Generated on MOUNT (an effect, not during render) so SSR and client agree —
-  // a random value produced during render would hydrate-mismatch.
-  const [passphrase, setPassphrase] = React.useState('');
-  const [passphraseSaved, setPassphraseSaved] = React.useState(false);
-  const [ownPassword, setOwnPassword] = React.useState('');
+  // The generated/typed password choice, its meter, its message line and its gate —
+  // all of it, shared with Settings → change password. `username` is the zxcvbn
+  // penalty term.
+  const newPassword = useNewPassword({ username });
 
   const [confirmInput, setConfirmInput] = React.useState('');
   const [confirmError, setConfirmError] = React.useState(false);
@@ -112,16 +106,12 @@ export function CreateAccountForm() {
 
   const [submitError, setSubmitError] = React.useState<string | null>(null);
 
-  React.useEffect(() => {
-    setPassphrase(generatePassphrase());
-  }, []);
-
   // Mint the recovery code the first time the user reaches that step.
   React.useEffect(() => {
     if (step === 'recovery' && !recoveryCode) setRecoveryCode(generateRecoveryCode());
   }, [step, recoveryCode]);
 
-  const password = mode === 'generated' ? passphrase : ownPassword;
+  const password = newPassword.password;
 
   // Live username validation + availability (the hook debounces and gates on a valid
   // format internally). Both fields work the same way from here: one ladder produces
@@ -132,28 +122,7 @@ export function CreateAccountForm() {
   const availability = useUsernameAvailable(username);
   const usernameMsg = usernameMessage(username, availability, usernameTaken);
 
-  // Strength only matters on the typed path (the generated passphrase is ~77 bits
-  // by construction). Score the CANONICAL form (canonicalizePassword) — the exact
-  // string the KEK derives from — so the meter can't disagree with what's stored.
-  // Pass the username as a penalty term.
-  const { guessesLog10, displayScore } = usePasswordStrength(
-    mode === 'own' ? canonicalizePassword(ownPassword) : '',
-    [username],
-    NEW_PASSWORD_MIN_LENGTH,
-  );
-  // Note it's `guessesLog10` the ladder gates on, never `displayScore` — that one is
-  // the meter's, not the policy's (see PASSWORD_MIN_GUESSES_LOG10) — and that null,
-  // the estimator still loading, keeps the gate shut until it's ready.
-  const passwordMsg = newPasswordMessage(ownPassword, guessesLog10);
-
-  const passwordChosen =
-    mode === 'generated' ? passphrase !== '' && passphraseSaved : passwordMsg.tone === 'ok';
-  const canContinueSetup = usernameMsg.tone === 'ok' && passwordChosen;
-
-  const regeneratePassphrase = () => {
-    setPassphrase(generatePassphrase());
-    setPassphraseSaved(false);
-  };
+  const canContinueSetup = usernameMsg.tone === 'ok' && newPassword.ok;
 
   const regenerateRecovery = () => {
     setRecoveryCode(generateRecoveryCode());
@@ -201,7 +170,6 @@ export function CreateAccountForm() {
   // --- step: setup ----------------------------------------------------------
   if (step === 'setup') {
     const usernameInvalid = usernameMsg.tone === 'error';
-    const passwordInvalid = passwordMsg.tone === 'error';
 
     return (
       <FieldGroup>
@@ -229,73 +197,7 @@ export function CreateAccountForm() {
           </FieldDescription>
         </Field>
 
-        {mode === 'generated' ? (
-          <Field>
-            <FieldLabel>Your password</FieldLabel>
-            <FieldDescription>
-              We generated a strong password for you. Save it in a password manager, or anywhere
-              you&apos;ll still have it later — there is no way to reset it if it&apos;s lost.
-            </FieldDescription>
-            <ShowOnceSecret
-              id="passphrase-saved"
-              secret={passphrase}
-              label="Your password"
-              saved={passphraseSaved}
-              onSavedChange={setPassphraseSaved}
-              confirmLabel="I've saved my password somewhere safe."
-              // Both of these change WHICH password you end up with, so they ride
-              // in the panel's `actions` slot — directly under the value, above
-              // Copy. Regenerate also clears the saved checkbox further down;
-              // sitting above it is what makes that reset look like cause and
-              // effect rather than the box emptying itself.
-              actions={
-                <div className="flex items-center justify-between">
-                  <button
-                    type="button"
-                    onClick={regeneratePassphrase}
-                    className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-                  >
-                    <RefreshCw className="size-3.5" />
-                    Regenerate
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setMode('own')}
-                    className="text-sm text-muted-foreground underline hover:text-foreground"
-                  >
-                    Choose my own
-                  </button>
-                </div>
-              }
-            />
-          </Field>
-        ) : (
-          <Field data-invalid={passwordInvalid}>
-            <FieldLabel htmlFor="password">Password</FieldLabel>
-            <PasswordInput
-              id="password"
-              autoComplete="new-password"
-              aria-invalid={passwordInvalid}
-              value={ownPassword}
-              onChange={(e) => setOwnPassword(e.target.value)}
-            />
-            <PasswordStrengthMeter displayScore={displayScore} />
-            <FieldDescription className={MESSAGE_TONE[passwordMsg.tone]}>
-              {passwordMsg.text}
-            </FieldDescription>
-            <FieldDescription>
-              A password of random words is stronger than most passwords you&apos;d type. If you use
-              your own, make it long and unique — there is no way to reset it if it&apos;s lost.{' '}
-              <button
-                type="button"
-                onClick={() => setMode('generated')}
-                className="underline hover:text-foreground"
-              >
-                Generate one instead
-              </button>
-            </FieldDescription>
-          </Field>
-        )}
+        <NewPasswordField control={newPassword} copy="create" idPrefix="signup" />
 
         <Field>
           <Button type="button" className="w-full" disabled={!canContinueSetup} onClick={goConfirm}>

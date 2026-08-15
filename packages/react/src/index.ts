@@ -8,3 +8,4 @@ export * from './hooks/use-stable-id';
 export * from './hooks/use-subscription-status';
 export * from './hooks/use-username-available';
 export * from './lib/field-messages';
+export * from './lib/new-password-copy';

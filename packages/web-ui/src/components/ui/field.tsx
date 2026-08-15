@@ -30,6 +30,13 @@
 // `flex flex-col gap-1.5` stays a deliberate alternative, not a lapse — it's what
 // the link editors and the settings sections use, and migrating them here would
 // buy machinery they don't need.
+//
+// Which makes `NewPasswordField` (components/auth/) the one thing that carries the
+// kit INTO Settings, and it's the boundary above rather than an exception to it:
+// that component is rendered by create-account and by Settings → change password
+// both, it wants the `data-invalid` cascade, and a vertical `Field` is `flex-col
+// gap-2` — exactly the column it replaced there, so nothing on that screen moved.
+// A shared component picks one spelling; the surfaces around it keep theirs.
 
 import { useMemo } from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';

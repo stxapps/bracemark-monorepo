@@ -331,9 +331,11 @@ Rough entropy targets, for calibration:
 | BIP-39 24-word seed                          | ~256 bits       | wallet reference point             |
 
 > **STATUS — ✅ built (typed path).** On the "type my own" path the create-account
-> form runs **zxcvbn** (`@zxcvbn-ts`, dynamically imported so it stays out of the
-> initial bundle; the CANONICAL password is scored, and the username is fed as a
-> penalty term) and **disables submit below `PASSWORD_MIN_GUESSES_LOG10`** — 10^18
+> form — and Settings → change password, which renders the same component
+> (`NewPasswordField`, below) — runs **zxcvbn** (`@zxcvbn-ts`, dynamically imported
+> so it stays out of the initial bundle; the CANONICAL password is scored, and the
+> username is fed as a penalty term on both)
+> and **disables submit below `PASSWORD_MIN_GUESSES_LOG10`** — 10^18
 > guesses ≈ 60 bits — with a strength meter
 > (`web-ui/components/auth/password-strength.tsx`), alongside the
 > `newPasswordSchema` 20-char floor above. The **generated** path is ~77 bits by
@@ -477,6 +479,27 @@ their own only behind a strength gate. As built:
   `ShowOnceSecret` in `web-ui/components/auth/` with a native twin in
   `bracemark-expo/src/features/auth/`; the settle controls are passed in per call
   site through its `actions` slot, since the recovery panel in Settings has none;
+- **the whole choose-a-password block is ONE component per platform** —
+  `NewPasswordField` + `useNewPassword`
+  (`web-ui/components/auth/new-password-field.tsx`, native twin in
+  `bracemark-expo/src/features/auth/`). It owns the generated/typed choice, the
+  `ShowOnceSecret` panel, the meter, the message line and **the gate**: the hook
+  returns `{ password, ok }`, and a caller spells its submit's `disabled` as `!ok`
+  and nothing else. Two surfaces render it — create-account's setup step and
+  Settings → **change password** — and they carried near-verbatim copies of it
+  until those drifted: Settings scored the typed password with **no penalty terms**
+  while create-account fed it the username, so a username-derived password could be
+  rejected at signup and accepted at rotation. Both pass `username` now. The words
+  all four surfaces print sit one layer further down again, beside the message
+  ladders (`NEW_PASSWORD_COPY`, `react/lib/new-password-copy.ts`) — two components
+  × two platforms is more copies than prose survives, and the typed-path paragraph
+  had already lost its "there is no way to reset it if it's lost" clause on the
+  Settings side. On web the component renders the **Field kit** even though the
+  rest of Settings hand-rolls a `Label` over a `flex flex-col gap-2` column:
+  `Field`'s vertical variant _is_ that column, so nothing moves, and this block
+  wants the `data-invalid` cascade the kit gives it. That Field-vs-`Label` split is
+  otherwise **per surface** and deliberate — auth forms use the kit, Settings and
+  the link editors don't (`web-ui/components/ui/field.tsx`);
 - a **confirm step** re-enters the password (verifying the user can reproduce it —
   there is no reset), then a **skippable recovery-code step** (show-once, same
   wallet panel). Skipping starts the account password-only; a **"no recovery set"
@@ -556,10 +579,12 @@ permanently and adjacently.** A disabled button is silent in every channel —
 hover, and nothing is announced — so it is only honest when the blocker is either
 a **permanent message line** under the offending field (the setup step, where the
 ladder _is_ the gate) or a **labelled checkbox** immediately above it
-(`passphraseSaved`, `recoverySaved`, delete-account's confirm box). Everything
+(`passphraseSaved`, `recoverySaved` — both `ShowOnceSecret`). Everything
 else stays live and answers the click with an announced error, which is the one
 channel a disabled button doesn't have
-([accessibility.md](./accessibility.md), _the one rule_).
+([accessibility.md](./accessibility.md), _the one rule_). Qualifying is a
+permission, not an obligation: delete-account's confirm box would satisfy this
+rule and deliberately doesn't take it (below).
 
 An in-flight request is the third allowed case, and there the **label** carries
 the state ("Signing in…", "Deleting account…") — the greyed rectangle announces
@@ -574,9 +599,17 @@ each with nothing on screen explaining it — recovery sign-in, delete-account's
 password, change-password's proof field, the recovery-code mint's password, and
 their expo twins. They now submit and answer in the slot that field's other errors
 already use. Delete-account reports the empty password and the unticked box in the
-same pass, so satisfying one doesn't reveal the other. The one emptiness gate that
-_stays_ is delete-account's `subscriptionBlocks`, which has a `SettingsNotice`
-above it stating the block in full and linking where to fix it.
+same pass, so satisfying one doesn't reveal the other — and that is precisely why
+its confirm box, legible enough to gate on, does **not** hold the button down. A
+checkbox gate can only ever report the miss it is gating on, so a user who typed a
+password but didn't tick would meet a dead button naming neither requirement, and
+wouldn't hear about the password until after ticking. `ShowOnceSecret`'s two boxes
+have neither problem: each is the only requirement on its step, and each attests
+to an act performed off-screen ("I've saved it") that the disable exists to teach.
+Create-account's disabled primary also sits above a **live** ghost alternative,
+where delete-account's button is the whole screen's only control. The one
+emptiness gate that _stays_ is delete-account's `subscriptionBlocks`, which has a
+`SettingsNotice` above it stating the block in full and linking where to fix it.
 
 Recovery sign-in was the worst of the five and got the deepest fix: it hand-rolled
 two `useState` fields plus a `string | null` error, which is how it drifted from
