@@ -1,4 +1,4 @@
-import { sha256 } from '@noble/hashes/sha256';
+import { sha256 } from '@noble/hashes/sha2';
 import { wordlist } from '@scure/bip39/wordlists/english';
 
 import { CRYPTO_CONTRACT_VECTOR } from './contract-vectors';
