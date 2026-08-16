@@ -1,6 +1,6 @@
 ---
 name: verify
-description: How to build, launch, and drive this repo's apps to verify a change end-to-end (bracemark-web GUI via headless Chromium).
+description: How to build, launch, and drive this repo's apps to verify a change end-to-end — bracemark-web via headless Chromium, bracemark-expo on the iOS simulator or Android emulator.
 ---
 
 # Verifying changes in this repo
@@ -64,3 +64,76 @@ description: How to build, launch, and drive this repo's apps to verify a change
   `#signup-new-password`, Continue, fill `#confirm`, Continue, then "Create account without
   a recovery code" on the recovery step (the primary there is disabled until the
   saved-it checkbox is ticked). Argon2 makes the submit take a few seconds.
+
+## Drive bracemark-expo (native surface)
+
+**Check whether you need this first.** Unlike the web surface — where
+`npm run dev` is 15 s and driving is nearly free — every path here starts with a
+**multi-minute native build that holds the foreground running Metro**, plus a
+~32 s cold emulator boot. Most changes are answered cheaper by jest
+(`npx nx test @stxapps/bracemark-expo`) or by the web surface above. Reach for a
+device when the change is native, visual, or layout/safe-area shaped, i.e. when
+you need to _look_ at it.
+
+For **suite** runs (`npm run e2e:mobile`, `npm run e2e:contract`) stop here and
+read `e2e/README.md` — this section is the ad-hoc "show me my change" loop.
+
+- **The prerequisite is an installed dev build**, and nothing installs it for
+  you: `npm run expo:android` or `npm run expo:ios` (from the root; both hold the
+  foreground, so background them or use a second terminal). App id is
+  `com.bracemark.app`. Both native dirs are prebuilt already — only re-run
+  `npm run prebuild` after an `app.config.ts`/plugin/native-dep change.
+- **Android additionally needs `npm run expo:reverse`** once per emulator boot,
+  before anything hits the api — it is `adb reverse` for 8787 (api) and 8788
+  (extractor). It is deliberately NOT chained onto `expo:android` (that script
+  never returns), it is idempotent and instant, and it survives reinstalls but
+  not a device reboot. Re-run it whenever unsure.
+
+### Android is the cheap path — `adb` alone is a complete loop
+
+No driver, no session, nothing to install. `adb`/`emulator` are on PATH via
+`.zshenv`, with `ANDROID_HOME=~/Library/Android/sdk`.
+
+```sh
+$ANDROID_HOME/emulator/emulator -avd bracemark-pixel8 -no-audio -no-boot-anim &
+adb wait-for-device                          # ~32 s cold; the only AVD, a Pixel 8
+adb exec-out screencap -p > shot.png         # capture
+adb shell uiautomator dump                   # query → /sdcard/window_dump.xml
+adb shell cat /sdcard/window_dump.xml        # the real view tree, as XML
+adb shell input tap <x> <y>                  # drive: also text / keyevent / swipe
+```
+
+### iOS: `simctl` is lifecycle only — `maestro` is the only way to query
+
+`simctl` has **no tap, no type, no query**. It boots, installs, launches, opens
+deep links (useful for share flows), and screenshots; anything that reads the
+screen needs Maestro on top (`~/.maestro/bin`, on PATH via `.zshenv`, verified
+working on this machine's Xcode 26).
+
+```sh
+xcrun simctl boot 'iPhone 17 Pro'            # `simctl list devices available`
+xcrun simctl io booted screenshot shot.png
+xcrun simctl openurl booted '<deep link>'
+maestro hierarchy                            # the a11y tree as text, no session
+```
+
+### Gotchas
+
+- **Boot ONE platform at a time.** `e2e/runner/lib.ts` passes Maestro no
+  `--device`, so with both a simulator and an emulator up it picks
+  non-deterministically or hangs on an interactive picker. Shut one down before
+  booting the other.
+- **`launchApp` resumes an app, it does not cold-start it.** A flow that assumes
+  it begins at a root screen passes alone and fails in a directory run, because
+  the previous flow left the app deep in a navigation stack. Reset with
+  `clearState`. The failure looks like a driver bug and is not one.
+- **Selectors are `testID`s, and they are an interface** — renaming one fails a
+  flow as a bare timeout that names nothing. The list is in `docs/e2e.md`, _the
+  testID contract_. Selectors otherwise bind to the a11y tree, so an unlabelled
+  control is untestable as well as inaccessible (`docs/accessibility.md`).
+- **Write screenshots to the scratchpad, not the repo** — nothing gitignores a
+  stray `shot.png` at the root.
+- `apps/bracemark-expo/ios/` and `android/` are generated and gitignored — never
+  hand-edit them to make a run work. → `docs/expo-build.md`
+- Why Maestro and not Appium/Detox, what a real device buys, and the AVD's
+  config: `docs/testing.md`, _driving the native apps_.

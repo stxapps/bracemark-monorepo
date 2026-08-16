@@ -226,6 +226,11 @@ makes [accessibility.md](./accessibility.md) load-bearing twice over: labels and
 roles are what a driver's selectors bind to, so an unlabelled control is
 untestable as well as inaccessible.
 
+As with the web surface above, the runnable half — the boot/install/screenshot/
+query commands for an ad-hoc "show me my change" run — lives in
+`.claude/skills/verify/SKILL.md`, and suite runs live in `e2e/README.md`. This
+section stays the design record.
+
 **iOS: `simctl` is lifecycle only.** `boot`, `install`, `launch`, `openurl`
 (deep links — useful for share flows), `io … screenshot` / `recordVideo`,
 `privacy`, `status_bar override`, `push`. There is **no tap, no type, no
