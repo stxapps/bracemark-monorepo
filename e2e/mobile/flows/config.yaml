@@ -1,0 +1,9 @@
+# Maestro workspace config for bracemark-expo. `maestro test mobile/flows` reads
+# this; run it from `e2e/` (or via `npx nx e2e-mobile @stxapps/e2e`).
+#
+# The glob is non-recursive on purpose: `subflows/` holds fragments meant to be
+# pulled in with `runFlow`, not run on their own, and a subflow executed
+# standalone fails confusingly on its unset `${...}` parameters.
+appId: com.bracemark.app
+flows:
+  - '*.yaml'

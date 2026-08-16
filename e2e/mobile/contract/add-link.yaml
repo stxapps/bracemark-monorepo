@@ -1,0 +1,25 @@
+# Contract leg: write on the device, so the browser can read it back.
+#
+# Driven by `runner/mobile-to-web.ts`. Outside `flows/` for the same reason as
+# verify-links.yaml.
+#
+# Parameters: USERNAME, PASSWORD, LINK_URL (full URL, scheme included).
+appId: com.bracemark.app
+---
+- runFlow:
+    file: ../flows/subflows/sign-in.yaml
+
+- tapOn: 'Add link'
+- tapOn:
+    id: 'add-link-url'
+- inputText: ${LINK_URL}
+- hideKeyboard
+- tapOn:
+    id: 'add-link-save'
+
+# Confirm the device itself considers the write done before handing over to the
+# browser. Without this the run could hand off mid-save and fail on the web side,
+# which is the wrong place to look for the bug.
+- extendedWaitUntil:
+    visible: ${LINK_URL.replace('https://', '')}
+    timeout: 20000

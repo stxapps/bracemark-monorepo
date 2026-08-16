@@ -69,6 +69,12 @@ out
 test-output
 next-env.d.ts
 
+# e2e run output (docs/e2e.md): Playwright traces and HTML reports, Maestro
+# screenshots, the run manifests, and the per-worker Chrome profiles the app
+# fixture creates — a profile holds a live session for a throwaway account and
+# must never be committed.
+/e2e/.artifacts/
+
 # Local env overrides (committed env files: .env.development, .env.production)
 .env*.local
 

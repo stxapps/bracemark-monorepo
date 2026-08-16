@@ -82,7 +82,8 @@
   },
   "workspaces": [
     "packages/*",
-    "apps/*"
+    "apps/*",
+    "e2e"
   ],
   "dependencies": {
     "@craftzdog/react-native-buffer": "^6.1.2",

@@ -1,0 +1,21 @@
+# Contract leg: read on the device what the browser wrote.
+#
+# Driven by `runner/web-to-mobile.ts`, which supplies every parameter. It lives
+# outside `flows/` on purpose — `flows/config.yaml` globs that directory, and a
+# contract leg run without its `-e LINK_*` parameters would fail on unset
+# variables rather than on anything meaningful.
+#
+# Parameters: USERNAME, PASSWORD, LINK_1, LINK_2 (the DISPLAY form — host+path,
+# scheme already stripped, because that is what an untitled link renders as).
+appId: com.bracemark.app
+---
+- runFlow:
+    file: ../flows/subflows/sign-in.yaml
+
+# Sign-in derives the keys and pulls the remote blob; decrypting it is the whole
+# assertion. The generous timeout covers the pull, not the derivation — the
+# subflow already waited that out.
+- extendedWaitUntil:
+    visible: ${LINK_1}
+    timeout: 60000
+- assertVisible: ${LINK_2}

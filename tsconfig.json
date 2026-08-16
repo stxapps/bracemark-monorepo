@@ -38,6 +38,9 @@
     },
     {
       "path": "./apps/bracemark-site"
+    },
+    {
+      "path": "./e2e"
     }
   ]
 }

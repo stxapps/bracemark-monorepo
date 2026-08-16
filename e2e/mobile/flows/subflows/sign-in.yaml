@@ -1,0 +1,37 @@
+# Sign in an existing account, from a cold start. Pulled in with `runFlow` by
+# every flow that needs a session; never run directly.
+#
+# Parameters (set by the caller's `env:`, or by `maestro test -e`):
+#   USERNAME, PASSWORD
+#
+# `clearState: true` is not optional. `launchApp` RESUMES an app rather than
+# cold-starting it (docs/testing.md, "verified against Xcode 26"), so a flow that
+# assumes it begins at the landing screen passes alone and fails in a directory
+# run, because the previous flow left the app deep in a navigation stack. That
+# failure looks exactly like the batch-mode driver bug and is not one.
+appId: com.bracemark.app
+---
+- launchApp:
+    clearState: true
+
+- tapOn: 'Sign in'
+
+- tapOn:
+    id: 'sign-in-username'
+- inputText: ${USERNAME}
+
+- tapOn:
+    id: 'sign-in-password'
+- inputText: ${PASSWORD}
+
+- hideKeyboard
+- tapOn:
+    id: 'sign-in-submit'
+
+# Argon2id (64 MiB, t=3) runs here on the device — slower than the browser, and
+# much slower on a cold simulator. This is the one place in the mobile flows that
+# genuinely needs a long wait.
+- extendedWaitUntil:
+    visible:
+      id: 'links-screen'
+    timeout: 60000

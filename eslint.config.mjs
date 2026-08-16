@@ -52,6 +52,18 @@ export default [
               sourceTag: 'type:shared',
               onlyDependOnLibsWithTags: ['type:shared'],
             },
+            // e2e (the `e2e/` project) drives the BUILT apps over the wire and
+            // the screen — it is a client of them, never a consumer of their
+            // source. Importing app or UI internals would let a refactor "fix" a
+            // broken flow, which is the one thing this layer exists to prevent.
+            // `shared` is allowed for ADDRESSING (the LinkQuery URL grammar, sync
+            // paths) and never for EXPECTATIONS: copy, crypto and formatting must
+            // be spelled out in the spec, or it can't catch a regression in them.
+            // See docs/e2e.md.
+            {
+              sourceTag: 'type:e2e',
+              onlyDependOnLibsWithTags: ['type:shared'],
+            },
             // Platform: agnostic code must stay portable; web/worker/expo may
             // also use agnostic libs but never each other's. This keeps
             // web-only libs (ui, web-crypto) out of the Cloudflare Workers api

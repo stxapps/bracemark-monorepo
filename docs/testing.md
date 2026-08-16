@@ -8,8 +8,14 @@ to.
 | layer                | what it covers                                       | how it runs                         |
 | -------------------- | ---------------------------------------------------- | ----------------------------------- |
 | **unit / component** | pure logic, hooks, a rendered component's behaviour  | `npm run test` — jest or vitest     |
-| **driving the app**  | a real build, a real browser or device, a whole flow | by hand / by agent, not a target    |
+| **driving the app**  | a real build, a real browser or device, a whole flow | `e2e/`, by hand / by agent          |
 | **typecheck + lint** | boundaries, types, the module-boundary tags          | `npm run typecheck`, `npm run lint` |
+
+The second layer now has a home: **`e2e/`, one Nx project, its own targets, never
+part of `npm run test`.** This doc stays the record of _which layer a question
+belongs to_; [e2e.md](./e2e.md) is the record of how that layer is built — the
+three surfaces it drives, why the standard Playwright auth fixture can't work
+against a non-extractable `CryptoKey`, and what e2e is forbidden to assert.
 
 The third layer is easy to forget in a testing doc, but it is the one that
 catches the largest class of mistake here: `@nx/enforce-module-boundaries` turns
@@ -133,6 +139,12 @@ young package and the wrong thing to read as a pass.
 
 ### driving bracemark-web
 
+> The scripted form of everything in this section now lives in `e2e/web/`, driven
+> by `@playwright/test`. This section remains the _reasoning_ — why a browser is
+> reached for at all, and why it isn't a `test` target. For the project layout,
+> the fixture constraints and the running instructions, see
+> [e2e.md](./e2e.md).
+
 **`playwright-core` is a root devDependency.** It drives the _system_ Chrome via
 `executablePath` rather than a downloaded browser — that is why it is
 `playwright-core` and not `playwright`, whose install pulls a browser bundle
@@ -202,6 +214,10 @@ real performance. See [share-sheet.md](./share-sheet.md) and
 [expo-build.md](./expo-build.md).
 
 #### the driver: Maestro, not Appium
+
+> The flows themselves live in `e2e/mobile/`; [e2e.md](./e2e.md) covers the
+> `testID` contract they bind to, the `adb reverse` the Android emulator needs,
+> and how a flow gets an account.
 
 The choice is **Maestro** — one YAML flow across the iOS simulator, the Android
 emulator and a real device, and `maestro hierarchy` dumps the view tree as text

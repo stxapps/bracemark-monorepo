@@ -1,0 +1,20 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "emitDeclarationOnly": false,
+    "lib": ["es2022", "dom", "dom.iterable"],
+    "types": ["node"],
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": [
+    "web/**/*.ts",
+    "runner/**/*.ts",
+    "global-setup.ts",
+    "paths.ts",
+    "playwright.config.ts"
+  ],
+  "exclude": [".artifacts", "node_modules", "eslint.config.mjs"]
+}

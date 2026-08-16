@@ -1,0 +1,21 @@
+# Sign in, and land on the links screen with the session intact after a restart.
+#
+# The restart half is the part worth driving a device for: the native session
+# lives in expo-secure-store + expo-sqlite, and "still signed in after a cold
+# start" is the mobile counterpart of web's reload spec. Everything else about
+# this form — validation, the recovery-code door swap, error announcement — is
+# already reachable from jest and belongs there.
+#
+#   maestro test mobile/flows/sign-in.yaml -e USERNAME=… -e PASSWORD=…
+appId: com.bracemark.app
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+
+# Cold-start again. `stopApp` first, because `launchApp` alone would resume.
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible:
+      id: 'links-screen'
+    timeout: 30000

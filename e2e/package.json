@@ -1,0 +1,34 @@
+{
+  "name": "@stxapps/e2e",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "nx": {
+    "tags": [
+      "type:e2e",
+      "platform:agnostic"
+    ],
+    "targets": {
+      "e2e-web": {
+        "cache": false
+      },
+      "e2e-mobile": {
+        "cache": false
+      },
+      "e2e-contract": {
+        "cache": false
+      }
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "e2e-web": "playwright test",
+    "e2e-web:headed": "playwright test --headed",
+    "e2e-web:report": "playwright show-report .artifacts/report",
+    "e2e-mobile": "tsx runner/mobile.ts",
+    "e2e-contract": "tsx runner/web-to-mobile.ts && tsx runner/mobile-to-web.ts"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1"
+  }
+}

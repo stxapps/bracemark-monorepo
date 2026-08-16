@@ -1,0 +1,30 @@
+# Add a link from the FAB and see it in the list.
+#
+#   maestro test mobile/flows/add-link.yaml -e USERNAME=… -e PASSWORD=… \
+#     -e LINK_URL=https://e2e-local.invalid/added-on-device
+#
+# LINK_URL should be unresolvable (`.invalid`), for the same reason the web specs
+# use one: bracemark-extractor's SSRF guard blocks every local address with no
+# allowlist, so a link that resolves would acquire an extracted title from the
+# live internet and make the assertion below non-deterministic. Assert on what was
+# typed, never on what was extracted — docs/e2e.md, "what e2e may not assert".
+appId: com.bracemark.app
+env:
+  LINK_URL: 'https://e2e-default.invalid/added-on-device'
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+
+- tapOn: 'Add link'
+- tapOn:
+    id: 'add-link-url'
+- inputText: ${LINK_URL}
+- hideKeyboard
+- tapOn:
+    id: 'add-link-save'
+
+# Untitled links fall back to the URL with the scheme stripped, so the host+path
+# is what renders in the row.
+- extendedWaitUntil:
+    visible: ${LINK_URL.replace('https://', '')}
+    timeout: 20000
