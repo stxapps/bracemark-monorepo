@@ -182,6 +182,9 @@ export function SubscriptionSection() {
 
   const refreshStatus = async () => {
     setError(null);
+    // The notice too — a restore's result must not outlive the status it
+    // described. bracemark-web's Refresh carries the full reasoning.
+    setNotice(null);
     setBusy('refresh');
     await refetch().catch(() => undefined);
     setBusy(null);
@@ -259,14 +262,17 @@ export function SubscriptionSection() {
                       : `Ends on ${formatDate(expiresAt)} — it won't renew.`}
             </Text>
           </View>
+          {/* `outline`, like the sync row's Sync now (settings/data-section.tsx) —
+              the trailing action of a bordered status block. bracemark-web's Refresh
+              carries the full reasoning; change the two together. */}
           <Button
-            variant="ghost"
+            variant="outline"
             size="sm"
             disabled={busy !== null}
             onPress={() => void refreshStatus()}
           >
             <Icon as={RefreshCw} className="size-4" />
-            <Text>Refresh</Text>
+            <Text>{busy === 'refresh' ? 'Refreshing…' : 'Refresh'}</Text>
           </Button>
         </View>
 
@@ -311,7 +317,7 @@ export function SubscriptionSection() {
       {error && <SettingsNotice tone="error">{error}</SettingsNotice>}
 
       {/* Upgrades. The extra column around the cards holds the consent line
-          closer than the pane's `gap-6`, so it reads as the cards' own fine
+          closer than the pane's `gap-8`, so it reads as the cards' own fine
           print rather than as another block of the screen — web's section is
           nested the same way, for the same reason.
 
@@ -337,7 +343,10 @@ export function SubscriptionSection() {
                         : `$${PLAN_USD_PER_YEAR[cardPlan]}/year`}
                     </Text>
                   </View>
-                  <Text className="mt-1 text-sm text-muted-foreground">{blurb}</Text>
+                  {/* 2, matching the current-plan block's `gap-0.5` above — same
+                      bordered box, same font-medium line over the same text-sm muted
+                      one. bracemark-web's card is the same line; change both. */}
+                  <Text className="mt-0.5 text-sm text-muted-foreground">{blurb}</Text>
                   <View className="mt-3 gap-1.5">
                     {features.map((feature) => (
                       <View key={feature} className="flex-row items-start gap-2">
@@ -374,6 +383,17 @@ export function SubscriptionSection() {
           <Button variant="ghost" size="sm" disabled={busy !== null} onPress={() => void restore()}>
             <Text>{busy === 'restore' ? 'Restoring…' : 'Restore purchases'}</Text>
           </Button>
+          {/* Names the SITUATION, because the label only names the mechanism — and
+              this screen carries a second control that also promises to fix a
+              wrong-looking plan. The two repair opposite gaps: Refresh re-reads OUR
+              server, for a purchase it already recorded (bought on the web, or on
+              another device); this re-drives verify for one the STORE holds and the
+              server never recorded. Same shape as the Manage note above. */}
+          <Text className="mt-2 text-xs text-muted-foreground">
+            Already subscribed with this device&apos;s{' '}
+            {STORE_SOURCE === 'appstore' ? 'App Store' : 'Play Store'} account? This brings it back
+            — after a reinstall, or on a new device.
+          </Text>
         </View>
       )}
     </SettingsPane>

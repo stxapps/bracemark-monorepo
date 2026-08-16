@@ -124,6 +124,14 @@ Three config families, because `preset` takes exactly one value:
   `nextJest()` still sets `preset: '../../jest.preset.js'`, and both files then
   patch the _resolved_ `transformIgnorePatterns` by hand, because `next/jest`
   only appends to it and can't relax the base `/node_modules/` ignore.
+  `bracemark-web` also maps its own `@/…` alias by hand
+  (`moduleNameMapper: { '^@/(.*)$': '<rootDir>/src/$1' }`), which is not
+  belt-and-braces: `next/jest` derives its path mapping from a **resolved
+  `baseUrl`**, and nothing in this workspace sets one — the `paths` entries are
+  resolved relative to their own tsconfig by TS 5, and by its own resolver by
+  Next. Without the mapping every `@/…` import is unresolvable under jest, and
+  the failure surfaces on the first spec to render a component that uses the
+  alias, naming a module that plainly exists.
 
 **`jest.esm-packages.cjs` is the single source of truth** for node_modules that
 ship raw ESM and must be transpiled rather than ignored. All three families read
@@ -159,20 +167,29 @@ The honest state, so nobody reads a green `npm run test` as coverage:
 | `shared`              | 37    | the best-covered project, by a lot                                           |
 | `bracemark-api`       | 13    | real D1/DO/R2 through the Workers pool; one is the workerd portability suite |
 | `expo-react`          | 9     |                                                                              |
-| `bracemark-expo`      | 7     |                                                                              |
+| `bracemark-expo`      | 8     |                                                                              |
 | `bracemark-extractor` | 5     |                                                                              |
 | `web-react`           | 3     |                                                                              |
+| **`bracemark-web`**   | **2** | **the generated `page.spec.tsx`, plus one settings regression**              |
 | `web-crypto`          | 1     |                                                                              |
 | `expo-crypto`         | 1     |                                                                              |
 | `bracemark-site`      | 1     | scaffold only                                                                |
-| **`bracemark-web`**   | **1** | **scaffold `page.spec.tsx` only**                                            |
 | **`web-ui`**          | **0** | test target, no specs                                                        |
 | **`react`**           | **0** | test target, no specs                                                        |
 
-The bottom three are the gap worth naming: `bracemark-web` is the primary app
-and has one generated spec, and the two web packages it is built out of have
-none. `passWithNoTests` is what keeps that green — it is the right setting for a
-young package and the wrong thing to read as a pass.
+The bold rows are the gap worth naming: `bracemark-web` is the primary app and
+has two specs, one of which is generated, and the two web packages it is built
+out of have none. `passWithNoTests` is what keeps that green — it is the right
+setting for a young package and the wrong thing to read as a pass.
+
+The one real `bracemark-web` spec is worth reading as a model of _which_ web
+behaviour is worth this layer. It pins a two-line contradiction — a subscription
+notice that outlives the status it described — by mocking the whole IAP edge and
+driving the activation poll on fake timers, in about a second. The same
+behaviour on the browser layer would need a real Paddle overlay and a real
+webhook. Its native peer (`bracemark-expo`'s `subscription-section.spec.tsx`)
+reaches the same state by the path that section actually offers, a restore
+verdict rather than a poll — two specs, one rule, neither a port of the other.
 
 ### driving bracemark-web
 

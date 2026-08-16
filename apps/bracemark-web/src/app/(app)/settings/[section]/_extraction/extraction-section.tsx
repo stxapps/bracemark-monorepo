@@ -106,7 +106,7 @@ export function ExtractionSection() {
           title="Server-side previews"
           description="Upgrade to fill in titles and preview images for links that weren't previewed on the device that saved them."
           action={
-            <Button asChild variant="outline">
+            <Button asChild variant="outline" size="sm">
               <Link href="/settings/subscription">Upgrade to Plus</Link>
             </Button>
           }

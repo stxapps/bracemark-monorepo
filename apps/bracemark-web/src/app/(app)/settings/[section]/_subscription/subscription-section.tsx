@@ -157,6 +157,11 @@ export function SubscriptionSection() {
 
   const refreshStatus = async () => {
     setError(null);
+    // The notice too, not just the error — the only path here that has to clear
+    // one it didn't set. pollActivation's timeout notice ("still processing —
+    // check back in a minute") is precisely what SENDS the user to this button,
+    // so leaving it up has it contradicting a plan box that just flipped to Plus.
+    setNotice(null);
     setBusy('refresh');
     await refetch().catch(() => undefined);
     setBusy(null);
@@ -225,9 +230,16 @@ export function SubscriptionSection() {
                       : `Ends on ${formatDate(expiresAt)} — it won't renew.`}
             </span>
           </div>
-          <Button variant="ghost" size="sm" disabled={busy !== null} onClick={refreshStatus}>
+          {/* `outline`, like the sync row's Sync now (_data/data-section.tsx) — the
+              same control in the same slot: a manual kick of something that already
+              runs on its own, alone as the trailing action of a bordered status
+              block. `ghost` on this surface means a bare-icon trigger or the quieter
+              of two adjacent buttons, and this is neither: Manage billing only
+              renders for a paid Paddle account, so on the plan a free user sees this
+              is the box's only control and has to look like one at rest. */}
+          <Button variant="outline" size="sm" disabled={busy !== null} onClick={refreshStatus}>
             <RefreshCw data-icon="inline-start" className="size-4" />
-            Refresh
+            {busy === 'refresh' ? 'Refreshing…' : 'Refresh'}
           </Button>
         </div>
 
@@ -263,7 +275,7 @@ export function SubscriptionSection() {
       {notice && <SettingsNotice tone="pending">{notice}</SettingsNotice>}
       {error && <SettingsNotice tone="error">{error}</SettingsNotice>}
 
-      {/* Upgrades. Wrapped in a tighter column than the pane's `gap-6` so the
+      {/* Upgrades. Wrapped in a tighter column than the pane's `gap-8` so the
           consent line reads as the cards' own fine print rather than as a third
           block of the section — the kit's note on SettingsPane calls for exactly
           this when something has to sit closer than the page rhythm.
@@ -290,7 +302,13 @@ export function SubscriptionSection() {
                       : `$${PLAN_USD_PER_YEAR[cardPlan]}/year`}
                   </span>
                 </div>
-                <p className="mt-1 text-sm text-muted-foreground">{blurb}</p>
+                {/* 2, matching the title/description step the rest of this surface
+                    uses — SettingsRow's `gap-0.5`, and the current-plan block above,
+                    which is the same bordered box with the same font-medium line over
+                    the same text-sm muted one. Kept as a margin rather than folded
+                    into a gap column because the card's three steps differ (2/12/16).
+                    bracemark-expo's card is the same line; change the two together. */}
+                <p className="mt-0.5 text-sm text-muted-foreground">{blurb}</p>
                 <ul className="mt-3 flex flex-1 flex-col gap-1.5">
                   {features.map((feature) => (
                     <li key={feature} className="flex items-start gap-2 text-sm">

@@ -11,6 +11,13 @@ const config = {
     '^(?!.*\\.(js|jsx|ts|tsx|css|json)$)': '@nx/react/plugins/jest',
   },
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx'],
+  // `@/…` — the app's own alias, declared as tsconfig `paths` with NO `baseUrl`
+  // (nothing in this workspace sets one; TS 5 resolves paths relative to the
+  // tsconfig, and Next's bundler has its own resolver). next/jest derives its
+  // path mapping from a resolved baseUrl, so without one it derives nothing and
+  // every `@/…` import is unresolvable under jest — the failure lands on the
+  // spec that first imports a component using the alias, not on the alias.
+  moduleNameMapper: { '^@/(.*)$': '<rootDir>/src/$1' },
   coverageDirectory: '../../coverage/apps/bracemark-web',
   testEnvironment: 'jsdom',
 };
