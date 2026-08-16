@@ -6,7 +6,33 @@
     "tsBuildInfoFile": "dist/tsconfig.lib.tsbuildinfo",
     "emitDeclarationOnly": true,
     "forceConsistentCasingInFileNames": true,
-    "types": ["node"],
+    // The ambient environment this package is allowed to assume. `shared` is
+    // platform:agnostic — the SAME source runs on browsers, on workerd
+    // (bracemark-api) and on Hermes (bracemark-expo) — so the globals the
+    // compiler hands us here ARE a portability claim, and `types: ["node"]`
+    // made a false one: it declares `crypto`, `Buffer`, `process`, `require`
+    // and `__dirname`, none of which Hermes has. That's how a bare
+    // `crypto.getRandomValues` in crypto/passphrase.ts typechecked and shipped,
+    // then threw `ReferenceError: Property 'crypto' doesn't exist` on the expo
+    // create-account screen (docs/expo-native-deps.md, _runtime polyfills_).
+    //
+    // `webworker` is the closest published lib to the intersection of the three
+    // runtimes: it has fetch/Response/URL/TextEncoder/AbortSignal/setTimeout and
+    // NOT document/window/localStorage/Buffer/process. It is still a superset of
+    // Hermes — no published lib describes Hermes, and `crypto` is in webworker —
+    // so the remaining gap is closed by lint, not by types: the deny list in
+    // tools/eslint/agnostic-globals.mjs is where a global that Hermes or workerd
+    // lacks gets refused by name. Types narrow the surface; the deny list is the
+    // contract. Both are needed; neither alone is enough.
+    //
+    // Node types stay available to the SPEC config (tsconfig.spec.json) — the
+    // tests do run on node.
+    //
+    // `webworker.iterable` is the iterator half of the same lib (it's what makes
+    // `URLSearchParams.entries()` exist), split out by TypeScript the way
+    // `dom.iterable` is — without it the lib is a subset of every real runtime.
+    "lib": ["es2022", "webworker", "webworker.iterable"],
+    "types": [],
     "module": "preserve"
   },
   "include": ["src/**/*.ts"],

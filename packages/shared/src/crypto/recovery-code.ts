@@ -27,9 +27,13 @@ const GROUP_SIZE = 5;
 
 // Generate a fresh recovery code: 32 CSPRNG bytes → Crockford base32 → grouped
 // for display. Uses the standard `crypto.getRandomValues` global (never
-// Math.random). The returned string is what we SHOW; feed it (or user input)
+// Math.random) — which Hermes lacks, so bracemark-expo installs it at entry; see
+// the note in passphrase.ts. The returned string is what we SHOW; feed it (or user input)
 // through normalizeRecoveryCode before deriving the KEK.
 export function generateRecoveryCode(): string {
+  // getRandomValues is the one portable member of `crypto`; the full note is on
+  // the identical disable in passphrase.ts.
+  // eslint-disable-next-line no-restricted-globals -- portable member, see above
   const raw = base32crockford.encode(crypto.getRandomValues(new Uint8Array(RECOVERY_CODE_BYTES)));
   const groups: string[] = [];
   for (let i = 0; i < raw.length; i += GROUP_SIZE) groups.push(raw.slice(i, i + GROUP_SIZE));

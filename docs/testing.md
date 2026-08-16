@@ -68,6 +68,43 @@ execution, `npx nx reset` or scope to one project with
 
 `bracemark-extension` has no test target and no specs.
 
+### the portability suites
+
+The runner table above splits by the runtime code executes in, which leaves one
+thing uncovered: `shared` and `react` are `platform:agnostic` — compiled once and
+run on browsers, on workerd and on Hermes — yet their own specs run on node under
+jest, which has every global all three engines lack. That is exactly how
+`crypto.getRandomValues` in `crypto/passphrase.ts` reached production: it
+typechecked, it passed lint, it passed 37 jest specs, and it threw
+`ReferenceError: Property 'crypto' doesn't exist` when `bracemark-expo`'s
+create-account screen mounted. A missing global is a fact about an engine, and
+node is not one of our engines.
+
+Two static guards now bound what agnostic code may assume — the `webworker`
+ambient surface in `packages/shared/tsconfig.lib.json` and the deny list in
+`tools/eslint/agnostic-globals.mjs` (docs/architecture.md, _the globals a
+`platform:agnostic` package may assume_). Both reason about what the source
+_says_. These two check what an engine actually _does_:
+
+- **workerd** — `apps/bracemark-api/src/shared-portability.spec.ts`. It lives in
+  that app only because the Workers pool is the workspace's one non-node test
+  runtime; it tests the dependency, not the api. Importing the `@stxapps/shared`
+  barrel is itself half the test — every module evaluates, which is what catches
+  a module-scope global reach (`@noble/hashes` reads `globalThis.crypto` once at
+  init and captures the result, so that failure lands at import, not at call).
+  The rest calls the functions that reach a global at call time, so an engine
+  that has the name but not the behaviour still fails.
+- **Hermes** — no equivalent exists and none can cheaply: `jest-expo` runs on
+  node, not Hermes, and there is no in-engine runner for React Native. It's
+  enforced at runtime instead, by the `__DEV__` audit in
+  `apps/bracemark-expo/src/polyfills.ts` that throws at launch naming any missing
+  global — so every dev launch and every Maestro run checks it for free
+  (docs/expo-native-deps.md, _runtime polyfills_).
+
+Keep the two global lists in step; together they're one contract checked on the
+two engines that can't be taken for granted. Neither sees import **order**, which
+is why `polyfills.ts` is the first import of both native entries.
+
 ### the shared jest plumbing
 
 Three config families, because `preset` takes exactly one value:
@@ -117,20 +154,20 @@ an install, check that link before anything else.
 
 The honest state, so nobody reads a green `npm run test` as coverage:
 
-| project               | specs | note                                   |
-| --------------------- | ----- | -------------------------------------- |
-| `shared`              | 37    | the best-covered project, by a lot     |
-| `bracemark-api`       | 12    | real D1/DO/R2 through the Workers pool |
-| `expo-react`          | 9     |                                        |
-| `bracemark-expo`      | 7     |                                        |
-| `bracemark-extractor` | 5     |                                        |
-| `web-react`           | 3     |                                        |
-| `web-crypto`          | 1     |                                        |
-| `expo-crypto`         | 1     |                                        |
-| `bracemark-site`      | 1     | scaffold only                          |
-| **`bracemark-web`**   | **1** | **scaffold `page.spec.tsx` only**      |
-| **`web-ui`**          | **0** | test target, no specs                  |
-| **`react`**           | **0** | test target, no specs                  |
+| project               | specs | note                                                                         |
+| --------------------- | ----- | ---------------------------------------------------------------------------- |
+| `shared`              | 37    | the best-covered project, by a lot                                           |
+| `bracemark-api`       | 13    | real D1/DO/R2 through the Workers pool; one is the workerd portability suite |
+| `expo-react`          | 9     |                                                                              |
+| `bracemark-expo`      | 7     |                                                                              |
+| `bracemark-extractor` | 5     |                                                                              |
+| `web-react`           | 3     |                                                                              |
+| `web-crypto`          | 1     |                                                                              |
+| `expo-crypto`         | 1     |                                                                              |
+| `bracemark-site`      | 1     | scaffold only                                                                |
+| **`bracemark-web`**   | **1** | **scaffold `page.spec.tsx` only**                                            |
+| **`web-ui`**          | **0** | test target, no specs                                                        |
+| **`react`**           | **0** | test target, no specs                                                        |
 
 The bottom three are the gap worth naming: `bracemark-web` is the primary app
 and has one generated spec, and the two web packages it is built out of have
@@ -200,10 +237,57 @@ machine is broken — a dangling `python@3.10` interpreter and no `idb_companion
 tap/swipe/text/keyevent`, `adb exec-out screencap -p`, `adb shell am start -a
 android.intent.action.SEND` for share intents, `adb logcat` — and crucially
 `adb shell uiautomator dump`, a real queryable XML view tree. This is the
-friendliest of the three surfaces. Note there is no AVD created yet; the
-`android-36.1` `google_apis_playstore` arm64-v8a image is downloaded. The Play
-Store image cannot `adb root`, so pull the plain `google_apis` variant if that
-ever matters.
+friendliest of the three surfaces. The Play Store image cannot `adb root`, so
+pull the plain `google_apis` variant if that ever matters.
+
+#### the AVD
+
+One emulator, `bracemark-pixel8` — a **Pixel 8** (1080×2400, 420 dpi) on the
+`android-36.1` `google_apis_playstore` arm64-v8a image. Phone only; there is no
+tablet AVD until something needs one.
+
+The image choice is **disk, not preference**: that one was already downloaded
+(2.3 GB), and any other API level or variant is a fresh 1.5–2.5 GB. `minSdkVersion`
+is 33, so 36.1 is comfortably in range.
+
+Created with `avdmanager`, which needed `cmdline-tools` — the SDK here shipped
+with `emulator` and `platform-tools` only, so it was bootstrapped from Google's
+zip (`cmdline-tools;latest`, 22.0, 173 MB installed). `avdmanager` prints a
+`Could not load devices from …/devices.xml` error while creating and creates the
+AVD correctly anyway; it is reading a device list the system image doesn't ship,
+not failing.
+
+```sh
+export ANDROID_HOME="$HOME/Library/Android/sdk"
+export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
+avdmanager create avd -n bracemark-pixel8 \
+  -k "system-images;android-36.1;google_apis_playstore;arm64-v8a" -d pixel_8
+$ANDROID_HOME/emulator/emulator -avd bracemark-pixel8 -no-audio -no-boot-anim &
+```
+
+Six edits to `~/.android/avd/bracemark-pixel8.avd/config.ini` after creating it,
+four for disk and two the defaults get wrong for e2e:
+
+| key                         | default → set    | why                                                        |
+| --------------------------- | ---------------- | ---------------------------------------------------------- |
+| `disk.dataPartition.size`   | `10G` → `4G`     | the qcow2 grows into this cap                              |
+| `hw.sdCard` / `sdcard.size` | `yes`/512M → off | nothing here uses one                                      |
+| `fastboot.forceColdBoot`    | `no` → `yes`     | a boot snapshot is ~RAM-sized, ~2 GB                       |
+| `firstboot.*Snapshot`       | `yes` → `no`     | ditto, plus avoids a snapshot download                     |
+| `hw.gpu.enabled`            | **`no`** → `yes` | `no` is software rendering — slow enough to time out flows |
+| `hw.keyboard`               | **`no`** → `yes` | hardware keyboard for `inputText`                          |
+
+Measured: 32 s cold boot, and `maestro hierarchy` returns a 69 KB tree at exit
+0 — the same attach check _verified against Xcode 26_ below records for iOS.
+
+Disk is **~2.4 GB** in `~/.android/avd`, essentially all of it
+`userdata-qemu.img.qcow2`, and it is worth knowing the shape of that number: it
+reads 1.0 GB the moment boot completes and settles at 2.3 GB after the first
+clean shutdown. Measure after a full boot/shutdown cycle or you will record less
+than half the real cost. The cap is `disk.dataPartition.size` above, so it grows
+toward 4 GB as the app writes and never past it. The cold-boot settings do hold
+— the shutdown log says `Snapshots have been disabled by the user, save request
+is ignored`, which is the ~2 GB that is _not_ on disk.
 
 **A real iPhone is possible and is the highest-friction path.** It needs a dev
 build signed with a profile carrying the device UDID, and WebDriverAgent

@@ -26,8 +26,10 @@ export const PASSPHRASE_DEFAULT_WORDS = 7;
 
 // Uniformly pick `words` entries from the 2048-word list with a CSPRNG and join
 // them with HYPHENS. Entropy = words * 11 bits (7 → 77). Uses the standard
-// `crypto.getRandomValues` global (present on web/Workers and on Hermes via the
-// app's react-native-get-random-values polyfill) — never Math.random.
+// `crypto.getRandomValues` global — never Math.random. Present on web/Workers;
+// on Hermes there is no `crypto` global at all, so bracemark-expo installs this
+// one method from its entry (apps/bracemark-expo/src/polyfills.ts, backed by
+// quick-crypto's native CSPRNG) before any app code runs.
 //
 // Hyphen, not space: the string is a `password` (no trim/normalization on the
 // derivation path — see derivePasswordKek), shown once and RE-TYPED at the
@@ -45,6 +47,14 @@ export function generatePassphrase(words: number = PASSPHRASE_DEFAULT_WORDS): st
     throw new RangeError('generatePassphrase: refuse fewer than 4 words (too little entropy)');
   }
   // Two bytes per word, read as a big-endian 16-bit value then masked to 11 bits.
+  //
+  // The deny list (tools/eslint/agnostic-globals.mjs) refuses `crypto` in
+  // platform-agnostic code because Hermes has no such global. getRandomValues is
+  // the ONE member that is portable across all three engines: native on web and
+  // workerd, installed on Hermes by apps/bracemark-expo/src/polyfills.ts. Keep
+  // this disable on the line it excuses — a comment between the two silently
+  // detaches the directive, and `npm run fix` then deletes it as unused.
+  // eslint-disable-next-line no-restricted-globals -- portable member, see above
   const bytes = crypto.getRandomValues(new Uint8Array(words * 2));
   const picked: string[] = [];
   for (let i = 0; i < words; i++) {

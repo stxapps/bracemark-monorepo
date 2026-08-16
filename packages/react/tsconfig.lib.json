@@ -2,7 +2,14 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "dist",
-    "types": ["node", "@nx/react/typings/cssmodule.d.ts", "@nx/react/typings/image.d.ts"],
+    // platform:agnostic — same rule as packages/shared/tsconfig.lib.json, which
+    // carries the full reasoning: node's globals are not a portability claim this
+    // package can make (its consumers include Hermes), so the ambient surface is
+    // the webworker lib plus the deny list in tools/eslint/agnostic-globals.mjs.
+    // The two @nx/react typings stay — they're module declarations for imported
+    // .css/.svg assets, not globals.
+    "lib": ["es2022", "webworker", "webworker.iterable"],
+    "types": ["@nx/react/typings/cssmodule.d.ts", "@nx/react/typings/image.d.ts"],
     "rootDir": "src",
     "jsx": "react-jsx",
     "tsBuildInfoFile": "dist/tsconfig.lib.tsbuildinfo"

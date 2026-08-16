@@ -362,3 +362,41 @@ so the app doesn't lean on hoist order — as `*`, with the version pinned once 
 the workspace root (`^6.1.2`), the same root-pin + app-`*` convention the other
 RN native deps use (`react-native-quick-base64`, `react-native-quick-crypto`).
 This can only be exercised on a native build, not jest/Metro.
+
+The same file installs **`crypto.getRandomValues`**. Hermes has no `crypto`
+global at all and the winter runtime installs none, so the two secrets
+`@stxapps/shared` mints in platform-agnostic code — `generatePassphrase`
+(`crypto/passphrase.ts`, the create-account default) and `generateRecoveryCode`
+(`crypto/recovery-code.ts`) — crash the create-account screen on mount with
+`ReferenceError: Property 'crypto' doesn't exist`. @noble/hashes' `randomBytes`
+reads `globalThis.crypto` **once at module init**, so this belongs at the entry
+rather than behind the first caller. It is backed by `react-native-quick-crypto`'s
+native CSPRNG (already a dependency of `@stxapps/expo-crypto`, so no new native
+module) — but **not** via quick-crypto's own `install()`, which assigns the whole
+module to `global.crypto` and also replaces `global.Buffer`. The `require` is
+**lazy and memoized**, for the same reason as `newId`'s in
+`packages/expo-crypto/src/lib/ids.ts`: `polyfills.ts` is also the first import of
+`index.share.js`, and a static import would drag quick-crypto's ~390KB of JS into
+the init of the iOS share extension's process, which is re-created on every share
+([share-sheet.md](./share-sheet.md), _keep `index.share.js` lean_). The shim is
+deliberately partial — no `subtle`, no `randomUUID` (native ids go through
+expo-crypto's `newId`).
+
+Last in the file, and **only under `__DEV__`**, comes the **audit**: a list of
+every global the platform-agnostic packages are allowed to assume, checked
+against this engine, throwing at boot with the missing names. It is the runtime
+half of the contract those packages are held to statically (see
+[architecture.md](./architecture.md), _the globals a `platform:agnostic` package
+may assume_) — lint refuses a global that isn't portable, the audit catches one
+that is supposed to be portable and turns out to be missing here. That gap is
+exactly what shipped the `crypto` crash, and it is not hypothetical maintenance:
+every name in the list that isn't ours comes from Hermes or Expo's winter runtime
+(`node_modules/expo/src/winter/runtime.native.ts`, which installs `TextDecoder`,
+`URL`, `URLSearchParams` and `structuredClone`), so an SDK upgrade can withdraw
+one. The failure it replaces is a `ReferenceError` from whatever screen touches
+the API first, three navigations deep and blamed on the feature; the audit names
+it at launch instead. `__DEV__` is compile-time constant, so Metro drops the
+whole block from release bundles — the share extension's cold boot pays nothing.
+What it cannot see is import **order**: a module that reads `globalThis.crypto`
+at its own init still loses if it evaluates before `polyfills.ts`, which is why
+that import is first in both entries and not lazy.

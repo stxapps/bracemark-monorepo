@@ -321,6 +321,58 @@ bracemark-api` below; `expo` is React Native/Hermes — no DOM, no Web Crypto.)
 When you add a new package, give it both a `type:` and a `platform:` tag, and
 add a matching `type:crypto`-style constraint block if it's a new layer.
 
+#### the globals a `platform:agnostic` package may assume
+
+The tags above govern what a package may **import**. This governs what it may
+**reach for without importing** — and it's the same portability question, one
+level down. `shared` and `react` are compiled once and run on three engines:
+browsers, workerd (`bracemark-api`) and Hermes (`bracemark-expo`). Every ambient
+global they touch is a claim that all three provide it, and until this was
+written down nothing checked the claim. `crypto.getRandomValues` in
+`crypto/passphrase.ts` typechecked, passed jest (node has `crypto`), passed lint,
+and threw `ReferenceError: Property 'crypto' doesn't exist` the moment
+`bracemark-expo`'s create-account screen mounted — Hermes has no `crypto` global
+at all.
+
+The root cause was a config that asserted the wrong thing: those packages
+compiled with `types: ["node"]`, which declares `crypto`, `Buffer`, `process`,
+`require` and `__dirname` for source that must run where none of them exist.
+Two mechanisms replace it, and **both are needed because neither is sufficient**:
+
+- **The ambient surface is pinned by `lib`, not by `@types/node`.** Both agnostic
+  packages compile with `"lib": ["es2022", "webworker", "webworker.iterable"]`
+  and `"types": []` (the nx asset-module typings aside). `webworker` is the
+  closest published lib to the three-way intersection — `fetch`/`Response`/`URL`/
+  `TextEncoder`/`AbortSignal`/`setTimeout` yes, `document`/`window`/`localStorage`/
+  `Buffer`/`process` no. Node types stay available to the **spec** tsconfigs; the
+  tests really do run on node.
+- **The rest is refused by name**, in `tools/eslint/agnostic-globals.mjs`, wired
+  into both packages' `eslint.config.mjs`. No published lib describes Hermes — it
+  is the floor, and `crypto` is in `webworker` — so the last gap has to be a
+  hand-maintained deny list. It runs in both directions: browser/worker-only
+  names (`document`, `indexedDB`, `caches`) because Hermes lacks them, and
+  React-Native-only names (`setImmediate`, `__DEV__`) because the browser and
+  workerd lack them. Each entry carries the fix in its message.
+
+Reaching for a denied global is allowed as a **one-off with an
+`eslint-disable-next-line` and a comment naming the platform that makes it safe**
+— that's what the two `crypto.getRandomValues` sites do, since that one member is
+portable (native on web and workerd, installed on Hermes by
+`apps/bracemark-expo/src/polyfills.ts`). Adding a name to the deny list is cheap;
+taking one off means verifying it on all three engines first, and usually means a
+new polyfill. Keep the disable comment on the line it excuses: a comment between
+the directive and the code detaches it, and `npm run fix` then deletes it as
+unused.
+
+The runtime counterpart is a `__DEV__` boot audit in `src/polyfills.ts` that
+fails the native app at launch, naming any global from this contract that Hermes
+turns out not to have — see [expo-native-deps.md](./expo-native-deps.md),
+_runtime polyfills_. Lint refuses globals that **aren't** portable; the audit
+catches ones that are **supposed** to be and aren't. Neither can see import
+**order** — a module that reads `globalThis.crypto` at its own init (as
+`@noble/hashes` does) still loses if it evaluates first, which is why
+`polyfills.ts` is the first import of both native entries.
+
 ### dependency versions
 
 Where the previous section governs _what_ a project may import, this one governs

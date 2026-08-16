@@ -344,11 +344,11 @@ that directory, and it means two runs never contend for the same rows.
 
 ### state today
 
-| surface  | status                                                                       |
-| -------- | ---------------------------------------------------------------------------- |
-| web      | **5 specs, passing** — account (reload, sign-out), links, lists              |
-| native   | 4 flows written, YAML validated, **not yet executed** — no dev build, no AVD |
-| contract | both runners written, **not yet executed** — same reason                     |
+| surface  | status                                                                   |
+| -------- | ------------------------------------------------------------------------ |
+| web      | **5 specs, passing** — account (reload, sign-out), links, lists          |
+| native   | 4 flows written, YAML validated, **not yet executed** — no dev build yet |
+| contract | both runners written, **not yet executed** — same reason                 |
 
 The honest reading of that table: the web half is real, and the native and
 contract halves are scaffolding whose first real run will find things. The
