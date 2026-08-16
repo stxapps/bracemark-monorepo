@@ -48,11 +48,32 @@ export async function waitForApi(timeoutMs = 90_000): Promise<void> {
 // web fixture takes the "Choose my own" path rather than the generated
 // passphrase: a secret we chose can be passed along, one the app generated would
 // have to be scraped off a screen.
-export async function provisionAccount(label: string): Promise<Credentials> {
+//
+// `withRecovery` is the one case where that preference has nothing to prefer —
+// a recovery code cannot be chosen, only minted — so it IS scraped, off the
+// show-once panel, and handed along the same way.
+export interface ProvisionOptions {
+  // Also mint a recovery code and return it. `mobile/flows/recovery-sign-in.yaml`
+  // is the only thing that needs one, and it cannot bring its own: the code is
+  // CSPRNG-minted by the client and shown once, so the ceremony is the only place
+  // to capture it (createAccountWithRecovery carries the full reasoning).
+  withRecovery?: boolean;
+}
+
+export interface ProvisionedAccount extends Credentials {
+  recoveryCode?: string;
+}
+
+export async function provisionAccount(
+  label: string,
+  options: ProvisionOptions = {},
+): Promise<ProvisionedAccount> {
   await waitForApi();
-  const app = await launchApp(profileDir(`provision-${label}`));
+  const app = await launchApp(profileDir(`provision-${label}`), {
+    withRecovery: options.withRecovery,
+  });
   try {
-    return app.credentials;
+    return { ...app.credentials, recoveryCode: app.recoveryCode };
   } finally {
     await app.close();
   }

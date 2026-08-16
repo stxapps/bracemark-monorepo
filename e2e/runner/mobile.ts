@@ -14,15 +14,27 @@ import { maestro, provisionAccount, waitForApi, writeManifest } from './lib';
 async function main(): Promise<void> {
   await waitForApi();
 
-  const credentials = await provisionAccount('mobile');
+  // `withRecovery` because one flow in the directory signs in through the
+  // recovery door. It costs one extra checkbox on the way through the ceremony,
+  // and the resulting account behaves identically for every other flow — a
+  // recovery door is additive, not a different kind of account (docs/account.md,
+  // _the doors_).
+  const account = await provisionAccount('mobile', { withRecovery: true });
+  if (!account.recoveryCode) throw new Error('provisioning returned no recovery code');
+
   const manifest = await writeManifest('mobile-run', {
-    username: credentials.username,
-    password: credentials.password,
+    username: account.username,
+    password: account.password,
+    recoveryCode: account.recoveryCode,
   });
   console.log(`wrote ${manifest}`);
 
   await maestro('mobile/flows', {
-    env: { USERNAME: credentials.username, PASSWORD: credentials.password },
+    env: {
+      USERNAME: account.username,
+      PASSWORD: account.password,
+      RECOVERY_CODE: account.recoveryCode,
+    },
   });
 }
 

@@ -24,6 +24,14 @@ import { PasswordInput } from './password-input';
 // door unwraps the same DEK). Same react-hook-form setup as web via the shared
 // useSignInForm; the RN difference is Controller + onChangeText in place of
 // register (no DOM events to spread).
+//
+// Every control here carries a `testID`: this is the one screen every Maestro
+// flow crosses, and flows may bind to `testID` and accessible labels but never
+// to body copy (docs/e2e.md, _the testID contract_) — including the two mode
+// toggles, which is how a flow reaches the recovery door at all. The
+// `aria-label`s are not the same job and do not replace them: RN has no
+// `<label for>`, so an Input whose only label is the adjacent `<Text>` announces
+// as an unnamed text field.
 export function SignInForm() {
   const [mode, setMode] = React.useState<'password' | 'recovery'>('password');
   return mode === 'password' ? (
@@ -71,6 +79,9 @@ function PasswordSignIn({ onUseRecovery }: { onUseRecovery: () => void }) {
           name="username"
           render={({ field }) => (
             <Input
+              testID="sign-in-username"
+              aria-label="Username"
+              aria-invalid={!!errors.username}
               autoComplete="username"
               autoCapitalize="none"
               autoCorrect={false}
@@ -95,6 +106,9 @@ function PasswordSignIn({ onUseRecovery }: { onUseRecovery: () => void }) {
           name="password"
           render={({ field }) => (
             <PasswordInput
+              testID="sign-in-password"
+              aria-label="Password"
+              aria-invalid={!!errors.password}
               autoComplete="current-password"
               className={cn(errors.password && 'border-destructive')}
               value={field.value}
@@ -110,11 +124,16 @@ function PasswordSignIn({ onUseRecovery }: { onUseRecovery: () => void }) {
       </View>
 
       <View className="gap-1">
-        <Button disabled={isSubmitting} onPress={handleSubmit(onSubmit)}>
+        <Button testID="sign-in-submit" disabled={isSubmitting} onPress={handleSubmit(onSubmit)}>
           <Text>{isSubmitting ? 'Signing in…' : 'Sign in'}</Text>
         </Button>
-        {errors.root ? <ErrorText>{errors.root.message}</ErrorText> : null}
-        <Pressable role="button" onPress={onUseRecovery} className="items-center py-2">
+        {errors.root ? <ErrorText testID="sign-in-error">{errors.root.message}</ErrorText> : null}
+        <Pressable
+          testID="sign-in-use-recovery"
+          role="button"
+          onPress={onUseRecovery}
+          className="items-center py-2"
+        >
           <Text className="text-sm text-muted-foreground underline">
             Forgot your password? Use a recovery code
           </Text>
@@ -167,6 +186,9 @@ function RecoverySignIn({ onUsePassword }: { onUsePassword: () => void }) {
           name="username"
           render={({ field }) => (
             <Input
+              testID="sign-in-recovery-username"
+              aria-label="Username"
+              aria-invalid={!!errors.username}
               autoComplete="username"
               autoCapitalize="none"
               autoCorrect={false}
@@ -191,6 +213,9 @@ function RecoverySignIn({ onUsePassword }: { onUsePassword: () => void }) {
           name="recoveryCode"
           render={({ field }) => (
             <Input
+              testID="sign-in-recovery-code"
+              aria-label="Recovery code"
+              aria-invalid={!!errors.recoveryCode}
               autoComplete="off"
               autoCapitalize="characters"
               autoCorrect={false}
@@ -208,11 +233,22 @@ function RecoverySignIn({ onUsePassword }: { onUsePassword: () => void }) {
       </View>
 
       <View className="gap-1">
-        <Button disabled={isSubmitting} onPress={handleSubmit(onSubmit)}>
+        <Button
+          testID="sign-in-recovery-submit"
+          disabled={isSubmitting}
+          onPress={handleSubmit(onSubmit)}
+        >
           <Text>{isSubmitting ? 'Signing in…' : 'Sign in with recovery code'}</Text>
         </Button>
-        {errors.root ? <ErrorText>{errors.root.message}</ErrorText> : null}
-        <Pressable role="button" onPress={onUsePassword} className="items-center py-2">
+        {errors.root ? (
+          <ErrorText testID="sign-in-recovery-error">{errors.root.message}</ErrorText>
+        ) : null}
+        <Pressable
+          testID="sign-in-use-password"
+          role="button"
+          onPress={onUsePassword}
+          className="items-center py-2"
+        >
           <Text className="text-sm text-muted-foreground underline">Use your password instead</Text>
         </Pressable>
       </View>

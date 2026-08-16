@@ -29,7 +29,12 @@ const StyledSafeAreaView = withUniwind(SafeAreaView);
 export default function LinksScreen() {
   return (
     <LinksViewStateProvider>
-      <StyledSafeAreaView className="flex-1 bg-background">
+      {/* `links-screen` is what every Maestro flow waits on to know a sign-in
+          landed — the root marker of docs/e2e.md's testID contract. It sits on
+          the screen root rather than on any of the panes below because those
+          swap (LockPane, EmptyState) while this is what "signed in and home"
+          means. */}
+      <StyledSafeAreaView testID="links-screen" className="flex-1 bg-background">
         <View className="min-h-0 flex-1">
           <Topbar />
           <SearchBar />

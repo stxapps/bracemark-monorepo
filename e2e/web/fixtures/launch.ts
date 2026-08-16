@@ -2,7 +2,13 @@ import { rm } from 'node:fs/promises';
 
 import { type BrowserContext, chromium, type Page } from '@playwright/test';
 
-import { createAccount, type Credentials, newCredentials, signIn } from './account';
+import {
+  createAccount,
+  createAccountWithRecovery,
+  type Credentials,
+  newCredentials,
+  signIn,
+} from './account';
 import { CHROME_PATH, WEB_URL } from './env';
 
 // Launching a signed-in bracemark-web, as a plain function rather than a fixture —
@@ -21,6 +27,9 @@ export interface LaunchedApp {
   // right one because we put it there.
   page: Page;
   credentials: Credentials;
+  // Present only when `withRecovery` was asked for. Undefined otherwise because
+  // the account genuinely has no recovery door, not because it wasn't captured.
+  recoveryCode?: string;
   close(): Promise<void>;
 }
 
@@ -28,6 +37,11 @@ export interface LaunchOptions {
   // Sign in to an existing account instead of creating a new one. The contract
   // runner's reverse leg uses this: the account was made on the phone.
   existing?: Credentials;
+  // Take create-account's recovery-code exit instead of skipping it, and return
+  // the minted code as `recoveryCode`. Only the mobile runner wants this — see
+  // createAccountWithRecovery. Ignored when `existing` is set: that account was
+  // created elsewhere and its code, if any, was shown once and is gone.
+  withRecovery?: boolean;
   // Watch the run. `slowMo` is only useful with this on.
   headed?: boolean;
   slowMo?: number;
@@ -55,13 +69,16 @@ export async function launchApp(
   const credentials = options.existing ?? newCredentials();
   const page = context.pages()[0] ?? (await context.newPage());
 
+  let recoveryCode: string | undefined;
   if (options.existing) await signIn(page, credentials);
+  else if (options.withRecovery) recoveryCode = await createAccountWithRecovery(page, credentials);
   else await createAccount(page, credentials);
 
   return {
     context,
     page,
     credentials,
+    recoveryCode,
     async close() {
       await context.close();
       await rm(userDataDir, { recursive: true, force: true });

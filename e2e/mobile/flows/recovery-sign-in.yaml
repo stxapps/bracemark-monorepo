@@ -1,0 +1,71 @@
+# Sign in through the RECOVERY door — the escape hatch when the password is lost.
+# Both halves of it: a wrong code is rejected with a message, the real code lands
+# on the links screen.
+#
+#   maestro test mobile/flows/recovery-sign-in.yaml \
+#     -e USERNAME=… -e RECOVERY_CODE=A1B2C-D3E4F-…
+#
+# RECOVERY_CODE has to come from `npm run e2e-mobile` (runner/mobile.ts), which
+# provisions the account with `withRecovery`. A recovery code cannot be chosen in
+# advance the way the password is — it is CSPRNG-minted by the client and shown
+# once — so a hand-run of this flow needs a code copied out of
+# `.artifacts/mobile-run.json` from a run that provisioned one. An account created
+# WITHOUT a recovery door 404s on the pre-auth door fetch and fails here with the
+# same message as a wrong code.
+#
+# This flow does not use subflows/sign-in.yaml: that subflow exists to GET other
+# flows signed in, and its password door is exactly what this one is avoiding.
+appId: com.bracemark.app
+---
+- launchApp:
+    clearState: true
+
+- tapOn: 'Sign in'
+
+# The toggle is an id, not its text: the label is a whole sentence ("Forgot your
+# password? Use a recovery code") and copy in this repo moves.
+- tapOn:
+    id: 'sign-in-use-recovery'
+
+- tapOn:
+    id: 'sign-in-recovery-username'
+- inputText: ${USERNAME}
+
+# --- the wrong code -----------------------------------------------------------
+# Well-formed but not this account's: 52 Crockford base32 chars in the display
+# grouping, so it clears the field's own validation and fails where it should —
+# on the GCM tag, when the recovery-KEK it derives doesn't unwrap the DEK.
+- tapOn:
+    id: 'sign-in-recovery-code'
+- inputText: '00000-00000-00000-00000-00000-00000-00000-00000-00000-00000-00'
+- hideKeyboard
+- tapOn:
+    id: 'sign-in-recovery-submit'
+
+# Asserted by id, never by the message text — the wording is copy. This is the
+# whole reason the error carries one.
+- extendedWaitUntil:
+    visible:
+      id: 'sign-in-recovery-error'
+    timeout: 20000
+
+# --- the real code ------------------------------------------------------------
+# `eraseText` clears 50 characters by default and the display form is 62 (52
+# chars + 10 hyphens), so the count is explicit — the default would leave a
+# prefix behind and the retry would fail for a reason that looks like the door.
+- tapOn:
+    id: 'sign-in-recovery-code'
+- eraseText: 70
+- inputText: ${RECOVERY_CODE}
+- hideKeyboard
+- tapOn:
+    id: 'sign-in-recovery-submit'
+
+# 20s, not the 60s subflows/sign-in.yaml gives the password door. Nothing here
+# runs Argon2id: a recovery code carries 256 bits of its own entropy, so its KEK
+# is a cheap HKDF (docs/account.md, _the doors_). If this ever needs a minute,
+# something is wrong rather than slow.
+- extendedWaitUntil:
+    visible:
+      id: 'links-screen'
+    timeout: 20000

@@ -246,6 +246,7 @@ export function LinkAddScreen() {
           <>
             <Field label="URL">
               <Input
+                testID="add-link-url"
                 value={url}
                 onChangeText={(v) => {
                   setUrl(v);
@@ -365,7 +366,16 @@ export function LinkAddScreen() {
                   <Text>Restore</Text>
                 </Button>
               )}
-              <Button size="sm" disabled={saving} onPress={() => void onSubmit()}>
+              {/* `add-link-save` rides the button, not its label: the label flips
+                  Save → Confirm on a warning, so it is the one control on this
+                  screen a Maestro flow could not have bound to by text even if
+                  the rule allowed it (docs/e2e.md, _the testID contract_). */}
+              <Button
+                testID="add-link-save"
+                size="sm"
+                disabled={saving}
+                onPress={() => void onSubmit()}
+              >
                 <Text>{urlWarning !== null ? 'Confirm' : 'Save'}</Text>
               </Button>
             </View>

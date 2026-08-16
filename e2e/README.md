@@ -53,5 +53,8 @@ on a booted simulator or emulator**, and on Android
 3. **Assert on what the user typed, not what was extracted.** The extractor's SSRF
    guard makes a local fixture server unreachable by design, so specs use
    unresolvable `.invalid` URLs — `unresolvableUrl()`, same module.
-4. **The mobile flows don't run yet.** They need four `testID`s that don't exist in
-   bracemark-expo — listed in `docs/e2e.md`, _the testID contract_.
+4. **The `testID`s the flows bind to are an interface.** They live in
+   bracemark-expo, and renaming one fails a flow as a bare timeout on a missing
+   element — never as anything that names the rename. The list is in
+   `docs/e2e.md`, _the testID contract_. What still blocks a native run is an
+   installed dev build, not a selector.

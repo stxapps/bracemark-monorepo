@@ -241,33 +241,78 @@ also why the web fixture takes create-account's "Choose my own" branch rather th
 the generated passphrase: a secret we chose can be passed along, one the app
 generated would have to be scraped off a screen.
 
+**The recovery code is the exception, and it has to be.** `recovery-sign-in.yaml`
+needs one, and a recovery code cannot be chosen — it is CSPRNG-minted by the
+client and never user-supplied by design (`crypto/recovery-code.ts`: "we GENERATE
+it and never let users type their own"). So the mobile runner provisions with
+`withRecovery`, which takes the ceremony's recovery exit and reads the code off
+the show-once panel by its `aria-label`. That is scraping a secret out of the DOM
+— the thing the paragraph above avoids — but the preference there was
+chosen-over-scraped, and here there is no chosen form to prefer. The code is
+captured in its **display** form, hyphens included, because that is what a user
+would have saved and what the flow should type back;
+`normalizeRecoveryCode` strips the grouping before it is key material, so the
+round trip is part of what gets exercised.
+
+A recovery door is **additive** — the same account still signs in by password
+identically (see [account.md](./account.md), _the doors_) — so provisioning with
+one costs the other flows nothing. The contract runners still provision without.
+
 Contract legs live in `mobile/contract/`, outside the `mobile/flows/` glob, because
 a parameterised leg run without its `-e` values fails on unset variables rather
 than on anything meaningful.
 
-#### the testID contract — not yet in the app
+#### the testID contract
 
-The mobile flows are written and their YAML parses, but **they cannot run until
-four `testID`s exist**, because the screens they drive currently have nothing
-stable to bind to:
+What the flows bind to. These are an interface, not decoration: renaming one
+breaks a flow silently — the YAML still parses, and the run fails as a timeout on
+a missing element rather than as anything that names the cause.
 
-| testID             | where                                           |
-| ------------------ | ----------------------------------------------- |
-| `sign-in-username` | `src/features/auth/sign-in-form.tsx`            |
-| `sign-in-password` | `src/features/auth/sign-in-form.tsx`            |
-| `sign-in-submit`   | `src/features/auth/sign-in-form.tsx`            |
-| `links-screen`     | `src/app/(app)/links/index.tsx` (a root marker) |
+All of them are in the app:
 
-`add-link-url` and `add-link-save` are the same story in
-`src/features/links/link-add-screen.tsx`, though its URL field already carries
-`aria-label="URL"`.
+| testID                      | where                                           |
+| --------------------------- | ----------------------------------------------- |
+| `sign-in-username`          | `src/features/auth/sign-in-form.tsx`            |
+| `sign-in-password`          | `src/features/auth/sign-in-form.tsx`            |
+| `sign-in-submit`            | `src/features/auth/sign-in-form.tsx`            |
+| `sign-in-error`             | ” — the submit-level `root` error               |
+| `sign-in-use-recovery`      | ” — the toggle into the recovery door           |
+| `sign-in-recovery-username` | ” — `RecoverySignIn`                            |
+| `sign-in-recovery-code`     | ” — `RecoverySignIn`                            |
+| `sign-in-recovery-submit`   | ” — `RecoverySignIn`                            |
+| `sign-in-recovery-error`    | ” — `RecoverySignIn`                            |
+| `sign-in-use-password`      | ” — the toggle back out                         |
+| `links-screen`              | `src/app/(app)/links/index.tsx` (a root marker) |
+| `add-link-url`              | `src/features/links/link-add-screen.tsx`        |
+| `add-link-save`             | ” — the submit, whose label flips Save→Confirm  |
 
-**The sign-in fields are an accessibility defect too, not only a selector gap.**
-They are `Input`s whose only label is a visually adjacent `<Text>`, with no
-`aria-label` and no association — so VoiceOver announces an unnamed text field.
-That is the same class of miss [accessibility.md](./accessibility.md) exists to
-catch, and it is why "an unlabelled control is untestable as well as inaccessible"
-is the framing above rather than a slogan.
+The recovery-door ids are deliberately **distinct** from the password ones rather
+than shared. The two modes never mount together, so reuse would work — but the
+flows read as prose, and `sign-in-recovery-submit` says which door was opened
+where a second `sign-in-submit` would not. The two mode toggles are ids for the
+same reason everything else here is: their labels are sentences ("Forgot your
+password? Use a recovery code"), and a flow keyed to a sentence turns a wording
+edit into a red run. The two error ids exist so the failure paths — a wrong
+password, a wrong recovery code — have something legal to assert on; the message
+text itself is copy.
+
+`add-link-save` is the sharpest case for why these are ids and not text: its label
+is `Save` until a malformed/duplicate/trashed warning relabels it `Confirm`, so
+there is no stable string to tap even setting the rule aside. The URL field also
+carries `aria-label="URL"`, which is not a substitute — see below.
+
+What the flows do bind to by name is an **accessible label**, never body copy:
+`add-link.yaml`'s `tapOn: 'Add link'` resolves to the FAB's `aria-label`
+(`add-link-fab.tsx`), which is why that one needs no id.
+
+**A `testID` and an `aria-label` are different jobs; the sign-in fields needed
+both.** They were `Input`s whose only label was a visually adjacent `<Text>`, with
+no `aria-label` and no association — RN has no `<label for>` — so VoiceOver
+announced an unnamed text field. That is the same class of miss
+[accessibility.md](./accessibility.md) exists to catch, and it is why "an
+unlabelled control is untestable as well as inaccessible" is the framing above
+rather than a slogan. The fields now carry `aria-label` and `aria-invalid`
+alongside their ids, matching `new-password-field.tsx`.
 
 ### running it
 
@@ -302,7 +347,7 @@ that directory, and it means two runs never contend for the same rows.
 | surface  | status                                                                       |
 | -------- | ---------------------------------------------------------------------------- |
 | web      | **5 specs, passing** — account (reload, sign-out), links, lists              |
-| native   | 3 flows written, YAML validated, **not yet executed** — no dev build, no AVD |
+| native   | 4 flows written, YAML validated, **not yet executed** — no dev build, no AVD |
 | contract | both runners written, **not yet executed** — same reason                     |
 
 The honest reading of that table: the web half is real, and the native and
