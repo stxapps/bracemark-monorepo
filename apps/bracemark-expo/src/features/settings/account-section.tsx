@@ -85,19 +85,30 @@ function DeleteAccountView({ onBack }: { onBack: () => void }) {
 
   return (
     <View>
+      {/* All three paragraphs go THROUGH the header — the trailing two used to
+          hang off it on `mt-3`. That fixes a 32 on web and moves this platform
+          12 → 16, the step the header's column now sets for every description that
+          has more than one paragraph. The web twin carries the note. */}
       <SettingsHeader
         title="Delete account"
-        description="Permanently delete your account and everything in it: all your data on all your devices, your account keys, and every signed-in session."
         back={{ label: 'Account', onPress: onBack }}
+        description={
+          <>
+            <Text className="text-sm text-muted-foreground">
+              Permanently delete your account and everything in it: all your data on all your
+              devices, your account keys, and every signed-in session.
+            </Text>
+            <Text className="text-sm text-muted-foreground">
+              Your username stays reserved and can&apos;t be registered again — by you or anyone
+              else. If you have a canceled subscription with paid time remaining, that time is
+              forfeited. Consider exporting your data first (Settings → Data).
+            </Text>
+            <Text className="text-sm font-medium text-destructive">
+              This action cannot be undone. There is no grace period and no recovery.
+            </Text>
+          </>
+        }
       />
-      <Text className="mt-3 text-sm text-muted-foreground">
-        Your username stays reserved and can&apos;t be registered again — by you or anyone else. If
-        you have a canceled subscription with paid time remaining, that time is forfeited. Consider
-        exporting your data first (Settings → Data).
-      </Text>
-      <Text className="mt-3 text-sm font-medium text-destructive">
-        This action cannot be undone. There is no grace period and no recovery.
-      </Text>
 
       {subscriptionBlocks && (
         <SettingsNotice
@@ -486,7 +497,18 @@ function SignOutOtherDevicesView({ onBack }: { onBack: () => void }) {
 
   return (
     <View>
-      <SettingsHeader title="Sign out other devices" back={{ label: 'Account', onPress: onBack }} />
+      {/* Description, not a loose paragraph — the web twin carries the note. It
+          drops once the job is done, because what stands there then is the receipt
+          below. */}
+      <SettingsHeader
+        title="Sign out other devices"
+        back={{ label: 'Account', onPress: onBack }}
+        description={
+          done
+            ? undefined
+            : 'End every other signed-in session. Any other browser or device will have to sign in again — this one stays signed in. Your data isn’t touched.'
+        }
+      />
       {done ? (
         <View className="mt-3 flex-row items-start gap-2">
           <Icon as={ShieldCheck} className="mt-0.5 size-4 shrink-0 text-primary" />
@@ -497,10 +519,6 @@ function SignOutOtherDevicesView({ onBack }: { onBack: () => void }) {
         </View>
       ) : (
         <>
-          <Text className="mt-1 text-sm text-muted-foreground">
-            End every other signed-in session. Any other browser or device will have to sign in
-            again — this one stays signed in. Your data isn&apos;t touched.
-          </Text>
           <View className="mt-6 flex-row">
             <Button onPress={() => void onConfirm()} disabled={signOutOthers.isPending}>
               <Text>{signOutOthers.isPending ? 'Signing out…' : 'Sign out other devices'}</Text>

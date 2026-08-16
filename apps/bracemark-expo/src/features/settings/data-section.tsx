@@ -594,19 +594,30 @@ function DeleteView({ onBack }: { onBack: () => void }) {
 
   return (
     <View>
+      {/* All three paragraphs go THROUGH the header — the trailing two used to
+          hang off it on `mt-3`. That fixes an 8× inconsistency on web (the twin
+          carries that note) and moves this platform 12 → 16, the step the header's
+          column now sets for every description that has more than one paragraph. */}
       <SettingsHeader
         title="Delete all data"
-        description="Delete all your data — every saved link in every list, all your lists and tags, and all your settings — from all your devices."
         back={{ label: 'Data', onPress: onBack }}
+        description={
+          <>
+            <Text className="text-sm text-muted-foreground">
+              Delete all your data — every saved link in every list, all your lists and tags, and
+              all your settings — from all your devices.
+            </Text>
+            <Text className="text-sm text-muted-foreground">
+              This removes your data only, not your account — you can still sign in. If another
+              device has changes that haven&apos;t synced yet, those changes may sync back
+              afterward. Consider exporting a copy first (Settings → Data).
+            </Text>
+            <Text className="text-sm font-medium text-destructive">
+              This action cannot be undone.
+            </Text>
+          </>
+        }
       />
-      <Text className="mt-3 text-sm text-muted-foreground">
-        This removes your data only, not your account — you can still sign in. If another device has
-        changes that haven&apos;t synced yet, those changes may sync back afterward. Consider
-        exporting a copy first (Settings → Data).
-      </Text>
-      <Text className="mt-3 text-sm font-medium text-destructive">
-        This action cannot be undone.
-      </Text>
 
       {/* role + state on the ROW, not the inner Checkbox — see the twin comment in
           account-section.tsx's delete confirmation. */}

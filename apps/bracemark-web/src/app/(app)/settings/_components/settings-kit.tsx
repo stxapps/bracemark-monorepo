@@ -66,13 +66,48 @@ export function SettingsHeader({
   // named for this view, so naming the destination closes that loop.
   back?: { label: string; onClick: () => void };
 }) {
+  // TWO nested columns, not one column plus a margin. The link is 12 from the
+  // title and the title is 4 from its description, and those are different
+  // relationships: the description is part of the title block, the link is a
+  // control sitting above it. Spelling both as gaps keeps each step readable as
+  // the number it is — the `mb-3` this replaced sat INSIDE the `gap-1` column and
+  // silently added to it, so the link was 16 from the title while the code said
+  // 12. web-ui's StepHeader (create-account-form.tsx) is the same shape at the
+  // same 12: same chevron, same `text-sm` link, same `text-xl` h1.
+  //
+  // 12-then-4 also has to stay legible as two steps. At 8 the pair would read
+  // 8-then-4, which is too fine a distinction to see — the link would look like
+  // a second line of the title block rather than the way out of it.
+  //
+  // The description is a COLUMN, for the reason SettingsRow's is (see there). Most
+  // are one string, but Delete all data needs three paragraphs — what it does, what
+  // it spares, and the red line — and a sub-view that keeps its prose OUTSIDE the
+  // header pays the pane's 32 to reach its own first sentence, where the sub-view
+  // next to it pays 4. Same screen, same role, eight times the gap. Pass a string
+  // and it stays one `<p>`; pass `<p>`s and they stack 16 apart, inheriting the
+  // size and colour so a caller only spells what differs (the red line's weight).
+  //
+  // 16 rather than the 12 this started at, which read tight against paragraphs
+  // three and four lines long — `text-sm` leads at 20, so 12 leaves the break only
+  // three times the space between two lines of the SAME paragraph, and at that
+  // length the eye wants more before it accepts a new one has begun. It cannot go
+  // to the 32 the pane steps by: the checkbox block below is 32 from the last
+  // paragraph, so matching it would flatten the screen into one evenly-spaced
+  // stack with no levels in it. 16 is the only value between the two. It is also
+  // SettingsGroup's heading-to-content step, which is a collision on paper only —
+  // no screen with a multi-paragraph description renders a SettingsGroup, and the
+  // two live at different depths if one ever does.
   return (
-    <div className={cn('flex flex-col gap-1')}>
-      {back ? (
-        <SettingsBackLink label={back.label} onClick={back.onClick} className="mb-3" />
-      ) : null}
-      <h1 className={cn('text-xl font-semibold tracking-tight')}>{title}</h1>
-      {description ? <p className={cn('text-sm text-muted-foreground')}>{description}</p> : null}
+    <div className={cn('flex flex-col gap-3')}>
+      {back ? <SettingsBackLink label={back.label} onClick={back.onClick} /> : null}
+      <div className={cn('flex flex-col gap-1')}>
+        <h1 className={cn('text-xl font-semibold tracking-tight')}>{title}</h1>
+        {description ? (
+          <div className={cn('flex flex-col gap-4 text-sm text-muted-foreground')}>
+            {typeof description === 'string' ? <p>{description}</p> : description}
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }

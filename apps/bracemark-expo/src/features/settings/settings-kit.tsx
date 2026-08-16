@@ -80,15 +80,36 @@ export function SettingsHeader({
   // named for this view, so naming the destination closes that loop.
   back?: { label: string; onPress: () => void };
 }) {
+  // TWO nested columns, not one column plus a margin — the web kit's twin
+  // (settings-kit.tsx there) carries the full note. The link is 12 from the
+  // title, the title is 4 from its description, and the `mb-3` this replaced sat
+  // inside the `gap-1` column and silently added to it: the link was 16 from the
+  // title while the code said 12, on both platforms.
+  //
+  // The description is a COLUMN so a sub-view with more than one paragraph (Delete
+  // all data) keeps its prose in the header at 4 from the title, instead of paying
+  // the pane's 32 to reach its own first sentence. Its paragraphs stack 16 apart —
+  // the web twin carries why that is neither the 12 it started at nor the pane's
+  // 32. Unlike that twin the parts do NOT inherit — a View passes no text style
+  // down — so each `<Text>` a caller stacks here carries its own
+  // `text-sm text-muted-foreground`.
   return (
-    <View className="gap-1">
-      {back ? (
-        <SettingsBackLink label={back.label} onPress={back.onPress} className="mb-3" />
-      ) : null}
-      <Text role="heading" aria-level="1" className="text-xl font-semibold tracking-tight">
-        {title}
-      </Text>
-      {description ? <Text className="text-sm text-muted-foreground">{description}</Text> : null}
+    <View className="gap-3">
+      {back ? <SettingsBackLink label={back.label} onPress={back.onPress} /> : null}
+      <View className="gap-1">
+        <Text role="heading" aria-level="1" className="text-xl font-semibold tracking-tight">
+          {title}
+        </Text>
+        {description ? (
+          <View className="gap-4">
+            {typeof description === 'string' ? (
+              <Text className="text-sm text-muted-foreground">{description}</Text>
+            ) : (
+              description
+            )}
+          </View>
+        ) : null}
+      </View>
     </View>
   );
 }

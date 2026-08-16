@@ -104,21 +104,30 @@ function DeleteAccountView({ onBack }: { onBack: () => void }) {
 
   return (
     <>
+      {/* All three paragraphs go THROUGH the header. The trailing two used to sit
+          outside it, which cost the pane's 32 to reach the second sentence of one
+          explanation — the twin of this screen (_data/data-section.tsx's
+          DeleteView) carries the full note. */}
       <SettingsHeader
         back={{ label: 'Account', onClick: onBack }}
         title="Delete account"
-        description="Permanently delete your account and everything in it: all your data on all your devices, your account keys, and every signed-in session."
+        description={
+          <>
+            <p>
+              Permanently delete your account and everything in it: all your data on all your
+              devices, your account keys, and every signed-in session.
+            </p>
+            <p>
+              Your username stays reserved and can&apos;t be registered again — by you or anyone
+              else. If you have a canceled subscription with paid time remaining, that time is
+              forfeited. Consider exporting your data first (Settings → Data).
+            </p>
+            <p className="font-medium text-destructive">
+              This action cannot be undone. There is no grace period and no recovery.
+            </p>
+          </>
+        }
       />
-      <div className="flex flex-col gap-3">
-        <p className="text-sm text-muted-foreground">
-          Your username stays reserved and can&apos;t be registered again — by you or anyone else.
-          If you have a canceled subscription with paid time remaining, that time is forfeited.
-          Consider exporting your data first (Settings → Data).
-        </p>
-        <p className="text-sm font-medium text-destructive">
-          This action cannot be undone. There is no grace period and no recovery.
-        </p>
-      </div>
 
       {subscriptionBlocks && (
         <SettingsNotice icon={<CircleAlert className="size-4" />}>
@@ -528,7 +537,19 @@ function SignOutOtherDevicesView({ onBack }: { onBack: () => void }) {
 
   return (
     <>
-      <SettingsHeader back={{ label: 'Account', onClick: onBack }} title="Sign out other devices" />
+      {/* Description, not a loose paragraph — it was sitting a full 32 below its
+          own title. It drops once the job is done, because what stands there then
+          is the receipt below, and a screen would otherwise describe an action the
+          user has already taken. */}
+      <SettingsHeader
+        back={{ label: 'Account', onClick: onBack }}
+        title="Sign out other devices"
+        description={
+          done
+            ? undefined
+            : 'End every other signed-in session. Any other browser or device will have to sign in again — this one stays signed in. Your data isn’t touched.'
+        }
+      />
       {done ? (
         <p className="flex items-start gap-2 text-sm text-foreground">
           <ShieldCheck className="mt-0.5 size-4 shrink-0 text-primary" />
@@ -537,10 +558,6 @@ function SignOutOtherDevicesView({ onBack }: { onBack: () => void }) {
         </p>
       ) : (
         <>
-          <p className="text-sm text-muted-foreground">
-            End every other signed-in session. Any other browser or device will have to sign in
-            again — this one stays signed in. Your data isn&apos;t touched.
-          </p>
           <div>
             <Button onClick={onConfirm} disabled={signOutOthers.isPending}>
               {signOutOthers.isPending ? (

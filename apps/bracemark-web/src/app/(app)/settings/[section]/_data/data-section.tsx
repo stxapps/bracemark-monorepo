@@ -177,7 +177,7 @@ function ImportStatus({ state }: { state: ImportState }) {
         ? ` (${state.done} of ${state.total})`
         : '';
     return (
-      <p className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+      <p className="flex items-center gap-2 text-sm text-muted-foreground">
         <Loader2 className="size-4 animate-spin" />
         {IMPORT_STEP_LABELS[state.step]}
         {counts}
@@ -187,7 +187,7 @@ function ImportStatus({ state }: { state: ImportState }) {
 
   if (state.phase === 'error') {
     return (
-      <p role="alert" className="mt-3 flex items-start gap-2 text-sm text-destructive">
+      <p role="alert" className="flex items-start gap-2 text-sm text-destructive">
         <CircleAlert className="mt-0.5 size-4 shrink-0" />
         <span className="wrap-break-words">Import failed: {state.message}</span>
       </p>
@@ -199,7 +199,7 @@ function ImportStatus({ state }: { state: ImportState }) {
     outcome.linkCount === 0 && outcome.fileCount === 0 && outcome.skippedCount === 0;
   if (nothingFound) {
     return (
-      <p className="mt-3 flex items-start gap-2 text-sm text-muted-foreground">
+      <p className="flex items-start gap-2 text-sm text-muted-foreground">
         <CircleAlert className="mt-0.5 size-4 shrink-0" />
         <span>No links were found in that file.</span>
       </p>
@@ -244,7 +244,7 @@ function ImportStatus({ state }: { state: ImportState }) {
     );
   }
   return (
-    <div className="mt-3 flex items-start gap-2 text-sm">
+    <div className="flex items-start gap-2 text-sm">
       {truncated ? (
         <CircleAlert className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
       ) : (
@@ -278,7 +278,7 @@ function ImportQuotaChoice({
 }) {
   const { newCount, existingCount, maxLinks, room } = prompt;
   return (
-    <div className="mt-3 flex flex-col gap-3 rounded-lg border border-border px-3 py-2.5 text-sm">
+    <div className="flex flex-col gap-3 rounded-lg border border-border px-3 py-2.5 text-sm">
       <p className="text-muted-foreground">
         This file has {newCount} new {newCount === 1 ? 'link' : 'links'}. Your plan holds {maxLinks}{' '}
         and you already have {existingCount}, so there is room for {room} more.
@@ -328,16 +328,33 @@ function ImportView({ onBack }: { onBack: () => void }) {
         className="hidden"
         onChange={onFilePicked}
       />
-      <Button variant="outline" onClick={() => inputRef.current?.click()} disabled={running}>
-        <Upload data-icon="inline-start" className="size-4" />
-        Choose a file
-      </Button>
+      {/* The action and its receipt are ONE block, not two. SettingsPane is a
+          `gap-8` column and that step is the rhythm between a section's top-level
+          blocks — a status line belongs to the button that produced it, so the two
+          sit at `gap-3` inside a wrapper and the pane's step separates the pair
+          from what comes next. The receipts used to carry their own `mt-3`, which
+          ADDED to the pane's gap (44px, not the 12 it was written for); the
+          spacing lives here now and the status components carry no margin.
 
-      {state.phase === 'quota' ? (
-        <ImportQuotaChoice prompt={state.prompt} onAnswer={answerQuota} />
-      ) : (
-        <ImportStatus state={state} />
-      )}
+          The inner div is what keeps the button at its text width. `Button` is
+          `inline-flex shrink-0`, but a direct flex child gets `align-self:
+          stretch` — as a bare child of the pane this one filled the whole 672px
+          measure, the only settings action in the app that did. Same wrapper the
+          other seven use (account-section, extraction-section). */}
+      <div className="flex flex-col gap-3">
+        <div>
+          <Button variant="outline" onClick={() => inputRef.current?.click()} disabled={running}>
+            <Upload data-icon="inline-start" className="size-4" />
+            Choose a file
+          </Button>
+        </div>
+
+        {state.phase === 'quota' ? (
+          <ImportQuotaChoice prompt={state.prompt} onAnswer={answerQuota} />
+        ) : (
+          <ImportStatus state={state} />
+        )}
+      </div>
     </>
   );
 }
@@ -395,7 +412,7 @@ function ExportStatus({ state, excludedCount }: { state: ExportState; excludedCo
         ? ` (${state.done} of ${state.total})`
         : '';
     return (
-      <p className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+      <p className="flex items-center gap-2 text-sm text-muted-foreground">
         <Loader2 className="size-4 animate-spin" />
         {EXPORT_STEP_LABELS[state.step]}
         {counts}
@@ -405,7 +422,7 @@ function ExportStatus({ state, excludedCount }: { state: ExportState; excludedCo
 
   if (state.phase === 'error') {
     return (
-      <p role="alert" className="mt-3 flex items-start gap-2 text-sm text-destructive">
+      <p role="alert" className="flex items-start gap-2 text-sm text-destructive">
         <CircleAlert className="mt-0.5 size-4 shrink-0" />
         <span className="wrap-break-words">Export failed: {state.message}</span>
       </p>
@@ -430,7 +447,7 @@ function ExportStatus({ state, excludedCount }: { state: ExportState; excludedCo
     );
   }
   return (
-    <div className="mt-3 flex items-start gap-2 text-sm">
+    <div className="flex items-start gap-2 text-sm">
       <CircleCheck className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
       <span className="text-muted-foreground">
         Exported {outcome.linkCount} {outcome.linkCount === 1 ? 'link' : 'links'}
@@ -491,14 +508,18 @@ function ExportView({ onBack }: { onBack: () => void }) {
         </SettingsNotice>
       )}
 
-      <div>
-        <Button variant="outline" onClick={() => run(format, lockedListIds)} disabled={running}>
-          <Download data-icon="inline-start" className="size-4" />
-          Export all data
-        </Button>
-      </div>
+      {/* Button + receipt as one `gap-3` block, inner div shrink-wraps the
+          button — ImportView carries the full note. */}
+      <div className="flex flex-col gap-3">
+        <div>
+          <Button variant="outline" onClick={() => run(format, lockedListIds)} disabled={running}>
+            <Download data-icon="inline-start" className="size-4" />
+            Export all data
+          </Button>
+        </div>
 
-      <ExportStatus state={state} excludedCount={lockedCount} />
+        <ExportStatus state={state} excludedCount={lockedCount} />
+      </div>
     </>
   );
 }
@@ -512,7 +533,7 @@ function DeleteStatus({ state }: { state: DeleteAllState }) {
 
   if (state.phase === 'running') {
     return (
-      <p className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+      <p className="flex items-center gap-2 text-sm text-muted-foreground">
         <Loader2 className="size-4 animate-spin" />
         Deleting all your data…
       </p>
@@ -521,7 +542,7 @@ function DeleteStatus({ state }: { state: DeleteAllState }) {
 
   if (state.phase === 'error') {
     return (
-      <p role="alert" className="mt-3 flex items-start gap-2 text-sm text-destructive">
+      <p role="alert" className="flex items-start gap-2 text-sm text-destructive">
         <CircleAlert className="mt-0.5 size-4 shrink-0" />
         <span className="wrap-break-words">
           Delete failed: {state.message} Nothing was removed from this device — please try again.
@@ -532,7 +553,7 @@ function DeleteStatus({ state }: { state: DeleteAllState }) {
 
   const { deletedCount } = state.outcome;
   return (
-    <p className="mt-3 flex items-start gap-2 text-sm text-muted-foreground">
+    <p className="flex items-start gap-2 text-sm text-muted-foreground">
       <CircleCheck className="mt-0.5 size-4 shrink-0" />
       <span>
         {deletedCount === 0
@@ -562,51 +583,87 @@ function DeleteView({ onBack }: { onBack: () => void }) {
 
   return (
     <>
-      <SettingsHeader back={{ label: 'Data', onClick: onBack }} title="Delete all data" />
+      {/* The prose goes THROUGH the header, like Import's and Export's one-liners
+          — this view's is three paragraphs rather than one, which is the only
+          difference between them and not a reason to sit 32px lower. */}
+      <SettingsHeader
+        back={{ label: 'Data', onClick: onBack }}
+        title="Delete all data"
+        description={
+          <>
+            <p>
+              Delete all your data — every saved link in every list, all your lists and tags, and
+              all your settings — from all your devices.
+            </p>
+            <p>
+              This removes your data only, not your account — you can still sign in. If another
+              device has changes that haven&apos;t synced yet, those changes may sync back
+              afterward. Consider exporting a copy first.
+            </p>
+            <p className="font-medium text-destructive">This action cannot be undone.</p>
+          </>
+        }
+      />
+
+      {/* The nudge belongs to the CHECKBOX, so the two are one block at `gap-2`
+          and the pane's `gap-8` still separates the pair from the button. Three
+          things fix it here rather than beside the button:
+
+          It says "the box above" — a validation message for a gate sits at the
+          gate. The slot under the button is already spoken for by DeleteStatus,
+          where "you didn't tick the box" and "the delete failed" would mount in
+          the same place meaning very different things. And it is the spacing
+          apps/bracemark-expo/src/features/settings/data-section.tsx already uses
+          (`mt-2` to the checkbox, a block step to the button).
+
+          The gap is also what keeps the button still. This alert mounts ON A
+          CLICK, and as a bare child of the `gap-8` column it pushed the button
+          52px down the page — out from under the cursor that had just pressed
+          it, which on a delete-everything screen is the worst possible moment to
+          move the target. Inside the group the shift is 28px, and none of it is
+          the pane's step. */}
+      <div className="flex flex-col gap-2">
+        <Label
+          htmlFor="delete-confirm"
+          className="flex items-start gap-3 rounded-lg border border-border p-3"
+        >
+          <Checkbox
+            id="delete-confirm"
+            checked={confirmed}
+            disabled={running || done}
+            onCheckedChange={(v) => {
+              setConfirmed(v === true);
+              setNudge(false);
+            }}
+            className="mt-0.5"
+          />
+          <span className="text-sm">
+            Yes, I&apos;m absolutely sure I want to delete all my data.
+          </span>
+        </Label>
+
+        {nudge && (
+          <p role="alert" className="text-sm text-destructive">
+            Please tick the box above to confirm.
+          </p>
+        )}
+      </div>
+
+      {/* Button + receipt as one `gap-3` block, inner div shrink-wraps the
+          button — ImportView carries the full note. Text width matters most on
+          THIS one: the checkbox above is the gate, and a delete button stretched
+          to the full measure would be the largest target on a screen whose whole
+          job is to slow the user down. */}
       <div className="flex flex-col gap-3">
-        <p className="text-sm text-muted-foreground">
-          Delete all your data — every saved link in every list, all your lists and tags, and all
-          your settings — from all your devices.
-        </p>
-        <p className="text-sm text-muted-foreground">
-          This removes your data only, not your account — you can still sign in. If another device
-          has changes that haven&apos;t synced yet, those changes may sync back afterward. Consider
-          exporting a copy first.
-        </p>
-        <p className="text-sm font-medium text-destructive">This action cannot be undone.</p>
+        <div>
+          <Button variant="destructive" onClick={onDelete} disabled={running || done}>
+            <Trash2 data-icon="inline-start" className="size-4" />
+            Delete all data
+          </Button>
+        </div>
+
+        <DeleteStatus state={state} />
       </div>
-
-      <Label
-        htmlFor="delete-confirm"
-        className="flex items-start gap-3 rounded-lg border border-border p-3"
-      >
-        <Checkbox
-          id="delete-confirm"
-          checked={confirmed}
-          disabled={running || done}
-          onCheckedChange={(v) => {
-            setConfirmed(v === true);
-            setNudge(false);
-          }}
-          className="mt-0.5"
-        />
-        <span className="text-sm">Yes, I&apos;m absolutely sure I want to delete all my data.</span>
-      </Label>
-
-      {nudge && (
-        <p role="alert" className="mt-2 text-sm text-destructive">
-          Please tick the box above to confirm.
-        </p>
-      )}
-
-      <div>
-        <Button variant="destructive" onClick={onDelete} disabled={running || done}>
-          <Trash2 data-icon="inline-start" className="size-4" />
-          Delete all data
-        </Button>
-      </div>
-
-      <DeleteStatus state={state} />
     </>
   );
 }
