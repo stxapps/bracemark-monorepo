@@ -23,28 +23,56 @@ regenerates the native projects, then **Xcode** builds/runs iOS and
 scripts** in
 `apps/bracemark-expo/package.json`:
 
-| script            | command                              | when                                               |
-| ----------------- | ------------------------------------ | -------------------------------------------------- |
-| `prebuild`        | `expo prebuild --clean`              | after any `app.config.ts`/plugin/native-dep change |
-| `start`           | `expo start`                         | Metro, for a Debug run from Xcode                  |
-| `android`         | `expo run:android`                   | dev build → device                                 |
-| `android:release` | `expo run:android --variant release` | release build → device (R8, no Metro)              |
-| `ios`             | `expo run:ios`                       | quick simulator run without opening Xcode          |
+| script            | command                              | when                                                 |
+| ----------------- | ------------------------------------ | ---------------------------------------------------- |
+| `prebuild`        | `expo prebuild --clean`              | after any `app.config.ts`/plugin/native-dep change   |
+| `start`           | `expo start`                         | Metro, for a Debug run from Xcode                    |
+| `android`         | `expo run:android`                   | dev build → device                                   |
+| `android:release` | `expo run:android --variant release` | release build → device (R8, no Metro)                |
+| `android:reverse` | `adb reverse` ×2 (8787, 8788)        | once per emulator boot, before anything hits the api |
+| `ios`             | `expo run:ios`                       | quick simulator run without opening Xcode            |
 
 Run them either way — `npm run <script>` from `apps/bracemark-expo`, or
 `npx nx <target> @stxapps/bracemark-expo` from the root (nx delegates to the
-script). Root also has `npm run dev:expo` for the Metro one, beside `dev:ext`.
-Extra flags pass straight through: `npm start -- --clear`,
+script). Root aliases the three the native e2e legs need — `expo:ios`,
+`expo:android`, `expo:reverse` — under an `expo:` prefix rather than the `dev:`
+one `dev:ext`/`dev:site` use: those start a server in seconds, where `expo:ios` is
+a multi-minute native build and install, and one prefix for both would hide that.
+Metro on its own gets no root alias — it is `npx nx start @stxapps/bracemark-expo`,
+and in practice `expo:ios`/`expo:android` already leave it running. Extra flags
+pass straight through: `npm start -- --clear`,
 `npm run prebuild -- --platform ios`.
+
+**`android:reverse` is a separate script, NOT chained onto `android`.** The
+tempting spelling is `expo run:android && adb reverse …`, and it silently never
+runs: `expo run:android` builds, installs, launches, and then **holds the
+foreground running Metro** — which is why the target is marked `continuous` — so
+`&&` fires only after you Ctrl-C, i.e. after the run that needed the forward. The
+inverse order (`adb reverse && expo run:android`) fails differently: `adb reverse`
+needs a device already attached, so it aborts the whole build on the very case
+where nothing is booted yet and `expo run:android` would have booted one.
+
+The lifecycles differ anyway. A reverse is bound to the **adb device connection**
+— it survives app reinstalls and relaunches, and is lost only on device reboot or
+`adb kill-server`. Chaining it to the build would tie a per-boot concern to a
+per-build command, so re-establishing a forward after rebooting the emulator would
+mean sitting through a native rebuild. It is idempotent and instant; run it again
+whenever you are unsure.
+
+Keeping it out of `android` also keeps that script byte-for-byte what Expo itself
+writes, which the next paragraph is about.
 
 **`android` and `ios` are named the way they are because PREBUILD WRITES
 THEM.** When `expo prebuild` creates a native directory it also "Updates
 package.json", adding `android`/`ios` (and `start`/`web`) scripts if absent —
 so an alternative spelling like `run-android` doesn't replace them, it just
 means every `--clean` re-adds a duplicate pair you have to delete again.
-Matching Expo's own names makes that step a no-op. `android:release` is the
-one addition (Expo has no release variant script) and follows the workspace's
-`build:staging` colon convention.
+Matching Expo's own names makes that step a no-op. `android:release` and
+`android:reverse` are the two additions (Expo has neither) and follow the
+workspace's `build:staging` colon convention — which is also why a new script
+belongs beside `android` under its own name rather than appended to it: the
+colon-suffixed spellings are ours to add, `android` and `ios` are Expo's to
+write.
 
 **`prebuild` and `start` OVERRIDE `@nx/expo/plugin`'s inferred targets of the
 same name** — a package.json script wins over an inferred target (the

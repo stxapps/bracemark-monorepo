@@ -7,6 +7,7 @@
     "prebuild": "expo prebuild --clean",
     "start": "expo start",
     "android": "expo run:android",
+    "android:reverse": "adb reverse tcp:8787 tcp:8787 && adb reverse tcp:8788 tcp:8788",
     "android:release": "expo run:android --variant release",
     "ios": "expo run:ios"
   },

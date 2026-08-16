@@ -329,9 +329,55 @@ npx nx e2e-mobile @stxapps/e2e     # provision an account, run mobile/flows
 npx nx e2e-contract @stxapps/e2e   # web → mobile, then mobile → web
 ```
 
+The three run-it targets also have root scripts — `npm run e2e:web`,
+`e2e:mobile`, `e2e:contract` — matching the `dev` / `dev:ext` / `dev:site`
+convention. **There is deliberately no bare `npm run e2e`.** A script that fanned
+out to all three would be a lie: it cannot boot a device, cannot install a dev
+build, cannot know which platform was meant, and would fan out to a target pair
+that cannot both run in one pass (below). It would fail as a Maestro timeout on a
+missing element, which is the failure mode the rest of this doc exists to avoid.
+The asymmetry with `npm run test` is the honest one — e2e has prerequisites a
+unit test does not.
+
 The mobile and contract targets additionally need a **bracemark-expo dev build
 already installed on a booted simulator or emulator**. Nothing here builds the
 app — see [expo-build.md](./expo-build.md).
+
+#### one platform at a time, and it is forced
+
+`runner/lib.ts`'s `MaestroOptions` is `{ env, outputDir }` — there is **no
+`--device` plumbing**, so `maestro test` is spawned bare and binds to whatever
+single device it finds. With an iOS simulator and an Android emulator both
+booted, Maestro either drops an interactive picker — which hangs, because the
+child inherits stdio — or picks one non-deterministically. Either way the run no
+longer says which platform it proved. Boot one, finish its leg, shut it down.
+
+Web e2e is platform-independent; run it once, not once per leg.
+
+```sh
+npm run dev                          # terminal 1, stays up for everything below
+
+# iOS leg
+npm run expo:ios                     # boots the sim, builds + installs the dev build
+npm run e2e:web
+npm run e2e:mobile
+npm run e2e:contract
+
+# Android leg — shut the iOS simulator down first
+npm run expo:android                 # leave Metro running; new terminal for the rest
+npm run expo:reverse                 # adb reverse 8787 + 8788, once per emulator boot
+npm run e2e:mobile
+npm run e2e:contract
+```
+
+`expo:ios` / `expo:android` are **not** e2e — they are the prerequisite, and the
+only step that produces the dev build the two native targets assume. Both hold the
+foreground running Metro once the app is installed, so the commands under them
+want a second terminal; `expo:reverse` is deliberately not chained onto the build
+for that exact reason ([expo-build.md](./expo-build.md), _the npm scripts_). Note
+that `apps/bracemark-expo/ios/` and `android/` being present on disk proves
+nothing: they are generated and gitignored, so the folders can exist with no build
+installed on any device.
 
 Failures leave a trace: `npx nx e2e-web:report @stxapps/e2e`, or
 `npx playwright show-trace e2e/.artifacts/test-results/<test>/trace.zip`. A run

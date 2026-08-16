@@ -26,11 +26,29 @@ npx nx e2e-mobile @stxapps/e2e      # provision an account, run mobile/flows
 npx nx e2e-contract @stxapps/e2e    # web → mobile, then mobile → web
 ```
 
+The three run-it targets also have root scripts: `npm run e2e:web`, `e2e:mobile`,
+`e2e:contract`. There is no bare `npm run e2e` — see `docs/e2e.md`, _running_.
+
 A single spec, from this directory: `npx playwright test web/links.e2e.ts`.
 
 The mobile and contract targets also need a **bracemark-expo dev build installed
-on a booted simulator or emulator**, and on Android
-`adb reverse tcp:8787 tcp:8787` first. Nothing here builds the app.
+on a booted simulator or emulator**. Nothing here builds the app —
+`npx nx ios @stxapps/bracemark-expo` (or `android`) does, and it is a
+prerequisite, not an e2e step.
+
+**Run one platform at a time.** `runner/lib.ts` passes Maestro no `--device`, so
+with both an iOS simulator and an Android emulator booted it picks one
+non-deterministically or hangs on an interactive picker. Boot one, run its legs,
+shut it down, boot the other. Web e2e is platform-independent — run it once.
+
+```sh
+npm run expo:ios          # or: npm run expo:android
+npm run expo:reverse      # Android only, once per emulator boot
+npm run e2e:mobile && npm run e2e:contract
+```
+
+Both build commands hold the foreground running Metro, so the rest wants a second
+terminal.
 
 ## layout
 
