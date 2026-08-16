@@ -434,16 +434,31 @@ function ExportStatus({ state, excludedCount }: { state: ExportState; excludedCo
       `${excludedCount} locked ${excludedCount === 1 ? 'list was' : 'lists were'} not included.`,
     );
   }
+  // Nothing matched the policy — an empty library, or every link in Trash under
+  // an interop format, or every list locked. Reported afterwards rather than
+  // gated before the run, to stay one behaviour with web, where the save picker
+  // must be claimed before the count is knowable (docs/data-lifecycle.md — _the
+  // export's empty run_). The line names the FILE first: it exists, the share
+  // sheet has already been presented over it, and "Save file…" below re-presents
+  // it — so "there was nothing to export" alone would contradict the screen.
+  const nothingExported = outcome.linkCount === 0;
+  const lead = nothingExported
+    ? 'The file was created, but there were no links to put in it.'
+    : `Exported ${outcome.linkCount} ${outcome.linkCount === 1 ? 'link' : 'links'}${
+        outcome.fileCount > 0
+          ? ` and ${outcome.fileCount} ${outcome.fileCount === 1 ? 'file' : 'files'}`
+          : ''
+      }.`;
   return (
     <View className="mt-3">
       <View className="flex-row items-start gap-2">
-        <Icon as={CircleCheck} className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+        <Icon
+          as={nothingExported ? CircleAlert : CircleCheck}
+          className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+        />
         <Text className="min-w-0 flex-1 text-sm text-muted-foreground">
-          Exported {outcome.linkCount} {outcome.linkCount === 1 ? 'link' : 'links'}
-          {outcome.fileCount > 0
-            ? ` and ${outcome.fileCount} ${outcome.fileCount === 1 ? 'file' : 'files'}`
-            : ''}
-          .{warnings.map((warning) => ` ${warning}`).join('')}
+          {lead}
+          {warnings.map((warning) => ` ${warning}`).join('')}
         </Text>
       </View>
       {/* Re-present the sheet — the auto-presented one may have been swiped

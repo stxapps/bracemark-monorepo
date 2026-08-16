@@ -446,15 +446,36 @@ function ExportStatus({ state, excludedCount }: { state: ExportState; excludedCo
       `${excludedCount} locked ${excludedCount === 1 ? 'list was' : 'lists were'} not included.`,
     );
   }
+
+  // Nothing matched the policy — an empty library, or every link in Trash under
+  // an interop format, or every list locked. NOT gated before the run: the save
+  // picker has to be claimed inside the click's user activation, before the
+  // sync/gather awaits that would tell us the count, so the emptiness can only
+  // be reported afterwards (docs/data-lifecycle.md — _the export's empty run_).
+  //
+  // Which is why the line names the FILE first. A bare "there was nothing to
+  // export" — DeleteStatus' shape, where nothing is produced — would contradict
+  // the download the user is looking at; "Exported 0 links." claimed a success
+  // for a file with nothing in it. Both facts, in the order they happened. The
+  // warnings above then supply the reason whenever there is one (locked lists).
+  const nothingExported = outcome.linkCount === 0;
+  const lead = nothingExported
+    ? 'The file was saved, but there were no links to put in it.'
+    : `Exported ${outcome.linkCount} ${outcome.linkCount === 1 ? 'link' : 'links'}${
+        outcome.fileCount > 0
+          ? ` and ${outcome.fileCount} ${outcome.fileCount === 1 ? 'file' : 'files'}`
+          : ''
+      }.`;
   return (
     <div className="flex items-start gap-2 text-sm">
-      <CircleCheck className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+      {nothingExported ? (
+        <CircleAlert className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+      ) : (
+        <CircleCheck className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+      )}
       <span className="text-muted-foreground">
-        Exported {outcome.linkCount} {outcome.linkCount === 1 ? 'link' : 'links'}
-        {outcome.fileCount > 0
-          ? ` and ${outcome.fileCount} ${outcome.fileCount === 1 ? 'file' : 'files'}`
-          : ''}
-        .{warnings.map((warning) => ` ${warning}`).join('')}
+        {lead}
+        {warnings.map((warning) => ` ${warning}`).join('')}
       </span>
     </div>
   );

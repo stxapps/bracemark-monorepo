@@ -54,6 +54,33 @@ list's _name_ is as sensitive as its contents; the UI warns with the count),
 and a dangling `listId` files under My List, the read layer's reconciliation
 spirit.
 
+### the export's empty run
+
+An export that matches **nothing** — an empty library, every link in Trash under
+an interop format, every list locked — still writes its file and still reports a
+receipt. There is no pre-flight "you have nothing to export" gate, and the
+ordering is why: on web the save destination has to be claimed by
+`showSaveFilePicker` **before** the sync refresh and the gather (it needs the
+click's transient user activation), and the count only exists after them. A gate
+would have to run off a separate live count in the view, which buys one avoided
+save dialog in the state a brand-new account is in, at the cost of the only
+settings action that pre-emptively disables itself.
+
+So the emptiness is the **receipt's** job, and the receipt names the file first —
+"The file was saved, but there were no links to put in it." (expo: "created", where
+the file lands in cache and the share sheet is presented over it). The two
+tempting shorter lines are both wrong: `Exported 0 links.` claims a success for a
+file with nothing in it, and delete-all's bare shape — "There was no data to
+delete." — would contradict the download the user is looking at. Delete can say
+that because it genuinely produces nothing; export always produces a file. The
+existing warnings supply the _reason_ where there is one, so a locked-out run
+reads "…no links to put in it. 2 locked lists were not included."
+
+The subtler zeros are deliberately not distinguished from each other. Telling
+"library is empty" apart from "the policy filtered everything" before the run
+would need a per-format pre-flight count; after the run the warnings already
+carry it.
+
 ### the bracemark zip is platform-split — and mobile has ceilings web doesn't
 
 Both platforms read and write the same **layout** (`manifest.json` +
