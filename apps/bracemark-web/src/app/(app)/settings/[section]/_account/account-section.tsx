@@ -355,6 +355,11 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
             if (error) setError(null);
           }}
         />
+        {/* The message belongs to the BUTTON — it's what the press answered with —
+            so it rides inside the button's wrapper at `mt-3` rather than standing
+            as another item in the form's `gap-4`. Same 12 as DeleteAccountView.
+            It has to be nested to get it: a margin on a flex ITEM adds to the
+            gap (16 + 12), it doesn't replace it. */}
         <div>
           <Button type="submit" disabled={changePassword.isPending || !newPassword.ok}>
             {changePassword.isPending ? (
@@ -362,13 +367,13 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
             ) : null}
             {changePassword.isPending ? 'Changing…' : 'Change password'}
           </Button>
+          {error ? (
+            <p role="alert" className="mt-3 flex items-start gap-2 text-sm text-destructive">
+              <CircleAlert className="mt-0.5 size-4 shrink-0" />
+              {error}
+            </p>
+          ) : null}
         </div>
-        {error ? (
-          <p role="alert" className="flex items-start gap-2 text-sm text-destructive">
-            <CircleAlert className="mt-0.5 size-4 shrink-0" />
-            {error}
-          </p>
-        ) : null}
 
         {/* Honest boundary of what a password change is: a door rotation, not a
             DEK rotation (docs/account.md). It re-wraps the same DEK, so anyone
@@ -492,6 +497,8 @@ function RecoveryCodeView({ onBack, hasRecovery }: { onBack: () => void; hasReco
             }}
           />
         </div>
+        {/* Inside the button's wrapper, at 12 — see ChangePasswordView above for
+            why nested rather than a margin on the flex item. */}
         <div>
           <Button type="submit" disabled={recovery.isPending}>
             {recovery.isPending ? (
@@ -503,13 +510,13 @@ function RecoveryCodeView({ onBack, hasRecovery }: { onBack: () => void; hasReco
                 ? 'Generate new code'
                 : 'Generate recovery code'}
           </Button>
+          {error ? (
+            <p role="alert" className="mt-3 flex items-start gap-2 text-sm text-destructive">
+              <CircleAlert className="mt-0.5 size-4 shrink-0" />
+              {error}
+            </p>
+          ) : null}
         </div>
-        {error ? (
-          <p role="alert" className="flex items-start gap-2 text-sm text-destructive">
-            <CircleAlert className="mt-0.5 size-4 shrink-0" />
-            {error}
-          </p>
-        ) : null}
       </form>
     </>
   );
@@ -557,22 +564,24 @@ function SignOutOtherDevicesView({ onBack }: { onBack: () => void }) {
           stays signed in.
         </p>
       ) : (
-        <>
-          <div>
-            <Button onClick={onConfirm} disabled={signOutOthers.isPending}>
-              {signOutOthers.isPending ? (
-                <Loader2 data-icon="inline-start" className="size-4 animate-spin" />
-              ) : null}
-              {signOutOthers.isPending ? 'Signing out…' : 'Sign out other devices'}
-            </Button>
-          </div>
+        // Nesting matters most here: there's no form on this view, so the error
+        // was a direct child of SettingsPane and wore its `gap-8` — a full 32 below
+        // the button that produced it. Inside the wrapper it's the same 12 as the
+        // other three views.
+        <div>
+          <Button onClick={onConfirm} disabled={signOutOthers.isPending}>
+            {signOutOthers.isPending ? (
+              <Loader2 data-icon="inline-start" className="size-4 animate-spin" />
+            ) : null}
+            {signOutOthers.isPending ? 'Signing out…' : 'Sign out other devices'}
+          </Button>
           {error ? (
-            <p role="alert" className="flex items-start gap-2 text-sm text-destructive">
+            <p role="alert" className="mt-3 flex items-start gap-2 text-sm text-destructive">
               <CircleAlert className="mt-0.5 size-4 shrink-0" />
               {error}
             </p>
           ) : null}
-        </>
+        </div>
       )}
     </>
   );

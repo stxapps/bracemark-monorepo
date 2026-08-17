@@ -100,29 +100,35 @@ export function LockPane({
         <Text className="mt-1 text-center text-sm text-muted-foreground">{description}</Text>
       </View>
 
-      <View className="w-full max-w-xs gap-3">
+      {/* One 8/16 scale, matching the web twin: 16 between blocks — the pane's own
+          gap, which this column matches so neither button is held tighter than
+          everything else — and 8 INSIDE the field, where the error belongs to the
+          input rather than standing as a block of its own. */}
+      <View className="w-full max-w-xs gap-4">
         {biometric && (
           <Button variant="outline" onPress={() => void tryBiometric()} disabled={busy}>
             <Icon as={ScanFace} className="size-4" />
             <Text>{`Unlock with ${biometric.label}`}</Text>
           </Button>
         )}
-        <Input
-          secureTextEntry
-          autoFocus={!biometric}
-          autoCapitalize="none"
-          autoCorrect={false}
-          placeholder="Password"
-          aria-label="Password"
-          value={password}
-          editable={!busy}
-          onChangeText={(text) => {
-            setPassword(text);
-            if (error) setError(null);
-          }}
-          onSubmitEditing={() => void submit()}
-        />
-        {error && <ErrorText>{error}</ErrorText>}
+        <View className="gap-2">
+          <Input
+            secureTextEntry
+            autoFocus={!biometric}
+            autoCapitalize="none"
+            autoCorrect={false}
+            placeholder="Password"
+            aria-label="Password"
+            value={password}
+            editable={!busy}
+            onChangeText={(text) => {
+              setPassword(text);
+              if (error) setError(null);
+            }}
+            onSubmitEditing={() => void submit()}
+          />
+          {error && <ErrorText>{error}</ErrorText>}
+        </View>
         <Button onPress={() => void submit()} disabled={busy}>
           <Text>{busy ? 'Unlocking…' : 'Unlock'}</Text>
         </Button>

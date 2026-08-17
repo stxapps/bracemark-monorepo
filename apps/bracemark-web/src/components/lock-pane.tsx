@@ -68,24 +68,30 @@ export function LockPane({
         <p className="mt-1 text-sm text-muted-foreground">{description}</p>
       </div>
 
-      <form onSubmit={submit} className="flex w-full max-w-xs flex-col gap-3">
-        <Input
-          type="password"
-          autoFocus
-          autoComplete="off"
-          placeholder="Password"
-          aria-label="Password"
-          value={password}
-          onChange={(e) => {
-            setPassword(e.target.value);
-            if (error) setError(null);
-          }}
-        />
-        {error && (
-          <p role="alert" className="text-sm text-destructive">
-            {error}
-          </p>
-        )}
+      {/* One 8/16 scale, the Field kit's (web-ui field.tsx): 16 between blocks —
+          the pane's own gap, which the form matches so the button isn't held
+          tighter than everything else, and 8 INSIDE the field, where the error
+          belongs to the input rather than standing as a block of its own. */}
+      <form onSubmit={submit} className="flex w-full max-w-xs flex-col gap-4">
+        <div className="flex flex-col gap-2">
+          <Input
+            type="password"
+            autoFocus
+            autoComplete="off"
+            placeholder="Password"
+            aria-label="Password"
+            value={password}
+            onChange={(e) => {
+              setPassword(e.target.value);
+              if (error) setError(null);
+            }}
+          />
+          {error && (
+            <p role="alert" className="text-sm text-destructive">
+              {error}
+            </p>
+          )}
+        </div>
         <Button type="submit" disabled={busy}>
           {busy ? 'Unlocking…' : 'Unlock'}
         </Button>

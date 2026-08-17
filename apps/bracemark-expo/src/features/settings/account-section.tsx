@@ -192,13 +192,9 @@ function DeleteAccountView({ onBack }: { onBack: () => void }) {
       </View>
 
       {errorText && (
-        <SettingsNotice
-          tone="error"
-          className="mt-3"
-          icon={<Icon as={CircleAlert} className="size-4 text-destructive" />}
-        >
+        <ErrorText className="mt-3" icon={CircleAlert}>
           {errorText}
-        </SettingsNotice>
+        </ErrorText>
       )}
     </View>
   );
@@ -336,15 +332,27 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
             if (error) setError(null);
           }}
         />
-        <View className="flex-row">
-          <Button
-            disabled={changePassword.isPending || !newPassword.ok}
-            onPress={() => void onSubmit()}
-          >
-            <Text>{changePassword.isPending ? 'Changing…' : 'Change password'}</Text>
-          </Button>
+        {/* The message belongs to the BUTTON — it's what the press answered with —
+            so it rides inside the button's wrapper at `mt-3` rather than standing as
+            another item in this column's `gap-4`. Same 12 as DeleteAccountView and
+            SignOutOtherDevicesView, which already sit outside a gapped parent. It
+            has to be nested to get it: a margin on a flex ITEM adds to the gap
+            (16 + 12), it doesn't replace it. */}
+        <View>
+          <View className="flex-row">
+            <Button
+              disabled={changePassword.isPending || !newPassword.ok}
+              onPress={() => void onSubmit()}
+            >
+              <Text>{changePassword.isPending ? 'Changing…' : 'Change password'}</Text>
+            </Button>
+          </View>
+          {error ? (
+            <ErrorText className="mt-3" icon={CircleAlert}>
+              {error}
+            </ErrorText>
+          ) : null}
         </View>
-        {error ? <ErrorText icon={CircleAlert}>{error}</ErrorText> : null}
 
         {/* Honest boundary of what a password change is: a door rotation, not a
             DEK rotation (docs/account.md) — see web for the full note. */}
@@ -452,25 +460,26 @@ function RecoveryCodeView({ onBack, hasRecovery }: { onBack: () => void; hasReco
             }}
           />
         </View>
-        <View className="flex-row">
-          <Button disabled={recovery.isPending} onPress={() => void onSubmit()}>
-            <Text>
-              {recovery.isPending
-                ? 'Generating…'
-                : hadRecovery
-                  ? 'Generate new code'
-                  : 'Generate recovery code'}
-            </Text>
-          </Button>
+        {/* Inside the button's wrapper, at 12 — see ChangePasswordView above for why
+            nested rather than a margin on the flex item. */}
+        <View>
+          <View className="flex-row">
+            <Button disabled={recovery.isPending} onPress={() => void onSubmit()}>
+              <Text>
+                {recovery.isPending
+                  ? 'Generating…'
+                  : hadRecovery
+                    ? 'Generate new code'
+                    : 'Generate recovery code'}
+              </Text>
+            </Button>
+          </View>
+          {error ? (
+            <ErrorText className="mt-3" icon={CircleAlert}>
+              {error}
+            </ErrorText>
+          ) : null}
         </View>
-        {error ? (
-          <SettingsNotice
-            tone="error"
-            icon={<Icon as={CircleAlert} className="size-4 text-destructive" />}
-          >
-            {error}
-          </SettingsNotice>
-        ) : null}
       </View>
     </View>
   );
@@ -525,13 +534,9 @@ function SignOutOtherDevicesView({ onBack }: { onBack: () => void }) {
             </Button>
           </View>
           {error ? (
-            <SettingsNotice
-              tone="error"
-              className="mt-3"
-              icon={<Icon as={CircleAlert} className="size-4 text-destructive" />}
-            >
+            <ErrorText className="mt-3" icon={CircleAlert}>
               {error}
-            </SettingsNotice>
+            </ErrorText>
           ) : null}
         </>
       )}

@@ -85,7 +85,12 @@ function DialogContent({
       <DialogOverlay>
         <DialogPrimitive.Content
           className={cn(
-            'z-50 mx-auto flex w-full flex-col gap-4 rounded-lg border border-border bg-background p-6 shadow-lg shadow-black/5 sm:max-w-lg',
+            // `gap-6`, matching web-ui's DialogContent. At `gap-4` the step BETWEEN
+            // a dialog's blocks (header, body, footer) was the same 16 the blocks
+            // use internally, so nothing read as grouped — and every caller that
+            // wanted a tier inside its body had nowhere left to go. 24/16/8 is the
+            // same scale the Field kit runs on web.
+            'z-50 mx-auto flex w-full flex-col gap-6 rounded-lg border border-border bg-background p-6 shadow-lg shadow-black/5 sm:max-w-lg',
             Platform.select({
               web: 'animate-in fade-in-0 zoom-in-95 duration-200 web:max-w-[calc(100%-2rem)]',
             }),

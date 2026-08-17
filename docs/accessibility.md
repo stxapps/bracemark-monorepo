@@ -51,8 +51,8 @@ per platform:
 | web, inside the Field kit | `<FieldError>`                  | `ui/field.tsx` — renders `role="alert"`; returns `null` on empty content, so no ternary is needed at the call site |
 | web, settings sections    | `<SettingsNotice tone="error">` | `settings/_components/settings-kit.tsx` — the role rides `tone === 'error'` only                                   |
 | web, anywhere else        | `<p role="alert">`              | the lock surfaces, `link-add-surface`                                                                              |
-| expo, everywhere          | `<ErrorText>`                   | `components/error-text.tsx` — the single carrier                                                                   |
-| expo, settings sections   | `<SettingsNotice tone="error">` | `features/settings/settings-kit.tsx`                                                                               |
+| expo, anywhere else       | `<ErrorText>`                   | `components/error-text.tsx` — the single carrier                                                                   |
+| expo, settings sections   | `<SettingsNotice tone="error">` | `features/settings/settings-kit.tsx` — only where the web twin uses one too (see below)                            |
 | bracemark-extension       | `<div role="alert">`            | two sites; the popup and options page are too small to earn a component                                            |
 
 Web has three carriers rather than one because `FieldError` is a member of the
@@ -62,8 +62,20 @@ everywhere — the settings sections and the link editors use a plain
 to `Field` just to reach `FieldError` would buy machinery they don't need. The
 bare `<p role="alert">` is the honest fallback, not a lapse.
 
-Expo has exactly one carrier because it has no Field kit at all, so there was
-nothing to compose with and no reason to have more than one spelling.
+Expo has no Field kit at all, so there was nothing to compose with and no reason
+for more than one spelling — `ErrorText` is the carrier, and the settings
+`SettingsNotice` is the single exception.
+
+**Which of the two, on expo, is decided by the web twin**, not by which folder the
+file sits in: a site whose web counterpart is `<SettingsNotice tone="error">` gets
+one here too, and a site whose counterpart is a bare `<p role="alert">` gets
+`ErrorText`. Both announce, so this is never an accessibility bug — it's weight.
+`SettingsNotice` is a filled `bg-destructive/10` block and `ErrorText` is a line of
+red text, and the same failure wearing a different weight on each platform is the
+kind of drift that has no symptom until you put the two screens side by side.
+`account-section.tsx` was where it had happened — three views carrying a filled
+block against web's plain line, in a file whose other four error sites already
+used `ErrorText`.
 
 `ErrorText` is **not** named `FieldError`. Most of the sites it serves pair with a
 bare `<p>` on web, so the name would promise a twin that isn't there — and this

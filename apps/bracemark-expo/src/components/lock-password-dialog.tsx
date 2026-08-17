@@ -77,22 +77,31 @@ export function LockPasswordDialog({
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
 
+        {/* 24 / 16 / 8, one scale down from DialogContent's own gap: 16 between the
+            form's blocks, 8 inside the field. Every message this dialog can show is
+            about the PASSWORD — the schema's, and the callers' "Password is not
+            correct…" — so the error sits in the field's column, under the input it
+            describes, not as a third block between the checkbox and the buttons
+            where it took a full 16 on each side. */}
         <View className="gap-4">
-          <Input
-            secureTextEntry
-            autoFocus
-            autoCapitalize="none"
-            autoCorrect={false}
-            placeholder="Password"
-            aria-label="Password"
-            value={password}
-            editable={!busy}
-            onChangeText={(text) => {
-              setPassword(text);
-              if (error) setError(null);
-            }}
-            onSubmitEditing={() => void submit()}
-          />
+          <View className="gap-2">
+            <Input
+              secureTextEntry
+              autoFocus
+              autoCapitalize="none"
+              autoCorrect={false}
+              placeholder="Password"
+              aria-label="Password"
+              value={password}
+              editable={!busy}
+              onChangeText={(text) => {
+                setPassword(text);
+                if (error) setError(null);
+              }}
+              onSubmitEditing={() => void submit()}
+            />
+            {error && <ErrorText>{error}</ErrorText>}
+          </View>
 
           {checkboxLabel && (
             <Pressable
@@ -105,8 +114,6 @@ export function LockPasswordDialog({
               <Text className="min-w-0 flex-1 text-sm">{checkboxLabel}</Text>
             </Pressable>
           )}
-
-          {error && <ErrorText>{error}</ErrorText>}
 
           <DialogFooter>
             <Button variant="outline" onPress={() => onOpenChange(false)}>

@@ -71,7 +71,9 @@ function AlertDialogContent({
       <AlertDialogOverlay>
         <AlertDialogPrimitive.Content
           className={cn(
-            'z-50 flex flex-col gap-4 rounded-lg border border-border bg-background p-6 shadow-lg shadow-black/5 sm:max-w-lg',
+            // `gap-6`, matching web-ui's AlertDialogContent — and the sibling
+            // dialog.tsx, which carries the note for both.
+            'z-50 flex flex-col gap-6 rounded-lg border border-border bg-background p-6 shadow-lg shadow-black/5 sm:max-w-lg',
             Platform.select({
               web: 'animate-in fade-in-0 zoom-in-95 duration-200 web:max-w-[calc(100%-2rem)]',
             }),
@@ -84,10 +86,16 @@ function AlertDialogContent({
   );
 }
 
+// `gap-1.5`, matching web-ui's AlertDialogHeader — deliberately tighter than the
+// `gap-2` both platforms' plain `DialogHeader` uses. An alert dialog's description
+// is one clause finishing the sentence its title starts ("Delete permanently?" /
+// "…can't be undone"), where a dialog's is a standalone line, so it binds closer.
+// Only the gap ports: web's header is a grid with a centering and media-slot
+// machinery that has no counterpart on this side.
 function AlertDialogHeader({ className, ...props }: ViewProps) {
   return (
     <TextClassContext.Provider value="text-center sm:text-left">
-      <View className={cn('flex flex-col gap-2', className)} {...props} />
+      <View className={cn('flex flex-col gap-1.5', className)} {...props} />
     </TextClassContext.Provider>
   );
 }
