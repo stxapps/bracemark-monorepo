@@ -80,12 +80,18 @@ function SyncStatus() {
   // button; pressing one would change nothing).
   const isBlocked = phase === 'capacity-blocked';
 
+  // `size-5` is the SettingsRow icon size (the three action rows at the bottom of
+  // this file, account-section's four), not the `size-4` of the receipt lines and
+  // notices below — those are inline glyphs beside 14px text, a different slot
+  // holding the same lucide shapes. It also puts the three static states on the
+  // same footing as the fourth: ActivityIndicator `small` renders ~20px, so at
+  // size-4 the row's icon grew every time a sync started.
   const icon = isError ? (
-    <Icon as={CircleAlert} className="size-4 text-destructive" />
+    <Icon as={CircleAlert} className="size-5 text-destructive" />
   ) : isBlocked ? (
-    <Icon as={CircleAlert} className="size-4 text-muted-foreground" />
+    <Icon as={CircleAlert} className="size-5 text-muted-foreground" />
   ) : phase === 'idle' ? (
-    <Icon as={CircleCheck} className="size-4 text-muted-foreground" />
+    <Icon as={CircleCheck} className="size-5 text-muted-foreground" />
   ) : (
     <ActivityIndicator size="small" />
   );
@@ -107,7 +113,13 @@ function SyncStatus() {
       <View className="min-w-0 flex-1 flex-row items-start gap-2.5">
         <View className="mt-0.5 shrink-0">{icon}</View>
         <View className="min-w-0 flex-1 gap-0.5">
-          <Text className="text-sm font-medium">Sync</Text>
+          {/* The kit's row title, spelled out because this card is hand-rolled
+              rather than a SettingsRow (the status column below is several lines,
+              not one description string). `font-medium` over Text's own
+              `text-base` is exactly what SettingsRow renders (settings-kit.tsx) —
+              at `text-sm` it read a step under the three action rows below it,
+              which is backwards for the block that heads the section. */}
+          <Text className="font-medium">Sync</Text>
           <Text className={cn('text-sm', isError ? 'text-destructive' : 'text-muted-foreground')}>
             {text}
           </Text>

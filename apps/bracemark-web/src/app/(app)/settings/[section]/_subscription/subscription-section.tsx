@@ -307,13 +307,24 @@ export function SubscriptionSection() {
             bare row of checkmarks under a renewal date reads as the thing you are
             about to be sold. `font-medium` at `text-sm` keeps it one step UNDER
             the plan name at the top of the box — this is a property of that plan,
-            not a second heading competing with it. */}
+            not a second heading competing with it.
+
+            The items themselves are MUTED, which is the kit's standing shape (a
+            font-medium foreground line over text-sm muted body — SettingsHeader,
+            SettingsRow, and the plan-name/status pair at the top of this box).
+            At full foreground they outweighed the renewal date, i.e. the list
+            outranked the thing the box exists to say; muted also matches the
+            already-muted Check beside them and bracemark-site's pricing cards,
+            so the block sits at or below the volume of the copy that SELLS it.
+            The upgrade cards below deliberately keep theirs at foreground —
+            that contrast is what separates what you're being sold from what you
+            already have. */}
         {includedFeatures.length > 0 && (
           <div className="mt-4">
             <p className="text-sm font-medium">Your plan includes</p>
             <ul className="mt-2 flex flex-col gap-1.5">
               {includedFeatures.map((feature) => (
-                <li key={feature} className="flex items-start gap-2 text-sm">
+                <li key={feature} className="flex items-start gap-2 text-sm text-muted-foreground">
                   <Check className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
                   {feature}
                 </li>

@@ -86,14 +86,18 @@ function SyncStatus() {
   // button; pressing one would change nothing).
   const isBlocked = phase === 'capacity-blocked';
 
+  // `size-5` is the SettingsRow icon size — the three action rows below, and
+  // account-section's four. NOT the `size-4` the receipts and SettingsNotice use
+  // further down this file: that one is an inline glyph beside 14px text, a
+  // different slot that happens to hold the same three lucide shapes.
   const icon = isError ? (
-    <CircleAlert className="size-4 text-destructive" />
+    <CircleAlert className="size-5 text-destructive" />
   ) : isBlocked ? (
-    <CircleAlert className="size-4 text-muted-foreground" />
+    <CircleAlert className="size-5 text-muted-foreground" />
   ) : phase === 'idle' ? (
-    <CircleCheck className="size-4 text-muted-foreground" />
+    <CircleCheck className="size-5 text-muted-foreground" />
   ) : (
-    <Loader2 className="size-4 animate-spin text-muted-foreground" />
+    <Loader2 className="size-5 animate-spin text-muted-foreground" />
   );
 
   const text =
@@ -110,8 +114,17 @@ function SyncStatus() {
 
   return (
     <SettingsRow
+      // The wrapper is what aligns the glyph, and both halves of it are load-
+      // bearing. This row is STATIC (no onClick), so the kit lays it out
+      // `items-start` rather than the `items-center` the pressable rows below get
+      // (settings-kit.tsx) — deliberately, because this description is a column of
+      // up to five lines that mount and unmount with sync state, and a centred
+      // icon would drift down the row as they appear. `mt-0.5` then drops the
+      // 20px glyph onto the optical centre of the 24px title line, and `block` is
+      // what makes that margin apply at all — the kit's own wrapper span is
+      // inline, where vertical margins do nothing.
       icon={<span className="mt-0.5 block">{icon}</span>}
-      title={<span className="text-sm">Sync</span>}
+      title="Sync"
       action={
         action ? (
           <Button variant="outline" size="sm" onClick={action.onClick}>

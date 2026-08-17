@@ -124,11 +124,21 @@ export function ExtractionSection() {
 
       <SettingsRow
         title={
-          // `font-medium` against Label's normal default: SettingsRow wraps a
-          // plain-text title in `font-medium` (settings-kit.tsx), and a Label
-          // brings its own weight, so without this the one row whose title is a
-          // Label would render lighter than every other row's.
-          <Label htmlFor="server-extraction" className="font-medium">
+          // A Label, NOT a plain string, because this row's action is a Switch
+          // and the `htmlFor` pairing is the only thing that names it — Switch
+          // carries no aria-label, so dropping the Label leaves a control that
+          // announces as "switch, off" with nothing saying what it toggles (and
+          // takes click-the-title-to-toggle with it). Nothing catches that: no
+          // lint rule, no type error, no test.
+          //
+          // Which is why BOTH of its type classes are overridden here. Label is
+          // `text-sm font-normal` (label.tsx), and SettingsRow renders a title as
+          // `font-medium` at the pane's inherited 16 (settings-kit.tsx) — so left
+          // alone, the one row whose title is a Label renders lighter AND smaller
+          // than every other row's. The free-plan branch above is the proof: it
+          // passes these same words as a plain string, and the two would render
+          // at different sizes depending on the reader's plan.
+          <Label htmlFor="server-extraction" className="text-base font-medium">
             Server-side previews
           </Label>
         }

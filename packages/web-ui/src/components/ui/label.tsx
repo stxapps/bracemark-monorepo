@@ -12,12 +12,15 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 // and SheetTitle are `text-base font-medium` here against shadcn's `text-lg
 // font-semibold` — so a `shadcn add label` overwrite has to be re-applied.
 //
-// Labels that play a TITLE role rather than a field-name role opt back up with an
-// explicit `font-medium` at the call site: a SettingsRow's title (settings-kit
-// wraps plain-text titles in `font-medium`, so a Label-bearing row has to match),
-// and the headings above a radio list whose own option rows are medium. Those two
-// overrides are load-bearing — dropping one demotes a heading below the options
-// under it. Everything else inherits this and should not restate a weight.
+// Labels that play a TITLE role rather than a field-name role opt back up at the
+// call site: a SettingsRow's title (settings-kit wraps plain-text titles in
+// `font-medium` at the pane's inherited 16, so a Label-bearing row overrides BOTH
+// axes — `text-base font-medium` — or that one row renders lighter and smaller
+// than every other row's), and the headings above a radio list whose own option
+// rows are medium (weight only; those rows are Label-wrapped too, so the whole
+// group sits at `text-sm` together). Those overrides are load-bearing — dropping
+// one demotes a heading below the options under it. Everything else inherits this
+// and should not restate a weight.
 //
 // TWO DENSITIES, and the point of making them a variant rather than a convention
 // is that there is no way to spell a third without noticing:

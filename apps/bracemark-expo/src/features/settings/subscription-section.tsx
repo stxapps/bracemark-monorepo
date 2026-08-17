@@ -328,7 +328,13 @@ export function SubscriptionSection() {
             16 rather than the sibling notes' 12 because this is a labelled
             sub-block, not a note hanging off what precedes it. The label is what
             keeps a row of checkmarks under a renewal date from reading as an
-            upsell. bracemark-web's box is the same block; change both. */}
+            upsell, and the items are MUTED for the same reason — the kit's
+            standing shape is a font-medium line over text-sm muted body, and at
+            full foreground the list outweighed the renewal date, i.e. outranked
+            the thing the box exists to say. The upgrade cards below keep theirs
+            at foreground: that contrast separates what you're being sold from
+            what you already have. bracemark-web's box is the same block; change
+            both. */}
         {includedFeatures.length > 0 && (
           <View className="mt-4">
             <Text className="text-sm font-medium">Your plan includes</Text>
@@ -336,7 +342,7 @@ export function SubscriptionSection() {
               {includedFeatures.map((feature) => (
                 <View key={feature} className="flex-row items-start gap-2">
                   <Icon as={Check} className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                  <Text className="flex-1 text-sm">{feature}</Text>
+                  <Text className="flex-1 text-sm text-muted-foreground">{feature}</Text>
                 </View>
               ))}
             </View>
