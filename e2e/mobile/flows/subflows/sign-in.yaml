@@ -4,16 +4,24 @@
 # Parameters (set by the caller's `env:`, or by `maestro test -e`):
 #   USERNAME, PASSWORD
 #
-# `clearState: true` is not optional. `launchApp` RESUMES an app rather than
+# The wiped cold start is not optional. `launchApp` RESUMES an app rather than
 # cold-starting it (docs/testing.md, "verified against Xcode 26"), so a flow that
 # assumes it begins at the landing screen passes alone and fails in a directory
 # run, because the previous flow left the app deep in a navigation stack. That
-# failure looks exactly like the batch-mode driver bug and is not one.
+# failure looks exactly like the batch-mode driver bug and is not one. It goes
+# through cold-launch.yaml rather than `launchApp: clearState: true` because
+# clearing state also clears expo-dev-client's — see that file.
 appId: com.bracemark.app
 ---
-- launchApp:
-    clearState: true
+- runFlow:
+    file: cold-launch.yaml
 
+# The deep link returns before the bundle does, and a cold Metro can take tens of
+# seconds to serve it — so wait for the landing screen rather than tapping into
+# whatever is on screen.
+- extendedWaitUntil:
+    visible: 'Sign in'
+    timeout: 60000
 - tapOn: 'Sign in'
 
 - tapOn:

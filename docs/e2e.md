@@ -211,14 +211,29 @@ accessible identity is untestable as well as inaccessible. Flows bind to `testID
 and accessible labels, **never to body copy** — copy in this repo changes often,
 and a flow keyed to a sentence turns every wording edit into a red run.
 
-Three repo-specific gotchas:
+Four repo-specific gotchas:
 
 - **`launchApp` resumes, it does not cold-start.** Every flow that assumes a root
-  screen needs `clearState: true`, or it passes alone and fails in a directory run
-  because the previous flow left the app deep in a navigation stack. That failure
-  looks exactly like Maestro's batch-mode driver bug and is not one.
+  screen needs its state wiped first, or it passes alone and fails in a directory
+  run because the previous flow left the app deep in a navigation stack. That
+  failure looks exactly like Maestro's batch-mode driver bug and is not one.
+- **…but `clearState: true` wipes expo-dev-client's state too**, which is why the
+  wipe goes through `flows/subflows/cold-launch.yaml` rather than `launchApp`.
+  `clearState` is `pm clear`: it takes the dev launcher's
+  recently-opened-apps registry and the dev menu's `isOnboardingFinished` with it,
+  so the next launch shows the launcher's "enter the dev server URL" home screen,
+  and then floats the dev-menu sheet over whatever loaded. Both are
+  expo-dev-client chrome, neither is assertable, and a flow that ignores them
+  fails as a timeout on its first `tapOn`. The subflow launches by dev-client deep
+  link instead — bundle URL and `disableOnboarding=1` both stated up front, so
+  neither screen has a reason to appear. One link covers both platforms: the
+  param rides on the inner URL, which is what Android reads as the manifest URL
+  and iOS as `expoUrl`. The hand-driven twins are `npm run expo:ios:open` and
+  `npm run expo:android:open`. Its cost is that the mobile legs now assume a
+  **dev** build with Metro up, which they already did.
 - **Android needs `adb reverse tcp:8787 tcp:8787`** (and `8788` for the
-  extractor). Both `.env.development` files point at `http://localhost:8787` and
+  extractor, `8081` for Metro — `npm run expo:android:reverse` does all three). Both
+  `.env.development` files point at `http://localhost:8787` and
   `EXPO_PUBLIC_*` is inlined by Metro at bundle time, so one value has to serve the
   iOS simulator and the Android emulator both. Reversing the port teaches the
   emulator that localhost means the host; switching to `10.0.2.2` instead would
@@ -365,7 +380,7 @@ npm run e2e:contract
 
 # Android leg — shut the iOS simulator down first
 npm run expo:android                 # leave Metro running; new terminal for the rest
-npm run expo:reverse                 # adb reverse 8787 + 8788, once per emulator boot
+npm run expo:android:reverse         # adb reverse 8081 + 8787 + 8788, per emulator boot
 npm run e2e:mobile
 npm run e2e:contract
 ```
@@ -373,7 +388,7 @@ npm run e2e:contract
 `expo:ios` / `expo:android` are **not** e2e — they are the prerequisite, and the
 only step that produces the dev build the two native targets assume. Both hold the
 foreground running Metro once the app is installed, so the commands under them
-want a second terminal; `expo:reverse` is deliberately not chained onto the build
+want a second terminal; `expo:android:reverse` is deliberately not chained onto the build
 for that exact reason ([expo-build.md](./expo-build.md), _the npm scripts_). Note
 that `apps/bracemark-expo/ios/` and `android/` being present on disk proves
 nothing: they are generated and gitignored, so the folders can exist with no build

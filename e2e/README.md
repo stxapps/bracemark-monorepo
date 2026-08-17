@@ -43,7 +43,7 @@ shut it down, boot the other. Web e2e is platform-independent — run it once.
 
 ```sh
 npm run expo:ios          # or: npm run expo:android
-npm run expo:reverse      # Android only, once per emulator boot
+npm run expo:android:reverse   # Android only, once per emulator boot
 npm run e2e:mobile && npm run e2e:contract
 ```
 

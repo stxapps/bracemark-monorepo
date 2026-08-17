@@ -7,9 +7,11 @@
     "prebuild": "expo prebuild --clean",
     "start": "expo start",
     "android": "expo run:android",
-    "android:reverse": "adb reverse tcp:8787 tcp:8787 && adb reverse tcp:8788 tcp:8788",
+    "android:reverse": "adb reverse tcp:8081 tcp:8081 && adb reverse tcp:8787 tcp:8787 && adb reverse tcp:8788 tcp:8788",
+    "android:open": "adb shell am start -a android.intent.action.VIEW -d bracemark://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081%2F%3FdisableOnboarding%3D1",
     "android:release": "expo run:android --variant release",
-    "ios": "expo run:ios"
+    "ios": "expo run:ios",
+    "ios:open": "xcrun simctl openurl booted bracemark://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081%2F%3FdisableOnboarding%3D1"
   },
   "nx": {
     "tags": [

@@ -83,11 +83,22 @@ read `e2e/README.md` — this section is the ad-hoc "show me my change" loop.
   foreground, so background them or use a second terminal). App id is
   `com.bracemark.app`. Both native dirs are prebuilt already — only re-run
   `npm run prebuild` after an `app.config.ts`/plugin/native-dep change.
-- **Android additionally needs `npm run expo:reverse`** once per emulator boot,
-  before anything hits the api — it is `adb reverse` for 8787 (api) and 8788
-  (extractor). It is deliberately NOT chained onto `expo:android` (that script
-  never returns), it is idempotent and instant, and it survives reinstalls but
-  not a device reboot. Re-run it whenever unsure.
+- **Android additionally needs `npm run expo:android:reverse`** once per emulator boot,
+  before anything hits the api — it is `adb reverse` for 8081 (Metro), 8787 (api)
+  and 8788 (extractor). It is deliberately NOT chained onto `expo:android` (that
+  script never returns), it is idempotent and instant, and it survives reinstalls
+  but not a device reboot. Re-run it whenever unsure.
+- **Launch with `npm run expo:ios:open` / `expo:android:open`, not the app icon**
+  (both platforms — same code path, not an Android quirk). The dev build only
+  opens straight into the app while expo-dev-client's own prefs survive; anything
+  that clears app data (a Maestro `clearState`, so any `npm run e2e:mobile`, or a
+  remembered-bundle entry older than 3 days) leaves it showing the dev-launcher
+  home screen — "enter the dev server URL" — and then the dev-menu sheet on top
+  of the loaded bundle, both of which have to be dismissed by hand before the app
+  can be driven. Those two scripts are the dev-client deep link with the bundle
+  URL and `disableOnboarding=1` in it, so neither screen appears. Maestro flows
+  get the same treatment via `e2e/mobile/flows/subflows/cold-launch.yaml` →
+  `docs/e2e.md`.
 
 ### Android is the cheap path — `adb` alone is a complete loop
 

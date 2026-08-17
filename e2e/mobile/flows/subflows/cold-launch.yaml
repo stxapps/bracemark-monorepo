@@ -1,0 +1,37 @@
+# Cold-start the app with a wiped state, straight into the JS bundle. Pulled in
+# with `runFlow` by every flow that used to say `launchApp: clearState: true`;
+# never run directly.
+#
+# `clearState` is `pm clear` (and its iOS equivalent), so it wipes the app's WHOLE
+# data dir — including the two SharedPreferences files expo-dev-client keeps:
+#
+#   expo.modules.devlauncher.recentyopenedapps   → which bundle to load
+#   expo.modules.devmenu.sharedpreferences       → isOnboardingFinished
+#
+# Cleared, the dev build has nothing to open, so a plain `launchApp` lands on the
+# dev-launcher home screen ("enter the dev server URL") instead of the app, and
+# then — because onboarding also reads as unfinished — the dev-menu sheet slides
+# up over whatever loaded. Neither belongs to bracemark and neither is assertable;
+# a flow that ignores them times out on its first `tapOn`.
+#
+# The deep link answers both. `expo-development-client` is the dev launcher's own
+# host: given `url`, it skips the home screen and loads that bundle directly, and
+# `disableOnboarding=1` sets `isOnboardingFinished` (persisted, so it also covers
+# the plain `launchApp`s later in a flow). The param rides on the INNER url on
+# purpose — Android reads it off the parsed manifest URL and iOS off `expoUrl`,
+# both of which are the inner one, and keeping it there leaves the outer link free
+# of `&`, which `adb shell` would otherwise eat. Metro ignores the extra param.
+#
+# `localhost:8081` is the same call docs/e2e.md makes for the api and extractor
+# ports: the simulator has it for free and `expo:android:reverse` reverses 8081
+# for the emulator, so ONE link serves both platforms — Maestro turns `openLink`
+# into `xcrun simctl openurl` or an `am start` as needed. That does mean this
+# assumes a DEV build with Metro up, which the mobile legs already require
+# (e2e/README.md). The hand-driven twins are `npm run expo:ios:open` and
+# `expo:android:open`.
+appId: com.bracemark.app
+---
+- clearState
+- openLink:
+    link: 'bracemark://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081%2F%3FdisableOnboarding%3D1'
+    autoVerify: false

@@ -29,15 +29,21 @@ scripts** in
 | `start`           | `expo start`                         | Metro, for a Debug run from Xcode                    |
 | `android`         | `expo run:android`                   | dev build → device                                   |
 | `android:release` | `expo run:android --variant release` | release build → device (R8, no Metro)                |
-| `android:reverse` | `adb reverse` ×2 (8787, 8788)        | once per emulator boot, before anything hits the api |
+| `android:reverse` | `adb reverse` ×3 (8081, 8787, 8788)  | once per emulator boot, before anything hits the api |
+| `android:open`    | `am start` on the dev-client link    | open the installed dev build, every time             |
 | `ios`             | `expo run:ios`                       | quick simulator run without opening Xcode            |
+| `ios:open`        | `simctl openurl` on the same link    | ” — the simulator twin                               |
 
 Run them either way — `npm run <script>` from `apps/bracemark-expo`, or
 `npx nx <target> @stxapps/bracemark-expo` from the root (nx delegates to the
-script). Root aliases the three the native e2e legs need — `expo:ios`,
-`expo:android`, `expo:reverse` — under an `expo:` prefix rather than the `dev:`
-one `dev:ext`/`dev:site` use: those start a server in seconds, where `expo:ios` is
-a multi-minute native build and install, and one prefix for both would hide that.
+script). Root aliases the ones the native e2e legs need — `expo:ios`,
+`expo:ios:open`, `expo:android`, `expo:android:reverse`, `expo:android:open` —
+under an `expo:` prefix rather than the `dev:` one `dev:ext`/`dev:site` use: those
+start a server in seconds, where `expo:ios` is a multi-minute native build and
+install, and one prefix for both would hide that. The root spelling names the
+platform even where the app-level script could not be anything else
+(`adb reverse` is Android by construction), because at the root the five sit in
+one list and `expo:reverse` next to `expo:ios` read as if it applied to both.
 Metro on its own gets no root alias — it is `npx nx start @stxapps/bracemark-expo`,
 and in practice `expo:ios`/`expo:android` already leave it running. Extra flags
 pass straight through: `npm start -- --clear`,
@@ -61,6 +67,35 @@ whenever you are unsure.
 
 Keeping it out of `android` also keeps that script byte-for-byte what Expo itself
 writes, which the next paragraph is about.
+
+**`android:open`/`ios:open` open the dev build by DEV-CLIENT DEEP LINK, not by
+its icon.** Both are one line — `am start -a android.intent.action.VIEW -d …` and
+`xcrun simctl openurl booted …` — around the same URL:
+
+```
+bracemark://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081%2F%3FdisableOnboarding%3D1
+```
+
+`expo-development-client` is expo-dev-launcher's own host, and the two halves of
+that link turn off the two screens it otherwise puts in front of the app. `url`
+says which bundle to load, so it skips the launcher's "enter the dev server URL"
+home screen — which it shows whenever it has no bundle to remember, i.e. after
+anything clears app data (a Maestro `clearState`, so any `npm run e2e:mobile`) or
+after its 3-day registry TTL. `disableOnboarding=1` sets the dev **menu**'s
+`isOnboardingFinished`, the flag behind the sheet that slides up over the loaded
+app. Both flags live in cleared-with-everything-else storage
+(`expo.modules.devlauncher.recentyopenedapps` and
+`expo.modules.devmenu.sharedpreferences` on Android, `NSUserDefaults` on iOS),
+which is why "I dismissed that yesterday" doesn't hold.
+
+The param rides on the **inner** URL deliberately: Android reads it off the
+parsed manifest URL and iOS off `expoUrl`, both of which are the inner one, so
+one link serves both platforms — and the outer link stays free of `&`, which the
+device-side shell in `adb shell` would otherwise treat as a job control operator.
+`localhost` rather than `10.0.2.2` for the same reason
+[e2e.md](./e2e.md) gives for the api and extractor ports: `android:reverse`
+carries 8081 too, so the emulator and the simulator take the identical URL. The
+e2e flows launch through the same link — `e2e/mobile/flows/subflows/cold-launch.yaml`.
 
 **`android` and `ios` are named the way they are because PREBUILD WRITES
 THEM.** When `expo prebuild` creates a native directory it also "Updates

@@ -17,9 +17,13 @@
 # flows signed in, and its password door is exactly what this one is avoiding.
 appId: com.bracemark.app
 ---
-- launchApp:
-    clearState: true
+- runFlow:
+    file: subflows/cold-launch.yaml
 
+# Wait the bundle out before the first tap — see subflows/sign-in.yaml.
+- extendedWaitUntil:
+    visible: 'Sign in'
+    timeout: 60000
 - tapOn: 'Sign in'
 
 # The toggle is an id, not its text: the label is a whole sentence ("Forgot your
