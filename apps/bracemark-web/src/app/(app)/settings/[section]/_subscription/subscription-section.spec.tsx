@@ -49,7 +49,11 @@ const mockOpenPaddleCheckout = jest.fn(
 );
 
 jest.mock('@stxapps/web-react', () => ({
-  useEntitlements: () => ({ subscription: mockSubscription, isLoading: false, refetch: mockRefetch }),
+  useEntitlements: () => ({
+    subscription: mockSubscription,
+    isLoading: false,
+    refetch: mockRefetch,
+  }),
   useSync: () => ({ requestSync: mockRequestSync }),
 }));
 

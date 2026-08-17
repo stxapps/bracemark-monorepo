@@ -353,19 +353,33 @@ export const LIFETIME_SEATS = 500;
 // which turns "flip one flag" into "flip one flag and rediscover what it broke".
 export const LIFETIME_ON_SALE = false;
 
-// The upgrade cards' customer-facing copy — the human rendering of the
+// The plan cards' customer-facing copy — the human rendering of the
 // entitlements table above, so it lives HERE rather than in each app: it is plain
 // data with no platform types, and every checkout surface (bracemark-web's Paddle
 // section, bracemark-expo's store section, any future one) renders the same words.
 // It used to be copy-pasted per app under a "keep these VERBATIM in step"
 // comment, which is exactly the drift the rest of this file exists to prevent —
 // the place that defines a tier and the place that sells it can't disagree if
-// there's only one of each. Two rules when editing:
+// there's only one of each.
+//
+// It is read in TWO directions, which is why the increment rule below matters.
+// Facing a buyer it is an UPGRADE card (what the money adds); facing an owner it
+// is the "Your plan includes" list on both settings sections' current-plan box
+// (what the account has). The second reading is the stricter one — a feature
+// promised to someone who has already paid is a support ticket, not a lost sale.
+// Three rules when editing:
 //   - Only list what actually SHIPS. Reader view, screenshots, page copies, and AI
 //     are gated in ENTITLEMENTS above but not yet built, so they are NOT promised
 //     here — re-add each line as it lands. At launch Plus is unlimited links +
 //     server-side link previews + app lock/hidden lists + the structured search
 //     editor.
+//   - Every list here is an INCREMENT over the plan below it, never an inventory.
+//     Pro says so itself ('Everything in Plus'); Plus's baseline is supplied by
+//     whoever renders it — bracemark-site's pricing page has its own `inherits`
+//     line, and the two settings sections prepend 'Everything in Free' for the
+//     entry paid tier only. Fold a free-tier feature into a list below and it
+//     reads as newly bought; drop the prepended line and an owner reads four
+//     bullets as the whole of what they have.
 //   - Never sell the preview IMAGE. It is free for everyone (a client extracts it
 //     at zero cost to us), and this list said "Preview images" for a while from
 //     back when it was a paid lever — which read as "free users get no

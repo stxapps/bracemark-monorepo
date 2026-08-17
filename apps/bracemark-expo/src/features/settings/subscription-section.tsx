@@ -25,6 +25,7 @@ import { useEntitlements, useSync } from '@stxapps/expo-react';
 import {
   type AvailablePaidPlan,
   entitlementsOf,
+  PLAN_CARD_COPY,
   PLAN_CARDS,
   PLAN_LABELS,
   PLAN_USD_PER_YEAR,
@@ -213,6 +214,15 @@ export function SubscriptionSection() {
   // subscription, not one subscription per account.
   const upgradeCards = plan === 'free' ? PLAN_CARDS : [];
 
+  // What a PAID plan unlocks, listed inside the current-plan box. bracemark-web's
+  // section carries the full reasoning (why PLAN_CARD_COPY and not PLAN_CARDS,
+  // why 'Everything in Free' rides only on the entry paid tier, why free gets
+  // nothing here); change the two together.
+  const includedFeatures =
+    plan === 'free'
+      ? []
+      : [...(plan === 'plus' ? ['Everything in Free'] : []), ...PLAN_CARD_COPY[plan].features];
+
   return (
     <SettingsPane>
       <SettingsHeader
@@ -310,6 +320,27 @@ export function SubscriptionSection() {
             This subscription was purchased in the{' '}
             {source === 'appstore' ? 'App Store' : 'Play Store'} — manage or cancel it there.
           </Text>
+        )}
+
+        {/* LAST in the box: the grace notice says "update your payment method"
+            and Manage subscription is the control that does it, so nothing goes
+            between them — reference material with no urgency closes the block.
+            16 rather than the sibling notes' 12 because this is a labelled
+            sub-block, not a note hanging off what precedes it. The label is what
+            keeps a row of checkmarks under a renewal date from reading as an
+            upsell. bracemark-web's box is the same block; change both. */}
+        {includedFeatures.length > 0 && (
+          <View className="mt-4">
+            <Text className="text-sm font-medium">Your plan includes</Text>
+            <View className="mt-2 gap-1.5">
+              {includedFeatures.map((feature) => (
+                <View key={feature} className="flex-row items-start gap-2">
+                  <Icon as={Check} className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                  <Text className="flex-1 text-sm">{feature}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
         )}
       </View>
 

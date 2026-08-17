@@ -44,6 +44,15 @@ device that can sync can ask.
 | bracemark-web  | `lib/paddle.ts`, settings → Subscription | Paddle.js overlay checkout + plan cards + portal + `usePaddlePrices` (the localized price preview — app-level, since it calls app code; see _currency_)                                                          |
 | bracemark-expo | `lib/iap.ts`, settings → Subscription    | expo-iap store sheet + `iap/verify` + plan cards + restore + store-manage deep link (expo-react's `useEntitlements` caches in sqlite)                                                                            |
 
+Both Subscription sections render `PLAN_CARD_COPY` **twice over**: as the upgrade
+card, shown only on `free`, and as the "Your plan includes" list inside the
+current-plan box, shown only on a paid plan. So the same sentences face a buyer
+and an owner, and the copy rules in `iap/plans.ts` are written for both readings
+— in particular that each list is an **increment** over the plan below it, which
+is why the entry paid tier's list gets `Everything in Free` prepended at the two
+render sites (and `bracemark-site`'s pricing page supplies the same line from its
+own `inherits` field).
+
 `purchases` is **global** (DIRECTORY*DB, not an account shard) because webhook
 events after the first arrive keyed by the \_provider's* subscription id with no
 username/session to route a shard by — a per-shard table would force the

@@ -15,7 +15,7 @@
 //    so they get a note instead of the portal button.
 
 import { useEffect, useRef, useState } from 'react';
-import { Check, ExternalLink, RefreshCw } from 'lucide-react';
+import { Check, ExternalLink, Loader2, RefreshCw } from 'lucide-react';
 
 import { useApiClient } from '@stxapps/react';
 import {
@@ -24,6 +24,7 @@ import {
   iapCheckoutEndpoint,
   iapPortalEndpoint,
   type Plan,
+  PLAN_CARD_COPY,
   PLAN_CARDS,
   PLAN_LABELS,
   PLAN_USD_PER_YEAR,
@@ -183,6 +184,31 @@ export function SubscriptionSection() {
   // server enforces the same guard at /v1/iap/checkout.
   const upgradeCards = plan === 'free' ? PLAN_CARDS : [];
 
+  // What a PAID plan unlocks, listed inside the current-plan box — the same
+  // words the upgrade card sells, read the other way round (PLAN_CARD_COPY in
+  // plans.ts covers both directions). It exists because a Plus account's whole
+  // Subscription section was otherwise one small box with a date in it, and
+  // because `locks` and `searchEditor` are the two entitlements with the worst
+  // in-app discoverability: a renewal notice that never says what is being
+  // renewed is where a cancellation starts.
+  //
+  // Off PLAN_CARD_COPY, NOT PLAN_CARDS — that one is the storefront subset
+  // (AVAILABLE_PAID_PLANS), so a manually-granted 'pro' account would find
+  // nothing in it and render an empty block. Free gets nothing here: its own
+  // description line above already says what it has, and a check list under it
+  // would be a second one.
+  //
+  // 'Everything in Free' is prepended for the ENTRY paid tier only. Plus's copy
+  // is written as what it ADDS, so unprefixed it reads as the whole of what the
+  // account has and silently drops encryption, sync, lists and tags; Pro's copy
+  // already opens with 'Everything in Plus', which carries the same baseline
+  // transitively and would double up. bracemark-site's pricing page makes the
+  // identical split with its `inherits` line.
+  const includedFeatures =
+    plan === 'free'
+      ? []
+      : [...(plan === 'plus' ? ['Everything in Free'] : []), ...PLAN_CARD_COPY[plan].features];
+
   return (
     <SettingsPane>
       <SettingsHeader
@@ -267,10 +293,49 @@ export function SubscriptionSection() {
             {source === 'appstore' ? 'App Store' : 'Play Store'} — manage or cancel it there.
           </p>
         )}
+
+        {/* LAST in the box, and that ordering is load-bearing: the grace notice
+            says "update your payment method" and Manage billing is the control
+            that does it, so nothing may come between them. Reference material
+            with no urgency closes the block instead.
+
+            16 rather than the 3 sibling blocks' 12 — those are notes hanging off
+            what precedes them, this is a labelled sub-block of its own, and at
+            the same step it would read as a fourth note.
+
+            LABELLED, which is the whole difference between this and an upsell: a
+            bare row of checkmarks under a renewal date reads as the thing you are
+            about to be sold. `font-medium` at `text-sm` keeps it one step UNDER
+            the plan name at the top of the box — this is a property of that plan,
+            not a second heading competing with it. */}
+        {includedFeatures.length > 0 && (
+          <div className="mt-4">
+            <p className="text-sm font-medium">Your plan includes</p>
+            <ul className="mt-2 flex flex-col gap-1.5">
+              {includedFeatures.map((feature) => (
+                <li key={feature} className="flex items-start gap-2 text-sm">
+                  <Check className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                  {feature}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
 
+      {/* The ONLY pending notice on this surface that gets a spinner, because it
+          is the only one describing something actually in flight — the poll
+          against `iap/status`, running for up to 30 seconds behind a screen where
+          the checkout overlay has just closed and nothing else moves. Motion is
+          what makes a strip read as pending; no background value does that job.
+          Deliberately not on the two in _extraction (both are standing states —
+          previews unavailable, auto-previews paused — and a spinner would promise
+          progress that isn't happening), nor on `notice` below, which is a RESULT
+          ("You're on Plus now") or the timeout's advice, never a wait. */}
       {busy === 'activating' && (
-        <SettingsNotice tone="pending">Finishing your upgrade…</SettingsNotice>
+        <SettingsNotice tone="pending" icon={<Loader2 className="size-4 animate-spin" />}>
+          Finishing your upgrade…
+        </SettingsNotice>
       )}
       {notice && <SettingsNotice tone="pending">{notice}</SettingsNotice>}
       {error && <SettingsNotice tone="error">{error}</SettingsNotice>}

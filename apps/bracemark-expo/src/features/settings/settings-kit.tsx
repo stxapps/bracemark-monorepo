@@ -250,7 +250,12 @@ export function SettingsRow({
 //
 //   - `info`    — a standing fact or a caution. Bordered, body colour, quiet.
 //   - `error`   — something failed. Tinted, and the only tone that uses red.
-//   - `pending` — a transient status the user is waiting on.
+//   - `pending` — a transient status the user is waiting on. Bordered AND
+//     tinted: the hairline is what makes it a block, the fill is what separates
+//     it from `info`. It was `bg-muted/50` alone and read as nothing in light
+//     mode — `--color-muted` is achromatic and three points off the background,
+//     so unlike `bg-destructive/10` no opacity makes it register. The web twin's
+//     SettingsNotice carries the full reasoning; change the two together.
 //
 // `error` also carries `role="alert"` (see components/error-text.tsx for why, and
 // for the iOS caveat) — the same thing the web twin's SettingsNotice does. The
@@ -274,7 +279,7 @@ export function SettingsNotice({
         'flex-row items-start gap-2 rounded-lg px-3 py-2.5',
         tone === 'info' && 'border border-border',
         tone === 'error' && 'bg-destructive/10',
-        tone === 'pending' && 'bg-muted/50',
+        tone === 'pending' && 'border border-border bg-muted',
         className,
       )}
     >

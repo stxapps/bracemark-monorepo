@@ -255,7 +255,20 @@ export function SettingsRow({
 //
 //   - `info`    — a standing fact or a caution. Bordered, body colour, quiet.
 //   - `error`   — something failed. Tinted, and the only tone that uses red.
-//   - `pending` — a transient status the user is waiting on.
+//   - `pending` — a transient status the user is waiting on. Bordered AND
+//     tinted: the hairline is what makes it a block, the fill is what separates
+//     it from `info`.
+//
+// WHY `pending` NEEDS THE BORDER. It was `bg-muted/50` alone and read as nothing
+// at all in light mode. `error` gets away with a bare fill because `--destructive`
+// is CHROMATIC — `bg-destructive/10` is pink on white, which the eye catches at
+// any lightness. `--muted` is `oklch(0.97 0 0)`, achromatic and three points off
+// the background, so no opacity makes it register; it can only become a darker
+// grey (and going DOWN — /25 — makes it lighter still, which is the trap). Full
+// `bg-muted` doubles the delta to the token's designed value, and on a white
+// surface the hairline is what actually delineates a block, which is why `info`
+// is bordered and unfilled. Dark mode never had the problem (0.269 on 0.145) and
+// the border there is `oklch(1 0 0 / 10%)`, so it only firms the edge up.
 //
 // `error` also carries `role="alert"`, so mounting it ANNOUNCES — the same thing
 // web-ui's `FieldError` does for the auth forms. Every error tone here arrives as
@@ -280,7 +293,7 @@ export function SettingsNotice({
         'flex items-start gap-2 rounded-lg px-3 py-2.5 text-sm',
         tone === 'info' && 'border border-border text-muted-foreground',
         tone === 'error' && 'bg-destructive/10 text-destructive',
-        tone === 'pending' && 'bg-muted/50 text-muted-foreground',
+        tone === 'pending' && 'border border-border bg-muted text-muted-foreground',
         className,
       )}
     >
