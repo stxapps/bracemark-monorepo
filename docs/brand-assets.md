@@ -3,8 +3,8 @@
 The **invariants** that keep the brand consistent across seven surfaces and the
 four apps that carry the mark: what the mark is, where its copies live and why
 they must not drift, the one set of lockup measurements, the two meanings the 45°
-fold is allowed to carry, the three brand lines, and what the public repo
-entitles us to claim.
+fold is allowed to carry, the three brand lines, the two nouns the product uses
+for what it stores, and what the public repo entitles us to claim.
 
 Every rule here is enforced by nothing but this file. There is no test that
 compares two SVG paths, no lint rule that catches a hand-typed lockup, and no
@@ -207,6 +207,56 @@ claim inverted to a positive.
 product whose whole argument is that intent is worthless — putting them next to
 "we don't promise not to look" contradicts it out loud. Prose says the mechanism
 ("a path, a size, and bytes we hold no key for").
+
+### the two nouns — bookmark and link
+
+The product has **two words for the thing it stores, and they are not
+interchangeable.** Both are correct; each is the best word for a different job,
+and using either everywhere breaks something specific.
+
+| word         | job                                                                                    | where it belongs                                                                                                                                                                                                                    |
+| ------------ | -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **bookmark** | the **category** — what kind of product this is, and what it is being compared against | the three brand lines above; `FULL_DESCRIPTION`'s opener; the marketing site's meta description, `/about` and the comparison FAQs; **file formats** (`import/netscape.ts`, `export/netscape.ts`, the "HTML bookmarks" import label) |
+| **link**     | the **object** — the thing a user saves, opens, files and acts on                      | every in-app surface: "Add link", "Edit link", "Copy links", "Search links…", "No links saved yet", "Unlimited saved links"; the `/links` route; `LinkQuery`; the `links/` blob namespace                                           |
+
+The marketing site's footer runs both in one breath, and is the pattern in
+miniature: _"An end-to-end encrypted bookmark manager. Your links are encrypted
+on your device…"_ — category, then object.
+
+**Three reasons the split is load-bearing rather than habitual.**
+
+- **"Bookmark" is the searched word.** Nobody types "link manager". The name
+  alone does not say what the product does, so the outward lines have to carry
+  the category — and it is the category term the stores index.
+- **"Bookmark" is already taken, by the browser.** The sharp one. This app
+  _imports_ browser bookmarks, so if our objects were bookmarks too, the import
+  copy would read "import an HTML bookmarks file … bookmarks you already have are
+  skipped" — theirs or ours? It reads "**links** you already have are skipped",
+  and is unambiguous. The same collision is handled deliberately in
+  `apps/bracemark-extension/wxt.config.ts`, where declaring Firefox's
+  `bookmarksInfo` is rejected because it would tell users we read their bookmark
+  _tree_. On that surface the word means the browser's tree; it cannot also mean
+  ours.
+- **"Link" is what the URL and the schema already say** — `/links`,
+  `links/{id}.enc`, `LinkQuery`. An in-app noun matching the path in the address
+  bar is consistency for free.
+
+**The collection gets no noun at all — and "vault" and "library" are why that is
+a rule.** The UI names **places** (My List, Archive, Trash, Show All); a user
+files into a list and never addresses the whole, so there is no slot a container
+word could fill. "Vault" is additionally barred by the paragraph above it: it is
+a claim about how the product _feels_, in a product whose argument is that
+feelings count for nothing beside mechanism. It appears once in the codebase, in
+`KEYWORDS` in `listing-copy.ts` — which is a comma-list of search terms, not
+prose, and outside this rule. "Library" is serviceable as a **mass noun in
+prose** ("bring the library you already have", "someone with a large library")
+and is not a label; promoting it to one is the same mistake as "vault".
+
+⚠ **Nothing enforces any of this** — a `<Button>Add bookmark</Button>` type-checks
+and lints clean. The check is this page. Related: the first-sync counter says
+**"items"**, a third word for a third scope (`sync/status.ts` carries the
+reasoning — it counts index blobs across six namespaces, not links), which is the
+same instinct one level down and not an exception to the table.
 
 ### the source — what we may claim
 

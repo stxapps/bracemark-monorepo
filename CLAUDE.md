@@ -83,6 +83,7 @@ self-contained and cross-links its neighbours.
 | which host each app answers, the CSP, `nx start` preview         | `hosting.md`                    |
 | **the public repo, the AGPL licence, what we claim about it**    | `brand-assets.md` ⚠             |
 | **the mark** — the icon shape, its two components, the icon PNGs | `brand-assets.md`               |
+| **user-facing wording** — "bookmark" vs "link", the brand lines  | `brand-assets.md`               |
 | the marketing site — its pages, its apex, why it's in this repo  | `architecture.md`, `hosting.md` |
 | how the workspace was originally scaffolded (run-once history)   | `setup.md`                      |
 

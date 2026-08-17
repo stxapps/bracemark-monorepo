@@ -138,9 +138,15 @@ function DecryptingScreen({ progress }: { progress: InitialSyncProgress | null }
           NOT announce") — it is on screen from the first frame. This is the one
           wait in the app where the end-to-end encryption is visible rather than
           claimed, so the empty seconds carry the sentence.
+
+          "only you, with your password" — NOT "only this device", which this
+          screen is itself the counterexample to: the key derives from the
+          password (docs/account.md), so a first pull on a SECOND device is
+          exactly what is being narrated here. Matches BRAND's "Bookmarks only
+          you can read" (stores/listing-copy.ts).
         */}
         <Text className="text-center text-xs text-muted-foreground">
-          Your links are encrypted — only this device can read them.
+          Your links are encrypted — only you, with your password, can read them.
         </Text>
       </View>
     </StyledSafeAreaView>
