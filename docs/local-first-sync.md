@@ -372,6 +372,26 @@ metadata each that's ~2.5 MB — manageable. Set the cursor to the **newest
 `(updatedAt, path)` among the files listed** — the same reconstruction the
 fallback full sync does from its listing.
 
+This is the only flow that **blocks the UI**, so it is also the only one that
+**reports progress**. `runInitialSync` takes an optional `onProgress(done, total)`
+— a parameter, not a `SyncDeps` field, because the providers build one `deps` and
+hand it to both flows, and a background cycle has no blocked screen waiting on a
+count. The order matters: the listing reports **nothing** (there is no
+denominator until it returns, and inventing one is just a fake progress bar),
+then `storeDownloads` emits `(0, n)` the moment it knows `n`, then one tick per
+entry. `n` is the count of **index** blobs actually being fetched — after the
+selective-sync filter and after the staleness skip, and never including `files/`
+content, whose blobs aren't downloaded here at all. So the number is a fact
+rather than an estimate, an interrupted run's retry counts only the remainder it
+still has to do, and — because the tick sits in a `finally` — an entry skipped
+for a mid-pull 404 still counts, which is what keeps the counter from stalling
+one short of its own total. The shape of the type and the wording of the label
+(`InitialSyncProgress`, `initialSyncProgressLabel`) live in `@stxapps/shared`, so
+both gates say the same thing; the **throttling** is the providers' job, not the
+engine's — the engine is React-free and also runs in the browser extension's
+service worker, which has no renders to schedule. What the two gates then draw
+with it is [accessibility.md](./accessibility.md), _the first-sync counter_.
+
 **2. Incremental sync (next visit).** Call `GET /v1/ops/list` with the cursor,
 get the ops whose `updatedAt` is newer than the cursor, apply them (download +
 decrypt + store for `put`, remove for `delete`), and advance the cursor to the

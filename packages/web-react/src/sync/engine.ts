@@ -22,6 +22,7 @@ import {
   FILES_PREFIX,
   filesListEndpoint,
   filesSignEndpoint,
+  type InitialSyncProgressFn,
   mapLimit,
   MAX_COMMIT_OPS,
   MAX_LIST_LIMIT,
@@ -127,10 +128,22 @@ function withRetryDeps(deps: SyncDeps): SyncDeps {
 // manifest, download + decrypt the index, build the local store — content is NOT
 // pulled here. BLOCKING from the UI's point of view (InitialSyncGate shows the
 // decrypting screen until this resolves).
-export async function runInitialSync(deps: SyncDeps): Promise<void> {
+//
+// `onProgress` is the gate's counter feed, and it is a PARAMETER rather than a
+// SyncDeps field on purpose: the providers build one `deps` and hand it to both
+// flows, so a field here would also fire on every background cycle — and a
+// background cycle has no blocked UI waiting on a count. Passing it per call makes
+// "only the blocking pull reports progress" structural instead of a convention.
+// It stays silent through the listing below (no denominator exists yet, and
+// inventing one is the fake-progress-bar failure); the first tick arrives once
+// storeDownloads knows exactly how much it is about to fetch.
+export async function runInitialSync(
+  deps: SyncDeps,
+  onProgress?: InitialSyncProgressFn,
+): Promise<void> {
   deps = withRetryDeps(deps);
   const files = await listAllFiles(deps.api);
-  await storeDownloads(deps, files);
+  await storeDownloads(deps, files, onProgress);
   // Cursor is the newest compound `(updatedAt, path)` among ALL listed files
   // (content included, even though its blob is deferred) — the same
   // reconstruction the fallback cycle does from its full listing.
@@ -752,7 +765,11 @@ async function uploadBlobs(
 // previously-cached `data` so a stale copy isn't served after an update). The index
 // is pulled in chunks — each chunk signs its own GET URLs, then GETs + decrypts +
 // stores at bounded concurrency — so the URL set never outgrows one batch.
-async function storeDownloads(deps: SyncDeps, entries: Entry[]): Promise<void> {
+async function storeDownloads(
+  deps: SyncDeps,
+  entries: Entry[],
+  onProgress?: InitialSyncProgressFn,
+): Promise<void> {
   // Selective sync: drop the namespaces this client doesn't materialize before any
   // sign/GET work (the cursor is advanced by the caller from the full op/file set, so
   // skipping these downloads never strands it). A no-op for a full-sync client.
@@ -790,6 +807,22 @@ async function storeDownloads(deps: SyncDeps, entries: Entry[]): Promise<void> {
     deps.username,
     content.map((e) => toItemRecord(e.path, e.updatedAt)),
   );
+  // The counter's denominator is `index` — what this pull is actually about to
+  // fetch, after both filters above. Emitted once at zero before the first round
+  // trip so the gate can swap its indeterminate state for a real bar right away
+  // rather than waiting for the first blob to land. Nothing to fetch reports
+  // nothing at all: the gate reads that as "still working" and stays
+  // indeterminate, which beats flashing a full bar over a pull that is already
+  // over. Content records are excluded because their blobs aren't downloaded here
+  // (only their `updatedAt` rows are) — counting them would inflate the total with
+  // work that costs no time.
+  let done = 0;
+  // Hoisted out of the batch loop below so the per-entry callback closes over a
+  // `const` — a closure declared inside the loop that incremented `done` itself
+  // reads to no-loop-func as a stale-capture bug, which it isn't here.
+  const tick = () => onProgress?.(++done, index.length);
+  if (index.length > 0) onProgress?.(done, index.length);
+
   // Index: sign → GET → decrypt → store one chunk at a time, so the presigned-URL
   // map never grows past a single batch (a large first sync holds ~1k URLs, not all
   // of them) and each URL's mint-to-GET latency stays well inside its 1-hour TTL.
@@ -803,19 +836,29 @@ async function storeDownloads(deps: SyncDeps, entries: Entry[]): Promise<void> {
       batch.map((e) => e.path),
     );
     await mapLimit(batch, DOWNLOAD_CONCURRENCY, async (e) => {
-      const url = urls.get(e.path);
-      if (!url) return;
+      // `finally`, so the two skips below tick the counter too: an entry dropped
+      // for a missing URL or a mid-pull 404 still leaves the pull with one fewer
+      // thing to do, and a counter that ignored them would stop short of its
+      // total and read as a hang on the one screen the user is watching. The
+      // increment is safe unsynchronized — these callbacks interleave at await
+      // points, they don't run in parallel.
+      try {
+        const url = urls.get(e.path);
+        if (!url) return;
 
-      const blob = await getBlob(url).catch((err: unknown) => {
-        // Deleted between the op pull / listing and this GET: the delete op sits
-        // past our window and reconciles next sync — skip it, don't fail the cycle.
-        if (err instanceof BlobRequestError && err.status === 404) return;
-        throw err;
-      });
-      if (!blob) return;
+        const blob = await getBlob(url).catch((err: unknown) => {
+          // Deleted between the op pull / listing and this GET: the delete op sits
+          // past our window and reconciles next sync — skip it, don't fail the cycle.
+          if (err instanceof BlobRequestError && err.status === 404) return;
+          throw err;
+        });
+        if (!blob) return;
 
-      const data = await decryptEntity(deps.encryptionKey, blob);
-      await putPulled(deps.username, [toItemRecord(e.path, e.updatedAt, data)]);
+        const data = await decryptEntity(deps.encryptionKey, blob);
+        await putPulled(deps.username, [toItemRecord(e.path, e.updatedAt, data)]);
+      } finally {
+        tick();
+      }
     });
   }
 }

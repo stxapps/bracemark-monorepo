@@ -33,7 +33,7 @@ import {
 } from '../data/mutations';
 import { enqueuePut } from '../data/pending-store';
 import { toItemRecord } from '../data/projection';
-import { loadEntityContent, runIncrementalSync, type SyncDeps } from './engine';
+import { loadEntityContent, runIncrementalSync, runInitialSync, type SyncDeps } from './engine';
 import { BlobRequestError, getBlob, putBlob } from './r2';
 
 // The crypto boundary is not what these specs are about: a reversible stand-in keeps
@@ -864,5 +864,103 @@ describe('loadEntityContent', () => {
 
     expect(new TextDecoder().decode(data)).toBe('page copy');
     expect(mockGetBlob).not.toHaveBeenCalled();
+  });
+});
+
+// --- the first-sync counter --------------------------------------------------
+
+// What the decrypting screen (bracemark-web components/initial-sync-gate.tsx) puts a
+// number on. The number is only worth showing if the denominator is what the pull
+// actually fetches and the count always arrives at it: this is a blocking screen with
+// nothing else on it, so a counter that stops at 4 of 6 reads as a hang, and a
+// denominator padded with work that costs no time reads as a stall near the end.
+describe('the first-sync counter', () => {
+  const LISTING = [
+    { path: LINK_PATH, updatedAt: 100 },
+    { path: OTHER_LINK_PATH, updatedAt: 101 },
+    { path: EXTRACTION_PATH, updatedAt: 102 },
+    // Listed, and it carries the cursor like any other path — but its blob is
+    // deferred (content downloads lazily, never on first sync), so it must not
+    // inflate the total.
+    { path: FILE_PATH, updatedAt: 103 },
+  ];
+
+  // A pull that streams back the path itself as its plaintext, through the marker
+  // byte the crypto stand-in at the top of this file strips.
+  const serveBlobs = (missing?: string) =>
+    mockGetBlob.mockImplementation(async (url: string) => {
+      const path = pathFor(url);
+      if (path === missing) throw new BlobRequestError('GET', 404);
+      return new Uint8Array([0xee, ...utf8(path)]);
+    });
+
+  beforeEach(async () => {
+    // No first-sync flag — this IS the first sync (the shared beforeEach seeds a
+    // returning client).
+    await db.syncMeta.clear();
+    serveBlobs();
+  });
+
+  function recordTicks(): {
+    ticks: [number, number][];
+    onProgress: (d: number, t: number) => void;
+  } {
+    const ticks: [number, number][] = [];
+    return { ticks, onProgress: (done, total) => ticks.push([done, total]) };
+  }
+
+  it('counts the index blobs only, and opens at zero before the first GET', async () => {
+    const { ticks, onProgress } = recordTicks();
+
+    await runInitialSync(deps({ filesList: () => LISTING }), onProgress);
+
+    // Three index paths out of four listed: the `files/` entry is not downloaded.
+    expect(ticks[0]).toEqual([0, 3]);
+    // Opening at zero is what lets the gate swap its indeterminate state for a real
+    // bar immediately, instead of waiting out the first round trip.
+    expect(ticks.map(([done]) => done)).toEqual([0, 1, 2, 3]);
+    expect(ticks.every(([, total]) => total === 3)).toBe(true);
+  });
+
+  it('reaches its total even when a path is deleted mid-pull', async () => {
+    // The 404 skip: the delete op sits past our window and reconciles next cycle, so
+    // the entry is dropped rather than failing the run. The work it stood for is
+    // still off the list, and a counter that ignored it would stall one short of the
+    // end — the exact shape of a hang.
+    serveBlobs(EXTRACTION_PATH);
+    const { ticks, onProgress } = recordTicks();
+
+    await runInitialSync(deps({ filesList: () => LISTING }), onProgress);
+
+    expect(ticks.at(-1)).toEqual([3, 3]);
+  });
+
+  it('skips what the store already has, and counts only the remainder', async () => {
+    // A re-run after an interruption resumes rather than restarting, so the total
+    // shrinks to the work actually left. The count stays honest about THIS attempt
+    // (see the staleness skip in storeDownloads).
+    await seedSynced(LINK_PATH, 'the link', 100);
+    const { ticks, onProgress } = recordTicks();
+
+    await runInitialSync(deps({ filesList: () => LISTING }), onProgress);
+
+    expect(ticks[0]).toEqual([0, 2]);
+    expect(ticks.at(-1)).toEqual([2, 2]);
+  });
+
+  it('reports nothing at all when there is nothing to download', async () => {
+    // The gate reads "no number" as the indeterminate state it already shows while
+    // the manifest is listing — better than flashing a full bar over a pull that was
+    // over before it started.
+    const { ticks, onProgress } = recordTicks();
+
+    await runInitialSync(deps({ filesList: () => [] }), onProgress);
+
+    expect(ticks).toEqual([]);
+  });
+
+  it('is optional — the browser extension passes no reporter', async () => {
+    await expect(runInitialSync(deps({ filesList: () => LISTING }))).resolves.toBeUndefined();
+    expect(await bodyAt(LINK_PATH)).toBe(LINK_PATH);
   });
 });

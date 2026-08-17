@@ -10,7 +10,12 @@ import {
 } from 'react';
 
 import { useApiClient } from '@stxapps/react';
-import { bgStatusForOutcome, type BgSyncStatus, type StoreStatus } from '@stxapps/shared';
+import {
+  bgStatusForOutcome,
+  type BgSyncStatus,
+  type InitialSyncProgress,
+  type StoreStatus,
+} from '@stxapps/shared';
 
 import { getSession } from '../data/session-store';
 import { isFirstSyncDone } from '../data/sync-store';
@@ -46,6 +51,17 @@ import { useAuth } from './auth-provider';
 // platform-free sync vocabulary — defined in @stxapps/shared so web and native
 // clients speak the same language — and imported above. SyncProvider is one
 // concrete producer of them.
+// How often the first-sync counter is allowed to re-render the gate. The engine
+// reports once per decrypted record and runs 24 downloads at a time, so an
+// unthrottled feed is hundreds of setStates a second — competing with the entity
+// crypto for the same JS thread, to move a number faster than anyone can read it.
+// ~10 renders a second looks continuous and costs nothing.
+//
+// The coalescing lives HERE rather than in the engine deliberately: the engine is
+// React-free, so a rendering cadence is not its policy to hold. Same value as
+// web-react's — the two gates should feel identical.
+const PROGRESS_FLUSH_MS = 100;
+
 interface SyncContextValue {
   storeStatus: StoreStatus;
   bgSyncStatus: BgSyncStatus;
@@ -60,6 +76,16 @@ interface SyncContextValue {
   // detail line for a `blocked-*` status, exactly as `lastError` is the detail
   // for 'error'. 0 whenever nothing was refused.
   blockedCount: number;
+  // Determinate progress for the BLOCKING first pull, throttled to
+  // PROGRESS_FLUSH_MS — the gate's counter, and the only reason a first sync of a
+  // large library doesn't look like a hang. Null means "no number yet": before the
+  // pull starts, while it is still listing the manifest (the denominator doesn't
+  // exist until that returns), and on every returning visit, where no initial sync
+  // runs at all. It deliberately survives the switch to 'ready' so the gate's
+  // minimum-visible floor shows a FULL bar for its last moments instead of
+  // dropping back to a bare spinner; it's cleared when a run fails, and reset with
+  // the rest of the state on retry.
+  initialSyncProgress: InitialSyncProgress | null;
   // Bumped each time requestSync() runs — i.e. on every local edit on THIS
   // device (pin/unpin/move today; any mutation kicks a cycle the same way). The
   // read edge (useLinks) keys on it to apply the user's own change immediately
@@ -87,6 +113,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const [lastSyncAt, setLastSyncAt] = useState<number | null>(null);
   const [lastError, setLastError] = useState<string | null>(null);
   const [blockedCount, setBlockedCount] = useState(0);
+  const [initialSyncProgress, setInitialSyncProgress] = useState<InitialSyncProgress | null>(null);
   // Bumped by retryInitialSync() to re-run the effect.
   const [attempt, setAttempt] = useState(0);
   // Bumped by requestSync() — the local-edit signal the read edge keys on.
@@ -129,6 +156,36 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     setLastSyncAt(null);
     setLastError(null);
     setBlockedCount(0);
+    setInitialSyncProgress(null);
+
+    // Trailing-edge coalescer for the first-sync counter (see PROGRESS_FLUSH_MS):
+    // every tick overwrites the pending value, and at most one flush is scheduled
+    // at a time, so a burst of records costs one render. Effect-scoped locals
+    // rather than refs — the scope is exactly right, since a new account (or a
+    // retry) re-runs the effect and must not inherit the previous run's count.
+    let progressTimer: ReturnType<typeof setTimeout> | null = null;
+    let pendingProgress: InitialSyncProgress | null = null;
+    const flushProgress = () => {
+      progressTimer = null;
+      if (!activeRef.current || !pendingProgress) return;
+      setInitialSyncProgress(pendingProgress);
+      pendingProgress = null;
+    };
+    const reportProgress = (done: number, total: number) => {
+      pendingProgress = { done, total };
+      progressTimer ??= setTimeout(flushProgress, PROGRESS_FLUSH_MS);
+    };
+    // Settle at the end of a run. On success the final count is pushed through
+    // immediately instead of waiting out the last coalescing window, so the bar the
+    // gate holds up during its minimum-visible floor is a full one rather than the
+    // second-to-last tick. On failure it's dropped: the error screen carries no bar.
+    const settleProgress = (keep: boolean) => {
+      if (progressTimer !== null) clearTimeout(progressTimer);
+      progressTimer = null;
+      if (keep && pendingProgress) setInitialSyncProgress(pendingProgress);
+      if (!keep) setInitialSyncProgress(null);
+      pendingProgress = null;
+    };
 
     // Returning visit → render local data now, refresh in the background. The
     // outcome lands on the INDICATOR (bgSyncStatus), never the gate: a failed
@@ -173,9 +230,10 @@ export function SyncProvider({ children }: { children: ReactNode }) {
 
         // First sign-in on this device: block on the full pull.
         setStoreStatus('syncing-initial');
-        await runInitialSync(deps);
+        await runInitialSync(deps, reportProgress);
         if (!activeRef.current) return;
 
+        settleProgress(true);
         setStoreStatus('ready');
         // Not a second download: a cycle right after the initial pull is usually
         // one empty opsList call (storeDownloads skips current records). It closes
@@ -186,6 +244,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
         backgroundSync();
       } catch (err) {
         if (!activeRef.current) return;
+        settleProgress(false);
         setStoreStatus('error');
         setLastSyncAt(Date.now());
         setLastError(err instanceof Error ? err.message : String(err));
@@ -195,6 +254,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     return () => {
       activeRef.current = false;
       backgroundSyncRef.current = () => undefined;
+      if (progressTimer !== null) clearTimeout(progressTimer);
     };
   }, [username, authStatus, attempt, api]);
 
@@ -205,6 +265,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       lastSyncAt,
       lastError,
       blockedCount,
+      initialSyncProgress,
       localWriteNonce,
       retryInitialSync,
       requestSync,
@@ -215,6 +276,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       lastSyncAt,
       lastError,
       blockedCount,
+      initialSyncProgress,
       localWriteNonce,
       retryInitialSync,
       requestSync,

@@ -121,7 +121,9 @@ categories are deliberately silent:
   not a role.
 
 The tone-guard in both `SettingsNotice`s encodes exactly this: `error` announces,
-`info` and `pending` do not.
+`info` and `pending` do not. The first category has one extreme case — a value
+that re-words ten times a second — which gets its own section below,
+_the first-sync counter_.
 
 ### the iOS asterisk — `role="alert"` is not portable
 
@@ -146,6 +148,49 @@ collapses its children into a single node, which breaks any interactive content
 inside. The role belongs on the `Text` that holds the message. `ErrorText` does
 this, and `SettingsNotice` puts it on the message `Text` for string children —
 a **non-string** child there has to carry its own.
+
+### the first-sync counter — a value that must not speak
+
+The decrypting screen (`initial-sync-gate.tsx`, both platforms) is the one place
+in the app that renders a number changing ten times a second, and it is the
+clearest case of the two rules above pulling in opposite directions on one screen.
+
+The **count** is `role="progressbar"` carrying `aria-valuemin` / `aria-valuemax` /
+`aria-valuenow` / `aria-valuetext`, and it is **not** a live region. Putting
+`aria-live` on it would be the password-strength mistake — a verdict that re-words
+continuously — multiplied by however many blobs the library holds; a screen-reader
+user would get a solid wall of numbers instead of a usable screen. A progressbar
+is read when the user reaches it, which is the behaviour that was wanted. Note
+that this is one of the few places the ARIA-shaped props survive the trip into
+native intact: `role="progressbar"` and all four `aria-value*` are on RN's
+supported list (see the note at the top), so `aria-valuetext` really does reach
+VoiceOver and TalkBack rather than type-checking and doing nothing.
+
+The visible counter line beside it is `aria-hidden`, because the progressbar
+already announces that exact string as its value and a screen reader would
+otherwise read the count twice — and on expo that prop **has to ride a wrapping
+`View`**. `aria-hidden` is on RN's list of fourteen, but only `View.js` implements
+it (mapping it to `accessibilityElementsHidden` plus
+`importantForAccessibility="no-hide-descendants"`); `Text.js` destructures exactly
+six — `aria-busy`, `aria-checked`, `aria-disabled`, `aria-expanded`, `aria-label`,
+`aria-selected` — and `aria-hidden` is not among them, so spelling it on a `Text`
+type-checks, renders, and leaves the node in the accessibility tree. It is the
+inert-`aria-*` trap from the note at the top of this doc with a twist: **the list
+of fourteen is per-component, and nothing tells you which component implements
+which**. Reading it as a flat list of "props RN supports" is what makes this one
+invisible. Two lessons for checking it on a device: `uiautomator dump` prints the
+raw view hierarchy, so a hidden node still appears there and the plain dump proves
+nothing either way — `--compressed` is the accessibility-filtered tree and the one
+to read. The reassurance under the headline ("Your links
+are encrypted…") is **standing prose** — on screen from the first paint, so it
+belongs to the silent category with "This action cannot be undone."
+
+The **error** state on the same screen is the opposite: it mounts as the result of
+the user signing in, so it announces — a `role="alert"` wrapper on web (the
+wrapper rather than the first line, so the "nothing was lost" sentence is
+announced with the failure it qualifies) and `ErrorText` on expo. Which is to say
+one small screen carries an announcing error, a silent value, a silent duplicate
+and silent prose, and only the first of the four is a `role="alert"`.
 
 ### `Pressable` inherits no role (expo)
 

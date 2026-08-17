@@ -2,6 +2,7 @@
 
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 
+import { type InitialSyncProgress, initialSyncProgressLabel } from '@stxapps/shared';
 import { useSync } from '@stxapps/web-react';
 
 // Renders the app subtree only once the local store is usable; otherwise shows an
@@ -18,6 +19,17 @@ import { useSync } from '@stxapps/web-react';
 // Named for what it gates: only the FIRST (initial) sync blocks here. By design,
 // subsequent incremental/background syncs never gate the UI — they report on the
 // separate bgSyncStatus dimension instead (see sync-provider).
+//
+// The screen shows a real COUNT, not a percentage and not a bare spinner, because
+// the engine hands it an honest denominator: the pull lists every file before it
+// fetches anything, so it knows exactly how many blobs it is about to decrypt (see
+// InitialSyncProgress). Two reasons the count is the right shape. A number
+// EXPLAINS the wait — someone with a large library learns why it takes twenty
+// seconds, where a percentage just sits there — and a climbing integer is better
+// evidence of life than a bar, since a bar that pauses reads as hung while a
+// counter that jumps still reads as working. What it must never become is a bar
+// with an invented denominator: this pull is resumable and blocking, and a fake
+// percentage on the one screen that is only about trust is a bad trade.
 
 // How long the first-sync screen stays up once shown, so a fast pull can't flash
 // it. Only relevant to 'syncing-initial' (a network pull); 'checking' never shows
@@ -25,7 +37,7 @@ import { useSync } from '@stxapps/web-react';
 const MIN_SCREEN_MS = 500;
 
 export function InitialSyncGate({ children }: { children: ReactNode }) {
-  const { storeStatus, retryInitialSync } = useSync();
+  const { storeStatus, initialSyncProgress, retryInitialSync } = useSync();
 
   // No-flash: 'checking' is a single IndexedDB read of the first-sync flag and
   // happens on every mount. We never want the decrypting screen for it, so we
@@ -62,7 +74,26 @@ export function InitialSyncGate({ children }: { children: ReactNode }) {
   if (storeStatus === 'error') {
     return (
       <div className="flex min-h-dvh flex-col items-center justify-center gap-4 safe-area">
-        <p>Couldn’t sync your links.</p>
+        {/*
+          `role="alert"` on the WRAPPER, not on the first line alone: this message
+          mounts as the result of the user signing in (docs/accessibility.md, "an
+          error that appears must announce"), and the reassurance under it is part
+          of what needs saying — a screen-reader user who hears only "couldn't
+          sync" has no idea whether pressing the button starts over. The bare `<p
+          role="alert">` in that doc's table is the same carrier, one element up.
+        */}
+        <div role="alert" className="flex flex-col items-center gap-1">
+          <p className="text-sm text-destructive">Couldn’t sync your links.</p>
+          {/*
+            The pull is resumable — storeDownloads skips every path already stored,
+            so a retry re-fetches only the remainder — but nothing on screen said
+            so, which is what makes a user sit through a stalled first sync afraid
+            to close the tab. Cheaper reassurance than any animation.
+          */}
+          <p className="max-w-xs text-center text-xs text-muted-foreground">
+            Nothing was lost — trying again picks up where it left off.
+          </p>
+        </div>
         <button onClick={retryInitialSync} className="underline">
           Try again
         </button>
@@ -74,24 +105,86 @@ export function InitialSyncGate({ children }: { children: ReactNode }) {
   // first appeared so the minimum-visible floor can hold it.
   if (storeStatus === 'syncing-initial') {
     shownAtRef.current ??= performance.now();
-    return <DecryptingScreen />;
+    return <DecryptingScreen progress={initialSyncProgress} />;
   }
 
   // 'ready' — but if the first-sync screen showed and hasn't met its floor yet,
-  // keep it up for the remainder before swapping in the app.
-  if (shownAtRef.current !== null && !released) return <DecryptingScreen />;
+  // keep it up for the remainder before swapping in the app. The provider keeps
+  // the final count alive across that switch, so this holds a FULL bar rather than
+  // flicking back to the counter-less state for the last few hundred ms.
+  if (shownAtRef.current !== null && !released) {
+    return <DecryptingScreen progress={initialSyncProgress} />;
+  }
 
   return children;
 }
 
-function DecryptingScreen() {
+// `progress` is null while the pull is still listing the manifest — real work with
+// no denominator yet — so the screen renders its headline alone and grows the bar
+// underneath once the count exists. That is a deliberate two-phase screen, not a
+// loading state that forgot its spinner: the alternative is a bar parked at 0%,
+// which looks broken for exactly as long as the listing takes.
+function DecryptingScreen({ progress }: { progress: InitialSyncProgress | null }) {
   return (
     // `safe-area` on the same element as the height, like every other
     // full-screen surface here — bracemark-web has no blanket wrapper to inherit
     // it from (inner-layout.tsx, docs/safe-area.md). `dvh` for the same reason
     // every other full-height box in this app uses it (links/page.tsx).
-    <div className="flex min-h-dvh flex-col items-center justify-center safe-area">
+    <div className="flex min-h-dvh flex-col items-center justify-center gap-3 safe-area">
       <p>Decrypting your links…</p>
+      {progress ? <SyncProgressBar progress={progress} /> : null}
+      {/*
+        Standing prose, not an announcement (docs/accessibility.md, "what must NOT
+        announce") — it is on screen from the first paint. This is the one wait in
+        the app where the end-to-end encryption is visible rather than claimed, so
+        the empty seconds carry the sentence instead of a bigger spinner.
+      */}
+      <p className="max-w-xs text-center text-xs text-muted-foreground">
+        Your links are encrypted — only this device can read them.
+      </p>
+    </div>
+  );
+}
+
+function SyncProgressBar({ progress }: { progress: InitialSyncProgress }) {
+  const { done, total } = progress;
+  const label = initialSyncProgressLabel(progress);
+  // The engine only reports a positive total, but this component is a package
+  // boundary away from that guarantee, and the failure mode is a NaN width.
+  const percent = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
+
+  return (
+    <div className="flex w-56 flex-col gap-2">
+      {/*
+        The progressbar carries the value for assistive tech, via `aria-valuetext`
+        — the same sentence the sighted user reads. It is NOT a live region and
+        must not become one: this updates ~10 times a second, and an `aria-live`
+        here would be the password-strength mistake (docs/accessibility.md, "what
+        must NOT announce") multiplied by a thousand. A screen-reader user hears
+        the count when they land on it, which is how a progressbar is meant to work.
+      */}
+      <div
+        role="progressbar"
+        aria-label="Decrypting your links"
+        aria-valuemin={0}
+        aria-valuemax={total}
+        aria-valuenow={done}
+        aria-valuetext={label}
+        className="h-1.5 w-full overflow-hidden rounded-full bg-muted"
+      >
+        <div
+          className="h-full rounded-full bg-primary transition-[width] duration-200 ease-out"
+          style={{ width: `${percent}%` }}
+        />
+      </div>
+      {/*
+        `aria-hidden` because the progressbar above already announces this exact
+        string as its value — without it the count is read twice. `tabular-nums`
+        keeps the line from twitching as digits change width.
+      */}
+      <p aria-hidden className="text-center text-xs text-muted-foreground tabular-nums">
+        {label}
+      </p>
     </div>
   );
 }

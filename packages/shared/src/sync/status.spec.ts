@@ -1,6 +1,7 @@
 import {
   emptySyncOutcome,
   getSyncPhase,
+  initialSyncProgressLabel,
   recordBlocked,
   SYNC_PHASE_LABELS,
   syncBlockedDetail,
@@ -82,5 +83,27 @@ describe('syncBlockedDetail', () => {
   it('has nothing to say about the non-blocked phases', () => {
     expect(syncBlockedDetail('idle', 0)).toBeNull();
     expect(syncBlockedDetail('cycle-error', 3)).toBeNull();
+  });
+});
+
+describe('initialSyncProgressLabel', () => {
+  it('reads as a count, not a percentage', () => {
+    // The whole point of the first-sync screen's number: "142 of 1,024" explains
+    // the wait, where "14%" only measures it.
+    expect(initialSyncProgressLabel({ done: 142, total: 1024 })).toBe('142 of 1,024 items');
+  });
+
+  it('says "items", never "links"', () => {
+    // `total` counts every index blob — links AND tags/lists/pins/extractions/
+    // settings — so it lands near twice the user's bookmark count. Calling those
+    // links would be a number they can check and find wrong.
+    expect(initialSyncProgressLabel({ done: 0, total: 8 })).not.toContain('link');
+  });
+
+  it('can reach its own total', () => {
+    // The engine ticks in a `finally`, so skipped entries count too — the label
+    // has to be able to render the completed state the gate holds up during its
+    // minimum-visible floor.
+    expect(initialSyncProgressLabel({ done: 8, total: 8 })).toBe('8 of 8 items');
   });
 });

@@ -20,6 +20,55 @@ export type StoreStatus =
   | 'ready' // local store is usable; background sync may still be running
   | 'error'; // initial pull failed; offer retry
 
+// Determinate progress for the BLOCKING first pull — the one wait long enough to
+// deserve a number. `total` is how many index blobs this pull has to download and
+// decrypt, and `done` climbs to meet it.
+//
+// The count is a FACT, not an estimate: the first sync lists every file before it
+// fetches anything, then subtracts what the local store already has (the staleness
+// skip that also makes an interrupted run resume), so the denominator is known
+// before the first round trip. That is the whole reason the gate can show a real
+// bar instead of an indeterminate one easing toward 90%.
+//
+// Reported by the initial sync ONLY. A background cycle never gates the UI — it
+// reports on BgSyncStatus instead — so nothing is waiting on its count.
+export interface InitialSyncProgress {
+  // How many of `total` are downloaded, decrypted and stored. Every entry counts
+  // exactly once, including the ones the pull skips (a path deleted mid-listing),
+  // so `done` always reaches `total` rather than stalling short of it.
+  done: number;
+  // Always ≥ 1 where this is reported at all: a pull with nothing to download
+  // reports no progress and the gate stays indeterminate for its (brief) life.
+  total: number;
+}
+
+// How the engines hand a tick back. Two numbers rather than the struct because
+// this fires once per decrypted record, several hundred times on a large library
+// — the struct is allocated once per flush, by the consumer that throttles.
+export type InitialSyncProgressFn = (done: number, total: number) => void;
+
+// The counter line under the decrypting screen's headline. Shared so the two
+// gates can't word the same number differently.
+//
+// "items", not "links". `total` counts every INDEX blob the pull materializes —
+// `links/`, yes, but also `tags/`, `lists/`, `pins/`, `extractions/` and
+// `settings/` — and since extraction blobs run about one per bookmark, the number
+// typically lands near TWICE the link count the user believes they have. "2,048
+// links" would be a claim they can check and find wrong, on the one screen whose
+// job is to look trustworthy. The headline above still says links, because that
+// is what the library is; only the count needs the wider word.
+//
+// The locale is pinned rather than left to the host, for the same reason every
+// other string in this module is a literal: nothing here is translated, so an
+// ambient locale would only buy a number that groups differently on a German
+// phone than in the copy around it. A Hermes build without full ICU ignores the
+// argument and returns the ungrouped digits — cosmetic, and the same string the
+// unpinned call would have produced there anyway.
+export function initialSyncProgressLabel(progress: InitialSyncProgress): string {
+  const grouped = (n: number) => n.toLocaleString('en-US');
+  return `${grouped(progress.done)} of ${grouped(progress.total)} items`;
+}
+
 // The indicator's phases. Only post-'ready' cycles report here — while the gate
 // blocks, the decrypting screen IS the progress UI.
 export type BgSyncStatus =
