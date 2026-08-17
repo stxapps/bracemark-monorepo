@@ -48,6 +48,17 @@ module.exports = ({ babelConfig }) => ({
         // literal `undefined` (not left alone), so expo-modules-core's
         // Platform.ts warns "The global process.env.EXPO_OS is not defined."
         // on any suite that pulls in expo (e.g. via expo-router).
+        //
+        // Note this runtime cannot service a real `import()`: jest's CJS vm
+        // throws "A dynamic import callback was invoked without
+        // --experimental-vm-modules", and neither babel-preset-expo nor
+        // @react-native/babel-preset lowers one to a require() (verified — the
+        // `supportsDynamicImport: false` caller flag that would do it elsewhere
+        // is simply not read by either preset). That is why native code that
+        // wants a deferred load spells it `require()` at the call site rather
+        // than `import()` — see the lazy requires in expo-react's
+        // data/share-store.ts and the note on bracemark-expo's
+        // features/auth/password-strength.tsx.
         caller: { name: 'metro', bundler: 'metro', platform: 'ios' },
         configFile: babelConfig,
       },

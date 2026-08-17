@@ -31,12 +31,13 @@ export const PASSPHRASE_DEFAULT_WORDS = 7;
 // one method from its entry (apps/bracemark-expo/src/polyfills.ts, backed by
 // quick-crypto's native CSPRNG) before any app code runs.
 //
-// Hyphen, not space: the string is a `password` (no trim/normalization on the
-// derivation path — see derivePasswordKek), shown once and RE-TYPED at the
-// confirm step and every sign-in. A space is a re-entry footgun there — a stray
-// trailing space or double-space silently derives a different KEK, and mobile
-// keyboards auto-capitalize / autocorrect ". " after one. A hyphen reads as a
-// single token to the keyboard and has no leading/trailing/collapse ambiguity.
+// Hyphen, not space: the string is a `password`, shown once and RE-TYPED at the
+// confirm step and every sign-in. A space is a re-entry footgun there — the
+// derivation path canonicalizes with trim + NFC (canonicalizePassword, params.ts)
+// and nothing more, so a stray INTERNAL double-space silently derives a different
+// KEK, and mobile keyboards auto-capitalize / autocorrect ". " after one. A hyphen
+// reads as a single token to the keyboard and has no leading/trailing/collapse
+// ambiguity.
 // The separator is NOT a derivation contract (generation is random + per-user;
 // only the wordlist is pinned), so this is free to choose for UX.
 //

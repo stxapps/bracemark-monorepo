@@ -351,6 +351,23 @@ Rough entropy targets, for calibration:
 > sub-passing whenever either floor blocks submit, so meter and gate stay one signal
 > (no "green meter, disabled button").
 >
+> **Which dictionaries the estimate is scored against is part of the gate.** zxcvbn
+> models anything it fails to match as 10^length, so with the 20-char floor above, a
+> password the dictionaries miss clears 10^18 on **length alone** — the dictionary
+> set is therefore not a detail of the library, it is the policy. Both language packs
+> load: `@zxcvbn-ts/language-common` (49k leaked passwords + the 7.8k-word EFF
+> diceware list) **and `@zxcvbn-ts/language-en`** (26.7k common words, 4.9k first
+> names, 88.8k last names, 29.8k wikipedia titles). `en` was missing at first, and the
+> hole was exactly the shape you'd expect — measured against the 18 floor,
+> `thequickbrownfoxjumps` scored 19.1 and **passed**, `ilovemydogsomuchyess` 18.1 and
+> **passed**; with `en` they score 15.6 and 17.6 and are refused. Nothing failed while
+> it was missing: it lints, types and tests clean, and the only symptom is a weaker
+> gate. Hence `loadPasswordScorer` is exported from both platform copies and pinned by
+> a spec on each side (`password-strength.spec.ts`, web-ui and bracemark-expo), which
+> drives the real loader over that same corpus — a pack pruned from one manifest can't
+> pass. This does not make the estimate sound; it closes the part of the overestimate a
+> shipped dictionary can close. The rest is what the 60-bit headroom is for.
+>
 > **The meter's top band is green, and the field always says something.** The bands
 > run destructive → amber → emerald, bar fill and label sharing one tone per band;
 > the top band is a literal green rather than `bg-primary`, which is a chroma-0
@@ -1065,8 +1082,9 @@ the data is gone."**
   (`crypto/params.ts`, `bracemark.app-salt.v1.…`). It can never change after the
   first real user; a hypothetical rotation mints a `.v2.` constant rather than
   editing it.
-- **Entropy gate** — ✅ built (zxcvbn score ≥ 3 on the typed path; the meter +
-  hard floor described above).
+- **Entropy gate** — ✅ built (zxcvbn `guessesLog10 >= PASSWORD_MIN_GUESSES_LOG10`
+  on the typed path — **never** the 0–4 `score`, see above — over both language
+  packs, plus the meter + hard length floor described above).
 - **Generated passphrase** — ✅ built (the "Secure your account" ceremony +
   skippable recovery code + recovery sign-in + change-password/recovery door
   management). Remaining: **DEK rotation** (compromise remedy) and **expo parity**.

@@ -14,11 +14,26 @@ import { cn } from '../../lib/utils';
 // `guessesLog10` against PASSWORD_MIN_GUESSES_LOG10 on the TYPED-your-own path
 // only; the generated passphrase is ~77 bits by construction and bypasses this.
 //
-// zxcvbn is heavy (~400 KB with its dictionaries), so it's loaded via a dynamic
-// import on first use, same as web. Metro bundles it either way (no code
-// splitting on native), but the parse/registration cost still stays off the
-// first render. Until it loads, both outputs are null and the caller keeps
-// submit disabled (never gate-open before the estimator is ready).
+// zxcvbn is heavy (~1.7 MB of raw dictionary JSON), so it's loaded on first use
+// rather than at module scope — by a lazy `require()` here where web uses
+// `import()`, for the reasons on `loadPasswordScorer` below. Metro bundles it
+// either way (no code splitting on native), but the parse/registration cost still
+// stays off the first render. Until it loads, both outputs are null and the caller
+// keeps submit disabled (never gate-open before the estimator is ready).
+//
+// BOTH language packs load, matching web exactly — and that identity is the point,
+// not a convenience: the gate is policy, so the same typed password must be admitted
+// or rejected identically on the two platforms (the same reason the message ladders
+// live in `@stxapps/react`). `language-en` is the load-bearing pack; the twin
+// explains what it buys, with the measured numbers.
+//
+// It roughly triples the dictionary payload (~466 KB → ~1.7 MB raw), and native has
+// no code splitting to hide that, so it lands in the app bundle. Taken deliberately:
+// it is download/disk size, not startup cost (Hermes precompiles to bytecode at build
+// time and maps it lazily), and trimming a list on this side only — `lastnames` is
+// 695 KB of it — would buy back size by making native's gate weaker than web's, which
+// is the one thing this file must not do. The iOS share extension is unaffected: it
+// is a separate Metro entry (index.share.js) that never reaches the auth surfaces.
 
 // Display bands over the same guess estimate the gate uses — one per meter segment,
 // so `displayScore` (0–3) is both the band index and the last segment lit. The top
@@ -29,7 +44,36 @@ const TOP_BAND = DISPLAY_BANDS.length; // displayScore 3 = "Strong" = passes the
 
 type ScoreFn = (password: string, userInputs: string[]) => number;
 
-// Lazily load zxcvbn + its common language pack once, then score `password`
+// Load zxcvbn + both language packs and return the raw scorer — the native twin of
+// web-ui's `loadPasswordScorer`, split out for the same reason: which packs are wired
+// in is policy, and this platform gets its own spec asserting it matches web's
+// (password-strength.spec.ts, both sides).
+//
+// LAZY `require()`, where web spells the same three loads `import()`. Not a style
+// drift — the two runtimes want different things. Web wants a real code-split chunk,
+// which only `import()` produces. Metro has no code splitting, so on native `import()`
+// buys nothing over `require()` at runtime and costs the module its testability:
+// jest's CJS vm cannot service a real dynamic import ("A dynamic import callback was
+// invoked without --experimental-vm-modules") and neither babel-preset-expo nor
+// @react-native/babel-preset lowers one, so the gate's own spec could not reach it.
+// `require()` defers evaluation exactly the same way — the identical trade the iOS
+// share path makes for its heavy modules (expo-react data/share-store.ts, which
+// explains it at length). Still called from an effect, so the several MB of dictionary
+// JSON is not evaluated during the first render of the auth screen.
+export function loadPasswordScorer(): ScoreFn {
+  const core = require('@zxcvbn-ts/core') as typeof import('@zxcvbn-ts/core');
+  const common =
+    require('@zxcvbn-ts/language-common') as typeof import('@zxcvbn-ts/language-common');
+  const en = require('@zxcvbn-ts/language-en') as typeof import('@zxcvbn-ts/language-en');
+  // Disjoint keys, so the spread is a union — see the twin.
+  core.zxcvbnOptions.setOptions({
+    dictionary: { ...common.dictionary, ...en.dictionary },
+    graphs: common.adjacencyGraphs,
+  });
+  return (pw, inputs) => core.zxcvbn(pw, inputs).guessesLog10;
+}
+
+// Lazily load zxcvbn + both language packs once, then score `password`
 // (penalizing `userInputs` — e.g. the username — so a username-derived password
 // scores low). Returns { guessesLog10: number | null, displayScore: 0–3 | null, ready }.
 // Both outputs are null while loading or when the password is empty.
@@ -48,24 +92,12 @@ export function usePasswordStrength(
 ): { guessesLog10: number | null; displayScore: number | null; ready: boolean } {
   const [scoreFn, setScoreFn] = React.useState<ScoreFn | null>(null);
 
+  // In an effect, so the dictionaries are evaluated after the auth screen's first
+  // paint rather than during it. No `alive` flag and no promise: the loader is
+  // synchronous here (see its note on require-vs-import), so there is no window in
+  // which this can resolve against an unmounted component.
   React.useEffect(() => {
-    let alive = true;
-    void (async () => {
-      const [core, common] = await Promise.all([
-        import('@zxcvbn-ts/core'),
-        import('@zxcvbn-ts/language-common'),
-      ]);
-      core.zxcvbnOptions.setOptions({
-        dictionary: { ...common.dictionary },
-        graphs: common.adjacencyGraphs,
-      });
-      if (alive) {
-        setScoreFn(() => (pw: string, inputs: string[]) => core.zxcvbn(pw, inputs).guessesLog10);
-      }
-    })();
-    return () => {
-      alive = false;
-    };
+    setScoreFn(() => loadPasswordScorer());
   }, []);
 
   // Join userInputs to a stable string key so a fresh [username] array each render

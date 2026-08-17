@@ -19,10 +19,29 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 // the same floors as the gate. See the constant's comment in `shared`
 // `auth/credentials.ts`.
 //
-// zxcvbn is heavy (~400 KB with its dictionaries), so it's DYNAMICALLY imported
+// zxcvbn is heavy (~1.7 MB of raw dictionary JSON), so it's DYNAMICALLY imported
 // on first use — it never lands in the initial auth-route bundle. Until it loads,
 // both outputs are null and the caller keeps submit disabled (never gate-open before
 // the estimator is ready).
+//
+// BOTH language packs load, and `language-en` is the load-bearing one. On its own
+// `language-common` is only the 49k leaked-password list plus the 7.8k-word EFF
+// diceware list — no English vocabulary, no names — so an ordinary typed English
+// phrase falls through to zxcvbn's 10^length bruteforce model and clears the gate on
+// length alone. Measured against PASSWORD_MIN_GUESSES_LOG10 (18):
+// `thequickbrownfoxjumps` scored 19.1 (PASSED) on common alone and 15.6 with `en`;
+// `ilovemydogsomuchyess` 18.1 (PASSED) → 17.6. `en` is what supplies the 26.7k common
+// words, 4.9k first names, 88.8k last names and 29.8k wikipedia titles those phrases
+// are actually built from. It can't close the overestimate entirely (zxcvbn still
+// can't know the user's dog's name — see `shared` auth/credentials.ts), but the part
+// that a shipped dictionary CAN close should not be left open on the one gate
+// standing behind the typed-your-own path.
+//
+// We take only `en.dictionary`, not its `translations`: this module reads
+// `guessesLog10` and never zxcvbn's `feedback` strings, so the translations would be
+// dead weight in the chunk. Native pays for this differently — Metro has no code
+// splitting, so there the packs sit in the app bundle either way; the note on the
+// twin (bracemark-expo/src/features/auth/password-strength.tsx) covers it.
 
 // Display bands over the same guess estimate the gate uses — one per meter segment,
 // so `displayScore` (0–3) is both the band index and the last segment lit. The top
@@ -33,7 +52,27 @@ const TOP_BAND = DISPLAY_BANDS.length; // displayScore 3 = "Strong" = passes the
 
 type ScoreFn = (password: string, userInputs: string[]) => number;
 
-// Lazily load zxcvbn + its common language pack once, then score `password`
+// Load zxcvbn + both language packs and return the raw scorer. Split out of the
+// effect below so a spec can drive the REAL loader rather than a copy of it —
+// which packs are wired in is policy, and a policy that only exists inside a
+// `useEffect` is one nobody can assert on. See password-strength.spec.ts.
+export async function loadPasswordScorer(): Promise<ScoreFn> {
+  const [core, common, en] = await Promise.all([
+    import('@zxcvbn-ts/core'),
+    import('@zxcvbn-ts/language-common'),
+    import('@zxcvbn-ts/language-en'),
+  ]);
+  // The two packs' dictionary keys are disjoint (common: diceware, passwords;
+  // en: commonWords, firstnames, lastnames, wikipedia), so this spread is a
+  // union, not an override — every list stays in play.
+  core.zxcvbnOptions.setOptions({
+    dictionary: { ...common.dictionary, ...en.dictionary },
+    graphs: common.adjacencyGraphs,
+  });
+  return (pw, inputs) => core.zxcvbn(pw, inputs).guessesLog10;
+}
+
+// Lazily load zxcvbn + both language packs once, then score `password`
 // (penalizing `userInputs` — e.g. the username — so a username-derived password
 // scores low). Returns { guessesLog10: number | null, displayScore: 0–3 | null, ready }.
 // Both outputs are null while loading or when the password is empty.
@@ -57,17 +96,8 @@ export function usePasswordStrength(
   React.useEffect(() => {
     let alive = true;
     void (async () => {
-      const [core, common] = await Promise.all([
-        import('@zxcvbn-ts/core'),
-        import('@zxcvbn-ts/language-common'),
-      ]);
-      core.zxcvbnOptions.setOptions({
-        dictionary: { ...common.dictionary },
-        graphs: common.adjacencyGraphs,
-      });
-      if (alive) {
-        setScoreFn(() => (pw: string, inputs: string[]) => core.zxcvbn(pw, inputs).guessesLog10);
-      }
+      const score = await loadPasswordScorer();
+      if (alive) setScoreFn(() => score);
     })();
     return () => {
       alive = false;

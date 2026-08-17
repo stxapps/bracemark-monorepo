@@ -55,6 +55,7 @@
     "@testing-library/react-native": "*",
     "@zxcvbn-ts/core": "*",
     "@zxcvbn-ts/language-common": "*",
+    "@zxcvbn-ts/language-en": "*",
     "class-variance-authority": "*",
     "clsx": "*",
     "expo": "*",
