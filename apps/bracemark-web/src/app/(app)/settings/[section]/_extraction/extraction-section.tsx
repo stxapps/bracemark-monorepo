@@ -21,7 +21,12 @@
 // (reportDisplayedLinkPaths) and needs no UI here.
 
 import { useState } from 'react';
-import { Pause, Sparkles } from 'lucide-react';
+// ImageDown, not Sparkles: previews are a plain fetch of <title>/og:image, with
+// no model anywhere in the path. Sparkles is reserved for the parked `aiTier`
+// entitlement (plans.ts) — lending it to a deterministic fetch is exactly the
+// conflation that entitlement is kept separate to avoid, and it reads as vague
+// magic right beside a privacy-load-bearing opt-in.
+import { ImageDown, Pause } from 'lucide-react';
 import Link from 'next/link';
 
 import {
@@ -201,7 +206,7 @@ export function ExtractionSection() {
                 disabled={pendingCount === 0}
                 onClick={() => setConfirming(true)}
               >
-                <Sparkles data-icon="inline-start" className="size-4" />
+                <ImageDown data-icon="inline-start" className="size-4" />
                 Generate all
               </Button>
             )}

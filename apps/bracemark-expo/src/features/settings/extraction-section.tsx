@@ -30,7 +30,12 @@
 
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
-import { Globe, Pause, ShieldOff, Smartphone, Sparkles } from 'lucide-react-native';
+// ImageDown, not Sparkles: previews are a plain fetch of <title>/og:image, with
+// no model anywhere in the path. Sparkles is reserved for the parked `aiTier`
+// entitlement (plans.ts) — lending it to a deterministic fetch is exactly the
+// conflation that entitlement is kept separate to avoid. Globe/Smartphone/
+// ShieldOff below say WHERE extraction runs; ImageDown says what it produces.
+import { Globe, ImageDown, Pause, ShieldOff, Smartphone } from 'lucide-react-native';
 
 import {
   useExtraction,
@@ -213,7 +218,7 @@ export function ExtractionSection() {
               </Button>
             ) : (
               <Button variant="outline" disabled={pendingCount === 0} onPress={extractAll}>
-                <Icon as={Sparkles} className="size-4" />
+                <Icon as={ImageDown} className="size-4" />
                 <Text>Generate all</Text>
               </Button>
             )}

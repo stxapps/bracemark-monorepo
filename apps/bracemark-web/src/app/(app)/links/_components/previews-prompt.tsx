@@ -38,7 +38,9 @@
 
 import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { Sparkles, X } from 'lucide-react';
+// ImageDown, not Sparkles — see the note in settings' extraction-section.tsx:
+// Sparkles is held for the parked `aiTier`, and previews involve no model.
+import { ImageDown, X } from 'lucide-react';
 import Link from 'next/link';
 
 import {
@@ -81,7 +83,7 @@ export function PreviewsPrompt() {
 
   return (
     <aside className="flex items-start gap-3 border-b border-border bg-muted/40 px-4 py-3">
-      <Sparkles className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+      <ImageDown className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
       <div className="flex min-w-0 flex-1 flex-col gap-2">
         <p className="text-sm font-medium">
           {pending} link{pending === 1 ? '' : 's'} without a preview

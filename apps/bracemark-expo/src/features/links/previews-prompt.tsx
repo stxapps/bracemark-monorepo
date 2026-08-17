@@ -24,7 +24,9 @@
 // the banner could show, so it costs nothing in steady state.
 
 import { Pressable, View } from 'react-native';
-import { Sparkles, X } from 'lucide-react-native';
+// ImageDown, not Sparkles — see the note in settings/extraction-section.tsx:
+// Sparkles is held for the parked `aiTier`, and previews involve no model.
+import { ImageDown, X } from 'lucide-react-native';
 
 import {
   readRawPendingTitleImageCount,
@@ -62,7 +64,7 @@ export function PreviewsPrompt() {
 
   return (
     <View className="mx-4 mt-3 flex-row items-start gap-3 rounded-lg border border-border bg-muted/40 p-3">
-      <Icon as={Sparkles} className="mt-0.5 size-4 text-muted-foreground" />
+      <Icon as={ImageDown} className="mt-0.5 size-4 text-muted-foreground" />
       <View className="min-w-0 flex-1 gap-2">
         <Text className="text-sm font-medium">
           {pending} link{pending === 1 ? '' : 's'} without a preview
