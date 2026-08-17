@@ -18,6 +18,17 @@
 // glyphs optically aligned to the 16px content inset the pane below uses — the
 // links topbar does the same, and the two bars have to agree since a user
 // crosses between them constantly.
+//
+// That 16 is now the pane's inset for EVERY section on a phone, where it used to
+// be only the two table ones (settings-kit.tsx carries why the pane's `px-4 md:px-6`
+// replaced a flat `px-6` plus two overrides). Nothing here had to move for it, and
+// nothing here should chase the `md:` half either: on a tablet the pane is a
+// centred 672 column while this bar spans the frame, so the glyph and the content
+// are on different axes at that width whatever the numbers say. Web's settings
+// topbar is the surface that DOES ride the content column — its title sits on the
+// section heading's left edge — and it spells the pane's inset exactly for that
+// reason. This bar leads with a drawer toggle instead, so its title never sat on
+// that edge to begin with.
 
 import { Pressable, View } from 'react-native';
 import { DrawerActions } from '@react-navigation/native';

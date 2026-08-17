@@ -14,10 +14,26 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 // inset, on the same hairline, at the same heading step as the one they saw a
 // minute ago — that consistency is the entire design of a settings surface.
 //
-// The measure is `max-w-2xl` with `px-6`, which is also the browser extension's
-// options page (its `OptionsShell` says so, and cites this page as the source).
-// The two are the same product's settings reached from two places; keep them
-// equal, and change them together.
+// The measure is `max-w-2xl` with `px-4 md:px-6`, which is also the browser
+// extension's options page (its `OptionsShell` says so, and cites this page as
+// the source). The two are the same product's settings reached from two places;
+// keep them equal, and change them together.
+//
+// THE INSET IS RESPONSIVE, AND IT IS THE ONLY COPY. It used to be a flat `px-6`
+// that the Lists and Tags sections overrode to `px-4` — a table row is a grip, a
+// collapse toggle, an icon, a rename field, lock chrome and a kebab plus its
+// indent, all of them fixed widths except the field, so every px of gutter came
+// out of the one thing the section exists to let you type in. That need is a
+// NARROW-SCREEN need: above `md` the column caps at 672, which leaves 624px of
+// measure at `px-6` — more than any depth of table has ever wanted. So the two
+// values are a breakpoint apart rather than a section apart, and the tables get
+// their 16px exactly where it's earned.
+//
+// Which also fixes what the override cost: `_panes/topbar.tsx` rides this column
+// so "Settings" sits on one left edge with the section's own title, and an
+// override here put the two tables 8px inside the bar at every width. The bar
+// spells the same `pl-4 md:pl-6`, so the pair only stays aligned while this is
+// the single place the inset is written. Don't reintroduce a per-section one.
 
 // The scrolling column every section renders into. `gap-8` is the rhythm between
 // a section's top-level blocks, so no section adds its own `mt-*` to the ones it
@@ -39,7 +55,9 @@ export function SettingsPane({
   children: React.ReactNode;
 }) {
   return (
-    <div className={cn('mx-auto flex w-full max-w-2xl flex-col gap-8 px-6 py-8', className)}>
+    <div
+      className={cn('mx-auto flex w-full max-w-2xl flex-col gap-8 px-4 py-8 md:px-6', className)}
+    >
       {children}
     </div>
   );

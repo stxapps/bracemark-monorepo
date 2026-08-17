@@ -21,11 +21,22 @@ import { cn } from '../../lib/utils';
 // heading step as the one they saw a minute ago — that consistency is the entire
 // design of a settings surface.
 //
-// The measure is `max-w-2xl` with `px-6`, which is what bracemark-web's settings
-// pane and the browser extension's options page are both set to. On a phone the
-// cap never binds and this is just the padding; on a tablet it stops a column of
-// controls stretching to 1024px. Three surfaces, one measure — a user who has
-// seen one should not be able to tell they have changed apps.
+// The measure is `max-w-2xl` with `px-4 md:px-6`, which is what bracemark-web's
+// settings pane and the browser extension's options page are both set to. On a
+// phone the cap never binds and this is just the padding; on a tablet it stops a
+// column of controls stretching to 1024px. Three surfaces, one measure — a user
+// who has seen one should not be able to tell they have changed apps.
+//
+// THE INSET IS RESPONSIVE, AND IT IS THE ONLY COPY. It was a flat `px-6` that the
+// Lists and Tags sections each overrode to `px-4`, because a table row on a phone
+// is a grip, a collapse toggle, an icon, a rename field, lock chrome and a kebab
+// plus its indent, and all of those are fixed widths except the field. That is a
+// PHONE need: `md:` only matches on a tablet, where the column caps at 672 and
+// `px-6` still leaves 624px of measure. So the two values are a breakpoint apart
+// rather than a section apart, no section overrides this, and the tables get their
+// 16px on every screen they are cramped on. The web twin's kit carries the rest of
+// the argument, including what the override cost there (its topbar rides this
+// column; ours doesn't — see topbar.tsx).
 //
 // WHAT IS NOT PORTED: web's `focus-visible:` rings, which have no meaning
 // without a keyboard, and its `hover:` states, which have no meaning without a
@@ -52,7 +63,7 @@ import { cn } from '../../lib/utils';
 // dividers, no cards — so each level has to be legibly its own size.
 export function SettingsPane({ className, children }: { className?: string; children: ReactNode }) {
   return (
-    <View className={cn('w-full max-w-2xl gap-8 self-center px-6 py-8', className)}>
+    <View className={cn('w-full max-w-2xl gap-8 self-center px-4 py-8 md:px-6', className)}>
       {children}
     </View>
   );

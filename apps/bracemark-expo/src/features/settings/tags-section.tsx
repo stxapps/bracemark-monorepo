@@ -184,15 +184,14 @@ export function TagsSection() {
   });
 
   return (
-    // `px-4` for the same reason the Lists table uses it — see the note there.
-    // `px-4` rather than the pane's `px-6`, for CONSISTENCY rather than need —
-    // the argument lives at the head of lists-section.tsx's pane, where the
-    // inset is earned. This table is flat, so a row has no indent to pay for and
-    // ~217px of name field at `px-4` against ~201px at `px-6` on a 375pt screen:
-    // ample either way. It matches because Lists and Tags are one screen for two
-    // collections, and the four copies (two sections × two platforms) move
-    // together.
-    <SettingsPane className="px-4">
+    // No inset override — the pane's own `px-4 md:px-6` is the inset, on this
+    // section and every other. This table never needed the narrow half: it is
+    // flat, so a row has no indent to pay for, and on a 375pt screen the name field
+    // gets ~217px at 16 against ~201px at 24 — ample either way. It used to carry a
+    // hard `px-4` regardless, to stay the same screen as Lists, which is now the
+    // kit's job. The argument for the narrow value lives at the head of
+    // lists-section.tsx's pane, where it is earned.
+    <SettingsPane>
       <SettingsHeader
         title="Tags"
         description="Create, rename, and reorder your tags. Tags are flat labels — a link can have many, so there’s no nesting."

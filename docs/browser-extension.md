@@ -41,9 +41,14 @@ silent visual regression, so they're written down:
 
 - **The frame owns the geometry.** `popup/Shell.tsx` declares the popup's width
   (`w-90` — 360px), the header, the 16px body padding and the footer slot;
-  `options/Shell.tsx` declares the `max-w-2xl px-6` measure, the footer and the
-  section rhythm. Screens compose them and set no width of their own. Before
-  this, six components each carried `w-85 p-4` and had already drifted.
+  `options/Shell.tsx` declares the `max-w-2xl px-4 md:px-6` measure, the footer
+  and the section rhythm. Screens compose them and set no width of their own.
+  Before this, six components each carried `w-85 p-4` and had already drifted.
+  The inset steps at `md` for a reason that belongs to bracemark-web — a settings
+  section there can be a table that runs out of width on a phone — and no host
+  embeds the options page that wide, so it renders at 16px in practice; the `md:`
+  half is declared anyway, because the parity below is a promise about what the
+  two files SAY.
 - **The options page has no header, and that's the config's doing.**
   `options/index.html` pins `manifest.open_in_tab: false`, so the page only ever
   renders embedded — Chrome's options dialog on `chrome://extensions`, Firefox's
@@ -68,7 +73,7 @@ silent visual regression, so they're written down:
   eight sections there (its header comment carries the reasoning).
   **bracemark-expo has the third copy of that scale**, and it is a component too:
   `apps/bracemark-expo/src/features/settings/settings-kit.tsx`, same names, same
-  steps, same `max-w-2xl px-6` measure, with web's `focus-visible:`/`hover:`
+  steps, same `max-w-2xl px-4 md:px-6` measure, with web's `focus-visible:`/`hover:`
   states becoming `active:` because neither a keyboard nor a pointer exists
   there. So the product's settings scale now lives in **three** files —
   `OptionsShell` here, and one kit per app — and **nothing enforces their

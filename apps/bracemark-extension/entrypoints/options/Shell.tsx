@@ -15,14 +15,22 @@ import { WEB_APP_URL } from '@/utils/web-app-url';
 // user embedded in about:addons cannot be asking. index.html carries the reasoning
 // at the point where someone would undo it.
 //
-// THE MEASURE IS bracemark-web's. `max-w-2xl` with `px-6` is exactly what a
-// settings pane there is set to, and the headings below match its scale step for
+// THE MEASURE IS bracemark-web's. `max-w-2xl` with `px-4 md:px-6` is exactly what
+// a settings pane there is set to, and the headings below match its scale step for
 // step (`text-xl font-semibold` for the page, `text-base font-medium` for a
 // section, `text-sm text-muted-foreground` for the line under either). The two
 // pages are the same product's settings, reached from two places; a user who has
 // seen one should not be able to tell they've changed apps. Neither host hands this
 // document the full 672px, so the measure is a ceiling rather than a target — it's
 // here for the parity, and for whatever room a host gives it later.
+//
+// The inset STEPS AT `md` for a reason that is bracemark-web's rather than this
+// page's — a settings section there can be a table whose row runs out of width on
+// a phone (its kit's header comment carries the argument). No host embeds this
+// document at 768px or wider, so in practice the `md:` half never matches and this
+// page renders at 16px; it is written anyway, because the parity above is a
+// promise about the DECLARATION, and a reader diffing the two files should find
+// them the same. If a host ever does give it that width, it widens with web's.
 
 // `min-h-dvh` SURVIVES the header's removal, and it isn't the same assumption. It
 // does one job: hold the footer against the bottom of whatever frame the host gives
@@ -39,7 +47,7 @@ import { WEB_APP_URL } from '@/utils/web-app-url';
 export function OptionsShell({ children }: { children: React.ReactNode }) {
   return (
     <div className={cn('flex min-h-dvh flex-col bg-background text-foreground')}>
-      <main className={cn('mx-auto w-full max-w-2xl flex-1 px-6 py-10')}>{children}</main>
+      <main className={cn('mx-auto w-full max-w-2xl flex-1 px-4 py-10 md:px-6')}>{children}</main>
 
       <Footer />
     </div>
@@ -58,7 +66,7 @@ function Footer() {
     <footer className={cn('shrink-0 border-t border-border')}>
       <div
         className={cn(
-          'mx-auto flex max-w-2xl items-center justify-between gap-4 px-6 py-4 text-xs text-muted-foreground',
+          'mx-auto flex max-w-2xl items-center justify-between gap-4 px-4 py-4 text-xs text-muted-foreground md:px-6',
         )}
       >
         <span>Version {version}</span>

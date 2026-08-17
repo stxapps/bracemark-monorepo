@@ -271,12 +271,13 @@ export function SortMenu({
               the table's right border rather than 12px inside it — the mirror of
               the `-ml-3` that lands "Advanced" on its form's text edge. A ghost
               button aligns by its label, not by its box, so the hover background
-              is meant to overhang: 12px into the 16px both table sections narrow
-              the pane to (`px-4` — see either section's pane for why), leaving
-              4px to the edge. Tight, and the reason the inset and this margin
-              have to be read together; expo's peer lands on the same 4px. Only
-              the right is pulled — the left margin would move nothing in a
-              `justify-end` row.
+              is meant to overhang, and what it overhangs into is the pane's
+              gutter: 12px of the 16 below `md` (leaving 4px to the frame edge —
+              tight, and the reason the inset and this margin have to be read
+              together), 12px of the 24 above it. Which way the pull can grow is
+              therefore a function of the narrow inset, not the wide one; expo's
+              peer lands on the same 4px. Only the right is pulled — the left
+              margin would move nothing in a `justify-end` row.
               The leading icon keeps `data-icon="inline-start"`, so the trim is
               still 10px before the glyph and 12px after the word. */}
           <Button variant="ghost" size="sm" disabled={disabled} className="-mr-3 font-normal">

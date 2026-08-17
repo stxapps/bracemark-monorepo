@@ -98,6 +98,16 @@ Without it, none of the `safe-area` utilities or `useWindowInsets` do anything.
   with no lint or type error. Spell the attribute `data-no-scrollbar-gutter=""`
   so no `"true"`/`"false"` string is ever emitted; the presence selector is
   correct here because the marker is static, never toggled from state.
+- **The opt-out is about `html`, not about the pane.** A frame that carries it can
+  still want a stable gutter on its own inner scroll container, and `/settings`
+  does: its topbar and its section both render an `mx-auto max-w-2xl` column
+  **inside** that container, so the gutter's width is part of where the shared
+  column centres, and letting it come and go slides the whole column sideways
+  between a section that scrolls and one that doesn't. `[scrollbar-gutter:stable]`
+  there reserves a strip a scrollbar actually uses — the case the blanket rule is
+  for — so it is not the dead gutter the bullet above removes. See
+  `(app)/settings/layout.tsx`, which is also where the topbar moved **into** the
+  scroller for the other half of that alignment.
 - `@utility safe-area` — pads all four sides with the insets.
 - `@utility pt-safe / pr-safe / pb-safe / pl-safe` — per-side variants to mix with
   normal spacing.

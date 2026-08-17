@@ -220,11 +220,14 @@ export function SortMenu({
 
               `-mr-3` cancels the size variant's `px-3` exactly, as it does on
               web, so the word lands on the table's right border. The press
-              background overhangs by those 12px into the 16px both table
-              sections narrow the pane to (`px-4` — see lists-section.tsx's pane
-              for why), leaving 4px to the screen edge: tight, and the reason the
-              inset and this margin have to be read together. Web's peer lands on
-              the same 4px, so the two platforms agree. The leading icon keeps the
+              background overhangs by those 12px into the pane's gutter — 12 of the
+              16 on a phone, leaving 4px to the screen edge (tight, and the reason
+              the inset and this margin have to be read together), 12 of the 24 on a
+              tablet, where `md:` widens it. Which way the pull can grow is
+              therefore a function of the phone inset; see settings-kit.tsx for why
+              the pane steps, and lists-section.tsx's pane for what earns the narrow
+              value. Web's peer lands on the same 4px, so the two platforms agree.
+              The leading icon keeps the
               padding trim the Button derives from its children, so it stays 10px
               before the glyph and 12px after the word. */}
           <Button variant="ghost" size="sm" disabled={disabled} className="-mr-3">

@@ -501,27 +501,31 @@ export function ListsSection() {
     run(reorder(sortedByName(childrenOf(lists, parentId), dir)));
 
   return (
-    // `px-4` instead of the pane's `px-6` — the one inset on this surface that
-    // isn't the standard one, and the only kind of section that earns it: a
-    // TABLE, whose row must fit a grip, a collapse toggle, an icon, a rename
+    // NO INSET OVERRIDE HERE — and this table is why the pane HAS one to give.
+    // SettingsPane is `px-4 md:px-6`, and the narrow half of that step exists for
+    // this section: a row must fit a grip, a collapse toggle, an icon, a rename
     // field, lock chrome and a kebab on one line, at whatever depth the tree is
-    // nested to. All of those are fixed widths; the rename field is the only
+    // nested to. All of those are fixed widths and the rename field is the only
     // flexible one, so every px of gutter comes out of the field the section
-    // exists to let you type in. The 8px this gives back is half an indent step
-    // (INDENT_WIDTH is 20 here, 16 on expo) — it buys most of a nesting level.
+    // exists to let you type in — silently, since nothing ever overflows. The 8px
+    // the narrow inset gives back is half an indent step (INDENT_WIDTH is 20 here,
+    // 16 on expo), so it buys most of a nesting level: on a 375px screen a locked
+    // row at depth 3 leaves ~83px of text at 16 and ~67px at 24, about nine
+    // characters. Nothing caps depth (there is no MAX_DEPTH anywhere), so the
+    // field degrades eventually either way; the inset decides how soon.
     //
-    // Applied to Lists and Tags on BOTH platforms, and nowhere else. The Tags
-    // table is flat and has width to spare, so it takes this to stay the same
-    // screen as its sibling rather than because it needs it; expo's copies of
-    // both sections carry the same override, and the four move together.
-    //
-    // What this does NOT touch is SettingsPane's own `px-6`. That measure is
-    // shared with the browser extension's options page, which says so at
-    // entrypoints/options/Shell.tsx and cites this pane as its source — but that
-    // page renders only Account and Theme, no table, so the parity it's promising
-    // is unaffected by an override the tables make for themselves. Keep it that
-    // way: widen the KIT and the two pages silently drift.
-    <SettingsPane className="px-4">
+    // Above `md` the argument stops applying — the column caps at 672, so `px-6`
+    // still leaves 624px of measure — which is the whole reason the two values
+    // could move into the kit as a breakpoint. This section used to spell `px-4`
+    // itself, at every width, and the cost was the topbar: it rides the same
+    // column to put "Settings" on one left edge with the section title, so the
+    // override put Lists and Tags 8px inside the bar. If this table ever needs the
+    // narrow inset at a width the kit gives it `px-6` at, move the BREAKPOINT in
+    // settings-kit.tsx and the bar follows — don't hand the section back a local
+    // override, and don't widen the kit's narrow value either: that measure is
+    // shared with the browser extension's options page (see
+    // entrypoints/options/Shell.tsx, which cites this pane as its source).
+    <SettingsPane>
       <SettingsHeader
         title="Lists"
         description="Create, rename, reorder, and nest your lists. My List, Archive, and Trash are built in — you can rename and reorder them, but not delete them."

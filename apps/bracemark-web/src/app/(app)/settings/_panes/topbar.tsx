@@ -2,12 +2,27 @@
 
 // The bar above the main pane, and the only way out of settings.
 //
-// IT ALIGNS WITH THE CONTENT. Its inner row is the same `max-w-2xl` + `px-6`
-// column the sections render into (SettingsPane), so "Settings" sits directly
-// above the section's own title on one left edge. Before, the bar's title started
-// at the pane's left padding while the content was centred ~180px to its right,
-// which put the page's two headings on two different axes — the most visible
-// thing wrong with this screen at desktop width.
+// IT ALIGNS WITH THE CONTENT. Its inner row is the same `max-w-2xl` +
+// `px-4 md:px-6` column the sections render into (SettingsPane), so "Settings"
+// sits directly above the section's own title on one left edge. Before, the bar's
+// title started at the pane's left padding while the content was centred ~180px
+// to its right, which put the page's two headings on two different axes — the
+// most visible thing wrong with this screen at desktop width.
+//
+// The inset is written once, in SettingsPane, and mirrored here; that file says
+// why it steps at `md` and why no section may override it. Below `md` it is the
+// SectionMenu rather than the label that has to land on it, which is what that
+// button's `-ml-2` is for — see there.
+//
+// IT IS STICKY, INSIDE THE SCROLL CONTAINER. This bar used to be a SIBLING of the
+// scrolling `main`, and a sibling cannot stay aligned with it: `main` is the
+// scroll container, so its content box is the frame MINUS the scrollbar, and the
+// two `mx-auto`s then centre about two different midpoints. The section landed
+// half a scrollbar (~7px) left of "Settings" — with matching padding on both, at
+// every width past ~912px, and unfixable from the inset because it isn't an inset
+// problem. So the bar moved inside the scroller (layout.tsx), where there is one
+// box and one midpoint. `bg-background` is load-bearing now: content scrolls
+// BEHIND this bar rather than being clipped at its edge.
 //
 // "Settings" IS NOT A HEADING. It was an `h1` set at `text-lg font-semibold`,
 // above a section title at `text-xl` — a document whose h1 rendered smaller than
@@ -44,6 +59,17 @@ function SectionMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
+        {/* `-ml-2` lands this button's LEADING GLYPH on the pane's content inset,
+            which is what the bar has to align below `md` (the label can't — the
+            icon is in front of it). The arithmetic: the row's `pl-4` puts the
+            button box at 16, this pulls it to 8, and `size="sm"` trims its `px-3`
+            to `pl-2` for an `inline-start` icon, so the glyph starts back at 16 —
+            the pane's own narrow inset. It is 1px out in practice, because the
+            Button base carries `border border-transparent`; measured, the glyph
+            sits at 17 against an `h1` at 16. Left alone deliberately — an
+            `-ml-[9px]` would buy a pixel of a glyph-against-text edge that no
+            lucide icon is flush to anyway, at the cost of a magic number. Above
+            `md` this button is gone and the `Settings` span aligns exactly. */}
         <Button variant="ghost" size="sm" className={cn('-ml-2 gap-1.5')}>
           {/* `data-icon` sits on a wrapper rather than on the icon itself: the
               node comes from the SETTINGS_SECTIONS table, which also renders it
@@ -80,14 +106,21 @@ function SectionMenu() {
 }
 
 export function Topbar() {
+  // `sticky` is still a positioned element, so the absolutely-placed close button
+  // below anchors to this header exactly as it did under the `relative` it
+  // replaced.
   return (
-    <header className={cn('relative h-14 shrink-0 border-b border-border')}>
+    <header className={cn('sticky top-0 z-10 h-14 border-b border-border bg-background')}>
       {/* The label rides the content column; the close button does NOT. It is a
           window control for the whole pane, so it stays in the pane's own corner
           where one is looked for — inside the column it read as a stray glyph
           floating mid-pane with 340px of empty bar to its right. `pr-14` keeps the
           mobile section menu from running under it. */}
-      <div className={cn('mx-auto flex h-full w-full max-w-2xl items-center pr-14 pl-6 md:pr-6')}>
+      <div
+        className={cn(
+          'mx-auto flex h-full w-full max-w-2xl items-center pr-14 pl-4 md:pr-6 md:pl-6',
+        )}
+      >
         <div className={cn('min-w-0 flex-1')}>
           <div className={cn('md:hidden')}>
             <SectionMenu />

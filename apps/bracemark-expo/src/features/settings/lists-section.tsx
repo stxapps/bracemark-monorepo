@@ -524,26 +524,32 @@ export function ListsSection() {
   });
 
   return (
-    // `px-4`, one step tighter than the pane's own `px-6`: the table below is a
-    // DRAG surface, and every pixel of inset is a pixel a dragged row has to
-    // travel before it clears the edge. The vertical rhythm and the max-w-2xl
-    // measure still come from the pane, so this is the only axis that differs.
-    // `px-4` instead of the pane's `px-6` — the same override web's copy of this
-    // section makes, for the same reason, and the reason bites hardest here. A
-    // row is a grip (size-9), a collapse toggle or its spacer (size-9), an icon,
-    // the rename field, lock chrome, and a kebab (size-9), plus `4 + depth × 16`
-    // of leading indent. Everything except the rename field is a fixed width and
-    // the field is `flex-1 min-w-0` with no floor, so the gutter is paid for
-    // entirely out of it — silently, since nothing ever overflows.
+    // NO INSET OVERRIDE HERE — and this table is why the pane HAS one to give.
+    // SettingsPane is `px-4 md:px-6`, and the narrow half of that step exists for
+    // this section, on a phone, where `md:` never matches. A row is a grip
+    // (size-9), a collapse toggle or its spacer (size-9), an icon, the rename
+    // field, lock chrome, and a kebab (size-9), plus `4 + depth × 16` of leading
+    // indent. Everything except the rename field is a fixed width and the field is
+    // `flex-1 min-w-0` with no floor, so the gutter is paid for entirely out of it
+    // — silently, since nothing ever overflows. It is also a DRAG surface, where
+    // every pixel of inset is a pixel a dragged row travels before it clears the
+    // edge.
     //
-    // The 16px this returns is EXACTLY INDENT_WIDTH, which makes the trade
-    // legible: at `px-6` a row reads one nesting level deeper than it is. On a
-    // 375pt screen a locked row at depth 3 leaves ~83px of text at `px-4` and
-    // ~67px at `px-6` — about nine characters, on a field whose whole job is
-    // editing a name. Nothing caps depth (there is no MAX_DEPTH anywhere), so
-    // the field degrades to unusable eventually either way; this decides how
-    // soon.
-    <SettingsPane className="px-4">
+    // The 16px the narrow inset keeps is EXACTLY INDENT_WIDTH, which makes the
+    // trade legible: at 24 a row reads one nesting level deeper than it is. On a
+    // 375pt screen a locked row at depth 3 leaves ~83px of text at 16 and ~67px at
+    // 24 — about nine characters, on a field whose whole job is editing a name.
+    // Nothing caps depth (there is no MAX_DEPTH anywhere), so the field degrades to
+    // unusable eventually either way; the inset decides how soon.
+    //
+    // This section used to spell `px-4` itself, as web's twin did. Both moved into
+    // their kits when web's copy turned out to be pulling the two tables 8px inside
+    // the topbar that rides the same column there. If the narrow inset is ever
+    // wanted at a width the kit gives `px-6` at, move the BREAKPOINT in
+    // settings-kit.tsx rather than handing the section back an override — the four
+    // files (two sections × two platforms) stayed in step by having nothing left in
+    // them to drift.
+    <SettingsPane>
       <SettingsHeader
         title="Lists"
         description="Create, rename, reorder, and nest your lists. My List, Archive, and Trash are built in — you can rename and reorder them, but not delete them."
