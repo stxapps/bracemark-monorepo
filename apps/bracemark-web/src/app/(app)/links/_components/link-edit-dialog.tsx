@@ -255,9 +255,11 @@ function LinkEditForm({
         </DialogHeader>
 
         <form className="flex min-h-0 flex-1 flex-col gap-4" onSubmit={onSubmit} noValidate>
-          {/* The scrollable body. -mx-1 px-1 gives focus rings room so
-              overflow-y-auto doesn't clip them at the edges. */}
-          <div className="-mx-1 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-1">
+          {/* The scrollable body. overflow-y-auto clips at the border box on
+              every side, so the -m-1 p-1 pair gives the 3px focus rings room
+              (the note textarea's would otherwise be cut off at the bottom)
+              while the negative margin keeps the layout where it was. */}
+          <div className="-m-1 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-1">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="edit-title" density="dense">
                 Title
