@@ -42,6 +42,7 @@ import {
   opsCommitEndpoint,
   opsListEndpoint,
   type OpsListResponse,
+  type ProgressFn,
   recordBlocked,
   type SignOp,
   type SyncOutcome,
@@ -332,7 +333,7 @@ export async function loadEntityContent(deps: SyncDeps, path: string): Promise<F
 export async function loadEntityContents(
   deps: SyncDeps,
   paths: string[],
-  onProgress?: (done: number, total: number) => void,
+  onProgress?: ProgressFn,
 ): Promise<{ missingPaths: string[] }> {
   deps = withRetryDeps(deps);
 

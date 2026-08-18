@@ -34,6 +34,7 @@ import type {
   List,
   ListItem,
   Pin,
+  ProgressFn,
   Tag,
   TreeNode,
 } from '@stxapps/shared';
@@ -193,7 +194,7 @@ function readRawNamespace<T extends z.ZodTypeAny>(
 // a full read — chunked only so progress ticks.
 async function gatherLinks(
   excludedListIds: ReadonlySet<string>,
-  onProgress: (done: number, total: number) => void,
+  onProgress: ProgressFn,
 ): Promise<GatheredLink[]> {
   const records = namespaceRows(LINKS_PREFIX);
   const total = records.length;

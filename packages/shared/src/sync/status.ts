@@ -12,6 +12,8 @@
 //                  failed background cycle coexists with a usable store (that's
 //                  the point of local-first), so it must not leave 'ready'.
 
+import type { ProgressFn } from '../async/progress';
+
 // The gate's phases — named for the LOCAL STORE, not the sync runs: on a
 // returning visit no initial sync runs at all, yet the store is 'ready'.
 export type StoreStatus =
@@ -42,10 +44,11 @@ export interface InitialSyncProgress {
   total: number;
 }
 
-// How the engines hand a tick back. Two numbers rather than the struct because
-// this fires once per decrypted record, several hundred times on a large library
-// — the struct is allocated once per flush, by the consumer that throttles.
-export type InitialSyncProgressFn = (done: number, total: number) => void;
+// How the engines hand a tick back: the generic done/total callback
+// (async/progress.ts — which is where the two-numbers-not-a-struct reasoning
+// lives), aliased here so the initial-sync signatures keep naming the counter
+// they feed rather than a shape shared with the export flows.
+export type InitialSyncProgressFn = ProgressFn;
 
 // The counter line under the decrypting screen's headline. Shared so the two
 // gates can't word the same number differently.

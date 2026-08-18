@@ -14,6 +14,7 @@ import {
   bgStatusForOutcome,
   type BgSyncStatus,
   type InitialSyncProgress,
+  type InitialSyncProgressFn,
   type StoreStatus,
 } from '@stxapps/shared';
 
@@ -171,7 +172,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       setInitialSyncProgress(pendingProgress);
       pendingProgress = null;
     };
-    const reportProgress = (done: number, total: number) => {
+    const reportProgress: InitialSyncProgressFn = (done, total) => {
       pendingProgress = { done, total };
       progressTimer ??= setTimeout(flushProgress, PROGRESS_FLUSH_MS);
     };

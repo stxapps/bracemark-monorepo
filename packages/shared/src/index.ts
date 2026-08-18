@@ -3,6 +3,7 @@ export * from './api/endpoint';
 export * from './api/retry';
 export * from './array/chunk';
 export * from './async/pool';
+export * from './async/progress';
 export * from './auth/credentials';
 export * from './auth/endpoints';
 export * from './crypto/contract-vectors';
