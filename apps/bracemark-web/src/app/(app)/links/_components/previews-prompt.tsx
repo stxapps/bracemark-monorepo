@@ -121,7 +121,22 @@ export function PreviewsPrompt() {
           </>
         )}
       </div>
-      <Button variant="ghost" size="icon-sm" aria-label="Dismiss" onClick={dismiss}>
+      {/* A ghost icon button aligns by its GLYPH, not its box — the same rule as
+          settings/_components/table-kit.tsx's `-mr-3` and the dialog close
+          button's `top-4 right-4` inside a `p-6`. `icon-sm` is 32px around a
+          16px glyph, so untouched the X sits 8px further inside than the
+          ImageDown opposite it (24px vs the aside's `px-4`) and 6px below the
+          headline the icon's `mt-0.5` lands on. The two pulls cancel exactly
+          that; what the hover background overhangs into is the gutter, leaving
+          8px to the banner's edge. expo's peer needs none of this: its dismiss
+          is a bare Pressable with `hitSlop`, so the glyph IS the box. */}
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        aria-label="Dismiss"
+        onClick={dismiss}
+        className="-mt-1.5 -mr-2"
+      >
         <X className="size-4" />
       </Button>
     </aside>

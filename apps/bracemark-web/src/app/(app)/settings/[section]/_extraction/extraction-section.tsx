@@ -20,7 +20,7 @@
 // The incidental, displayed-scoped auto drain is driven from the links pane
 // (reportDisplayedLinkPaths) and needs no UI here.
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 // ImageDown, not Sparkles: previews are a plain fetch of <title>/og:image, with
 // no model anywhere in the path. Sparkles is reserved for the parked `aiTier`
 // entitlement (plans.ts) — lending it to a deterministic fetch is exactly the
@@ -80,6 +80,40 @@ export function ExtractionSection() {
   // Two-step confirm for "Extract all": the first click reveals the count +
   // Confirm, since draining the whole library can be thousands of paid requests.
   const [confirming, setConfirming] = useState(false);
+
+  // Focus has to be carried across that step BY HAND, because the step replaces
+  // the control that was clicked: "Generate all" unmounts to make room for the
+  // question, so a keyboard user is dropped on <body> and a screen reader hears
+  // nothing at the moment the screen is asking them something. The two peer
+  // two-steps (Delete account, Delete all data) never hit this — they gate on an
+  // always-mounted checkbox, so there is nothing to restore.
+  //
+  // Focus lands on the GROUP, not on Confirm. Focusing the affirmative button of
+  // a confirm step arms Enter, and a repeated Enter on "Generate all" would then
+  // walk straight through the step that exists to slow this job down. The group
+  // is labelled by the question, so what gets announced is the cost sentence,
+  // and Confirm stays one Tab away. It carries `outline-none` for the reason
+  // DialogContent does: the row appearing IS the feedback, and this is a
+  // programmatic focus target rather than a control.
+  //
+  // The other direction — the drain finishing on its own, Pause → Generate all —
+  // needs nothing: both branches render a `Button` in the same slot, so React
+  // reconciles them into one DOM node and focus rides along.
+  const confirmGroupRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  // Set by the three handlers that cause a swap, consumed by the effect below.
+  // Any other render leaves it null and moves nothing — focus is never taken
+  // from wherever the user actually put it.
+  const focusAfterSwap = useRef<'group' | 'trigger' | null>(null);
+  useEffect(() => {
+    const slot = focusAfterSwap.current;
+    focusAfterSwap.current = null;
+    if (slot === 'group') confirmGroupRef.current?.focus();
+    // If the auto drain emptied the queue while the question was up, Cancel
+    // returns to a `disabled` trigger, which cannot hold focus. Nothing to do
+    // here — the alternative is parking focus on a control that does nothing.
+    else if (slot === 'trigger') triggerRef.current?.focus();
+  });
   // Surface a failed toggle write (e.g. no active account) rather than swallow
   // it; the control stays live for a retry. Mirrors MiscSection's `run`.
   const [error, setError] = useState<string | null>(null);
@@ -93,7 +127,19 @@ export function ExtractionSection() {
 
   const total = doneCount + pendingCount + failedCount;
 
+  // All three swap the contents of the button slot, so all three hand focus on.
+  // `extractAll` flips `isExtractingAll` in the same event, so the slot the
+  // effect focuses is Pause by the time it runs.
+  const askExtractAll = () => {
+    focusAfterSwap.current = 'group';
+    setConfirming(true);
+  };
+  const cancelExtractAll = () => {
+    focusAfterSwap.current = 'trigger';
+    setConfirming(false);
+  };
   const startExtractAll = () => {
+    focusAfterSwap.current = 'trigger';
     setConfirming(false);
     extractAll();
   };
@@ -183,28 +229,35 @@ export function ExtractionSection() {
 
           <div>
             {isExtractingAll ? (
-              <Button variant="outline" onClick={pause}>
+              <Button ref={triggerRef} variant="outline" onClick={pause}>
                 <Pause data-icon="inline-start" className="size-4" />
                 {isRunning ? 'Generating… Pause' : 'Pause'}
               </Button>
             ) : confirming ? (
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="text-sm">
+              <div
+                ref={confirmGroupRef}
+                role="group"
+                aria-labelledby="extract-all-confirm"
+                tabIndex={-1}
+                className="flex flex-wrap items-center gap-3 outline-none"
+              >
+                <span id="extract-all-confirm" className="text-sm">
                   Generate previews for all {pendingCount} pending link
                   {pendingCount === 1 ? '' : 's'}? This sends a request per link to the server.
                 </span>
                 <div className="flex gap-2">
                   <Button onClick={startExtractAll}>Confirm</Button>
-                  <Button variant="ghost" onClick={() => setConfirming(false)}>
+                  <Button variant="ghost" onClick={cancelExtractAll}>
                     Cancel
                   </Button>
                 </div>
               </div>
             ) : (
               <Button
+                ref={triggerRef}
                 variant="outline"
                 disabled={pendingCount === 0}
-                onClick={() => setConfirming(true)}
+                onClick={askExtractAll}
               >
                 <ImageDown data-icon="inline-start" className="size-4" />
                 Generate all
