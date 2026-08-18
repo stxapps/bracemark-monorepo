@@ -38,7 +38,8 @@ import { useEngagedOpen } from './hooks';
 // The per-row options menu — every row action lives here so each layout renders
 // one `<LinkRowMenu>` and the logic stays in one place. The shape follows the
 // menu convention: frequent actions first (Copy link / Edit / Move to / Edit
-// tags / pin), destructive last behind a separator (Archive / Remove). The
+// tags / Edit note / pin), destructive last behind a separator (Archive /
+// Remove). The
 // variant is keyed off the LINK's own `listId`, not the active view, so a
 // trashed/archived link gets the right menu in the All view and tag views too:
 //
@@ -48,9 +49,9 @@ import { useEngagedOpen } from './hooks';
 //                (view-state-provider `requestDestroy` → LinkDestroyConfirm).
 //   in Archive — "Archive" flips to "Unarchive"; everything else as normal.
 //
-// Edit and Edit tags both open the page-level edit dialog (the latter landing
-// focused on the tag field) via the hoisted `openEditor` — a row-owned dialog
-// could be unmounted by a sync repaint mid-edit. Move to / Archive / Restore /
+// Edit, Edit tags and Edit note all open the page-level edit dialog (the latter
+// two landing focused on that field) via the hoisted `openEditor` — a row-owned
+// dialog could be unmounted by a sync repaint mid-edit. Move to / Archive / Restore /
 // Remove are all one `update({ listId })` — thin wrappers over the same op the
 // dialog's Save uses. `pinned` swaps the pin block between "Pin to top" and the
 // pinned set (move up/down + unpin); `isFirst`/`isLast` disable the move that
@@ -128,17 +129,6 @@ export function LinkRowMenu({
         ) : (
           <>
             {copyLink}
-            {/* Only when there IS a note — this item is the way to READ one that
-                the fixed-height row can only badge (NoteBadge, link-row-widgets).
-                Adding a note is plain Edit, so an always-on item would just
-                duplicate it. Absent in the Trash variant for the same reason
-                edit/move are. */}
-            {link.note && (
-              <DropdownMenuItem onSelect={() => openEditor(link, 'note')}>
-                <StickyNote className="size-4" />
-                View note
-              </DropdownMenuItem>
-            )}
             <DropdownMenuItem onSelect={() => openEditor(link)}>
               <Pencil className="size-4" />
               Edit
@@ -169,6 +159,16 @@ export function LinkRowMenu({
             <DropdownMenuItem onSelect={() => openEditor(link, 'tags')}>
               <Tags className="size-4" />
               Edit tags
+            </DropdownMenuItem>
+            {/* Pairs with Edit tags: both are field-focused shortcuts into the
+                dialog Edit opens. Always on, like its sibling — a note-only
+                condition would make the menu two shapes, and this is also the
+                READ path, since the fixed-height row can only badge a note
+                (NoteBadge, link-row-widgets) and the field has no read-only
+                surface. Absent in the Trash variant, like the other edits. */}
+            <DropdownMenuItem onSelect={() => openEditor(link, 'note')}>
+              <StickyNote className="size-4" />
+              Edit note
             </DropdownMenuItem>
             {pinned ? (
               <>

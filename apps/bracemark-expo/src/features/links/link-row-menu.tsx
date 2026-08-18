@@ -11,12 +11,14 @@
 // off the pinned section's ends. Divergences from web:
 //
 //  - Copy link goes through expo-clipboard (web's navigator.clipboard).
-//  - View note / Edit / Edit tags PUSH the modal edit-link route (web opens
+//  - Edit / Edit tags / Edit note PUSH the modal edit-link route (web opens
 //    the page-level hoisted dialog instead — hoisted there because virtualized
 //    rows repaint under an open dialog; a pushed screen isn't row-anchored, so
 //    no `editing` view state exists here). The `focus` param is web's
-//    LinkEditRequest focus: 'note' scrolls to the note (the only way to READ
-//    one — the fixed-height rows can only badge it), 'tags' to the tag field.
+//    LinkEditRequest focus: 'note' SCROLLS the note into view instead of
+//    focusing it — reading one is still what most opens are for (the
+//    fixed-height rows can only badge it), and a native focus would summon the
+//    keyboard over it; 'tags' goes to the tag field.
 //  - Move to opens the shared MoveToDialog (a dropdown-anchored ListCommand
 //    submenu doesn't fit a phone — the bulk bar's rationale). Mounted only
 //    while open: the dialog holds a live list read, and this component renders
@@ -132,17 +134,6 @@ export function LinkRowMenu({
           ) : (
             <>
               {copyLink}
-              {/* Only when there IS a note — this item is the way to READ one
-                  that the fixed-height row can only badge. Adding a note is
-                  plain Edit, so an always-on item would just duplicate it.
-                  Absent in the Trash variant for the same reason edit/move
-                  are. */}
-              {link.note && (
-                <DropdownMenuItem onPress={() => openEditor('note')}>
-                  <Icon as={StickyNote} className="size-4" />
-                  <Text>View note</Text>
-                </DropdownMenuItem>
-              )}
               <DropdownMenuItem onPress={() => openEditor()}>
                 <Icon as={Pencil} className="size-4" />
                 <Text>Edit</Text>
@@ -154,6 +145,16 @@ export function LinkRowMenu({
               <DropdownMenuItem onPress={() => openEditor('tags')}>
                 <Icon as={Tags} className="size-4" />
                 <Text>Edit tags</Text>
+              </DropdownMenuItem>
+              {/* Pairs with Edit tags: both are field-focused shortcuts into
+                  the screen Edit pushes. Always on, like its sibling — a
+                  note-only condition would make the menu two shapes, and this
+                  is also the READ path, since the fixed-height row can only
+                  badge a note and the field has no read-only surface. Absent in
+                  the Trash variant, like the other edits. */}
+              <DropdownMenuItem onPress={() => openEditor('note')}>
+                <Icon as={StickyNote} className="size-4" />
+                <Text>Edit note</Text>
               </DropdownMenuItem>
               {pinned ? (
                 <>

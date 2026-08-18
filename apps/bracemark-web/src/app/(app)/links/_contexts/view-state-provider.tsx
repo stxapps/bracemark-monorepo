@@ -71,8 +71,8 @@ export type SimpleSelection = Exclude<Selection, { kind: 'none' }>;
 // An open edit-dialog request: the link's row snapshot (the dialog re-resolves
 // freshness at save time — useLinkMutations.update re-reads before merging) and
 // optionally which section to land focused ('tags' for the menu's "Edit tags",
-// 'note' for its "View note" — the note has no read-only surface of its own, so
-// viewing it IS opening the editor on that field).
+// 'note' for its "Edit note" — the note has no read-only surface of its own, so
+// reading one IS opening the editor on that field).
 export interface LinkEditRequest {
   link: LinkView;
   focus?: 'tags' | 'note';

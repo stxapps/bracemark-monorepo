@@ -21,7 +21,7 @@
 //    placeholder title / fallback image update mid-edit.
 //  - `focus` ('tags' | 'note') SCROLLS the field into view instead of focusing
 //    it: web's focus() is inert chrome, but focusing a native input summons
-//    the keyboard — over the very note "View note" came to read.
+//    the keyboard — over the very note "Edit note" is most often opened to read.
 //  - The image draft holds a picked file's URI, not bytes + object URLs —
 //    content stays out of the JS heap on this platform (file-store.ts), so
 //    pick (expo-image-picker) → resize (resizeImage, uri→uri) → store
@@ -361,7 +361,7 @@ function LinkEditForm({ link, focus }: { link: LinkItem; focus?: EditFocus }) {
           <TagsField value={tagIds} onChange={setTagIds} />
         </Field>
 
-        {/* The row menu's "View note" lands here (focus === 'note'): the note
+        {/* The row menu's "Edit note" lands here (focus === 'note'): the note
             has no read-only surface — the layouts are fixed-height, so a row
             can only badge it — and at LINK_NOTE_MAX this input reads as well as
             any viewer would, with the edit already in hand. */}

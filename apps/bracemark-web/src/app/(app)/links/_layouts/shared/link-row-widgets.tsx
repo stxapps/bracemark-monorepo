@@ -49,7 +49,7 @@ export function PinnedBadge() {
 // (the row/card estimate must stay exact for the virtualizer), so an inline note
 // would cost its line on every row, noteless ones included — and most links have
 // none. So the badge marks that a note exists and the text stays one hover
-// (`title`) or one row menu "View note" away. `title` is why this is a <span>
+// (`title`) or one row menu "Edit note" away. `title` is why this is a <span>
 // wrapper rather than the bare icon — the tooltip needs a box, and this sits
 // inside the row's <a>, so it must stay non-interactive.
 export function NoteBadge({ note }: { note: string }) {

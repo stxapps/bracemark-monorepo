@@ -302,28 +302,42 @@ editors:
   **editors** only (leave it out on both move-to menus). Adding a fourth consumer
   means deciding both, not copying the nearest call site — and a future bulk
   "Move to" (see below) is a _menu_, not an editor.
-- **The row menu's "View note"** is the reason the edit dialog takes a
+- **The row menu's "Edit note"** is the reason the edit dialog takes a
   `focus?: 'tags' | 'note'` (`LinkEditRequest` in `view-state-provider`) rather
-  than the boolean it started as. **The note has no read-only surface** — viewing
+  than the boolean it started as. **The note has no read-only surface** — reading
   it IS opening the editor on that field, which is why the item routes to
   `openEditor(link, 'note')` exactly as "Edit tags" routes to `'tags'`. That's a
   deliberate no: a separate note dialog would need its own page-level hoisting
   and `engaged` handling (rows are virtualized and repaint under sync — see
   invariant 4), and at `LINK_NOTE_MAX` a `Textarea` reads as well as a viewer
-  would, with the edit already in hand. The item shows only when `link.note` is
-  set (adding one is plain **Edit**) and is absent from the Trash variant, like
-  the other edit affordances. A new "land focused on X" entry point should widen
-  this union, not grow a surface. On bracemark-expo the same items push `/edit-link`
-  with the same `focus` union as a route param — with one native divergence:
-  `focus` **scrolls** the field into view instead of focusing it, because
-  focusing a native input summons the keyboard over the very note "View note"
-  came to read (web's `focus()` has no such side effect).
+  would, with the edit already in hand. A new "land focused on X" entry point
+  should widen this union, not grow a surface.
+- **That item is always on, and sits directly below "Edit tags".** It read
+  "View note" and rendered only when `link.note` was set, on the argument that
+  adding one is plain **Edit** so an always-on item would duplicate it — but
+  that argument doesn't survive its own sibling: "Edit tags" is always on and
+  duplicates **Edit** in exactly the same way, earning its place as a
+  _field-focused shortcut_, not as the only path. Three things followed from the
+  conditional and are the reason not to restore it: the label described the
+  intent rather than the destination (which is an editable `Textarea` with
+  Save/Cancel, never a viewer); the menu had two shapes, so **Edit** was the 2nd
+  item on a noteless row and the 3rd on a noted one and everything below shifted
+  with the data; and adding a note meant **Edit** → past the image preview and
+  tags to the last field. The presence of a note is still signalled — that is
+  `NoteBadge`'s job on the row (next bullet), not the menu's. Both are absent
+  from the Trash variant, like the other edit affordances.
+- On bracemark-expo the same items push `/edit-link` with the same `focus` union
+  as a route param — with one native divergence: `focus` **scrolls** the field
+  into view instead of focusing it, because focusing a native input summons the
+  keyboard over the very note most opens are there to read (web's `focus()` has
+  no such side effect). The rename doesn't change that: an always-on item is
+  reached with a note to read more often than with one to write.
 - **The layouts show the note as a badge, never inline.** Both are FIXED-height
   (`ROW_HEIGHT` — the virtualizer's estimate must stay exact), so a note line
   can't be conditional: it would be budgeted on every row, noteless ones
   included, and most links have none. So each row renders `NoteBadge` beside
   `PinnedBadge` — card (280) and list (70) alike — carrying the text in `title`
-  for hover, with "View note" above as the real read path. This is a deliberate
+  for hover, with "Edit note" in the menu as the real read path. This is a deliberate
   trade against `note`'s own rationale in `entities.ts`, which caps the field
   (`LINK_NOTE_MAX`) precisely so it CAN be shown in a list view; the density won.
   If that's ever revisited, the card layout is where the line fits (one clamped

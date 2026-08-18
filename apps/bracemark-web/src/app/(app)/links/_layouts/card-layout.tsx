@@ -55,7 +55,7 @@ const DEFAULT_COLUMNS = 3;
 // No line is budgeted for the link's note: a fixed estimate can't be conditional,
 // so an inline note would cost its line on EVERY card — and most links have none.
 // Both layouts therefore badge it (NoteBadge) and leave the text to hover and the
-// row menu's "View note".
+// row menu's "Edit note".
 //
 // Scaled by the root font size (useRootFontScale) for the same reason as
 // list-layout's row, and see that file's note for the full argument: every part

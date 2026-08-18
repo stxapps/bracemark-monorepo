@@ -238,7 +238,7 @@ function LinkEditForm({
       <DialogContent
         className="flex max-h-[calc(100dvh-2rem)] flex-col sm:max-w-md"
         // Radix's default open-autofocus grabs the first focusable — the title
-        // input — so "View note"/"Edit tags" would still land on title. Take
+        // input — so "Edit note"/"Edit tags" would still land on title. Take
         // over: focus the field the opener asked for. The tags trigger rings
         // itself off its own focus state (see TagsField), so a plain focus() is
         // enough for all three.
@@ -367,7 +367,7 @@ function LinkEditForm({
               <Label htmlFor="edit-note" density="dense">
                 Note
               </Label>
-              {/* The row menu's "View note" lands here (focus === 'note'): the
+              {/* The row menu's "Edit note" lands here (focus === 'note'): the
                   note has no read-only surface — the layouts are fixed-height, so
                   a row can only badge it — and at LINK_NOTE_MAX a textarea reads
                   as well as any viewer would, with the edit already in hand.
