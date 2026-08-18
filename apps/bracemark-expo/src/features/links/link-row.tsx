@@ -41,6 +41,19 @@ function formatRelativeTime(epochMs: number): string {
   return 'now';
 }
 
+// What the row can spare for the tag strip, off the item width main.tsx hands
+// down (link-tag-chips.tsx does the fitting). Left to right: pl-4 + pr-2 (24),
+// the two gap-3s bracketing the date column (24), the date column itself at its
+// widest ("12mo", font-scaled — 34), the ⋯ menu's size-8 (32), and inside the
+// text box the thumbnail's w-16 plus its gap-3 (76).
+//
+// One number for both modes, deliberately: bulk-edit drops the menu (32 + a
+// 12pt gap) and inserts a size-4 checkbox (16 + a 12pt gap), so a selecting row
+// is 16pt ROOMIER. Budgeting the tighter shape for both means entering the mode
+// can't reflow the chips under the user's thumb — 16pt buys a couple of
+// characters, not a chip.
+const ROW_CHIP_CHROME = 190;
+
 // Whether this row renders a chip strip, and so which of its two shapes it
 // takes: exactly the test LinkTagChips applies before it renders anything, so
 // the two must not drift. A plain `tagIds.length > 0` would be subtly wrong — a
@@ -58,6 +71,7 @@ export function LinkRow({
   isLast,
   sortOn,
   tagsById,
+  itemWidth,
   selectMode,
   selected,
   onToggle,
@@ -142,7 +156,12 @@ export function LinkRow({
               {hostFromText(link.url)}
             </Text>
           </View>
-          <LinkTagChips link={link} tagsById={tagsById} className="mt-3" />
+          <LinkTagChips
+            link={link}
+            tagsById={tagsById}
+            availableWidth={itemWidth - ROW_CHIP_CHROME}
+            className="mt-3"
+          />
         </View>
       </View>
       <Text className="shrink-0 text-xs text-muted-foreground">

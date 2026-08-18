@@ -195,16 +195,25 @@ function UnlockedMain() {
   // width instead and MIN_CARD_WIDTH stops being the guarantee it exists to be.
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const numColumns = columns(width - insets.left - insets.right - contentPadding * 2);
+  const paneWidth = width - insets.left - insets.right - contentPadding * 2;
+  const numColumns = columns(paneWidth);
+  // One cell's width, for the item's own internal budgets — today just the tag
+  // strip's, which estimates how many chips fit rather than measuring (see
+  // link-tag-chips.tsx for why measuring is the wrong trade in a recycling
+  // list). Derived here because this is where the column math already lives.
+  const itemWidth = paneWidth / numColumns;
 
   // FlashList compares extraData by reference to decide whether items must
   // re-render; memoized so scroll-flag renders of this pane don't force a
   // re-render of every item, while a selection toggle (new map identity), a tag
-  // rename (tagsById — renames must repaint immediately, see useTagMap), or a
-  // sort change (the row's date column) does.
+  // rename (tagsById — renames must repaint immediately, see useTagMap), a sort
+  // change (the row's date column), or a rotation (itemWidth, the tag strip's
+  // budget) does. Anything renderItem passes as a PROP has to be in here: the
+  // cells re-render off this reference, not off renderItem's identity, so a
+  // value left out would go stale in already-mounted cells.
   const itemExtra = useMemo(
-    () => ({ bulkEditing, selectedLinks, tagsById, sortOn: query.sortOn }),
-    [bulkEditing, selectedLinks, tagsById, query.sortOn],
+    () => ({ bulkEditing, selectedLinks, tagsById, sortOn: query.sortOn, itemWidth }),
+    [bulkEditing, selectedLinks, tagsById, query.sortOn, itemWidth],
   );
 
   // Pull-to-refresh: the spinner is OUR gesture's, so it's local state armed on
@@ -258,6 +267,7 @@ function UnlockedMain() {
                 isLast={index === pinnedCount - 1}
                 sortOn={query.sortOn}
                 tagsById={tagsById}
+                itemWidth={itemWidth}
                 selectMode={bulkEditing}
                 selected={selectedLinks.has(item.path)}
                 onToggle={() => toggleSelected(item)}

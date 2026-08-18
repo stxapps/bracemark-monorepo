@@ -38,6 +38,11 @@ import { LinkTagChips } from './link-tag-chips';
 import { type LinkItemProps, NoteBadge, PinnedBadge } from './shared';
 import { useLinksViewState } from './view-state-provider';
 
+// What the card can spare for the tag strip, off the item width main.tsx hands
+// down (link-tag-chips.tsx does the fitting): the item wrapper's own p-2 (16)
+// plus the strip's px-3 (24). Nothing else shares the strip's line.
+const CARD_CHIP_CHROME = 40;
+
 const CARD_FIXED_HEIGHT = 156;
 const CARD_TEXT_HEIGHT = 80;
 
@@ -47,6 +52,7 @@ export function LinkCard({
   isFirst,
   isLast,
   tagsById,
+  itemWidth,
   selectMode,
   selected,
   onToggle,
@@ -98,7 +104,12 @@ export function LinkCard({
             {link.title || displayUrl(link.url)}
           </Text>
         </View>
-        <LinkTagChips link={link} tagsById={tagsById} className="px-3 pb-3" />
+        <LinkTagChips
+          link={link}
+          tagsById={tagsById}
+          availableWidth={itemWidth - CARD_CHIP_CHROME}
+          className="px-3 pb-3"
+        />
         {/* Floats over the banner (web's corner slot: the row menu, swapped for
             the selection checkbox while bulk editing), so give it a readable
             backdrop. */}
