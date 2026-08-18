@@ -8,7 +8,7 @@
 // the BOTTOM (reads as bottom padding, not a mid-card gap). Budget: preview
 // slot (112 — image or fallback panel, fixed either way) + p-3 text block
 // (host line 16 + gap 8 + two title lines 40 + padding 24) + one chip line +
-// pb-3 (32) = 232. No date column (web parity)
+// pb-3 (36) = 236. No date column (web parity)
 // and no inline note text (NoteBadge only — web's fixed-estimate rationale).
 //
 // That budget is drawn in UNSCALED dp, so it can't be a constant: the text in
@@ -18,9 +18,9 @@
 // and just grows). So split the budget and scale only the text-driven part:
 //
 //   fixed  156 = preview 112 + gap 8 + p-3 24 + pb-3 12
-//   text    76 = host line 16 + two title lines 40 + chip line 20
+//   text    80 = host line 16 + two title lines 40 + chip line 24
 //
-// at scale 1.0 that is exactly the 232 above, so the design baseline is
+// at scale 1.0 that is exactly the 236 above, so the design baseline is
 // unchanged. `useCappedFontScale` applies the same ceiling the text itself is
 // capped at (lib/font-scale.ts), which is what keeps the growth bounded —
 // without the cap this would track Dynamic Type all the way to ~310%.
@@ -36,9 +36,10 @@ import { Favicon, LinkPreviewImage } from './link-media';
 import { LinkRowMenu } from './link-row-menu';
 import { LinkTagChips } from './link-tag-chips';
 import { type LinkItemProps, NoteBadge, PinnedBadge } from './shared';
+import { useLinksViewState } from './view-state-provider';
 
 const CARD_FIXED_HEIGHT = 156;
-const CARD_TEXT_HEIGHT = 76;
+const CARD_TEXT_HEIGHT = 80;
 
 export function LinkCard({
   link,
@@ -50,6 +51,7 @@ export function LinkCard({
   selected,
   onToggle,
 }: LinkItemProps) {
+  const { enterBulkEdit } = useLinksViewState();
   const host = hostFromText(link.url);
   const fontScale = useCappedFontScale();
   // Ceil so rounding can only ever give the text MORE room, never less.
@@ -60,11 +62,20 @@ export function LinkCard({
     // (main.tsx CARD_GRID_PADDING), edges and inter-card gaps both come to 16 —
     // web's p-4 container + gap-4 grid.
     <View className="p-2">
-      {/* Two meanings, two roles — see the twin comment in link-row.tsx. */}
+      {/* Two meanings, two roles, and long-press as the way into bulk-edit —
+          see the twin comment in link-row.tsx for all three. */}
       <Pressable
         role={selectMode ? 'checkbox' : 'link'}
         aria-checked={selectMode ? selected : undefined}
         onPress={() => (selectMode ? onToggle() : void Linking.openURL(link.url))}
+        onLongPress={
+          selectMode
+            ? undefined
+            : () => {
+                enterBulkEdit();
+                onToggle();
+              }
+        }
         style={{ height: cardHeight }}
         className={`overflow-hidden rounded-lg border border-border ${
           selected ? 'bg-muted' : 'active:bg-muted/50'

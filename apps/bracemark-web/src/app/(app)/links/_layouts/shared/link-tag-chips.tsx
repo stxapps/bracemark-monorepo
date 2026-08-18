@@ -9,8 +9,39 @@ import { useLinksPage } from '../../_contexts/page-provider';
 import { useLinksViewState } from '../../_contexts/view-state-provider';
 import { useEngagedOpen } from './hooks';
 
+// 24px tall exactly: py-1 (4+4) around a 16px line box. `leading-4` is spelled
+// out rather than left to `text-xs`'s default because that 24 is load-bearing —
+// list-layout's tagged row budget is built from it, and a theme that retuned
+// `--text-xs--line-height` would silently push the chips out of the row.
+//
+// Weight 400, not 500: the row title is `text-sm font-medium`, and a chip at the
+// same weight competes with it for the eye. Tags are metadata; the size and the
+// pill already mark them, so the weight doesn't have to.
+//
+// `text-foreground/70` rather than the obvious `text-muted-foreground`, which is
+// the token for quiet text everywhere else in the row and is WRONG here for a
+// reason that only shows up in light mode: it is calibrated against the page
+// background, and the chip is not the page background. #737373 clears 4.74:1 on
+// white but only 4.35:1 on the pill's #F5F5F5 — under the 4.5:1 AA floor, at
+// 12px, from a change that touches no layout and breaks no test. The alpha is
+// mixed against the pill instead, landing 7.3:1 light / 7.8:1 dark: clearly
+// lighter than `text-secondary-foreground`'s 16.4:1, with margin to spare.
+// Anything below /60 walks back into muted-foreground's territory and its
+// problem.
+//
+// The hover is an OPAQUE mix toward the foreground, not `bg-secondary/80`, and
+// this is the one rule here that can't be eyeballed from the class list. The
+// shadcn default assumes a chip sitting on `--background`; ours sits inside a
+// row that is ITSELF hovering at the same moment (list-layout's
+// `hover:bg-muted/50`), and in this palette `--secondary` and `--muted` are the
+// same grey. So the alpha version composited the chip against a near-copy of
+// itself: 245 → 246 in light, and in dark it moved the WRONG WAY, 38 → 35. One
+// step of 255, in both themes — a hover state that renders as no hover state at
+// all, with nothing to fail. The mix is the same formula (and
+// the same 5%) the Button's secondary variant already uses for this exact
+// reason; being opaque, it is immune to whatever the row does behind it.
 const TAG_CHIP_CLASS =
-  'max-w-32 shrink-0 truncate rounded-full bg-secondary px-2 py-px text-[11px] font-medium text-secondary-foreground hover:bg-secondary/80';
+  'max-w-32 shrink-0 truncate rounded-full bg-secondary px-2 py-1 text-xs leading-4 text-foreground/70 hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)]';
 
 // gap-1 on the chip row and clone (both axes); the measurement math mirrors it
 // when asking whether the "+N" chip still fits after a kept chip.

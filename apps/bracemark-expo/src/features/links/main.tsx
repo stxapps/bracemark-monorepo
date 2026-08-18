@@ -38,7 +38,7 @@ import { type LinkView, useExtraction, useLocks, useSettings, useSync } from '@s
 import { LockPane } from '../../components/lock-pane';
 import { BulkEditBar } from './bulk-edit-bar';
 import { LinkCard } from './link-card';
-import { LinkRow } from './link-row';
+import { hasKnownTags, LinkRow } from './link-row';
 import { useLinksPage } from './page-provider';
 import { EmptyState, type LinkItemProps, RefreshPill, useTagMap } from './shared';
 import { useLinks } from './use-links';
@@ -74,6 +74,16 @@ type LayoutConfig = {
   // that knows which layout resolved.
   name: 'list' | 'card';
   Item: (props: LinkItemProps) => React.ReactNode;
+  // This layout's FlashList recycle pools: a view is only ever reused for an
+  // item of the same type, so it never has to change SHAPE on recycle. The list
+  // row has two — a tagged row carries a chip strip and is a chip line taller —
+  // and without this they share one pool, so a scroll makes every mismatched
+  // reuse re-lay out and re-measure the cell. The card is fixed-height with the
+  // chips inside its budget (link-card.tsx), so its shapes cost the same to
+  // recycle and one pool is right; omitted rather than made constant, since a
+  // single type IS FlashList's default. Called very often (FlashList's own
+  // note), hence a Map lookup and no allocation.
+  itemType?: (link: LinkView, tagsById: Map<string, string>) => string;
   columns: (paneWidth: number) => number;
   contentPadding: number;
 };
@@ -81,6 +91,7 @@ type LayoutConfig = {
 const LIST_LAYOUT: LayoutConfig = {
   name: 'list',
   Item: LinkRow,
+  itemType: (link, tagsById) => (hasKnownTags(link, tagsById) ? 'tagged' : 'bare'),
   columns: () => 1,
   contentPadding: 0,
 };
@@ -172,7 +183,7 @@ function UnlockedMain() {
   // nobody is looking at.
   useEffect(() => () => reportRef.current([]), []);
 
-  const { name, Item, columns, contentPadding } = LAYOUTS[linksLayout] ?? LIST_LAYOUT;
+  const { name, Item, itemType, columns, contentPadding } = LAYOUTS[linksLayout] ?? LIST_LAYOUT;
   // Window width MINUS what the pane doesn't get, rather than a measured
   // container: the window value is available synchronously, so there's no
   // DEFAULT_COLUMNS flash to paper over (web's useElementWidth dance isn't
@@ -235,6 +246,7 @@ function UnlockedMain() {
             numColumns={numColumns}
             contentContainerStyle={contentPadding ? { padding: contentPadding } : undefined}
             keyExtractor={(link) => link.path}
+            getItemType={itemType ? (link) => itemType(link, tagsById) : undefined}
             renderItem={({ item, index }) => (
               <Item
                 link={item}

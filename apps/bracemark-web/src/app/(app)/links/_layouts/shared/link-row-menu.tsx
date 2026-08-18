@@ -93,10 +93,19 @@ export function LinkRowMenu({
   return (
     <DropdownMenu open={open} onOpenChange={handleOpenChange}>
       <DropdownMenuTrigger asChild>
+        {/* 32px box, 44px target. The `after:` pseudo-element is an invisible hit
+            expansion (-6px on every edge), the same trick Checkbox and RadioGroupItem
+            use — it needs the `relative` beside it, since Button's base has none.
+            Deleting it looks like removing a rule that draws nothing: the button
+            still works, and nothing lints or fails. It matters most on a narrow
+            pane, where the sorted-date column is hidden (@xl) and the trigger's
+            left neighbour is the row's title ANCHOR across a 12px gap — a thumb
+            that overshoots navigates off to an external site. 44 reaches 6px into
+            that gap, so the target grows without ever overlapping the anchor. */}
         <Button
           variant="ghost"
-          size="icon"
-          className="size-8 shrink-0 text-muted-foreground"
+          size="icon-sm"
+          className="relative shrink-0 text-muted-foreground after:absolute after:-inset-1.5"
           aria-label="Link options"
         >
           <MoreHorizontal className="size-4" />

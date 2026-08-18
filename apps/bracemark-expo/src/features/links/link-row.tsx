@@ -11,6 +11,7 @@
 
 import { Linking, Pressable, View } from 'react-native';
 
+import { type LinkView } from '@stxapps/expo-react';
 import { displayUrl, hostFromText } from '@stxapps/shared';
 
 import { Checkbox } from '../../components/ui/checkbox';
@@ -19,6 +20,7 @@ import { Favicon, LinkPreviewImage } from './link-media';
 import { LinkRowMenu } from './link-row-menu';
 import { LinkTagChips } from './link-tag-chips';
 import { type LinkItemProps, NoteBadge, PinnedBadge } from './shared';
+import { useLinksViewState } from './view-state-provider';
 
 const MINUTE = 60 * 1000;
 const RELATIVE_UNITS: [string, number][] = [
@@ -39,6 +41,16 @@ function formatRelativeTime(epochMs: number): string {
   return 'now';
 }
 
+// Whether this row renders a chip strip, and so which of its two shapes it
+// takes: exactly the test LinkTagChips applies before it renders anything, so
+// the two must not drift. A plain `tagIds.length > 0` would be subtly wrong — a
+// tag deleted or not yet synced resolves to no chip, and so to no strip. Web's
+// list layout carries the same predicate for its row-height BUDGETS
+// (`_layouts/list-layout.tsx`, hasKnownTags); here heights are measured, and it
+// feeds FlashList's recycle pools instead (main.tsx, LayoutConfig.itemType).
+export const hasKnownTags = (link: LinkView, tagsById: Map<string, string>) =>
+  link.tagIds.some((id) => tagsById.has(id));
+
 export function LinkRow({
   link,
   pinned,
@@ -50,17 +62,39 @@ export function LinkRow({
   selected,
   onToggle,
 }: LinkItemProps) {
+  const { enterBulkEdit } = useLinksViewState();
+
   // The role follows the press, because the press has two meanings. In bulk-edit
   // the whole row IS the checkbox — Pressable is `accessible`, so it collapses the
   // inner Checkbox's semantics into itself and has to re-declare them
   // (docs/accessibility.md, the same rule as the settings confirmation rows).
   // Otherwise the press leaves the app for the browser, which is a link, not a
   // button.
+  //
+  // Long-press enters bulk-edit with this row already picked — the platform
+  // idiom (Photos, Files, Mail), and the reason it's here rather than on web:
+  // desktop binds click-and-hold to a drag, and a touch browser binds it to the
+  // link context menu, so web keeps its visible topbar toggle instead.
+  // Deliberately ONLY the way in — once selecting, a long-press falls through
+  // to onPress and just toggles, since RN only skips onPress when onLongPress
+  // actually fires. The ⋯ menu's "Select" stays: a gesture has no AT
+  // equivalent, so it can enhance this entry point but never be the only one.
+  // No haptic tick on the pick-up, for the reason drag-sort.tsx records at its
+  // own seam — expo-haptics is a native module and a prebuild, a dependency
+  // decision rather than a code one.
   return (
     <Pressable
       role={selectMode ? 'checkbox' : 'link'}
       aria-checked={selectMode ? selected : undefined}
       onPress={() => (selectMode ? onToggle() : void Linking.openURL(link.url))}
+      onLongPress={
+        selectMode
+          ? undefined
+          : () => {
+              enterBulkEdit();
+              onToggle();
+            }
+      }
       className="flex-row items-center gap-3 border-b border-border py-3 pr-2 pl-4 active:bg-muted/50"
     >
       {selectMode && (
@@ -71,32 +105,45 @@ export function LinkRow({
           className="shrink-0"
         />
       )}
-      {/* The thumbnail stays in bulk-edit mode — it's the row's at-a-glance
+      {/* Thumbnail + text share a TOP edge, so they get their own `items-start`
+          box while the row stays `items-center` for the date and the ⋯ menu
+          (web's list layout, verbatim — see its comment for why centring the
+          thumbnail stopped working once tagged and untagged rows differed in
+          height).
+
+          The thumbnail stays in bulk-edit mode — it's the row's at-a-glance
           identity, so the checkbox is inserted, not swapped in (web's list
           layout, verbatim). Fixed-size slot; `overflow-hidden` clips the
           image's corners to the rounding. */}
-      <LinkPreviewImage
-        link={link}
-        className="h-10 w-16 shrink-0 overflow-hidden rounded"
-        iconClassName="size-4 rounded"
-      />
-      <View className="min-w-0 flex-1">
-        <View className="flex-row items-center gap-1.5">
-          {pinned && <PinnedBadge />}
-          {link.note !== undefined && link.note !== '' && <NoteBadge />}
-          <Text numberOfLines={1} className="min-w-0 flex-1 text-sm font-medium">
-            {link.title || displayUrl(link.url)}
-          </Text>
+      <View className="min-w-0 flex-1 flex-row items-start gap-3">
+        {/* mt-0.5 pays back the title's half-leading, so the image starts on
+            the title's ink rather than on its line box (web's list layout —
+            see there for the arithmetic). */}
+        <LinkPreviewImage
+          link={link}
+          className="mt-0.5 h-10 w-16 shrink-0 overflow-hidden rounded"
+          iconClassName="size-4 rounded"
+        />
+        <View className="min-w-0 flex-1">
+          <View className="flex-row items-center gap-1.5">
+            {pinned && <PinnedBadge />}
+            {link.note !== undefined && link.note !== '' && <NoteBadge />}
+            <Text numberOfLines={1} className="min-w-0 flex-1 text-sm font-medium">
+              {link.title || displayUrl(link.url)}
+            </Text>
+          </View>
+          {/* text-sm to match the title, mt-0.5 so the lines don't touch, size-3.5
+              so the favicon sits just under the cap height (web's list layout,
+              verbatim — see its row budgets for what each number is worth there;
+              FlashList measures here, so these only have to LOOK the same). */}
+          <View className="mt-0.5 flex-row items-center gap-1.5">
+            <Favicon host={hostFromText(link.url)} className="size-3.5 shrink-0 rounded-sm" />
+            <Text numberOfLines={1} className="min-w-0 flex-1 text-sm text-muted-foreground">
+              {hostFromText(link.url)}
+            </Text>
+          </View>
+          <LinkTagChips link={link} tagsById={tagsById} className="mt-3" />
         </View>
-        {/* size-3.5 icon so the host line stays inside its slim budget (web's
-            list layout, verbatim). */}
-        <View className="flex-row items-center gap-1.5">
-          <Favicon host={hostFromText(link.url)} className="size-3.5 shrink-0 rounded-sm" />
-          <Text numberOfLines={1} className="min-w-0 flex-1 text-xs text-muted-foreground">
-            {hostFromText(link.url)}
-          </Text>
-        </View>
-        <LinkTagChips link={link} tagsById={tagsById} className="mt-1" />
       </View>
       <Text className="shrink-0 text-xs text-muted-foreground">
         {formatRelativeTime(link[sortOn])}

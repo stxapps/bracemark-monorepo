@@ -38,9 +38,15 @@ const MIN_CARD_WIDTH = 300;
 const CARD_GAP = 16;
 const DEFAULT_COLUMNS = 3;
 // Fixed card budget: preview banner (112) + p-3 text block (host 20 + gap 8 +
-// two title lines 40 + padding 24) + up to two chip lines + pb-3 (56 —
-// LinkTagChips maxLines={2} measures the fit, so the block never exceeds two
-// lines) + the row's pb-4 (16). Cards with less content keep the height — the
+// two title lines 40 + padding 24) + up to two chip lines + pb-3 (64 — two 24px
+// chips plus the 4px gap-1 between their lines plus the 12px pad; LinkTagChips
+// maxLines={2} measures the fit, so the block never exceeds two lines) + the
+// row's pb-4 (16). This block is why the total moved with the chip: chips went
+// 18.5 → 24 for the list row's sake, and a card is the layout that stacks TWO
+// of them, so it absorbs the growth twice over. The card is `overflow-hidden`,
+// so under-budgeting here clips the second chip line rather than spilling it —
+// a silent failure, hence the arithmetic spelled out. Cards with less content
+// keep the height — the
 // grid stretches every card to the row height and the unused space falls at the
 // BOTTOM (content flows top-down; the anchor is NOT flex-1) — so the row estimate
 // stays exact. Height is fixed regardless of card WIDTH, so a variable column
@@ -60,7 +66,7 @@ const DEFAULT_COLUMNS = 3;
 // meaningfully unscaled part to hold back (unlike the native card in
 // bracemark-expo, which does split — RN has no rem and its font scale moves
 // fontSize alone).
-const ROW_HEIGHT = 280;
+const ROW_HEIGHT = 288;
 const SCROLL_TOP_THRESHOLD = 8;
 
 export function CardLayout({
@@ -225,8 +231,12 @@ export function CardLayout({
                         maxLines={2}
                         className="px-3 pb-3"
                       />
-                      {/* Floats over the banner now, so give it a readable pad. */}
-                      <div className="absolute top-1 right-1 rounded-md bg-background/60">
+                      {/* Floats over the banner now, so give it a readable pad. The
+                          1.5 inset, not 1, keeps the trigger's 44px hit target (an
+                          `after:` expansion 6px past its 32px box — see LinkRowMenu)
+                          inside the card instead of spilling into the grid gutter,
+                          where it would steal taps aimed at the next card. */}
+                      <div className="absolute top-1.5 right-1.5 rounded-md bg-background/60">
                         {bulkEditing ? (
                           <LinkRowSelect link={link} links={links} />
                         ) : (

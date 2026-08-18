@@ -17,7 +17,26 @@ import { useLinksViewState } from './view-state-provider';
 // budget stand-in for web's measured maxLines overflow.
 const MAX_CHIPS = 3;
 
-const TAG_CHIP_CLASS = 'bg-muted active:bg-muted/70 rounded-full px-2 py-0.5';
+// 24pt tall exactly: py-1 (4+4) around the 16pt line box `leading-4` pins on the
+// chip's Text. The label is `text-foreground/70`, not `text-muted-foreground`:
+// that token is calibrated against the screen background, and on the chip's own
+// fill it drops to 4.35:1 in light mode — under the 4.5:1 AA floor at 12pt.
+// Web's chip carries the same numbers (its own TAG_CHIP_CLASS), and there the 24
+// is load-bearing for a fixed row budget; here FlashList measures, so keeping
+// them equal is about the two apps looking alike, not about layout.
+//
+// `max-w-32` is web's cap too, but it does more work here, because these chips
+// are `shrink` where web's are `shrink-0` (it measures which ones fit instead).
+// Two things compound without it: Yoga implements no `min-width: auto`
+// min-content floor, so a chip shrinks straight past its text down to its
+// padding; and shrink is proportional to the flex BASE while `px-2` is not
+// shrinkable, so a 300pt tag beside two short ones drags the short ones' labels
+// down to an ellipsis with it (equal percentage lost, far more of it text). The
+// cap bounds one long name's pull on its neighbours. It does not promise a
+// legible chip on a narrow card — 2 columns at MIN_CARD_WIDTH leave ~70pt for
+// three labels — where truncating to a few chars is the accepted failure;
+// `numberOfLines={1}` ellipsizes, so nothing is ever clipped mid-glyph.
+const TAG_CHIP_CLASS = 'bg-muted active:bg-muted/70 max-w-32 rounded-full px-2 py-1';
 
 // The item's tag-chip strip — web's LinkTagChips (`_layouts/shared/
 // link-tag-chips.tsx`), minus the measured overflow (MAX_CHIPS above stands
@@ -65,7 +84,7 @@ export function LinkTagChips({
           onPress={() => onTagPress(chip.id)}
           className={`shrink ${TAG_CHIP_CLASS}`}
         >
-          <Text numberOfLines={1} className="text-xs text-muted-foreground">
+          <Text numberOfLines={1} className="text-xs leading-4 text-foreground/70">
             {chip.name}
           </Text>
         </Pressable>
@@ -77,7 +96,7 @@ export function LinkTagChips({
             onPress={() => toggleSelected(link)}
             className={`shrink-0 ${TAG_CHIP_CLASS}`}
           >
-            <Text className="text-xs text-muted-foreground">+{overflow.length}</Text>
+            <Text className="text-xs leading-4 text-foreground/70">+{overflow.length}</Text>
           </Pressable>
         ) : (
           <DropdownMenu onOpenChange={onOverflowOpenChange}>
@@ -87,7 +106,7 @@ export function LinkTagChips({
                 aria-label={`Show ${overflow.length} more ${overflow.length === 1 ? 'tag' : 'tags'}`}
                 className={`shrink-0 ${TAG_CHIP_CLASS}`}
               >
-                <Text className="text-xs text-muted-foreground">+{overflow.length}</Text>
+                <Text className="text-xs leading-4 text-foreground/70">+{overflow.length}</Text>
               </Pressable>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="max-w-64">
