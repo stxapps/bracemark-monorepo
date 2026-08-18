@@ -332,12 +332,16 @@ editors:
   keyboard over the very note most opens are there to read (web's `focus()` has
   no such side effect). The rename doesn't change that: an always-on item is
   reached with a note to read more often than with one to write.
-- **The layouts show the note as a badge, never inline.** Both are FIXED-height
-  (`ROW_HEIGHT` — the virtualizer's estimate must stay exact), so a note line
-  can't be conditional: it would be budgeted on every row, noteless ones
-  included, and most links have none. So each row renders `NoteBadge` beside
-  `PinnedBadge` — card (280) and list (70) alike — carrying the text in `title`
-  for hover, with "Edit note" in the menu as the real read path. This is a deliberate
+- **The layouts show the note as a badge, never inline.** The card is
+  FIXED-height (`ROW_HEIGHT` — a card is stretched to its grid row, so its height
+  is a property of the row and the virtualizer's estimate must stay exact), so a
+  note line can't be conditional there: it would be budgeted on every card,
+  noteless ones included, and most links have none. The list row is no longer
+  fixed — it measures (see below) — so the constraint there is density rather than
+  arithmetic: a note line would push a two-line title plus host plus chips past
+  what a dense row can carry. So each row renders `NoteBadge` beside
+  `PinnedBadge` — card and list alike — carrying the text in `title` for hover,
+  with "Edit note" in the menu as the real read path. This is a deliberate
   trade against `note`'s own rationale in `entities.ts`, which caps the field
   (`LINK_NOTE_MAX`) precisely so it CAN be shown in a list view; the density won.
   If that's ever revisited, the card layout is where the line fits (one clamped

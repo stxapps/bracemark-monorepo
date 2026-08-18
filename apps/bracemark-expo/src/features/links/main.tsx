@@ -75,10 +75,13 @@ type LayoutConfig = {
   name: 'list' | 'card';
   Item: (props: LinkItemProps) => React.ReactNode;
   // This layout's FlashList recycle pools: a view is only ever reused for an
-  // item of the same type, so it never has to change SHAPE on recycle. The list
+  // item of the same type, so it rarely has to change SHAPE on recycle. The list
   // row has two — a tagged row carries a chip strip and is a chip line taller —
   // and without this they share one pool, so a scroll makes every mismatched
-  // reuse re-lay out and re-measure the cell. The card is fixed-height with the
+  // reuse re-lay out and re-measure the cell. Tag-ness is all this can key on:
+  // the row's other height input is whether the title wraps to its second line
+  // (link-row.tsx), which isn't knowable without laying the text out, so a
+  // one-line and a two-line row of the same tag-ness do still share a pool. The card is fixed-height with the
   // chips inside its budget (link-card.tsx), so its shapes cost the same to
   // recycle and one pool is right; omitted rather than made constant, since a
   // single type IS FlashList's default. Called very often (FlashList's own

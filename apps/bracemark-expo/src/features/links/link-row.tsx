@@ -122,8 +122,7 @@ export function LinkRow({
       {/* Thumbnail + text share a TOP edge, so they get their own `items-start`
           box while the row stays `items-center` for the date and the ⋯ menu
           (web's list layout, verbatim — see its comment for why centring the
-          thumbnail stopped working once tagged and untagged rows differed in
-          height).
+          thumbnail stopped working once rows differed in height).
 
           The thumbnail stays in bulk-edit mode — it's the row's at-a-glance
           identity, so the checkbox is inserted, not swapped in (web's list
@@ -141,18 +140,26 @@ export function LinkRow({
         <View className="min-w-0 flex-1">
           {/* The title line holds the title ALONE (web's list layout, verbatim):
               a phone is the narrowest pane there is, so every pixel goes to the
-              one string that identifies the link. Web pairs this with a `title`
-              tooltip for the truncated remainder; there's no RN equivalent and
-              none is needed — `numberOfLines` truncates the PAINT, not the
-              accessible text, so a screen reader still reads the whole title,
-              and the row menu's editor is the sighted path. */}
-          <Text numberOfLines={1} className="text-sm font-medium">
+              one string that identifies the link. TWO lines for the same reason —
+              at this width one line fits only a few words and cuts most titles
+              mid-phrase. It costs nothing on the rows that don't need it: the row
+              is intrinsic-height, so a short title still renders one line and the
+              row stays short. (Web reserves nothing either, but had to start
+              measuring its rows to get there — see list-layout.tsx.)
+
+              Web pairs this with a `title` tooltip for the remainder past two
+              lines; there's no RN equivalent and none is needed — `numberOfLines`
+              truncates the PAINT, not the accessible text, so a screen reader
+              still reads the whole title, and the row menu's editor is the
+              sighted path. */}
+          <Text numberOfLines={2} className="text-sm font-medium">
             {link.title || displayUrl(link.url)}
           </Text>
           {/* text-sm to match the title, mt-0.5 so the lines don't touch, size-3.5
               so the favicon sits just under the cap height (web's list layout,
-              verbatim — see its row budgets for what each number is worth there;
-              FlashList measures here, so these only have to LOOK the same).
+              verbatim). BOTH platforms measure the row now — FlashList always
+              did, and web's list layout does too — so these numbers only have to
+              look right, not add up to a budget.
 
               The badges ride THIS line in all four layouts (web's list layout
               carries the argument: a host is bounded where a title is not, so

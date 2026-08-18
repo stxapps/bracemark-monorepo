@@ -57,15 +57,23 @@ const DEFAULT_COLUMNS = 3;
 // Both layouts therefore badge it (NoteBadge) and leave the text to hover and the
 // row menu's "Edit note".
 //
-// Scaled by the root font size (useRootFontScale) for the same reason as
-// list-layout's row, and see that file's note for the full argument: every part
-// of this budget is rem — Tailwind v4 sizes text from `--text-sm`/`--text-xs`
-// AND spacing from `--spacing: 0.25rem`, so `h-28`, `p-3`, `gap-4` scale too —
-// while the number itself would not, and the card's `overflow-hidden` swallows
-// the difference. So the whole budget scales UNIFORMLY; there is no
-// meaningfully unscaled part to hold back (unlike the native card in
-// bracemark-expo, which does split — RN has no rem and its font scale moves
-// fontSize alone).
+// Scaled by the root font size (useRootFontScale). Every part of this budget is
+// rem: Tailwind v4 sizes text from `--text-sm`/`--text-xs` AND spacing from
+// `--spacing: 0.25rem`, so `h-28`, `p-3`, `gap-4` scale too — while the number
+// itself would not. This app pins no root `font-size`, so a reader who raises the
+// browser's default font-size preference grows the whole card, and the card's
+// `overflow-hidden` would swallow the difference by clipping. (Not browser zoom,
+// which scales px and rem alike and needs no compensation.) So the whole budget
+// scales UNIFORMLY; there is no meaningfully unscaled part to hold back — unlike
+// the native card in bracemark-expo, which does split, and correctly: RN has no
+// rem, Uniwind resolves spacing to fixed dp, and the OS font scale multiplies
+// fontSize ALONE.
+//
+// This is now the only layout on web that budgets a height at all. The list
+// layout MEASURES its rows (list-layout.tsx has the argument), which it can
+// because a list row is free to be whatever height its content wants; a card is
+// stretched to its grid row, so a card's height is a property of the row, not of
+// the card, and a budget is the honest way to express that.
 const ROW_HEIGHT = 288;
 const SCROLL_TOP_THRESHOLD = 8;
 

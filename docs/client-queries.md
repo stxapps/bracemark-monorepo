@@ -98,6 +98,34 @@ These compose: `useLiveQuery` produces the current array, the virtualizer render
 a window of it. Both are reactive, so a write refreshes the data and the visible
 rows together.
 
+**Estimated vs. measured row heights.** The two web layouts answer this
+differently, and the split is not arbitrary:
+
+- **The card layout budgets.** A card is stretched to its grid row, so its height
+  is a property of the row rather than of the card — `ROW_HEIGHT` is a fixed
+  number the markup must stay in step with, and `card-layout.tsx` spells the
+  arithmetic out because the card is `overflow-hidden` and under-budgeting clips
+  silently.
+- **The list layout measures.** Its title is `line-clamp-2`, so a row's height
+  turns on whether that title wraps, which is a fact about the browser's line
+  breaker at the current pane width and root font size — not derivable from the
+  link. Each row carries `ref={virtualizer.measureElement}` and `data-index`, and
+  no `height` in its style. Heights cache by `getItemKey`, which is the link
+  **path** rather than the default index, so a search or re-sort can't leave a
+  measurement describing whichever link used to sit at that position.
+
+The cost of measuring is that `getTotalSize()` is part measurement and part
+estimate, so the scrollbar thumb resizes as unmeasured rows scroll into view. That
+is second-order for this list: growing-`limit` pagination (below) already grows
+`count` as the user nears the bottom, so the total was never stable. What it buys
+is a uniform gutter — every list row is `14 + content + 14`, with no reserved line
+to leave slack on the rows that don't use it — and rows that cannot disagree with
+what they rendered, including under a changed root font size.
+
+On expo the question doesn't arise for the list: `FlashList` v2 measures cells and
+takes no size estimate, so `link-row.tsx` is plain intrinsic-height. `link-card.tsx`
+budgets, mirroring web's card for the same grid-row reason.
+
 ### pagination: growing `limit` + a decode cache
 
 The current model is deliberately the **simplest thing that works for every

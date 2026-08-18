@@ -5,12 +5,11 @@
 // scrolls cheaply. `ShowMore` lives outside the virtual measurement, below the
 // rows, growing the page on click.
 
-import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 
 import { displayUrl, hostFromText } from '@stxapps/shared';
 import { type LinkView } from '@stxapps/web-react';
-import { useRootFontScale } from '@stxapps/web-ui/hooks/use-root-font-scale';
 
 import { useLinksViewState } from '../_contexts/view-state-provider';
 import {
@@ -29,53 +28,65 @@ import {
   useTagMap,
 } from './shared';
 
-// TWO fixed row budgets, picked per row by whether the link has a tag the tag
-// map knows — which is exactly the test LinkTagChips applies before it renders
-// anything, so the two must not drift. `hasKnownTags` below is the only copy;
-// a plain `tagIds.length > 0` would be subtly wrong, giving the tall row to a
-// link whose only tag was deleted or hasn't synced yet and then leaving a hole
-// where the chips would have gone.
+// Row heights are MEASURED, not budgeted. The title is `line-clamp-2`, so a row's
+// height turns on whether that title wraps — and whether it wraps is a fact about
+// the browser's line breaker at the current pane width, font and root font size,
+// not something derivable from the link. So each row reports its own height:
+// `ref={virtualizer.measureElement}` and `data-index` on the row below, and no
+// `height` in its style.
 //
-//   bare    70 = 14 + [ title 20 + 2 + host 20 ]                        + 14
-//   tagged 106 = 14 + [ title 20 + 2 + host 20 + 12 + one chip line 24 ] + 14
+// `py-3.5` makes the 14px gutter explicit — every row is 14 + content + 14 (+1px
+// border) whatever the content does — which is the whole point of measuring. The
+// four shapes that produces:
 //
-// The chip line is LinkTagChips' default `maxLines` — measured, overflow behind
-// "+N" — so it can never become two, which is what keeps the tagged number a
-// constant rather than something to measure. The 64×40 preview image on the
-// left, nudged down 0.5 to sit level with the title's ink, ends exactly level
-// with the bare text column and well short of the tagged one, so it never sets
-// the height either way. One
-// budget used to serve both, which meant untagged rows paid for a chip line
-// they don't render; that slack is the whole reason there are two numbers.
+//    71 = 14 + [ title 20 + 2 + host 20 ]                        + 14 + 1
+//    91 = 14 + [ title 40 + 2 + host 20 ]                        + 14 + 1
+//   107 = 14 + [ title 20 + 2 + host 20 + 12 + one chip line 24 ] + 14 + 1
+//   127 = 14 + [ title 40 + 2 + host 20 + 12 + one chip line 24 ] + 14 + 1
 //
-// Both are pure functions of the DATA, never of the DOM: no `measureElement`,
-// no ref on the row, so the virtualizer's total size stays exact and the
-// scrollbar never settles as you scroll. The price is that react-virtual caches
-// measurements by index and will NOT re-run `estimateSize` on its own when a
-// row changes shape — see the re-measure effect below.
+// A FIXED budget cannot have that gutter once the title may take two lines: it
+// would reserve the second line on every row and leave 20px of slack on the rows
+// that don't use it. That slack either splits (centred content — the thumbnail
+// rail then wanders row to row) or falls at the bottom (top-aligned — the gap
+// between rows then alternates 29/49). Measuring leaves no slack to place.
 //
-// The budgets are in px but EVERY part of the row they measure is rem: Tailwind v4
-// sizes text from `--text-sm`/`--text-xs` (0.875/0.75rem) AND spacing from
-// `--spacing: 0.25rem`, so `h-10`, `gap-3`, `pl-4` are rem as well. Nothing here
-// is px except the 1px `border-b`. Since this app pins no root `font-size`, a
-// reader who raises the browser's default font-size preference grows the whole
-// row — while these numbers would not, and the rows are ABSOLUTELY POSITIONED
-// with no `overflow-hidden`, so the overflow lands on top of the next row
-// rather than clipping.
+// Two things keep the measurement settling in ONE pass rather than oscillating:
+// the chip line is capped at one (LinkTagChips' default `maxLines` — measured,
+// overflow behind "+N"), and the 64x40 preview is a fixed slot, so neither the tag
+// strip nor a late image load can reflow a row after it has been measured.
 //
-// Hence a UNIFORM scale by the root font size (useRootFontScale) rather than a
-// fixed/text split: on the web there is no meaningfully unscaled part. (The
-// native card in bracemark-expo does split, and correctly — RN has no rem, Uniwind
-// resolves spacing to fixed dp, and the OS font scale multiplies fontSize
-// ALONE. Same-looking budget, genuinely different arithmetic.) The 1px border
-// rides along in the scale; erring 0.5px generous beats the pedantry.
+// The numbers below are only ESTIMATES, for rows not yet mounted. Each sits
+// BETWEEN its own two outcomes rather than at the floor, so the error cancels
+// across a long list instead of accumulating in one direction.
 //
-// Note this is NOT browser zoom, which scales px and rem alike.
-const ROW_HEIGHT_BARE = 70;
-const ROW_HEIGHT_TAGGED = 106;
+// What measuring costs: `getTotalSize()` is part measurement, part estimate, so
+// the scrollbar thumb resizes as unmeasured rows scroll into view. That is a
+// second-order wobble here — infinite scroll (below) already grows `count` as you
+// near the bottom, so this list's total was never stable. react-virtual
+// compensates the scroll offset on an item's FIRST measurement in either
+// direction and skips the compensation when re-measuring during a backward
+// scroll, which is what stops the correction cascading as you scroll up.
+//
+// What it buys, besides the gutter: the row cannot disagree with what it
+// rendered. The fixed budgets had to be kept in step with the markup by hand, and
+// had to be scaled by the root font size (useRootFontScale) because they were px
+// numbers against an all-rem row — an approximation that erred generous on
+// purpose. A measured row is simply correct at any root size, and that whole
+// apparatus (the scale, the ceil, the re-measure effect) is gone with it.
+//
+// Sizes cache by `getItemKey`, which is why the virtualizer is handed the link
+// PATH rather than the default index: a search or a re-sort moves a link to a
+// different index, and a height cached by index would then describe whichever
+// link used to sit there. Keyed by path, a measured height follows its link, and
+// no manual invalidation is needed — a row that changes shape while mounted is
+// re-measured by the observer, and one that changes while offscreen is measured
+// afresh when it mounts.
+const ESTIMATE_BARE = 80;
+const ESTIMATE_TAGGED = 116;
 
-// The row-height predicate, and LinkTagChips' render test, in one place: a tag
-// id the map doesn't resolve is skipped there and must not buy a taller row here.
+// The estimate predicate, and LinkTagChips' render test, in one place: a tag id
+// the map doesn't resolve is skipped there, so it must not buy the taller
+// estimate here.
 const hasKnownTags = (link: LinkView, tagsById: Map<string, string>) =>
   link.tagIds.some((id) => tagsById.has(id));
 
@@ -128,10 +139,6 @@ export function ListLayout({
   const { setScrolled, bulkEditing, selectedLinks, toggleSelected, selectRange } =
     useLinksViewState();
   const tagsById = useTagMap();
-  // Ceil so rounding can only ever give the content MORE room, never less.
-  const fontScale = useRootFontScale();
-  const bareHeight = Math.ceil(ROW_HEIGHT_BARE * fontScale);
-  const taggedHeight = Math.ceil(ROW_HEIGHT_TAGGED * fontScale);
 
   // This layout owns the scroll position; reset the shared flag on mount (fresh
   // at top) and unmount (so a layout switch doesn't leave it stuck true).
@@ -148,53 +155,12 @@ export function ListLayout({
   const virtualizer = useVirtualizer({
     count: links.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: (index) => (hasKnownTags(links[index], tagsById) ? taggedHeight : bareHeight),
+    // By path, not the default index — see the note above the estimates.
+    getItemKey: (index) => links[index]?.path ?? index,
+    estimateSize: (index) =>
+      hasKnownTags(links[index], tagsById) ? ESTIMATE_TAGGED : ESTIMATE_BARE,
     overscan: 8,
   });
-
-  // A changed `estimateSize` doesn't invalidate the cached measurements on its
-  // own, so re-measure when the root font size moves (rare — a browser
-  // preference change, plus the once-per-mount 1 → real correction) or when any
-  // row crosses between the two budgets.
-  //
-  // The trigger is a SIGNATURE of which rows are tall, not `links` itself.
-  // `useLiveQuery` hands back a fresh array on every `items` write, so keying on
-  // it would call measure() every tick — and measure() notifies, so each tick
-  // would cost a second render of the whole list (noticeably, while typing in
-  // search). The signature only changes VALUE when a link actually gains or
-  // loses a known tag, and the effect below compares it as the string it is.
-  //
-  // Memoized because building it is O(loaded) — a Map lookup per tag id, then a
-  // string one char per link — while this component re-renders on every scroll
-  // offset the virtualizer reports. Unmemoized, that is ~0.2ms and a few KB of
-  // garbage per scroll FRAME at 5k loaded rows, growing without bound as
-  // infinite scroll pages more in, to recompute a value that can only move when
-  // the store writes. Both deps change identity exactly then and not on scroll:
-  // `links` per liveQuery emit, `tagsById` per tag-tree emit (useTagMap memoizes
-  // it). Nothing else in the render path is O(loaded) — react-virtual keeps its
-  // own measurements memoized and binary-searches them, so this was the only
-  // whole-list work on the scroll path.
-  const tallSignature = useMemo(
-    () => links.map((link) => (hasKnownTags(link, tagsById) ? 1 : 0)).join(''),
-    [links, tagsById],
-  );
-  // BEFORE PAINT, not after. A row that just gained a tag renders its chips
-  // inside the height the STALE measurement gives it, and the rows are
-  // absolutely positioned with no `overflow-hidden` (that is what keeps a
-  // font-size overflow from clipping, above), so a passive effect would show one
-  // frame of chips lying over the next row and then a jump. Same frame, in the
-  // other direction, for a row that lost its last tag. The trigger is rare — a
-  // tag edit, or a sync landing one — but the fix costs a synchronous re-render
-  // this commit rather than a second frame, which is the cheaper of the two.
-  //
-  // useLayoutEffect is safe HERE despite the SSR rule: bracemark-web is
-  // `output: 'export'`, and at build-time prerender both AuthGuard ('loading')
-  // and InitialSyncGate ('checking') render nothing, so nothing under (app)
-  // reaches the server at all. LinkTagChips already measures in a layout effect
-  // one level down for the same reason.
-  useLayoutEffect(() => {
-    virtualizer.measure();
-  }, [virtualizer, bareHeight, taggedHeight, tallSignature]);
 
   // Report only the displayed rows (index maps 1:1 to `links`) so extraction tracks the window.
   const rows = virtualizer.getVirtualItems();
@@ -253,10 +219,19 @@ export function ListLayout({
             return (
               <div
                 key={link.path}
-                className={`absolute inset-x-0 flex items-center gap-3 border-b border-border pr-2 pl-4 ${
+                // The virtualizer MEASURES this element. `data-index` is how it maps
+                // an observer entry back to a row (its default `indexAttribute`), and
+                // the style deliberately carries no `height`: a fixed one would be
+                // read back as the measurement, and the row could never grow to a
+                // second title line. `py-3.5` is the 14px gutter the two fixed
+                // budgets used to produce implicitly by centring content inside a
+                // fixed height — explicit, it holds on every row.
+                ref={virtualizer.measureElement}
+                data-index={row.index}
+                className={`absolute inset-x-0 flex items-center gap-3 border-b border-border py-3.5 pr-2 pl-4 ${
                   selected ? 'bg-muted' : 'hover:bg-muted/50'
                 }`}
-                style={{ height: row.size, transform: `translateY(${row.start}px)` }}
+                style={{ transform: `translateY(${row.start}px)` }}
               >
                 {/* Bulk-edit selection sits at the row's LEADING edge (a scannable
                     checkbox column), pushing the image/text right; the row menu is
@@ -268,11 +243,13 @@ export function ListLayout({
                     The row stays `items-center` so the date and the ⋯ menu still
                     centre; this box is what centres inside it, and its contents
                     align to its top. Centring the thumbnail against the text
-                    column read fine when every row was 70, but the two budgets
-                    put it 19px below the title on a tagged row and 1px below on a
-                    bare one — so the left rail wandered as you scrolled a mixed
-                    list. Top-aligned, the image and the title start on the same
-                    line in every row.
+                    column read fine when every row was one shape, but the column
+                    now runs 42 to 98 tall depending on the title's line count and
+                    the chips, which would put the image anywhere from 1px to 29px
+                    below the title — so the left rail would wander as you scrolled
+                    a mixed list. Top-aligned, the image and the title start on the
+                    same line in every row, which together with the row's `py-3.5`
+                    puts every thumbnail at the same offset from its row's top.
 
                     Two sibling anchors (image, text) rather than one wrapping the
                     whole row: the tag chips are buttons and may not nest inside an
@@ -295,11 +272,12 @@ export function ListLayout({
                         edge, so a flush image reads as sitting high. 2 is the
                         largest honest nudge: it lands the image on the text's
                         first pixel of ink-bearing box and leaves its bottom
-                        exactly level with the bare row's text column (2+40 = 42
-                        = 20+2+20), so the image still never sets the height.
-                        Chasing Inter's cap height instead would want ~5 and make
-                        the image the tallest thing in a bare row. In rem, so it
-                        scales with the row. */}
+                        exactly level with the shortest text column there is
+                        (2+40 = 42 = 20+2+20, a one-line title with no chips), so
+                        the image never sets the row height in any of the four
+                        shapes. Chasing Inter's cap height instead would want ~5
+                        and make the image the tallest thing in the shortest row.
+                        In rem, so it scales with the text. */}
                     <LinkPreviewImage
                       link={link}
                       className="mt-0.5 h-10 w-16 rounded"
@@ -316,29 +294,34 @@ export function ListLayout({
                     >
                       {/* The title line holds the title ALONE — no badges, so a
                           narrow pane spends every pixel it has on the one string
-                          that identifies the link. `block` because `truncate`
-                          needs a block box (overflow doesn't apply to an inline
-                          span); the line box stays 20, which is what the row
-                          budgets above count.
+                          that identifies the link. TWO lines before it truncates,
+                          which is what the measured row height above exists to
+                          allow: a narrow pane (the browser extension's popup above
+                          all) fits only a few words per line, and one line there
+                          cuts most titles mid-phrase. A short title still occupies
+                          one line and its row stays 71 tall, so the second line
+                          costs nothing on the rows that don't need it.
 
-                          `title` is the only disclosure of the full string: it
-                          truncates hard wherever the pane is narrow — the
-                          browser extension's popup above all, which is both
-                          narrow and pointer-driven — and nothing else in the row
-                          spells it out. Hover-only, so it's a pointer
-                          affordance; on touch the row menu's editor is the path.
-                          (bracemark-expo has no equivalent and needs none: RN
-                          has no tooltip, and `numberOfLines` truncates the
-                          PAINT, not the accessible text.) */}
-                      <span className="block truncate text-sm font-medium" title={title}>
+                          `line-clamp-2` rather than `truncate` + a fixed height:
+                          the clamp is a MAXIMUM, so nothing has to predict whether
+                          this particular string wraps. (It brings its own
+                          `-webkit-box` display, so the `block` that `truncate`
+                          needed is gone.)
+
+                          `title` is still the only disclosure of the remainder past
+                          two lines. Hover-only, so it's a pointer affordance; on
+                          touch the row menu's editor is the path. (bracemark-expo
+                          has no equivalent and needs none: RN has no tooltip, and
+                          `numberOfLines` truncates the PAINT, not the accessible
+                          text.) */}
+                      <span className="line-clamp-2 text-sm font-medium" title={title}>
                         {title}
                       </span>
                       {/* text-sm, matching the title's size — the host is the second
                           thing read, not a caption. mt-0.5 keeps the two lines from
                           touching. size-3.5 leaves the favicon a touch under the
                           14px cap height so it reads as a mark, not a third word;
-                          the line box is 20 either way, which is what the row
-                          budgets above count. */}
+                          the line box is 20 either way. */}
                       <span className="mt-0.5 flex items-center gap-1.5">
                         <Favicon host={hostFromText(link.url)} className="size-3.5 shrink-0" />
                         <span className="truncate text-sm text-muted-foreground">
@@ -351,17 +334,15 @@ export function ListLayout({
                             string is bounded at ~15-25 chars where a title is
                             unbounded, so this line has slack the title line
                             doesn't, and the badges cost the reader nothing here.
-                            They are 14px inside a 20px line box, so neither row
-                            budget moves.
+                            They are 14px inside a 20px line box, so the row's
+                            height doesn't move for them.
 
-                            Not the tag-chip row: it doesn't render at all for an
-                            untagged link, so a pinned untagged row would have to
-                            buy the 106 budget to hold one glyph — the exact
-                            waste the two budgets exist to avoid — and
-                            `hasKnownTags` would stop being the whole height
-                            predicate. Not a row of their own either: that would
-                            make the height a function of the PANE, and both
-                            budgets are pure functions of the data by design.
+                            Not the title's line: the title is the string a narrow
+                            pane has least room for, and it now runs to two lines,
+                            so a badge there would compete with it twice over. Not
+                            the tag-chip row either — that doesn't render at all
+                            for an untagged link, so a pinned untagged row would
+                            have to grow a whole 24px chip line to hold one glyph.
 
                             Still inside the anchor, so their aria-labels stay
                             part of the link's accessible name (now read after
