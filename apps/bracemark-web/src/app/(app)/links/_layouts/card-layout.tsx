@@ -175,6 +175,8 @@ export function CardLayout({
                 {rowLinks.map((link, cardIndex) => {
                   const index = start + cardIndex;
                   const pinned = index < pinnedCount;
+                  // Needed twice below — as the card's text and as its tooltip.
+                  const title = link.title || displayUrl(link.url);
                   const selected = bulkEditing && selectedLinks.has(link.path);
                   return (
                     <div
@@ -212,16 +214,29 @@ export function CardLayout({
                           fallback="panel"
                         />
                         <div className="flex min-w-0 flex-col gap-2 p-3">
+                          {/* Badges trail the host on the meta line — the same
+                              rule as the list row and as both bracemark-expo
+                              layouts (see list-layout.tsx for the argument: the
+                              host is bounded where the title is not, so this is
+                              the line with slack). Here it's also the only
+                              option: the title below is line-clamp-2, and a
+                              -webkit-box formatting context is no place for an
+                              inline icon. Inside the anchor, so their
+                              aria-labels join the link's name. */}
                           <div className="flex items-center gap-2">
-                            {pinned && <PinnedBadge />}
-                            {link.note && <NoteBadge note={link.note} />}
                             <Favicon host={hostFromText(link.url)} className="size-4 shrink-0" />
                             <span className="truncate text-xs text-muted-foreground">
                               {hostFromText(link.url)}
                             </span>
+                            {pinned && <PinnedBadge />}
+                            {link.note && <NoteBadge note={link.note} />}
                           </div>
-                          <span className="line-clamp-2 text-sm font-medium">
-                            {link.title || displayUrl(link.url)}
+                          {/* `title` discloses the full string, which
+                              line-clamp-2 hides on any card whose title runs
+                              past two lines (see list-layout.tsx — same
+                              reasoning, and the same pointer-only caveat). */}
+                          <span className="line-clamp-2 text-sm font-medium" title={title}>
+                            {title}
                           </span>
                         </div>
                       </a>

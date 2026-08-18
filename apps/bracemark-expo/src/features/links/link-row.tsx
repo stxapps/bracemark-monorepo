@@ -139,22 +139,32 @@ export function LinkRow({
           iconClassName="size-4 rounded"
         />
         <View className="min-w-0 flex-1">
-          <View className="flex-row items-center gap-1.5">
-            {pinned && <PinnedBadge />}
-            {link.note !== undefined && link.note !== '' && <NoteBadge />}
-            <Text numberOfLines={1} className="min-w-0 flex-1 text-sm font-medium">
-              {link.title || displayUrl(link.url)}
-            </Text>
-          </View>
+          {/* The title line holds the title ALONE (web's list layout, verbatim):
+              a phone is the narrowest pane there is, so every pixel goes to the
+              one string that identifies the link. Web pairs this with a `title`
+              tooltip for the truncated remainder; there's no RN equivalent and
+              none is needed — `numberOfLines` truncates the PAINT, not the
+              accessible text, so a screen reader still reads the whole title,
+              and the row menu's editor is the sighted path. */}
+          <Text numberOfLines={1} className="text-sm font-medium">
+            {link.title || displayUrl(link.url)}
+          </Text>
           {/* text-sm to match the title, mt-0.5 so the lines don't touch, size-3.5
               so the favicon sits just under the cap height (web's list layout,
               verbatim — see its row budgets for what each number is worth there;
-              FlashList measures here, so these only have to LOOK the same). */}
+              FlashList measures here, so these only have to LOOK the same).
+
+              The badges ride THIS line in all four layouts (web's list layout
+              carries the argument: a host is bounded where a title is not, so
+              this is the line with slack to spend). 14px inside a 20px line box,
+              so the row's look doesn't move. */}
           <View className="mt-0.5 flex-row items-center gap-1.5">
             <Favicon host={hostFromText(link.url)} className="size-3.5 shrink-0 rounded-sm" />
             <Text numberOfLines={1} className="min-w-0 flex-1 text-sm text-muted-foreground">
               {hostFromText(link.url)}
             </Text>
+            {pinned && <PinnedBadge />}
+            {link.note !== undefined && link.note !== '' && <NoteBadge />}
           </View>
           <LinkTagChips
             link={link}

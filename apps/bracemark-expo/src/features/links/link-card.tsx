@@ -92,13 +92,17 @@ export function LinkCard({
             panel. Fixed h-28 either way (the height budget above). */}
         <LinkPreviewImage link={link} className="h-28 w-full" fallback="panel" />
         <View className="gap-2 p-3">
+          {/* Badges trail the host on the meta line — the same rule as link-row
+              and both web layouts (web's list-layout.tsx carries the argument).
+              On a card it's also the only option: the title below is clamped to
+              two lines. */}
           <View className="flex-row items-center gap-1.5">
-            {pinned && <PinnedBadge />}
-            {link.note !== undefined && link.note !== '' && <NoteBadge />}
             <Favicon host={host} className="size-4 shrink-0 rounded-sm" />
             <Text numberOfLines={1} className="min-w-0 flex-1 text-xs text-muted-foreground">
               {host}
             </Text>
+            {pinned && <PinnedBadge />}
+            {link.note !== undefined && link.note !== '' && <NoteBadge />}
           </View>
           <Text numberOfLines={2} className="text-sm font-medium">
             {link.title || displayUrl(link.url)}

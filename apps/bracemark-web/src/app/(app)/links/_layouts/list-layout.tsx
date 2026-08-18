@@ -237,22 +237,25 @@ export function ListLayout({
           {rows.map((row) => {
             const link = links[row.index];
             const pinned = row.index < pinnedCount;
+            // Needed twice below — as the row's text and as its `title` tooltip.
+            const title = link.title || displayUrl(link.url);
             const selected = bulkEditing && selectedLinks.has(link.path);
             // In bulk-edit mode a click toggles selection instead of opening the
             // link (middle/cmd-click still opens); shift-click extends a range
             // over `links` (the displayed order). Shared by both row anchors.
             const onRowClick = bulkEditing
               ? (e: React.MouseEvent) => {
-                e.preventDefault();
-                if (e.shiftKey) selectRange(link, links);
-                else toggleSelected(link);
-              }
+                  e.preventDefault();
+                  if (e.shiftKey) selectRange(link, links);
+                  else toggleSelected(link);
+                }
               : undefined;
             return (
               <div
                 key={link.path}
-                className={`absolute inset-x-0 flex items-center gap-3 border-b border-border pr-2 pl-4 ${selected ? 'bg-muted' : 'hover:bg-muted/50'
-                  }`}
+                className={`absolute inset-x-0 flex items-center gap-3 border-b border-border pr-2 pl-4 ${
+                  selected ? 'bg-muted' : 'hover:bg-muted/50'
+                }`}
                 style={{ height: row.size, transform: `translateY(${row.start}px)` }}
               >
                 {/* Bulk-edit selection sits at the row's LEADING edge (a scannable
@@ -311,12 +314,24 @@ export function ListLayout({
                       className="block min-w-0"
                       onClick={onRowClick}
                     >
-                      <span className="flex items-center gap-1.5">
-                        {pinned && <PinnedBadge />}
-                        {link.note && <NoteBadge note={link.note} />}
-                        <span className="truncate text-sm font-medium">
-                          {link.title || displayUrl(link.url)}
-                        </span>
+                      {/* The title line holds the title ALONE — no badges, so a
+                          narrow pane spends every pixel it has on the one string
+                          that identifies the link. `block` because `truncate`
+                          needs a block box (overflow doesn't apply to an inline
+                          span); the line box stays 20, which is what the row
+                          budgets above count.
+
+                          `title` is the only disclosure of the full string: it
+                          truncates hard wherever the pane is narrow — the
+                          browser extension's popup above all, which is both
+                          narrow and pointer-driven — and nothing else in the row
+                          spells it out. Hover-only, so it's a pointer
+                          affordance; on touch the row menu's editor is the path.
+                          (bracemark-expo has no equivalent and needs none: RN
+                          has no tooltip, and `numberOfLines` truncates the
+                          PAINT, not the accessible text.) */}
+                      <span className="block truncate text-sm font-medium" title={title}>
+                        {title}
                       </span>
                       {/* text-sm, matching the title's size — the host is the second
                           thing read, not a caption. mt-0.5 keeps the two lines from
@@ -329,6 +344,30 @@ export function ListLayout({
                         <span className="truncate text-sm text-muted-foreground">
                           {hostFromText(link.url)}
                         </span>
+                        {/* The badges ride THIS line, not the title's, in all
+                            four layouts (both here and in bracemark-expo, list
+                            and card alike — the card had no title-adjacent slot
+                            anyway, so this is where the two converge). A host
+                            string is bounded at ~15-25 chars where a title is
+                            unbounded, so this line has slack the title line
+                            doesn't, and the badges cost the reader nothing here.
+                            They are 14px inside a 20px line box, so neither row
+                            budget moves.
+
+                            Not the tag-chip row: it doesn't render at all for an
+                            untagged link, so a pinned untagged row would have to
+                            buy the 106 budget to hold one glyph — the exact
+                            waste the two budgets exist to avoid — and
+                            `hasKnownTags` would stop being the whole height
+                            predicate. Not a row of their own either: that would
+                            make the height a function of the PANE, and both
+                            budgets are pure functions of the data by design.
+
+                            Still inside the anchor, so their aria-labels stay
+                            part of the link's accessible name (now read after
+                            the host rather than after the title). */}
+                        {pinned && <PinnedBadge />}
+                        {link.note && <NoteBadge note={link.note} />}
                       </span>
                     </a>
                     <LinkTagChips link={link} tagsById={tagsById} className="mt-3" />
