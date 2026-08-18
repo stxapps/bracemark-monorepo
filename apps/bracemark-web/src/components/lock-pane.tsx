@@ -38,7 +38,7 @@ export function LockPane({
   const [busy, setBusy] = useState(false);
   const signOut = useSignOut();
 
-  const submit = async (e: React.FormEvent) => {
+  const submit = async (e: React.SubmitEvent) => {
     e.preventDefault();
     if (busy) return;
     if (password === '') {

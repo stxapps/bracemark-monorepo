@@ -82,7 +82,7 @@ function DeleteAccountView({ onBack }: { onBack: () => void }) {
   // this is UX, and a stale cache just means the 409 lands below instead.
   const subscriptionBlocks = subscription.status === 'grace' || subscription.willRenew;
 
-  const onSubmit = (event: React.FormEvent) => {
+  const onSubmit = (event: React.SubmitEvent) => {
     event.preventDefault();
     if (isPending) return;
     // Report BOTH misses at once — a user who submits an empty form should not have
@@ -243,7 +243,7 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
   const newPassword = useNewPassword({ username });
   const proofReady = useRecovery ? recoveryCode !== '' : currentPassword !== '';
 
-  const onSubmit = async (event: React.FormEvent) => {
+  const onSubmit = async (event: React.SubmitEvent) => {
     event.preventDefault();
     // `newPassword.ok` still returns silently: the button IS disabled for it, and
     // legibly so — generated mode blocks on the labelled checkbox in ShowOnceSecret,
@@ -410,7 +410,7 @@ function RecoveryCodeView({ onBack, hasRecovery }: { onBack: () => void; hasReco
   // the user arrived with, not the one this view's own write just produced.
   const [hadRecovery] = useState(hasRecovery);
 
-  const onSubmit = async (event: React.FormEvent) => {
+  const onSubmit = async (event: React.SubmitEvent) => {
     event.preventDefault();
     if (recovery.isPending) return;
     // Empty answers out loud rather than holding the button down; the slot below

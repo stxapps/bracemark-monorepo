@@ -47,7 +47,7 @@ export function LockPasswordDialog({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const submit = async (e: React.FormEvent) => {
+  const submit = async (e: React.SubmitEvent) => {
     e.preventDefault();
     if (busy) return;
 
