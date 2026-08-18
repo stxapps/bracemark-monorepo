@@ -231,6 +231,17 @@ is asked, and nothing is written if the user backs out — including on the zip
 branch, where the reader is deliberately held open across the prompt because it
 reads an in-memory blob.
 
+**Cancelling is silent.** The error the cancel path throws is how the answer
+reaches the orchestrator, not something to show: the hook (`use-import-all-data`,
+both platforms) flags the answer and drops the view straight back to `idle`,
+skipping the error phase. Reporting it would flash a spinner and then announce
+`role="alert"` "Import failed: …" — restating, as a refusal, the counts the user
+had just read and declined to act on, for a run in which nothing happened. The
+choice card unmounting is the feedback, and there is no receipt because there is
+no event; `idle` renders nothing, as it does before any import. The flag is
+scoped to that one answer — the gate's own refusals (no room at all, no resolver,
+a backup file) still surface as errors.
+
 **A backup is still refused whole.** `assertUnderImportQuota` survives unchanged
 on the bracemark-backup path, and that path never prompts. The old reasoning — a
 partial import is indistinguishable from a corrupt one at the far end — is

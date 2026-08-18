@@ -46,7 +46,7 @@ export interface UseImportAllDataResult {
   // detected from the file itself (zip magic → Bracemark backup, else sniffed text).
   run: (file: File) => void;
   // Answer the `quota` phase. 'import-what-fits' resumes the run with the first
-  // `prompt.room` links; 'cancel' fails it with the quota message. A no-op in
+  // `prompt.room` links; 'cancel' abandons it and drops back to idle. A no-op in
   // any other phase.
   answerQuota: (answer: ImportQuotaAnswer) => void;
 }
@@ -63,14 +63,26 @@ export function useImportAllData(): UseImportAllDataResult {
   const runningRef = useRef(false);
   // The suspended orchestrator's resolve fn while the `quota` phase is on screen.
   const quotaResolveRef = useRef<((answer: ImportQuotaAnswer) => void) | null>(null);
+  // The user answered 'cancel'. `resolveImportQuota` carries that out by throwing
+  // ImportQuotaError — the very error the gate throws when it refuses on its own
+  // — so the rejection handler below needs this to tell the two apart.
+  const cancelledRef = useRef(false);
 
   const answerQuota = useCallback((answer: ImportQuotaAnswer) => {
     const resolve = quotaResolveRef.current;
     if (resolve === null) return;
     quotaResolveRef.current = null;
-    // Back to a running spinner on both answers — 'cancel' throws inside the
-    // orchestrator, which lands on the error phase a tick later.
-    setState({ phase: 'running', step: 'items' });
+    // 'import-what-fits' resumes the run, so it goes back to a spinner. 'cancel'
+    // ends it, and ends it as a NON-EVENT: nothing has been written, and the user
+    // chose this a keystroke ago. So the view drops straight back to idle rather
+    // than flashing a spinner on its way to an error phase that would restate the
+    // counts as a refusal and ANNOUNCE (role="alert") a failure the user asked
+    // for. The choice card unmounting is the feedback; a receipt for a non-event
+    // is clutter, the same reason idle renders nothing at all. Only the cancel
+    // path is quiet — the gate's own refusals (no room, a backup file) still land
+    // on the error phase. docs/data-lifecycle.md — _the import's quota gate_.
+    cancelledRef.current = answer === 'cancel';
+    setState(answer === 'cancel' ? { phase: 'idle' } : { phase: 'running', step: 'items' });
     resolve(answer);
   }, []);
 
@@ -86,6 +98,7 @@ export function useImportAllData(): UseImportAllDataResult {
       const deps: SyncDeps = { username, encryptionKey: session.encryptionKey, api };
 
       runningRef.current = true;
+      cancelledRef.current = false;
       setState({ phase: 'running', step: 'sync' });
       void importAllData({
         file,
@@ -107,6 +120,9 @@ export function useImportAllData(): UseImportAllDataResult {
             requestSync();
           },
           (err: unknown) => {
+            // A cancelled run is already back on idle — its ImportQuotaError is
+            // the answer being carried out, not a failure to report.
+            if (cancelledRef.current) return;
             setState({
               phase: 'error',
               message: err instanceof Error ? err.message : String(err),

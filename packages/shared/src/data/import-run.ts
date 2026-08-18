@@ -102,7 +102,9 @@ export type ImportQuotaResolver = (prompt: ImportQuotaPrompt) => Promise<ImportQ
 // when the whole file fits, `room` when the user chose to take what fits.
 // Throws ImportQuotaError when there is no room at all, when the caller passed
 // no resolver (the safe default: refuse rather than silently truncate), or when
-// the user cancelled.
+// the user cancelled. That last one is a throw for control flow, not a failure to
+// report: both hooks recognise their own cancel and return the view to idle
+// without an error (docs/data-lifecycle.md — _the import's quota gate_).
 export async function resolveImportQuota(
   newLinkCount: number,
   existingCount: number,
