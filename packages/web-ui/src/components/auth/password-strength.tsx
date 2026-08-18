@@ -22,7 +22,8 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 // zxcvbn is heavy (~1.7 MB of raw dictionary JSON), so it's DYNAMICALLY imported
 // on first use — it never lands in the initial auth-route bundle. Until it loads,
 // both outputs are null and the caller keeps submit disabled (never gate-open before
-// the estimator is ready).
+// the estimator is ready). Being a real network fetch, it can also never arrive, so
+// the hook reports that separately — see `failed` on `usePasswordStrength`.
 //
 // BOTH language packs load, and `language-en` is the load-bearing one. On its own
 // `language-common` is only the 49k leaked-password list plus the 7.8k-word EFF
@@ -74,8 +75,11 @@ export async function loadPasswordScorer(): Promise<ScoreFn> {
 
 // Lazily load zxcvbn + both language packs once, then score `password`
 // (penalizing `userInputs` — e.g. the username — so a username-derived password
-// scores low). Returns { guessesLog10: number | null, displayScore: 0–3 | null, ready }.
-// Both outputs are null while loading or when the password is empty.
+// scores low). Returns { guessesLog10, displayScore, ready, failed }.
+// Both scores are null while loading, when the load failed, and when the password is
+// empty — which is why `failed` is reported alongside rather than folded into them.
+// A null score is not one state, and the three differ in whether the user can do
+// anything about it; the message ladder splits them (`newPasswordMessage`).
 //
 // `guessesLog10` is the raw, uncapped estimate — the value callers gate on.
 // `displayScore` is for the meter only: a band index derived from BOTH floors the
@@ -90,34 +94,87 @@ export function usePasswordStrength(
   password: string,
   userInputs: string[] = [],
   minLength = 0,
-): { guessesLog10: number | null; displayScore: number | null; ready: boolean } {
+): {
+  guessesLog10: number | null;
+  displayScore: number | null;
+  ready: boolean;
+  failed: boolean;
+} {
   const [scoreFn, setScoreFn] = React.useState<ScoreFn | null>(null);
+  const [failed, setFailed] = React.useState(false);
+  // Bumped to re-run the load effect. Not `failed` itself: a retry has to be
+  // distinguishable from the failure that prompted it, or the effect that starts it
+  // is also the effect that observes it finishing.
+  const [attempt, setAttempt] = React.useState(0);
+  // One import in flight at a time. A ref, not state, because nothing renders from it
+  // and every read below happens inside an effect.
+  const inFlight = React.useRef(false);
 
+  // The load STARTS ON MOUNT, not on first keystroke, and the callers are what make
+  // that worth saying: both spell `useNewPassword` at form level, above the step that
+  // renders this field, and both default to the GENERATED passphrase. So the fetch is
+  // already running while the user reads that panel and decides to type their own —
+  // by which point the ~800 KB of gzipped dictionary is normally long since here, and
+  // the loading rung below is never seen.
   React.useEffect(() => {
     let alive = true;
+    inFlight.current = true;
     void (async () => {
-      const score = await loadPasswordScorer();
-      if (alive) setScoreFn(() => score);
+      try {
+        const score = await loadPasswordScorer();
+        if (alive) {
+          setScoreFn(() => score);
+          setFailed(false);
+        }
+      } catch {
+        // The chunk didn't arrive — offline, or a stale chunk 404ing after a deploy.
+        // Without this catch the rejection is unhandled and `scoreFn` stays null
+        // FOREVER: the field sits on "Checking strength…" and submit is disabled with
+        // no way out, which is the one failure the permanent message slot was supposed
+        // to make impossible (it reads as a state that resolves itself, and this one
+        // doesn't). The gate still stays shut — never gate-open without an estimate —
+        // so all this branch buys is a rung that says so and a retry.
+        if (alive) setFailed(true);
+      } finally {
+        inFlight.current = false;
+      }
     })();
     return () => {
       alive = false;
+      // The attempt outlives the unmount either way; only its result is dropped. Clear
+      // the flag so a remount isn't wedged by the previous mount's request.
+      inFlight.current = false;
     };
-  }, []);
+  }, [attempt]);
+
+  // TYPING IS THE RETRY, which is what makes the failed rung's "Try again." literal
+  // (field-messages.ts). No button: the message slot is one line on a ~220px budget
+  // and has no room for a control, and the user's hands are already on the keyboard.
+  //
+  // `password` is the ONLY dependency, deliberately. Adding `failed` — which this
+  // reads — re-runs it the instant an attempt fails, and since the retry it then
+  // starts fails too, that is an unthrottled request loop, not a retry. Keyed on the
+  // keystroke, each failure costs exactly one more attempt and only when the user
+  // asks for it; `inFlight` keeps a fast typist from stacking them up.
+  React.useEffect(() => {
+    if (failed && !inFlight.current) setAttempt((n) => n + 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [password]);
 
   // Join userInputs to a stable string key so a fresh [username] array each render
   // doesn't force a recompute when nothing meaningful changed.
   const inputsKey = userInputs.join(' ');
   return React.useMemo(() => {
     if (!scoreFn || !password) {
-      return { guessesLog10: null, displayScore: null, ready: scoreFn !== null };
+      return { guessesLog10: null, displayScore: null, ready: scoreFn !== null, failed };
     }
     const guessesLog10 = scoreFn(password, inputsKey ? inputsKey.split(' ').filter(Boolean) : []);
     // Band the estimate, then hold it one under the top while the length floor blocks
     // submit — the entropy floor needs no such step, since the top band IS that floor.
     const band = DISPLAY_BANDS.filter((b) => guessesLog10 >= b).length;
     const displayScore = password.length < minLength ? Math.min(band, TOP_BAND - 1) : band;
-    return { guessesLog10, displayScore, ready: true };
-  }, [scoreFn, password, inputsKey, minLength]);
+    return { guessesLog10, displayScore, ready: true, failed: false };
+  }, [scoreFn, password, inputsKey, minLength, failed]);
 }
 
 // The two status pairs the message line and the meter BOTH use, named once because

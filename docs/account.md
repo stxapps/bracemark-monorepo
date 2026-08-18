@@ -385,6 +385,25 @@ Rough entropy targets, for calibration:
 > "Username is available" about a name already typed past is the one direction that
 > line must never be wrong in.
 >
+> **A third gap was the same shape, one level down: the estimator that never
+> arrives.** zxcvbn reaches web as a code-split chunk over the network (~800 KB
+> gzipped, ~1.7 MB raw — `language-en` is most of it), so it can be lost to a dead
+> connection or 404 against a stale build after a deploy. The load had no `catch`, so
+> that rejection went unhandled and the scorer stayed absent for good: the field held
+> the in-flight rung, "Checking strength…", and submit stayed disabled with no way
+> out — a permanent state wearing a self-resolving message, which is exactly the
+> failure the always-say-something slot exists to prevent, reached from the one
+> direction the slot couldn't see. `usePasswordStrength` now reports `failed`
+> alongside the (still null) score, and the ladder splits the two: `Couldn't check.
+Try again.`, `warn` — the same sentence and the same tone as the username ladder's
+> transient-failure rung, because it is the same event. The gate is unmoved; no
+> estimate never opens it. **Typing is the retry** — the hook re-imports on the next
+> keystroke, serialized so a fast typist can't stack attempts — which is what makes
+> that sentence literal without spending the slot's ~33-character line on a button.
+> This is the ladder's one platform-conditional rung, and deliberately so: native
+> `require()`s the packs out of a bundle already on disk (Metro has no code
+> splitting), where the equivalent failure is a broken app binary, not a field state.
+>
 > Both ladders live in `@stxapps/react` (`lib/field-messages.ts`) —
 > `usernameMessage` and `newPasswordMessage`, one copy for web and native alike, so
 > the same input can't be described differently on two platforms or between

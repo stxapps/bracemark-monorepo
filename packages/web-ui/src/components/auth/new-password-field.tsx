@@ -87,15 +87,21 @@ export function useNewPassword({
   // Strength only matters on the typed path — the generated passphrase is ~77 bits by
   // construction. Score the CANONICAL form, the exact string the KEK derives from, so
   // the meter can't disagree with what's stored.
-  const { guessesLog10, displayScore } = usePasswordStrength(
+  const { guessesLog10, displayScore, failed } = usePasswordStrength(
     mode === 'own' ? canonicalizePassword(ownPassword) : '',
     username ? [username] : [],
     NEW_PASSWORD_MIN_LENGTH,
   );
   // Note it's `guessesLog10` the ladder gates on, never `displayScore` — that one is
   // the meter's, not the policy's (see PASSWORD_MIN_GUESSES_LOG10) — and that null,
-  // the estimator still loading, keeps the gate shut until it's ready.
-  const message = newPasswordMessage(ownPassword, guessesLog10);
+  // the estimator not having answered, keeps the gate shut until it does.
+  //
+  // `failed` is that same null with the reason attached: the estimator's chunk never
+  // arrived, so it is null for good rather than for a moment. It changes nothing about
+  // the gate — no estimate is no estimate — only what the line under the field says,
+  // which is the whole point of passing it: without it a permanent failure wears the
+  // in-flight rung and reads as a wait that is about to end.
+  const message = newPasswordMessage(ownPassword, guessesLog10, failed);
 
   const regenerate = React.useCallback(() => {
     setPassphrase(generatePassphrase());

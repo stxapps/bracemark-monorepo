@@ -96,6 +96,17 @@ export function usePasswordStrength(
   // paint rather than during it. No `alive` flag and no promise: the loader is
   // synchronous here (see its note on require-vs-import), so there is no window in
   // which this can resolve against an unmounted component.
+  //
+  // AND NO FAILURE PATH, which is the one place this hook's surface diverges from
+  // web's — web returns a `failed` flag and retries on the next keystroke, and there
+  // is nothing here for either to describe. Its `import()` is a network fetch of a
+  // code-split chunk, so it can be lost to a dead connection or 404 against a stale
+  // build and leave the gate shut for good; this `require()` reads a module out of a
+  // bundle Metro already shipped and the OS already installed. If it throws, the
+  // dictionaries aren't missing, the app binary is — a red screen, not a field state,
+  // and no rung under a password input is the right place to report it. Hence the
+  // shared ladder's `strengthFailed` argument is defaulted and left unpassed by this
+  // platform (field-messages.ts says the same thing from the other side).
   React.useEffect(() => {
     setScoreFn(() => loadPasswordScorer());
   }, []);
