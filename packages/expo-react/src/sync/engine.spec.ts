@@ -1,0 +1,735 @@
+// Sync-engine specs for the EXPO engine — deliberately NOT a port of
+// web-react's engine.spec.ts. That file is the canonical end-to-end coverage of
+// the CYCLE (docs/local-first-sync.md — a sync cycle), and re-asserting the
+// protocol against a second copy of the same logic would mostly restate it.
+// What it cannot cover is the half that only exists here: `files/` content lives
+// DECRYPTED ON DISK (data/file-store.ts), not as bytes in the row, so every
+// content flow is a two-store write — a SQLite row and a file — and the two can
+// disagree in ways nothing else catches:
+//
+//  - a pull that re-stores a content row must tear down the stale plaintext,
+//    but ONLY for the rows it actually re-stored: a path spared by the
+//    local-wins guard still has a queued op whose upload reads that file, and
+//    deleting it strands the user's content with no error, no pending count and
+//    no retry;
+//  - the same asymmetry on the delete side (applyDeletes);
+//  - `uploadBlobs`' content branch, where "no payload" is a TWO-part test
+//    (`!rec.hasDataFile || !plain.exists`) that web spells as one;
+//  - `loadEntityContent`, which DIVERGES in behaviour, not just mechanism: web
+//    still returns the bytes when it loses the restamp race, this returns
+//    undefined and discards the plaintext it just wrote;
+//  - and the in-transit ciphertext temp files, which must be gone however a
+//    transfer settles.
+//
+// The last three describes are the exception to the "don't restate the
+// protocol" rule: the two engines are duplicated SOURCE, not shared source, so
+// nothing catches expo-side drift on the phase order, the orphan self-heal or
+// the quota gate. Those are near-free once this harness exists, so they stay as
+// drift guards — thinned to one case each, not the full web matrix.
+//
+// The harness shims only the two native seams and runs everything above them
+// for real: `expo-sqlite` → the node:sqlite shim (so the real DDL, the real
+// drizzle driver, the real guarded writes run), and `expo-file-system` → an
+// in-memory filesystem (so the real file-store owns the directory and the
+// path↔location mapping). The write edge is the real mutations.ts, which is
+// what puts a mid-cycle write after the pending snapshot deterministically,
+// with no timers.
+
+import { sql } from 'drizzle-orm';
+
+import {
+  ApiError,
+  EXTRACTIONS_PREFIX,
+  FILES_PREFIX,
+  filesListEndpoint,
+  filesSignEndpoint,
+  LINKS_PREFIX,
+  opsCommitEndpoint,
+  opsListEndpoint,
+  pathFromId,
+  utf8,
+} from '@stxapps/shared';
+
+import { getDb } from '../data/db';
+import { dataFileFor, ensureDataFilesDir } from '../data/file-store';
+import { getItem, markItemDataFile, putItemsTx, stampItemUpdatedAts } from '../data/item-store';
+import { writeExtraction, writeFile } from '../data/mutations';
+import { enqueueDeleteTx, enqueuePutTx, listPendingOps } from '../data/pending-store';
+import { toItemRecord } from '../data/projection';
+import { markFirstSyncDone } from '../data/sync-store';
+import {
+  File as MemFile,
+  listFileUris,
+  Paths as MemPaths,
+  readFileText,
+  resetFileSystem,
+  writeFileText,
+} from '../testing/memory-file-system';
+import { loadEntityContent, loadEntityContents, runIncrementalSync, type SyncDeps } from './engine';
+import { BlobRequestError, getBlob, getBlobToFile, putBlob, putBlobFromFile } from './r2';
+
+// The one seam that would reach native sqlite; everything above it in db.ts —
+// getDb, the PRAGMA, the DDL, the schema objects — runs for real
+// (data/item-store.spec.ts, same shim).
+jest.mock('expo-sqlite', () => require('../testing/node-sqlite'));
+// The other native seam. The REAL data/file-store.ts runs on top of it.
+jest.mock('expo-file-system', () => require('../testing/memory-file-system'));
+// r2's upload transport is the legacy native module. It is stubbed wholesale
+// below; this only keeps `requireActual('./r2')` — which we want, for the real
+// BlobRequestError the engine branches on with `instanceof` — from loading it.
+jest.mock('expo-file-system/legacy', () => ({
+  FileSystemUploadType: { BINARY_CONTENT: 'BINARY_CONTENT' },
+  uploadAsync: jest.fn(),
+}));
+
+// The crypto boundary is not what these specs are about: reversible stand-ins
+// keep the assertions on what the pipeline actually MOVED, so "the local copy
+// survived" is checkable by value on both paths. The entity pair prefixes a
+// marker byte; the FILE pair is path-to-path, like the native module, and
+// prefixes a marker string — so a plaintext that never reached disk, or a
+// ciphertext uploaded from the wrong file, is visible in the assertion.
+jest.mock('@stxapps/expo-crypto', () => {
+  const fs =
+    require('../testing/memory-file-system') as typeof import('../testing/memory-file-system');
+  return {
+    encryptEntity: jest.fn(
+      async (_key: Uint8Array, bytes: Uint8Array) => new Uint8Array([0xee, ...bytes]),
+    ),
+    decryptEntity: jest.fn(async (_key: Uint8Array, bytes: Uint8Array) => bytes.slice(1)),
+    encryptFile: jest.fn(async (input: string, output: string) => {
+      fs.writeFileText(output, `enc:${fs.readFileText(input)}`);
+    }),
+    decryptFile: jest.fn(async (input: string, output: string) => {
+      const cipher = fs.readFileText(input);
+      // GCM authenticates at the end of the stream: a bad tag rejects and leaves
+      // no output behind (expo-crypto lib/file-crypto.ts).
+      if (!cipher.startsWith('enc:')) throw new Error('BracemarkFileCrypto: bad tag');
+      fs.writeFileText(output, cipher.slice('enc:'.length));
+    }),
+    // Kept real in spirit — file-store mints temp names with it, and two
+    // concurrent transfers must not collide.
+    newId: () => globalThis.crypto.randomUUID(),
+  };
+});
+// pending-store deep-imports this one (the barrel would drag in quick-crypto).
+// UNIQUE per call: `writeId` identity is what compare-and-delete rests on, and a
+// repeating stub would make it pass vacuously.
+jest.mock('@stxapps/expo-crypto/lib/ids', () => ({
+  newId: () => globalThis.crypto.randomUUID(),
+}));
+
+// R2 is reached over presigned URLs; stub the four movers (two per direction,
+// split by payload — sync/r2.ts). The real BlobRequestError class is kept
+// because the engine branches on `instanceof` for 404s.
+jest.mock('./r2', () => {
+  const actual = jest.requireActual<typeof import('./r2')>('./r2');
+  return {
+    ...actual,
+    getBlob: jest.fn(),
+    putBlob: jest.fn(),
+    getBlobToFile: jest.fn(),
+    putBlobFromFile: jest.fn(),
+  };
+});
+
+const mockGetBlob = getBlob as jest.MockedFunction<typeof getBlob>;
+const mockPutBlob = putBlob as jest.MockedFunction<typeof putBlob>;
+const mockGetBlobToFile = getBlobToFile as jest.MockedFunction<typeof getBlobToFile>;
+const mockPutBlobFromFile = putBlobFromFile as jest.MockedFunction<typeof putBlobFromFile>;
+
+const USER = 'alice';
+const LINK_PATH = pathFromId('l_a', LINKS_PREFIX);
+const OTHER_LINK_PATH = pathFromId('l_b', LINKS_PREFIX);
+const EXTRACTION_PATH = pathFromId('l_a', EXTRACTIONS_PREFIX);
+const FILE_ID = 'f_a';
+const FILE_PATH = pathFromId(FILE_ID, FILES_PREFIX);
+const OTHER_FILE_ID = 'f_b';
+const OTHER_FILE_PATH = pathFromId(OTHER_FILE_ID, FILES_PREFIX);
+
+// --- the api stub ------------------------------------------------------------
+
+interface OpsListReply {
+  ops: { op: 'put' | 'delete'; path: string; updatedAt: number }[];
+  oldestUpdatedAt: number | null;
+  newestUpdatedAt: number | null;
+  hasMore: boolean;
+}
+
+interface Handlers {
+  opsList?: () => Promise<OpsListReply> | OpsListReply;
+  filesList?: () =>
+    Promise<{ path: string; updatedAt: number }[]> | { path: string; updatedAt: number }[];
+  // The hook a test uses to land a write mid-cycle — it runs after the pending
+  // snapshot and before the apply. `op` is passed so a handler can refuse PUT
+  // signing while leaving GETs alone, the way the quota gate does.
+  filesSign?: (paths: string[], op: 'put' | 'get') => Promise<string[] | void> | string[] | void;
+  opsCommit?: (paths: string[]) => Promise<void> | void;
+  commitUpdatedAt?: number;
+}
+
+// Every commit the cycle made, in call order — the phase-ordering assertions
+// read this.
+let commits: { op: string; path: string }[][];
+// R2 objects this fake server holds, so `ops/commit` can enforce the real
+// op-without-object rule instead of rubber-stamping every op.
+let uploaded: Set<string>;
+// What each content PUT actually sent, read off the temp ciphertext file the
+// upload was pointed at.
+let uploadedFiles: Map<string, string>;
+// The plaintext R2 holds for a content path, for the download direction.
+let r2Content: Map<string, string>;
+
+const urlFor = (path: string): string => `https://r2.test/${path}`;
+const pathFor = (url: string): string => url.slice('https://r2.test/'.length);
+
+// An ApiClient that dispatches on endpoint IDENTITY (not path strings), so a
+// renamed route can't silently turn a handler into the "unexpected endpoint"
+// throw below.
+function makeApi(handlers: Handlers = {}): SyncDeps['api'] {
+  const empty: OpsListReply = {
+    ops: [],
+    oldestUpdatedAt: null,
+    newestUpdatedAt: null,
+    hasMore: false,
+  };
+  return {
+    call: async (endpoint: unknown, input: Record<string, unknown>) => {
+      if (endpoint === opsListEndpoint) return (await handlers.opsList?.()) ?? empty;
+      if (endpoint === filesListEndpoint) {
+        return { files: (await handlers.filesList?.()) ?? [], nextPageToken: null };
+      }
+      if (endpoint === filesSignEndpoint) {
+        const paths = input.paths as string[];
+        const granted = (await handlers.filesSign?.(paths, input.op as 'put' | 'get')) ?? paths;
+        return { urls: granted.map((path) => ({ path, url: urlFor(path) })) };
+      }
+      if (endpoint === opsCommitEndpoint) {
+        const ops = input.ops as { op: 'put' | 'delete'; path: string }[];
+        commits.push(ops);
+        await handlers.opsCommit?.(ops.map((o) => o.path));
+        // A `put` whose object never landed is REFUSED, exactly as bracemark-api
+        // refuses it (`failed: no_object`) — which is what leaves the path queued.
+        const landed = ops.filter((o) => o.op === 'delete' || uploaded.has(o.path));
+        return {
+          results: landed.map((o) => ({
+            path: o.path,
+            updatedAt: handlers.commitUpdatedAt ?? 9000,
+          })),
+          failed: ops
+            .filter((o) => !landed.includes(o))
+            .map((o) => ({ path: o.path, reason: 'no_object' })),
+        };
+      }
+      throw new Error('unexpected endpoint');
+    },
+    // The stub sidesteps the generic contract types; the engine only calls `.call`.
+  } as unknown as SyncDeps['api'];
+}
+
+function deps(handlers: Handlers = {}): SyncDeps {
+  return { username: USER, encryptionKey: new Uint8Array(32), api: makeApi(handlers) };
+}
+
+// --- local-store helpers -----------------------------------------------------
+
+// A synced entity record with no local edit outstanding: bytes + the server's
+// stamp, no op.
+function seedSynced(path: string, body: string, updatedAt: number): void {
+  getDb().transaction((tx) => putItemsTx(tx, [toItemRecord(path, updatedAt, utf8(body))]));
+}
+
+// The write edge's own shape (mutations.ts writeEntityWith): the record and its
+// pending op in ONE transaction. Through the real enqueue, so the row carries a
+// fresh `writeId`.
+function seedQueued(path: string, body: string, baseUpdatedAt = 0): void {
+  getDb().transaction((tx) => {
+    putItemsTx(tx, [toItemRecord(path, baseUpdatedAt, utf8(body))]);
+    enqueuePutTx(tx, USER, path, baseUpdatedAt);
+  });
+}
+
+// A synced CONTENT record, materialized: the row (blob-less, by definition) plus
+// its decrypted plaintext on disk and the `hasDataFile` claim over it.
+async function seedSyncedContent(
+  path: string,
+  plaintext: string,
+  updatedAt: number,
+): Promise<void> {
+  ensureDataFilesDir();
+  writeFileText(dataFileFor(path).uri, plaintext);
+  getDb().transaction((tx) => putItemsTx(tx, [toItemRecord(path, updatedAt)]));
+  await markItemDataFile(path, true);
+}
+
+// A queued content write, through the REAL write edge — plaintext copied onto
+// the store's location, row + op in one transaction, `hasDataFile` marked last.
+async function seedQueuedContent(fileId: string, plaintext: string): Promise<void> {
+  const source = new MemFile(MemPaths.cache, `picked-${fileId}`);
+  writeFileText(source.uri, plaintext);
+  await writeFile(USER, fileId, source as unknown as Parameters<typeof writeFile>[2]);
+}
+
+function pendingPaths(): Promise<string[]> {
+  return listPendingOps(USER).then((ops) => ops.map((o) => o.path).sort());
+}
+
+async function bodyAt(path: string): Promise<string | undefined> {
+  const rec = await getItem(path);
+  return rec?.data ? new TextDecoder().decode(rec.data) : undefined;
+}
+
+// The decrypted content on disk for a path, or undefined if not materialized.
+function plaintextAt(path: string): string | undefined {
+  const file = dataFileFor(path);
+  return file.exists ? readFileText(file.uri) : undefined;
+}
+
+// In-transit ciphertext. Every transfer must clean up after itself however it
+// settled — a leak here is invisible on device until the cache fills.
+function tempFiles(): string[] {
+  return listFileUris().filter((uri) => uri.includes('bracemark-enc-'));
+}
+
+const committedPaths = (): string[] => commits.flat().map((o) => o.path);
+
+// The real shape of a presigned PUT that outlived its 5-min TTL — R2 answers
+// 403, which the transports raise as this.
+const EXPIRED_URL = new BlobRequestError('PUT', 403);
+
+// Make the named paths' uploads fail while every other path still lands, on both
+// transports.
+function failUploadsFor(...paths: string[]): void {
+  const failing = new Set(paths);
+  mockPutBlob.mockImplementation(async (url: string) => {
+    if (failing.has(pathFor(url))) throw EXPIRED_URL;
+    uploaded.add(pathFor(url));
+  });
+  mockPutBlobFromFile.mockImplementation(async (url: string, file: { uri: string }) => {
+    if (failing.has(pathFor(url))) throw EXPIRED_URL;
+    uploaded.add(pathFor(url));
+    uploadedFiles.set(pathFor(url), readFileText(file.uri));
+  });
+}
+
+beforeEach(async () => {
+  commits = [];
+  uploaded = new Set();
+  uploadedFiles = new Map();
+  r2Content = new Map();
+  jest.clearAllMocks();
+
+  mockPutBlob.mockImplementation(async (url: string) => {
+    uploaded.add(pathFor(url));
+  });
+  mockPutBlobFromFile.mockImplementation(async (url: string, file: { uri: string }) => {
+    uploaded.add(pathFor(url));
+    uploadedFiles.set(pathFor(url), readFileText(file.uri));
+  });
+  mockGetBlobToFile.mockImplementation(async (url: string, file: { uri: string }) => {
+    const plain = r2Content.get(pathFor(url));
+    if (plain === undefined) throw new BlobRequestError('GET', 404);
+    writeFileText(file.uri, `enc:${plain}`);
+  });
+
+  // `getDb()` memoizes its connection, so the whole file shares one database
+  // (jest gives each spec FILE a fresh module registry). Truncate rather than
+  // reopen, enumerating from `sqlite_master` so a table added to the DDL is
+  // cleared automatically (data/item-store.spec.ts).
+  const tables = getDb().all<{ name: string }>(
+    sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'`,
+  );
+  for (const { name } of tables) getDb().run(sql.raw(`DELETE FROM "${name}"`));
+  resetFileSystem();
+
+  // Past the first-sync gate, with a cursor inside the op log's retained range
+  // so a test picks its cycle by what it makes ops/list answer, not by leftover
+  // state.
+  await markFirstSyncDone(USER, 1000, 'links/l_seed.enc');
+});
+
+// --- the content push: row, disk, and the two crypto paths -------------------
+
+describe('a content push', () => {
+  it('encrypts the plaintext from disk and uploads it without a temp left behind', async () => {
+    await seedQueuedContent(FILE_ID, 'image bytes');
+    seedQueued(LINK_PATH, 'the link');
+
+    await runIncrementalSync(deps({ commitUpdatedAt: 7777 }));
+
+    // The content blob rode the native path-to-path pipeline; the entity blob
+    // rode the in-memory one. Neither crossed over.
+    expect(uploadedFiles.get(FILE_PATH)).toBe('enc:image bytes');
+    expect(mockPutBlob).toHaveBeenCalledWith(
+      urlFor(LINK_PATH),
+      new Uint8Array([0xee, ...utf8('the link')]),
+    );
+    expect(mockPutBlob).not.toHaveBeenCalledWith(urlFor(FILE_PATH), expect.anything());
+
+    expect(await pendingPaths()).toEqual([]);
+    expect((await getItem(FILE_PATH))?.updatedAt).toBe(7777);
+    // The plaintext is the local copy, untouched by the upload, and still claimed.
+    expect(plaintextAt(FILE_PATH)).toBe('image bytes');
+    expect((await getItem(FILE_PATH))?.hasDataFile).toBeTruthy();
+    expect(tempFiles()).toEqual([]);
+  });
+
+  it('deletes the temp ciphertext when the upload fails, and keeps the plaintext queued', async () => {
+    await seedQueuedContent(FILE_ID, 'image bytes');
+    failUploadsFor(FILE_PATH);
+
+    await expect(runIncrementalSync(deps())).rejects.toBe(EXPIRED_URL);
+
+    // The retry next cycle needs exactly this state: the op queued, its payload
+    // on disk, and nothing accumulating in the cache dir per attempt.
+    expect(await pendingPaths()).toEqual([FILE_PATH]);
+    expect(plaintextAt(FILE_PATH)).toBe('image bytes');
+    expect(committedPaths()).toEqual([]);
+    expect(tempFiles()).toEqual([]);
+  });
+
+  it('drops a content op whose plaintext file is gone', async () => {
+    await seedQueuedContent(FILE_ID, 'image bytes');
+    dataFileFor(FILE_PATH).delete();
+
+    await runIncrementalSync(deps());
+
+    // TERMINAL, not transient: nothing will put those bytes back, so retrying it
+    // forever is a queue no cycle can drain. Never committed — an op logged for
+    // an object we didn't upload would 404 every other device's puller.
+    expect(await pendingPaths()).toEqual([]);
+    expect(mockPutBlobFromFile).not.toHaveBeenCalled();
+    expect(committedPaths()).toEqual([]);
+  });
+
+  it('drops a content op whose row no longer claims a plaintext file', async () => {
+    // The other half of the two-part payload test. The file is on disk, but the
+    // row's claim over it is gone — the state a re-stored row leaves behind, and
+    // the bytes under it are the OLD version, so uploading them would publish
+    // stale content under a fresh commit.
+    await seedQueuedContent(FILE_ID, 'image bytes');
+    await markItemDataFile(FILE_PATH, false);
+
+    await runIncrementalSync(deps());
+
+    expect(await pendingPaths()).toEqual([]);
+    expect(mockPutBlobFromFile).not.toHaveBeenCalled();
+    expect(committedPaths()).toEqual([]);
+  });
+
+  it('commits content before the metadata that references it', async () => {
+    await seedQueuedContent(FILE_ID, 'image bytes');
+    seedQueued(EXTRACTION_PATH, 'refers to the image');
+
+    await runIncrementalSync(deps());
+
+    // Separate commit calls, content's first — so no crash mid-push can leave
+    // metadata pointing at an object that was never uploaded.
+    expect(commits.map((batch) => batch.map((o) => o.path))).toEqual([
+      [FILE_PATH],
+      [EXTRACTION_PATH],
+    ]);
+  });
+
+  it('holds the metadata phase when a content upload failed', async () => {
+    await seedQueuedContent(FILE_ID, 'image bytes');
+    seedQueued(EXTRACTION_PATH, 'refers to the image');
+    failUploadsFor(FILE_PATH);
+
+    await expect(runIncrementalSync(deps())).rejects.toBe(EXPIRED_URL);
+
+    expect(mockPutBlob).not.toHaveBeenCalledWith(urlFor(EXTRACTION_PATH), expect.anything());
+    expect(committedPaths()).toEqual([]);
+    expect(await pendingPaths()).toEqual([EXTRACTION_PATH, FILE_PATH]);
+  });
+});
+
+// --- the pull: the row and the file must move together -----------------------
+
+describe('a pull that re-stores a content record', () => {
+  const serverPut = (path: string, updatedAt: number) => () => ({
+    ops: [{ op: 'put' as const, path, updatedAt }],
+    oldestUpdatedAt: 500,
+    newestUpdatedAt: updatedAt,
+    hasMore: false,
+  });
+
+  it('tears down the stale plaintext so the next read re-materializes', async () => {
+    await seedSyncedContent(FILE_PATH, 'the old image', 1500);
+
+    await runIncrementalSync(deps({ opsList: serverPut(FILE_PATH, 2000) }));
+
+    // The row moved, so the file under it is a lie now. Both halves of the
+    // "not downloaded" state, together: no claim, no file.
+    expect((await getItem(FILE_PATH))?.updatedAt).toBe(2000);
+    expect((await getItem(FILE_PATH))?.hasDataFile).toBeFalsy();
+    expect(plaintextAt(FILE_PATH)).toBeUndefined();
+    // Content is never fetched eagerly — only its row is.
+    expect(mockGetBlobToFile).not.toHaveBeenCalled();
+  });
+
+  it('keeps the plaintext of a path this device re-wrote mid-cycle', async () => {
+    await seedSyncedContent(FILE_PATH, 'the old image', 1500);
+
+    await runIncrementalSync(
+      deps({
+        opsList: async () => {
+          // The user replaces the image while the cycle is listing: local-only,
+          // absent from the pending snapshot the reconcile filtered against.
+          await seedQueuedContent(FILE_ID, 'the new image');
+          return serverPut(FILE_PATH, 2000)();
+        },
+      }),
+    );
+
+    // The guard spared the ROW, so the file must be spared with it — it is the
+    // queued op's upload payload, and deleting it would strand the write with no
+    // error, no pending count and no retry.
+    expect(plaintextAt(FILE_PATH)).toBe('the new image');
+    expect(await pendingPaths()).toEqual([FILE_PATH]);
+
+    // And it is not wedged: the next cycle carries it.
+    await runIncrementalSync(deps());
+    expect(uploadedFiles.get(FILE_PATH)).toBe('enc:the new image');
+    expect(await pendingPaths()).toEqual([]);
+  });
+});
+
+describe('a delete the pull applied', () => {
+  const serverDelete = (path: string) => () => ({
+    ops: [{ op: 'delete' as const, path, updatedAt: 2000 }],
+    oldestUpdatedAt: 500,
+    newestUpdatedAt: 2000,
+    hasMore: false,
+  });
+
+  it('removes the plaintext of a content path deleted on another device', async () => {
+    await seedSyncedContent(FILE_PATH, 'the image', 1500);
+
+    await runIncrementalSync(deps({ opsList: serverDelete(FILE_PATH) }));
+
+    expect(await getItem(FILE_PATH)).toBeUndefined();
+    expect(plaintextAt(FILE_PATH)).toBeUndefined();
+  });
+
+  it('spares the plaintext of a path re-created mid-cycle', async () => {
+    await seedSyncedContent(FILE_PATH, 'the image', 1500);
+
+    await runIncrementalSync(
+      deps({
+        opsList: async () => {
+          await seedQueuedContent(FILE_ID, 'replaced, not deleted');
+          return serverDelete(FILE_PATH)();
+        },
+      }),
+    );
+
+    // Local-wins holds even though the server says the path is gone — and the
+    // file half follows the row half, not the reconcile's own list.
+    expect(await getItem(FILE_PATH)).toBeDefined();
+    expect(plaintextAt(FILE_PATH)).toBe('replaced, not deleted');
+    expect(await pendingPaths()).toEqual([FILE_PATH]);
+  });
+});
+
+// --- the lazy materializer ---------------------------------------------------
+
+describe('loadEntityContent', () => {
+  beforeEach(() => {
+    getDb().transaction((tx) => putItemsTx(tx, [toItemRecord(FILE_PATH, 1000)]));
+    r2Content.set(FILE_PATH, 'page copy');
+  });
+
+  it('materializes the plaintext, claims it on the row, and cleans up the ciphertext', async () => {
+    const file = await loadEntityContent(deps(), FILE_PATH);
+
+    expect(file?.uri).toBe(dataFileFor(FILE_PATH).uri);
+    expect(plaintextAt(FILE_PATH)).toBe('page copy');
+    expect((await getItem(FILE_PATH))?.hasDataFile).toBeTruthy();
+    expect(tempFiles()).toEqual([]);
+  });
+
+  it('serves an already-materialized file without a round trip', async () => {
+    await seedSyncedContent(FILE_PATH, 'page copy', 1000);
+
+    const file = await loadEntityContent(deps(), FILE_PATH);
+
+    expect(file?.uri).toBe(dataFileFor(FILE_PATH).uri);
+    expect(mockGetBlobToFile).not.toHaveBeenCalled();
+  });
+
+  it('re-materializes when the row claims a file that is gone from disk', async () => {
+    // The claim and the disk are two stores; an OS purge or a half-finished
+    // teardown can leave the flag set over nothing, and trusting it alone would
+    // hand back a uri that renders as a broken image forever.
+    await markItemDataFile(FILE_PATH, true);
+
+    const file = await loadEntityContent(deps(), FILE_PATH);
+
+    expect(mockGetBlobToFile).toHaveBeenCalled();
+    expect(file && readFileText(file.uri)).toBe('page copy');
+  });
+
+  it('discards the plaintext and reports nothing when the row was restamped mid-fetch', async () => {
+    const result = await loadEntityContent(
+      deps({
+        // A pull lands the newer version while this fetch is being signed.
+        filesSign: async () => {
+          await stampItemUpdatedAts([{ path: FILE_PATH, updatedAt: 2000 }]);
+        },
+      }),
+      FILE_PATH,
+    );
+
+    // The DIVERGENCE from web, which still returns the bytes it fetched: here the
+    // caller is handed a FILE, so returning one that is about to be torn down (or
+    // leaving it in place under the new stamp, served as current until the server
+    // moves again) is worse than reporting nothing. Losing the race costs the
+    // read; the next call fetches the new version.
+    expect(result).toBeUndefined();
+    expect(plaintextAt(FILE_PATH)).toBeUndefined();
+    expect((await getItem(FILE_PATH))?.hasDataFile).toBeFalsy();
+    expect(tempFiles()).toEqual([]);
+  });
+
+  it('returns undefined and leaves no temp behind when the object is gone server-side', async () => {
+    r2Content.clear();
+
+    await expect(loadEntityContent(deps(), FILE_PATH)).resolves.toBeUndefined();
+    expect(tempFiles()).toEqual([]);
+    expect((await getItem(FILE_PATH))?.hasDataFile).toBeFalsy();
+  });
+});
+
+describe('loadEntityContents', () => {
+  it('materializes what is missing, skips what is resident, and reports what is unknown', async () => {
+    getDb().transaction((tx) => putItemsTx(tx, [toItemRecord(FILE_PATH, 1000)]));
+    await seedSyncedContent(OTHER_FILE_PATH, 'already here', 1000);
+    r2Content.set(FILE_PATH, 'fetched');
+
+    const ticks: [number, number][] = [];
+    const { missingPaths } = await loadEntityContents(
+      deps(),
+      [FILE_PATH, OTHER_FILE_PATH, 'files/gone.enc'],
+      (done, total) => ticks.push([done, total]),
+    );
+
+    expect(missingPaths).toEqual(['files/gone.enc']);
+    expect(plaintextAt(FILE_PATH)).toBe('fetched');
+    expect(plaintextAt(OTHER_FILE_PATH)).toBe('already here');
+    // The resident path and the unknown one cost no round trip, so neither
+    // inflates the denominator.
+    expect(ticks).toEqual([
+      [0, 1],
+      [1, 1],
+    ]);
+    expect(tempFiles()).toEqual([]);
+  });
+
+  it('does not report a restamped path as missing, but discards its stale plaintext', async () => {
+    getDb().transaction((tx) => putItemsTx(tx, [toItemRecord(FILE_PATH, 1000)]));
+    r2Content.set(FILE_PATH, 'fetched');
+
+    const { missingPaths } = await loadEntityContents(
+      deps({
+        filesSign: async () => {
+          await stampItemUpdatedAts([{ path: FILE_PATH, updatedAt: 2000 }]);
+        },
+      }),
+      [FILE_PATH],
+    );
+
+    // A CAS-miss and a 404 look alike and are not: the blob EXISTS, the row just
+    // moved. Reporting it missing would tell the export flow a file is gone when
+    // the caller only needs to re-read the store.
+    expect(missingPaths).toEqual([]);
+    expect(plaintextAt(FILE_PATH)).toBeUndefined();
+    expect(tempFiles()).toEqual([]);
+  });
+});
+
+// --- drift guards ------------------------------------------------------------
+
+// The cases below are covered end-to-end on web. They are restated here at one
+// case each because the two engines are duplicated SOURCE: edit this copy's
+// phase order, self-heal or quota branch and nothing else in the workspace
+// fails.
+describe('the cycle, against this copy of it', () => {
+  it('does not delete a create that landed mid-cycle, and syncs it next cycle', async () => {
+    seedQueued(LINK_PATH, 'the link');
+
+    // Empty op log under a returning client → fallback. The extraction lands
+    // while the full listing is in flight — after the pending snapshot, before
+    // the local-delete reconcile.
+    await runIncrementalSync(
+      deps({
+        filesList: async () => {
+          await writeExtraction(USER, 'l_a', { fields: { title: 'Google' } });
+          return [];
+        },
+      }),
+    );
+
+    expect(await getItem(EXTRACTION_PATH)).toBeDefined();
+    expect(await pendingPaths()).toEqual([EXTRACTION_PATH]); // the link's op drained
+    expect(committedPaths()).toEqual([LINK_PATH]);
+
+    commits = [];
+    await runIncrementalSync(deps());
+    expect(committedPaths()).toEqual([EXTRACTION_PATH]);
+    expect(await pendingPaths()).toEqual([]);
+  });
+
+  it('drops a pending put whose record is gone and re-downloads the server copy', async () => {
+    // The wedged state: an op that can never be satisfied (nothing will put those
+    // bytes back), whose path the reconcile then reserves for a push that never
+    // happens — so the heal has to put the path back into the download set.
+    getDb().transaction((tx) => enqueuePutTx(tx, USER, LINK_PATH, 0));
+    mockGetBlob.mockResolvedValue(new Uint8Array([0xee, ...utf8('the server copy')]));
+
+    await runIncrementalSync(
+      deps({
+        opsList: () => ({
+          ops: [{ op: 'put', path: LINK_PATH, updatedAt: 2000 }],
+          oldestUpdatedAt: 500,
+          newestUpdatedAt: 2000,
+          hasMore: false,
+        }),
+      }),
+    );
+
+    expect(await pendingPaths()).toEqual([]);
+    expect(await bodyAt(LINK_PATH)).toBe('the server copy');
+    expect((await getItem(LINK_PATH))?.updatedAt).toBe(2000);
+    expect(committedPaths()).toEqual([]);
+  });
+
+  it('records a refused push and completes, still committing the deletes', async () => {
+    // docs/iap.md promises an over-quota account "read-only-plus-delete, never
+    // data loss": the put is refused, the cycle does NOT throw, the queued data
+    // stays queued, and the deletes — which never reach files/sign — still get
+    // through, which is what lets the user free space.
+    seedSynced(LINK_PATH, 'trashed locally', 1500);
+    seedQueued(LINK_PATH, 'trashed locally', 1500);
+    getDb().transaction((tx) => enqueueDeleteTx(tx, USER, OTHER_LINK_PATH, 1500));
+
+    const outcome = await runIncrementalSync(
+      deps({
+        opsList: () => ({
+          ops: [],
+          oldestUpdatedAt: 500,
+          newestUpdatedAt: 1500,
+          hasMore: false,
+        }),
+        filesSign: (_paths, op) => {
+          if (op === 'put') throw new ApiError(403, JSON.stringify({ error: 'quota_exceeded' }));
+        },
+      }),
+    );
+
+    expect(outcome.blocked).toBe(true);
+    expect(outcome.blockedCount).toBe(1);
+    expect(committedPaths()).toEqual([OTHER_LINK_PATH]);
+    expect(await pendingPaths()).toEqual([LINK_PATH]);
+    expect(await bodyAt(LINK_PATH)).toBe('trashed locally');
+  });
+});

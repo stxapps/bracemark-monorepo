@@ -105,6 +105,41 @@ Keep the two global lists in step; together they're one contract checked on the
 two engines that can't be taken for granted. Neither sees import **order**, which
 is why `polyfills.ts` is the first import of both native entries.
 
+### the ported pair: two sync engines
+
+`web-react/src/sync/engine.ts` and `expo-react/src/sync/engine.ts` are the same
+design written twice — one protocol, two platforms
+([local-first-sync.md](./local-first-sync.md)). That shape asks a question no
+other pair in the workspace does: how much of a spec should be written twice?
+
+The split settled on is **cover the protocol once, cover the divergence
+always**, plus a thin drift guard:
+
+- **web's `engine.spec.ts` is canonical for the cycle.** The mid-cycle write
+  hazards, the commit phase order, the first-sync counter, the quota gate — all
+  of it is asserted there, in the app that has the most surfaces riding on it.
+- **expo's `engine.spec.ts` covers the half web has no equivalent of**: `files/`
+  content lives DECRYPTED ON DISK there, not as bytes in the row, so every
+  content flow is a two-store write and the two stores can disagree silently.
+  The load-bearing case is the asymmetry — a pull tears down the plaintext only
+  for the rows it actually re-stored, because a path the local-wins guard spared
+  still has a queued op whose upload reads that file.
+- **the drift guards are the exception to "once".** The engines are duplicated
+  _source_, so a spec that passes on web's copy proves nothing about expo's:
+  edit expo's phase order or its self-heal and nothing in the workspace fails.
+  One case each, not the full web matrix.
+
+The store layer splits the same way: `expo-react`'s `data/item-store.spec.ts`
+pins the guarded writes' SQL rather than restating what they mean.
+
+Both expo suites run the real modules over shimmed native seams, which is what
+makes that possible — `src/testing/node-sqlite.ts` puts the real DDL and the
+real drizzle driver on `node:sqlite`, and `src/testing/memory-file-system.ts`
+puts the real `data/file-store.ts` on an in-memory filesystem. Two
+strictnesses in that shim are deliberate, because both catch real bugs: a
+`delete()` of something absent throws, as the native API does, and so does a
+write into a directory nobody created.
+
 ### the shared jest plumbing
 
 Three config families, because `preset` takes exactly one value:
@@ -166,7 +201,7 @@ The honest state, so nobody reads a green `npm run test` as coverage:
 | --------------------- | ----- | ---------------------------------------------------------------------------- |
 | `shared`              | 37    | the best-covered project, by a lot                                           |
 | `bracemark-api`       | 13    | real D1/DO/R2 through the Workers pool; one is the workerd portability suite |
-| `expo-react`          | 9     |                                                                              |
+| `expo-react`          | 10    |                                                                              |
 | `bracemark-expo`      | 8     |                                                                              |
 | `bracemark-extractor` | 5     |                                                                              |
 | `web-react`           | 3     |                                                                              |

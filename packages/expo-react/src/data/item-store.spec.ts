@@ -5,7 +5,10 @@
 // web-react's engine.spec.ts is the canonical end-to-end coverage of the cycle
 // (docs/local-first-sync.md — a sync cycle); these pin the divergent SQL, so they
 // run against a REAL in-memory SQLite over the real DDL — a stubbed row scan
-// would prove nothing about the predicates.
+// would prove nothing about the predicates. The engine-level half of the same
+// split — what those guards mean once a `files/` plaintext file hangs off the
+// row they spare — is ../sync/engine.spec.ts (docs/testing.md, _the ported
+// pair_).
 //
 // `./db` is NOT mocked: `openDatabaseSync` is redirected to a node:sqlite shim
 // (testing/node-sqlite.ts) so the real `getDb()` opens, sets its PRAGMA, and runs
