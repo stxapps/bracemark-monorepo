@@ -10,9 +10,10 @@ import { useLinksViewState } from '../../_contexts/view-state-provider';
 import { useEngagedOpen } from './hooks';
 
 // 24px tall exactly: py-1 (4+4) around a 16px line box. `leading-4` is spelled
-// out rather than left to `text-xs`'s default because that 24 is load-bearing —
-// list-layout's tagged row budget is built from it, and a theme that retuned
-// `--text-xs--line-height` would silently push the chips out of the row.
+// out rather than left to `text-xs`'s default because both layouts' row-height
+// ESTIMATES are built from that 24 (and bracemark-expo's chip copies it), so a
+// theme that retuned `--text-xs--line-height` would quietly put every estimate
+// a line out of step with what the rows measure.
 //
 // Weight 400, not 500: the row title is `text-sm font-medium`, and a chip at the
 // same weight competes with it for the eye. Tags are metadata; the size and the
@@ -43,6 +44,17 @@ import { useEngagedOpen } from './hooks';
 const TAG_CHIP_CLASS =
   'max-w-32 shrink-0 truncate rounded-full bg-secondary px-2 py-1 text-xs leading-4 text-foreground/70 hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)]';
 
+// Whether the strip renders anything for this link — EXACTLY the test the
+// component applies below, hoisted so a layout can ask it before rendering. Both
+// use it to pick a row-height estimate (list-layout's two row shapes,
+// card-layout's two), and a plain `tagIds.length > 0` would be subtly wrong: a
+// tag deleted or not yet synced resolves to no chip, and so to no strip. Keeping
+// it here is what stops the two from drifting apart. (bracemark-expo carries the
+// same predicate beside its row — link-row.tsx — where it also feeds FlashList's
+// recycle pools.)
+export const hasKnownTags = (link: LinkView, tagsById: Map<string, string>) =>
+  link.tagIds.some((id) => tagsById.has(id));
+
 // gap-1 on the chip row and clone (both axes); the measurement math mirrors it
 // when asking whether the "+N" chip still fits after a kept chip.
 const CHIP_GAP_PX = 4;
@@ -56,12 +68,16 @@ const CHIP_GAP_PX = 4;
 // doesn't know (a tag deleted / not yet synced) are skipped; no tags renders
 // nothing.
 //
-// The rows are fixed-height, so chips get a line budget (`maxLines`, the card
-// layout's two vs the list's one) and the component MEASURES how many fit it;
+// The strip gets a line budget (`maxLines`) and MEASURES how many chips fit it;
 // the rest collapse behind an in-flow "+N" chip that opens a popover holding
 // them (still clickable, same navigation). Measurement, not a fixed cap: the
 // column widths are responsive and tag names vary, so the fit is only knowable
-// from real geometry. An invisible absolutely-positioned clone renders ALL
+// from real geometry. BOTH layouts take the default ONE line today — the card
+// used to spend two, and gave it up so that a card here and a card in
+// bracemark-expo show the same chips (its strip is one line and can't be more:
+// link-tag-chips.tsx there estimates the fit rather than measuring it, because
+// RN has no synchronous pre-paint measure). The budget stays a parameter because
+// the fit is expressed in lines either way, not because a caller varies it. An invisible absolutely-positioned clone renders ALL
 // chips with the same metrics but ALWAYS wrapping (so overflow folds into
 // measurable lines even for a single-line row); a layout effect keeps the
 // chips whose clone line is within budget — and on the last line only while

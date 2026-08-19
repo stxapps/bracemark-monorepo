@@ -98,21 +98,34 @@ These compose: `useLiveQuery` produces the current array, the virtualizer render
 a window of it. Both are reactive, so a write refreshes the data and the visible
 rows together.
 
-**Estimated vs. measured row heights.** The two web layouts answer this
-differently, and the split is not arbitrary:
+**Estimated vs. measured row heights.** Both web layouts MEASURE. A title is
+`line-clamp-2`, so an item's height turns on whether that title wraps — a fact
+about the browser's line breaker at the current pane width, font and root font
+size, not something derivable from the link. So each row carries
+`ref={virtualizer.measureElement}` and `data-index`, and no `height` in its
+style; the estimates in each file are only for rows not yet mounted, and each
+sits between its own two outcomes so the error cancels rather than accumulating.
 
-- **The card layout budgets.** A card is stretched to its grid row, so its height
-  is a property of the row rather than of the card — `ROW_HEIGHT` is a fixed
-  number the markup must stay in step with, and `card-layout.tsx` spells the
-  arithmetic out because the card is `overflow-hidden` and under-budgeting clips
-  silently.
-- **The list layout measures.** Its title is `line-clamp-2`, so a row's height
-  turns on whether that title wraps, which is a fact about the browser's line
-  breaker at the current pane width and root font size — not derivable from the
-  link. Each row carries `ref={virtualizer.measureElement}` and `data-index`, and
-  no `height` in its style. Heights cache by `getItemKey`, which is the link
-  **path** rather than the default index, so a search or re-sort can't leave a
-  measurement describing whichever link used to sit at that position.
+- **The list layout** measures the row itself. Heights cache by `getItemKey`,
+  which is the link **path** rather than the default index, so a search or re-sort
+  can't leave a measurement describing whichever link used to sit at that
+  position.
+- **The card layout** measures the ROW OF CARDS — one virtual item is a row of
+  `columns` cards. A card is stretched to its grid row (`items-stretch`), so a
+  card's height is a property of the row rather than of the card, which is exactly
+  what lets one measurement describe it: the row is as tall as its tallest card
+  and the slack falls at the bottom of the shorter ones. Its key is the row's
+  first link path; a change in `columns` re-composes every row, so it drops the
+  whole measurement cache (`virtualizer.measure()`) rather than trying to remap
+  it. The banner is a fixed ASPECT of the card's width (12:7), which is what keeps
+  a late image load from reflowing a measured row.
+
+The card layout used to budget instead — a `ROW_HEIGHT` constant the markup had to
+stay in step with, scaled by the root font size. It was dropped for the usual
+reason a budget gets dropped: it had to reserve the second title line and the chip
+line on every card including the many that used neither, and the card is
+`overflow-hidden`, so under-budgeting clipped silently while over-budgeting left
+dead space under every card.
 
 The cost of measuring is that `getTotalSize()` is part measurement and part
 estimate, so the scrollbar thumb resizes as unmeasured rows scroll into view. That
@@ -122,9 +135,11 @@ is a uniform gutter — every list row is `14 + content + 14`, with no reserved 
 to leave slack on the rows that don't use it — and rows that cannot disagree with
 what they rendered, including under a changed root font size.
 
-On expo the question doesn't arise for the list: `FlashList` v2 measures cells and
-takes no size estimate, so `link-row.tsx` is plain intrinsic-height. `link-card.tsx`
-budgets, mirroring web's card for the same grid-row reason.
+On expo the question doesn't arise at all: `FlashList` v2 measures cells and takes
+no size estimate, so `link-row.tsx` and `link-card.tsx` are both plain
+intrinsic-height. The card gets web's equal-height rows for free — FlashList's
+grid layout manager normalizes a row's cells to the tallest as a `minHeight`,
+which the card fills with `grow`.
 
 ### pagination: growing `limit` + a decode cache
 

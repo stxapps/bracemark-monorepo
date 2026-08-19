@@ -332,23 +332,21 @@ editors:
   keyboard over the very note most opens are there to read (web's `focus()` has
   no such side effect). The rename doesn't change that: an always-on item is
   reached with a note to read more often than with one to write.
-- **The layouts show the note as a badge, never inline.** The card is
-  FIXED-height (`ROW_HEIGHT` — a card is stretched to its grid row, so its height
-  is a property of the row and the virtualizer's estimate must stay exact), so a
-  note line can't be conditional there: it would be budgeted on every card,
-  noteless ones included, and most links have none. The list row is no longer
-  fixed — it measures (see below) — so the constraint there is density rather than
-  arithmetic: a note line would push a two-line title plus host plus chips past
-  what a dense row can carry. So each row renders `NoteBadge` beside
-  `PinnedBadge` — card and list alike — carrying the text in `title` for hover,
-  with "Edit note" in the menu as the real read path. This is a deliberate
-  trade against `note`'s own rationale in `entities.ts`, which caps the field
-  (`LINK_NOTE_MAX`) precisely so it CAN be shown in a list view; the density won.
-  If that's ever revisited, the card layout is where the line fits (one clamped
-  `text-xs` line ≈ +20px, `ROW_HEIGHT` 300) — and its budget comment has the
-  arithmetic. Either way the field must stay inline on the link: were it to move
-  to a `files/` blob (the deferred `noteId`), the layouts would lose the cheap
-  read that makes even the badge possible.
+- **The layouts show the note as a badge, never inline.** Every link item on both
+  platforms measures its own height now (no layout budgets one — see
+  [client-queries.md](./client-queries.md)), so this is no longer arithmetic: it
+  is density. A note line would render on every noted item and push a two-line
+  title plus host plus chips past what a dense row can carry, and on a card it
+  would come between the title and the tags on the majority of cards that have no
+  note to show. So each item renders `NoteBadge` beside `PinnedBadge` — card and
+  list alike — carrying the text in `title` for hover, with "Edit note" in the
+  menu as the real read path. This is a deliberate trade against `note`'s own
+  rationale in `entities.ts`, which caps the field (`LINK_NOTE_MAX`) precisely so
+  it CAN be shown in a list view; the density won. If that's ever revisited, the
+  card layout is where the line fits — it has the most room per link and it grows
+  to whatever it renders. Either way the field must stay inline on the link: were
+  it to move to a `files/` blob (the deferred `noteId`), the layouts would lose
+  the cheap read that makes even the badge possible.
 - **The sidebar** (`_panes/sidebar.tsx`) does **not** use the shared picker
   components — it renders its own `NavTree`. But it renders it over the **same
   `useLists`/`useTags` trees** and the same `@stxapps/shared` tree helpers

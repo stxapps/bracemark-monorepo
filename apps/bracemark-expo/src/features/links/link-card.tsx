@@ -3,48 +3,51 @@
 // FlashList's `numColumns` replaces web's virtualize-by-rows-of-N chunking
 // (see main.tsx), so this file is only the card itself.
 //
-// FIXED height, web's rationale: cards with less content keep the height so the
-// grid rows stay aligned — content flows top-down and the unused space falls at
-// the BOTTOM (reads as bottom padding, not a mid-card gap). Budget: preview
-// slot (112 — image or fallback panel, fixed either way) + p-3 text block
-// (host line 16 + gap 8 + two title lines 40 + padding 24) + one chip line +
-// pb-3 (36) = 236. No date column (web parity)
-// and no inline note text (NoteBadge only — web's fixed-estimate rationale).
+// INTRINSIC height, web's rationale: a card fits its content — one title line or
+// two, chips or none — and the row it sits in is as tall as its tallest card. Web
+// gets that from the grid (`items-stretch`); here FlashList's GridLayoutManager
+// does the same job, giving every cell in a row the tallest cell's height as a
+// `minHeight`, which the `grow` on the wrapper and the card below then fill. So
+// the slack still falls at the BOTTOM of a shorter card (reads as padding, not as
+// a gap mid-card) and the card borders in a row still line up.
 //
-// That budget is drawn in UNSCALED dp, so it can't be a constant: the text in
-// it grows with the device font scale while the box would not, and the overage
-// disappears into `overflow-hidden` (this is the one layout in the app where
-// accessibility text scaling actually clips — the list row is intrinsic-height
-// and just grows). So split the budget and scale only the text-driven part:
-//
-//   fixed  156 = preview 112 + gap 8 + p-3 24 + pb-3 12
-//   text    80 = host line 16 + two title lines 40 + chip line 24
-//
-// at scale 1.0 that is exactly the 236 above, so the design baseline is
-// unchanged. `useCappedFontScale` applies the same ceiling the text itself is
-// capped at (lib/font-scale.ts), which is what keeps the growth bounded —
-// without the cap this would track Dynamic Type all the way to ~310%.
-
+// This replaces a fixed budget — a dp constant plus a font-scaled text part,
+// since the OS font scale multiplies fontSize alone. That split existed because
+// this was the one layout in the app where accessibility text scaling actually
+// CLIPPED (the card is `overflow-hidden`); with the height measured, the card
+// simply grows and the whole apparatus (the budget, the split, useCappedFontScale
+// here) is gone. What's left as a number is the banner, and it isn't a budget:
+// it's the card's own width times a ratio.
 import { Linking, Pressable, View } from 'react-native';
 
 import { displayUrl, hostFromText } from '@stxapps/shared';
 
 import { Checkbox } from '../../components/ui/checkbox';
 import { Text } from '../../components/ui/text';
-import { useCappedFontScale } from '../../lib/font-scale';
 import { Favicon, LinkPreviewImage } from './link-media';
 import { LinkRowMenu } from './link-row-menu';
 import { LinkTagChips } from './link-tag-chips';
 import { type LinkItemProps, NoteBadge, PinnedBadge } from './shared';
 import { useLinksViewState } from './view-state-provider';
 
-// What the card can spare for the tag strip, off the item width main.tsx hands
-// down (link-tag-chips.tsx does the fitting): the item wrapper's own p-2 (16)
-// plus the strip's px-3 (24). Nothing else shares the strip's line.
-const CARD_CHIP_CHROME = 40;
+// The banner is 12:7 — its height is 58.33% of the card's width — so it scales
+// with the column count instead of being pinned to one number (web's
+// `aspect-[12/7]`). Spelled as a HEIGHT computed off the item width main.tsx
+// hands down rather than as an aspect class: the card already knows that width
+// (the chip strip needs it), and a plain dp height needs nothing from the class
+// layer to be exactly right on the first frame — which is what keeps the cell
+// from measuring twice as the image resolves.
+const PREVIEW_ASPECT = 7 / 12;
+// The card's own width, off that item width: the wrapper's p-2 (16). No cap to
+// go with web's `max-w-105` — web needs one because a one-column pane can hand a
+// card 600px, while MIN_CARD_WIDTH 180 (main.tsx) keeps a cell here under ~360
+// on any device that reaches one column at all.
+const CARD_H_CHROME = 16;
 
-const CARD_FIXED_HEIGHT = 156;
-const CARD_TEXT_HEIGHT = 80;
+// What the card can spare for the tag strip, off the same item width
+// (link-tag-chips.tsx does the fitting): the wrapper's p-2 (16) plus the strip's
+// px-3 (24). Nothing else shares the strip's line.
+const CARD_CHIP_CHROME = 40;
 
 export function LinkCard({
   link,
@@ -59,15 +62,15 @@ export function LinkCard({
 }: LinkItemProps) {
   const { enterBulkEdit } = useLinksViewState();
   const host = hostFromText(link.url);
-  const fontScale = useCappedFontScale();
-  // Ceil so rounding can only ever give the text MORE room, never less.
-  const cardHeight = CARD_FIXED_HEIGHT + Math.ceil(CARD_TEXT_HEIGHT * fontScale);
+  const previewHeight = Math.round((itemWidth - CARD_H_CHROME) * PREVIEW_ASPECT);
 
   return (
     // p-2 is half the 16pt grid gutter: with the pane's matching content padding
     // (main.tsx CARD_GRID_PADDING), edges and inter-card gaps both come to 16 —
-    // web's p-4 container + gap-4 grid.
-    <View className="p-2">
+    // web's p-4 container + gap-4 grid. `grow`, not `flex-1`: flexGrow alone
+    // leaves the cell's base size its CONTENT, which is what FlashList measures
+    // on the first pass; `flex-1`'s flexBasis 0 would measure as an empty cell.
+    <View className="grow p-2">
       {/* Two meanings, two roles, and long-press as the way into bulk-edit —
           see the twin comment in link-row.tsx for all three. */}
       <Pressable
@@ -82,20 +85,26 @@ export function LinkCard({
                 onToggle();
               }
         }
-        style={{ height: cardHeight }}
-        className={`overflow-hidden rounded-lg border border-border ${
+        className={`grow overflow-hidden rounded-lg border border-border ${
           selected ? 'bg-muted' : 'active:bg-muted/50'
         }`}
       >
         {/* The banner: the preview image once its bytes are resident (fetched
             on demand by mounting — link-media.tsx), else the full-bleed hue
-            panel. Fixed h-28 either way (the height budget above). */}
-        <LinkPreviewImage link={link} className="h-28 w-full" fallback="panel" />
+            panel. The height is the slot's, so both fallbacks fill it. */}
+        <View style={{ height: previewHeight }}>
+          <LinkPreviewImage link={link} className="h-full w-full" fallback="panel" />
+        </View>
         <View className="gap-2 p-3">
-          {/* Badges trail the host on the meta line — the same rule as link-row
-              and both web layouts (web's list-layout.tsx carries the argument).
-              On a card it's also the only option: the title below is clamped to
-              two lines. */}
+          {/* The meta line: host, then the badges, then the ⋯ menu at the
+              trailing edge (web's card, verbatim). The badges ride this line in
+              all four layouts — web's list-layout.tsx carries the argument: the
+              host is bounded where the title is not, so this is the line with
+              slack. The menu joins them here rather than floating over the
+              banner, so nothing covers the preview. It can sit INSIDE the card's
+              Pressable on this platform (RN's responder hands the touch to the
+              innermost pressable), which is the whole trick web has to buy with
+              a stretched overlay. */}
           <View className="flex-row items-center gap-1.5">
             <Favicon host={host} className="size-4 shrink-0 rounded-sm" />
             <Text numberOfLines={1} className="min-w-0 flex-1 text-xs text-muted-foreground">
@@ -103,8 +112,25 @@ export function LinkCard({
             </Text>
             {pinned && <PinnedBadge />}
             {link.note !== undefined && link.note !== '' && <NoteBadge />}
+            {selectMode ? (
+              // The ⋯ menu's footprint (size-8), so entering bulk-edit swaps the
+              // slot's contents without moving the line (web's LinkRowSelect).
+              <View className="size-8 shrink-0 items-center justify-center">
+                <Checkbox
+                  aria-label={`Select ${link.title || displayUrl(link.url)}`}
+                  checked={selected}
+                  onCheckedChange={onToggle}
+                />
+              </View>
+            ) : (
+              <LinkRowMenu link={link} pinned={pinned} isFirst={isFirst} isLast={isLast} />
+            )}
           </View>
-          <Text numberOfLines={2} className="text-sm font-medium">
+          {/* text-base, not the list row's text-sm: a card is the layout with the
+              most room per link, so its title reads at body size (web's card,
+              verbatim). Two lines, and they cost nothing on the cards that use
+              one — the card is intrinsic-height now. */}
+          <Text numberOfLines={2} className="text-base font-medium">
             {link.title || displayUrl(link.url)}
           </Text>
         </View>
@@ -114,22 +140,6 @@ export function LinkCard({
           availableWidth={itemWidth - CARD_CHIP_CHROME}
           className="px-3 pb-3"
         />
-        {/* Floats over the banner (web's corner slot: the row menu, swapped for
-            the selection checkbox while bulk editing), so give it a readable
-            backdrop. */}
-        <View className="absolute top-1 right-1 rounded-md bg-background/60">
-          {selectMode ? (
-            <View className="p-1">
-              <Checkbox
-                aria-label={`Select ${link.title || displayUrl(link.url)}`}
-                checked={selected}
-                onCheckedChange={onToggle}
-              />
-            </View>
-          ) : (
-            <LinkRowMenu link={link} pinned={pinned} isFirst={isFirst} isLast={isLast} />
-          )}
-        </View>
       </Pressable>
     </View>
   );

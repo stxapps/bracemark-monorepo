@@ -123,9 +123,9 @@ export function EmptyState({
 // silhouette of the list rather than a sentence the eye has to parse and
 // discard. Mirrors each layout's real geometry closely enough to read as the
 // same surface (the list row's 64×38 thumbnail and two text lines; the card's
-// banner over its text block) without importing their measurements — a skeleton
-// that drifts by a few pixels costs nothing, and this file has no business
-// depending on ROW_HEIGHT.
+// 12:7 banner over its text block, capped and centred like the real one) without
+// importing their measurements — a skeleton that drifts by a few pixels costs
+// nothing, and this file has no business reaching into a layout's numbers.
 //
 // `aria-hidden` on the bones, with one polite status line behind it: a screen
 // reader should hear "Loading links", not eleven empty boxes.
@@ -146,8 +146,11 @@ function LinksSkeleton({ variant }: { variant: 'list' | 'card' }) {
           style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(18.75rem, 1fr))' }}
         >
           {Array.from({ length: rows }, (_, i) => (
-            <div key={i} className="overflow-hidden rounded-lg border border-border">
-              <Bone className="h-28 rounded-none" />
+            <div
+              key={i}
+              className="mx-auto w-full max-w-105 overflow-hidden rounded-lg border border-border"
+            >
+              <Bone className="aspect-[12/7] rounded-none" />
               <div className="flex flex-col gap-2 p-3">
                 <Bone className="h-3 w-24" />
                 <Bone className="h-3.5 w-full" />

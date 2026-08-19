@@ -331,12 +331,16 @@ overflows its chrome. The tempting fix — `allowFontScaling={false}` — keeps 
 layout pristine by making the app unreadable for exactly the users who changed
 the setting. That is an accessibility regression aimed at the people the setting
 exists for. So: cap, don't disable. 1.3 keeps the common small bumps working and
-bounds the overflow to what the fixed heights absorb.
+bounds the overflow to what the surrounding chrome absorbs.
 
 Both chokepoints spread `{...props}` _after_ the default, so a call site can
-still opt out or choose its own ceiling. For the rare layout that must size a
-fixed box around scaling text, `useCappedFontScale()` returns the device scale
-clamped to `[1, 1.3]` — `link-card.tsx`'s height budget is the one caller.
+still opt out or choose its own ceiling. For the rare place that must do
+ARITHMETIC on scaling text, `useCappedFontScale()` returns the device scale
+clamped to the same `[1, 1.3]` the text itself is capped at — the tag strip
+(`link-tag-chips.tsx`) is the one caller, and it estimates chip widths rather than
+sizing a box. Nothing sizes a fixed box around scaling text any more: both link
+items are intrinsic-height and simply grow (`link-card.tsx` was the last one, and
+its height budget is gone).
 
 The web has no equivalent policy: browser text zoom reflows, and
 `use-root-font-scale.ts` handles the root-size case.

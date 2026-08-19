@@ -8,5 +8,5 @@ export { EmptyState, RefreshPill, ShowMore } from './layout-chrome';
 export { Favicon, LinkPreviewImage } from './link-media';
 export { LinkRowMenu } from './link-row-menu';
 export { LinkRowSelect, NoteBadge, PinnedBadge } from './link-row-widgets';
-export { LinkTagChips } from './link-tag-chips';
+export { hasKnownTags, LinkTagChips } from './link-tag-chips';
 export type { LinkLayoutProps } from './types';

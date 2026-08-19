@@ -57,10 +57,11 @@ const ROW_CHIP_CHROME = 190;
 // Whether this row renders a chip strip, and so which of its two shapes it
 // takes: exactly the test LinkTagChips applies before it renders anything, so
 // the two must not drift. A plain `tagIds.length > 0` would be subtly wrong — a
-// tag deleted or not yet synced resolves to no chip, and so to no strip. Web's
-// list layout carries the same predicate for its row-height BUDGETS
-// (`_layouts/list-layout.tsx`, hasKnownTags); here heights are measured, and it
-// feeds FlashList's recycle pools instead (main.tsx, LayoutConfig.itemType).
+// tag deleted or not yet synced resolves to no chip, and so to no strip. Web
+// carries the same predicate for the row-height ESTIMATES both its layouts feed
+// their virtualizer (`_layouts/shared/link-tag-chips.tsx`, hasKnownTags); here
+// every height is measured, so it feeds FlashList's recycle pools instead
+// (main.tsx, LayoutConfig.itemType — the card's as well as the row's).
 export const hasKnownTags = (link: LinkView, tagsById: Map<string, string>) =>
   link.tagIds.some((id) => tagsById.has(id));
 

@@ -75,17 +75,17 @@ type LayoutConfig = {
   name: 'list' | 'card';
   Item: (props: LinkItemProps) => React.ReactNode;
   // This layout's FlashList recycle pools: a view is only ever reused for an
-  // item of the same type, so it rarely has to change SHAPE on recycle. The list
-  // row has two — a tagged row carries a chip strip and is a chip line taller —
-  // and without this they share one pool, so a scroll makes every mismatched
-  // reuse re-lay out and re-measure the cell. Tag-ness is all this can key on:
-  // the row's other height input is whether the title wraps to its second line
-  // (link-row.tsx), which isn't knowable without laying the text out, so a
-  // one-line and a two-line row of the same tag-ness do still share a pool. The card is fixed-height with the
-  // chips inside its budget (link-card.tsx), so its shapes cost the same to
-  // recycle and one pool is right; omitted rather than made constant, since a
-  // single type IS FlashList's default. Called very often (FlashList's own
-  // note), hence a Map lookup and no allocation.
+  // item of the same type, so it rarely has to change SHAPE on recycle. Both
+  // layouts have two — a tagged item carries a chip strip and is a chip line
+  // taller than a bare one — and without this they share one pool, so a scroll
+  // makes every mismatched reuse re-lay out and re-measure the cell. The card
+  // pays MORE for a mismatch than the row does: its cells are height-normalized
+  // per grid row (link-card.tsx), so one re-measured cell can re-lay out the
+  // whole row it landed in. Tag-ness is all this can key on: the other height
+  // input is whether the title wraps to its second line, which isn't knowable
+  // without laying the text out, so a one-line and a two-line item of the same
+  // tag-ness do still share a pool. Called very often (FlashList's own note),
+  // hence a Map lookup and no allocation.
   itemType?: (link: LinkView, tagsById: Map<string, string>) => string;
   columns: (paneWidth: number) => number;
   contentPadding: number;
@@ -101,6 +101,7 @@ const LIST_LAYOUT: LayoutConfig = {
 const CARD_LAYOUT: LayoutConfig = {
   name: 'card',
   Item: LinkCard,
+  itemType: (link, tagsById) => (hasKnownTags(link, tagsById) ? 'tagged' : 'bare'),
   columns: (paneWidth) => Math.max(1, Math.floor(paneWidth / MIN_CARD_WIDTH)),
   contentPadding: CARD_GRID_PADDING,
 };

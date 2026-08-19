@@ -12,10 +12,10 @@ import { Checkbox } from '@stxapps/web-ui/components/ui/checkbox';
 import { useLinksViewState } from '../../_contexts/view-state-provider';
 
 // The bulk-edit selection checkbox, shown while `bulkEditing` is on. Each layout
-// places it to fit its form factor: the card overlays it at the banner corner
-// (where its menu floats), while the list gives it a leading-edge column and
-// hides the menu. Sized to the menu trigger's footprint (size-8) so it reads as a
-// peer of the row's other action widgets.
+// places it to fit its form factor: the card puts it in the ⋯ menu's slot on the
+// meta line (the menu is what it stands in for), while the list gives it a
+// leading-edge column and hides the menu. Sized to the menu trigger's footprint
+// (size-8) so it reads as a peer of the row's other action widgets.
 // It toggles the same hoisted selection the row's own click does (in bulk mode
 // the layouts intercept the anchor click) — the checkbox is the visible state
 // plus a small dedicated target, not a separate mechanism. Shift-click extends a
@@ -45,13 +45,17 @@ export function PinnedBadge() {
   return <Pin className="size-3.5 shrink-0 text-muted-foreground" aria-label="Pinned" />;
 }
 
-// Its sibling for the link's note, used by BOTH layouts. Both are fixed-height
-// (the row/card estimate must stay exact for the virtualizer), so an inline note
-// would cost its line on every row, noteless ones included — and most links have
-// none. So the badge marks that a note exists and the text stays one hover
-// (`title`) or one row menu "Edit note" away. `title` is why this is a <span>
-// wrapper rather than the bare icon — the tooltip needs a box, and this sits
-// inside the row's <a>, so it must stay non-interactive.
+// Its sibling for the link's note, used by BOTH layouts. Neither reserves a line
+// for the note itself: an inline note would cost its line on every row, noteless
+// ones included — and most links have none. (The rows are measured now, so this
+// is a design choice rather than the arithmetic it once was: a note line would
+// still be dead space on the majority of rows.) So the badge marks that a note
+// exists and the text stays one hover (`title`) or one row menu "Edit note"
+// away. `title` is why this is a <span> wrapper rather than the bare icon — the
+// tooltip needs a box. It must stay NON-INTERACTIVE either way: in the list it
+// sits inside the row's <a>, and on a card it sits under the title anchor's
+// full-card overlay, lifted just far enough (`relative z-10` on its wrapper
+// there) for the tooltip to be reachable.
 export function NoteBadge({ note }: { note: string }) {
   return (
     <span className="flex shrink-0 items-center" title={note}>

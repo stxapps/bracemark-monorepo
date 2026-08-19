@@ -1,22 +1,65 @@
 'use client';
 
 // Grid-of-previews layout. Virtualized by ROW (each virtual item is a row of
-// `columns` cards, where `columns` tracks the container width) — the simplest
-// way to virtualize a uniform grid: divide the
-// link list into chunks and lay each chunk out with a flex/grid row. Card height
-// is fixed so the row estimate stays exact.
+// `columns` cards, where `columns` tracks the container width) — the simplest way
+// to virtualize a uniform grid: chunk the link list and lay each chunk out as a
+// grid row.
+//
+// Row heights are MEASURED, not budgeted — list-layout.tsx carries the argument
+// and this layout now follows it. It used to be the one web layout that budgeted,
+// on the grounds that a card is stretched to its grid row, so a card's height is a
+// property of the ROW rather than of the card. That is still true, and it is
+// exactly what makes the measurement work: the grid stretches every card in a row
+// to the tallest of them, so the row has ONE height to report, and the virtualizer
+// reads it off the row element (`ref={virtualizer.measureElement}` + `data-index`,
+// and no `height` in its style).
+//
+// What that buys: the card fits its CONTENT. A fixed budget had to reserve the
+// second title line and the chip line on every card, including the many that use
+// neither — and since the card is `overflow-hidden`, under-budgeting clipped
+// silently while over-budgeting left dead space at the bottom of every card. It
+// also had to be scaled by the root font size (useRootFontScale, now gone from
+// this file) because it was a px number against an all-rem card. A measured row is
+// simply correct at any root size, and it cannot disagree with what it painted.
+//
+// Two things keep a row settling in ONE pass rather than oscillating: the banner
+// is a fixed ASPECT of the card's width (below), so a late image load can't
+// reflow a measured row, and the chip strip is capped at one line.
+//
+// The card anatomy, top to bottom:
+//
+//   the banner  — LinkPreviewImage at 12:7 (`aspect-[12/7]`, i.e. its height is
+//                 58.33% of the card's width — it scales with the column count
+//                 instead of being pinned to one number).
+//   the meta line — favicon + host + the pinned/note badges + the ⋯ menu at the
+//                 trailing edge. The badges trail the host in all four layouts
+//                 (list-layout.tsx has the argument: the host is bounded where the
+//                 title is not, so this is the line with slack). The menu joins
+//                 them here rather than floating over the banner: nothing covers
+//                 the preview any more, and the trigger's 44px hit target expands
+//                 into the card's own p-3 instead of into the grid gutter, where
+//                 it used to sit 6px from the next card's edge.
+//   the title   — `text-base`, `line-clamp-2`. A card is the layout with the most
+//                 room per link, so the title reads at body size here; the list
+//                 row's text-sm answers to a different constraint (density).
+//   the chips   — ONE line (LinkTagChips' default), which is also all
+//                 bracemark-expo's strip can do, so both apps show the same chips.
+//
+// No line is budgeted for the link's note: an inline note would cost its line on
+// the many cards that have none, so both layouts badge it (NoteBadge) and leave
+// the text to hover and the row menu's "Edit note".
 
 import { useEffect, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 
 import { displayUrl, hostFromText } from '@stxapps/shared';
 import { useElementWidth } from '@stxapps/web-ui/hooks/use-element-size';
-import { useRootFontScale } from '@stxapps/web-ui/hooks/use-root-font-scale';
 
 import { useLinksViewState } from '../_contexts/view-state-provider';
 import {
   EmptyState,
   Favicon,
+  hasKnownTags,
   type LinkLayoutProps,
   LinkPreviewImage,
   LinkRowMenu,
@@ -37,44 +80,33 @@ import {
 const MIN_CARD_WIDTH = 300;
 const CARD_GAP = 16;
 const DEFAULT_COLUMNS = 3;
-// Fixed card budget: preview banner (112) + p-3 text block (host 20 + gap 8 +
-// two title lines 40 + padding 24) + up to two chip lines + pb-3 (64 — two 24px
-// chips plus the 4px gap-1 between their lines plus the 12px pad; LinkTagChips
-// maxLines={2} measures the fit, so the block never exceeds two lines) + the
-// row's pb-4 (16). This block is why the total moved with the chip: chips went
-// 18.5 → 24 for the list row's sake, and a card is the layout that stacks TWO
-// of them, so it absorbs the growth twice over. The card is `overflow-hidden`,
-// so under-budgeting here clips the second chip line rather than spilling it —
-// a silent failure, hence the arithmetic spelled out. Cards with less content
-// keep the height — the
-// grid stretches every card to the row height and the unused space falls at the
-// BOTTOM (content flows top-down; the anchor is NOT flex-1) — so the row estimate
-// stays exact. Height is fixed regardless of card WIDTH, so a variable column
-// count leaves it exact.
+
+// The other end of that range, and the reason each card is `mx-auto` inside its
+// grid cell: dropping a column can only happen once a cell has grown to twice the
+// minimum, so a cell runs up to ~615px wide at one column (a pane between 300 and
+// 615 — the browser extension's popup, or a narrow window with the sidebar open).
+// A 615px card is a 359px banner and a title stranded on one very long line; the
+// cap keeps a card a card, and the cell's leftover width becomes margin either
+// side of it. Mirrored by `max-w-105` on the card below (26.25rem — the class is
+// the one that renders, this number only feeds the estimates, so under a raised
+// root font size the estimate errs small, which is what an estimate should do).
+const MAX_CARD_WIDTH = 420;
+
+// The banner's height as a fraction of the card's width: 12:7. Only the estimates
+// need it as a number — `aspect-[12/7]` on the slot is what actually lays it out.
+const PREVIEW_ASPECT = 7 / 12;
+
+// What a row's TEXT adds to its banner, for rows not yet measured. Both sit
+// BETWEEN the two outcomes of the only thing they can't know — whether the title
+// wraps to its second line — so the error cancels across a long list instead of
+// accumulating in one direction:
 //
-// No line is budgeted for the link's note: a fixed estimate can't be conditional,
-// so an inline note would cost its line on EVERY card — and most links have none.
-// Both layouts therefore badge it (NoteBadge) and leave the text to hover and the
-// row menu's "Edit note".
-//
-// Scaled by the root font size (useRootFontScale). Every part of this budget is
-// rem: Tailwind v4 sizes text from `--text-sm`/`--text-xs` AND spacing from
-// `--spacing: 0.25rem`, so `h-28`, `p-3`, `gap-4` scale too — while the number
-// itself would not. This app pins no root `font-size`, so a reader who raises the
-// browser's default font-size preference grows the whole card, and the card's
-// `overflow-hidden` would swallow the difference by clipping. (Not browser zoom,
-// which scales px and rem alike and needs no compensation.) So the whole budget
-// scales UNIFORMLY; there is no meaningfully unscaled part to hold back — unlike
-// the native card in bracemark-expo, which does split, and correctly: RN has no
-// rem, Uniwind resolves spacing to fixed dp, and the OS font scale multiplies
-// fontSize ALONE.
-//
-// This is now the only layout on web that budgets a height at all. The list
-// layout MEASURES its rows (list-layout.tsx has the argument), which it can
-// because a list row is free to be whatever height its content wants; a card is
-// stretched to its grid row, so a card's height is a property of the row, not of
-// the card, and a budget is the honest way to express that.
-const ROW_HEIGHT = 288;
+//   meta line 32 (the ⋯ trigger's size-8 sets it) + gap-2 8 + title 24 or 48
+//   + p-3 24 + the row's pb-4 16                      → 104 … 128
+//   + one chip line 24 + the strip's pb-3 12          → 140 … 164
+const ESTIMATE_BARE = 116;
+const ESTIMATE_TAGGED = 152;
+
 const SCROLL_TOP_THRESHOLD = 8;
 
 export function CardLayout({
@@ -103,9 +135,13 @@ export function CardLayout({
     contentWidth > 0
       ? Math.max(1, Math.floor((contentWidth + CARD_GAP) / (MIN_CARD_WIDTH + CARD_GAP)))
       : DEFAULT_COLUMNS;
+  // The width one card actually renders at — the cell, capped by `max-w-105` —
+  // which is what turns the banner's ASPECT into a number for the estimate below.
+  const cardWidth = Math.min(
+    contentWidth > 0 ? (contentWidth - CARD_GAP * (columns - 1)) / columns : MIN_CARD_WIDTH,
+    MAX_CARD_WIDTH,
+  );
   const rowCount = Math.ceil(links.length / columns);
-  // Ceil so rounding can only ever give the content MORE room, never less.
-  const rowHeight = Math.ceil(ROW_HEIGHT * useRootFontScale());
 
   useEffect(() => {
     setScrolled(false);
@@ -120,16 +156,33 @@ export function CardLayout({
   const virtualizer = useVirtualizer({
     count: rowCount,
     getScrollElement: () => scrollEl,
-    estimateSize: () => rowHeight,
+    // By the first link's PATH rather than the default index (list-layout.tsx's
+    // reasoning): a measured height then follows its row across a search or a
+    // re-sort instead of describing whichever links used to sit at that position.
+    // A row is re-measured on mount anyway, so a row whose COMPANIONS changed
+    // corrects itself; what this prevents is a stale height being trusted for a
+    // row that never mounts.
+    getItemKey: (index) => links[index * columns]?.path ?? index,
+    // A row is as tall as its tallest card, so a row with any tagged link in it
+    // carries the chip line. `hasKnownTags` is the chip strip's own render test —
+    // a tag id the map can't resolve renders no chip, so it must not buy the
+    // taller estimate here either.
+    estimateSize: (index) => {
+      const rowLinks = links.slice(index * columns, index * columns + columns);
+      const tagged = rowLinks.some((link) => hasKnownTags(link, tagsById));
+      return Math.round(cardWidth * PREVIEW_ASPECT) + (tagged ? ESTIMATE_TAGGED : ESTIMATE_BARE);
+    },
     overscan: 4,
   });
 
-  // A changed `estimateSize` doesn't invalidate the cached measurements on its
-  // own, so re-measure when the root font size moves (rare — a browser
-  // preference change, plus the once-per-mount 1 → real correction).
+  // Changing `columns` re-composes every row, so the cached measurements now
+  // describe rows that no longer exist (three cards' worth of height on a row that
+  // holds two). `measure()` drops the cache wholesale; the visible rows re-measure
+  // on their next layout. Also covers the once-per-mount DEFAULT_COLUMNS → real
+  // correction, and the banner-height change that comes with a new `cardWidth`.
   useEffect(() => {
     virtualizer.measure();
-  }, [virtualizer, rowHeight]);
+  }, [virtualizer, columns, cardWidth]);
 
   // Virtual items are ROWS of `columns` cards, so the displayed LINK range is the first row's
   // first card through the last row's last card (the hook clamps the tail to `links.length`).
@@ -173,9 +226,21 @@ export function CardLayout({
             return (
               <div
                 key={virtualRow.key}
-                className="absolute inset-x-0 grid gap-4 pb-4"
+                // The virtualizer MEASURES this element, and `items-stretch` (the
+                // grid default, spelled out because the measurement depends on it)
+                // is what makes one number describe the whole row: every card is
+                // stretched to the tallest, so the row has a single height and the
+                // slack falls at the BOTTOM of the shorter cards — content flows
+                // top-down and nothing here is `flex-1`, so it reads as bottom
+                // padding rather than a gap in the middle of a card. `data-index`
+                // maps an observer entry back to a row (react-virtual's default
+                // `indexAttribute`); the style deliberately carries no `height`,
+                // which would be read back as the measurement and pin every row to
+                // one shape. `pb-4` is the 16px row gutter, inside the measured box.
+                ref={virtualizer.measureElement}
+                data-index={virtualRow.index}
+                className="absolute inset-x-0 grid items-stretch gap-4 pb-4"
                 style={{
-                  height: rowHeight,
                   gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
                   transform: `translateY(${virtualRow.start}px)`,
                 }}
@@ -189,88 +254,97 @@ export function CardLayout({
                   return (
                     <div
                       key={link.path}
-                      className={`relative flex flex-col overflow-hidden rounded-lg border border-border ${
+                      className={`relative mx-auto flex w-full max-w-105 flex-col overflow-hidden rounded-lg border border-border ${
                         selected ? 'bg-muted' : 'hover:bg-muted/50'
                       }`}
                     >
-                      {/* The tag chips are buttons, so they sit OUTSIDE the anchor
-                          as the card's bottom block (same no-button-in-anchor rule
-                          as LinkRowMenu). The anchor is NOT flex-1: content flows
-                          top-down and the fixed-height slack falls below the tags
-                          (reads as bottom padding, not a mid-card gap). */}
-                      <a
-                        href={link.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex min-w-0 flex-col"
-                        // In bulk-edit mode the card's click toggles selection
-                        // instead of opening the link (middle/cmd-click still
-                        // opens); shift-click extends a range over `links`.
-                        onClick={
-                          bulkEditing
-                            ? (e) => {
-                                e.preventDefault();
-                                if (e.shiftKey) selectRange(link, links);
-                                else toggleSelected(link);
-                              }
-                            : undefined
-                        }
-                      >
-                        <LinkPreviewImage
-                          link={link}
-                          className="h-28 w-full shrink-0"
-                          fallback="panel"
-                        />
-                        <div className="flex min-w-0 flex-col gap-2 p-3">
-                          {/* Badges trail the host on the meta line — the same
-                              rule as the list row and as both bracemark-expo
-                              layouts (see list-layout.tsx for the argument: the
-                              host is bounded where the title is not, so this is
-                              the line with slack). Here it's also the only
-                              option: the title below is line-clamp-2, and a
-                              -webkit-box formatting context is no place for an
-                              inline icon. Inside the anchor, so their
-                              aria-labels join the link's name. */}
-                          <div className="flex items-center gap-2">
-                            <Favicon host={hostFromText(link.url)} className="size-4 shrink-0" />
-                            <span className="truncate text-xs text-muted-foreground">
-                              {hostFromText(link.url)}
+                      <LinkPreviewImage
+                        link={link}
+                        className="aspect-[12/7] w-full shrink-0"
+                        fallback="panel"
+                      />
+                      <div className="flex min-w-0 flex-col gap-2 p-3">
+                        <div className="flex items-center gap-2">
+                          <Favicon host={hostFromText(link.url)} className="size-4 shrink-0" />
+                          <span className="truncate text-xs text-muted-foreground">
+                            {hostFromText(link.url)}
+                          </span>
+                          {/* Both islands below are `relative z-10`, which is what
+                              lifts them clear of the title anchor's full-card
+                              overlay (see it below): the badges so the note's
+                              `title` tooltip is reachable at all, the ⋯ / checkbox
+                              so its click lands on the button and not on the link.
+                              Everything else on this line stays UNDER the overlay,
+                              so a click on the host opens the link like the rest of
+                              the card does. */}
+                          {(pinned || link.note) && (
+                            <span className="relative z-10 flex shrink-0 items-center gap-2">
+                              {pinned && <PinnedBadge />}
+                              {link.note && <NoteBadge note={link.note} />}
                             </span>
-                            {pinned && <PinnedBadge />}
-                            {link.note && <NoteBadge note={link.note} />}
-                          </div>
-                          {/* `title` discloses the full string, which
-                              line-clamp-2 hides on any card whose title runs
-                              past two lines (see list-layout.tsx — same
-                              reasoning, and the same pointer-only caveat). */}
-                          <span className="line-clamp-2 text-sm font-medium" title={title}>
-                            {title}
+                          )}
+                          <span className="relative z-10 ml-auto flex shrink-0">
+                            {bulkEditing ? (
+                              <LinkRowSelect link={link} links={links} />
+                            ) : (
+                              <LinkRowMenu
+                                link={link}
+                                pinned={pinned}
+                                isFirst={index === 0}
+                                isLast={index === pinnedCount - 1}
+                              />
+                            )}
                           </span>
                         </div>
-                      </a>
+                        {/* One anchor for the whole card: `after:inset-0` stretches
+                            an invisible overlay across the card (the card is the
+                            `relative` ancestor), so a click anywhere that isn't one
+                            of the islands above opens the link — which is how a
+                            card grid is expected to behave, and how bracemark-expo's
+                            card already behaves (its whole cell is one Pressable).
+                            The buttons stay OUTSIDE the anchor in the DOM, which is
+                            the rule they exist for (LinkRowMenu, and the chips
+                            below); the overlay is what re-unites the two halves
+                            visually. The clamp sits on the inner span, not on the
+                            anchor: `line-clamp-2` is `-webkit-box`, and an
+                            absolutely-positioned pseudo-element inside one is at
+                            the mercy of the clamp's line counting.
+
+                            `title` on the anchor discloses the full string that
+                            line-clamp-2 hides past two lines (list-layout.tsx —
+                            same reasoning, same pointer-only caveat). It answers
+                            for the whole card now, since the overlay is what the
+                            pointer is over. */}
+                        <a
+                          href={link.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          title={title}
+                          className="block after:absolute after:inset-0"
+                          // In bulk-edit mode the card's click toggles selection
+                          // instead of opening the link (middle/cmd-click still
+                          // opens); shift-click extends a range over `links`.
+                          onClick={
+                            bulkEditing
+                              ? (e) => {
+                                  e.preventDefault();
+                                  if (e.shiftKey) selectRange(link, links);
+                                  else toggleSelected(link);
+                                }
+                              : undefined
+                          }
+                        >
+                          <span className="line-clamp-2 text-base font-medium">{title}</span>
+                        </a>
+                      </div>
+                      {/* The chips are buttons, so they sit outside the anchor as
+                          the card's bottom block — and above its overlay, or they
+                          would be unclickable. One line, LinkTagChips' default. */}
                       <LinkTagChips
                         link={link}
                         tagsById={tagsById}
-                        maxLines={2}
-                        className="px-3 pb-3"
+                        className="relative z-10 px-3 pb-3"
                       />
-                      {/* Floats over the banner now, so give it a readable pad. The
-                          1.5 inset, not 1, keeps the trigger's 44px hit target (an
-                          `after:` expansion 6px past its 32px box — see LinkRowMenu)
-                          inside the card instead of spilling into the grid gutter,
-                          where it would steal taps aimed at the next card. */}
-                      <div className="absolute top-1.5 right-1.5 rounded-md bg-background/60">
-                        {bulkEditing ? (
-                          <LinkRowSelect link={link} links={links} />
-                        ) : (
-                          <LinkRowMenu
-                            link={link}
-                            pinned={pinned}
-                            isFirst={index === 0}
-                            isLast={index === pinnedCount - 1}
-                          />
-                        )}
-                      </div>
                     </div>
                   );
                 })}

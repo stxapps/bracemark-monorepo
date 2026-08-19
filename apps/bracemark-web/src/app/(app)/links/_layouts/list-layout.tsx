@@ -9,12 +9,12 @@ import { useEffect, useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 
 import { displayUrl, hostFromText } from '@stxapps/shared';
-import { type LinkView } from '@stxapps/web-react';
 
 import { useLinksViewState } from '../_contexts/view-state-provider';
 import {
   EmptyState,
   Favicon,
+  hasKnownTags,
   type LinkLayoutProps,
   LinkPreviewImage,
   LinkRowMenu,
@@ -83,12 +83,6 @@ import {
 // afresh when it mounts.
 const ESTIMATE_BARE = 80;
 const ESTIMATE_TAGGED = 116;
-
-// The estimate predicate, and LinkTagChips' render test, in one place: a tag id
-// the map doesn't resolve is skipped there, so it must not buy the taller
-// estimate here.
-const hasKnownTags = (link: LinkView, tagsById: Map<string, string>) =>
-  link.tagIds.some((id) => tagsById.has(id));
 
 // Past this many pixels we treat the pane as "scrolled away from the top", so a
 // background sync is staged behind the refresh pill (see view-state-provider).
