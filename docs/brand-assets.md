@@ -42,17 +42,34 @@ a re-render of every raster.
 - **Favicons and toolbar icons** (`logo16/32/48/64`, the browser extension's
   `icon/16|32|48|128`, `icon1`/`icon2` in bracemark-web and the marketing site,
   expo `favicon.png`) — mark in `#0a0a0a` on an **opaque white tile cut tight to
-  the mark**: on an N×N canvas the tile is **7N/8 wide × N tall, centred, with an
-  N/8 corner radius**, and the mark sits inside it at **ink height 7N/8**, centred,
-  natural 428:512 aspect. The canvas corners outside the tile's radius stay
-  transparent, so the tile reads as a rounded chip and not as a square.
+  the mark**: on an N×N canvas the tile is **7N/8 wide × N tall, centred**, with
+  an **N/8 radius on three corners and a 45° chamfer of N/3 on the top-right**,
+  and the mark sits inside it at **ink height 7N/8**, centred, natural 428:512
+  aspect. The canvas corners outside the tile stay transparent, so the tile reads
+  as a dog-eared chip and not as a square.
+  The chamfer is the mark's own fold repeated one level out, and it is
+  deliberately **larger** than the fold it echoes — N/3 measured against the tile,
+  not the mark's ~30% measured against the mark — so the two diagonals run
+  parallel with a white band between them instead of collapsing into one edge.
+  That band is what sets the floor: at 16px it is a single pixel, and cutting any
+  deeper merges the mark's fold into the tile's, at which point the corner stops
+  reading as folded and starts reading as clipped.
 - **App and PWA tiles** (`logo192/512`, `*-maskable`, `apple-touch-icon`,
   `apple-icon`, expo `icon.png`/`ios-light.png`) — opaque **white** tile, mark
-  `#0a0a0a`, ink height 50–55%.
+  `#0a0a0a`, ink height 50–55%, and **no chamfer**. These are full-bleed squares
+  the platform masks to a shape of its own (a squircle, a circle, a rounded rect),
+  so a corner cut here is either erased by the mask or fights it. The split is
+  deliberate and it is visible — the same mark is a dog-eared chip in a tab strip
+  and a plain square on a home screen — and it follows from who owns the corner: a
+  browser paints our raster as we shipped it, an OS does not.
 - **The expo dark and tinted variants** (`ios-dark.png`, `ios-tinted.png`) —
   transparent, near-white mark, 55%; iOS composites them over its own backdrop.
 - **The two `favicon.ico`** (bracemark-web, bracemark-site) — four frames each,
-  16/32/48/64, following the favicon rule above, tile included.
+  16/32/48/64, following the favicon rule above, tile and chamfer included. **All
+  four frames move together.** A shape change that re-renders the PNGs and the
+  largest frame leaves 16px on the old shape in every browser that picks that
+  frame, and nothing about the file looks wrong — the `.ico` is one path in
+  `git status` no matter how many frames inside it are stale.
 - **The three expo rasters the platform composites itself** (`adaptive-icon.png`,
   `splash-icon.png`, `splash-icon-dark.png`, all 1024²) — transparent, because
   their background is set in `app.config.ts` rather than baked in: Android's
@@ -80,6 +97,14 @@ re-render: the geometry reproduces exactly, but the **antialiasing does not** �
 fresh render from the same path differs from the committed file by up to ~26%
 alpha on edge pixels alone, because a different rasteriser drew it — so a
 re-render is never a byte-clean diff.
+
+Which is the argument for **editing the corner rather than re-rendering the file**
+whenever a change is confined to one corner, as the chamfer was. The diff then
+stays inside that corner's bounding box and every other pixel stays byte-identical
+to what shipped, so the mark itself is provably untouched and the check is
+mechanical: the difference of old and new must have an empty bounding box outside
+the corner. A full re-render buries the same change in edge noise across the whole
+raster and there is nothing left to check it against.
 
 **The white tile is what makes that first class survive a dark browser**, and it
 is why those files are no longer transparent. They are the only rasters a
@@ -137,6 +162,13 @@ The fold is also used away from the mark, and it carries **exactly two
 meanings**. No use renders the mark — each cuts the same corner off a rectangle,
 at a size set against the object rather than against the mark's 30% ratio, which
 only reads as a silhouette on ~40px objects.
+
+**The favicon tile's chamfer is not one of these uses and is not a third
+meaning.** It is the mark's own fold on the tile that exists only to carry the
+mark, and it is governed by the raster conventions above, not by this table. The
+rule here binds the fold where it appears **away** from the mark, on an object
+that is about something else — which is exactly where a fold has to earn a
+meaning, because there is no mark beside it to explain the shape.
 
 | where                                                                       | cut     | what it means                                                                                                               |
 | --------------------------------------------------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------- |
