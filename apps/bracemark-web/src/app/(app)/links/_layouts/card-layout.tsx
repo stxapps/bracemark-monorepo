@@ -8,11 +8,12 @@
 // Row heights are MEASURED, not budgeted — list-layout.tsx carries the argument
 // and this layout now follows it. It used to be the one web layout that budgeted,
 // on the grounds that a card is stretched to its grid row, so a card's height is a
-// property of the ROW rather than of the card. That is still true, and it is
-// exactly what makes the measurement work: the grid stretches every card in a row
-// to the tallest of them, so the row has ONE height to report, and the virtualizer
-// reads it off the row element (`ref={virtualizer.measureElement}` + `data-index`,
-// and no `height` in its style).
+// property of the ROW rather than of the card. Cards are no longer stretched — each
+// one sizes to its own content, so its border hugs it (`items-start` below) — but
+// the measurement is untouched by that: a grid row is as tall as its tallest item
+// either way, so the row still has ONE height to report, and the virtualizer reads
+// it off the row element (`ref={virtualizer.measureElement}` + `data-index`, and no
+// `height` in its style).
 //
 // What that buys: the card fits its CONTENT. A fixed budget had to reserve the
 // second title line and the chip line on every card, including the many that use
@@ -32,7 +33,8 @@
 //                 58.33% of the card's width — it scales with the column count
 //                 instead of being pinned to one number).
 //   the meta line — favicon + host + the pinned/note badges + the ⋯ menu at the
-//                 trailing edge. The badges trail the host in all four layouts
+//                 trailing edge. The host reads at `text-base`, the title's size —
+//                 the relationship list-layout has at its own denser text-sm. The badges trail the host in all four layouts
 //                 (list-layout.tsx has the argument: the host is bounded where the
 //                 title is not, so this is the line with slack). The menu joins
 //                 them here rather than floating over the banner: nothing covers
@@ -226,20 +228,22 @@ export function CardLayout({
             return (
               <div
                 key={virtualRow.key}
-                // The virtualizer MEASURES this element, and `items-stretch` (the
-                // grid default, spelled out because the measurement depends on it)
-                // is what makes one number describe the whole row: every card is
-                // stretched to the tallest, so the row has a single height and the
-                // slack falls at the BOTTOM of the shorter cards — content flows
-                // top-down and nothing here is `flex-1`, so it reads as bottom
-                // padding rather than a gap in the middle of a card. `data-index`
+                // The virtualizer MEASURES this element. `items-start` overrides the
+                // grid's default stretch so each card is only as tall as its own
+                // content: the row is still the height of its tallest card, so one
+                // number still describes it, but the difference now falls OUTSIDE
+                // the shorter cards as gutter instead of inside their borders as
+                // dead space. Stretched, a card that used neither the title's second
+                // line nor the chip strip enclosed up to ~60px of nothing while its
+                // neighbour used both — and the border drew a box around it.
+                // `data-index`
                 // maps an observer entry back to a row (react-virtual's default
                 // `indexAttribute`); the style deliberately carries no `height`,
                 // which would be read back as the measurement and pin every row to
                 // one shape. `pb-4` is the 16px row gutter, inside the measured box.
                 ref={virtualizer.measureElement}
                 data-index={virtualRow.index}
-                className="absolute inset-x-0 grid items-stretch gap-4 pb-4"
+                className="absolute inset-x-0 grid items-start gap-4 pb-4"
                 style={{
                   gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
                   transform: `translateY(${virtualRow.start}px)`,
@@ -265,8 +269,19 @@ export function CardLayout({
                       />
                       <div className="flex min-w-0 flex-col gap-2 p-3">
                         <div className="flex items-center gap-2">
+                          {/* text-base, the size the TITLE reads at — the same pairing
+                              list-layout makes at its own text-sm. The host is the
+                              second thing read, not a caption; it stays subordinate on
+                              colour and weight rather than on size, and a card has MORE
+                              room per link than a dense row, so a card can't be the
+                              layout that shrinks it. It also puts the size-4 favicon at
+                              list-layout's proportion — the mark matches the font size
+                              there (14/14) as it does here (16/16). Free of the row
+                              height either way: this line is the ⋯ trigger's 32px box,
+                              and a 16px string's line box is 24, so the estimates above
+                              don't move for it. */}
                           <Favicon host={hostFromText(link.url)} className="size-4 shrink-0" />
-                          <span className="truncate text-xs text-muted-foreground">
+                          <span className="truncate text-base text-muted-foreground">
                             {hostFromText(link.url)}
                           </span>
                           {/* Both islands below are `relative z-10`, which is what

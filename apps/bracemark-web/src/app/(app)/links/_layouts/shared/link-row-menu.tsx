@@ -109,7 +109,14 @@ export function LinkRowMenu({
           className="relative shrink-0 text-muted-foreground after:absolute after:-inset-1.5"
           aria-label="Link options"
         >
-          <MoreHorizontal className="size-4" />
+          {/* 20, not 16 — the same optical correction the topbar's overflow
+              trigger documents (more-options-menu.tsx): three dots at the
+              vertical centre carry a fraction of a solid glyph's ink, so at a
+              matching 16 they read smaller. The BOX stays 32: the bulk-edit
+              toolbar already renders this 20-in-32, and growing the box would
+              push the 44px target above past the 12px gap into the row's
+              title anchor. */}
+          <MoreHorizontal className="size-5" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>

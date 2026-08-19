@@ -395,6 +395,38 @@ same `data-selected` attribute (`onPointerMove` selects the row under the
 cursor), so a `CommandItem` needs no separate `hover:` fill. Adding one gives two
 rows a highlight at once — the hovered one and the keyboard-selected one.
 
+### contrast — the wash surfaces
+
+[accessibility.md](./accessibility.md) sends contrast questions here, so: the one
+pairing in the palette that needs watching is **`text-muted-foreground` on a wash**.
+Light mode has four wash surfaces and they are all the same value —
+`--muted`, `--secondary`, `--accent` and `--sidebar-accent` are each
+`oklch(0.97 0 0)` — so anything muted that sits on a hovered row, a selected row,
+a secondary surface or a sidebar-accent row is on 0.97, not on `--background`.
+
+shadcn's stock `--muted-foreground` (`oklch(0.556)`, #737373) is calibrated
+against `--background` alone. It measures 4.73:1 there and **4.34:1 on 0.97** —
+under the 4.5 AA floor, which applies to everything below 24px (or 18.66px bold),
+so making text _bigger_ doesn't buy relief until it is very big indeed. We
+therefore ship `oklch(0.54)`: 5.06:1 on white, 4.85:1 on a `bg-muted/50` hover,
+**4.64:1 on the full wash**. Dark mode is untouched — `oklch(0.708)` on its
+`oklch(0.269)` wash is 5.83:1.
+
+Two things follow.
+
+- **The value is a deliberate divergence from shadcn**, in two files that must
+  move together: `packages/web-ui/src/styles.css` (`:root`) and
+  `apps/bracemark-expo/global.css` (the `light` variant). Re-deriving the block
+  from an upstream shadcn theme silently reverts it, and nothing lints or fails —
+  the symptom is only ever a measurement.
+- **A new wash darker than 0.97 re-opens the question.** Check it against
+  `--muted-foreground` before adding it; icons are the easier case (WCAG 1.4.11
+  asks 3:1 of a meaningful glyph, which muted clears on every surface we have).
+
+Contrast is not otherwise linted anywhere. `hover:text-foreground` on the `ghost`
+button is why ghost triggers are exempt in their hovered state — they leave the
+muted colour exactly when they land on the wash.
+
 ### extending
 
 - **A new mode** — add it to `THEME_MODES` (`theme/theme.ts`), handle it in

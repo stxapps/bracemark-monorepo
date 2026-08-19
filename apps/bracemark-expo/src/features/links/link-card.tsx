@@ -4,12 +4,15 @@
 // (see main.tsx), so this file is only the card itself.
 //
 // INTRINSIC height, web's rationale: a card fits its content — one title line or
-// two, chips or none — and the row it sits in is as tall as its tallest card. Web
-// gets that from the grid (`items-stretch`); here FlashList's GridLayoutManager
-// does the same job, giving every cell in a row the tallest cell's height as a
-// `minHeight`, which the `grow` on the wrapper and the card below then fill. So
-// the slack still falls at the BOTTOM of a shorter card (reads as padding, not as
-// a gap mid-card) and the card borders in a row still line up.
+// two, chips or none — and the row it sits in is as tall as its tallest card.
+// FlashList's GridLayoutManager gives every cell in a row the tallest cell's
+// height as a `minHeight`, and the `grow` on the WRAPPER fills it. The card
+// inside does NOT grow (web's `items-start`, same change): its border hugs its
+// own content, so a short card beside a tall one no longer draws a box around the
+// difference — up to a title's second line plus a chip strip of nothing. That
+// slack now falls outside the card as gutter, which costs the row's bottom edges
+// their alignment; web took the same trade, on the grounds that an enclosed void
+// reads as a rendering fault where a ragged edge reads as content-fit.
 //
 // This replaces a fixed budget — a dp constant plus a font-scaled text part,
 // since the OS font scale multiplies fontSize alone. That split existed because
@@ -85,7 +88,8 @@ export function LinkCard({
                 onToggle();
               }
         }
-        className={`grow overflow-hidden rounded-lg border border-border ${
+        // No `grow`: the wrapper above fills the cell, this hugs its content.
+        className={`overflow-hidden rounded-lg border border-border ${
           selected ? 'bg-muted' : 'active:bg-muted/50'
         }`}
       >
@@ -106,8 +110,15 @@ export function LinkCard({
               innermost pressable), which is the whole trick web has to buy with
               a stretched overlay. */}
           <View className="flex-row items-center gap-1.5">
+            {/* text-base, the size the title below reads at — the pairing the
+                list row makes at its own denser text-sm (link-row.tsx), and web's
+                card verbatim. The host is the second thing read, not a caption;
+                it stays subordinate on colour, not on size. Costs the line
+                nothing: the ⋯ / checkbox slot is size-8 and a 16pt line box is
+                24. The size-4 favicon lands at the list row's proportion too —
+                the mark matches the font size there (14/14) as here (16/16). */}
             <Favicon host={host} className="size-4 shrink-0 rounded-sm" />
-            <Text numberOfLines={1} className="min-w-0 flex-1 text-xs text-muted-foreground">
+            <Text numberOfLines={1} className="min-w-0 flex-1 text-base text-muted-foreground">
               {host}
             </Text>
             {pinned && <PinnedBadge />}

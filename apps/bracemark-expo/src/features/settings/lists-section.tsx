@@ -148,7 +148,8 @@ function RowActions({
           aria-label="List actions"
           className="size-9 items-center justify-center rounded-md"
         >
-          <Icon as={MoreHorizontal} className="size-4 text-muted-foreground" />
+          {/* 20, as every ⋯ trigger in both apps is — see link-row-menu.tsx. */}
+          <Icon as={MoreHorizontal} className="size-5 text-muted-foreground" />
         </Pressable>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-52">

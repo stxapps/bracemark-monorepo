@@ -111,10 +111,13 @@ sits between its own two outcomes so the error cancels rather than accumulating.
   can't leave a measurement describing whichever link used to sit at that
   position.
 - **The card layout** measures the ROW OF CARDS — one virtual item is a row of
-  `columns` cards. A card is stretched to its grid row (`items-stretch`), so a
-  card's height is a property of the row rather than of the card, which is exactly
-  what lets one measurement describe it: the row is as tall as its tallest card
-  and the slack falls at the bottom of the shorter ones. Its key is the row's
+  `columns` cards. One measurement describes it because a grid row is as tall as
+  its tallest card whatever the others do. The cards themselves are `items-start`,
+  NOT stretched: each hugs its own content, so the difference between a short card
+  and a tall one falls outside the short one as gutter rather than inside its
+  border as enclosed dead space. (Stretched was the earlier spelling, and it cost
+  a bare card — no second title line, no chips — a visible box drawn around the
+  slack its neighbour used.) Its key is the row's
   first link path; a change in `columns` re-composes every row, so it drops the
   whole measurement cache (`virtualizer.measure()`) rather than trying to remap
   it. The banner is a fixed ASPECT of the card's width (12:7), which is what keeps
@@ -137,9 +140,10 @@ what they rendered, including under a changed root font size.
 
 On expo the question doesn't arise at all: `FlashList` v2 measures cells and takes
 no size estimate, so `link-row.tsx` and `link-card.tsx` are both plain
-intrinsic-height. The card gets web's equal-height rows for free — FlashList's
-grid layout manager normalizes a row's cells to the tallest as a `minHeight`,
-which the card fills with `grow`.
+intrinsic-height. FlashList's grid layout manager normalizes a row's cells to the
+tallest as a `minHeight`, which `link-card.tsx`'s WRAPPER fills with `grow` — the
+card inside it does not grow, which is how expo lands on web's `items-start`: the
+cell keeps the row's height, the bordered card keeps its own.
 
 ### pagination: growing `limit` + a decode cache
 

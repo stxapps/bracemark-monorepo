@@ -114,7 +114,11 @@ export function LinkRowMenu({
             aria-label="Link options"
             className="size-8 shrink-0 items-center justify-center rounded-md"
           >
-            <Icon as={MoreHorizontal} className="size-4 text-muted-foreground" />
+            {/* 20, not 16 — three dots at the vertical centre carry a fraction of
+                a solid glyph's ink, so at a matching 16 they read smaller. The
+                optical correction web's topbar documents, applied to every ⋯ in
+                both apps; the BOX is unchanged. */}
+            <Icon as={MoreHorizontal} className="size-5 text-muted-foreground" />
           </Pressable>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-52">

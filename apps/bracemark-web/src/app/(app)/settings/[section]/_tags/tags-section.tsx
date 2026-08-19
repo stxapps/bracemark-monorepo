@@ -85,8 +85,20 @@ function RowActions({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon-sm" aria-label="Tag actions">
-          <MoreHorizontal className="size-4" />
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="text-muted-foreground"
+          aria-label="Tag actions"
+        >
+          {/* 20 in a 32px box and muted at rest — the same trigger the link rows
+              render, which is where both halves of the reasoning live
+              (link-row-menu.tsx): the optical correction is a fact about the
+              glyph rather than of the surface it sits on, and the ⋯ is chrome
+              until you go looking for it, so it doesn't compete with the row's
+              name at full `text-foreground`. `ghost` hands that back on hover and
+              for as long as the menu is open. */}
+          <MoreHorizontal className="size-5" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" onCloseAutoFocus={onCloseAutoFocus}>
