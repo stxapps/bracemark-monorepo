@@ -274,6 +274,19 @@ A control with no accessible name is announced as its type and nothing else
   chrome from a 520pt sheet is a visual decision and does not extend to dropping
   the semantics — see [share-sheet.md](./share-sheet.md).
 
+**A visible label is not automatically an accessible name.** `<label htmlFor>`
+reaches only the **labelable** elements — button, input, select, textarea, meter,
+output, progress. Pointed at anything else it contributes no name _and_ its click
+does nothing, and neither half is caught by anything: `jsx-a11y` checks that a
+label has a control, not that the control can be one, so the field looks correct,
+sits between two that work, and is dead. Web's `TagsField` is the case that
+proves it — its trigger is a `div role="combobox"`, a div because each chosen tag
+carries its own ✕ button and a button inside a button is invalid HTML — so it
+carries its own `aria-label`, and `ui/label.tsx` forwards the label's click to any
+non-labelable `htmlFor` target by hand (focus + click, which is what the browser
+does for the labelable set). Any future picker built on a div inherits both
+halves; a picker built on a `Button` (`ListSelect`) needs neither.
+
 Expo's `ui/text.tsx` maps its heading variants to `role="heading"` with the
 matching `aria-level`, so `<Text variant="h2">` is a real heading to TalkBack /
 VoiceOver rather than styled text. Use the variant instead of hand-styling a

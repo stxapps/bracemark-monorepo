@@ -28,7 +28,9 @@ export function TagsField({
   onChange,
   ref,
 }: {
-  // The labelled form-control id (htmlFor target), landing on the trigger.
+  // The labelled form-control id (htmlFor target), landing on the trigger. The
+  // trigger is not a labelable element, so this id is what ui/label.tsx uses to
+  // forward the label's click here; the NAME comes from the `aria-label` below.
   id?: string;
   // The chosen tag ids, in chosen order.
   value: string[];
@@ -79,6 +81,14 @@ export function TagsField({
           ref={ref}
           id={id}
           role="combobox"
+          // The name, because the consumer's `<Label htmlFor>` CANNOT supply it:
+          // a label only names a labelable element, and this is a div (see the
+          // note above, and ui/label.tsx, which makes the label's CLICK reach here
+          // by hand for the same reason). Hardcoded because all four consumers —
+          // web quick-add, the edit dialog, BulkTagsDialog, the browser
+          // extension's popup — label it "Tags"; one that needs another word
+          // should take this as a prop rather than leave the control unnamed.
+          aria-label="Tags"
           aria-controls={listId}
           aria-expanded={open}
           tabIndex={0}

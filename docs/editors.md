@@ -28,9 +28,9 @@ overrides). Create collects a strict subset of edit's fields.
 | surface                    | file                                                            | kind      | fields                                             |
 | -------------------------- | --------------------------------------------------------------- | --------- | -------------------------------------------------- |
 | extension save editor      | `apps/bracemark-extension/entrypoints/popup/Editor.tsx`         | create    | list, tags, note (URL is the tab's, read-only)     |
-| web quick-add              | `apps/bracemark-web/.../links/_components/link-add-surface.tsx` | create    | URL, then list/tags/note behind "Advanced"         |
+| web quick-add              | `apps/bracemark-web/.../links/_components/link-add-surface.tsx` | create    | URL, then list/tags/note behind a disclosure       |
 | web edit dialog            | `apps/bracemark-web/.../links/_components/link-edit-dialog.tsx` | full edit | title, image, list, tags, note                     |
-| bracemark-expo quick-add   | `apps/bracemark-expo/src/features/links/link-add-screen.tsx`    | create    | URL, then list/tags/note behind "Advanced"         |
+| bracemark-expo quick-add   | `apps/bracemark-expo/src/features/links/link-add-screen.tsx`    | create    | URL, then list/tags/note behind a disclosure       |
 | bracemark-expo edit screen | `apps/bracemark-expo/src/features/links/link-edit-screen.tsx`   | full edit | title, image, list, tags, note                     |
 | bracemark-expo share sheet | `apps/bracemark-expo/src/features/share/share-screen.tsx`       | create    | list, tags (URL/title arrive in the share payload) |
 
@@ -59,7 +59,7 @@ form fills a bottom sheet. The split is about the **soft keyboard**, not the wid
 The URL field is `autoFocus`, and `PopoverContent`'s height cap is computed by
 Floating UI against the **layout** viewport — the one the keyboard does not shrink
 ([safe-area.md](./safe-area.md), _what's provided_). So an anchored popover believes
-it has the whole screen, and with "Advanced" open its Save button — the control that
+it has the whole screen, and with the optional fields open its Save button — the control that
 completes the task — sits under the keyboard, inside a scroll container that doesn't
 know it's clipped. A bottom sheet does not fix that by itself, since `position:
 fixed` anchors to that same layout viewport; what fixes it is lifting the sheet by
@@ -73,6 +73,44 @@ silently no-op on a dirty draft. The **trigger** does not move — Add stays in 
 topbar at every width. bracemark-expo's FAB is a different affordance for a
 different frame; the two clients agree on the form, not on where it is summoned
 from.
+
+**The optional fields are named for themselves, and collapsing them does not
+discard them.** The disclosure reads **"List, tags & note"**, not "Advanced":
+nothing behind it is advanced — filing a link into a list is the most ordinary act
+in the product — and the novice/expert axis that earns the word on advanced
+_search_ (a plain box vs. the full grammar) has no counterpart here. URL is the one
+required field; these three are the optional ones, and the label says which three
+so the collapsed state needs no guessing. "More options" was unavailable in any
+case: it is the topbar overflow button's name, one row up
+([brand-assets.md](./brand-assets.md) is the record for user-facing wording). The
+state is `openOptional` / `optionalSet` / `optionalDirty` in both files, so the
+code says what the button says. The trigger is quiet by weight and one step of
+colour — `font-normal` and `text-foreground/70`, never a smaller type size, and
+never `text-muted-foreground`, which is what the Field labels under it wear
+([theme.md](./theme.md), _contrast_ — the ghost variant's `hover:text-foreground`
+lifts it to full on hover). The dot matches the label's colour.
+
+Both quick-add surfaces keep
+`listId`/`tagIds`/`note` when the disclosure shuts, and Save writes them whether it
+is open or closed. A disclosure discloses — it doesn't arm — and people close it to
+reach Save without scrolling, or to get the sheet clear of the keyboard, so
+answering that with a silent revert would be the worse failure of the two: Save
+writes a record, and there is no undo. It could not be a clean rule anyway, because
+`listId` is never empty (it starts at the viewed list and is always written), so
+"collapsed means ignored" would have to mean "collapsed means back to My List". What
+the hidden state does need is to stay **visible**: the trigger carries a dot while
+the section is shut and holds something (`optionalSet` in both files), the same
+answer the advanced-**search** trigger gives to the same problem
+([search.md](./search.md)) — the same 6px dot, but `bg-foreground/70` rather than
+that one's `bg-primary`. The search trigger is an icon button, where the dot is the only
+thing that can carry the state and has the whole box to itself; here it is
+punctuation beside a label, and an accent-coloured one would outweigh the label it
+modifies and make a 6px dot the loudest thing in the form. The dot is decoration;
+`aria-label` is what reaches a screen reader, as a name rather than a live region,
+since it re-words as the note is typed ([accessibility.md](./accessibility.md)).
+Discarding on collapse would also quietly break invariant 3 below: `optionalDirty`
+is derived from those same fields, so a reverting collapse would disarm the close
+guard exactly when a draft was in hand.
 
 The two bracemark-expo in-app editors are the web pair's behavioral twins (same
 validation, same quota banner on create, same dirty close guard — swipe-down /
@@ -195,7 +233,7 @@ editors pass and the move-to menus below must not. The rows themselves are
 - **Why inline, rather than a "Manage lists" link out to Settings → Lists** (the
   shape the sidebar's `FooterLink` uses): the sidebar holds no draft, and every
   editor does. Navigating away destroys it — web quick-add would drop the
-  very URL/note its `advancedDirty` guard exists to protect (invariant 3), and the
+  very URL/note its `optionalDirty` guard exists to protect (invariant 3), and the
   extension popup would be killed outright by `tabs.create`, since a popup
   dismisses on focus loss uninterceptably. "Add a list" is a **sub-task of the
   save**; anything that ends the save to do it isn't an answer.
@@ -405,7 +443,7 @@ resurrecting stale fields.
 
 **3. Guard the close so a stray click can't lose work.** The edit dialog and web
 quick-add both compute a `dirty` flag that mirrors the patch Save would write
-(`isDirty` in the dialog, `advancedDirty` in quick-add), and **swallow only the
+(`isDirty` in the dialog, `optionalDirty` in quick-add), and **swallow only the
 accidental close vectors** — backdrop click, Escape, the corner X — while dirty.
 The explicit **Cancel** button calls `onClose`/`onOpenChange(false)` directly,
 bypassing the guard, so a deliberate discard stays one click. Note the dirty check
@@ -415,6 +453,34 @@ bumps `updatedAt` (which would reorder the date-modified sort). The extension's
 popup editor has **no** close guard: a browser popup's close is the platform's
 (it dismisses on focus loss, not interceptable), and it's create-only, so there's
 less to lose — don't assume the invariant holds there.
+
+**4. Hoist the editor above the rows, and hold `engaged` while it is open.** Rows
+are **virtualized and repaint under sync** — a touched link floats to the top of
+the date-modified sort, and a row can move or unmount underneath whatever it
+owns. So a row must never own its editor: the row menu and the bulk toolbar only
+_request_ an edit, and the dialog is rendered **once at the page level** (Main),
+driven by hoisted state in `view-state-provider` — `editing: LinkEditRequest |
+null` for the edit dialog, `retagging` for BulkTagsDialog. A row-owned dialog
+would unmount mid-edit and take the draft with it (invariant 1's snapshot is no
+help if the component holding it is gone).
+
+That same hoisted state **is** the engagement flag: `engaged` is
+`scrolled || openMenus > 0 || editing !== null || destroying !== null ||
+retagging !== null || bulkEditing`, and `useLinks` stages incoming sync results
+while it holds — `displayed` stays put and the refresh pill lights instead of the
+list repainting under the modal ([client-queries.md](./client-queries.md), the
+staged-snapshot rule). Row-anchored overlays that are not editors (the row menu,
+the tag overflow popover) join the same count through `useEngagedOpen`, which
+tracks its own open flag so an unmount-while-open — a layout switch across the
+breakpoint — releases the count instead of pinning `engaged` true forever.
+
+Two surfaces are exempt, for the same reason in different words: **web quick-add**
+and the **extension popup** are create-only, so they are anchored to no row and
+have nothing to be repainted out from under them (quick-add's `open` is therefore
+plain local state, not hoisted). And the **bracemark-expo** editors get the
+guarantee structurally — a modal-presented router screen lives outside the list's
+tree, so there is no row to lose and nothing to hoist. A new editor over
+_existing_ links on web inherits the rule.
 
 ### bulk edit
 

@@ -284,6 +284,18 @@ prose, and outside this rule. "Library" is serviceable as a **mass noun in
 prose** ("bring the library you already have", "someone with a large library")
 and is not a label; promoting it to one is the same mistake as "vault".
 
+**A disclosure is named for what is behind it, not for how hard it is.** The
+quick-add form's second section reads **"List, tags & note"** — it was "Advanced",
+which claimed a novice/expert axis the form does not have (filing a link into a
+list is the most ordinary act here; URL is simply the required field and those
+three are the optional ones). The word is right one screen over, on advanced
+**search**, where a plain text box really does sit opposite the full query grammar.
+Two constraints on any replacement: **"More options" is taken** — it is the topbar
+overflow button's name in both clients — and **"Details" is spoken for**, by the
+link detail view `/links/{id}` is reserved for. Naming the contents also follows
+the rule above it: the concrete names beat a container word.
+[editors.md](./editors.md) carries the rest.
+
 ⚠ **Nothing enforces any of this** — a `<Button>Add bookmark</Button>` type-checks
 and lints clean. The check is this page. Related: the first-sync counter says
 **"items"**, a third word for a third scope (`sync/status.ts` carries the

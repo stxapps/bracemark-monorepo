@@ -3,7 +3,7 @@
 // behavior: the two-tier validation — a HARD empty-URL error vs the SOFT
 // malformed/duplicate/trashed warnings that relabel Save → Confirm; why the
 // trashed ground alone offers Restore; why the quota banner REPLACES the form;
-// the advancedDirty close guard). Web anchors that form to a popover only at
+// the optionalDirty close guard). Web anchors that form to a popover only at
 // `md` and up; below it the form fills a bottom sheet, for the same reason this
 // screen exists — a phone-height surface with the keyboard up has no room to
 // hang a form off a topbar corner. Here the surface is a modal-presented router
@@ -15,7 +15,7 @@
 //    presentation first; the keyboard answer follows"), and the ListSelect
 //    Dialog portals layer normally on Android (no close-and-reopen dance).
 //  - The close is guardable: usePreventRemove swallows the accidental close
-//    vectors (iOS swipe-down, Android back) while the Advanced section holds
+//    vectors (iOS swipe-down, Android back) while the optional section holds
 //    work — web's onOpenChange guard. Cancel/X/save set `closing`, which drops
 //    the guard and pops in an effect, so a deliberate discard stays one tap.
 //
@@ -86,7 +86,7 @@ export function LinkAddScreen() {
       ? paramListId
       : DEFAULT_LIST_ID;
 
-  const [openAdvanced, setOpenAdvanced] = useState(false);
+  const [openOptional, setOpenOptional] = useState(false);
   const [url, setUrl] = useState('');
   const [listId, setListId] = useState(defaultListId);
   const [tagIds, setTagIds] = useState<string[]>([]);
@@ -103,19 +103,30 @@ export function LinkAddScreen() {
   // from the submit that found it, so Restore doesn't re-query.
   const [trashedMatch, setTrashedMatch] = useState<LinkItem | null>(null);
 
+  // Which of the three OPTIONAL fields hold something — URL is the required one
+  // (web's optionalSet, verbatim — its
+  // comment is canonical: COLLAPSING THE SECTION DOES NOT DISCARD THEM, Save uses
+  // these values either way, and the dot on the trigger is what keeps the hidden
+  // state visible).
+  const optionalSet = [
+    listId !== defaultListId ? 'list' : null,
+    tagIds.length > 0 ? 'tags' : null,
+    note.trim() !== '' ? 'note' : null,
+  ].filter((field) => field !== null);
+
   // Does closing now lose real work? A bare typed URL doesn't count — it's
   // cheap to retype, and the swipe-down-to-dismiss idiom is worth more than
-  // guarding it. Only the Advanced fields represent effort worth protecting
-  // (web's advancedDirty, verbatim).
-  const advancedDirty = note.trim() !== '' || tagIds.length > 0 || listId !== defaultListId;
+  // guarding it. Only the optional fields represent effort worth protecting
+  // (web's optionalDirty, verbatim).
+  const optionalDirty = optionalSet.length > 0;
 
   // Guard only the ACCIDENTAL close vectors (swipe-down, Android back) while
-  // the Advanced section holds work — swallowed silently, like web's
+  // the optional section holds work — swallowed silently, like web's
   // onOpenChange guard. `closing` is the deliberate door: setting it drops the
   // guard on this same commit (this hook's effect re-runs before the one
   // below) and the effect pops the screen.
   const [closing, setClosing] = useState(false);
-  usePreventRemove(advancedDirty && !closing, () => {
+  usePreventRemove(optionalDirty && !closing, () => {
     // Swallowed silently — web's guard eats the outside-click/Escape the same
     // way; the Cancel button is the deliberate discard door.
   });
@@ -281,14 +292,14 @@ export function LinkAddScreen() {
             {/* Web's disclosure, ported (link-add-surface.tsx carries the full
                 reasoning): quiet by WEIGHT rather than size or colour, so the
                 label drops to normal weight at full contrast; the chevron sits
-                WITH the word rather than pinned to the far edge of a mostly empty
+                WITH the label rather than pinned to the far edge of a mostly empty
                 row; and `self-start` keeps the pressed background on the control
                 instead of painting a bar the width of the form.
 
                 A `Button variant="ghost" size="sm"` rather than the hand-rolled
                 Pressable this used to be, so the numbers come from the same RULE
                 as web's rather than being matched by hand: `px-3` (hence the same
-                `-ml-3` to put "Advanced" on the Field labels' text edge), the
+                `-ml-3` to put the label on the Field labels' text edge), the
                 trailing-icon padding trim derived from the children, and the icon
                 colour inherited through TextClassContext the way web's inherits
                 from the button. `h-9` on a phone, `h-8` from `sm:` — the size
@@ -299,23 +310,59 @@ export function LinkAddScreen() {
 
                 `font-normal` on the label because buttonTextVariants' base is
                 `text-sm font-medium` — the native analogue of overriding the web
-                Button's own `font-medium`. Web additionally cancels an
-                `aria-expanded:bg-muted`; nothing to do here, since `active:` is
-                press-only and RN has no attribute-driven styling. The
-                `aria-expanded` prop stays either way — it announces the state. */}
+                Button's own `font-medium`. `text-foreground/70` is web's colour
+                step (its comment carries the reasoning: between the Input's
+                foreground and the Field labels' `text-muted-foreground`, which the
+                control must not wear). It is spelled TWICE, on the Text and on the
+                Icon, because there is no currentColor here: the chevron takes its
+                colour from TextClassContext, which the Button fixes at
+                `text-foreground`, and a class on the Pressable cannot cascade into
+                either child. Web sets it once on the button and both follow. Web additionally cancels both halves
+                of its ghost variant's `aria-expanded:` lift (the fill AND the text
+                jumping to full contrast); nothing to do here, since `active:` is
+                press-only and RN has no attribute-driven styling, so the reduced
+                colour above is simply what this button wears open or shut. The
+                `aria-expanded` prop stays either way — it announces the state.
+
+                The DOT is web's too, same `size-1.5 bg-foreground/70`, same place
+                (after the chevron) and same job: a collapsed section that holds
+                something still gets saved, so something on screen has to say so.
+                `bg-foreground/70` rather than the advanced-search trigger's
+                `bg-primary` because this one sits beside a label — web's comment
+                carries that reasoning, and the token is what lets the two clients
+                spell the dot identically. `aria-label` is how it reaches a screen
+                reader — a NAME carrying the visible text first, never a live
+                region, since it re-words as the note is typed
+                (docs/accessibility.md).
+
+                The label is web's too, and is NAMED FOR ITS CONTENTS rather than
+                "Advanced": nothing behind it is advanced, and "More options" is
+                already the links screen's overflow button. Web's header carries
+                that reasoning; docs/brand-assets.md is the record for user-facing
+                wording. */}
             <Button
               variant="ghost"
               size="sm"
-              onPress={() => setOpenAdvanced((v) => !v)}
-              aria-expanded={openAdvanced}
-              aria-label="Advanced"
+              onPress={() => setOpenOptional((v) => !v)}
+              aria-expanded={openOptional}
+              aria-label={
+                !openOptional && optionalDirty
+                  ? `List, tags & note, ${optionalSet.join(', ')} set`
+                  : 'List, tags & note'
+              }
               className="-ml-3 self-start"
             >
-              <Text className="font-normal">Advanced</Text>
-              <Icon as={openAdvanced ? ChevronUp : ChevronDown} className="size-4" />
+              <Text className="font-normal text-foreground/70">List, tags & note</Text>
+              <Icon
+                as={openOptional ? ChevronUp : ChevronDown}
+                className="size-4 text-foreground/70"
+              />
+              {!openOptional && optionalDirty && (
+                <View aria-hidden className="size-1.5 rounded-full bg-foreground/70" />
+              )}
             </Button>
 
-            {openAdvanced && (
+            {openOptional && (
               <View className="gap-4">
                 {/* No Trash target: it's the deletion staging area, never a place
                     to add new links (same rule as the default-list fallback).

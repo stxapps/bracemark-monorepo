@@ -37,6 +37,29 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 // bracemark-expo's own field labels are `text-xs text-muted-foreground` already
 // (link-add-screen.tsx's Field helper), so dense is also what puts the two
 // clients' add forms on the same footing.
+// The labelable elements — the only ones `htmlFor` reaches on its own. HTML's
+// label activation behaviour runs against the label's "labeled control", which is
+// defined only for this set, and so does the accessible-name contribution: point
+// `htmlFor` at anything else and clicking the label does NOTHING and the target is
+// left unnamed. Nothing catches it — `jsx-a11y` checks that a label HAS a control,
+// not that the control can BE one — so the symptom is a label that looks exactly
+// like its neighbours and is simply dead.
+//
+// Which is what TagsField's trigger was: a `div role="combobox"`, a div because
+// each chosen tag carries its own ✕ button and a button inside a button is invalid
+// HTML (tags-field.tsx). Its own name comes from an `aria-label` there; the CLICK
+// is this. ListSelect, sitting one row above it in the same forms, worked only by
+// the accident of its trigger being a `Button`.
+//
+// So: do by hand what the browser does for the labelable set — focus the target
+// and forward the click. Forwarding rather than focusing alone is what keeps those
+// two picker rows behaving alike (clicking "List" opens its popover, so clicking
+// "Tags" must too). A native `<select>` focuses without opening, but that ship
+// sailed with the Button trigger, and adjacent rows of one form disagreeing is the
+// worse outcome. A target the label already CONTAINS is skipped — the browser
+// delivered that click itself.
+const LABELABLE = new Set(['BUTTON', 'INPUT', 'METER', 'OUTPUT', 'PROGRESS', 'SELECT', 'TEXTAREA']);
+
 const labelVariants = cva(
   'flex items-center gap-2 leading-none font-normal select-none group-data-[disabled=true]:pointer-events-none group-data-[disabled=true]:opacity-50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50',
   {
@@ -55,13 +78,27 @@ const labelVariants = cva(
 function Label({
   className,
   density,
+  onClick,
   ...props
 }: React.ComponentProps<typeof LabelPrimitive.Root> & VariantProps<typeof labelVariants>) {
+  const onLabelClick = (event: React.MouseEvent<HTMLLabelElement>) => {
+    onClick?.(event);
+    if (event.defaultPrevented || props.htmlFor === undefined) return;
+
+    const target = document.getElementById(props.htmlFor);
+    if (target === null || LABELABLE.has(target.tagName)) return;
+    if (event.target instanceof Node && target.contains(event.target)) return;
+
+    target.focus();
+    target.click();
+  };
+
   return (
     <LabelPrimitive.Root
       data-slot="label"
       className={cn(labelVariants({ density }), className)}
       {...props}
+      onClick={onLabelClick}
     />
   );
 }

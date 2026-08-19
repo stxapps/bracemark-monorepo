@@ -17,7 +17,7 @@
 //   does not shrink (docs/safe-area.md, _what's provided_ — on most mobile
 //   browsers the keyboard fires only `visualViewport.resize`). So an anchored
 //   popover hanging off a top-right trigger believes it has the whole screen,
-//   and with "Advanced" open its footer — Save, the one control that completes
+//   and with the optional fields open its footer — Save, the one control that completes
 //   the task — sits under the keyboard, in a scroll container that doesn't know
 //   it's clipped and so won't scroll to it.
 //
@@ -34,8 +34,17 @@
 // layout also keeps it. expo's FAB is a different affordance for a different
 // frame, and the two clients agree on the form, not on where it's summoned from.
 //
-// Shape: a URL field always visible, an "Advanced" disclosure that reveals the
-// list picker + tag editor + note, and Save/Cancel. Saving writes one
+// Shape: a URL field always visible, a "List, tags & note" disclosure that
+// reveals the list picker + tag editor + note, and Save/Cancel. The disclosure is
+// NAMED FOR ITS CONTENTS, not "Advanced": there is nothing advanced about filing
+// a link into a list, and the novice/expert axis that earns the word on advanced
+// SEARCH (a plain box vs. the full grammar) has no counterpart here — URL is the
+// one required field and these three are the optional ones. "More options" was
+// unavailable in any case: it is the topbar overflow's name, one row up
+// (docs/brand-assets.md is the record for user-facing wording). Collapsing the
+// disclosure HIDES those fields, it never discards them — `optionalSet` below
+// carries the reasoning and the dot that keeps the hidden state visible. Saving
+// writes one
 // `links/{id}.enc` via useLinkMutations and kicks a sync; the title is
 // back-filled later by a metadata fetch, so the form only collects a URL
 // (+ optional list/tags/note — the same create fields the extension editor sets).
@@ -171,7 +180,7 @@ export function LinkAddSurface({
   const sheetGeometry = useSheetGeometry();
 
   const [open, setOpen] = useState(false);
-  const [openAdvanced, setOpenAdvanced] = useState(false);
+  const [openOptional, setOpenOptional] = useState(false);
   const [url, setUrl] = useState('');
   const [listId, setListId] = useState(defaultListId);
   const [tagIds, setTagIds] = useState<string[]>([]);
@@ -198,7 +207,7 @@ export function LinkAddSurface({
   // that boundary would go with it.
   const onOpenChange = (next: boolean) => {
     if (next) {
-      setOpenAdvanced(false);
+      setOpenOptional(false);
       setUrl('');
       setListId(defaultListId);
       setTagIds([]);
@@ -281,21 +290,44 @@ export function LinkAddSurface({
     }
   };
 
+  // Which of the three OPTIONAL fields hold something (URL is the required one).
+  // Two things read it, so it's one list.
+  //
+  // COLLAPSING THE SECTION DOES NOT DISCARD THEM — Save uses these values whether
+  // the disclosure is open or shut. A disclosure discloses; it doesn't arm. People
+  // collapse it to reach Save without scrolling, or to get the sheet clear of the
+  // keyboard (the whole pressure this surface is under below `md`), and answering
+  // that with a silent revert is the worse of the two failures: Save writes a
+  // record, so there'd be no undo. It couldn't even be a clean rule — `listId` is
+  // never empty (it starts at defaultListId and is always written), so "collapsed
+  // means ignored" would have to mean "collapsed means back to My List", a stranger
+  // promise than the one it replaces. What the hidden state does need is to stay
+  // VISIBLE: hence the dot on the trigger, which is the answer the advanced-search
+  // trigger already gives to the same problem (search-bar.tsx, docs/search.md).
+  //
+  // Fields, not values: naming the list would need its record, and the point is only
+  // to say that something is set down there.
+  const optionalSet = [
+    listId !== defaultListId ? 'list' : null,
+    tagIds.length > 0 ? 'tags' : null,
+    note.trim() !== '' ? 'note' : null,
+  ].filter((field) => field !== null);
+
   // Does closing now lose real work? A bare typed URL doesn't count — it's
   // cheap to retype and the click-away-to-dismiss idiom is worth more than
-  // guarding it. Only the Advanced fields (note, tags, a non-default list)
+  // guarding it. Only the optional fields (note, tags, a non-default list)
   // represent effort worth protecting from a stray outside-click or Escape.
-  const advancedDirty = note.trim() !== '' || tagIds.length > 0 || listId !== defaultListId;
+  const optionalDirty = optionalSet.length > 0;
 
   // Guard only the ACCIDENTAL close vectors (outside-click / overlay tap,
   // Escape, and the sheet's swipe-adjacent dismissals), and only when the
-  // Advanced section holds work — swallow those so a stray click can't drop a
+  // optional section holds work — swallow those so a stray click can't drop a
   // typed note or picked tags. The DELIBERATE doors (Cancel, the sheet's X)
   // call `onOpenChange(false)` directly, bypassing this, so discarding stays one
   // click. Same division bracemark-expo's add screen draws with usePreventRemove
   // plus its own `closing` flag (link-add-screen.tsx).
   const onGuardedOpenChange = (next: boolean) => {
-    if (!next && advancedDirty) return;
+    if (!next && optionalDirty) return;
     onOpenChange(next);
   };
 
@@ -376,12 +408,30 @@ export function LinkAddSurface({
           ) : null}
         </div>
 
-        {/* A quiet disclosure, made quiet by WEIGHT rather than size or colour:
-            `font-normal` against the Button base's `text-sm font-medium`.
-            Shrinking the type costs legibility on the one control in the form
-            that isn't self-evident, and muting the colour reads as disabled next
-            to the Input it sits under — it's a real control, just not the loud
-            one, so full contrast at normal weight is the whole adjustment.
+        {/* A quiet disclosure, made quiet by WEIGHT and one measured step of
+            COLOUR, never by size: `font-normal` against the Button base's
+            `text-sm font-medium`, plus `text-foreground/70`. Shrinking the type
+            costs legibility on the one control in the form that isn't
+            self-evident, so the type stays at 14.
+
+            `text-foreground/70` and NOT `text-muted-foreground`, which is the
+            colour of the field Labels this button sits above (Label's `dense`
+            density is `text-xs text-muted-foreground`) — wearing it would tie the
+            control with the captions it introduces and read as one of them. The
+            /70 lands between: `#545454` on white against muted's `#6e6e6e`,
+            `#b2b2b2` on the dark ground against muted's `#a1a1a1` — 7.6:1 where
+            muted is 5.1:1, which is a step back from the Input's full foreground
+            without arriving at caption grey. Same idiom, same value, as the tag
+            chips on both clients (link-tag-chips.tsx). Weight alone WAS the whole
+            adjustment while the label was the single word "Advanced"; three words
+            and a chevron carry more, so the same quiet now costs colour too.
+
+            The ghost variant's `hover:text-foreground` lifts it to full contrast
+            on hover — which is the documented ghost-trigger behaviour, and the
+            reason ghost triggers are exempt from the wash-contrast rule
+            (docs/theme.md, _contrast_): they leave the reduced colour exactly when
+            they land on a wash. A pseudo-class outranks a plain utility, so the
+            lift wins over /70 without any ordering care.
 
             `self-start` so the button sizes to its content: as a flex-column child
             it would otherwise stretch, and the ghost background is the button, so a
@@ -389,7 +439,7 @@ export function LinkAddSurface({
             background are the same rectangle, so this does trade the full-width
             target for one that ends at the chevron.
 
-            `-ml-3` cancels the size's `px-3` EXACTLY, which is what puts the word
+            `-ml-3` cancels the size's `px-3` EXACTLY, which is what puts the label
             on the form's text edge — level with the labels above it and with the
             Input's border box. A ghost button aligns by its label, not by its box,
             so the background is meant to overhang: 12px into a container that gives
@@ -397,8 +447,11 @@ export function LinkAddSurface({
             it stays inside both. Only the left is pulled — the right margin would
             move nothing on a `self-start`, content-sized box.
 
-            The two `aria-expanded:` overrides cancel the ghost variant's
-            `aria-expanded:bg-muted` (button.tsx). That rule is for POPUP triggers —
+            The four `aria-expanded:` overrides cancel the ghost variant's
+            `aria-expanded:bg-muted aria-expanded:text-foreground` (button.tsx) —
+            BOTH halves of it, which is easy to half-do: cancelling only the fill
+            leaves the label jumping to full contrast the moment the section opens,
+            for the same reason the fill would have. That rule is for POPUP triggers —
             list-select and tags-field, where the trigger should stay lit while its
             popover is open, because the popup is a separate layer that needs tying
             back to what summoned it. This is an IN-PLACE disclosure: the revealed
@@ -407,37 +460,89 @@ export function LinkAddSurface({
             it's the only thing announcing collapsed/expanded to a screen reader,
             and the repo's other in-place disclosures (sidebar.tsx's two) keep it
             while dodging this styling by not being a `Button` at all. The second
-            override is not redundant: with the variant's rule merged away, a bare
-            `hover:bg-muted` and `aria-expanded:bg-transparent` tie on specificity,
-            so which one won while expanded AND hovered would come down to Tailwind's
-            variant emission order. Stacking the two variants outranks both.
+            override in each pair is not redundant: with the variant's rule merged
+            away, a bare `hover:bg-muted` and `aria-expanded:bg-transparent` tie on
+            specificity — one class plus one pseudo-class against one class plus one
+            attribute selector, (0,2,0) either way — so which one won while expanded
+            AND hovered would come down to Tailwind's variant emission order.
+            Stacking the two variants is (0,3,0) and outranks both. The text pair
+            has the identical tie and takes the identical fix, so hover lifts the
+            label to full contrast whether the section is open or shut.
 
-            The chevron sits WITH the word for the same reason it rotates with it.
+            The chevron sits WITH the label for the same reason it rotates with it.
             It keeps `data-icon="inline-end"` — which arms
             `has-data-[icon=inline-end]:pr-2` (button.tsx) — because `self-start`
             sizes the button to its content, so the glyph IS against the trailing
             padding edge and should get that edge's smaller padding: 12px before
-            the word, 8px after the glyph. (The marker is only wrong for a
+            the label, 8px after the glyph. (The marker is only wrong for a
             STRETCHED button whose icon floats mid-row, which is what this was
             between dropping `justify-between` and adding `self-start`.)
             bracemark-expo derives the same trim from its children instead — see
-            the port in link-add-screen.tsx. */}
+            the port in link-add-screen.tsx.
+
+            The DOT marks a collapsed section that holds something (optionalSet —
+            which is also where the never-discard rule is written down). Without
+            it, a picked list or a typed note would be applied by Save while
+            nothing on screen said so; the advanced-search trigger answers the
+            identical problem with the identical 6px dot (search-bar.tsx). It
+            rides AFTER the chevron rather than between the chevron and the label,
+            which stay adjacent for the reason above — so the dot is what sits
+            against the trailing padding edge, and 8px suits a 6px dot better than
+            the untrimmed 12px would.
+
+            `bg-foreground/70` — the colour of the label it belongs to — where the
+            search trigger uses `bg-primary`. That trigger is an ICON button: with
+            no text on it, the dot is the only thing that can carry the "there are
+            filters" state, and it has the whole `size-9` box to itself. Here the
+            dot is a mark of punctuation on a labelled control, and an accent-
+            coloured one outweighs the label it is modifying — the loudest thing
+            in the form would be a 6px dot rather than Save. Matching the text
+            keeps it a detail of the label. It tracks the ghost variant's
+            `hover:text-foreground` for free, since that resolves to this token;
+            `bg-current` would track it more literally, but there is no
+            currentColor in React Native, and this dot ports verbatim to
+            link-add-screen.tsx.
+
+            `aria-label` is how the dot reaches a screen reader, since the dot
+            itself is `aria-hidden` decoration. It carries the visible text first,
+            so the accessible name and the label agree (the trigger above does the
+            same), and `aria-expanded` appends the collapsed/expanded half. The
+            suffix echoes field names the label has already said — "List, tags &
+            note, list, tags set" — which is deliberate: the words in the label
+            enumerate what is BEHIND the disclosure, and the suffix names which of
+            them are FILLED, and there is no shorter way to say the second thing.
+            It is a NAME, not a live region: it re-words as the user types in the
+            note field, and text that re-words must never announce
+            (docs/accessibility.md) — a changing name on an unfocused control is
+            silent, and is read when the user next reaches it. */}
         <Button
           type="button"
           variant="ghost"
           size="sm"
-          aria-expanded={openAdvanced}
-          className="-ml-3 self-start font-normal aria-expanded:bg-transparent aria-expanded:hover:bg-muted"
-          onClick={() => setOpenAdvanced((v) => !v)}
+          aria-expanded={openOptional}
+          aria-label={
+            !openOptional && optionalDirty
+              ? `List, tags & note, ${optionalSet.join(', ')} set`
+              : undefined
+          }
+          className={cn(
+            '-ml-3 self-start font-normal text-foreground/70',
+            'aria-expanded:bg-transparent aria-expanded:hover:bg-muted',
+            'aria-expanded:text-foreground/70 aria-expanded:hover:text-foreground',
+          )}
+          onClick={() => setOpenOptional((v) => !v)}
         >
-          Advanced
+          List, tags & note
           <ChevronDown
             data-icon="inline-end"
-            className={cn('size-4 transition-transform', openAdvanced && 'rotate-180')}
+            className={cn('size-4 transition-transform', openOptional && 'rotate-180')}
           />
+          {!openOptional && optionalDirty && (
+            <span aria-hidden className="size-1.5 rounded-full bg-foreground/70" />
+          )}
         </Button>
 
-        {openAdvanced && (
+        {openOptional && (
           <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="link-list" density="dense">
