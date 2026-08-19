@@ -260,7 +260,7 @@ export function CardLayout({
                     >
                       <LinkPreviewImage
                         link={link}
-                        className="aspect-[12/7] w-full shrink-0"
+                        className="aspect-12/7 w-full shrink-0"
                         fallback="panel"
                       />
                       <div className="flex min-w-0 flex-col gap-2 p-3">
