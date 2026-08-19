@@ -185,7 +185,15 @@ function TriCheckList({
           className="h-7 text-sm"
         />
       )}
-      <div className="max-h-32 overflow-y-auto rounded-md border border-border p-1">
+      {/* `scrollbar-gutter-stable` for the reason the links sidebar carries: the
+          filter box directly above prunes these rows, and `max-h-32` is ~4 rows
+          against a FILTER_THRESHOLD of 8, so the box only exists on a checklist
+          that is already scrolling — typing one character reliably takes the
+          scrollbar away. The row labels are `truncate` and indented by `depth`,
+          so on a classic-scrollbar platform that 15px re-truncates list and tag
+          names while you are reading them to decide what to tick. Bordered box,
+          so the reserved strip also keeps the border's inset even. */}
+      <div className="max-h-32 scrollbar-gutter-stable overflow-y-auto rounded-md border border-border p-1">
         {visible.length === 0 && (
           <p className="px-1.5 py-1 text-sm text-muted-foreground">No matches</p>
         )}

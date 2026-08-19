@@ -540,7 +540,24 @@ export function SidebarBody({
         </div>
       )}
 
-      <nav className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
+      {/* `scrollbar-gutter-stable` because this scroller's overflow is TOGGLED
+          FROM INSIDE IT: collapsing either section header, expanding a subtree,
+          typing in the filter box above (which prunes both trees to a handful of
+          rows), and locking a `hideList` list all cross the threshold in ordinary
+          use. Every row label is `truncate`, so on a classic-scrollbar platform
+          the 15px jump doesn't just slide the rows — it RE-TRUNCATES their text,
+          and a list name gains or loses a character as you collapse the section
+          next to it. The filter box is pinned OUTSIDE this scroller and is inset
+          to these rows on purpose (see it above), so it holds still while they
+          move: the same "shared column, one half scrolls" shape the settings pane
+          carries the full note for.
+
+          Not in conflict with the frame's `data-no-scrollbar-gutter` (page.tsx):
+          that opt-out is about `html`'s dead gutter on a frame which can never
+          scroll the document. This is an inner pane, and its gutter is one a
+          scrollbar actually appears in. Inert under overlay scrollbars, which is
+          also why the drawer rendering this same body pays nothing for it. */}
+      <nav className="min-h-0 flex-1 scrollbar-gutter-stable overflow-y-auto px-2 pb-4">
         {/* Lists: one ordered tree of the system three (My List / Archive /
             Trash) and the user's own lists, merged in the read layer and ordered
             by `rank`, nested by `parentId` (see use-lists). The system lists are

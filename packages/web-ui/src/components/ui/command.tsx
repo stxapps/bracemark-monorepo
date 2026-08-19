@@ -79,12 +79,31 @@ function CommandInput({
   );
 }
 
+// `scrollbar-gutter-stable` because THIS is the scroller a filter box drives: the
+// only two users are ListCommand and TagsCommand, whose input prunes the rows on
+// every keystroke, and `max-h-72` (288px) is ~9 rows — right where ListCommand's
+// own SEARCH_THRESHOLD of 10 lets the input appear at all. So the first character
+// typed almost always takes the list from overflowing to not, and on a
+// classic-scrollbar platform that widens the content box by 15px mid-keystroke.
+// Every row is `truncate` (and ListCommand's filtered rows prepend an ancestor
+// path), so the jump RE-TRUNCATES row text rather than merely moving it — the
+// links sidebar's symptom, in the surface where filtering is the whole point.
+//
+// The `no-scrollbar` that used to sit here was DEAD: no such utility is defined
+// in web-ui/styles.css, in any app stylesheet, or in Tailwind core, so it emitted
+// nothing and these lists have always shown an ordinary scrollbar. Its position
+// at the head of the class list was the tell — prettier-plugin-tailwindcss hoists
+// classes it can't resolve (see CLAUDE.md's tripwire). Removing it changes no
+// rendered behaviour. If hiding the scrollbar was ever the intent, that wants a
+// real `@utility no-scrollbar` in styles.css — but a filterable list with no
+// scrollbar also loses its only "there is more below" cue, which is why this
+// keeps the scrollbar and merely stops it from moving the rows.
 function CommandList({ className, ...props }: React.ComponentProps<typeof CommandPrimitive.List>) {
   return (
     <CommandPrimitive.List
       data-slot="command-list"
       className={cn(
-        'no-scrollbar max-h-72 scroll-py-1 overflow-x-hidden overflow-y-auto outline-none',
+        'max-h-72 scroll-py-1 scrollbar-gutter-stable overflow-x-hidden overflow-y-auto outline-none',
         className,
       )}
       {...props}

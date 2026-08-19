@@ -218,7 +218,16 @@ export function CardLayout({
       <RefreshPill show={hasPending} onClick={applyAndScrollTop} />
       <div
         ref={setScrollEl}
-        className="h-full overflow-y-auto p-4"
+        // `scrollbar-gutter-stable` because this element's CONTENT WIDTH is read by
+        // CODE — useElementWidth above measures the content box, which excludes the
+        // scrollbar — and that number drives `columns` and `cardWidth`, which the
+        // effect above turns into a wholesale `virtualizer.measure()`. So on a
+        // classic-scrollbar platform a list that stops overflowing (a search
+        // narrowed to a few hits, a short list, a bulk delete) widens this box by
+        // 15px and can re-compose the whole grid at a different column count. That
+        // is a re-layout, not a slide. list-layout.tsx carries the rest of the
+        // note, including why both layouts must set this or neither.
+        className="h-full scrollbar-gutter-stable overflow-y-auto p-4"
         onScroll={(e) => setScrolled(e.currentTarget.scrollTop > SCROLL_TOP_THRESHOLD)}
       >
         <div className="relative" style={{ height: virtualizer.getTotalSize() }}>

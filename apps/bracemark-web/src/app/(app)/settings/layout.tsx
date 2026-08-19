@@ -17,18 +17,27 @@ import { Topbar } from './_panes/topbar';
 // carries the rest.
 //
 // `scrollbar-gutter: stable` is the other half, and it is a TRADE. The gutter's
-// width is now part of the shared column's centring, so without it the whole
-// settings column — bar and content together — slides sideways between a section
-// that scrolls and one that doesn't (About against Lists), which is the same axis
-// the bar is here to hold still. What it costs: Chrome reserves the strip whether
-// or not that platform's scrollbar would have taken layout width, so on macOS —
-// where scrollbars are overlays and the shift never happened — the pane gives up
-// ~15px it used to have. Measured, at 1280 × 900: `auto` puts the gutter at 0 and
-// the shift at 0 on macOS, and at 15/7.5px on a classic-scrollbar platform;
-// `stable` is 15 and 0 everywhere. Paying on one platform to be steady on the
-// others is the same call web-ui's blanket `html` rule already makes for the
-// marketing site and every `min-h-dvh` screen, so the surprise would be a settings
-// pane that DIDN'T.
+// width is part of the shared column's centring, so without it the whole settings
+// column — bar and content together — slides sideways between a section that
+// scrolls and one that doesn't (About against Lists), which is the same axis the
+// bar is here to hold still. What it costs is the 15px a section too SHORT to
+// scroll gives up, since the strip is reserved either way.
+//
+// Both halves of that trade land only where scrollbars are CLASSIC — Chrome and
+// Firefox on Windows and Linux, or a Mac with "Always show scrollbars" switched
+// on. `scrollbar-gutter` is spec'd to have no effect on overlay scrollbars, so on
+// a default macOS the shift never happened AND this line does nothing about it:
+// the property is inert in both directions, exactly as web-ui's blanket `html`
+// rule is, which is why neither can be checked on a Mac at default settings
+// (docs/safe-area.md). An earlier version of this note claimed a measured ~15px
+// macOS cost; that reading can only have come from a machine with the
+// always-show setting on.
+//
+// Paying on the platforms that charge, in order to be steady on them, is the same
+// call the blanket `html` rule already makes for the marketing site and every
+// `min-h-dvh` screen — so the surprise would be a settings pane that DIDN'T. The
+// links pane's sidebar rail and both of its layouts now make it too, each for its
+// own reason (see those files).
 //
 // And it is NOT the case the frame opts out of below: that opt-out is about
 // `html`'s dead gutter on a frame which can never scroll the document — a strip

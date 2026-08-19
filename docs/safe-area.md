@@ -99,15 +99,53 @@ Without it, none of the `safe-area` utilities or `useWindowInsets` do anything.
   so no `"true"`/`"false"` string is ever emitted; the presence selector is
   correct here because the marker is static, never toggled from state.
 - **The opt-out is about `html`, not about the pane.** A frame that carries it can
-  still want a stable gutter on its own inner scroll container, and `/settings`
-  does: its topbar and its section both render an `mx-auto max-w-2xl` column
-  **inside** that container, so the gutter's width is part of where the shared
-  column centres, and letting it come and go slides the whole column sideways
-  between a section that scrolls and one that doesn't. `[scrollbar-gutter:stable]`
-  there reserves a strip a scrollbar actually uses — the case the blanket rule is
-  for — so it is not the dead gutter the bullet above removes. See
-  `(app)/settings/layout.tsx`, which is also where the topbar moved **into** the
-  scroller for the other half of that alignment.
+  still want a stable gutter on its own inner scroll container, and four of them
+  do. The utility is `scrollbar-gutter-stable` (Tailwind core since v4.2; it used
+  to be written as the arbitrary property `[scrollbar-gutter:stable]`). In every
+  case below it reserves a strip a scrollbar actually uses — the case the blanket
+  rule is for — so it is never the dead gutter the bullet above removes.
+  - `(app)/settings/layout.tsx` — its topbar and its section both render an
+    `mx-auto max-w-2xl` column **inside** that container, so the gutter's width is
+    part of where the shared column centres, and letting it come and go slides the
+    whole column sideways between a section that scrolls and one that doesn't.
+    That file is also where the topbar moved **into** the scroller, for the other
+    half of the same alignment.
+  - `(app)/links/_panes/sidebar.tsx` — this scroller's overflow is toggled from
+    **inside** it: collapsing a section header, expanding a subtree, filtering the
+    trees, locking a `hideList` list. Its rows `truncate`, so the width jump
+    re-truncates label text rather than merely moving it, and the filter box is
+    pinned outside the scroller and inset to those rows, so it holds still while
+    they move. One edit covers the drawer too — both hosts render `SidebarBody`.
+  - `(app)/links/_layouts/list-layout.tsx` and `card-layout.tsx` — here the pane's
+    content width is **read by code**: the list gates its date column on an
+    `@container` width, and the card grid feeds `useElementWidth` into its column
+    count and from there into a wholesale `virtualizer.measure()`. A 15px flip when
+    the list stops overflowing doesn't slide the pane, it re-composes it. The two
+    are sibling scrollers for one pane with only ever one mounted, so they must
+    carry the utility **together** or the Settings → Misc layout switch shifts the
+    pane. `EmptyState` replaces the scroller outright, so the 0→N boundary is a
+    full swap that no gutter setting steadies.
+  - `web-ui/components/ui/command.tsx` (`CommandList`) — the same pattern in the
+    surface where filtering IS the interaction. Its only two users are
+    `ListCommand` and `TagsCommand`, and `max-h-72` is about nine rows, so the
+    first character typed usually takes the list from overflowing to not. Rows
+    `truncate`, and filtered `ListCommand` rows prepend an ancestor path, so the
+    jump re-truncates text. (The `no-scrollbar` class that used to lead that class
+    list was dead — defined in no stylesheet and in no Tailwind core build, so it
+    emitted nothing; its position at the head of the list was the hoisting tell
+    described in CLAUDE.md's tripwire.)
+  - `(app)/links/_components/search-bar.tsx` (`TriCheckList`) — a `max-h-32` box,
+    roughly four rows, under a filter input that only appears past eight options:
+    the box exists only on a checklist already scrolling, so typing reliably
+    removes the scrollbar under indented, truncating list and tag names.
+
+  **The rule of thumb these share:** reach for the utility when a scroll
+  container's overflow is toggled _by input inside the same surface_ — a filter
+  box, a collapse, a mode switch — and especially when its content `truncate`s, so
+  the width jump changes the TEXT rather than just moving it. A scroller whose
+  height only changes with the data (a dialog body, a settings pane, a Radix menu
+  of fixed options) does not need it.
+
 - `@utility safe-area` — pads all four sides with the insets.
 - `@utility pt-safe / pr-safe / pb-safe / pl-safe` — per-side variants to mix with
   normal spacing.
@@ -120,10 +158,71 @@ Without it, none of the `safe-area` utilities or `useWindowInsets` do anything.
   `env(...)` string. Use `getWindowInsets()` instead, which measures a probe
   element's resolved padding.
 
-Neither scrollbar-gutter rule is observable on macOS with the default overlay
-scrollbars, where `scrollbar-gutter` is spec'd to have no effect. Both the layout
-shift and the doubled gutter only appear with classic scrollbars — Chrome/Firefox
-on Windows and Linux — so neither can be checked on a Mac at default settings.
+### checking any of this, and what a scrollbar actually costs
+
+All of it turns on whether the platform's scrollbars are **classic** (they consume
+layout width) or **overlay** (they float above the content and consume nothing).
+Chrome and Firefox on Windows and Linux are classic. macOS is classic whenever
+System Settings → Appearance → "Show scroll bars" is **Always**, and _also_ under
+the default **Automatic** whenever a mouse is attached — so "a Mac" is not a
+synonym for "overlay".
+
+This workspace's own machine reads `Always` (`defaults read -g
+AppleShowScrollBars`), switched over from Automatic deliberately and long ago.
+That is worth knowing in both directions. It means a local measurement here is a
+CLASSIC-scrollbar measurement, so don't generalise it to "macOS" — but it also
+means the whole class of bug on this page is visible during ordinary development
+here, on the platform that otherwise hides it. Every layout shift these rules
+exist to remove can be seen locally, which is the opposite of the usual position
+of having to take Windows behaviour on trust.
+
+Measured here in **headed** Chrome, a 200px-wide `overflow-y-auto` box
+(`clientWidth`):
+
+| content   | `scrollbar-gutter` | `scrollbar-width` | width |
+| --------- | ------------------ | ----------------- | ----- |
+| fits      | `auto`             | `auto`            | 200   |
+| overflows | `auto`             | `auto`            | 185   |
+| fits      | `stable`           | `auto`            | 185   |
+| overflows | `stable`           | `auto`            | 185   |
+| overflows | `auto`             | `none`            | 200   |
+| overflows | `stable`           | `none`            | 200   |
+| fits      | `stable`           | `none`            | 200   |
+
+Three things follow, and the last two are the ones that bite:
+
+- The shift `stable` removes is the first two rows: **15px**, on every classic
+  platform, which includes this machine.
+- **`scrollbar-width: none` cancels `scrollbar-gutter: stable`.** The last two rows
+  reserve nothing. Hiding wins, so the two are alternatives and never a pair —
+  stacking them silently gets you the hidden scrollbar and no gutter.
+- **Headless Chrome cannot answer this question.** The same page in headless
+  reports 200 for the overflowing/`auto` row where headed reports 185 — it renders
+  a zero-width scrollbar while still honouring `scrollbar-gutter`. Measure scrollbar
+  behaviour headed (`headless: false`, see `docs/testing.md`), or not at all.
+
+**Hiding the scrollbar was considered and rejected.** Since `scrollbar-width: none`
+cancels the gutter, it is the cheaper stabiliser — constant width at 0px on every
+platform — so it is a real alternative to every `scrollbar-gutter-stable` above,
+not a variation on one. What it costs is the only cue that a list continues below
+the fold, plus the drag handle. That trade loses everywhere it was weighed here:
+the links panes and the sidebar rail are primary content where scroll position is
+information; `TriCheckList` shows about four of up to twenty rows and needs the cue
+most; and bracemark-site's `overflow-x-auto` pricing table (a `min-w-120` table at
+390px) has the scrollbar as its ONLY signal that more columns exist. The single
+defensible site would be `CommandList` — a bounded, narrow, rounded floating panel
+whose cmdk keyboard nav scrolls the active item into view, so ↓ discovers what the
+scrollbar would have advertised — and that is exactly where a dead `no-scrollbar`
+class sat for a long time (see command.tsx). It stays rejected there too: the tree
+`ListCommand` renders makes position worth its 15px. There is deliberately **no
+`@utility no-scrollbar`** in `styles.css`; adding one is how this decision would be
+reopened, so re-read this paragraph first.
+
+What is **not** settled here: whether Chrome reserves a `stable` gutter under true
+overlay scrollbars. It cannot be measured on this machine without changing that
+system setting, and `--enable-features=OverlayScrollbar` does not override it. So
+the cost of `stable` for a macOS user at default settings _with no mouse attached_
+is unverified — assume it may be a real 15px rather than free.
 
 **Utils** (`@stxapps/web-ui/lib/window`)
 

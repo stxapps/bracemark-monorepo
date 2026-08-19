@@ -190,7 +190,22 @@ export function ListLayout({
         // `@container` so the date column below can gate on the PANE width (not the
         // viewport) — the pane widens/narrows with the collapsible sidebar without a
         // window resize, so a viewport `lg:` breakpoint would be wrong here.
-        className="@container h-full overflow-y-auto"
+        //
+        // `scrollbar-gutter-stable` is what keeps that container width from moving
+        // with the SCROLLBAR as well. On a classic-scrollbar platform the content
+        // box is 15px narrower while this pane overflows, so a list that stops
+        // overflowing — a search narrowed to three hits, a short list, a bulk
+        // delete — widens it by 15px, and across the `@xl` threshold that adds or
+        // removes the date column outright. Reserved, the number is constant.
+        //
+        // card-layout.tsx pins its own scroller for the same reason (there the 15px
+        // moves the column count), and the two must carry this TOGETHER: they are
+        // sibling scrollers for one pane with only ever one mounted, so a gutter on
+        // just one of them makes the Settings → Misc layout switch shift the pane.
+        // Not in conflict with the frame's `data-no-scrollbar-gutter` (page.tsx) —
+        // that opt-out is `html`'s dead gutter, outside a pane that has its own
+        // scrollbar; this is that pane. docs/safe-area.md carries the full note.
+        className="@container h-full scrollbar-gutter-stable overflow-y-auto"
         onScroll={(e) => setScrolled(e.currentTarget.scrollTop > SCROLL_TOP_THRESHOLD)}
       >
         <div className="relative" style={{ height: virtualizer.getTotalSize() }}>
