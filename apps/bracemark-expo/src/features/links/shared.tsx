@@ -163,13 +163,17 @@ function emptyCopy(selection: Selection): {
 export function EmptyState({
   isLoading,
   variant = 'list',
+  columns = 1,
 }: {
   isLoading: boolean;
   variant?: 'list' | 'card';
+  // The card grid's live column count, straight from the pane (main.tsx) — only
+  // the skeleton reads it, and only in the card variant.
+  columns?: number;
 }) {
   const { selection } = useLinksPage();
 
-  if (isLoading) return <LinksSkeleton variant={variant} />;
+  if (isLoading) return <LinksSkeleton variant={variant} columns={columns} />;
 
   const { icon, title, body, cta } = emptyCopy(selection);
 
@@ -198,10 +202,10 @@ export function EmptyState({
 // arrive as a jump, and a local-first read that resolves in 40ms flashes a
 // silhouette of the list rather than a sentence the eye has to parse and
 // discard. Mirrors each layout's real geometry closely enough to read as the
-// same surface (the row's 64×40 thumbnail and two text lines; the card's banner
-// over its text block) without importing their measurements — a skeleton that
-// drifts by a few pixels costs nothing, and this file has no business depending
-// on the item renderers.
+// same surface (the row's 64×40 thumbnail and two text lines; the card's 12:7
+// banner over its text block, the ratio link-card.tsx gives the real one)
+// without importing their measurements — a skeleton that drifts by a few pixels
+// costs nothing, and this file has no business depending on the item renderers.
 //
 // It is STATIC, where web's bones pulse. `animate-pulse` is a CSS animation
 // Uniwind has no native equivalent for, and the honest alternatives both cost
@@ -219,8 +223,11 @@ function Bone({ className }: { className?: string }) {
   return <View className={cn('rounded bg-muted', className)} />;
 }
 
-function LinksSkeleton({ variant }: { variant: 'list' | 'card' }) {
-  const count = variant === 'card' ? 6 : 8;
+function LinksSkeleton({ variant, columns }: { variant: 'list' | 'card'; columns: number }) {
+  // Three rows of whatever the grid is about to be, rather than a flat 6: at one
+  // column six cards is two screens of bones nobody sees, and on a tablet six is
+  // barely one row.
+  const count = variant === 'card' ? columns * 3 : 8;
 
   return (
     <View className="flex-1 overflow-hidden">
@@ -228,9 +235,18 @@ function LinksSkeleton({ variant }: { variant: 'list' | 'card' }) {
         {variant === 'card' ? (
           <View className="flex-row flex-wrap p-2">
             {Array.from({ length: count }, (_, i) => (
-              <View key={i} className="w-1/2 p-2">
-                <View className="overflow-hidden rounded-lg border border-border">
-                  <Bone className="h-24 rounded-none" />
+              // The one measurement this file does take from the pane, because
+              // guessing it is what a wrong skeleton looks like: the card grid
+              // is one column until 648pt of outer width and two past it
+              // (main.tsx), so any hardcoded fraction is wrong on one side of
+              // that line — `w-1/2` drew half-width cards on every phone. A
+              // percentage of the padded container is exactly main.tsx's
+              // `paneWidth / numColumns` — same insets, same content padding —
+              // with nothing to measure. `max-w-105 self-center` then mirrors
+              // the real card's cap (link-card.tsx MAX_CARD_WIDTH).
+              <View key={i} style={{ width: `${100 / columns}%` }} className="p-2">
+                <View className="w-full max-w-105 self-center overflow-hidden rounded-lg border border-border">
+                  <Bone className="aspect-12/7 rounded-none" />
                   <View className="gap-2 p-3">
                     <Bone className="h-3 w-16" />
                     <Bone className="h-3.5 w-full" />

@@ -124,7 +124,15 @@ Without it, none of the `safe-area` utilities or `useWindowInsets` do anything.
     are sibling scrollers for one pane with only ever one mounted, so they must
     carry the utility **together** or the Settings → Misc layout switch shifts the
     pane. `EmptyState` replaces the scroller outright, so the 0→N boundary is a
-    full swap that no gutter setting steadies.
+    full swap that no gutter setting steadies — but its SKELETON
+    (`shared/layout-chrome.tsx`) carries the utility anyway, on an
+    `overflow-hidden` box that can never scroll. Not to steady that boundary: the
+    skeleton is a prediction of the scroller's geometry, and the card grid derives
+    its column count from the content width by `auto-fill`, so a skeleton 15px
+    wider than the grid it precedes can show two columns where the real grid then
+    shows one. `scrollbar-gutter: stable` does reserve the strip under
+    `overflow: hidden` — the gutter follows from being a scroll container, not
+    from painting a scrollbar.
   - `web-ui/components/ui/command.tsx` (`CommandList`) — the same pattern in the
     surface where filtering IS the interaction. Its only two users are
     `ListCommand` and `TagsCommand`, and `max-h-72` is about nine rows, so the

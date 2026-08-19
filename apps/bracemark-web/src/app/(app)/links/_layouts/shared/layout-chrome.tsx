@@ -122,7 +122,7 @@ export function EmptyState({
 // arrive as a jump, and a local-first read that resolves in 40ms flashes a
 // silhouette of the list rather than a sentence the eye has to parse and
 // discard. Mirrors each layout's real geometry closely enough to read as the
-// same surface (the list row's 64×38 thumbnail and two text lines; the card's
+// same surface (the list row's 64×40 thumbnail and two text lines; the card's
 // 12:7 banner over its text block, capped and centred like the real one) without
 // importing their measurements — a skeleton that drifts by a few pixels costs
 // nothing, and this file has no business reaching into a layout's numbers.
@@ -134,10 +134,43 @@ function Bone({ className }: { className?: string }) {
 }
 
 function LinksSkeleton({ variant }: { variant: 'list' | 'card' }) {
-  const rows = variant === 'card' ? 6 : 8;
+  // Enough CARDS to fill the widest pane, not exactly one pane's worth — the
+  // grid is `auto-fill` (below), so its column count is a fact about the
+  // container that no value here can know, while the root is `h-full
+  // overflow-hidden`, so a surplus card is CLIPPED rather than scrolled. That
+  // asymmetry is the whole rule: too many costs some aria-hidden divs for the
+  // ~40ms this is up, too few leaves the bottom of the pane bare. Measured at a
+  // 900px-tall pane, the old 6 showed two rows at three columns and fell to a
+  // single row by seven — a strip of bones across the top of a wide monitor and
+  // nothing under it. 24 holds three rows out to nine columns (a ~3000px pane)
+  // and four through the usual 1000-2400, while the ~20 a one-column popup can't
+  // reach are clipped at no visual cost.
+  //
+  // bracemark-expo spells the same intent as `columns * 3` (features/links/
+  // shared.tsx) and can be exact, but only because RN has no `auto-fill`: its
+  // grid must be handed a column count for the cell WIDTH anyway, so the count
+  // rides along free. Here that number would have to be measured, and measured
+  // off a container that does not exist yet on the frame this renders — the
+  // reason card-layout.tsx falls back to DEFAULT_COLUMNS at that moment.
+  const count = variant === 'card' ? 24 : 8;
 
   return (
-    <div className="h-full overflow-hidden" role="status" aria-live="polite">
+    // `scrollbar-gutter-stable` on a box that can never scroll, which looks wrong
+    // until you remember what this element IS: a prediction of the scroller it
+    // stands in for. Both real scrollers reserve the gutter permanently
+    // (list-layout.tsx and card-layout.tsx, `overflow-y-auto
+    // scrollbar-gutter-stable`), so on a classic-scrollbar platform their content
+    // box is 15px narrower than this one would otherwise be — and the card grid
+    // resolves its column count from that width via `auto-fill`. Without this the
+    // skeleton can lay out two columns immediately before the real grid lays out
+    // one. `stable` does reserve the strip under `overflow-hidden` (verified in
+    // Chrome; the gutter is about being a scroll container, not about painting a
+    // scrollbar), and an unpainted strip costs the skeleton nothing.
+    <div
+      className="h-full scrollbar-gutter-stable overflow-hidden"
+      role="status"
+      aria-live="polite"
+    >
       <span className="sr-only">Loading links…</span>
       {variant === 'card' ? (
         <div
@@ -145,14 +178,14 @@ function LinksSkeleton({ variant }: { variant: 'list' | 'card' }) {
           className="grid gap-4 p-4"
           style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(18.75rem, 1fr))' }}
         >
-          {Array.from({ length: rows }, (_, i) => (
+          {Array.from({ length: count }, (_, i) => (
             <div
               key={i}
               className="mx-auto w-full max-w-105 overflow-hidden rounded-lg border border-border"
             >
-              <Bone className="aspect-[12/7] rounded-none" />
+              <Bone className="aspect-12/7 rounded-none" />
               <div className="flex flex-col gap-2 p-3">
-                <Bone className="h-3 w-24" />
+                <Bone className="h-3 w-16" />
                 <Bone className="h-3.5 w-full" />
                 <Bone className="h-3.5 w-2/3" />
               </div>
@@ -161,10 +194,10 @@ function LinksSkeleton({ variant }: { variant: 'list' | 'card' }) {
         </div>
       ) : (
         <div aria-hidden>
-          {Array.from({ length: rows }, (_, i) => (
+          {Array.from({ length: count }, (_, i) => (
             <div
               key={i}
-              className="flex h-[4.375rem] items-center gap-3 border-b border-border pr-2 pl-4"
+              className="flex h-17.5 items-center gap-3 border-b border-border pr-2 pl-4"
             >
               <Bone className="h-10 w-16 shrink-0" />
               <div className="flex min-w-0 flex-1 flex-col gap-2">

@@ -37,7 +37,7 @@ import { type LinkView, useExtraction, useLocks, useSettings, useSync } from '@s
 
 import { LockPane } from '../../components/lock-pane';
 import { BulkEditBar } from './bulk-edit-bar';
-import { LinkCard } from './link-card';
+import { CARD_H_CHROME, LinkCard } from './link-card';
 import { hasKnownTags, LinkRow } from './link-row';
 import { useLinksPage } from './page-provider';
 import { EmptyState, type LinkItemProps, RefreshPill, useTagMap } from './shared';
@@ -56,11 +56,16 @@ const SCROLL_TOP_THRESHOLD = 8;
 // simply stops being picked.
 const VIEWABILITY_CONFIG = { itemVisiblePercentThreshold: 0, minimumViewTime: 250 };
 
-// The smallest a card may get before the card grid drops a column — web's
-// MIN_CARD_WIDTH rationale at mobile scale: web's 300 would pin every phone to
-// one column (a bloated list); 180 yields 2 columns on phones and 4–5 on
-// tablets, where the card is a compact tile rather than web's wide preview.
-const MIN_CARD_WIDTH = 180;
+// The smallest a CARD may get before the card grid drops a column — web's
+// MIN_CARD_WIDTH (card-layout.tsx), the same 300 rather than a mobile-scaled
+// number. The card's meta line is a favicon, the host, the badges and the ⋯
+// menu on one text-base line, and the host is the line that says where the link
+// goes: at two columns on a 390pt phone the card is 187 wide and the host gets
+// ~103 of it, about 13 characters, so `www.nytimes.com` truncates. One column
+// there gives it ~274. So the grid is one column on every phone (two needs
+// 648pt of outer width) and 2–4 on a tablet — which is where web lands at those
+// same widths, a 390px browser window included.
+const MIN_CARD_WIDTH = 300;
 // The pane's content padding in card layout: pairs with each card's own p-2
 // (link-card.tsx) so edges and inter-card gaps both come to 16 — web's p-4
 // container + gap-4 grid.
@@ -102,7 +107,13 @@ const CARD_LAYOUT: LayoutConfig = {
   name: 'card',
   Item: LinkCard,
   itemType: (link, tagsById) => (hasKnownTags(link, tagsById) ? 'tagged' : 'bare'),
-  columns: (paneWidth) => Math.max(1, Math.floor(paneWidth / MIN_CARD_WIDTH)),
+  // Web's fit math, in this platform's cell model. Web adds its 16pt gutter
+  // BETWEEN cells (`gap-4`, hence its `+ CARD_GAP` term); here the gutter rides
+  // inside every cell as the card's own p-2 (CARD_H_CHROME), so it belongs in
+  // the divisor instead. Both spellings reduce to n cards of 300 with 16 between
+  // and 16 outside, so the two platforms drop to one column at the same outer
+  // width — 648 — rather than merely near each other.
+  columns: (paneWidth) => Math.max(1, Math.floor(paneWidth / (MIN_CARD_WIDTH + CARD_H_CHROME))),
   contentPadding: CARD_GRID_PADDING,
 };
 
@@ -243,7 +254,7 @@ function UnlockedMain() {
   return (
     <>
       {links.length === 0 ? (
-        <EmptyState isLoading={isLoading} variant={name} />
+        <EmptyState isLoading={isLoading} variant={name} columns={numColumns} />
       ) : (
         <View className="relative min-h-0 flex-1">
           <RefreshPill show={hasPending} onPress={applyAndScrollTop} />

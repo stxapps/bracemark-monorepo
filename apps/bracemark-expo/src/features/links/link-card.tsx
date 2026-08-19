@@ -41,16 +41,24 @@ import { useLinksViewState } from './view-state-provider';
 // layer to be exactly right on the first frame — which is what keeps the cell
 // from measuring twice as the image resolves.
 const PREVIEW_ASPECT = 7 / 12;
-// The card's own width, off that item width: the wrapper's p-2 (16). No cap to
-// go with web's `max-w-105` — web needs one because a one-column pane can hand a
-// card 600px, while MIN_CARD_WIDTH 180 (main.tsx) keeps a cell here under ~360
-// on any device that reaches one column at all.
-const CARD_H_CHROME = 16;
+// The cell's horizontal chrome — the wrapper's p-2, both sides — so the CARD is
+// the item width less this. main.tsx's column math imports it rather than
+// spelling 16 again: that gutter is exactly what separates a cell's width from
+// the card a reader sees, and MIN_CARD_WIDTH is a promise about the latter.
+export const CARD_H_CHROME = 16;
+// The other end of the range, and now the same cap web sets (card-layout.tsx
+// MAX_CARD_WIDTH, rendered there as `max-w-105`): a column can only be dropped
+// once a cell has grown to TWICE the minimum, so a one-column pane runs a cell
+// up to ~615 wide. That card is a 359 banner and a title stranded on one very
+// long line; the cap keeps a card a card, and the cell's leftover width becomes
+// margin either side of it (`self-center`). No phone reaches it — a 430pt device
+// gives a 398 card — it's for the widths a tablet or a foldable opens up.
+const MAX_CARD_WIDTH = 420;
 
-// What the card can spare for the tag strip, off the same item width
-// (link-tag-chips.tsx does the fitting): the wrapper's p-2 (16) plus the strip's
-// px-3 (24). Nothing else shares the strip's line.
-const CARD_CHIP_CHROME = 40;
+// What the card can spare for the tag strip, off the CAPPED card width
+// (link-tag-chips.tsx does the fitting): the strip's own px-3. Nothing else
+// shares the strip's line.
+const CARD_CHIP_PADDING = 24;
 
 export function LinkCard({
   link,
@@ -65,7 +73,8 @@ export function LinkCard({
 }: LinkItemProps) {
   const { enterBulkEdit } = useLinksViewState();
   const host = hostFromText(link.url);
-  const previewHeight = Math.round((itemWidth - CARD_H_CHROME) * PREVIEW_ASPECT);
+  const cardWidth = Math.min(itemWidth - CARD_H_CHROME, MAX_CARD_WIDTH);
+  const previewHeight = Math.round(cardWidth * PREVIEW_ASPECT);
 
   return (
     // p-2 is half the 16pt grid gutter: with the pane's matching content padding
@@ -89,7 +98,9 @@ export function LinkCard({
               }
         }
         // No `grow`: the wrapper above fills the cell, this hugs its content.
-        className={`overflow-hidden rounded-lg border border-border ${
+        // `w-full max-w-105 self-center` is web's `mx-auto w-full max-w-105` —
+        // the card takes the cell up to MAX_CARD_WIDTH, then centres in it.
+        className={`w-full max-w-105 self-center overflow-hidden rounded-lg border border-border ${
           selected ? 'bg-muted' : 'active:bg-muted/50'
         }`}
       >
@@ -148,7 +159,7 @@ export function LinkCard({
         <LinkTagChips
           link={link}
           tagsById={tagsById}
-          availableWidth={itemWidth - CARD_CHIP_CHROME}
+          availableWidth={cardWidth - CARD_CHIP_PADDING}
           className="px-3 pb-3"
         />
       </Pressable>
