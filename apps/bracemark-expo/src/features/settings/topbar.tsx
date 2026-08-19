@@ -32,16 +32,16 @@
 
 import { Pressable, View } from 'react-native';
 import { DrawerActions } from '@react-navigation/native';
-import { useNavigation, useRouter } from 'expo-router';
+import { useNavigation } from 'expo-router';
 import { Menu, X } from 'lucide-react-native';
 
 import { Icon } from '../../components/ui/icon';
 import { Text } from '../../components/ui/text';
+import { closeSettings } from './close';
 import { SETTINGS_SECTIONS, type SettingsSectionId } from './sections';
 
 export function Topbar({ section }: { section: SettingsSectionId }) {
   const navigation = useNavigation();
-  const router = useRouter();
   const label = SETTINGS_SECTIONS.find((s) => s.id === section)?.label ?? 'Settings';
 
   return (
@@ -59,7 +59,7 @@ export function Topbar({ section }: { section: SettingsSectionId }) {
       </Text>
       <Pressable
         role="button"
-        onPress={() => router.push('/links')}
+        onPress={closeSettings}
         aria-label="Close settings"
         className="-mr-1 size-9 items-center justify-center rounded-md active:bg-muted"
       >

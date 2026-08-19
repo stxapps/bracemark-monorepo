@@ -37,6 +37,7 @@
 // source (`SETTINGS_SECTIONS`) — a dropdown is just the shape a 15rem rail takes
 // when there isn't 15rem to give it.
 
+import { useEffect, useState } from 'react';
 import { Check, ChevronDown, X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -51,6 +52,8 @@ import {
 import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { SETTINGS_SECTIONS } from '../sections';
+
+import { readLinksReturn } from '@/lib/links-return';
 
 function SectionMenu() {
   const pathname = usePathname();
@@ -105,7 +108,33 @@ function SectionMenu() {
   );
 }
 
+// Where the ✕ goes: the links view Settings was opened from, or the bare
+// `/links` when this tab hasn't been there. It used to be `/links` always, which
+// silently dropped whatever list, tag, or search was on screen — the round trip
+// through Settings (to add a list, to change the sort) reset the page you came
+// from. The links page records the view; lib/links-return.ts holds the key and
+// says why it's session-scoped.
+//
+// Read in an effect rather than during render because sessionStorage doesn't
+// exist on the server: the first paint is the `/links` default on both sides —
+// so there's nothing for hydration to mismatch — and the stored href swaps in on
+// mount, long before anyone can click. That also keeps the ✕ a real `<a>` with a
+// real href, which a button + router.push would not be.
+//
+// Deliberately NOT validated here against the current lists/tags. Returning to a
+// view whose list was just deleted IS handled — by the links page itself
+// (page-provider's isStaleSelection), which is also what a stale bookmark or a
+// back-button entry hits. One rule, in the place that owns the URL, instead of a
+// second copy here that would only cover the ✕.
+function useCloseHref(): string {
+  const [href, setHref] = useState('/links');
+  useEffect(() => setHref(readLinksReturn()), []);
+  return href;
+}
+
 export function Topbar() {
+  const closeHref = useCloseHref();
+
   // `sticky` is still a positioned element, so the absolutely-placed close button
   // below anchors to this header exactly as it did under the `relative` it
   // replaced.
@@ -140,7 +169,7 @@ export function Topbar() {
         aria-label="Close settings"
         className={cn('absolute top-1/2 right-4 -translate-y-1/2')}
       >
-        <Link href="/links">
+        <Link href={closeHref}>
           <X className={cn('size-4')} />
         </Link>
       </Button>

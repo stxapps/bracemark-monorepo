@@ -13,7 +13,9 @@ Code: `app/(app)/links/_contexts/page-provider.tsx` (the grammar + writers +
 projection), `app/(app)/links/_components/search-bar.tsx` (the UI), and
 `packages/web-react/src/data/queries.ts` (`LinkQuery`, the read engine). The
 native port (bracemark-expo) is `features/links/page-provider.tsx` +
-`features/links/search-bar.tsx` — see _on native_ below.
+`features/links/search-bar.tsx` — see _on native_ below. Getting back to a view
+after a trip through Settings is `lib/links-return.ts` (web) and
+`features/settings/close.ts` (expo) — see _leaving the page and coming back_.
 
 ### the query is the URL
 
@@ -123,6 +125,54 @@ correct — there's no list/tag context during a search. Only two needed an expl
 `none` branch: `isActive` (sidebar — a kind match is enough for `all`/`none`) and
 `useSelectionLabel` (topbar — `none` → "Search"). `hrefForSelection('none')` →
 `/links` (navigating "to nothing" = home).
+
+### leaving the page and coming back
+
+Settings is a **round trip**, and it used to be a one-way door: both clients' close
+buttons navigated to a hard-coded `/links`, so going to Settings to add a list or
+change the sort dropped whatever list, tag, or search you were on. The URL already
+survives everything — this is not view state that needed persisting, it's a **return
+destination** that was never recorded. Each client fixes it with the primitive its
+own navigation gives it, and the two fixes look nothing alike on purpose.
+
+**bracemark-expo pops.** `links` and `settings` are sibling cards in the `(app)`
+stack, so the links screen stays **mounted** underneath while Settings covers it.
+`features/settings/close.ts` (`closeSettings`, shared by the topbar's ✕ and the
+drawer's back arrow) calls `router.dismiss()` — one card, so a Settings opened from
+the add-link screen uncovers that instead — which reveals the original screen with
+its params, its scroll offset, and its view state intact. The old `push('/links')`
+built a _second_ links card at the default view and left the real one buried below it.
+`canDismiss()` false means a cold entry (a deep link, or the paywall pushing
+`/settings/subscription` first), and then it's a real `replace('/links')`. Moving
+between sections doesn't stack: they're screens of the Settings drawer, so
+expo-router demotes their `push` to a navigate.
+
+**bracemark-web remembers.** Nothing stays mounted — navigating to `/settings` unmounts
+the links tree — so the route itself has to be recorded. `LinksPageProvider` writes the
+current href to `sessionStorage` on every URL change (`lib/links-return.ts` owns the key),
+and the ✕ reads it on mount, defaulting to `/links`. **Session**, not local: this is
+per-tab "where I was", not a preference — with `localStorage`, a second tab's ✕ would
+jump to the first tab's filter and next week's visit would open on a stale tag. The
+read happens in an effect because `sessionStorage` doesn't exist on the server, so the
+first paint is the `/links` default on both sides and the stored href swaps in on mount
+— no hydration mismatch, and the ✕ stays a real `<a href>`. A stored value is checked
+to be `/links` or `/links?…` before use: it's user-writable storage feeding a link, the
+same open-redirect hole `guest-guard.ts` closes on its `?next=` param.
+
+**A returned-to view can be stale**, because Settings is exactly where lists and tags
+get deleted. Both providers therefore carry `isStaleSelection`: a single-axis
+`selection` whose entity is gone sends the page home (`replace`, so the vanished view
+isn't a back destination). It runs on **positive evidence only** — `useLists`/`useTags`
+collapse "still loading" into `[]`, so only a _non-empty_ tree can convict an id, which
+is what keeps a cold load of a shared list URL from bouncing to the inbox. Lists always
+land non-empty (the system three are merged in); the one case it can't judge is a tag id
+on an account whose last tag was just deleted, which falls back to the "Unknown" header
+it would have shown anyway. Compound queries are never judged — one dead id among live
+clauses isn't worth discarding the whole search. The rule lives with the URL rather than
+in the close button because a stale bookmark and a back-button entry reach the same
+state, and on expo it is additionally **gated on focus**: the provider stays mounted
+under Settings, and an ungated `replace` would swap Settings out from under the user
+mid-edit.
 
 ### the three-rung ladder (tiering)
 

@@ -15,20 +15,24 @@
 // Lives in `src/features/links/` (not under `src/app/`) per the thin-routes
 // convention — every file under the app root becomes a route.
 
-import { createContext, useCallback, useContext, useMemo } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo } from 'react';
+import { useIsFocused } from '@react-navigation/native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
-import { useSettings } from '@stxapps/expo-react';
+import { useLists, useSettings, useTags } from '@stxapps/expo-react';
 import {
   ALL_ID,
   coerceLinkSortOn,
   coerceLinkSortOrder,
   DEFAULT_LIST_ID,
+  flattenTree,
   LINK_SORT_ONS,
   LINK_SORT_ORDERS,
   type LinkQuery,
   type LinkSortOn,
   type LinkSortOrder,
+  type TreeItem,
+  type TreeNode,
 } from '@stxapps/shared';
 
 // The single-axis view the sidebar highlights and the topbar names — web's
@@ -201,6 +205,27 @@ function selectionFromQuery(q: LinkQuery): Selection {
   return { kind: 'none' }; // multi-list, list+tag combo, etc.
 }
 
+// Does this tree still hold that id? Flattened, since the match may be at any
+// depth — the same lookup the topbar does to name the selection.
+function treeHasId<T extends TreeItem>(tree: TreeNode<T>[], id: string): boolean {
+  return flattenTree(tree).some((n) => n.item.id === id);
+}
+
+// A selection whose list or tag was DELETED while this screen still names it —
+// web's isStaleSelection, verbatim (see there for why only a single-axis
+// selection is judged, and why an empty tree is never taken as proof of
+// absence: both hooks collapse "still loading" into `[]`, so only a NON-empty
+// tree can convict).
+function isStaleSelection<L extends TreeItem, T extends TreeItem>(
+  selection: Selection,
+  lists: TreeNode<L>[],
+  tags: TreeNode<T>[],
+): boolean {
+  if (selection.kind === 'list') return lists.length > 0 && !treeHasId(lists, selection.id);
+  if (selection.kind === 'tag') return tags.length > 0 && !treeHasId(tags, selection.id);
+  return false;
+}
+
 interface LinksPageContextValue {
   // The single-axis sidebar/topbar view state (what's highlighted / named).
   selection: Selection;
@@ -242,6 +267,27 @@ export function LinksPageProvider({ children }: { children: React.ReactNode }) {
   // Selection is a derived PROJECTION of the query — never a separate read of
   // the URL — so it can never disagree with what the main pane shows.
   const selection = useMemo<Selection>(() => selectionFromQuery(query), [query]);
+
+  // The deleted-entity fallback (isStaleSelection): the list or tag this screen
+  // is filtered by no longer exists, so send it home rather than leave it on a
+  // dead end — a topbar reading "Unknown" over an empty list, with nothing to
+  // say the thing is gone rather than empty. `replace`, not `push`: the view
+  // being left doesn't exist, so it must not become a back-gesture destination.
+  //
+  // GATED ON FOCUS, which web needs no equivalent of. Deleting a list happens in
+  // SETTINGS, and this provider stays mounted under it the whole time (it wraps
+  // the links navigator, a sibling card in the `(app)` stack — the same fact
+  // settings/close.ts pops back onto). An ungated effect would therefore fire
+  // while settings is the focused screen, and `replace` acts on the focused card
+  // — it would swap SETTINGS out from under the user mid-edit. Focused, it fires
+  // the moment settings is dismissed, on the screen it's actually about.
+  const isFocused = useIsFocused();
+  const lists = useLists();
+  const tags = useTags();
+  const stale = isFocused && isStaleSelection(selection, lists, tags);
+  useEffect(() => {
+    if (stale) router.replace('/links');
+  }, [stale, router]);
 
   // push (not replace) so the back gesture steps through the views you visited.
   const setSimpleQuery = useCallback(

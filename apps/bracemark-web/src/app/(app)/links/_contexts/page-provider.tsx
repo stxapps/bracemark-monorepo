@@ -18,7 +18,7 @@
 // site — means consumers just render <LinksPageProvider> and the constraint
 // travels with it (the self-wrapping AuthGuard/GuestGuard pattern).
 
-import { createContext, Suspense, useCallback, useContext, useMemo } from 'react';
+import { createContext, Suspense, useCallback, useContext, useEffect, useMemo } from 'react';
 import { type ReadonlyURLSearchParams, useRouter, useSearchParams } from 'next/navigation';
 
 import {
@@ -26,12 +26,17 @@ import {
   coerceLinkSortOn,
   coerceLinkSortOrder,
   DEFAULT_LIST_ID,
+  flattenTree,
   LINK_SORT_ONS,
   LINK_SORT_ORDERS,
   type LinkSortOn,
   type LinkSortOrder,
+  type TreeItem,
+  type TreeNode,
 } from '@stxapps/shared';
-import { type LinkQuery, useSettings } from '@stxapps/web-react';
+import { type LinkQuery, useLists, useSettings, useTags } from '@stxapps/web-react';
+
+import { recordLinksReturn } from '@/lib/links-return';
 
 // The single-axis view the sidebar highlights and the topbar names — a lossy
 // PROJECTION of `query` onto one axis (via `selectionFromQuery`; never set
@@ -235,6 +240,45 @@ function selectionFromQuery(q: LinkQuery): Selection {
   return { kind: 'none' }; // multi-list, list+tag combo, etc.
 }
 
+// Does this tree still hold that id? Flattened, since the match may be at any
+// depth — the same lookup the topbar does to name the selection.
+function treeHasId<T extends TreeItem>(tree: TreeNode<T>[], id: string): boolean {
+  return flattenTree(tree).some((n) => n.item.id === id);
+}
+
+// A selection whose entity is GONE — the list or tag was deleted while this URL
+// still names it. Reachable three ways: a bookmark or a history entry from
+// before the delete, and (the common one) closing Settings back onto the view
+// you were on when you deleted it there. Left alone the page is a dead end: the
+// topbar reads "Unknown" over an empty list, with no clue that the thing is gone
+// rather than empty.
+//
+// Only a SINGLE-AXIS selection is judged. A compound query (`kind: 'none'` —
+// multi-tag, a text search, an exclusion) may name a deleted id among several
+// live clauses, and dropping the whole search over one of them would throw away
+// far more than it fixes; it keeps showing, one clause narrower than it reads.
+//
+// POSITIVE EVIDENCE ONLY, which is what makes this safe to run continuously.
+// useLists/useTags collapse "still loading" into an empty tree, so an empty one
+// proves nothing and never convicts: an unmatched id is stale only when the tree
+// it should be in has entries. Lists always do once the read lands (the system
+// three are merged in, so `length > 0` is effectively "the store answered"), so
+// the only case this can't judge is a tag id on an account whose last tag was
+// just deleted — which falls back to the "Unknown" view it would have shown
+// anyway. The inverse mistake — treating a loading tree as proof of absence —
+// would bounce every cold load of a shared list URL back to the inbox.
+// Generic over the two item shapes so this file needs no entity types: all it
+// reads is `item.id`, which TreeItem already guarantees.
+function isStaleSelection<L extends TreeItem, T extends TreeItem>(
+  selection: Selection,
+  lists: TreeNode<L>[],
+  tags: TreeNode<T>[],
+): boolean {
+  if (selection.kind === 'list') return lists.length > 0 && !treeHasId(lists, selection.id);
+  if (selection.kind === 'tag') return tags.length > 0 && !treeHasId(tags, selection.id);
+  return false;
+}
+
 interface LinksPageContextValue {
   // The single-axis sidebar/topbar view state (what's highlighted / named).
   selection: Selection;
@@ -280,6 +324,24 @@ function InnerLinksPageProvider({ children }: { children: React.ReactNode }) {
   // — so it can never disagree with what the main pane shows: a global search
   // resolves to `none` (no highlight), not a stale list. See selectionFromQuery.
   const selection = useMemo<Selection>(() => selectionFromQuery(query), [query]);
+
+  // Remember this view for Settings' ✕ (see lib/links-return.ts). Recorded here,
+  // off the URL itself, so the record can't drift from what's on screen and no
+  // call site has to remember to update it — the URL is already the whole view.
+  useEffect(() => {
+    const qs = searchParams.toString();
+    recordLinksReturn(qs ? `/links?${qs}` : '/links');
+  }, [searchParams]);
+
+  // The deleted-entity fallback (isStaleSelection). `replace`, not `push`: the
+  // view being left is gone, so it must not become a back-button destination —
+  // stepping back into it would only bounce forward again.
+  const lists = useLists();
+  const tags = useTags();
+  const stale = isStaleSelection(selection, lists, tags);
+  useEffect(() => {
+    if (stale) router.replace('/links');
+  }, [stale, router]);
 
   // push (not replace) so the back button steps through the views you visited —
   // the deep-link/history behavior the URL approach is for.

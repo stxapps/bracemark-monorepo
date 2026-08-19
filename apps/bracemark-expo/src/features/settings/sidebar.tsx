@@ -24,6 +24,7 @@ import { BrandLockup } from '../../components/brand-lockup';
 import { Icon } from '../../components/ui/icon';
 import { Text } from '../../components/ui/text';
 import { cn } from '../../lib/utils';
+import { closeSettings } from './close';
 import { SETTINGS_SECTIONS, type SettingsSection } from './sections';
 
 const StyledSafeAreaView = withUniwind(SafeAreaView);
@@ -77,8 +78,6 @@ function NavItem({
 }
 
 export function Sidebar({ closeDrawer }: { closeDrawer: () => void }) {
-  const router = useRouter();
-
   return (
     <StyledSafeAreaView className="flex-1 bg-background">
       {/* `h-14` and a hairline under it — the same height and the same rule the
@@ -89,7 +88,7 @@ export function Sidebar({ closeDrawer }: { closeDrawer: () => void }) {
           action={
             <Pressable
               role="button"
-              onPress={() => router.push('/links')}
+              onPress={closeSettings}
               aria-label="Back to links"
               className="-mr-2 size-9 items-center justify-center rounded-md active:bg-muted"
             >
