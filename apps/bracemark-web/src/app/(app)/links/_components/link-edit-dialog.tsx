@@ -299,14 +299,46 @@ function LinkEditForm({
               <Label htmlFor="edit-image" density="dense">
                 Image
               </Label>
+              {/* The card banner's exact shape (`aspect-12/7`, card-layout.tsx),
+                  so the preview crops what the card will crop. It didn't before:
+                  with only `max-h-40` the box took the IMAGE's aspect and
+                  object-cover was inert for anything landscape, so the field
+                  resized per image and cropped only portraits. The list layout's
+                  thumb is 8:5, close enough that the card — the one surface
+                  showing the image large — is the crop worth previewing.
+
+                  Capped on WIDTH, not height, and at 80 (320px → 187 tall): the
+                  dialog's body is 400px, where a full-width 12:7 preview is 233
+                  and crowds List/Tags/Note out of a region that already scrolls.
+                  That leaves ~80px beside it. Moving the buttons into that gap
+                  closes it completely, but only by taking the preview down to
+                  ~212 wide — too small for the one thing this field exists to
+                  show. So the gap stays, trimmed rather than filled, and the
+                  buttons stay BELOW at the same left edge: label, preview and
+                  buttons then share the form's single left edge, which is what
+                  makes three elements read as one field.
+
+                  The slot keeps its size with NO image, which is not cosmetic:
+                  the two buttons below would otherwise jump up under the pointer
+                  when "Reset to extracted" clears to nothing, and `storedUrl` is
+                  a LIVE read, so bytes landing mid-edit would grow the form under
+                  someone typing in the note. Dashed, so an empty slot doesn't
+                  read as content. The copy avoids "no preview image": an
+                  image-less card is not blank (LinkPreviewImage's `panel`
+                  fallback paints the host's hue), and this state also covers a
+                  blob this device simply hasn't materialized. */}
               {previewUrl ? (
                 <img
                   src={previewUrl}
                   alt=""
-                  className="max-h-40 w-full rounded-md border border-border object-cover"
+                  className="aspect-12/7 w-full max-w-80 rounded-md border border-border object-cover"
                 />
               ) : (
-                <p className="text-xs text-muted-foreground">No preview image.</p>
+                <div className="flex aspect-12/7 w-full max-w-80 items-center justify-center rounded-md border border-border border-dashed bg-muted/40 px-3">
+                  <p className="text-center text-xs text-muted-foreground">
+                    No image &mdash; cards show a colored panel.
+                  </p>
+                </div>
               )}
               <div className="flex gap-1.5">
                 <input

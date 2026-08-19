@@ -136,6 +136,38 @@ follow the web rule: they create **immediately** (top-level, index 0,
 case-insensitive reuse) — see "web pickers create IMMEDIATELY; the share sheet
 DEFERS" below.
 
+Both full editors preview the custom image in **the card banner's slot** —
+`aspect-12/7`, width-capped at `max-w-80` (320 → 187 tall), the ratio
+`card-layout.tsx` / `link-card.tsx` lay their banner out at. The editor is the
+only place a user chooses an image and nowhere lets them choose its crop, so the
+preview owes them the crop the app will actually apply; the list thumb's 8:5 is
+near enough that the card, the one surface showing the image large, is the one
+worth previewing. Neither app did this before — web's `max-h-40` let the box take
+the IMAGE's aspect (so `object-cover` was inert for landscape and the field
+resized per image), and expo's `h-40 w-full` cropped harder than either surface
+it was previewing.
+
+Capped on WIDTH, not height: at the dialog's 400px body a full-width 12:7 preview
+is 233px and crowds List/Tags/Note out of a region that already scrolls. That
+leaves ~80px of space beside it, and the buttons stay **below** it rather than
+filling that space — a side-by-side row closes the gap completely, but only by
+taking the preview to ~212 wide, too small for the one thing the field exists to
+show. Below is also where they share the form's single left edge with the label
+and the preview, which is what makes three elements read as one field.
+
+**The slot holds its size when there is no image**, showing a dashed box with a
+line of muted copy instead of collapsing to that line. Three jumps go away with
+it, none cosmetic: the Choose/Reset buttons sit BELOW the slot, so clearing an
+override with no extracted fallback yanked them up under the pointer; the stored
+image comes off a LIVE read (`useLiveQuery` / `useLiveRead`), so bytes
+materializing mid-edit grew the form under someone typing in the note; and on
+expo `focus` scrolls to its field's `layout.y` once, off that field's first
+layout, so an image resolving later left "Edit note" scrolled short of the note.
+The empty copy is "No image — cards show a colored panel", not "no preview
+image", because an image-less card is **not** blank (`LinkPreviewImage`'s `panel`
+fallback paints the host's hue — link-extraction.md) and because the same state
+covers a blob this device hasn't materialized yet.
+
 The share sheet is the RN member of the create family
 ([share-sheet.md](./share-sheet.md) is its own map — the two native shells, the
 iOS snapshot/outbox, the upload). It can't render the web pickers (`web-ui` is
