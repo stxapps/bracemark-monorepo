@@ -29,9 +29,9 @@ overrides). Create collects a strict subset of edit's fields.
 | -------------------------- | --------------------------------------------------------------- | --------- | -------------------------------------------------- |
 | extension save editor      | `apps/bracemark-extension/entrypoints/popup/Editor.tsx`         | create    | list, tags, note (URL is the tab's, read-only)     |
 | web quick-add              | `apps/bracemark-web/.../links/_components/link-add-surface.tsx` | create    | URL, then list/tags/note behind a disclosure       |
-| web edit dialog            | `apps/bracemark-web/.../links/_components/link-edit-dialog.tsx` | full edit | title, image, list, tags, note                     |
+| web edit dialog            | `apps/bracemark-web/.../links/_components/link-edit-dialog.tsx` | full edit | title, list, tags, note, image                     |
 | bracemark-expo quick-add   | `apps/bracemark-expo/src/features/links/link-add-screen.tsx`    | create    | URL, then list/tags/note behind a disclosure       |
-| bracemark-expo edit screen | `apps/bracemark-expo/src/features/links/link-edit-screen.tsx`   | full edit | title, image, list, tags, note                     |
+| bracemark-expo edit screen | `apps/bracemark-expo/src/features/links/link-edit-screen.tsx`   | full edit | title, list, tags, note, image                     |
 | bracemark-expo share sheet | `apps/bracemark-expo/src/features/share/share-screen.tsx`       | create    | list, tags (URL/title arrive in the share payload) |
 
 **Every create surface gates on the plan's link cap, because nothing behind them
@@ -137,8 +137,8 @@ case-insensitive reuse) — see "web pickers create IMMEDIATELY; the share sheet
 DEFERS" below.
 
 Both full editors preview the custom image in **the card banner's slot** —
-`aspect-12/7`, width-capped at `max-w-80` (320 → 187 tall), the ratio
-`card-layout.tsx` / `link-card.tsx` lay their banner out at. The editor is the
+`aspect-12/7`, full width, the ratio `card-layout.tsx` / `link-card.tsx` lay
+their banner out at. The editor is the
 only place a user chooses an image and nowhere lets them choose its crop, so the
 preview owes them the crop the app will actually apply; the list thumb's 8:5 is
 near enough that the card, the one surface showing the image large, is the one
@@ -147,22 +147,35 @@ the IMAGE's aspect (so `object-cover` was inert for landscape and the field
 resized per image), and expo's `h-40 w-full` cropped harder than either surface
 it was previewing.
 
-Capped on WIDTH, not height: at the dialog's 400px body a full-width 12:7 preview
-is 233px and crowds List/Tags/Note out of a region that already scrolls. That
-leaves ~80px of space beside it, and the buttons stay **below** it rather than
-filling that space — a side-by-side row closes the gap completely, but only by
-taking the preview to ~212 wide, too small for the one thing the field exists to
-show. Below is also where they share the form's single left edge with the label
-and the preview, which is what makes three elements read as one field.
+**The image field is LAST, and full width because it is last.** Both editors run
+title → list → tags → note → image. The middle three are exactly what the create
+surfaces collect, in the same order, so the two fields only a full edit has
+book-end that run rather than splitting it — and the field a link rarely carries
+an override for sits past the ones edited on every visit, which is the same trip
+the row menu's "Edit note" exists to skip (below). It used to sit second, capped
+at `max-w-80` (320 → 187 tall), because a full-width 12:7 preview is 233px in the
+dialog's 400px body and crowded List/Tags/Note out of a region that already
+scrolls. With nothing after it, height costs only a scroll taken by someone who
+came for the image, so the cap goes — and with it the ~80px of dead space beside
+the preview, which the buttons could only have filled by taking the preview to
+~212 wide, too small for the one thing the field exists to show. The buttons stay
+**below**, sharing the form's single left edge with the label and the preview,
+which is what makes three elements read as one field; full width also puts the
+preview on the same right edge as every input above it. The cost is
+discoverability for a field now below the fold — if that bites, widen the `focus`
+union (below) rather than grow a surface.
 
 **The slot holds its size when there is no image**, showing a dashed box with a
-line of muted copy instead of collapsing to that line. Three jumps go away with
-it, none cosmetic: the Choose/Reset buttons sit BELOW the slot, so clearing an
-override with no extracted fallback yanked them up under the pointer; the stored
-image comes off a LIVE read (`useLiveQuery` / `useLiveRead`), so bytes
-materializing mid-edit grew the form under someone typing in the note; and on
-expo `focus` scrolls to its field's `layout.y` once, off that field's first
-layout, so an image resolving later left "Edit note" scrolled short of the note.
+line of muted copy instead of collapsing to that line. The Choose/Reset buttons
+sit BELOW the slot, so without it they move under the pointer twice over: up when
+clearing an override with no extracted fallback, down when the LIVE read
+(`useLiveQuery` / `useLiveRead`) behind the stored image materializes bytes
+mid-edit. Moving the field last retired its other two reasons, both of which were
+about a growing field shoving what came after it — the note sliding out from
+under someone typing in it, and on expo `focus` scrolling to a field's `layout.y`
+once, off that field's first layout, so an image resolving later left "Edit note"
+scrolled short of the note. Nothing follows the image now, so keep the fixed slot
+for the buttons, and keep it in mind if the order ever changes back.
 The empty copy is "No image — cards show a colored panel", not "no preview
 image", because an image-less card is **not** blank (`LinkPreviewImage`'s `panel`
 fallback paints the host's hue — link-extraction.md) and because the same state
@@ -392,8 +405,8 @@ editors:
   intent rather than the destination (which is an editable `Textarea` with
   Save/Cancel, never a viewer); the menu had two shapes, so **Edit** was the 2nd
   item on a noteless row and the 3rd on a noted one and everything below shifted
-  with the data; and adding a note meant **Edit** → past the image preview and
-  tags to the last field. The presence of a note is still signalled — that is
+  with the data; and adding a note meant **Edit** → past list and tags to the
+  fourth field (past the image preview too, back when that sat second). The presence of a note is still signalled — that is
   `NoteBadge`'s job on the row (next bullet), not the menu's. Both are absent
   from the Trash variant, like the other edit affordances.
 - On bracemark-expo the same items push `/edit-link` with the same `focus` union

@@ -296,6 +296,48 @@ function LinkEditForm({
             </div>
 
             <div className="flex flex-col gap-1.5">
+              <Label htmlFor="edit-list" density="dense">
+                List
+              </Label>
+              {/* No Trash target: trashing is the menu's Remove, never a "move".
+                  Locked/hidden lists stay pickable — hiding only declutters the
+                  sidebar, it never blocks filing into a list you know exists. */}
+              <ListSelect
+                id="edit-list"
+                value={listId}
+                onValueChange={setListId}
+                excludeIds={[TRASH_ID]}
+                allowCreate
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="edit-tag" density="dense">
+                Tags
+              </Label>
+              <TagsField ref={tagsRef} id="edit-tag" value={tagIds} onChange={setTagIds} />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="edit-note" density="dense">
+                Note
+              </Label>
+              {/* The row menu's "Edit note" lands here (focus === 'note'): the
+                  note has no read-only surface — the layouts are fixed-height, so
+                  a row can only badge it — and at LINK_NOTE_MAX a textarea reads
+                  as well as any viewer would, with the edit already in hand.
+                  Focusing also scrolls it into view. */}
+              <Textarea
+                ref={noteRef}
+                id="edit-note"
+                maxLength={LINK_NOTE_MAX}
+                placeholder="Optional note"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
               <Label htmlFor="edit-image" density="dense">
                 Image
               </Label>
@@ -307,22 +349,34 @@ function LinkEditForm({
                   thumb is 8:5, close enough that the card — the one surface
                   showing the image large — is the crop worth previewing.
 
-                  Capped on WIDTH, not height, and at 80 (320px → 187 tall): the
-                  dialog's body is 400px, where a full-width 12:7 preview is 233
-                  and crowds List/Tags/Note out of a region that already scrolls.
-                  That leaves ~80px beside it. Moving the buttons into that gap
-                  closes it completely, but only by taking the preview down to
-                  ~212 wide — too small for the one thing this field exists to
-                  show. So the gap stays, trimmed rather than filled, and the
-                  buttons stay BELOW at the same left edge: label, preview and
-                  buttons then share the form's single left edge, which is what
-                  makes three elements read as one field.
+                  LAST field, and full width because of it. This sat between
+                  Title and List, capped at `max-w-80` (320px → 187 tall),
+                  because a full-width 12:7 preview is 233 in the dialog's 400px
+                  body and crowded List/Tags/Note out of a region that already
+                  scrolls. Nothing follows it now, so height costs only a scroll
+                  taken by someone who came for the image — and dropping the cap
+                  also drops the ~80px of dead space that sat beside it, which
+                  the buttons couldn't fill without taking the preview down to
+                  ~212 wide, too small for the one thing this field exists to
+                  show. The buttons stay BELOW, so label, preview and buttons
+                  share the form's single left edge, which is what makes three
+                  elements read as one field, and the preview shares its right
+                  edge with every input above it.
+
+                  Order: title → list → tags → note → image. The middle three
+                  are exactly what the create surfaces collect, in the same order
+                  (docs/editors.md, "the editing surfaces"), so the two fields
+                  only a full edit has book-end that run instead of splitting it,
+                  and the rarely-overridden one sits past the fields edited on
+                  every visit — the trip the row menu's "Edit note" exists to
+                  skip went past this preview.
 
                   The slot keeps its size with NO image, which is not cosmetic:
-                  the two buttons below would otherwise jump up under the pointer
-                  when "Reset to extracted" clears to nothing, and `storedUrl` is
-                  a LIVE read, so bytes landing mid-edit would grow the form under
-                  someone typing in the note. Dashed, so an empty slot doesn't
+                  the two buttons below would otherwise move under the pointer —
+                  up when "Reset to extracted" clears to nothing, down when
+                  `storedUrl` (a LIVE read) materializes bytes mid-edit. Being
+                  last retired its other reason, that a growing field shoved the
+                  note out from under someone typing in it. Dashed, so an empty slot doesn't
                   read as content. The copy avoids "no preview image": an
                   image-less card is not blank (LinkPreviewImage's `panel`
                   fallback paints the host's hue), and this state also covers a
@@ -331,10 +385,10 @@ function LinkEditForm({
                 <img
                   src={previewUrl}
                   alt=""
-                  className="aspect-12/7 w-full max-w-80 rounded-md border border-border object-cover"
+                  className="aspect-12/7 w-full rounded-md border border-border object-cover"
                 />
               ) : (
-                <div className="flex aspect-12/7 w-full max-w-80 items-center justify-center rounded-md border border-border border-dashed bg-muted/40 px-3">
+                <div className="flex aspect-12/7 w-full items-center justify-center rounded-md border border-dashed border-border bg-muted/40 px-3">
                   <p className="text-center text-xs text-muted-foreground">
                     No image &mdash; cards show a colored panel.
                   </p>
@@ -370,48 +424,6 @@ function LinkEditForm({
                   </Button>
                 )}
               </div>
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="edit-list" density="dense">
-                List
-              </Label>
-              {/* No Trash target: trashing is the menu's Remove, never a "move".
-                  Locked/hidden lists stay pickable — hiding only declutters the
-                  sidebar, it never blocks filing into a list you know exists. */}
-              <ListSelect
-                id="edit-list"
-                value={listId}
-                onValueChange={setListId}
-                excludeIds={[TRASH_ID]}
-                allowCreate
-              />
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="edit-tag" density="dense">
-                Tags
-              </Label>
-              <TagsField ref={tagsRef} id="edit-tag" value={tagIds} onChange={setTagIds} />
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="edit-note" density="dense">
-                Note
-              </Label>
-              {/* The row menu's "Edit note" lands here (focus === 'note'): the
-                  note has no read-only surface — the layouts are fixed-height, so
-                  a row can only badge it — and at LINK_NOTE_MAX a textarea reads
-                  as well as any viewer would, with the edit already in hand.
-                  Focusing also scrolls this last field into view. */}
-              <Textarea
-                ref={noteRef}
-                id="edit-note"
-                maxLength={LINK_NOTE_MAX}
-                placeholder="Optional note"
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-              />
             </div>
           </div>
 

@@ -320,52 +320,6 @@ function LinkEditForm({ link, focus }: { link: LinkItem; focus?: EditFocus }) {
           </View>
         </Field>
 
-        <Field label="Image">
-          {/* The card banner's shape (`aspect-12/7` — link-card.tsx), web's
-              slot verbatim; the dialog carries the argument for why the preview
-              owes the user the CARD's crop, why the box is capped on width
-              (`max-w-80`, 320 → 187 tall) rather than height, and why the buttons
-              stay BELOW at the same left edge instead of filling the space
-              beside it. `h-40 w-full` before it was a harder crop than either
-              surface (358×160 ≈ 2.24:1 on a 390pt phone), so the preview cut off
-              more than the card would. As a class, not link-card's computed dp
-              height: that number exists so FlashList measures a cell right on its
-              first frame, and nothing measures this screen.
-
-              Holding the slot's size with NO image is load-bearing here beyond
-              web's two reasons (buttons jumping under the finger on "Reset to
-              extracted"; a live `storedUri` landing mid-edit): `focus` scrolls to
-              its field's `layout.y` ONCE, off that field's first layout, so an
-              image resolving afterwards would grow this field and leave "Edit
-              note" scrolled short of the note. */}
-          {previewUri ? (
-            <Image
-              source={{ uri: previewUri }}
-              accessibilityIgnoresInvertColors
-              resizeMode="cover"
-              className="aspect-12/7 w-full max-w-80 rounded-md border border-border"
-            />
-          ) : (
-            <View className="aspect-12/7 w-full max-w-80 items-center justify-center rounded-md border border-dashed border-border bg-muted/40 px-3">
-              <Text className="text-center text-xs text-muted-foreground">
-                No image — cards show a colored panel.
-              </Text>
-            </View>
-          )}
-          <View className="flex-row gap-1.5">
-            <Button variant="outline" size="sm" onPress={() => void onPickImage()}>
-              <Icon as={ImagePlus} className="size-4" />
-              <Text>Choose image</Text>
-            </Button>
-            {(image.kind === 'pick' || (image.kind === 'keep' && link.customImageId)) && (
-              <Button variant="ghost" size="sm" onPress={() => setImage({ kind: 'clear' })}>
-                <Icon as={ImageOff} className="size-4" />
-                <Text>Reset to extracted</Text>
-              </Button>
-            )}
-          </View>
-        </Field>
-
         {/* No Trash target: trashing is the menu's Remove, never a "move".
             Locked/hidden lists stay pickable — hiding only declutters the
             drawer, it never blocks filing into a list you know exists. */}
@@ -398,6 +352,55 @@ function LinkEditForm({ link, focus }: { link: LinkItem; focus?: EditFocus }) {
             // Android centers multiline text vertically by default.
             style={{ textAlignVertical: 'top' }}
           />
+        </Field>
+
+        <Field label="Image">
+          {/* The card banner's shape (`aspect-12/7` — link-card.tsx), web's
+              slot verbatim; the dialog carries the argument for why the preview
+              owes the user the CARD's crop, why the field is LAST and full width
+              (title → list → tags → note → image, the create surfaces' three
+              fields book-ended rather than split — docs/editors.md), why the
+              buttons stay BELOW at the same left edge, and why the slot holds
+              its size with no image (the buttons would otherwise move under the
+              finger — up on "Reset to extracted", down when a live `storedUri`
+              materializes mid-edit). `h-40 w-full` before it was a harder crop
+              than either surface (358×160 ≈ 2.24:1 on a 390pt phone), so the
+              preview cut off more than the card would. As a class, not
+              link-card's computed dp height: that number exists so FlashList
+              measures a cell right on its first frame, and nothing measures this
+              screen.
+
+              Being last also retired this screen's own reason for the fixed
+              slot: `focus` scrolls to its field's `layout.y` ONCE, off that
+              field's first layout, so while the image sat above Note an image
+              resolving afterwards grew the field and left "Edit note" scrolled
+              short. Nothing this field does can move Tags or Note now. */}
+          {previewUri ? (
+            <Image
+              source={{ uri: previewUri }}
+              accessibilityIgnoresInvertColors
+              resizeMode="cover"
+              className="aspect-12/7 w-full rounded-md border border-border"
+            />
+          ) : (
+            <View className="aspect-12/7 w-full items-center justify-center rounded-md border border-dashed border-border bg-muted/40 px-3">
+              <Text className="text-center text-xs text-muted-foreground">
+                No image — cards show a colored panel.
+              </Text>
+            </View>
+          )}
+          <View className="flex-row gap-1.5">
+            <Button variant="outline" size="sm" onPress={() => void onPickImage()}>
+              <Icon as={ImagePlus} className="size-4" />
+              <Text>Choose image</Text>
+            </Button>
+            {(image.kind === 'pick' || (image.kind === 'keep' && link.customImageId)) && (
+              <Button variant="ghost" size="sm" onPress={() => setImage({ kind: 'clear' })}>
+                <Icon as={ImageOff} className="size-4" />
+                <Text>Reset to extracted</Text>
+              </Button>
+            )}
+          </View>
         </Field>
 
         <View className="flex-row justify-end gap-2">
