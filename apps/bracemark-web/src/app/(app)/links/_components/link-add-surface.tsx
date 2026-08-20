@@ -490,14 +490,15 @@ export function LinkAddSurface({
             against the trailing padding edge, and 8px suits a 6px dot better than
             the untrimmed 12px would.
 
-            `bg-foreground/70` — the colour of the label it belongs to — where the
-            search trigger uses `bg-primary`. That trigger is an ICON button: with
-            no text on it, the dot is the only thing that can carry the "there are
-            filters" state, and it has the whole `size-9` box to itself. Here the
+            `bg-foreground/70` — the colour of the label it belongs to. Here the
             dot is a mark of punctuation on a labelled control, and an accent-
             coloured one outweighs the label it is modifying — the loudest thing
             in the form would be a 6px dot rather than Save. Matching the text
-            keeps it a detail of the label. It tracks the ghost variant's
+            keeps it a detail of the label. The advanced-search trigger carries
+            the same token for the neighbouring reason: there the dot annotates a
+            glyph rather than a label, and at full ink a filled 6px circle
+            out-weighs a 1.5px stroke just as surely. One value, one rule — the
+            dot never out-weighs its host. It tracks the ghost variant's
             `hover:text-foreground` for free, since that resolves to this token;
             `bg-current` would track it more literally, but there is no
             currentColor in React Native, and this dot ports verbatim to

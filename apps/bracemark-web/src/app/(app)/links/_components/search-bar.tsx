@@ -343,9 +343,33 @@ function AdvancedSearch() {
         <Button variant="ghost" size="icon" aria-label="Advanced search" className="relative">
           <SlidersHorizontal className="size-4" />
           {hasAdvancedFilters(query) && (
+            /* `1.25` (5px), not the 1.5 a badge dot usually takes on a square
+               button: this one is round (the ghost hover is a 36px circle), and
+               the two constraints pull opposite ways along the diagonal. Inside
+               the circle needs the dot's centre within 15px of the middle —
+               true from 1.25 out, false at 1 (the dot's rim crosses the hover
+               edge). Clear of the glyph pushes the other way: at 1.5 the dot
+               lands ~1.5px off the end of SlidersHorizontal's top slider and
+               reads as touching it. 1.25 is the one quarter-step that satisfies
+               both, ~3px of air from the glyph with the dot still fully inside.
+               The topbar's other dot — the sync one on MoreOptionsMenu's
+               trigger — is pinned to the same offset so the pair lines up.
+
+               `bg-foreground/70`, not `bg-primary`. Every glyph in this bar
+               inherits `--foreground`, and `--primary` is a hair off it (0.205
+               against 0.145 — this theme has no brand hue, so primary IS
+               near-black), which leaves the dot at full ink: a FILLED 6px
+               circle carries several times the ink of the 1.5px strokes it is
+               annotating, so the loudest mark on the bar becomes the dot rather
+               than the control it belongs to. A step down reads as plainly at a
+               glance and stops it out-weighing its host. Same token as the add
+               form's "this collapsed section holds something" dot
+               (link-add-surface.tsx) — the same statement about a closed
+               surface, and one rule behind both: the dot never out-weighs the
+               thing it marks. */
             <span
               aria-hidden
-              className="absolute top-1.5 right-1.5 size-1.5 rounded-full bg-primary"
+              className="absolute top-1.25 right-1.25 size-1.5 rounded-full bg-foreground/70"
             />
           )}
         </Button>

@@ -6,8 +6,8 @@
 // links screen's only always-visible sync-error surface (pull-to-refresh gives
 // the gesture but no error affordance; the full status card lives in Settings →
 // Data). Only STANDING states get the dot: a spinner there would flicker
-// on every edit's sub-second cycle — and the blocked dot is muted, never
-// destructive, since the cycle completed and the library is intact. Web's
+// on every edit's sub-second cycle — and the blocked dot is full-ink neutral,
+// never destructive, since the cycle completed and the library is intact. Web's
 // "Storage full" row is here too, same reasoning (the Sync item keeps its plain
 // label because a press still can't clear a full account; the row LINKS to the
 // Data card rather than repeating its sentence). Divergences here:
@@ -79,24 +79,42 @@ export function MoreOptionsMenu() {
                 ? 'More options (storage full)'
                 : 'More options'
           }
+          // `left: 2` is half the `gap-1` to the search toggle (topbar.tsx's
+          // drawer button carries the rule); `right: 8` is the clearance this
+          // one's `-mr-1` leaves to the frame edge, so the slop stops at the
+          // screen rather than spilling past it. 46x48 effective.
+          hitSlop={{ top: 6, bottom: 6, left: 2, right: 8 }}
           // `size-9` and pulled to the frame edge, matching every other icon
           // button on both topbars (links and settings) — this is the last slot
           // in the row, so it sets where the bar's right edge reads.
           className="relative -mr-1 size-9 items-center justify-center rounded-md active:bg-muted"
         >
-          <Icon as={MoreHorizontal} className="size-5 text-muted-foreground" />
+          <Icon as={MoreHorizontal} className="size-5 text-foreground" />
           {(syncError || blocked) && (
             <View
               aria-hidden
-              // 6px in, not 4: a size-5 glyph centred in a size-9 box leaves 8
-              // free on each side, so 4 floats the dot off the mark it belongs
-              // to. Same inset as the search bar's advanced-filter dot, which
-              // sits in a larger (size-10) button — the dot tracks the glyph,
-              // not the button. Web's trigger resolved to the same geometry and
-              // the same 1.5.
+              // 5px in (`1.25`), not 4: a size-5 glyph centred in a size-9 box
+              // leaves 8 free on each side, and at 4 the dot floats off the mark
+              // it belongs to instead of annotating it. Same inset as the search
+              // bar's advanced-filter dot, which sits in a larger (size-10)
+              // button — the dot tracks the glyph, not the button — and the same
+              // as web's pair, so all four agree on one value. Web is FORCED to
+              // 1.25 from both sides: its triggers are round (`rounded-4xl` on a
+              // 36px box clamps to a circle, which is what the ghost hover
+              // fills), so 1 puts the dot's rim outside that circle while 1.5
+              // crowds the glyph. Here `rounded-md` means the corner never
+              // clips, so only the glyph bounds it and the extra 1px is free.
+              //
+              // Colour is web's ladder, ranked by what the mark asks of the user:
+              // `bg-destructive` (the cycle failed — act), `bg-foreground`
+              // (blocked — changes are stuck, but nothing is lost), and below
+              // both, `bg-foreground/70` on the search bar's advanced-filter dot
+              // (a state the user chose). Blocked is full ink rather than
+              // `bg-muted-foreground` so it can't read quieter than that benign
+              // neighbour; NEUTRAL still, which is all "never destructive" asks.
               className={cn(
-                'absolute top-1.5 right-1.5 size-1.5 rounded-full',
-                syncError ? 'bg-destructive' : 'bg-muted-foreground',
+                'absolute top-1.25 right-1.25 size-1.5 rounded-full',
+                syncError ? 'bg-destructive' : 'bg-foreground',
               )}
             />
           )}
@@ -106,7 +124,11 @@ export function MoreOptionsMenu() {
         <DropdownMenuItem onPress={requestSync}>
           {syncError ? (
             <>
-              <Icon as={CircleAlert} className="size-4 text-destructive" />
+              {/* No `text-destructive`, matching web: that colour is for actions
+                  that destroy something (Sign out below), and this one retries a
+                  sync. The red lives on the trigger's dot, where it carries the
+                  state with the menu shut; here the label already says it. */}
+              <Icon as={CircleAlert} className="size-4" />
               <Text>Sync failed — Retry</Text>
             </>
           ) : (

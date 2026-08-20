@@ -20,9 +20,9 @@
 // Settings → Data, not a copy of what that card says. This menu is a launcher,
 // not a status readout: it names the state and the fact that changes are
 // stuck, and the sentence with the count (syncBlockedDetail) stays in the one
-// place a user goes to read status. Its dot and its icon are muted, never
-// destructive — the cycle completed and the local library is intact
-// (@stxapps/shared sync/status.ts, `blocked-capacity`).
+// place a user goes to read status. Its icon is muted and its dot is full-ink
+// neutral — never destructive, because the cycle completed and the local library
+// is intact (@stxapps/shared sync/status.ts, `blocked-capacity`).
 
 import {
   CircleAlert,
@@ -83,10 +83,21 @@ export function MoreOptionsMenu() {
               that bar swaps into the slot below this one. */}
           <MoreHorizontal className="size-5" />
           {(syncError || blocked) && (
+            /* The topbar's dot ladder, ranked by what the mark asks of the user
+               rather than by how bad the state sounds: `bg-destructive` (the
+               cycle failed — act), `bg-foreground` (blocked — changes are stuck,
+               but nothing is lost), and a step below both, `bg-foreground/70` on
+               the advanced-search trigger beside this one (filters are on — a
+               state the user chose). The last rung is why blocked is full ink
+               and not `bg-muted-foreground`: `/70` composites to #545454 on
+               light, against muted-foreground's #6f6f6f, so the benign mark of
+               the neighbouring pair was reading as the heavier one. Full-ink
+               NEUTRAL, though — the "never destructive" rule in the header is
+               about hue, and it still holds. */
             <span
               aria-hidden="true"
-              className={`absolute top-1.5 right-1.5 size-1.5 rounded-full ${
-                syncError ? 'bg-destructive' : 'bg-muted-foreground'
+              className={`absolute top-1.25 right-1.25 size-1.5 rounded-full ${
+                syncError ? 'bg-destructive' : 'bg-foreground'
               }`}
             />
           )}
@@ -108,7 +119,16 @@ export function MoreOptionsMenu() {
             </>
           ) : syncError ? (
             <>
-              <CircleAlert className="size-4 text-destructive" />
+              {/* Deliberately NOT `text-destructive`, and not `variant="destructive"`
+                  either: that variant means the action destroys something (Sign
+                  out below, Delete on a link), and this one retries a sync. The
+                  red lives on the trigger's dot, where it has to carry the state
+                  with the menu shut; in here the label already says it. A red
+                  glyph would also be a lie on hover — the item's focus rule
+                  (`not-data-[variant=destructive]:focus:**:text-accent-foreground`)
+                  recolours every descendant, so `text-destructive` flips to black
+                  under the cursor and only `!important` would hold it. */}
+              <CircleAlert className="size-4" />
               Sync failed — Retry
             </>
           ) : (

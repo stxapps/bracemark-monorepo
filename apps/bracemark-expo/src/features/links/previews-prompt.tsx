@@ -73,7 +73,7 @@ export function PreviewsPrompt() {
           Bracemark can fetch their titles and images on this device. Links you save here are always
           previewed; this covers the ones that arrived from your other devices or an import.
         </Text>
-        <View className="flex-row">
+        <View className="mt-1 flex-row">
           <Button size="sm" variant="outline" onPress={turnOn}>
             <Text>Turn on previews</Text>
           </Button>

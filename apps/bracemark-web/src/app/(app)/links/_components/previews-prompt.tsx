@@ -95,7 +95,7 @@ export function PreviewsPrompt() {
               preview service. Only the link&apos;s URL is sent, nothing is stored, and it never
               runs until you turn it on.
             </p>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="mt-1 flex flex-wrap items-center gap-2">
               <Button asChild size="sm" variant="outline">
                 <Link href="/settings/extraction">Set up previews</Link>
               </Button>
@@ -108,7 +108,7 @@ export function PreviewsPrompt() {
               — free, and the page never leaves your device. Filling in the ones already here, saved
               on the web or added by import, is part of Plus.
             </p>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="mt-1 flex flex-wrap items-center gap-2">
               <Button asChild size="sm" variant="outline">
                 <a href={storeUrl} target="_blank" rel="noreferrer">
                   Get the browser extension

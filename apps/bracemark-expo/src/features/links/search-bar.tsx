@@ -364,17 +364,38 @@ function AdvancedSearch() {
 
   return (
     <>
+      {/* 50x48 effective: `left: 2` is half the `gap-1` to the Input, which
+          takes touches of its own (the rule is in links/topbar.tsx), `right: 8`
+          runs out to the row's `px-2` frame edge, and 4 above/below clears the
+          floor on a box that is already 40. `active:bg-muted` is the press
+          feedback every other chrome button has and this one was missing — it
+          paints the 40px box, 2px proud of the h-9 Input beside it, which is
+          why the box can't simply shrink to match: 20px of glyph in 36 would
+          leave the corner dot ~1px off the top slider. 40/20 here against web's
+          36/16 is the same 10px margin by a different route — links/topbar.tsx
+          carries that rule, docs/accessibility.md the hitSlop one. */}
       <Pressable
         role="button"
         onPress={openSheet}
         aria-label="Advanced search"
-        className="relative size-10 items-center justify-center rounded-md"
+        hitSlop={{ top: 4, bottom: 4, left: 2, right: 8 }}
+        className="relative size-10 items-center justify-center rounded-md active:bg-muted"
       >
-        <Icon as={SlidersHorizontal} className="size-5 text-muted-foreground" />
+        <Icon as={SlidersHorizontal} className="size-5 text-foreground" />
         {hasAdvancedFilters(query) && (
           <View
             aria-hidden
-            className="absolute top-1.5 right-1.5 size-1.5 rounded-full bg-primary"
+            // `bg-foreground/70` at `1.25`, both matching web (search-bar.tsx
+            // carries the arguments): a filled 6px dot at full ink out-weighs the
+            // stroked glyph it annotates, so it steps below the glyph's
+            // `--foreground`, and it is the quietest rung of the topbar's dot
+            // ladder because filters are a state the USER CHOSE where the sync
+            // dots beside it mean something wants attention. 5px in rather than
+            // 6 buys ~1.4px more air off the end of SlidersHorizontal's top
+            // slider; web is pinned there by its round trigger, which this
+            // `rounded-md` box isn't, but one value across all four dots is
+            // worth more than the pixel.
+            className="absolute top-1.25 right-1.25 size-1.5 rounded-full bg-foreground/70"
           />
         )}
       </Pressable>
@@ -400,7 +421,7 @@ function AdvancedSearch() {
                 aria-label="Close advanced search"
                 className="size-10 items-center justify-center rounded-md"
               >
-                <Icon as={X} className="size-5 text-muted-foreground" />
+                <Icon as={X} className="size-5 text-foreground" />
               </Pressable>
             </View>
             <ScrollView keyboardShouldPersistTaps="handled" contentContainerClassName="gap-4 p-4">

@@ -50,6 +50,10 @@ export function Topbar({ section }: { section: SettingsSectionId }) {
         role="button"
         onPress={() => navigation.dispatch(DrawerActions.openDrawer())}
         aria-label="Open settings navigation"
+        // 48x48 effective — see links/topbar.tsx for why the boxes stay 36 and
+        // the slop makes up the difference. Neither button here has a pressable
+        // neighbour (the label between them is a Text), so both take the full 6.
+        hitSlop={6}
         className="-ml-1 size-9 items-center justify-center rounded-md active:bg-muted"
       >
         <Icon as={Menu} className="size-5 text-foreground" />
@@ -61,9 +65,10 @@ export function Topbar({ section }: { section: SettingsSectionId }) {
         role="button"
         onPress={closeSettings}
         aria-label="Close settings"
+        hitSlop={6}
         className="-mr-1 size-9 items-center justify-center rounded-md active:bg-muted"
       >
-        <Icon as={X} className="size-5 text-muted-foreground" />
+        <Icon as={X} className="size-5 text-foreground" />
       </Pressable>
     </View>
   );

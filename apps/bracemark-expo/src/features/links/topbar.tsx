@@ -102,10 +102,20 @@ export function Topbar() {
 
   return (
     <View className="h-14 shrink-0 flex-row items-center gap-2 border-b border-border px-3">
+      {/* hitSlop, on this and every other chrome button in the app: the boxes
+          are 36, under both platform floors (iOS HIG 44pt, Material 48dp), and
+          growing them would mean re-cutting both topbars — the bar is h-14, so
+          6px each way reaches 48 with room to spare and costs no layout at all.
+          The one rule: never take more than HALF the gap to a pressable
+          neighbour, since RN resolves overlapping touch regions by tree order
+          (the later sibling wins) and the loser's own visible box is what gets
+          eaten. Nothing pressable sits beside this one — the title is a Text —
+          so it takes the full 6. */}
       <Pressable
         role="button"
         onPress={() => navigation.dispatch(DrawerActions.openDrawer())}
         aria-label="Open navigation"
+        hitSlop={6}
         className="-ml-1 size-9 items-center justify-center rounded-md active:bg-muted"
       >
         <Icon as={Menu} className="size-5 text-foreground" />
@@ -117,7 +127,24 @@ export function Topbar() {
           hundred lists you are looking at, and it stays `text-lg font-semibold`
           for it. The drawer button and the two actions match the settings bar
           exactly (`size-9`, pulled to the frame edge, `px-3` row) — a user
-          crosses between the two bars constantly and they must not shift. */}
+          crosses between the two bars constantly and they must not shift.
+
+          THE GLYPHS ARE `size-5` (20) WHERE WEB'S ARE `size-4` (16), and that
+          divergence is deliberate, not drift: 16 is the desktop grid web's
+          topbar comment pins itself to, while a phone's navigation chrome sits
+          nearer the platform norms (iOS nav-bar symbols ~22pt, Material's top
+          app bar 24dp). Both apps otherwise run on `size-4` — 20 is the
+          exception on each, applied here to all nav chrome and on web only to
+          MoreHorizontal.
+
+          What the two platforms DO hold in common is the number that matters,
+          which is neither the box nor the glyph but the free margin between
+          them — because that gap is what a corner dot has to live in. Web's
+          search trigger is 36/16 and this app's is 40/20: both leave exactly
+          10px a side. Both ⋯ triggers are 36/20, both leave 8 — which is why
+          that one's dot comment argues about 4px vs 5px at all. Change a glyph
+          rung without re-deriving the box and the dot is what breaks, silently
+          (search-bar.tsx spells out the arithmetic for its own trigger). */}
       <Text numberOfLines={1} className="min-w-0 flex-1 text-lg font-semibold">
         {label}
       </Text>
@@ -131,15 +158,21 @@ export function Topbar() {
           // since dismissing a committed search also restores the view it ran from.
           aria-label={searchVisible ? 'Close search' : 'Search links'}
           aria-expanded={searchVisible}
+          // `right: 2` is half the `gap-1` to the ⋯ trigger — see the drawer
+          // button's note. Left is free (the title Text takes no touches).
+          hitSlop={{ top: 6, bottom: 6, left: 6, right: 2 }}
           className={cn(
             'size-9 items-center justify-center rounded-md active:bg-muted',
             searchVisible && 'bg-muted',
           )}
         >
-          <Icon
-            as={Search}
-            className={cn('size-5', searchVisible ? 'text-foreground' : 'text-muted-foreground')}
-          />
+          {/* Constant `text-foreground`, like every other icon button on this
+              bar and like web's: the open state is already carried by the
+              `bg-muted` fill above (web spells the same thing as the Button's
+              `secondary` variant), and dimming the glyph on top of it made the
+              INACTIVE state look disabled rather than the active one look
+              picked. */}
+          <Icon as={Search} className="size-5 text-foreground" />
         </Pressable>
         <MoreOptionsMenu />
       </View>
