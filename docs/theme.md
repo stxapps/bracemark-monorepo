@@ -441,19 +441,45 @@ against `--background` alone. It measures 4.73:1 there and **4.34:1 on 0.97** �
 under the 4.5 AA floor, which applies to everything below 24px (or 18.66px bold),
 so making text _bigger_ doesn't buy relief until it is very big indeed. We
 therefore ship `oklch(0.54)`: 5.06:1 on white, 4.85:1 on a `bg-muted/50` hover,
-**4.64:1 on the full wash**. Dark mode is untouched — `oklch(0.708)` on its
-`oklch(0.269)` wash is 5.83:1.
+**4.64:1 on the full wash**.
 
-Two things follow.
+### contrast — dark mode, where the ratio lies
 
-- **The value is a deliberate divergence from shadcn**, in two files that must
-  move together: `packages/web-ui/src/styles.css` (`:root`) and
-  `apps/bracemark-expo/global.css` (the `light` variant). Re-deriving the block
-  from an upstream shadcn theme silently reverts it, and nothing lints or fails —
-  the symptom is only ever a measurement.
+Dark mode diverges from shadcn too, and for a reason WCAG cannot express. Run the
+stock `--muted-foreground` (`oklch(0.708)`) against the surfaces it actually sits
+on and every number looks _better_ than light mode's: 6.91:1 on the 0.205
+popover/card (what a `Dialog` is — `dialog.tsx` is `bg-popover`), 7.63:1 on the
+0.145 background, 5.83:1 on the 0.269 wash. Nothing fails, so nothing gets
+flagged; muted text in dark dialogs nonetheless reads thin, and people report it.
+
+The ratio is the problem. WCAG 2.x contrast is polarity-blind and overrates
+light-on-dark at low luminance. [APCA](https://git.apcacontrast.com/), which is
+not, scores that same pair **Lc 50 against light mode's Lc 75** — a third less
+contrast from one token. Trust APCA on this axis; the WCAG number is not wrong so
+much as measuring something that doesn't predict legibility here.
+
+We therefore ship `oklch(0.78)` in dark: **Lc 60 on the 0.269 wash** — the lowest
+value clearing APCA's body-text floor on the _worst_ surface, which is the same
+rule that picked 0.54 in light — and Lc 63 in a dialog. It stays 41 Lc below
+`--foreground` (Lc 104 on the popover), so the muted rank still reads. Parity with
+light mode's Lc 75 is not reachable: it needs ~0.85, close enough to
+`--foreground`'s 0.985 that the two stop being distinguishable and the hierarchy
+the token exists to express collapses.
+
+Three things follow.
+
+- **Both values are deliberate divergences from shadcn**, in two files that must
+  move together: `packages/web-ui/src/styles.css` (`:root` _and_ `.dark`) and
+  `apps/bracemark-expo/global.css` (the `light` _and_ `dark` variants). Re-deriving
+  either block from an upstream shadcn theme silently reverts it, and nothing lints
+  or fails — the symptom is only ever a measurement. Only the token's _value_ moves,
+  so `tools/prettier/expo-tailwind.css` needs nothing (it shims names).
 - **A new wash darker than 0.97 re-opens the question.** Check it against
   `--muted-foreground` before adding it; icons are the easier case (WCAG 1.4.11
   asks 3:1 of a meaningful glyph, which muted clears on every surface we have).
+- **Check dark pairings with APCA, not a WCAG ratio.** Any new light-on-dark text
+  colour — a tone on a coloured surface, a disabled state, a placeholder — will
+  pass the ratio long before it is comfortable to read.
 
 Contrast is not otherwise linted anywhere. `hover:text-foreground` on the `ghost`
 button is why ghost triggers are exempt in their hovered state — they leave the

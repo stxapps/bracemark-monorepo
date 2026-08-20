@@ -47,8 +47,8 @@
      4.73. 0.54 clears the worst of the four at 4.64 and reads 5.06 on white; it
      is 4/255 darker than stock, which is below the threshold where "muted"
      stops looking muted. Re-deriving these tokens from shadcn will silently
-     revert it — see theme.md, contrast. Dark mode needs no equivalent (0.708 on
-     its 0.269 wash is 5.83). Mirrored in apps/bracemark-expo/global.css. */
+     revert it — see theme.md, contrast. Dark mode diverges too, for a different
+     reason, at the same token below. Mirrored in apps/bracemark-expo/global.css. */
   --muted-foreground: oklch(0.54 0 0);
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
@@ -92,7 +92,18 @@
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
+  /* 0.78, not shadcn's 0.708. WCAG rates this pairing generously — 0.708 on the
+     0.205 popover/card surface is 6.91:1, ABOVE light mode's 5.06 on white — but
+     the ratio is polarity-blind and overrates light-on-dark at low luminance.
+     APCA, which is not, scores the same pair Lc 50 against light mode's Lc 75:
+     a third less contrast from one token, which is why dark descriptions read
+     thin while every automated check passes. 0.78 is the lowest value clearing
+     APCA's Lc 60 body-text floor on the WORST surface (the 0.269 wash, Lc 60);
+     it reads Lc 63 in a dialog and still sits 41 Lc below --foreground, so the
+     muted rank survives. Parity with light mode would need ~0.85, close enough
+     to --foreground's 0.985 that the two stop being distinguishable. Same
+     re-derivation hazard as the light value; mirrored in the expo sheet. */
+  --muted-foreground: oklch(0.78 0 0);
   --accent: oklch(0.269 0 0);
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.704 0.191 22.216);

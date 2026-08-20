@@ -104,7 +104,11 @@
       --color-secondary: oklch(0.269 0 0);
       --color-secondary-foreground: oklch(0.985 0 0);
       --color-muted: oklch(0.269 0 0);
-      --color-muted-foreground: oklch(0.708 0 0);
+      /* 0.78, not shadcn's 0.708 — the APCA argument made at the same token in
+         packages/web-ui/src/styles.css (WCAG rates dark generously; APCA scores
+         stock Lc 50 against light mode's Lc 75), mirrored here so the two apps
+         render one grey. Value only, so the formatter shim needs nothing. */
+      --color-muted-foreground: oklch(0.78 0 0);
       --color-accent: oklch(0.269 0 0);
       --color-accent-foreground: oklch(0.985 0 0);
       --color-destructive: oklch(0.704 0.191 22.216);
