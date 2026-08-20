@@ -14,7 +14,16 @@ describe('Label htmlFor forwarding', () => {
     render(
       <>
         <Label htmlFor="combo">Tags</Label>
-        <div id="combo" role="combobox" tabIndex={0} aria-label="Tags" onClick={onClick} />
+        <div
+          id="combo"
+          role="combobox"
+          tabIndex={0}
+          aria-label="Tags"
+          // Mirrors TagsField's real trigger, which a combobox must carry.
+          aria-controls="combo-list"
+          aria-expanded={false}
+          onClick={onClick}
+        />
       </>,
     );
 
