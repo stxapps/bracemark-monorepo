@@ -97,8 +97,16 @@ function BulkTagsForm({ links, onClose }: { links: LinkView[]; onClose: () => vo
             land while the filter keyboard is still up. A tag minted here
             persists even if the user then cancels — web's accepted
             mint-then-cancel cost — and lands selected in the draft, so the
-            dirty guard engages. */}
-        <ScrollView className="max-h-60" nestedScrollEnabled keyboardShouldPersistTaps="handled">
+            dirty guard engages. `shrink` is what lets the 240 give way when the
+            keyboard leaves less than the whole form needs — this is the tallest
+            dialog in the app (~520 of the ~566pt an iPhone 17 Pro leaves), so it
+            is the one that would otherwise lose its title off the top rather
+            than scroll. */}
+        <ScrollView
+          className="max-h-60 shrink"
+          nestedScrollEnabled
+          keyboardShouldPersistTaps="handled"
+        >
           <TagsField value={tagIds} onChange={setTagIds} />
         </ScrollView>
         <Text className="text-xs text-muted-foreground">

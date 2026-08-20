@@ -649,7 +649,15 @@ expo keeps a dialog at every width (a phone is the only width it has, and Dialog
 is already the idiom for every picker it renders), while web forks to a bottom
 sheet, which is its own narrow-width language. Don't port the container in either
 direction; expo has no sheet primitive, and buying one is a native dependency
-decision ([architecture.md](./architecture.md), _dependency versions_), and the
+decision ([architecture.md](./architecture.md), _dependency versions_) — note
+that a phone-shaped sheet is available to expo without one, as a `formSheet`
+route presentation, which is what would answer a surface that outgrows a dialog.
+What a dialog does NOT get for free is the keyboard, or the room the keyboard
+leaves: portaled content inherits nothing from the screen's scroll container, so
+`ui/dialog.tsx` carries its own avoider and bounds itself to what is left, and a
+picker whose body can grow pairs that with `shrink` on its own scroller — which
+is why the bulk tags editor stays a dialog rather than becoming a route screen
+([safe-area.md](./safe-area.md), _keyboard avoidance on native_). And the
 bulk tags dialog seeds the same native `TagsField` cousin the in-app editors
 render (like web's seeds `TagsField` — filter input and reuse-or-mint Create
 included; the single-link case no longer rides this dialog anyway — the row

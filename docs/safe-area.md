@@ -516,8 +516,16 @@ and both apps' surfaces are edge-to-edge by default (iOS always was; Android
   react-native-screens' `FullWindowOverlay` on iOS) — outside every screen's
   `SafeAreaView`. It's safe by different means:
   - **Centered dialogs** (`ui/dialog.tsx`, `ui/alert-dialog.tsx`): the overlay
-    is `absoluteFill` + centered with padding; centered content never reaches
-    the unsafe edges, so no inset work.
+    is `absoluteFill` + centered with padding. "Centered, so it never reaches an
+    unsafe edge" held only while every dialog was short: `DialogContent` may now
+    fill the height it has (`max-h-full`, next section), and a maxed-out box put
+    its title under the dynamic island. So `DialogOverlay` applies
+    `useSafeAreaInsets()` + 8 as its gutter on native — the hand-rolled rule
+    below, not an inheritance. `ui/alert-dialog.tsx` is untouched: it has no
+    input and no growable body, so it can neither fill the height nor summon a
+    keyboard. Insets are half the story — the keyboard is the other half, and
+    a portaled dialog inherits no more from the screen's
+    `KeyboardAwareScrollView` than from its `SafeAreaView`.
   - **Anchored menus** (`ui/dropdown-menu.tsx`): @rn-primitives positions
     against the measured trigger with `avoidCollisions` (default on); its
     `insets` prop is the extra collision padding — the native analogue of
@@ -540,6 +548,7 @@ exist, and **the presentation container decides which, not the feature**:
 | surface                                                       | mechanism                                                           | examples                                    |
 | ------------------------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------- |
 | regular expo-router screen                                    | keyboard-controller `KeyboardAwareScrollView` in the screen wrapper | `auth-screen.tsx`, `settings/[section].tsx` |
+| portaled overlay content (`Dialog`)                           | keyboard-controller `KeyboardAvoidingView` in the CONTAINER         | `ui/dialog.tsx`'s `DialogOverlay`           |
 | RN `Modal`                                                    | plain `KeyboardAvoidingView behavior="padding"`                     | AdvancedSearch (`links/search-bar.tsx`)     |
 | share sheet (iOS extension process / Android `ShareActivity`) | plain `KeyboardAvoidingView` — keyboard-controller cannot work here | `share/share-screen.tsx` `Sheet`            |
 
@@ -558,6 +567,35 @@ exist, and **the presentation container decides which, not the feature**:
   values can't drive content there. Hence plain
   `KeyboardAvoidingView behavior="padding"` inside the Modal (AdvancedSearch's
   in-file comment carries the local rationale).
+- **Why a portaled dialog is NOT the `Modal` case, and still needs its own
+  avoider.** `Dialog` content portals to the root `PortalHost`, which is mounted
+  _inside_ `KeyboardProvider` (`src/app/_layout.tsx`), so keyboard-controller's
+  values do reach it — on Android the same window, on iOS a `FullWindowOverlay`
+  that still observes the app's keyboard. What it inherits nothing from is the
+  screen's `KeyboardAwareScrollView`: without an avoider the dialog stays centred
+  in the WHOLE window while the keyboard covers its lower third — for the lock
+  dialogs, the Cancel/submit row. Hence one `KeyboardAvoidingView
+behavior="padding"` around the centring box in `DialogOverlay` — the container,
+  never a caller — and it must be **react-native-keyboard-controller's, not
+  react-native's**. Both were driven on the emulator against a deliberately tall
+  dialog: RN's does not move the subtree at all under Android's edge-to-edge (its
+  metrics come from a window resize that no longer happens) and leaves a phantom
+  inset once the keyboard closes; keyboard-controller's is Reanimated over the
+  provider's context values — no native view of its own that would have to wrap
+  the portal — and lands the dialog centred in the space above the keyboard. Not
+  solved by the lift alone: a dialog taller than that space would overflow off
+  the TOP and lose its title. The second half is `max-h-full` on
+  `DialogContent` — the percentage resolves against the avoider, whose height is
+  definite, so it reads "the window, minus the keyboard, minus the gutter"
+  without measuring anything — plus `shrink` on the one scroller each growable
+  body owns (`list-command.tsx`, `bulk-tags-dialog.tsx`), since RN children do
+  not shrink by default and the cap alone would keep pushing the title off. The
+  margin was thinner than it looked: an iPhone 17 Pro leaves ~566pt above the
+  keyboard and bulk "Edit tags" wants ~520. Both halves were driven on a
+  simulator and an emulator against a deliberately oversized body. Related: this finding puts the two plain-KAV
+  surfaces below in question on Android; neither was re-driven for it. The share
+  sheet has no swap available (next bullet); AdvancedSearch might, and nobody has
+  measured whether the lib's values cross an RN `Modal`'s window boundary.
 - **Why the share sheet can't use it at all** (the stronger constraint):
   keyboard-controller's iOS layer is built on `UIApplication.shared`, which
   doesn't exist in an app-extension process — expo-share-extension's

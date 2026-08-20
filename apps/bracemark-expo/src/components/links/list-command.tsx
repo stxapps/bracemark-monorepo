@@ -132,7 +132,16 @@ export function ListCommand({
           className="h-9"
         />
       )}
-      <ScrollView className="max-h-80" nestedScrollEnabled keyboardShouldPersistTaps="handled">
+      {/* `shrink` beside the cap: `max-h-80` is the PREFERRED height, but the
+          dialog around this is bounded by what the keyboard leaves (dialog.tsx's
+          `max-h-full`), and RN children don't shrink by default — without this
+          the list keeps its 320 and pushes the title off the top of a short
+          phone instead of scrolling. */}
+      <ScrollView
+        className="max-h-80 shrink"
+        nestedScrollEnabled
+        keyboardShouldPersistTaps="handled"
+      >
         {/* Suppressed when there's a Create row: that row IS the next step. */}
         {visibleRows.length === 0 && !canCreate && (
           <Text className="px-2 py-2.5 text-sm text-muted-foreground">No lists found.</Text>
