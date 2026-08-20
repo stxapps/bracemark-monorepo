@@ -849,9 +849,17 @@ a crossgrade inside the existing subscription rather than a second purchase.
   — Retry") re-label one action by what pressing it will do, and blocked is the
   phase where pressing changes nothing. The state gets its own row instead,
   "Storage full / Some changes aren't syncing", which LINKS to Settings → Data
-  where the count and the fix are. The menu also grows the trigger dot for it,
-  in `muted-foreground` rather than the error dot's `destructive` — a standing
-  state worth noticing, not breakage.
+  where the count and the fix are. That row's icon is the menu's plain ink, like
+  every other row's — the second line, not a lighter glyph, is what marks it as a
+  report — and on web that second line has to be spelled `text-muted-foreground!`,
+  because the item's focus rule repaints every descendant and would otherwise
+  flatten the two lines to one weight on hover ([theme.md](./theme.md), _the
+  menu-item focus recolour_). The menu also grows the trigger dot for it, full-ink
+  `foreground` rather than the error dot's `destructive` — a standing state worth
+  noticing, not breakage — and a rung above the advanced-search trigger's
+  `foreground/70`, which is why it is not `muted-foreground`: at `/70` that benign
+  neighbour was compositing DARKER than a muted dot would, so the ladder read
+  upside down.
 
   There used to be a second pair, `'blocked-plan'` / `'plan-blocked'`, for the
   free tier's link cap, with its own wording and a "See plans" link — the two

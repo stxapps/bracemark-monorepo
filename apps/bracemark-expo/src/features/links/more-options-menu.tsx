@@ -143,7 +143,7 @@ export function MoreOptionsMenu() {
             count and the fix are spelled out. */}
         {blocked && (
           <DropdownMenuItem className="items-start" onPress={() => router.push('/settings/data')}>
-            <Icon as={CircleAlert} className="mt-0.5 size-4 text-muted-foreground" />
+            <Icon as={CircleAlert} className="mt-0.5 size-4" />
             <View className="min-w-0 flex-1">
               <Text>Storage full</Text>
               <Text className="text-xs text-muted-foreground">Some changes aren’t syncing</Text>

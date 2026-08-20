@@ -20,9 +20,11 @@
 // Settings → Data, not a copy of what that card says. This menu is a launcher,
 // not a status readout: it names the state and the fact that changes are
 // stuck, and the sentence with the count (syncBlockedDetail) stays in the one
-// place a user goes to read status. Its icon is muted and its dot is full-ink
-// neutral — never destructive, because the cycle completed and the local library
-// is intact (@stxapps/shared sync/status.ts, `blocked-capacity`).
+// place a user goes to read status. Its icon carries no colour of its own — it
+// is the second line, not a lighter glyph, that marks the row as a report — and
+// its dot is full-ink neutral, never destructive, because the cycle completed
+// and the local library is intact (@stxapps/shared sync/status.ts,
+// `blocked-capacity`).
 
 import {
   CircleAlert,
@@ -145,10 +147,15 @@ export function MoreOptionsMenu() {
         {blocked && (
           <DropdownMenuItem asChild>
             <Link href="/settings/data" className="items-start">
-              <CircleAlert className="mt-0.5 size-4 text-muted-foreground" />
+              <CircleAlert className="mt-0.5 size-4" />
               <span className="flex min-w-0 flex-col">
                 Storage full
-                <span className="text-xs text-muted-foreground">Some changes aren’t syncing</span>
+                {/* `!` because the item's focus rule recolours every descendant
+                    (`not-data-[variant=destructive]:focus:**:text-accent-foreground`
+                    — the same trap the Retry glyph above documents), so without it
+                    this second line jumps from muted to full ink under the cursor
+                    and the two lines flatten to one weight. */}
+                <span className="text-xs text-muted-foreground!">Some changes aren’t syncing</span>
               </span>
             </Link>
           </DropdownMenuItem>

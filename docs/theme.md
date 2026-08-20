@@ -395,6 +395,38 @@ same `data-selected` attribute (`onPointerMove` selects the row under the
 cursor), so a `CommandItem` needs no separate `hover:` fill. Adding one gives two
 rows a highlight at once — the hovered one and the keyboard-selected one.
 
+### the menu-item focus recolour
+
+`DropdownMenuItem` carries `focus:**:text-accent-foreground`, gated on
+`not-data-[variant=destructive]:` so a destructive row keeps its red
+(`DropdownMenuSubTrigger` and the checkbox/radio items carry the same rule).
+`**:` compiles to `& *` — **every** descendant, at any depth — and it outranks a
+plain utility on the child (two class-ish components against one). So any colour
+a menu item's own children set is a REST-state colour only: under the cursor it
+is gone.
+
+That is right for the common case, where an item is one label and one glyph and
+the whole row should go to accent ink together. It is wrong wherever a child is
+deliberately a different tier, and there are two of those:
+
+- **A second, quieter line.** The links ⋯ menu's "Storage full / Some changes
+  aren't syncing" row is a two-line report, and on hover its
+  `text-muted-foreground` subtitle jumped to `accent-foreground` — the two lines
+  flattened to one weight. `text-muted-foreground!` is the fix; the important
+  suffix is the only thing that outranks the descendant rule.
+  `DropdownMenuShortcut` solves the same problem from the other side, opting IN
+  with `group-focus/dropdown-menu-item:text-accent-foreground` — which is what
+  the item's `group/dropdown-menu-item` name is there for.
+- **A glyph that means something by its colour.** `text-destructive` on an icon
+  inside a default-variant item flips to near-black on hover: a red that stops
+  being red the moment you point at it. Use `variant="destructive"` on the ITEM
+  (the `not-` gate exempts it, and it paints the svg besides), or drop the colour
+  and let the label carry the meaning — which is what the same menu's "Sync
+  failed — Retry" glyph does, since that action retries rather than destroys.
+
+Not silent, but easy to miss: the resting screenshot is correct, and you only
+see it with a pointer on the row.
+
 ### contrast — the wash surfaces
 
 [accessibility.md](./accessibility.md) sends contrast questions here, so: the one
