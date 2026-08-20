@@ -25,7 +25,8 @@
 //    `apply`).
 
 import { useEffect, useMemo, useState } from 'react';
-import { KeyboardAvoidingView, Modal, Pressable, ScrollView, View } from 'react-native';
+import { Modal, Pressable, ScrollView, View } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Check, Lock, Minus, Search, SlidersHorizontal, X } from 'lucide-react-native';
@@ -44,6 +45,10 @@ import { useLinksPage } from './page-provider';
 import { useLinksViewState } from './view-state-provider';
 
 const StyledSafeAreaView = withUniwind(SafeAreaView);
+// Composite components need the wrapper to accept `className` — the same
+// treatment ui/dialog.tsx gives this component and the screens give
+// KeyboardAwareScrollView.
+const StyledKeyboardAvoidingView = withUniwind(KeyboardAvoidingView);
 
 // Split a raw field value into lowercased, trimmed words — the same normalization
 // parseLinkQuery applies on read-back, done here so a multi-word field becomes the
@@ -409,10 +414,39 @@ function AdvancedSearch() {
         onRequestClose={() => setOpen(false)}
       >
         <StyledSafeAreaView className="flex-1 bg-background">
-          {/* Plain KeyboardAvoidingView, not keyboard-controller: the Modal is
-              its own native window, outside the root KeyboardProvider's view
-              tree (the same reason the share screen avoids it). */}
-          <KeyboardAvoidingView behavior="padding" className="flex-1">
+          {/* keyboard-controller's KeyboardAvoidingView, NOT react-native's —
+              the same component ui/dialog.tsx uses, so the app tree runs on ONE
+              keyboard library. The share sheet is the only exception left and it
+              is a hard one: keyboard-controller's iOS layer is built on
+              `UIApplication.shared`, which does not exist in an extension
+              process (share/share-kit.tsx).
+
+              A Modal being its own native window used to be the reason to keep
+              RN's here. It stopped being one: at 1.18.5 the lib handles that
+              window explicitly — `ModalAttachedWatcher` listens for the Modal's
+              `topShow`, attaches a WindowInsetsAnimationCallback to the dialog's
+              own decorView, puts it in SOFT_INPUT_ADJUST_NOTHING, and feeds the
+              values back through the root KeyboardProvider. On iOS nothing is
+              needed: keyboard notifications are app-wide and this KAV is
+              Reanimated over context, owning no native view that would have to
+              wrap the window. Both were driven — the lib reports the keyboard's
+              height inside this sheet (335 on an iPhone 17 Pro) and the
+              ScrollView shrinks by the lift.
+
+              This was NOT a bug fix, and the doc's Modal row says so: RN's KAV
+              avoids correctly in THIS Modal on both platforms, unlike in the
+              portal ui/dialog.tsx sits in, where Android edge-to-edge leaves it
+              inert. What the swap buys is one library and a lift synced to the
+              keyboard's own animation.
+
+              What neither answers, so don't read the swap as fixing it: under
+              `presentationStyle="pageSheet"` the KAV's onLayout frame is
+              sheet-relative while the `screenHeight` it subtracts from is not,
+              so the lift falls short by the sheet's top offset (~60pt) and the
+              Clear/Search row stays behind the keyboard on iOS. Android's modal
+              is full-screen — offset 0 — and clears it (docs/safe-area.md,
+              _keyboard avoidance on native_). */}
+          <StyledKeyboardAvoidingView behavior="padding" className="flex-1">
             <View className="h-14 flex-row items-center justify-between border-b border-border pr-2 pl-4">
               <Text className="text-lg font-semibold">Advanced search</Text>
               <Pressable
@@ -532,7 +566,7 @@ function AdvancedSearch() {
                 </Button>
               </View>
             </ScrollView>
-          </KeyboardAvoidingView>
+          </StyledKeyboardAvoidingView>
         </StyledSafeAreaView>
       </Modal>
     </>

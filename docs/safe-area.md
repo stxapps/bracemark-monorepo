@@ -545,12 +545,12 @@ with edge-to-edge (enforced on Android 15+) `adjustResize` no longer resizes,
 so Android behaves like iOS — and content must move itself. Two mechanisms
 exist, and **the presentation container decides which, not the feature**:
 
-| surface                                                       | mechanism                                                           | examples                                    |
-| ------------------------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------- |
-| regular expo-router screen                                    | keyboard-controller `KeyboardAwareScrollView` in the screen wrapper | `auth-screen.tsx`, `settings/[section].tsx` |
-| portaled overlay content (`Dialog`)                           | keyboard-controller `KeyboardAvoidingView` in the CONTAINER         | `ui/dialog.tsx`'s `DialogOverlay`           |
-| RN `Modal`                                                    | plain `KeyboardAvoidingView behavior="padding"`                     | AdvancedSearch (`links/search-bar.tsx`)     |
-| share sheet (iOS extension process / Android `ShareActivity`) | plain `KeyboardAvoidingView` — keyboard-controller cannot work here | `share/share-screen.tsx` `Sheet`            |
+| surface                                                       | mechanism                                                               | examples                                    |
+| ------------------------------------------------------------- | ----------------------------------------------------------------------- | ------------------------------------------- |
+| regular expo-router screen                                    | keyboard-controller `KeyboardAwareScrollView` in the screen wrapper     | `auth-screen.tsx`, `settings/[section].tsx` |
+| portaled overlay content (`Dialog`)                           | keyboard-controller `KeyboardAvoidingView` in the CONTAINER             | `ui/dialog.tsx`'s `DialogOverlay`           |
+| RN `Modal`                                                    | keyboard-controller `KeyboardAvoidingView` — the lib handles the window | AdvancedSearch (`links/search-bar.tsx`)     |
+| share sheet (iOS extension process / Android `ShareActivity`) | plain `KeyboardAvoidingView` — keyboard-controller cannot work here     | `share/share-screen.tsx` `Sheet`            |
 
 - **The default is react-native-keyboard-controller.** Its `KeyboardProvider`
   mounts once at the root (`src/app/_layout.tsx`) and feeds
@@ -561,12 +561,40 @@ exist, and **the presentation container decides which, not the feature**:
   sections (`lists-section.tsx`, `tags-section.tsx`), future
   `ListSelect`/`TagsField` cousins — declare nothing themselves. Don't nest a
   second avoider; two stacked avoiders double the offset.
-- **Why RN `Modal` opts out:** a `Modal` is its own native window. React
-  context technically crosses the boundary, but the provider's native
-  `KeyboardControllerView` doesn't wrap the modal's window, so its animated
-  values can't drive content there. Hence plain
-  `KeyboardAvoidingView behavior="padding"` inside the Modal (AdvancedSearch's
-  in-file comment carries the local rationale).
+- **Why RN `Modal` does NOT opt out — it used to, and that reasoning is dead.**
+  The old rule here was that a `Modal` is its own native window, so the
+  provider's `KeyboardControllerView` can't drive content inside it. That is no
+  longer true of the pinned version. On **Android** the lib handles the modal's
+  window explicitly: `ModalAttachedWatcher` listens for the Modal's `topShow`
+  event, resolves the `ReactModalHostView`, attaches a
+  `WindowInsetsAnimationCallback` to the dialog's own `decorView`, puts that
+  window in `SOFT_INPUT_ADJUST_NOTHING` ("imitating edge-to-edge mode
+  behavior"), and propagates the values back through the root provider — wired
+  up whenever the provider is active. On **iOS** nothing special is needed:
+  keyboard notifications are app-wide, and the lib's `KeyboardAvoidingView` is
+  Reanimated over context values, owning no native view that would have to wrap
+  the window (the same property that lets it work through the dialog's portal).
+  Driven on both: inside the sheet the lib reports the keyboard's height (335 on
+  an iPhone 17 Pro) and the `ScrollView` shrinks by the lift.
+  **This was not a bug fix.** Unlike the portal case below, RN's own
+  `KeyboardAvoidingView` avoids correctly in this Modal on _both_ platforms —
+  a modal window carries its own `softInputMode`, so the resize RN's metrics
+  want still happens. What the swap buys is one keyboard library across the app
+  tree and a lift synced to the keyboard's own animation. **Pin the version when
+  you re-check this**: the Android half is a library behaviour, not a platform
+  one, so a downgrade silently takes it away.
+- **The pageSheet under-lift, which the swap does NOT fix.** With
+  `presentationStyle="pageSheet"` on iOS, a `KeyboardAvoidingView`'s `onLayout`
+  frame is measured relative to the SHEET while the `screenHeight` it subtracts
+  from is the whole screen — `max(frame.y + frame.height - (screenHeight -
+keyboardHeight), 0)`, which is the formula RN's KAV and keyboard-controller's
+  share, verbatim. So the lift falls short by the sheet's top offset (~60pt on
+  an iPhone 17 Pro) and AdvancedSearch's Clear/Search row stays behind the
+  keyboard once its body is tall enough to scroll. Measured, not inferred: the
+  `ScrollView` goes 722 → 483 against a 335pt keyboard. Android's modal is
+  full-screen, offset 0, and clears the row. The fix, if it is ever worth it, is
+  `keyboardVerticalOffset` set to `screenHeight − sheetHeight` (an `onLayout` on
+  the sheet gives the second term); it is deliberately NOT applied today.
 - **Why a portaled dialog is NOT the `Modal` case, and still needs its own
   avoider.** `Dialog` content portals to the root `PortalHost`, which is mounted
   _inside_ `KeyboardProvider` (`src/app/_layout.tsx`), so keyboard-controller's
@@ -592,10 +620,11 @@ behavior="padding"` around the centring box in `DialogOverlay` — the container
   not shrink by default and the cap alone would keep pushing the title off. The
   margin was thinner than it looked: an iPhone 17 Pro leaves ~566pt above the
   keyboard and bulk "Edit tags" wants ~520. Both halves were driven on a
-  simulator and an emulator against a deliberately oversized body. Related: this finding puts the two plain-KAV
-  surfaces below in question on Android; neither was re-driven for it. The share
-  sheet has no swap available (next bullet); AdvancedSearch might, and nobody has
-  measured whether the lib's values cross an RN `Modal`'s window boundary.
+  simulator and an emulator against a deliberately oversized body. Related: this finding put the two plain-KAV
+  surfaces in question on Android. AdvancedSearch has since been driven on both
+  platforms and swapped to keyboard-controller (bullet above) — RN's KAV turned
+  out to work there, so the swap is for consistency, not repair. The share sheet
+  still has no swap available (next bullet) and has not been re-driven.
 - **Why the share sheet can't use it at all** (the stronger constraint):
   keyboard-controller's iOS layer is built on `UIApplication.shared`, which
   doesn't exist in an app-extension process — expo-share-extension's
@@ -606,4 +635,6 @@ behavior="padding"` around the centring box in `DialogOverlay` — the container
 - **For a new surface, decide the presentation first; the keyboard answer
   follows.** A future link-add/link-edit built as a router screen inherits the
   keyboard-controller path for free; built as a page-sheet `Modal` (like
-  AdvancedSearch), it must carry its own plain `KeyboardAvoidingView`.
+  AdvancedSearch), it carries its own keyboard-controller `KeyboardAvoidingView`
+  — and inherits the pageSheet under-lift above, so keep its body short enough
+  not to scroll, or pay for the offset.

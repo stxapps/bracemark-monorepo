@@ -117,9 +117,9 @@ validation, same quota banner on create, same dirty close guard — swipe-down /
 Android-back swallowed via `usePreventRemove`) presented phone-shaped: both
 are **modal-presented expo-router screens** (`/add-link` pushed by the links
 screen's FAB, `/edit-link` pushed by the row menu with a `linkId` + optional
-`focus` param) — router screens, not RN `Modal`s, so keyboard-controller and
-portalled dialogs work inside them (docs/safe-area.md — the presentation
-decides the keyboard mechanism). Two structural consequences: the edit screen
+`focus` param) — router screens, not RN `Modal`s, so they inherit the screens'
+`KeyboardAwareScrollView` path for free and portalled dialogs work inside them
+(docs/safe-area.md — the presentation decides the keyboard mechanism). Two structural consequences: the edit screen
 needs **no hoisted `editing` view state** (web hoists its dialog because
 virtualized rows repaint under it; a pushed screen isn't row-anchored and its
 draft is a snapshot), and its custom-image flow is **uri/path-based end to
