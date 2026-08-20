@@ -1,6 +1,6 @@
 'use client';
 
-import { type ReactNode, Suspense } from 'react';
+import { type ReactNode, Suspense, useEffect } from 'react';
 import { redirect, usePathname, useSearchParams } from 'next/navigation';
 
 import { useAuth } from '@stxapps/web-react';
@@ -18,7 +18,8 @@ import { SITE_URL } from '@/lib/site';
 // the subtree before it commits (outside Server Actions it defaults to replace, the
 // history semantics we want). Redirecting in render rather than an effect means
 // protected content never paints for a signed-out user, with no intermediate null
-// frame or effect round-trip.
+// frame or effect round-trip. That holds for every SAME-ORIGIN destination here; the
+// one cross-origin destination is the exception, and it is the next paragraph.
 //
 // Where we send a non-authenticated user depends on WHY they're here (auth `reason`):
 // a deliberate 'signed-out' leaves this origin entirely for the marketing site's
@@ -26,8 +27,31 @@ import { SITE_URL } from '@/lib/site';
 // just left would be silly, and app.bracemark.com has no public page of its own to
 // land on. This is the sign-out destination for every call site — the links topbar
 // menu, the lock pane, Settings → Account — plus account deletion, which ends the
-// session with the same default reason. redirect() takes the absolute URL: the client
-// router sees a cross-origin href and turns it into a real location.replace().
+// session with the same default reason.
+//
+// That one leaves by `location.replace` in an EFFECT, not by `redirect()`, and the
+// difference is load-bearing. Handed a cross-origin href, redirect() routes through
+// Next's MPA path, which is a side effect in render: `Router` calls location.replace
+// and then THROWS mid-render, skipping every hook below the throw (app-router.tsx,
+// "Don't try this at home, kids"). It stays thrown only while nothing dispatches to
+// the router. Anything that does clears the flag, so the next Router render runs past
+// the throw with MORE hooks than the aborted one — React fails the render with
+// "Rendered more hooks than during the previous render", and that error takes the
+// pending navigation down with it, leaving the user signed out on the page they were
+// trying to leave.
+//
+// Sign-out dispatches exactly such a navigation. endSession wipes the local store
+// (clearData) BEFORE it flips auth, so the links page sees every user list and tag
+// disappear while still authenticated, reads the `?list=`/`?tag=` it is on as a
+// deleted entity, and replaces the URL on its way out (page-provider's
+// isStaleSelection). Any user-list or user-tag view therefore crashed on sign-out —
+// including the locked-list pane, whose own "sign out" is the documented way past a
+// forgotten lock password (lock-pane.tsx). Doing the navigation ourselves keeps
+// Router out of that branch entirely, so a late dispatch is just a dispatch.
+//
+// The cost is one null frame before the browser leaves, which is why this is the
+// exception and not the rule: it's a page we're abandoning, so there is nothing to
+// flash — and no protected content renders in it either way.
 //
 // EXCEPT when we're running as an INSTALLED app (isInstalled below), where that same
 // absolute URL is the bug. manifest.json declares no `scope`, so scope derives from
@@ -73,9 +97,25 @@ function InnerAuthGuard({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
+  // The one destination off this origin (see the header). `replace`, matching the
+  // history semantics of every other exit here — the app is not somewhere Back
+  // should return to once the session is gone. Idempotent under a repeat commit
+  // (dev's double-invoked effects, a re-render before unload): the second call
+  // replaces the same URL.
+  const leaving = status === 'unauthenticated' && reason === 'signed-out' && !isInstalled();
+  useEffect(() => {
+    if (leaving) window.location.replace(SITE_URL);
+  }, [leaving]);
+
   if (status === 'loading') return null;
   if (status === 'unauthenticated') {
-    if (reason === 'signed-out') redirect(isInstalled() ? '/sign-in' : SITE_URL);
+    // Installed: stay on this origin (the scope trap in the header). In a browser
+    // tab the effect above is already taking us to the apex — render nothing until
+    // it lands, rather than falling through to the `?next=` bounce below.
+    if (reason === 'signed-out') {
+      if (isInstalled()) redirect('/sign-in');
+      return null;
+    }
     const query = searchParams.toString();
     const next = query ? `${pathname}?${query}` : pathname;
     redirect(`/sign-in?next=${encodeURIComponent(next)}`);
