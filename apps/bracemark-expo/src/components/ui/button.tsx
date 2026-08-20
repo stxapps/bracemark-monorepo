@@ -34,10 +34,19 @@ import { TextClassContext } from './text';
 // which one held the icon. Those fragments are gone: `:has()` outranks a plain
 // utility, so leaving them would have kept overriding the single-edge classes
 // on web.
+//
+// THE BOX. `border border-transparent` on the base is load-bearing, and is the
+// web sibling's rule again: RN adds borderWidth to a hug width, so without it
+// `outline` — the only variant that declares `border` — came out 2px wider than
+// the same label in `default`, and a footer row of [Cancel][Save] held two
+// different pill widths. Reserving the edge everywhere makes the variants
+// swappable. There is no `bg-clip-padding` counterpart here and there must not
+// be: RN paints backgroundColor across the whole border box, so a transparent
+// border keeps a filled variant full-bleed on its own.
 
 const buttonVariants = cva(
   cn(
-    'group shrink-0 flex-row items-center justify-center gap-2 rounded-md shadow-none',
+    'group shrink-0 flex-row items-center justify-center gap-2 rounded-md border border-transparent shadow-none',
     Platform.select({
       web: "focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive whitespace-nowrap outline-none transition-all focus-visible:ring-[3px] disabled:pointer-events-none [&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none [&_svg]:shrink-0",
     }),

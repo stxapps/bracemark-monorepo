@@ -22,14 +22,27 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 // the SAME RULE — the icon's edge gets the smaller padding, icon-only stays
 // symmetric — by deriving it in JS, since native has no `:has()`. Two
 // mechanisms, one rule: change one and read the other's header.
+//
+// THE BOX. Every variant reserves 1px on each edge — that is what `border
+// border-transparent` on the base is for — so a filled button and an `outline`
+// one carrying the same label are the same size, and swapping a variant moves
+// nothing around it. `bg-clip-padding` is NOT part of that rule and does not
+// belong on the base: it exists for a variant whose BORDER COLOUR is translucent,
+// which is `outline` alone (`--border` is `oklch(1 0 0 / 10%)` in dark, and
+// `bg-input/30` painting under it would tint it). On a transparent border it does
+// the reverse of what you want — the fill stops 1px short of the edge, so a
+// `default` renders a 34px pill inside its 36px box and reads visibly smaller
+// than the `outline` beside it in a DialogFooter. Nothing catches that: same
+// layout box, same alignment, only the paint differs. Keep the clip on the
+// variant that needs it.
 const buttonVariants = cva(
-  "group/button inline-flex shrink-0 items-center justify-center rounded-4xl border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "group/button inline-flex shrink-0 items-center justify-center rounded-4xl border border-transparent text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
         default: 'bg-primary text-primary-foreground hover:bg-primary/80',
         outline:
-          'border-border bg-input/30 hover:bg-input/50 hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground',
+          'border-border bg-input/30 bg-clip-padding hover:bg-input/50 hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground',
         secondary:
           'bg-secondary text-secondary-foreground hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)] aria-expanded:bg-secondary aria-expanded:text-secondary-foreground',
         ghost:
