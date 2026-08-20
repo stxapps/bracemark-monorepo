@@ -106,18 +106,11 @@ import {
   SheetTrigger,
 } from '@stxapps/web-ui/components/ui/sheet';
 import { Textarea } from '@stxapps/web-ui/components/ui/textarea';
-import { useMediaQuery } from '@stxapps/web-ui/hooks/use-media-query';
+import { MD_QUERY, useMediaQuery } from '@stxapps/web-ui/hooks/use-media-query';
 import { useVisualViewport, useWindowSize } from '@stxapps/web-ui/hooks/use-window-metrics';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { useLinksPage } from '../_contexts/page-provider';
-
-// The `md:` breakpoint as a media query — the same string Tailwind matched, so
-// the JS branch and the CSS agree (use-media-query's header). This is the width
-// where the topbar already changes regime: the rail becomes a drawer and the
-// search box becomes a summoned row (topbar.tsx), so add joins the same fork
-// rather than inventing a second one.
-const MD_QUERY = '(min-width: 48rem)';
 
 // Breathing room between the sheet's top edge and the top of the visible band,
 // so it reads as a sheet rather than a full-screen takeover even when the form
@@ -176,6 +169,10 @@ export function LinkAddSurface({
   const { create, update } = useLinkMutations();
   const defaultListId = useDefaultListId();
   const { count, max, atLimit } = useLinkQuota();
+  // `md` is where the topbar already changes regime — the rail becomes a drawer
+  // and the search box becomes a summoned row (topbar.tsx) — so add joins that
+  // fork rather than inventing a second one. The query string itself is shared
+  // (use-media-query), since the Move-to pickers fork at the same width.
   const wide = useMediaQuery(MD_QUERY);
   const sheetGeometry = useSheetGeometry();
 

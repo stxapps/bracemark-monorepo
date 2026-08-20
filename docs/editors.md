@@ -198,7 +198,8 @@ draft; each keystroke commits or reverts in place):
 
 - `apps/bracemark-web/.../settings/[section]/_lists/lists-section.tsx` — create /
   rename / reorder / **reparent** / delete lists. Nesting _is_ the UI here: drag
-  with live depth projection, a "Move to" submenu, and collapse toggles.
+  with live depth projection, a "Move to" picker (a submenu at `md` and up, a
+  dialog/sheet below — §"the shared pickers"), and collapse toggles.
 - `apps/bracemark-web/.../settings/[section]/_tags/tags-section.tsx` — the tag
   counterpart **minus nesting**: create / rename / **reorder** (drag or up/down) /
   delete, over one flat ranked group.
@@ -268,6 +269,33 @@ straight to `web-react`'s live data hook:
 All three link editors render `ListSelect` + `TagsField`, so the pickers stay
 identical across web quick-add, the extension, and the edit dialog. That's the
 point of the pairing — one picker over one live tree, no drift.
+
+**A third shell sits beside the two above: `move-to-surface.tsx`
+(`MoveToSurface`) — `ListCommand` in a container that stands on its own**, for
+the callers and the widths where an anchored menu can't hold it. It takes
+`ListCommand`'s props straight through (`value` / `excludeIds` / `disabledIds` /
+`root`, and deliberately **not** `onCreate`), plus a `title`, a `busy` line, and
+a `wide` boolean that picks the container: a **centred dialog** at `md` and up, a
+**bottom sheet** below it — the same fork, at the same breakpoint, that quick-add
+makes between its popover and its sheet.
+
+The measurement behind it: a `DropdownMenuSubContent` at `w-64` (256px) needs its
+parent menu's `min-w-48` (192) plus two 8px collision gutters — **464px against a
+375px phone**. Radix doesn't clip that; the submenu flips, then the shift
+middleware clamps it to the gutter, so it lands _on top of_ the parent menu,
+covering the row it grew out of. Two more things the arithmetic misses: a
+hover-intent submenu is a mouse gesture, and past `SEARCH_THRESHOLD` the filter
+input summons a keyboard the floating layer cannot see (Floating UI measures the
+_layout_ viewport, which the keyboard doesn't shrink — `docs/safe-area.md`,
+_popups & dialogs_). Hence also `onOpenAutoFocus` prevented on the sheet: the
+picker is a list first, a search box second.
+
+**`wide` is a prop, not a `useMediaQuery` call inside the component**, and that's
+load-bearing twice. The hook seeds `false` and corrects in an effect, so a
+surface that mounts on interaction would flash a bottom sheet at a desktop user
+for one frame; and the links page's row menus need the same boolean, one
+`matchMedia` per page rather than one per virtualized row (it rides
+`view-state-provider`'s `wide`; the settings section calls the hook itself).
 
 **Both pickers can CREATE, and both creates are opt-in on the shell.**
 `TagsField` always mints (a tag editor with no way to make a tag is barely an
@@ -356,15 +384,20 @@ The bracemark-expo share sheet follows the same rule: its taxonomy
 **The coupling to watch** — the reason an editor change reaches beyond the
 editors:
 
-- **The row menu's "Move to"** (`_layouts/shared.tsx`, `LinkRowMenu`) renders
-  `ListCommand` **directly** — the same component `ListSelect` wraps. So a change
-  to `list-command` (its props, its row shape, its `excludeIds`/`disabledIds`
-  handling) hits the move-to menu too, not just the editors. It passes
-  `excludeIds={[TRASH_ID]}` and `disabledIds={[link.listId]}` — trashing is the
-  menu's Remove, never a "move", and the current list stays visible-but-disabled
-  to keep the tree's shape intact. It does **not** pass `onCreate`: this menu
-  re-files an existing link, and a Create row inside a _destination_ picker is a
-  different intent wearing the same clothes.
+- **The row menu's "Move to"** (`_layouts/shared/link-row-menu.tsx`,
+  `LinkRowMenu`) renders `ListCommand` **directly** — the same component
+  `ListSelect` wraps. So a change to `list-command` (its props, its row shape, its
+  `excludeIds`/`disabledIds` handling) hits the move-to menu too, not just the
+  editors. It passes `excludeIds={[TRASH_ID]}` and `disabledIds={[link.listId]}` —
+  trashing is the menu's Remove, never a "move", and the current list stays
+  visible-but-disabled to keep the tree's shape intact. It does **not** pass
+  `onCreate`: this menu re-files an existing link, and a Create row inside a
+  _destination_ picker is a different intent wearing the same clothes.
+  **It has two shapes, split at `md`** (`view-state-provider`'s `wide`): the
+  submenu above, and below it a plain item that hands the link to the page-level
+  `LinkMoveSurface` — because the submenu doesn't fit a phone (see §"the shared
+  pickers"). Same picker, same exclusions, different box; the ellipsis on the
+  narrow item ("Move to…") is the convention that it opens something further.
 - **The Lists settings "Move to"** (`_lists/lists-section.tsx`, `RowActions`)
   also embeds `ListCommand` — but it **reparents a list**, not a link, so it uses
   two things a link-move never does. It opts into `ListCommand`'s **`root`** prop
@@ -375,16 +408,24 @@ editors:
   current parent left visible-but-disabled (`value`/`disabledIds`) like the link
   menu. Because the pick comes from a `CommandItem` (not a `DropdownMenuItem`,
   which Radix would auto-close), that menu is **controlled** and closes itself on
-  select — same pattern as `LinkRowMenu`. Drag-and-drop with depth projection is
-  still the _primary_ reparent gesture there; this menu is the keyboard/mouse
-  fallback. It must never pass `onCreate` either — this picker chooses a
-  **parent**, so "create a new list" inside it is incoherent twice over.
+  select — same pattern as `LinkRowMenu`. It splits at `md` for the same reason
+  and into the same two shapes as the row menu's, into a `MoveToSurface` the
+  section hoists beside its `LockPasswordDialog`; both shapes call one `moveTo`,
+  so the `nestedLists` paywall gate and the destination maths can't drift between
+  them. The narrow path resolves its row against a **collapse-free** flatten, not
+  the rendered one: a sync landing another device's reparent can slide the row
+  under a collapsed ancestor, which would otherwise close the picker mid-pick.
+  Drag-and-drop with depth projection is still the _primary_ reparent gesture
+  there; this menu is the keyboard/mouse fallback. It must never pass `onCreate`
+  either — this picker chooses a **parent**, so "create a new list" inside it is
+  incoherent twice over.
 - **The rule the two menus above share**: `list-command`'s optional props split
   its audiences, and the split runs in both directions. `root` is for
   **reparenting** only (leave it out on link surfaces); `onCreate` is for
-  **editors** only (leave it out on both move-to menus). Adding a fourth consumer
-  means deciding both, not copying the nearest call site — and a future bulk
-  "Move to" (see below) is a _menu_, not an editor.
+  **editors** only (leave it out on both move-to menus). Adding a consumer means
+  deciding both, not copying the nearest call site — the bulk "Move to" (see
+  below) is a _menu_, not an editor, and `MoveToSurface` passes both through
+  without opinions precisely so each caller keeps making that call.
 - **The row menu's "Edit note"** is the reason the edit dialog takes a
   `focus?: 'tags' | 'note'` (`LinkEditRequest` in `view-state-provider`) rather
   than the boolean it started as. **The note has no read-only surface** — reading
@@ -505,13 +546,19 @@ the date-modified sort, and a row can move or unmount underneath whatever it
 owns. So a row must never own its editor: the row menu and the bulk toolbar only
 _request_ an edit, and the dialog is rendered **once at the page level** (Main),
 driven by hoisted state in `view-state-provider` — `editing: LinkEditRequest |
-null` for the edit dialog, `retagging` for BulkTagsDialog. A row-owned dialog
-would unmount mid-edit and take the draft with it (invariant 1's snapshot is no
-help if the component holding it is gone).
+null` for the edit dialog, `retagging` for BulkTagsDialog, `moving` for
+LinkMoveSurface. A row-owned dialog would unmount mid-edit and take the draft
+with it (invariant 1's snapshot is no help if the component holding it is gone).
+The rule extends past editors to any surface a row can raise: `LinkMoveSurface`
+is a picker, not an editor, and it is hoisted for exactly the same reason — plus
+one it doesn't share, which is that **the write lives with the surface**, so its
+two callers (a row menu below `md`, the bulk toolbar at every width) don't each
+carry a copy of the move.
 
 That same hoisted state **is** the engagement flag: `engaged` is
 `scrolled || openMenus > 0 || editing !== null || destroying !== null ||
-retagging !== null || bulkEditing`, and `useLinks` stages incoming sync results
+retagging !== null || moving !== null || bulkEditing`, and `useLinks` stages
+incoming sync results
 while it holds — `displayed` stays put and the refresh pill lights instead of the
 list repainting under the modal ([client-queries.md](./client-queries.md), the
 staged-snapshot rule). Row-anchored overlays that are not editors (the row menu,
@@ -552,10 +599,10 @@ geometry doesn't shift), and the `BulkEditToolbar` acts on the hoisted
   over the selection: URLs newline-separated, in display order; reads only, so
   trashed links are included). In Trash: **Restore** (→ My List — the schema records no previous
   list, same as the row menu) and **Delete permanently** (irreversible →
-  `requestDestroy` → `LinkDestroyConfirm`). Elsewhere: **Move to** (the same
-  searchable `ListCommand` as the row menu's submenu — no Trash target, no
-  `onCreate`/`root`, per §"shared pickers"; the selection's single shared list,
-  when there is one, shows checked-but-disabled), **Edit tags** (below),
+  `requestDestroy` → `LinkDestroyConfirm`). Elsewhere: **Move to**
+  (`requestMove` → `LinkMoveSurface` — no Trash target, no `onCreate`/`root`, per
+  §"shared pickers"; the selection's single shared list, when there is one, shows
+  checked-but-disabled), **Edit tags** (below),
   **Pin**/**Unpin** (Pin pins only the not-yet-pinned so existing manual pin
   ranks aren't churned; Unpin the inverse), **Archive** (flipping to
   **Unarchive** in the Archive view), and **Remove** (a reversible
@@ -595,7 +642,14 @@ at every width (web's `COLLAPSE_WIDTH` split, fixed — a phone is always below
 it, as it is below web's icon-only `ICON_WIDTH` tier), Move to is a dialog embedding the native `ListCommand` cousin instead of
 the anchored submenu (`features/links/move-to-dialog.tsx`, shared with the row
 menu — same `excludeIds`/`disabledIds` wiring, no `onCreate`/`root`; the Lists
-settings reparent dialog embeds the same body with `root`, like web), and the
+settings reparent dialog embeds the same body with `root`, like web). **Web
+converged on the same shape below `md`** (`MoveToSurface`) once its submenu was
+measured against a phone — but it converged on the _picker_, not the container:
+expo keeps a dialog at every width (a phone is the only width it has, and Dialog
+is already the idiom for every picker it renders), while web forks to a bottom
+sheet, which is its own narrow-width language. Don't port the container in either
+direction; expo has no sheet primitive, and buying one is a native dependency
+decision ([architecture.md](./architecture.md), _dependency versions_), and the
 bulk tags dialog seeds the same native `TagsField` cousin the in-app editors
 render (like web's seeds `TagsField` — filter input and reuse-or-mint Create
 included; the single-link case no longer rides this dialog anyway — the row

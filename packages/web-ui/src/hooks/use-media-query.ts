@@ -31,3 +31,14 @@ export function useMediaQuery(query: string): boolean {
 
   return matches;
 }
+
+/**
+ * The `md:` breakpoint as a media query — the same string Tailwind matched, so a
+ * JS branch and the CSS agree (see above). Shared rather than re-spelled per
+ * call site because `md` is where this app changes regime: the topbar's rail
+ * becomes a drawer and its search box becomes a summoned row, quick-add's
+ * popover becomes a bottom sheet, and the "Move to" pickers give up their
+ * anchored submenus. A second literal that drifted by a rem would fork all of
+ * that silently.
+ */
+export const MD_QUERY = '(min-width: 48rem)';

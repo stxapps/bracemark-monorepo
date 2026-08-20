@@ -6,8 +6,8 @@
 // place the data hook meets the layouts. It also mounts the bulk-edit toolbar
 // (shown while the topbar's toggle holds `bulkEditing`) and the page-level
 // dialogs the row menus + toolbar drive through view-state-provider (edit /
-// bulk tags / delete-permanently): one instance each, OUTSIDE the virtualized
-// rows, so a sync repaint can never unmount them mid-interaction.
+// bulk tags / move to / delete-permanently): one instance each, OUTSIDE the
+// virtualized rows, so a sync repaint can never unmount them mid-interaction.
 //
 // A LOCKED selected list swaps the whole body for the lock pane BEFORE the data
 // hook mounts (UnlockedMain is a separate component precisely so useLinks never
@@ -21,6 +21,7 @@ import { BulkEditToolbar } from '../_components/bulk-edit-toolbar';
 import { BulkTagsDialog } from '../_components/bulk-tags-dialog';
 import { LinkDestroyConfirm } from '../_components/link-destroy-confirm';
 import { LinkEditDialog } from '../_components/link-edit-dialog';
+import { LinkMoveSurface } from '../_components/link-move-surface';
 import { ListLockPane } from '../_components/list-lock-pane';
 import { useLinksPage } from '../_contexts/page-provider';
 import { useLinks } from '../_hooks/use-links';
@@ -88,6 +89,7 @@ function UnlockedMain() {
       </div>
       <LinkEditDialog />
       <BulkTagsDialog />
+      <LinkMoveSurface />
       <LinkDestroyConfirm />
     </main>
   );

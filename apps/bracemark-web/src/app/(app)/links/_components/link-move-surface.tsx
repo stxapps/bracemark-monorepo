@@ -1,0 +1,92 @@
+'use client';
+
+// The page-level "Move to" for links — web-ui's MoveToSurface (the shared
+// picker in a dialog/sheet) plus the write it commits. Hoisted and driven by
+// view-state-provider's `moving`, for the same reason as LinkDestroyConfirm and
+// BulkTagsDialog: the requesting row is virtualized, so a row-owned surface
+// could be unmounted by a sync repaint mid-pick.
+//
+// TWO CALLERS, ONE INSTANCE — and the second one is why the write lives here
+// rather than in each caller:
+//
+//   the row menu     — one link, and only BELOW `md`. Above it the menu keeps
+//                      its anchored ListCommand submenu, where hover-and-pick
+//                      is the better mouse gesture; below it that submenu needs
+//                      464px on a 375px screen (move-to-surface.tsx).
+//   the bulk toolbar — the whole selection, at EVERY width. Its own Move-to
+//                      dropdown was a third copy of this picker, and the toolbar
+//                      is already a set of buttons that open page-level modals
+//                      (Edit tags → BulkTagsDialog, Delete permanently →
+//                      LinkDestroyConfirm), so it loses nothing by joining them.
+//
+// The move itself is the same one-field `update({ listId })` patch the row menu's
+// Archive/Remove and the edit dialog's Save use. Links already in the target list
+// are skipped, so a pick never writes a no-op patch (which would bump updatedAt
+// and reorder the date-modified sort) — the same rule every bulk action follows.
+// Trash is not a destination: trashing is Remove, never a "move".
+//
+// `exitBulkEdit` after a completed move matches the other two page-level
+// surfaces (it's a no-op on the row-menu path, which was never in the mode).
+
+import { useState } from 'react';
+
+import { TRASH_ID } from '@stxapps/shared';
+import { type LinkView, useLinkMutations } from '@stxapps/web-react';
+import { MoveToSurface } from '@stxapps/web-ui/components/links/move-to-surface';
+
+import { useLinksViewState } from '../_contexts/view-state-provider';
+
+// Module-level so the array's identity is stable: ListCommand memoizes its
+// flattened tree on `excludeIds`, and a fresh literal per render would re-walk
+// the whole list tree on every keystroke in the filter box.
+const EXCLUDE_IDS = [TRASH_ID];
+
+export function LinkMoveSurface() {
+  const { moving, closeMove } = useLinksViewState();
+  // Unmounted while closed, so every open starts with fresh state.
+  if (!moving) return null;
+  return <LinkMove links={moving} onClose={closeMove} />;
+}
+
+function LinkMove({ links, onClose }: { links: LinkView[]; onClose: () => void }) {
+  const { wide, exitBulkEdit } = useLinksViewState();
+  const { update } = useLinkMutations();
+  const [busy, setBusy] = useState(false);
+
+  // If every link sits in one list (always true in a plain list view, and for
+  // the single-link row-menu path), show it checked-but-disabled — the tree
+  // keeps its shape, and the one meaningless target is ruled out. A mixed
+  // selection has no such list, so nothing is marked.
+  const sharedListId =
+    new Set(links.map((link) => link.listId)).size === 1 ? links[0].listId : undefined;
+
+  const onSelect = async (listId: string) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      for (const link of links) {
+        if (link.listId !== listId) await update(link, { listId });
+      }
+      onClose();
+      exitBulkEdit();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <MoveToSurface
+      wide={wide}
+      title="Move to"
+      // Only worth a progress line when there's a batch to wait for: a single
+      // link's write lands in a frame, and flashing "Moving…" for it reads as a
+      // stutter rather than as feedback.
+      busy={busy && links.length > 1 ? `Moving ${links.length} links…` : undefined}
+      onOpenChange={(open) => !open && onClose()}
+      value={sharedListId}
+      excludeIds={EXCLUDE_IDS}
+      disabledIds={sharedListId ? [sharedListId] : undefined}
+      onSelect={(listId) => void onSelect(listId)}
+    />
+  );
+}

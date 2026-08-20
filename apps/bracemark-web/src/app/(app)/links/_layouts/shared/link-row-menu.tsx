@@ -53,7 +53,17 @@ import { useEngagedOpen } from './hooks';
 // two landing focused on that field) via the hoisted `openEditor` — a row-owned
 // dialog could be unmounted by a sync repaint mid-edit. Move to / Archive / Restore /
 // Remove are all one `update({ listId })` — thin wrappers over the same op the
-// dialog's Save uses. `pinned` swaps the pin block between "Pin to top" and the
+// dialog's Save uses.
+//
+// MOVE TO HAS TWO SHAPES, split at `md` (view-state-provider's `wide`, one
+// matchMedia for the page rather than one per virtualized row). Above it, the
+// ListCommand submenu below: hover-and-pick, in place, no modal. Below it, an
+// item that hands the link to the page-level LinkMoveSurface — because the
+// submenu wants 464px beside a 192px parent menu, which a 375px phone doesn't
+// have, and because the picker's filter box summons a keyboard the floating
+// layer can't measure (the arithmetic and the rest of the reasoning are in
+// move-to-surface.tsx). The narrow item is the ONLY one here that doesn't act
+// immediately, hence the ellipsis. `pinned` swaps the pin block between "Pin to top" and the
 // pinned set (move up/down + unpin); `isFirst`/`isLast` disable the move that
 // would fall off the pinned section's ends.
 //
@@ -74,7 +84,7 @@ export function LinkRowMenu({
 }) {
   const { pin, unpin, moveUp, moveDown } = usePinMutations();
   const { update } = useLinkMutations();
-  const { openEditor, requestDestroy } = useLinksViewState();
+  const { openEditor, requestDestroy, requestMove, wide } = useLinksViewState();
   // Open state via useEngagedOpen: reports open/close into the engagement count
   // and releases it on unmount-while-open. The menu is CONTROLLED because Move
   // to selects via a CommandItem, not a DropdownMenuItem — Radix won't
@@ -140,29 +150,40 @@ export function LinkRowMenu({
               <Pencil className="size-4" />
               Edit
             </DropdownMenuItem>
-            <DropdownMenuSub>
-              <DropdownMenuSubTrigger>
+            {wide ? (
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>
+                  <FolderInput className="size-4" />
+                  Move to
+                </DropdownMenuSubTrigger>
+                {/* The same searchable list command as ListSelect (list-command.tsx).
+                    No Trash target — trashing is Remove, never a "move". The link's
+                    current list stays visible but disabled (and checked), keeping the
+                    tree's shape (and the user's bearings) intact. Locked/hidden lists
+                    stay pickable: hiding only declutters the sidebar, it never blocks
+                    filing a link into a list you know exists. */}
+                <DropdownMenuSubContent className="w-64 p-0">
+                  <ListCommand
+                    value={link.listId}
+                    excludeIds={[TRASH_ID]}
+                    disabledIds={[link.listId]}
+                    onSelect={(listId) => {
+                      void update(link, { listId });
+                      handleOpenChange(false);
+                    }}
+                  />
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+            ) : (
+              /* Same picker, same exclusions — LinkMoveSurface passes them, since
+                 it serves the bulk toolbar too. A plain Item, so Radix closes the
+                 menu for us (the submenu above is why this menu is controlled at
+                 all: a CommandItem pick isn't a menu selection). */
+              <DropdownMenuItem onSelect={() => requestMove([link])}>
                 <FolderInput className="size-4" />
-                Move to
-              </DropdownMenuSubTrigger>
-              {/* The same searchable list command as ListSelect (list-command.tsx).
-                  No Trash target — trashing is Remove, never a "move". The link's
-                  current list stays visible but disabled (and checked), keeping the
-                  tree's shape (and the user's bearings) intact. Locked/hidden lists
-                  stay pickable: hiding only declutters the sidebar, it never blocks
-                  filing a link into a list you know exists. */}
-              <DropdownMenuSubContent className="w-64 p-0">
-                <ListCommand
-                  value={link.listId}
-                  excludeIds={[TRASH_ID]}
-                  disabledIds={[link.listId]}
-                  onSelect={(listId) => {
-                    void update(link, { listId });
-                    handleOpenChange(false);
-                  }}
-                />
-              </DropdownMenuSubContent>
-            </DropdownMenuSub>
+                Move to…
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem onSelect={() => openEditor(link, 'tags')}>
               <Tags className="size-4" />
               Edit tags

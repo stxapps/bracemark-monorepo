@@ -28,6 +28,14 @@
 //   retagging   — same hoisting for the bulk-edit toolbar's "Edit tags" dialog
 //                 (see BulkTagsDialog): the toolbar requests it with the
 //                 selection, the page-level dialog renders it.
+//   moving      — same hoisting for "Move to" (see LinkMoveSurface). Two
+//                 callers, as with `destroying`: the toolbar passes the whole
+//                 selection, a row menu passes its one link — and the row menu
+//                 only does so BELOW `md`, where it drops its submenu (that
+//                 submenu is 464px of demand on a 375px screen; the arithmetic
+//                 is in move-to-surface.tsx). The write lives with the surface,
+//                 not with its callers, which is what keeps one Move-to
+//                 instead of three.
 //   bulkEditing — bulk-edit mode is on (topbar toggles it, rows become selectable,
 //                 the BulkEditToolbar shows). Selection is by row, so rows shifting
 //                 mid-multi-select is exactly the disruption this flag exists for.
@@ -42,6 +50,13 @@
 // beside a title and four actions — so the Search action summons it as a row
 // under the bar, exactly as bracemark-expo does (docs/search.md). Above `md`
 // the box is inline in the topbar and none of this applies.
+//
+// It holds one thing that is neither: `wide`, the live `md` media query. It's
+// here because the alternative is a matchMedia listener PER ROW — the row menus
+// need it to choose between an anchored submenu and the hoisted Move-to surface,
+// and rows are virtualized — and because a hook that seeds `false` and corrects
+// in an effect must be mounted before the surface it gates opens, or it flashes
+// the wrong container for a frame (move-to-surface.tsx's header).
 //
 // This is deliberately SEPARATE from page-provider (URL/layout state): it's
 // ephemeral interaction state, never persisted, never in the URL. It does WATCH
@@ -60,6 +75,7 @@ import {
 } from 'react';
 
 import type { LinkView } from '@stxapps/web-react';
+import { MD_QUERY, useMediaQuery } from '@stxapps/web-ui/hooks/use-media-query';
 
 import { type Selection, useLinksPage } from './page-provider';
 
@@ -125,6 +141,15 @@ interface LinksViewStateValue {
   retagging: LinkView[] | null;
   requestRetag: (links: LinkView[]) => void;
   closeRetag: () => void;
+  // The "Move to" picker: the links awaiting a destination (null = closed; an
+  // empty request is ignored, so a non-null value always has at least one). The
+  // CALLER decides the targets — the toolbar filters trashed links out, the row
+  // menu never offers the item in Trash — so the surface moves what it's given.
+  moving: LinkView[] | null;
+  requestMove: (links: LinkView[]) => void;
+  closeMove: () => void;
+  // The `md` breakpoint, live. See the header for why it lives here.
+  wide: boolean;
   // Bulk-edit mode: the topbar toggles it, rows toggle selection while it's on,
   // the BulkEditToolbar acts on the selection. Exiting clears the selection.
   bulkEditing: boolean;
@@ -157,6 +182,7 @@ export function LinksViewStateProvider({ children }: { children: React.ReactNode
   const [editing, setEditing] = useState<LinkEditRequest | null>(null);
   const [destroying, setDestroying] = useState<LinkView[] | null>(null);
   const [retagging, setRetagging] = useState<LinkView[] | null>(null);
+  const [moving, setMoving] = useState<LinkView[] | null>(null);
   const [bulkEditing, setBulkEditing] = useState(false);
   const [selectedLinks, setSelectedLinks] = useState<ReadonlyMap<string, LinkView>>(new Map());
   // The `link.path` a shift-click range extends FROM — the last row toggled on
@@ -183,6 +209,13 @@ export function LinksViewStateProvider({ children }: { children: React.ReactNode
     if (links.length > 0) setRetagging(links);
   }, []);
   const closeRetag = useCallback(() => setRetagging(null), []);
+
+  const requestMove = useCallback((links: LinkView[]) => {
+    if (links.length > 0) setMoving(links);
+  }, []);
+  const closeMove = useCallback(() => setMoving(null), []);
+
+  const wide = useMediaQuery(MD_QUERY);
 
   const enterBulkEdit = useCallback(() => setBulkEditing(true), []);
   const exitBulkEdit = useCallback(() => {
@@ -251,6 +284,7 @@ export function LinksViewStateProvider({ children }: { children: React.ReactNode
         editing !== null ||
         destroying !== null ||
         retagging !== null ||
+        moving !== null ||
         bulkEditing,
       setScrolled,
       setMenuOpen,
@@ -268,6 +302,10 @@ export function LinksViewStateProvider({ children }: { children: React.ReactNode
       retagging,
       requestRetag,
       closeRetag,
+      moving,
+      requestMove,
+      closeMove,
+      wide,
       bulkEditing,
       enterBulkEdit,
       exitBulkEdit,
@@ -293,6 +331,10 @@ export function LinksViewStateProvider({ children }: { children: React.ReactNode
       retagging,
       requestRetag,
       closeRetag,
+      moving,
+      requestMove,
+      closeMove,
+      wide,
       bulkEditing,
       enterBulkEdit,
       exitBulkEdit,

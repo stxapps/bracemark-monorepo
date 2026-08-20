@@ -27,8 +27,8 @@
 //               irreversible action, so it goes through the confirmation
 //               (requestDestroy → LinkDestroyConfirm, which exits bulk-edit
 //               mode after the destroy).
-//   elsewhere — "Move to" (the same searchable ListCommand as the row menu's
-//               submenu — no Trash target, trashing is Remove, never a "move"),
+//   elsewhere — "Move to" (requestMove → LinkMoveSurface, the shared picker —
+//               no Trash target, trashing is Remove, never a "move"),
 //               "Edit tags" (requestRetag → BulkTagsDialog), Pin/Unpin, then
 //               the destructive pair: "Archive" (flipping to "Unarchive" in the
 //               Archive view, like the row menu) and "Remove" (a reversible
@@ -67,7 +67,13 @@
 //                       reflex.
 //
 // One bulk action runs at a time (`busy`), and every completed action exits
-// bulk-edit mode.
+// bulk-edit mode. The three that open a page-level modal instead of writing
+// straight away — Move to, Edit tags, Delete permanently — hand the selection to
+// view-state-provider and let that surface do both (it also exits the mode), so
+// they carry no `busy` state here. Move to used to be a `w-64` dropdown holding
+// its own ListCommand, i.e. a third copy of a picker the row menu and the Lists
+// settings already embed; it became a request for the same reason its two
+// neighbours are ones.
 
 import { type ComponentProps, type ReactNode, useEffect, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -93,7 +99,6 @@ import {
   useLinkMutations,
   usePinMutations,
 } from '@stxapps/web-react';
-import { ListCommand } from '@stxapps/web-ui/components/links/list-command';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import { Checkbox } from '@stxapps/web-ui/components/ui/checkbox';
 import {
@@ -108,7 +113,7 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 import { useLinksPage } from '../_contexts/page-provider';
 import { useLinksViewState } from '../_contexts/view-state-provider';
 
-type BulkAction = 'restore' | 'move' | 'pin' | 'unpin' | 'archive' | 'remove';
+type BulkAction = 'restore' | 'pin' | 'unpin' | 'archive' | 'remove';
 
 // Below this container width the secondary actions (Edit tags, Pin, Unpin,
 // Archive) collapse into a ⋯ overflow menu so the fixed button row never spills
@@ -171,13 +176,11 @@ export function BulkEditToolbar({ links }: { links: LinkView[] }) {
     clearSelected,
     requestDestroy,
     requestRetag,
+    requestMove,
   } = useLinksViewState();
   const { update } = useLinkMutations();
   const { pin, unpin } = usePinMutations();
   const [busy, setBusy] = useState<BulkAction | null>(null);
-  // Controlled for the same reason as the row menu: Move to selects via a
-  // CommandItem, which Radix won't auto-close for.
-  const [moveOpen, setMoveOpen] = useState(false);
   // The "Copied" flash on Copy links; the timer is cleared on unmount so a
   // pending flash can't set state on an unmounted toolbar.
   const [copied, setCopied] = useState(false);
@@ -209,12 +212,6 @@ export function BulkEditToolbar({ links }: { links: LinkView[] }) {
   const toUnpin = actionable.filter((l) => pinnedIds.has(linkIdOf(l)));
   const toArchive = actionable.filter((l) => l.listId !== ARCHIVE_ID);
 
-  // If the whole selection sits in one list (always true in a plain list view),
-  // show it checked-but-disabled in Move to, like the row menu; a mixed
-  // selection has no such list, so nothing is marked.
-  const sharedListId =
-    new Set(actionable.map((l) => l.listId)).size === 1 ? actionable[0].listId : undefined;
-
   const runBulk = async (
     action: BulkAction,
     links: LinkView[],
@@ -230,12 +227,6 @@ export function BulkEditToolbar({ links }: { links: LinkView[] }) {
     } finally {
       setBusy(null);
     }
-  };
-
-  const onMoveTo = (listId: string) => {
-    setMoveOpen(false);
-    const targets = actionable.filter((l) => l.listId !== listId);
-    void runBulk('move', targets, (link) => update(link, { listId }));
   };
 
   const allSelected = links.length > 0 && links.every((l) => selectedLinks.has(l.path));
@@ -360,24 +351,13 @@ export function BulkEditToolbar({ links }: { links: LinkView[] }) {
           </>
         ) : (
           <>
-            <DropdownMenu open={moveOpen} onOpenChange={setMoveOpen}>
-              <DropdownMenuTrigger asChild>
-                <ActionButton
-                  icon={<FolderInput data-icon="inline-start" className="size-4" />}
-                  label={busy === 'move' ? 'Moving…' : 'Move to'}
-                  iconOnly={iconOnly}
-                  disabled={disabled || actionable.length === 0}
-                />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-64 p-0">
-                <ListCommand
-                  value={sharedListId}
-                  excludeIds={[TRASH_ID]}
-                  disabledIds={sharedListId ? [sharedListId] : undefined}
-                  onSelect={onMoveTo}
-                />
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <ActionButton
+              icon={<FolderInput data-icon="inline-start" className="size-4" />}
+              label="Move to"
+              iconOnly={iconOnly}
+              disabled={disabled || actionable.length === 0}
+              onClick={() => requestMove(actionable)}
+            />
             {collapsed ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

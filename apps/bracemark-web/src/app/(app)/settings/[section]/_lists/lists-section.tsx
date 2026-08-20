@@ -75,6 +75,7 @@ import {
   useLocks,
 } from '@stxapps/web-react';
 import { ListCommand } from '@stxapps/web-ui/components/links/list-command';
+import { MoveToSurface } from '@stxapps/web-ui/components/links/move-to-surface';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import {
   DropdownMenu,
@@ -86,6 +87,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@stxapps/web-ui/components/ui/dropdown-menu';
+import { MD_QUERY, useMediaQuery } from '@stxapps/web-ui/hooks/use-media-query';
 
 import { SettingsHeader, SettingsNotice, SettingsPane } from '../../_components/settings-kit';
 import {
@@ -131,14 +133,24 @@ function listIcon(id: string): React.ReactNode {
 // stays visible-but-disabled. The lock items fire page-level dialog intents
 // (the password prompt is one hoisted LockPasswordDialog, not per-row). Delete
 // is hidden for system lists.
+//
+// MOVE TO HAS TWO SHAPES, split at `md`, exactly as the link row menu's does.
+// Above it the submenu below; under it an item that raises the section's hoisted
+// MoveToSurface with the same wiring — a `w-64` submenu needs 464px beside its
+// parent menu and a phone has 375 (move-to-surface.tsx carries the arithmetic
+// and the keyboard half of the argument). This is also what bracemark-expo does
+// at every width, since a phone is the only width it has: its MoveToDialog is
+// this dialog, embedding the same ListCommand body.
 function RowActions({
   row,
+  wide,
   excludeIds,
   lock,
   onFocusName,
   onMoveUp,
   onMoveDown,
   onMoveTo,
+  onRequestMove,
   onSortChildren,
   onAddLock,
   onUnlock,
@@ -146,6 +158,8 @@ function RowActions({
   onDelete,
 }: {
   row: ListRow;
+  // At `md` and up. Picks which shape "Move to" takes — see the header.
+  wide: boolean;
   // Parent ids the row may NOT move under (forbiddenParentIds): its subtree +
   // no-children containers. Passed to ListCommand's excludeIds.
   excludeIds: readonly string[];
@@ -155,7 +169,10 @@ function RowActions({
   onFocusName: () => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
+  // The wide path's pick, straight from the embedded ListCommand.
   onMoveTo: (parentId: string | null) => void;
+  // The narrow path: no destination yet — raise the section's picker for this row.
+  onRequestMove: () => void;
   onSortChildren: (dir: SortDir) => void;
   onAddLock: () => void;
   onUnlock: () => void;
@@ -168,7 +185,9 @@ function RowActions({
 
   // Controlled so a Move-to pick closes the menu: ListCommand selects via a
   // CommandItem, not a DropdownMenuItem, so Radix won't auto-close for it (same
-  // reason the link row menu's Move to is controlled).
+  // reason the link row menu's Move to is controlled). Only the WIDE path needs
+  // this — the narrow item is an ordinary DropdownMenuItem — but the menu stays
+  // controlled at both widths rather than changing kind under the breakpoint.
   const [open, setOpen] = useState(false);
   const moveTo = (parentId: string | null) => {
     onMoveTo(parentId);
@@ -207,24 +226,30 @@ function RowActions({
         <DropdownMenuItem disabled={isLast} onSelect={onMoveDown}>
           <ChevronDown className="size-4" /> Move down
         </DropdownMenuItem>
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger>
-            <CornerUpRight className="size-4" /> Move to
-          </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className="w-64 p-0">
-            <ListCommand
-              value={row.parentId ?? undefined}
-              excludeIds={excludeIds}
-              disabledIds={row.parentId ? [row.parentId] : undefined}
-              root={{
-                label: 'Top level',
-                selected: row.parentId === null,
-                onSelect: () => moveTo(null),
-              }}
-              onSelect={(listId) => moveTo(listId)}
-            />
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
+        {wide ? (
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              <CornerUpRight className="size-4" /> Move to
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent className="w-64 p-0">
+              <ListCommand
+                value={row.parentId ?? undefined}
+                excludeIds={excludeIds}
+                disabledIds={row.parentId ? [row.parentId] : undefined}
+                root={{
+                  label: 'Top level',
+                  selected: row.parentId === null,
+                  onSelect: () => moveTo(null),
+                }}
+                onSelect={(listId) => moveTo(listId)}
+              />
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+        ) : (
+          <DropdownMenuItem onSelect={onRequestMove}>
+            <CornerUpRight className="size-4" /> Move to…
+          </DropdownMenuItem>
+        )}
         {row.hasChildren && (
           <DropdownMenuSub>
             <DropdownMenuSubTrigger>
@@ -279,6 +304,7 @@ function RowActions({
 // keyboard/mouse fallback that worked before drag existed.
 function SortableRow({
   row,
+  wide,
   renderDepth,
   collapsedIds,
   excludeIds,
@@ -288,6 +314,7 @@ function SortableRow({
   onMoveUp,
   onMoveDown,
   onMoveTo,
+  onRequestMove,
   onSortChildren,
   onAddLock,
   onUnlock,
@@ -295,6 +322,7 @@ function SortableRow({
   onDelete,
 }: {
   row: ListRow;
+  wide: boolean;
   renderDepth: number;
   collapsedIds: ReadonlySet<string>;
   excludeIds: readonly string[];
@@ -304,6 +332,7 @@ function SortableRow({
   onMoveUp: () => void;
   onMoveDown: () => void;
   onMoveTo: (parentId: string | null) => void;
+  onRequestMove: () => void;
   onSortChildren: (dir: SortDir) => void;
   onAddLock: () => void;
   onUnlock: () => void;
@@ -384,12 +413,14 @@ function SortableRow({
 
       <RowActions
         row={row}
+        wide={wide}
         excludeIds={excludeIds}
         lock={lock}
         onFocusName={focusName}
         onMoveUp={onMoveUp}
         onMoveDown={onMoveDown}
         onMoveTo={onMoveTo}
+        onRequestMove={onRequestMove}
         onSortChildren={onSortChildren}
         onAddLock={onAddLock}
         onUnlock={onUnlock}
@@ -417,6 +448,15 @@ export function ListsSection() {
     mode: 'add' | 'unlock' | 'remove';
     listId: string;
   } | null>(null);
+  // The pending "Move to" intent from a row's kebab, below `md` — drives the one
+  // hoisted MoveToSurface below, the same way `lockDialog` drives the password
+  // one. Held as an ID, not a row: the rows are rebuilt on every list change, and
+  // a stale snapshot would reparent against a tree that has moved on.
+  const [movingId, setMovingId] = useState<string | null>(null);
+
+  // One matchMedia for the section, not one per row (and settled before any menu
+  // opens, so the surface can't flash the wrong container — move-to-surface.tsx).
+  const wide = useMediaQuery(MD_QUERY);
 
   // Drag state: the row being dragged, the row it's over, and the horizontal
   // pointer offset that drives the projected depth. All null/0 when idle.
@@ -437,6 +477,21 @@ export function ListsSection() {
   // While dragging, the active row's subtree travels with it, so drop it out of
   // the flat list the sortable + projection see (and that we render).
   const displayRows = useMemo(() => excludeActiveDescendants(rows, activeId), [rows, activeId]);
+  // The moving row is resolved against a COLLAPSE-FREE flatten, not `rows`. The
+  // row was visible when its kebab opened, but the picker outlives that render:
+  // a sync landing another device's reparent can slide it under a collapsed
+  // ancestor, and `rows` would then stop listing it — closing the picker
+  // mid-pick, for a list that still exists. Here it stays findable until the pick
+  // lands (and correctly vanishes if the list is deleted elsewhere).
+  // bracemark-expo's twin does the same.
+  const allRows = useMemo(() => flattenToRows(lists, NO_COLLAPSED_IDS), [lists]);
+  const movingRow = movingId ? allRows.find((r) => r.item.id === movingId) : undefined;
+  // Memoized for ListCommand, which re-walks the whole tree when `excludeIds`
+  // changes identity — and this one is read on every keystroke in its filter box.
+  const movingExcludeIds = useMemo(
+    () => (movingRow ? [...forbiddenParentIds(lists, movingRow.item.id)] : []),
+    [lists, movingRow],
+  );
 
   // The depth the dragged row would land at, recomputed as it moves. Drives both
   // the live indent of the dragged row and the final drop.
@@ -512,6 +567,22 @@ export function ListsSection() {
   const sortGroup = (parentId: string | null, dir: SortDir) =>
     run(reorder(sortedByName(childrenOf(lists, parentId), dir)));
 
+  // Reparent to the end of the destination's children. Shared by both Move-to
+  // shapes (the wide submenu picks a parent inline, the narrow surface picks one
+  // in a dialog), so the paywall gate and the destination maths can't drift
+  // between them.
+  const moveTo = (row: ListRow, parentId: string | null) => {
+    setMovingId(null);
+    // Moving UNDER a list nests it (the Plus lever); moving to "Top level"
+    // (null) flattens and stays free — so a downgraded user can always un-nest.
+    if (parentId !== null && !entitlements.nestedLists) {
+      paywall.show('nestedLists');
+      return;
+    }
+    const dest = childrenOf(lists, parentId).filter((s) => s.id !== row.item.id);
+    run(move(row.item, parentId, dest, dest.length));
+  };
+
   return (
     // NO INSET OVERRIDE HERE — and this table is why the pane HAS one to give.
     // SettingsPane is `px-4 md:px-6`, and the narrow half of that step exists for
@@ -585,6 +656,7 @@ export function ListsSection() {
                     <SortableRow
                       key={row.item.id}
                       row={row}
+                      wide={wide}
                       renderDepth={renderDepth}
                       collapsedIds={collapsedIds}
                       excludeIds={excludeIds}
@@ -597,19 +669,8 @@ export function ListsSection() {
                       onMoveDown={() =>
                         run(move(row.item, row.parentId, siblingsWithout(row), row.index + 1))
                       }
-                      onMoveTo={(parentId) => {
-                        // Moving UNDER a list nests it (the Plus lever); moving to
-                        // "Top level" (null) flattens and stays free — so a
-                        // downgraded user can always un-nest.
-                        if (parentId !== null && !entitlements.nestedLists) {
-                          paywall.show('nestedLists');
-                          return;
-                        }
-                        const dest = childrenOf(lists, parentId).filter(
-                          (s) => s.id !== row.item.id,
-                        );
-                        run(move(row.item, parentId, dest, dest.length));
-                      }}
+                      onMoveTo={(parentId) => moveTo(row, parentId)}
+                      onRequestMove={() => setMovingId(row.item.id)}
                       onSortChildren={(dir) => sortGroup(row.item.id, dir)}
                       onAddLock={() =>
                         // Gate at the affordance, before any password dialog: a free
@@ -631,6 +692,27 @@ export function ListsSection() {
           </DndContext>
         </div>
       </div>
+
+      {/* The narrow-width "Move to" — one instance for the whole table, like the
+          lock dialog below it. The wiring is the submenu's, verbatim: the "Top
+          level" target, the row's own subtree excluded, the current parent shown
+          but disabled. */}
+      {movingRow && (
+        <MoveToSurface
+          wide={wide}
+          title={`Move “${movingRow.item.name}” to`}
+          onOpenChange={(open) => !open && setMovingId(null)}
+          value={movingRow.parentId ?? undefined}
+          excludeIds={movingExcludeIds}
+          disabledIds={movingRow.parentId ? [movingRow.parentId] : undefined}
+          root={{
+            label: 'Top level',
+            selected: movingRow.parentId === null,
+            onSelect: () => moveTo(movingRow, null),
+          }}
+          onSelect={(listId) => moveTo(movingRow, listId)}
+        />
+      )}
 
       {lockDialog?.mode === 'add' && (
         <LockPasswordDialog
