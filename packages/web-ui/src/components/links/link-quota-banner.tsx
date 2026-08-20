@@ -38,8 +38,8 @@ export function LinkQuotaBanner({
 }) {
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-start gap-2 rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
-        <Lock className="mt-0.5 size-3.5 shrink-0" />
+      <div className="flex items-start gap-2 rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">
+        <Lock className="mt-0.5 size-4 shrink-0" />
         <span>
           You’ve saved{' '}
           <span className="font-medium text-foreground">
