@@ -694,18 +694,29 @@ exist, and **the presentation container decides which, not the feature**:
   tree and a lift synced to the keyboard's own animation. **Pin the version when
   you re-check this**: the Android half is a library behaviour, not a platform
   one, so a downgrade silently takes it away.
-- **The pageSheet under-lift, which the swap does NOT fix.** With
-  `presentationStyle="pageSheet"` on iOS, a `KeyboardAvoidingView`'s `onLayout`
-  frame is measured relative to the SHEET while the `screenHeight` it subtracts
-  from is the whole screen — `max(frame.y + frame.height - (screenHeight -
-keyboardHeight), 0)`, which is the formula RN's KAV and keyboard-controller's
-  share, verbatim. So the lift falls short by the sheet's top offset (~60pt on
-  an iPhone 17 Pro) and AdvancedSearch's Clear/Search row stays behind the
-  keyboard once its body is tall enough to scroll. Measured, not inferred: the
+- **The pageSheet under-lift, and the `keyboardVerticalOffset` that pays for
+  it.** With `presentationStyle="pageSheet"` on iOS, a `KeyboardAvoidingView`'s
+  `onLayout` frame is measured relative to the SHEET while the `screenHeight` it
+  subtracts from is the whole screen — `max(frame.y + frame.height -
+(screenHeight - keyboardHeight - keyboardVerticalOffset), 0)`, which is the
+  formula RN's KAV and keyboard-controller's share, verbatim. So with the offset
+  at its default 0 the lift falls short by the sheet's top offset (~60pt on an
+  iPhone 17 Pro) and AdvancedSearch's Clear/Search row stays behind the keyboard
+  once its body is tall enough to scroll. Measured, not inferred: the
   `ScrollView` goes 722 → 483 against a 335pt keyboard. Android's modal is
-  full-screen, offset 0, and clears the row. The fix, if it is ever worth it, is
-  `keyboardVerticalOffset` set to `screenHeight − sheetHeight` (an `onLayout` on
-  the sheet gives the second term); it is deliberately NOT applied today.
+  full-screen, offset 0, and clears the row unaided.
+  AdvancedSearch now passes `keyboardVerticalOffset = screenHeight −
+sheetHeight`, the one place the formula lets us re-register the two rulers:
+  an `onLayout` on the Modal's `SafeAreaView` root supplies `sheetHeight`, and
+  `screenHeight` must come from **keyboard-controller's own**
+  `useWindowDimensions` (`UIScreen.main.bounds`, re-emitted on rotation), not
+  react-native's same-named window hook — the terms only cancel if both are read
+  off the same ruler. Two guards: the offset is 0 until the first layout, so the
+  failure mode is the old under-lift for one frame and never an over-lift; and
+  it is applied on iOS only, since Android's screen height counts system bars
+  whose relation to the modal decorView is an edge-to-edge detail not worth
+  betting a working surface on. A `Modal` that is NOT a page sheet (Android's,
+  or an iOS `fullScreen`) needs none of this.
 - **Why a portaled dialog is NOT the `Modal` case, and still needs its own
   avoider.** `Dialog` content portals to the root `PortalHost`, which is mounted
   _inside_ `KeyboardProvider` (`src/app/_layout.tsx`), so keyboard-controller's
@@ -749,5 +760,5 @@ behavior="padding"` around the centring box in `DialogOverlay` — the container
   follows.** A future link-add/link-edit built as a router screen inherits the
   keyboard-controller path for free; built as a page-sheet `Modal` (like
   AdvancedSearch), it carries its own keyboard-controller `KeyboardAvoidingView`
-  — and inherits the pageSheet under-lift above, so keep its body short enough
-  not to scroll, or pay for the offset.
+  — and must copy the `keyboardVerticalOffset` measurement above with it, or
+  inherit the under-lift (invisible until its body is tall enough to scroll).

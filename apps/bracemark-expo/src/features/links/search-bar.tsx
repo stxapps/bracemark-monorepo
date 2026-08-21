@@ -25,8 +25,16 @@
 //    `apply`).
 
 import { useEffect, useMemo, useState } from 'react';
-import { Modal, Pressable, ScrollView, View } from 'react-native';
-import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
+import { Modal, Platform, Pressable, ScrollView, View } from 'react-native';
+import {
+  KeyboardAvoidingView,
+  // The lib's OWN screen-dimensions hook, not react-native's window one: this is
+  // the exact value its KeyboardAvoidingView subtracts from (`UIScreen.main.bounds`
+  // on iOS, fed through its `windowDidResize` event so it survives a rotation), and
+  // the pageSheet offset below only cancels out if both terms come from the same
+  // ruler. Aliased because react-native exports a same-named hook that does NOT.
+  useWindowDimensions as useScreenDimensions,
+} from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Check, Lock, Minus, Search, SlidersHorizontal, X } from 'lucide-react-native';
@@ -314,6 +322,24 @@ function AdvancedSearch() {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<Draft>(() => initDraft(query));
 
+  // The pageSheet under-lift correction (the KeyboardAvoidingView comment below
+  // carries the diagnosis). Both KAV implementations lift by
+  // `max(frame.y + frame.height - (screenHeight - keyboardHeight - offset), 0)`,
+  // where the frame is measured inside the SHEET and `screenHeight` spans the whole
+  // screen; feeding the sheet's top offset back in as `keyboardVerticalOffset`
+  // re-registers the two in the one place the formula lets us. `sheetHeight` is the
+  // Modal root's own measured height (the onLayout below), so the term is 0 until
+  // the first layout — an under-lift for that frame, never an over-lift.
+  //
+  // iOS-only on purpose: Android's Modal is full-screen, so the sheet IS the screen
+  // and the correction is a no-op there in theory — but only in theory, since that
+  // screen height counts system bars whose relationship to the modal's decorView is
+  // an edge-to-edge detail we'd rather not bet a working surface on.
+  const { height: screenHeight } = useScreenDimensions();
+  const [sheetHeight, setSheetHeight] = useState(0);
+  const keyboardVerticalOffset =
+    Platform.OS === 'ios' && sheetHeight > 0 ? Math.max(screenHeight - sheetHeight, 0) : 0;
+
   // Snapshot the committed query into the draft each time the sheet opens, so
   // it edits the CURRENT query rather than a stale one (web's onOpenChange).
   const openSheet = () => {
@@ -413,7 +439,10 @@ function AdvancedSearch() {
         presentationStyle="pageSheet"
         onRequestClose={() => setOpen(false)}
       >
-        <StyledSafeAreaView className="flex-1 bg-background">
+        <StyledSafeAreaView
+          className="flex-1 bg-background"
+          onLayout={(e) => setSheetHeight(e.nativeEvent.layout.height)}
+        >
           {/* keyboard-controller's KeyboardAvoidingView, NOT react-native's —
               the same component ui/dialog.tsx uses, so the app tree runs on ONE
               keyboard library. The share sheet is the only exception left and it
@@ -439,14 +468,19 @@ function AdvancedSearch() {
               inert. What the swap buys is one library and a lift synced to the
               keyboard's own animation.
 
-              What neither answers, so don't read the swap as fixing it: under
-              `presentationStyle="pageSheet"` the KAV's onLayout frame is
+              What the swap did NOT answer, and `keyboardVerticalOffset` does:
+              under `presentationStyle="pageSheet"` the KAV's onLayout frame is
               sheet-relative while the `screenHeight` it subtracts from is not,
-              so the lift falls short by the sheet's top offset (~60pt) and the
-              Clear/Search row stays behind the keyboard on iOS. Android's modal
-              is full-screen — offset 0 — and clears it (docs/safe-area.md,
+              so the lift fell short by the sheet's top offset (~60pt on an
+              iPhone 17 Pro) and the Clear/Search row sat behind the keyboard
+              once the body was tall enough to scroll. Android's modal is
+              full-screen — offset 0 — and always cleared it (docs/safe-area.md,
               _keyboard avoidance on native_). */}
-          <StyledKeyboardAvoidingView behavior="padding" className="flex-1">
+          <StyledKeyboardAvoidingView
+            behavior="padding"
+            keyboardVerticalOffset={keyboardVerticalOffset}
+            className="flex-1"
+          >
             <View className="h-14 flex-row items-center justify-between border-b border-border pr-2 pl-4">
               <Text className="text-lg font-semibold">Advanced search</Text>
               <Pressable
