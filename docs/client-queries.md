@@ -98,6 +98,31 @@ These compose: `useLiveQuery` produces the current array, the virtualizer render
 a window of it. Both are reactive, so a write refreshes the data and the visible
 rows together.
 
+**The zone-echo constraint — awaiting a helper can silently kill reactivity.**
+Dexie tracks which index ranges a querier touched by running it inside a PSD
+zone, and that zone survives only **one** native-await resumption per awaited
+Dexie promise. Awaiting an async helper that _itself_ awaited (a stacked
+resumption) does not re-arm it: every Dexie call after that await registers no
+ranges, so writes never re-fire the querier. One hop is fine (`await readPins()`
+then query → tracked); two stacked hops are not (`await helperThatAwaits()` then
+query → untracked). It fails **silently and only in a real browser** — it does
+not reproduce under fake-indexeddb, so no jest/vitest run can catch it.
+
+This broke `readLinks` (`packages/web-react/src/data/queries.ts`): `await
+readPinnedOverlay()`, which awaits `readPins()`, killed tracking for the whole
+`readRest` list range, so new links never appeared until a deps change or a
+reload. Pin writes still re-fired — they were registered before the zone died —
+which is what masks the bug.
+
+**The rule:** in any code reachable from a `liveQuery`/`useLiveQuery` querier,
+wrap every await of an async **helper** as `await Promise.resolve(helper())`.
+Inside the zone the global `Promise` is Dexie's, so the wrap re-arms the echo.
+Direct `db.*` awaits, a pass-through `return helper()` with no await, and
+`Promise.all` of direct Dexie calls are all already safe. dexie 4.4.4 does not
+fix this — its liveQuery fix concerns in-place result mutation. The constraint
+does not exist in the expo port ([below](#the-expo-sqlitedrizzle-port)), whose
+reactivity is table-coarse rather than range-tracked.
+
 **Estimated vs. measured row heights.** Both web layouts MEASURE. A title is
 `line-clamp-2`, so an item's height turns on whether that title wraps — a fact
 about the browser's line breaker at the current pane width, font and root font

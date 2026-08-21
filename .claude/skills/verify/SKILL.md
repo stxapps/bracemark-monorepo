@@ -1,9 +1,46 @@
 ---
 name: verify
-description: How to build, launch, and drive this repo's apps to verify a change end-to-end — bracemark-web via headless Chromium, bracemark-expo on the iOS simulator or Android emulator.
+description: How to build, launch, and drive this repo's apps to verify a change end-to-end — bracemark-web via headless Chromium, bracemark-expo on the iOS simulator or Android emulator. Use when the change has to be SEEN running; when a test, typecheck, or a read of the code can settle the question, do that instead.
 ---
 
 # Verifying changes in this repo
+
+## Pick the cheapest instrument that can answer the question
+
+Driving an app is the most expensive way to learn anything in this repo — not
+because of this file, but because of what the loop spends: a screenshot costs
+roughly a page of prose, a hierarchy dump several pages, and every tool call
+round-trips the whole transcript. Ordered by cost, use the first one that
+actually settles the question:
+
+1. **Read the code** — for "is this wired up", "does this branch run".
+2. **`npx nx test <project>` / `npx nx typecheck <project>`** — for logic,
+   reducers, query builders, anything with an expected value.
+3. **A DOM/text assertion in a headless script** (`textContent`,
+   `getAttribute`, `count()`) — for "did the right thing render". Costs
+   ~nothing next to an image.
+4. **A screenshot** — only when the question is genuinely visual: spacing,
+   contrast, overflow, safe-area, "does this look right".
+5. **A native device** — only when the change is native, or visual on a
+   surface web can't show (see the expo section's own gate).
+
+**Then keep the loop tight:**
+
+- **Assert in the script; print a verdict, not the state.** Have the script
+  compute the answer and print `PASS`/`FAIL` plus the one number that decided
+  it. Reading a tree or an image to judge it by eye costs orders of magnitude
+  more than the script printing `scrollWidth 412 > 390 FAIL`. The pixel-read
+  recipe in the expo Gotchas is the model: one integer, not a picture.
+- **One script per run, not a tool call per step.** Launch, act, assert and
+  print in a single node script — each extra round-trip re-sends everything.
+- **Reuse what's already up.** `npm run dev` in the background and one browser
+  launch serve every check in a session; restarting them buys nothing.
+- **Crop, don't shrink.** `locator.screenshot()` or `screenshot({ clip })` is
+  the big saving. Lowering `deviceScaleFactor` is not — a full-page shot gets
+  downsampled to a fixed budget anyway, so you pay full price and then read the
+  detail you wanted at half resolution.
+- **Never dump a whole hierarchy into the transcript** — grep it for the node
+  you're asking about (both dump commands below show the spelling).
 
 ## Launch
 
@@ -32,6 +69,36 @@ description: How to build, launch, and drive this repo's apps to verify a change
   `slowMo: 250`) to watch a run live. `/Applications/Chromium.app/Contents/MacOS/Chromium`
   works the same way if Chrome is gone.
 
+- **Narrow layouts: set the context viewport, don't size the window.**
+  `newPage({ viewport: { width: 390, height: 844 } })` lays out at a true 390 —
+  verified here: `innerWidth` 390, `documentElement.clientWidth` 390,
+  `(max-width:400px)` matches. Chrome's own `--headless --window-size=390,H`
+  does **not**: the layout viewport floors at **500px**, so the page lays out at
+  500 and the PNG is merely cropped to 390. That reads exactly like a
+  horizontal-overflow bug that isn't there. If you ever need that CLI path,
+  measure through an iframe instead (iframes have no minimum) — compare
+  `iframe.contentDocument.documentElement.scrollWidth` against the iframe width,
+  and find the offending element with `el.getBoundingClientRect().right > width`.
+
+- **To capture a state that resolves too fast to screenshot**, stretch it with
+  CDP rather than racing it. A local-first read (Dexie → decrypt → render)
+  resolves in tens of ms, so a skeleton can't be caught by screenshotting in a
+  tight loop — every frame lands after it.
+
+  ```js
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Emulation.setCPUThrottlingRate', { rate: 20 });
+  await page.goto(url); // the transient state now spans several frames
+  // …screenshot burst…
+  await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+  ```
+
+  Network throttling does nothing here — the work is CPU-bound and local, not
+  fetched — and adding an artificial delay to the app to see it means shipping
+  (or forgetting to remove) test-only code. Remount the component by navigating
+  between views rather than reloading, so the one-time app-shell gates
+  (`InitialSyncGate`'s "Decrypting your links…") don't cover the frames you want.
+
 - Why this and not a browser test target, when to reach for claude-in-chrome
   instead, and how the native apps get driven: `docs/testing.md`.
 
@@ -52,8 +119,29 @@ description: How to build, launch, and drive this repo's apps to verify a change
 
 ## Gotchas
 
-- Nx TUI is disabled on purpose (breaks wrangler dev under run-many) — keep
-  `--output-style=stream` output; don't re-enable.
+- **Nx TUI is disabled on purpose** (`"tui": { "enabled": false }` in `nx.json`) —
+  keep `--output-style=stream` output; don't re-enable. The TUI's pseudo-terminal
+  stops wrangler's local proxy from ever becoming reachable under
+  `nx run-many -t dev`: `localhost:8787` is dead while next on `:3000` is fine, so
+  it reads as an api problem. Standalone `nx run @stxapps/bracemark-api:dev` works,
+  because that task gets a plain terminal. Confirmed both ways — `NX_TUI=false`
+  makes the dev servers reachable, and wrangler's own
+  `--show-interactive-dev-session=false` does NOT fix it. The setting is global
+  because a raw `nx run-many -t dev` would otherwise still break, and `nx.json` is
+  plain JSON that can't hold a comment saying so. Unrelated but adjacent:
+  `wrangler.jsonc` pins `dev.port: 8787`, so a port conflict fails loudly instead
+  of silently drifting to 8788.
+- **A hydration error on `localhost:3001` is your browser, not the site.** Under
+  `npm run dev:site`, visiting the marketing site can log "Hydration failed…" with
+  `+ <main className="flex-1">` / `- <div className="px-safe">`. It is not an app
+  or Next bug: `curl localhost:3001/` returns exactly what `layout.tsx` +
+  `page.tsx` should emit, and an extension-free headless load has zero console
+  errors with shell children `["HEADER","MAIN","FOOTER"]`. React prints `+` for a
+  client fiber with no matching DOM node and `-` for leftover server DOM, so
+  `<main>` was already gone at hydration time with its child in its place — the
+  DOM was mutated before React ran, which the app cannot cause. Re-confirm in an
+  Incognito or guest window and ignore it in dev. The Bracemark **browser
+  extension** is ruled out: its dev manifest declares no `content_scripts`.
 - Sign-out now leaves the app for the marketing site's landing page
   (`NEXT_PUBLIC_SITE_URL`, so `localhost:3001` in dev) — a cross-origin
   `location.replace`, not a route change, so don't wait for a bracemark-web URL
@@ -109,8 +197,9 @@ No driver, no session, nothing to install. `adb`/`emulator` are on PATH via
 $ANDROID_HOME/emulator/emulator -avd bracemark-pixel8 -no-audio -no-boot-anim &
 adb wait-for-device                          # ~32 s cold; the only AVD, a Pixel 8
 adb exec-out screencap -p > shot.png         # capture
-adb shell uiautomator dump                   # query → /sdcard/window_dump.xml
-adb shell cat /sdcard/window_dump.xml        # the real view tree, as XML
+adb shell uiautomator dump                   # bounds only — see Gotchas, not state
+adb shell cat /sdcard/window_dump.xml \
+  | tr '>' '>\n' | grep -i '<testID or text>' # ONE node — never cat the whole tree
 adb shell input tap <x> <y>                  # drive: also text / keyevent / swipe
 ```
 
@@ -125,10 +214,41 @@ working on this machine's Xcode 26).
 xcrun simctl boot 'iPhone 17 Pro'            # `simctl list devices available`
 xcrun simctl io booted screenshot shot.png
 xcrun simctl openurl booted '<deep link>'
-maestro hierarchy                            # the a11y tree as text, no session
+maestro hierarchy | grep -i '<testID>'       # the a11y tree, no session — grep it,
+                                             # the whole tree is a screenful of JSON
 ```
 
 ### Gotchas
+
+- **`uiautomator dump` is reliable for bounds, NOT for state.** With the
+  navigation drawer or a dropdown menu open it repeatedly returns the links
+  screen underneath, so a tap that DID work reads as a no-op — the dump reflects
+  one window's a11y tree, and RN's overlay surfaces don't land in it the way a
+  screenshot shows them. Two hitSlop tests looked like failures on that evidence
+  and passed when re-checked. Assert on pixels instead: `adb exec-out screencap
+-p`, then either `magick compare -metric AE before.png after.png null:` for
+  "did anything change", or read an exact token colour with `magick shot.png
+-crop WxH+X+Y +repage -colorspace gray -format '%[fx:round(minima*255)]'
+info:` (on light, foreground is 10, muted-foreground 111, muted 245).
+- **Metro can serve a bundle that predates your edits** — it starts cleanly,
+  answers `:8081/status` with 200, and there is no error at the point of use.
+  The tell is in Metro's own log, not the app: `Watchman error: query failed:
+synchronization failed: syncToNow: timed out waiting for cookie file to be
+observed by watcher within 60000 milliseconds`, usually alongside `Recrawled
+this watch 1 time, most recently because: MustScanSubDirs`. With the watch
+  wedged Metro never learns the files changed, so its cache stays authoritative —
+  and `expo start --clear` alone does NOT fix it, because the rebuilt cache is
+  populated from the same broken watch. Fix:
+
+  ```sh
+  ROOT=$(git rev-parse --show-toplevel)
+  watchman watch-del "$ROOT" ; watchman watch-project "$ROOT"
+  cd apps/bracemark-expo && npx expo start --clear
+  ```
+
+  Confirm the new bundle is live by asserting on a pixel your change moved
+  (above) before trusting any behavioural result — a stale bundle makes a correct
+  change look broken.
 
 - **Boot ONE platform at a time.** `e2e/runner/lib.ts` passes Maestro no
   `--device`, so with both a simulator and an emulator up it picks

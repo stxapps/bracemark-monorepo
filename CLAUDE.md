@@ -123,6 +123,14 @@ test. Check the linked doc before acting on any of these.
   prettier hoists to the front of every class list they appear in — the symptom
   is `npm run fix` churning files you never touched, with no lint or type error.
   → `theme.md`, _the token shim the formatter needs_.
+- **An expo Tailwind class Uniwind can't map fails silently.** No lint error, no
+  type error — the style is simply absent, and the only place you'd see that is a
+  device, a multi-minute native build away. Check a new or unusual class in
+  seconds by running uniwind's `ProcessorBuilder` in node, and don't infer safety
+  from an existing usage without checking how it's paired (a broken `aspectRatio`
+  next to an explicit `size-4` is invisible). Related: `rem` is baked at BUILD
+  time to `value * 16`, so an expo `max-w-*` cap does NOT move with the OS font
+  scale the way its web counterpart does. → `theme.md`, _extending_.
 - **A bare `data-x:` variant on a React-set `data-*` attribute matches when it is
   false.** Tailwind compiles `data-selected:` to the presence selector
   `[data-selected]`, but React stringifies false-valued `data-*` — cmdk's
@@ -145,6 +153,16 @@ test. Check the linked doc before acting on any of these.
   `components/error-text.tsx`. The inverse is equally a bug: text that was already
   on screen, or that re-words as the user types (the password-strength verdict),
   must NOT announce. → `accessibility.md`
+- **Awaiting an async helper inside a `liveQuery` querier silently kills
+  reactivity.** Dexie's tracking zone survives exactly one await resumption, so a
+  stacked one — awaiting a helper that itself awaited — leaves every later Dexie
+  call registering no index ranges. Writes then stop re-firing the query and the
+  list sits stale until a reload, with no error at the point of use. Nothing
+  catches it, and it does **not** reproduce under fake-indexeddb, so no
+  jest/vitest run can. In any code reachable from a querier, spell helper awaits
+  `await Promise.resolve(helper())`; direct `db.*` awaits and `Promise.all` of
+  them are already safe. Expo's port is table-coarse and carries no such rule.
+  → `client-queries.md`, _the zone-echo constraint_.
 - **Greenfield — no migrations.** There is no production data. Edit persisted
   schemas in place (Dexie `version(1)`, the expo-sqlite DDL); don't add a
   migration step.

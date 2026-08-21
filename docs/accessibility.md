@@ -261,7 +261,8 @@ A control with no accessible name is announced as its type and nothing else
   confirm step of `create-account-form` is the reference case: the visible label
   for the input is the step's own title, up in the header — but **a heading is
   not a label**, so the `<label htmlFor>` stays and goes `sr-only`. It is
-  `position: absolute`, so it costs nothing in the layout. Same reasoning in
+  `position: absolute`, so it costs nothing in the layout **it sits in** — but
+  see the overflow caveat below. Same reasoning in
   `SheetTitle` (`ui/sheet.tsx`): Radix needs a Title for the dialog's accessible
   name, and when the sheet's own chrome already says what it is, the Title is
   wrapped in `sr-only` rather than dropped — _a nameless dialog is announced as
@@ -273,6 +274,19 @@ A control with no accessible name is announced as its type and nothing else
   `value` and announces "List: Reading" rather than "Reading". Dropping a word of
   chrome from a 520pt sheet is a visual decision and does not extend to dropping
   the semantics — see [share-sheet.md](./share-sheet.md).
+
+**`sr-only` is not free inside a horizontal scroller.** Tailwind's `sr-only` is
+`position: absolute` with no positioned ancestor of its own, so it resolves
+against the **initial containing block** — and inside an `overflow-x-auto`
+wrapper that drags the _document's_ `scrollWidth` out with it. The symptom is a
+phantom horizontal-overflow bug: the page reports a scrollWidth wider than the
+viewport at narrow widths, with no visible element to blame, because the culprit
+is invisible by construction. Caught in bracemark-site's pricing table (the
+`min-w-120` table at 390px, [safe-area.md](./safe-area.md)); the fix is
+`relative` on the scroll wrapper, which gives the absolute label a containing
+block to resolve against. Nothing lints this — measure narrow layouts the way
+the `verify` skill describes rather than eyeballing a screenshot, since a
+cropped render hides it.
 
 **A visible label is not automatically an accessible name.** `<label htmlFor>`
 reaches only the **labelable** elements — button, input, select, textarea, meter,

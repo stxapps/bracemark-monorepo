@@ -499,6 +499,25 @@ muted colour exactly when they land on the wash.
   sibling round-trips through the parent `looseObject`), not as a sub-key of
   `theme`. Add it to `ThemeState` + `coerceThemeState`, and to
   `LocalSettingsRecord` if it needs a device variant.
+- **A new utility class on the expo side** — check that Uniwind can actually map
+  it before you spend a native build. An unmappable class fails **silently**: no
+  lint error, no type error, and the style is simply absent on the device. You
+  can settle it in seconds in node instead.
+  `node_modules/uniwind/dist/module/bundler/css-processor/processor.js` exports
+  `ProcessorBuilder`, and `new ProcessorBuilder({}).transform(cssText)` fills
+  `.stylesheets` with the per-class RN style objects. Feed it what `npx
+@tailwindcss/cli -i apps/bracemark-expo/global.css -o out.css --content
+<probe.html>` emits; the dist ships unresolved `@/` aliases, so run it under a
+  `module.register` resolve hook mapping `@/x` → `dist/module/x{,.js,/index.js}`.
+  Two things this settles that reading the source does not: **`rem` is baked at
+  BUILD time to `value * 16`** (`--uniwind-em`, from `polyfills.rem`, which
+  `metro.config.js` does not set), so a `max-w-105` cap is a hard 420 that does
+  NOT move with the OS font scale — unlike web, where the class and its mirrored
+  JS constant can drift under a raised root font size; and ratio values survive
+  as **strings** (`aspect-12/7` → `aspect-ratio: "12/7"`), which RN accepts.
+  Don't take comfort from an existing usage without checking how it's paired —
+  `aspect-square` was already in `ui/radio-group.tsx`, but alongside `size-4`, so
+  a broken `aspectRatio` there would have been invisible.
 - **A quick toggle** (e.g. a menu button, not the settings picker) — write through
   `useSettingMutations` to the active source; don't reintroduce a writer on the
   provider. Read the preference from `useSettings()`, or the rendered light/dark
