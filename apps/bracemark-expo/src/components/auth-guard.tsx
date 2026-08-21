@@ -31,7 +31,11 @@ export function AuthGuard({ children }: { children: ReactNode }) {
   const { status, reason } = useAuth();
   const pathname = usePathname();
 
-  if (status === 'loading') return null;
+  // 'ending' rides with 'loading': a sign-out is in flight, so this group comes
+  // down NOW — before endSession's wipe empties the store under it — while the
+  // exit <Redirect> waits for the flip below. Same rule as web's AuthGuard; the
+  // reasoning lives in the provider and in docs/data-lifecycle.md.
+  if (status === 'loading' || status === 'ending') return null;
   if (status === 'unauthenticated') {
     if (reason === 'signed-out') return <Redirect href="/" />;
     return <Redirect href={`/sign-in?next=${encodeURIComponent(pathname)}`} />;

@@ -1,5 +1,6 @@
 import { profileDir } from '../paths';
 import { expect, test } from './fixtures/app';
+import { unique } from './fixtures/data';
 import { SITE_URL } from './fixtures/env';
 import { launchApp } from './fixtures/launch';
 import { addLinkButton } from './fixtures/links';
@@ -27,7 +28,7 @@ test.describe('account', () => {
   // The empty pattern is required by Playwright, which parses this signature for
   // fixture dependencies and rejects a plain identifier — see fixtures/app.ts.
   // eslint-disable-next-line no-empty-pattern
-  test('signing out leaves the app for the marketing site', async ({}, testInfo) => {
+  test('signing out from a user list leaves the app for the marketing site', async ({}, testInfo) => {
     // This one CANNOT use the shared worker fixture: signing out would strand
     // every other test in this worker on a dead session. It buys its own account
     // and its own profile, and pays a second Argon2id for the privilege.
@@ -51,7 +52,36 @@ test.describe('account', () => {
         route.fulfill({ contentType: 'text/html', body: '<title>site stub</title>' }),
       );
 
+      // Sign out from a USER LIST, not from the bare /links this spec used to use.
+      // That distinction is the whole regression: bare /links selects My List, a
+      // SYSTEM list that readLists always merges in, so it can never look deleted.
+      // A user list can — endSession's wipe takes it away, and if the app subtree
+      // is still mounted when that lands, page-provider reads the `?list=` it is on
+      // as a deleted entity and fires router.replace into AuthGuard's own exit. Two
+      // navigators in one frame crashed the render and stranded the user, signed
+      // out, on the page they were leaving. Measured, not assumed: against the
+      // original cross-origin `redirect()` this spec fails, and the same spec on
+      // bare /links passes. What it pins is that half — the `location.replace`
+      // exit — and it needs a real router plus a real IndexedDB wipe to do it.
+      // The teardown's other half (auth-provider's 'ending', which unmounts before
+      // the wipe) is deliberately NOT covered here: with location.replace in place
+      // the stray dispatch is absorbed, so nothing observable breaks without it.
+      // See docs/data-lifecycle.md, "the sign-out teardown".
+      const list = unique('E2e signout list');
+      await page.goto('/settings/lists');
+      const create = page.getByLabel('New list name');
+      await create.fill(list);
+      await create.press('Enter');
+      await expect(page.locator(`input[aria-label="List name"][value="${list}"]`)).toBeVisible();
+
       await page.goto('/links');
+      await page.getByRole('button', { name: list }).click();
+      // The selection has to be in the URL before signing out — that param IS what
+      // page-provider would misread. Asserting it makes a future sidebar change
+      // that stops writing `?list=` fail here loudly instead of quietly gutting
+      // this spec back into the bare-/links case it replaced.
+      await expect(page).toHaveURL(/[?&]list=/);
+
       // The label gains a suffix in the sync-failed / storage-full states.
       await page.getByRole('button', { name: /^More options/ }).click();
       await page.getByRole('menuitem', { name: 'Sign out' }).click();

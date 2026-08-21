@@ -67,7 +67,7 @@ self-contained and cross-links its neighbours.
 | API endpoints (contract-first, typed once in `shared`)           | `api-contracts.md`              |
 | link editors, list/tag trees, bulk edit                          | `editors.md`                    |
 | title/image/screenshot/page-copy capture, `bracemark-extractor`  | `link-extraction.md`            |
-| import/export, delete all data, delete account                   | `data-lifecycle.md`             |
+| import/export, sign-out wipe, delete all data, delete account    | `data-lifecycle.md`             |
 | subscriptions — Paddle, store IAP, the entitlement fold          | `iap.md`                        |
 | app lock + list locks                                            | `locks.md`                      |
 | **error messages, labels, roles, font scaling**                  | `accessibility.md` ⚠            |
@@ -82,6 +82,7 @@ self-contained and cross-links its neighbours.
 | seeded dev accounts — a filled library, a paid plan, locally     | `e2e.md`                        |
 | env vars, per app and per mode                                   | `env-files.md`                  |
 | which host each app answers, the CSP, `nx start` preview         | `hosting.md`                    |
+| leaving an origin — cross-origin nav vs. the Next router         | `hosting.md`                    |
 | **the public repo, the AGPL licence, what we claim about it**    | `brand-assets.md` ⚠             |
 | **the mark** — the icon shape, its two components, the icon PNGs | `brand-assets.md`               |
 | **user-facing wording** — "bookmark" vs "link", the brand lines  | `brand-assets.md`               |
@@ -164,6 +165,22 @@ test. Check the linked doc before acting on any of these.
   `await Promise.resolve(helper())`; direct `db.*` awaits and `Promise.all` of
   them are already safe. Expo's port is table-coarse and carries no such rule.
   → `client-queries.md`, _the zone-echo constraint_.
+- **Nothing under the auth gate may navigate on its own during a sign-out.**
+  `endSession` wipes the local store, so for one frame every user list and tag
+  disappears while the app still believes it is signed in — and any effect that
+  treats data _disappearing_ as a deletion misfires on it. On web that meant the
+  links page reading its own `?list=` as deleted and firing `router.replace` into
+  `AuthGuard`'s exit navigation: two navigators in one frame, a crashed render,
+  and the user stranded signed-out on the page they were leaving. The teardown now
+  flips to `'ending'` BEFORE the wipe so the subtree unmounts first, and every gate
+  treats `'ending'` exactly like `'loading'` — keep that ordering, and keep new
+  auto-navigating effects UNDER the gate. `e2e/web/account.e2e.ts` covers only the
+  visible half — it signs out from a **user** list (a system list can't look
+  deleted, and the bare-`/links` version of it passes even against the crashing
+  code), which pins the `location.replace` exit. The `'ending'` ordering itself has
+  NO test and can't have one: with `location.replace` in place the stray dispatch
+  is absorbed, so deleting the phase breaks nothing observable — until the next
+  auto-navigating effect lands. → `data-lifecycle.md`, _the sign-out teardown_.
 - **Greenfield — no migrations.** There is no production data. Edit persisted
   schemas in place (Dexie `version(1)`, the expo-sqlite DDL); don't add a
   migration step.

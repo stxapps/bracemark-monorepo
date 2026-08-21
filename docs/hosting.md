@@ -67,6 +67,42 @@ code rather than asserted in prose. It has no storage bindings at all — no D1,
 R2, no Durable Objects. See [link-extraction.md](./link-extraction.md), _server
 extraction_.
 
+### crossing an origin — `window.location`, never the router
+
+Two web origins means bracemark-web has navigations that leave it, and **which API
+performs one is not a style choice**:
+
+| destination                            | use                                                                                        |
+| -------------------------------------- | ------------------------------------------------------------------------------------------ |
+| **same origin** (`/links`, `/sign-in`) | `next/navigation` — `redirect()` in render, `router.push`/`replace` in handlers            |
+| **another origin** (the apex, legal)   | `window.location.replace` / `.assign`, from an effect or handler — **never during render** |
+
+Same-origin is where the router earns its keep: a client-side transition, no
+document reboot, no re-reading the session out of IndexedDB, and `redirect()` in a
+gate's render throws before commit so protected content never paints.
+
+Cross-origin it earns nothing and costs something real. Hand `redirect()` or
+`router.replace()` an external URL and both land in the same place —
+`navigate-reducer` sets `mpaNavigation`, which `app-router.tsx` handles by calling
+`location.replace` **and then throwing mid-render**, under a comment that reads
+_"This is a side effect in render. Don't try this at home, kids."_ It stays thrown
+only while nothing dispatches to the router; anything that does clears the flag, so
+the next render runs past the throw with more hooks than the aborted one, React
+fails with _"Rendered more hooks than during the previous render"_, and that error
+takes the pending navigation down with it. The user ends up stranded on the page
+they were trying to leave. There is nothing on the other side of the trade: no
+prefetch, no client transition, no history entry to reuse — the browser is
+leaving. All the router adds is a state machine a concurrent dispatch can disturb.
+
+This is not theoretical and it is not silent: sign-out crashed exactly this way,
+and `e2e/web/account.e2e.ts` still fails if the exit is put back through
+`redirect()`. Sign-out is the one navigation this applies to today
+(`components/auth-guard.tsx` — see [data-lifecycle.md](./data-lifecycle.md), _the
+sign-out teardown_, for the other half of that defence); Settings → About and the
+legal pages are ordinary `<a>` links, which is the third correct answer whenever
+the user is the one choosing to leave. Note the PWA-scope caveat above: an
+installed sign-out stays on this origin rather than leaving for the apex at all.
+
 ### why staging is a separate registrable domain
 
 Staging lives on `dryrunbase.com` rather than anywhere under `bracemark.com`.

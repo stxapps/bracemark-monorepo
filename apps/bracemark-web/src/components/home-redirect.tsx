@@ -20,6 +20,9 @@ import { useAuth } from '@stxapps/web-react';
 export function HomeRedirect() {
   const { status } = useAuth();
 
-  if (status === 'loading') return null;
+  // 'ending' rides with 'loading' (same rule as the two guards): a sign-out in
+  // flight is not a state to route from — AuthGuard owns the exit — and routing on
+  // it would send the user to /sign-in a beat before the real destination is known.
+  if (status === 'loading' || status === 'ending') return null;
   redirect(status === 'authenticated' ? '/links' : '/sign-in');
 }

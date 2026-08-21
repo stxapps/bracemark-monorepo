@@ -28,7 +28,13 @@ import {
 // session store (read where needed via getToken/getSession), keeping key material
 // out of the component tree.
 
-type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated';
+// 'ending' is the TEARDOWN frame: endSession has started but the wipe hasn't
+// finished. It exists so the gates can close the app subtree BEFORE the local
+// store empties — see endSession for the race that costs. Treat it exactly like
+// 'loading' at every gate (render nothing, decide nothing); it is deliberately
+// NOT 'unauthenticated', because that is the state that triggers the exit
+// navigation, and that must wait until the wipe has actually run.
+type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated' | 'ending';
 // Why we left 'authenticated'. Lets AuthGuard pick the right destination: a
 // deliberate 'signed-out' leaves the app for the marketing site's landing page,
 // while 'expired' (or a direct visit, reason null) goes to /sign-in?next= so the
@@ -114,6 +120,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const endSession = useCallback(
     async (reason: EndReason = 'signed-out') => {
+      // CLOSE THE GATE FIRST — before a single byte is wiped. Without this there is
+      // a live frame where the store is empty but status is still 'authenticated',
+      // so the whole signed-in subtree stays mounted and its liveQueries re-fire
+      // against a wiped database. Every user list and tag vanishes while the app
+      // believes it's signed in, and anything that reacts to data DISAPPEARING
+      // misfires on what looks like a mass delete. bracemark-web's links page did
+      // exactly that: page-provider read the `?list=`/`?tag=` it was on as a deleted
+      // entity (isStaleSelection) and dispatched router.replace on its way out,
+      // racing AuthGuard's own exit navigation — two navigators in one frame, which
+      // is what crashed sign-out from any user-list or user-tag view. Setting
+      // 'ending' unmounts those observers first, so by the time the wipe lands there
+      // is nobody left to observe it. It also keeps the 'expired' path honest: no
+      // one can rewrite the URL underneath AuthGuard before it captures `?next=`.
+      //
+      // It is NOT enough to flip straight to 'unauthenticated' here: that starts the
+      // exit navigation immediately, and a cross-origin location.replace mid-wipe
+      // could tear the document down with DECRYPTED bookmarks still in IndexedDB.
+      // 'ending' buys the unmount without buying the navigation — the real flip
+      // still happens below, after the wipe has run.
+      setStatus('ending');
+
       // Drop the session AND the synced local data together. The local store holds
       // DECRYPTED bookmarks, so leaving them behind would let the next user on this
       // device read the previous user's plaintext. One active session per device

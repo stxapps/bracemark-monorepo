@@ -336,6 +336,16 @@ function InnerLinksPageProvider({ children }: { children: React.ReactNode }) {
   // The deleted-entity fallback (isStaleSelection). `replace`, not `push`: the
   // view being left is gone, so it must not become a back-button destination —
   // stepping back into it would only bounce forward again.
+  //
+  // This is an AUTOMATIC navigation — nobody asked for it — which makes it the one
+  // thing here that has to be safe during a sign-out, when every list and tag
+  // disappears at once and this reads as a mass delete. It is, but not by anything
+  // in this file: auth-provider's endSession flips to 'ending' BEFORE it wipes, so
+  // AuthGuard has unmounted this provider by then and the effect never runs against
+  // a wiped store (see auth-guard.tsx's header — two navigators in one frame is
+  // what used to crash sign-out from a user-list view). If you add another effect
+  // that navigates on its own, it inherits that protection; if you move this one
+  // above AuthGuard, it loses it.
   const lists = useLists();
   const tags = useTags();
   const stale = isStaleSelection(selection, lists, tags);

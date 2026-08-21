@@ -164,7 +164,10 @@ profile, not a state blob.** Hence:
   runners share so their `.invalid` URLs have the same shape a spec's do), never
   assert on a global count,
   and never sign out — `account.e2e.ts`'s sign-out test buys its own isolated app
-  via `launchApp` for exactly that reason.
+  via `launchApp` for exactly that reason. That spec creates a list and signs out
+  from **it**, not from bare `/links`: the teardown race it guards only reproduces
+  on a user list, since the default selection is a system list that can never look
+  deleted ([data-lifecycle.md](./data-lifecycle.md), _the sign-out teardown_).
 
 Do **not** speed setup up by weakening `ARGON2_PARAMS`. They are a frozen
 cross-platform contract, and a run that derived with different numbers would stop

@@ -30,7 +30,10 @@ import { SITE_URL } from '@/lib/site';
 // session with the same default reason.
 //
 // That one leaves by `location.replace` in an EFFECT, not by `redirect()`, and the
-// difference is load-bearing. Handed a cross-origin href, redirect() routes through
+// difference is load-bearing. It is also the general rule for this app, written up
+// once in hosting.md (_crossing an origin_) — same-origin goes through
+// next/navigation, another origin goes through window.location, and this file is
+// just its one live case. Handed a cross-origin href, redirect() routes through
 // Next's MPA path, which is a side effect in render: `Router` calls location.replace
 // and then THROWS mid-render, skipping every hook below the throw (app-router.tsx,
 // "Don't try this at home, kids"). It stays thrown only while nothing dispatches to
@@ -40,14 +43,20 @@ import { SITE_URL } from '@/lib/site';
 // pending navigation down with it, leaving the user signed out on the page they were
 // trying to leave.
 //
-// Sign-out dispatches exactly such a navigation. endSession wipes the local store
-// (clearData) BEFORE it flips auth, so the links page sees every user list and tag
-// disappear while still authenticated, reads the `?list=`/`?tag=` it is on as a
-// deleted entity, and replaces the URL on its way out (page-provider's
-// isStaleSelection). Any user-list or user-tag view therefore crashed on sign-out —
-// including the locked-list pane, whose own "sign out" is the documented way past a
-// forgotten lock password (lock-pane.tsx). Doing the navigation ourselves keeps
-// Router out of that branch entirely, so a late dispatch is just a dispatch.
+// Sign-out used to dispatch exactly such a navigation, and this is the ONE gate that
+// has to know why it no longer does. The teardown now runs in two steps
+// (auth-provider's endSession): 'ending' first, which closes this gate and unmounts
+// the whole app subtree, and only then the wipe and the flip to 'unauthenticated'.
+// So by the time we leave, no descendant is mounted to route: whatever the links page
+// would have made of a wiped store — reading the `?list=`/`?tag=` it is on as a
+// deleted entity and replacing the URL on its way out (page-provider's
+// isStaleSelection) — never happens, because it isn't there to see it. That is what
+// makes THIS component the sole navigator during a sign-out, and it's an invariant of
+// the teardown, not of this file: any future effect under here that navigates on its
+// own would be safe for the same reason, and unsafe again the moment the gate stops
+// closing first. Doing our own navigation is the second half of the same defence —
+// it keeps Router out of the MPA branch entirely, so even a stray late dispatch is
+// just a dispatch. Keep both; each is cheap and they fail independently.
 //
 // The cost is one null frame before the browser leaves, which is why this is the
 // exception and not the rule: it's a page we're abandoning, so there is nothing to
@@ -107,7 +116,10 @@ function InnerAuthGuard({ children }: { children: ReactNode }) {
     if (leaving) window.location.replace(SITE_URL);
   }, [leaving]);
 
-  if (status === 'loading') return null;
+  // 'ending' rides with 'loading' on purpose (see the header): a sign-out is in
+  // flight, so the subtree comes down NOW — before endSession's wipe empties the
+  // store under it — while the exit navigation waits for the flip below.
+  if (status === 'loading' || status === 'ending') return null;
   if (status === 'unauthenticated') {
     // Installed: stay on this origin (the scope trap in the header). In a browser
     // tab the effect above is already taking us to the apex — render nothing until

@@ -355,6 +355,90 @@ goes through `resizeImage`. The whole export is one JSON string parsed at once �
 the same in-memory ceiling the bracemark backup has on mobile, failing loudly
 rather than guarded, so a very large library wants the desktop app.
 
+### the sign-out teardown — close the gate, then wipe
+
+Every local wipe in this document funnels through one client primitive:
+`endSession` in each platform's `contexts/auth-provider.tsx`, which runs
+`clearData` (plus `clearSession` and, on web, `queryClient.clear()`) and then
+flips auth state. Deliberate sign-out, an invalidated session, and the last step
+of delete-account all end here.
+
+The order inside it is load-bearing, and it is **three** steps, not two:
+
+| step |                                                     | why it can't move                                                                     |
+| ---- | --------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| 1    | `setStatus('ending')`                               | closes the auth gate — the app subtree unmounts **before** the store empties under it |
+| 2    | `clearSession` + `clearData`, `queryClient.clear()` | the actual wipe, with nothing mounted to observe it                                   |
+| 3    | `setStatus('unauthenticated')`                      | releases the exit navigation, now that the wipe has finished                          |
+
+Step 1 is the one that isn't obvious. Without it there is a live frame where the
+store is already empty but status is still `authenticated`: the signed-in subtree
+stays mounted, every liveQuery re-fires against a wiped database, and **every user
+list and tag disappears at once while the app believes it is signed in**. Anything
+that reacts to data _disappearing_ then misfires on what looks like a mass delete.
+
+bracemark-web hit this in its sharpest form. The links page keeps its selection in
+the URL, so on `/links?list=<id>` the wipe made page-provider's `isStaleSelection`
+read a live view as a deleted one, and it did what it does for a genuinely deleted
+list: `router.replace('/links')` — straight into `AuthGuard`'s own exit navigation,
+one frame apart. Two navigators, and the render crashed hard enough to take the
+pending navigation with it, leaving the user signed out on the page they were
+trying to leave. Any user-list or user-tag view was affected, including the
+locked-list pane, whose "sign out" is the documented way past a forgotten lock
+password ([locks.md](./locks.md)).
+
+Note what step 1 is **not**: flipping straight to `unauthenticated`. That would
+also unmount the subtree, but it starts the exit navigation immediately, and on web
+that is a cross-origin `location.replace` — a document teardown racing a wipe that
+still has decrypted bookmarks in IndexedDB. `'ending'` buys the unmount without the
+navigation. (The mount-time guard in `AuthProvider` re-runs the wipe on the next
+load precisely because an interrupted one is possible; don't spend that budget
+here.)
+
+The invariant this leaves behind, and the reason it lives in the state machine
+rather than in the component that misfired:
+
+> **While a sign-out is in flight, only the auth gate navigates.** Every gate
+> (`AuthGuard`, `GuestGuard`, `HomeRedirect`) treats `'ending'` exactly like
+> `'loading'` — render nothing, decide nothing. Nothing else is mounted to route,
+> so an automatic navigation anywhere under the gate is safe by construction,
+> not by discipline.
+
+The second, independent defence sits in `AuthGuard` itself: the cross-origin exit
+leaves by `window.location.replace` in an effect rather than `redirect()`, keeping
+Next's router out of its MPA branch entirely — see that file's header for the
+failure mode, and [hosting.md](./hosting.md) for why sign-out is the one navigation
+that leaves this origin. Keep both; they're cheap and they fail independently.
+
+Coverage, stated exactly, because the two halves are not equally testable:
+
+- `e2e/web/account.e2e.ts` signs out from a **user list**, and that shape is
+  load-bearing — measured, not assumed. Against the original `redirect(SITE_URL)`
+  the spec fails; the same spec on bare `/links` **passes**, because that selection
+  is My List, a system list `readLists` always merges in, so it can never look
+  deleted. So the spec pins the `location.replace` half, and it needs a real router
+  plus a real IndexedDB wipe to do it — no jest/vitest layer can stand in
+  ([e2e.md](./e2e.md)).
+- The step-1 ordering has **no test, and can't have one today**. With
+  `location.replace` in place the stray `router.replace` is absorbed — that is the
+  whole point of keeping both defences — so removing `'ending'` breaks nothing
+  observable _right now_. It is prevention against the class: the next automatic
+  navigation added under the gate, or a future exit that goes back through the
+  router, turns an unobservable ordering into a crash again. That is why this is a
+  tripwire in `CLAUDE.md` rather than an assertion somewhere.
+
+**Both platforms run the same three steps**, and the `'ending'` phase means the
+same thing in each (`packages/{web,expo}-react/src/contexts/auth-provider.tsx`).
+What it _buys_ differs, and it's worth being honest about that: on web it prevents
+a crash, because the links page keeps its selection in the URL and therefore has an
+automatic navigation to misfire. Expo keeps its selection in React state, so it has
+no such effect and nothing there crashes — the phase buys the frame itself, where
+the list would otherwise empty on screen a beat before the group unmounts. It is
+still worth mirroring: the rule belongs to the state machine, and the platform that
+drops it re-opens the frame for whatever it adds next. Expo's guards
+(`AuthGuard`, `GuestGuard`) test `'ending'` explicitly; `AuthedHomeRedirect` acts on
+`'authenticated'` alone, which is the same safety by a different route.
+
 ### delete all data — one server-side wipe, not a client delete loop
 
 `POST /v1/data/delete-all` (contract in `@stxapps/shared` `data/endpoints.ts`,
@@ -483,7 +567,10 @@ what it always was — a server-side inconsistency to log and answer opaquely.
 **The deleting client** (`web-react` `hooks/use-delete-account.ts` +
 bracemark-web's Account section): door fetch → `unlockAccount` (the wrong-password
 check is the GCM tag, exactly as at sign-in) → sign → POST → `endSession()`,
-which runs the full `clearData` wipe and drops the local session; AuthGuard
+which runs the full `clearData` wipe and drops the local session (in the
+three-step order [above](#the-sign-out-teardown--close-the-gate-then-wipe) — the
+gate closes before the wipe, so nothing is mounted to watch the data vanish);
+AuthGuard
 sends the user out to the marketing site's landing page (the same destination as
 a deliberate sign-out — there is no signed-out page on `app.bracemark.com` worth
 landing on; from an installed PWA it stays on `/sign-in` instead, see

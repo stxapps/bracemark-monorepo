@@ -27,7 +27,15 @@ import {
 // session store (read where needed via getToken/getSession), keeping key material
 // out of the component tree.
 
-type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated';
+// 'ending' is the TEARDOWN frame: endSession has started but the wipe hasn't
+// finished. It exists so the gates can close the app group BEFORE the local store
+// empties under it — see endSession. Treat it exactly like 'loading' at every gate
+// (render nothing, decide nothing); it is deliberately NOT 'unauthenticated',
+// which is the state that fires the exit <Redirect>. Same four states as
+// web-react's provider, and the pair must stay in step: the ordering rule is the
+// state machine's, so a platform that quietly drops the phase re-opens the frame
+// for whatever it adds next.
+type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated' | 'ending';
 // Why we left 'authenticated'. Lets the AuthGuard pick the right destination: a
 // deliberate 'signed-out' goes home to '/', while 'expired' (or a direct visit,
 // reason null) goes to /sign-in?next= so the user can resume where they were.
@@ -112,6 +120,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const endSession = useCallback(
     async (reason: EndReason = 'signed-out') => {
+      // CLOSE THE GATE FIRST — before a single byte is wiped. Without this there is
+      // a live frame where the store is empty but status is still 'authenticated',
+      // so the whole signed-in group stays mounted and its queries re-read a wiped
+      // database: every user list and tag vanishes while the app believes it is
+      // signed in, and anything that reacts to data DISAPPEARING misfires on what
+      // looks like a mass delete. Nothing here does that TODAY — this client keeps
+      // its selection in React state, not a URL, so it has no automatic navigation
+      // to misfire (web's links page did, and it crashed sign-out; see
+      // docs/data-lifecycle.md, "the sign-out teardown"). What it does buy on this
+      // platform is the frame itself: the list would otherwise empty on screen a
+      // beat before the app group comes down. Keep it in step with web-react —
+      // an unobservable ordering here is the same rule, one auto-navigating effect
+      // away from mattering.
+      //
+      // It is NOT enough to flip straight to 'unauthenticated': that fires the exit
+      // <Redirect> immediately, racing a wipe that still has decrypted bookmarks in
+      // sqlite and plaintext blobs on disk — and this process OUTLIVES a sign-out,
+      // so there is no reload to clean up behind it (unlike web, where the exit
+      // navigation at least ends the document). 'ending' buys the unmount without
+      // buying the navigation; the real flip still happens below, after the wipe.
+      setStatus('ending');
+
       // Drop the session AND the synced local data together. The local store holds
       // DECRYPTED bookmarks (plus on-disk plaintext blobs), so leaving them behind
       // would let the next user on this device read the previous user's plaintext.

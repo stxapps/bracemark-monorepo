@@ -33,7 +33,11 @@ export function GuestGuard({ children }: { children: ReactNode }) {
   const params = useLocalSearchParams<{ next?: string }>();
   const next = typeof params.next === 'string' ? params.next : null;
 
-  if (status === 'loading') return null;
+  // 'ending' rides with 'loading' (same rule as AuthGuard): a teardown frame is
+  // not a state to route from, and during a sign-out the AuthGuard owns the exit.
+  // Not reachable from these guest-only routes today — you can't sign out from
+  // /sign-in — but the rule belongs to the state machine, not the call site.
+  if (status === 'loading' || status === 'ending') return null;
   if (status === 'authenticated') return <Redirect href={safeNext(next)} />;
 
   return children;

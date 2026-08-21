@@ -34,7 +34,12 @@ function InnerGuestGuard({ children }: { children: ReactNode }) {
   const { status } = useAuth();
   const next = useSearchParams().get('next');
 
-  if (status === 'loading') return null;
+  // 'ending' rides with 'loading' for the reason AuthGuard's header gives: a
+  // teardown frame is not a state to route from, and during a sign-out AuthGuard is
+  // the only component allowed to navigate. Not reachable from these guest-only
+  // routes today (you can't sign out from /sign-in), but the rule is the state
+  // machine's, not the call site's — every gate honours it the same way.
+  if (status === 'loading' || status === 'ending') return null;
   if (status === 'authenticated') redirect(safeNext(next));
 
   return children;

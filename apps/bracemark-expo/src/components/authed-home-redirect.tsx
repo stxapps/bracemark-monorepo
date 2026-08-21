@@ -11,6 +11,13 @@ import { useAuth } from '@stxapps/expo-react';
 // A native app has no apex to send anyone to — its landing screen has to live in the
 // binary — so `src/app/index.tsx` keeps rendering a real hero and this stays.
 //
+// It acts on 'authenticated' ALONE, which is also what makes it safe during a
+// sign-out with no clause of its own: the other three states — including 'ending',
+// the teardown frame the two guards test for explicitly — all fall through to null.
+// Keep it that way. Rewriting this as "if not authenticated, redirect somewhere"
+// would route from a teardown frame, which is the one thing nothing under the auth
+// gate may do (docs/data-lifecycle.md, "the sign-out teardown").
+//
 // Renders null in loading / unauthenticated, so the landing hero shows for guests
 // with no flash; it only acts once AuthProvider has hydrated to 'authenticated'.
 // No ?next= here: the root is never a return target, so /links is the only
