@@ -181,6 +181,38 @@ query kind**:
   paginated) followed by the page of the rest, with pins excluded from the rest
   so nothing double-shows.
 
+**A view change resets the page — so it must also reset the scroll.** `useLinks`
+drops `limit` back to `PAGE_SIZE` whenever the `query` reference changes (a new
+query is a fresh page, not an inherited "show more" depth), corrected during
+render so the read never runs once at the stale larger limit. The pane's scroll
+container is a **different** owner, and it stays mounted across the change: the
+sidebar pick, the committed search, the sort change and the back button all leave
+its offset exactly where the previous view put it. Combine the two and the new view
+is at most one page tall under an offset that may have come from a far deeper one:
+past the new content height the platform clamps it, so you land at the **bottom**
+of a view you never scrolled, which immediately satisfies the infinite-scroll
+trigger and pages it further. So the layouts reset
+the offset on the same signal: `useScrollTopOnQuery`
+(`_layouts/shared/hooks.ts`), called by both web layouts because each owns its own
+scroller, and one effect in expo's `main.tsx`, where FlashList's native grid means
+one list ref serves both layouts.
+
+Both key on the **`query` identity**, never on `selection`: selection is the lossy
+single-axis projection (see [search.md](./search.md)), so it holds still across two
+different searches and doesn't move at all for a sort change, which reorders every
+row and makes the offset just as meaningless. That reference is stable per view —
+page-provider memoizes it off the URL — which is what lets `limit`, the scroll
+reset, and view-state-provider's bulk-edit exit all fire off the same comparison.
+The reset runs a tick before the new page is promoted, so the frame it shows is the
+top of the _old_ list; the alternative is the old list sitting at its old offset
+until the read lands.
+
+Per-history-entry scroll **restore** (Back returns you to where you were) is
+deliberately not built: it is unreachable while a view change resets `limit`, since
+a view you had paged 400 rows deep re-reads only 50 and there is nothing to restore
+to. It would need the page depth persisted per history entry as well — see
+[alternatives deliberately not built](#alternatives-deliberately-not-built-yet).
+
 **Why a growing count and not a cursor.** A forward cursor that fetches each page
 once and never re-reads it would be cheaper — but it's incompatible with this UI,
 not merely unattractive. `useLiveQuery` runs `readLinks` as a **pure function of

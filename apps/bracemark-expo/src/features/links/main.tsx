@@ -246,6 +246,33 @@ function UnlockedMain() {
     return () => setScrolled(false);
   }, [setScrolled]);
 
+  // ...and put the list back at the top whenever the VIEW changes. This pane
+  // stays mounted across a drawer pick, a committed search or a sort change, so
+  // without this the FlashList keeps the offset the previous view left. And
+  // since `useLinks` resets `limit` to PAGE_SIZE on the same change, the new view
+  // is at most one page tall against an offset that may have come from a far
+  // deeper one: past the new content height it clamps, landing the user at the
+  // BOTTOM of a list they never scrolled, where onEndReached pages it further.
+  //
+  // Keyed on the `query` IDENTITY (page-provider memoizes it per view), not on
+  // `selection` — the lossy single-axis projection holds still across two
+  // different searches and doesn't move for a sort change, which reorders every
+  // row. The same trigger use-links resets `limit` on. Web spells this as a
+  // shared hook because it has one scroller PER LAYOUT (_layouts/shared/hooks.ts,
+  // the canonical note); FlashList makes the grid native, so this pane has one
+  // list ref for both layouts and the effect belongs here.
+  //
+  // `setScrolled(false)` rides along for the same reason the mount effect above
+  // resets it. While the view is empty the FlashList is unmounted behind
+  // EmptyState, so the ref is null and the call no-ops — it re-mounts at 0.
+  const prevQueryRef = useRef(query);
+  useEffect(() => {
+    if (prevQueryRef.current === query) return;
+    prevQueryRef.current = query;
+    listRef.current?.scrollToOffset({ offset: 0, animated: false });
+    setScrolled(false);
+  }, [query, setScrolled]);
+
   const applyAndScrollTop = () => {
     applyPending();
     listRef.current?.scrollToOffset({ offset: 0 });

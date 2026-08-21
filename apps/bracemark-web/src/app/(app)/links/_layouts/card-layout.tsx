@@ -72,6 +72,7 @@ import {
   RefreshPill,
   ShowMore,
   useReportDisplayedLinkPaths,
+  useScrollTopOnQuery,
   useTagMap,
 } from './shared';
 
@@ -149,6 +150,11 @@ export function CardLayout({
     setScrolled(false);
     return () => setScrolled(false);
   }, [setScrolled]);
+
+  // ...and back to the top whenever the VIEW changes — this component stays
+  // mounted across a sidebar pick, a committed search or a sort change, so
+  // nothing else would (see the hook for why the offset can't just be left).
+  useScrollTopOnQuery(() => scrollEl);
 
   const applyAndScrollTop = () => {
     applyPending();
