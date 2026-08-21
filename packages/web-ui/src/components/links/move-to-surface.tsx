@@ -145,7 +145,24 @@ export function MoveToSurface({
         {/* `pt-5` levels the title with the close button: that button is `top-3`
             at size-8, so its centre is at 28px, and the title is a 16px
             `leading-none` box — the same derivation the quick-add sheet spells
-            out. */}
+            out.
+
+            `pb-4` is the WHOLE gap down to the body — SheetContent sets no gap
+            between its children and the scroll container below has no top padding
+            — and it is 4 where the quick-add sheet's is 6 because the two headers
+            sit above different kinds of thing. There the first element is a dense
+            Label, `text-xs leading-none`, whose box IS its ink, so 24px of padding
+            is 24px of gap. Here it's a CommandItem: `py-2` around a 20px line, so
+            its text starts 8px inside its own box, and 16 + 8 lands the first row's
+            ink at that same 24px. Matching the NUMBER would put it at 32 and make
+            the two bottom sheets differ on screen while agreeing in the class list
+            — the reverse of the shape they're meant to share. Past
+            SEARCH_THRESHOLD the first element is the filter input instead, whose
+            wrapper is `p-1`: 20px to a border box, which is where a field reads
+            from, so that case wants the smaller value too. The wide branch is
+            airier by those 8px, but DialogContent's `gap-6` is a blanket default
+            every dialog in the app inherits, not a value derived for a list of
+            rows. */}
         <SheetHeader className="px-4 pt-5 pb-4">
           <SheetTitle className="truncate">{title}</SheetTitle>
         </SheetHeader>
