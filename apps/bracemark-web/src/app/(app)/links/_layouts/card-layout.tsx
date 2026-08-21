@@ -104,7 +104,8 @@ const PREVIEW_ASPECT = 7 / 12;
 // wraps to its second line — so the error cancels across a long list instead of
 // accumulating in one direction:
 //
-//   meta line 32 (the ⋯ trigger's size-8 sets it) + gap-2 8 + title 24 or 48
+//   meta line 32 (the ⋯ trigger's size-8 sets it, and while selecting the spacer
+//                 that stands in for it) + gap-2 8 + title 24 or 48
 //   + p-3 24 + the row's pb-4 16                      → 104 … 128
 //   + one chip line 24 + the strip's pb-3 12          → 140 … 164
 const ESTIMATE_BARE = 116;
@@ -273,10 +274,60 @@ export function CardLayout({
                   return (
                     <div
                       key={link.path}
+                      // The card needs no `cursor-pointer` — the title anchor's
+                      // overlay spans it, so the pointer is already everywhere the
+                      // click is (list-layout has to spell it out; see there).
+                      // `select-none` it does need, for the same reason: shift-click
+                      // extends the browser's text selection from the last click, so
+                      // range-selecting cards would drag highlight across their
+                      // titles.
                       className={`relative mx-auto flex w-full max-w-105 flex-col overflow-hidden rounded-lg border border-border ${
-                        selected ? 'bg-muted' : 'hover:bg-muted/50'
-                      }`}
+                        selected ? 'bg-muted ring-1 ring-muted-foreground' : 'hover:bg-muted/50'
+                      } ${bulkEditing ? 'select-none' : ''}`}
                     >
+                      {/* The selection checkbox floats over the banner's
+                          top-leading corner rather than sitting in the meta
+                          line's trailing slot — link-row-widgets.tsx carries the
+                          why. `z-10` lifts it clear of the title anchor's
+                          full-card overlay exactly as the meta line's islands do,
+                          even though it PRECEDES the anchor in the DOM: a
+                          positioned element with a z-index paints above the
+                          z-auto ones whatever the order. First child, so it is
+                          also the card's first tab stop, as it is in the list.
+
+                          The wrapper is a bare positioner that shrink-wraps the
+                          16px control — no size-8 box. It doesn't need to be one:
+                          the checkbox carries its own invisible hit expansion
+                          (`after:-inset-x-3 after:-inset-y-2` in ui/checkbox.tsx),
+                          so the target is already ~40x32 whatever the visible box
+                          says. What the wrapper DOES carry is `bg-background`,
+                          because an unchecked checkbox is a 1px `border-input`
+                          outline over a transparent middle — invisible against a
+                          light photo. Opaque, at the checkbox's own 6px radius,
+                          it reads as the control itself rather than as a plate
+                          behind it; `shadow-sm` seats it on the image. Checked,
+                          `bg-primary` covers the backing entirely.
+
+                          `size-6`, where the list keeps the component's `size-4`.
+                          A dense row reads at text-sm and a 16px box is a peer of
+                          its type; a card's corner is a target floating over a
+                          photograph with nothing beside it to set its scale, and
+                          16px there is a speck. It also fixes the shape: the
+                          component's radius is a flat `rounded-[6px]`, which at
+                          16px is 37% of the side — filled with `bg-primary` on
+                          check, that much curve reads as a DISC rather than as a
+                          checkbox. The same 6px against 24 is 25%, an
+                          unmistakable rounded square. The wrapper mirrors the
+                          radius either way, so the backing can't show at the
+                          corners. */}
+                      {bulkEditing && (
+                        <LinkRowSelect
+                          link={link}
+                          links={links}
+                          className="absolute top-2 left-2 z-10 flex rounded-[6px] bg-background shadow-sm"
+                          checkboxClassName="size-6"
+                        />
+                      )}
                       <LinkPreviewImage
                         link={link}
                         className="aspect-12/7 w-full shrink-0"
@@ -302,8 +353,8 @@ export function CardLayout({
                           {/* Both islands below are `relative z-10`, which is what
                               lifts them clear of the title anchor's full-card
                               overlay (see it below): the badges so the note's
-                              `title` tooltip is reachable at all, the ⋯ / checkbox
-                              so its click lands on the button and not on the link.
+                              `title` tooltip is reachable at all, the ⋯ menu so its
+                              click lands on the button and not on the link.
                               Everything else on this line stays UNDER the overlay,
                               so a click on the host opens the link like the rest of
                               the card does. */}
@@ -313,18 +364,37 @@ export function CardLayout({
                               {link.note && <NoteBadge note={link.note} />}
                             </span>
                           )}
-                          <span className="relative z-10 ml-auto flex shrink-0">
-                            {bulkEditing ? (
-                              <LinkRowSelect link={link} links={links} />
-                            ) : (
+                          {/* While selecting, the slot holds a SPACER, not the
+                              menu and not the checkbox. The menu can't stay: an
+                              action that isn't offered in this mode shouldn't be
+                              painted, and a disabled one would both announce as
+                              "dimmed button" and swallow the click that should be
+                              selecting the card (a disabled control dispatches
+                              none, so nothing reaches the overlay) — the dead
+                              region we removed, back in the one place a card is
+                              busiest. Dropping the slot outright isn't free
+                              either: this line's height IS the size-8 trigger
+                              (see the estimates above), and the host would take
+                              the freed width and push the badges up to 40px
+                              right. So the space is reserved and nothing is put
+                              in it — no height change, no reflow, nothing moves
+                              on the line, and the card measures the same in both
+                              modes so the virtualizer never re-measures on a mode
+                              toggle. `aria-hidden` and no `z-10`: it is a gap, so
+                              it must stay UNDER the overlay and a click there
+                              selects the card like any other empty part of it. */}
+                          {bulkEditing ? (
+                            <span aria-hidden className="ml-auto size-8 shrink-0" />
+                          ) : (
+                            <span className="relative z-10 ml-auto flex shrink-0">
                               <LinkRowMenu
                                 link={link}
                                 pinned={pinned}
                                 isFirst={index === 0}
                                 isLast={index === pinnedCount - 1}
                               />
-                            )}
-                          </span>
+                            </span>
+                          )}
                         </div>
                         {/* One anchor for the whole card: `after:inset-0` stretches
                             an invisible overlay across the card (the card is the
@@ -352,8 +422,19 @@ export function CardLayout({
                           title={title}
                           className="block after:absolute after:inset-0"
                           // In bulk-edit mode the card's click toggles selection
-                          // instead of opening the link (middle/cmd-click still
-                          // opens); shift-click extends a range over `links`.
+                          // instead of opening the link; shift-click extends a
+                          // range over `links`. The overlay is what makes that the
+                          // WHOLE card, so the mode's one gesture has no dead
+                          // region to miss — list-layout carries the same rule on
+                          // its row element, having no overlay to hang it on. The
+                          // islands above stop their own clicks, and the chips
+                          // below go inert and click through to here.
+                          //
+                          // Middle-click still opens the link — that is `auxclick`,
+                          // which never reaches an onClick handler. Cmd/ctrl-click
+                          // does NOT: it arrives as an ordinary click, and the
+                          // unconditional preventDefault cancels the new-tab
+                          // navigation, so it toggles like a plain click.
                           onClick={
                             bulkEditing
                               ? (e) => {
@@ -369,7 +450,11 @@ export function CardLayout({
                       </div>
                       {/* The chips are buttons, so they sit outside the anchor as
                           the card's bottom block — and above its overlay, or they
-                          would be unclickable. One line, LinkTagChips' default. */}
+                          would be unclickable. One line, LinkTagChips' default. In
+                          bulk-edit mode the strip turns inert and pointer-
+                          transparent, so this rectangle stops being a hole in the
+                          card's selection target and a click here reaches the
+                          overlay like the rest of the card. */}
                       <LinkTagChips
                         link={link}
                         tagsById={tagsById}

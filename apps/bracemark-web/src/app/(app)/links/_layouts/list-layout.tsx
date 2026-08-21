@@ -222,14 +222,34 @@ export function ListLayout({
             const title = link.title || displayUrl(link.url);
             const selected = bulkEditing && selectedLinks.has(link.path);
             // In bulk-edit mode a click toggles selection instead of opening the
-            // link (middle/cmd-click still opens); shift-click extends a range
-            // over `links` (the displayed order). Shared by both row anchors.
+            // link; shift-click extends a range over `links` (the displayed
+            // order). The ROW owns that click rather than the two anchors below,
+            // because everything that is neither of them is row surface too — the
+            // `py-3.5` gutters, the `gap-3` columns, the space under the thumbnail
+            // on a two-line row, the tag strip and the gaps between its pills, the
+            // date column, the `pr-2` the ⋯ menu vacates. Hung on the anchors, the
+            // mode's one gesture missed on all of it; hung here there is no dead
+            // pixel left to miss. card-layout reaches the same rule through its
+            // title anchor's full-card overlay (it has one; a dense row doesn't),
+            // and bracemark-expo's row is literally one Pressable.
+            //
+            // What that costs is one rule for everything interactive inside the
+            // row: it must not toggle a second time on the way up. LinkRowSelect
+            // stops its click, LinkTagChips goes inert and clicks through, and the
+            // anchors here only cancel their own navigation.
+            //
+            // Middle-click still opens the link — that is `auxclick`, which never
+            // reaches an onClick handler. Cmd/ctrl-click does NOT: it arrives as an
+            // ordinary click, and the unconditional preventDefault on the anchors
+            // cancels the new-tab navigation, so it toggles like a plain click.
             const onRowClick = bulkEditing
               ? (e: React.MouseEvent) => {
-                  e.preventDefault();
                   if (e.shiftKey) selectRange(link, links);
                   else toggleSelected(link);
                 }
+              : undefined;
+            const onAnchorClick = bulkEditing
+              ? (e: React.MouseEvent) => e.preventDefault()
               : undefined;
             return (
               <div
@@ -243,10 +263,34 @@ export function ListLayout({
                 // fixed height — explicit, it holds on every row.
                 ref={virtualizer.measureElement}
                 data-index={row.index}
+                // `cursor-pointer` because the row is clickable in this mode and
+                // nothing else says so: styles.css opts every enabled button and
+                // [role=button] into the pointer, and a div with an onClick is
+                // neither, so the pointer appeared only over the anchors and the
+                // checkbox — the parts that were ALREADY clickable before this
+                // mode existed. The rest of the row toggled while looking inert,
+                // which is the same lie the dead zones told, one layer up.
+                // card-layout gets it free: its whole surface is an <a>'s overlay.
+                //
+                // The row does NOT take `role="checkbox"` to earn the cursor
+                // through that rule. LinkRowSelect is already a real checkbox
+                // inside this row, so a role here would put two checkboxes in the
+                // AT tree for one selection. (bracemark-expo's row CAN declare the
+                // role — Pressable is `accessible`, so it collapses its inner
+                // checkbox into itself instead of doubling it. link-row.tsx.) The
+                // row's click stays a pointer-only enhancement; the checkbox is
+                // the keyboard and screen-reader path, as it was.
+                //
+                // `select-none` because the mode's own gesture produces the mess:
+                // shift-click extends the browser's text selection from the last
+                // click, so range-selecting rows paints highlight across every
+                // title and host it passes. A drag that means "select these rows"
+                // shouldn't leave text selected instead.
                 className={`absolute inset-x-0 flex items-center gap-3 border-b border-border py-3.5 pr-2 pl-4 ${
                   selected ? 'bg-muted' : 'hover:bg-muted/50'
-                }`}
+                } ${bulkEditing ? 'cursor-pointer select-none' : ''}`}
                 style={{ transform: `translateY(${row.start}px)` }}
+                onClick={onRowClick}
               >
                 {/* Bulk-edit selection sits at the row's LEADING edge (a scannable
                     checkbox column), pushing the image/text right; the row menu is
@@ -279,7 +323,7 @@ export function ListLayout({
                     tabIndex={-1}
                     aria-hidden
                     className="shrink-0"
-                    onClick={onRowClick}
+                    onClick={onAnchorClick}
                   >
                     {/* mt-0.5 pays back the title's half-leading. `items-start`
                         aligns the image's box to the TEXT BOX's top, but a 14px
@@ -305,7 +349,7 @@ export function ListLayout({
                       target="_blank"
                       rel="noreferrer"
                       className="block min-w-0"
-                      onClick={onRowClick}
+                      onClick={onAnchorClick}
                     >
                       {/* The title line holds the title ALONE — no badges, so a
                           narrow pane spends every pixel it has on the one string

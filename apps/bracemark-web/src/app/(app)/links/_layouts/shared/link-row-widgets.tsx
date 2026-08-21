@@ -12,25 +12,54 @@ import { Checkbox } from '@stxapps/web-ui/components/ui/checkbox';
 import { useLinksViewState } from '../../_contexts/view-state-provider';
 
 // The bulk-edit selection checkbox, shown while `bulkEditing` is on. Each layout
-// places it to fit its form factor: the card puts it in the ⋯ menu's slot on the
-// meta line (the menu is what it stands in for), while the list gives it a
-// leading-edge column and hides the menu. Sized to the menu trigger's footprint
-// (size-8) so it reads as a peer of the row's other action widgets.
-// It toggles the same hoisted selection the row's own click does (in bulk mode
-// the layouts intercept the anchor click) — the checkbox is the visible state
-// plus a small dedicated target, not a separate mechanism. Shift-click extends a
-// range over `links` (the displayed order) just like the row click. We drive it
-// off the checkbox's `onClick` rather than `onCheckedChange` because only the
-// mouse event carries `shiftKey`; keyboard activation (space) fires a click with
-// `shiftKey` false, so it still plain-toggles.
-export function LinkRowSelect({ link, links }: { link: LinkView; links: readonly LinkView[] }) {
+// places it to fit its form factor, and passes the wrapper's classes to say so —
+// `size-8` either way, the ⋯ trigger's footprint, so it reads as a peer of the
+// item's other action widgets.
+//
+// The list gives it a leading-edge column: one checkbox per row at the same x,
+// scannable straight down the pane. A CARD has no such column — the equivalent
+// slot is the meta line's trailing edge, where the ⋯ menu sits, and a 16px box
+// dropped in there shares its line with the favicon, the host and the badges and
+// simply isn't found. So the card floats it over the banner's top-leading corner
+// instead, on a translucent plate that holds up over a photo and over the hue
+// panel alike. That is the same rule the list follows — the item's leading edge —
+// and it is where a grid of previews has taught people to look (Photos, Drive,
+// Files). The card's own `relative` is what it positions against.
+// It toggles the same hoisted selection the item's own click does — the checkbox
+// is the visible state plus a small dedicated target, not a separate mechanism.
+// Shift-click extends a range over `links` (the displayed order) just like the
+// item click. We drive it off the checkbox's `onClick` rather than
+// `onCheckedChange` because only the mouse event carries `shiftKey`; keyboard
+// activation (space) fires a click with `shiftKey` false, so it still
+// plain-toggles.
+//
+// `stopPropagation` because in bulk mode the item owns a click of its own, and in
+// list-layout that handler is on an ANCESTOR of this checkbox: an un-stopped
+// click would toggle here and again on the row, landing back where it started —
+// a checkbox that visibly does nothing. (In card-layout the handler is on the
+// title anchor, a sibling, so there it is only insurance.)
+export function LinkRowSelect({
+  link,
+  links,
+  className = 'flex size-8 shrink-0 items-center justify-center',
+  checkboxClassName,
+}: {
+  link: LinkView;
+  links: readonly LinkView[];
+  className?: string;
+  // The control's own size, for the card's corner. `cn` is tailwind-merge, so a
+  // `size-*` here replaces the component's `size-4` rather than racing it.
+  checkboxClassName?: string;
+}) {
   const { selectedLinks, toggleSelected, selectRange } = useLinksViewState();
 
   return (
-    <span className="flex size-8 shrink-0 items-center justify-center">
+    <span className={className}>
       <Checkbox
+        className={checkboxClassName}
         checked={selectedLinks.has(link.path)}
         onClick={(e) => {
+          e.stopPropagation();
           if (e.shiftKey) selectRange(link, links);
           else toggleSelected(link);
         }}

@@ -17,7 +17,8 @@ import { useLinksViewState } from './view-state-provider';
 // 24pt tall exactly: py-1 (4+4) around the 16pt line box `leading-4` pins on the
 // chip's Text. The label is `text-foreground/70`, not `text-muted-foreground`:
 // that token is calibrated against the screen background, and on the chip's own
-// fill it drops to 4.35:1 in light mode — under the 4.5:1 AA floor at 12pt.
+// fill it drops to 4.4:1 and below in light mode as the item moves under it —
+// under the 4.5:1 AA floor at 12pt.
 // Web's chip carries the same numbers (its own TAG_CHIP_CLASS), and there the 24
 // is load-bearing for a fixed row budget; here FlashList measures, so keeping
 // them equal is about the two apps looking alike, not about layout.
@@ -30,7 +31,23 @@ import { useLinksViewState } from './view-state-provider';
 // shrinkable, so a 300pt tag beside two short ones drags the short ones' labels
 // down to an ellipsis with it (equal percentage lost, far more of it text). The
 // cap bounds one long name's pull on its neighbours.
-const TAG_CHIP_CLASS = 'bg-muted active:bg-muted/70 max-w-32 rounded-full px-2 py-1';
+//
+// The fill is an alpha toward the FOREGROUND, not one of the wash tokens, and it
+// is web's string verbatim (`_layouts/shared/link-tag-chips.tsx`, which carries
+// the arithmetic) with `active:` standing in for its `hover:`. The short of it:
+// a chip sits on an item, an item has three surfaces — plain, pressed
+// `active:bg-muted/50`, and `bg-muted` while selected — and `--muted` /
+// `--secondary` / `--accent` are one grey in this palette, so a `bg-muted` pill
+// stepped 28/255 off a plain dark item, 14 off a pressed one and 0 off a
+// selected one: the strip gone outright while the user picks links by hand.
+// Alpha toward the foreground can't collapse on any of them (every item surface
+// in both themes sits on the foreground's opposite side), and — unlike the
+// opaque mix web could otherwise have promoted — it needs no new `--color-*`
+// token: there is no `color-mix` on this side, and a token here would owe an
+// entry in `tools/prettier/expo-tailwind.css` as well. `active:` doubles the alpha for a
+// step the size of the base one, and stays in the base string: a selected chip
+// is inert (bulk-edit renders plain Views), so it never presses.
+const TAG_CHIP_CLASS = 'max-w-32 rounded-full bg-foreground/6 px-2 py-1 active:bg-foreground/12';
 
 // The strip ESTIMATES which chips fit its width, where web MEASURES (a hidden
 // clone + a ResizeObserver, `_layouts/shared/link-tag-chips.tsx`). Measuring is
@@ -92,17 +109,28 @@ function fitChipCount(names: string[], width: number, fontScale: number): number
 // link-tag-chips.tsx`), with the estimated fit above standing in for its
 // measured one: one pressable chip per tag, in the link's own `tagIds` order,
 // each navigating to that tag's view via setSimpleQuery — the same canonical
-// `/links?tag=…` URL the drawer writes. In bulk-edit mode a chip toggles the
-// item's selection instead, matching the item press. Ids the map doesn't know
-// (a tag deleted / not yet synced) are skipped; no tags renders nothing, so
-// callers can place it unconditionally.
+// `/links?tag=…` URL the drawer writes. Ids the map doesn't know (a tag deleted
+// / not yet synced) are skipped; no tags renders nothing, so callers can place
+// it unconditionally.
 //
 // The chips sit INSIDE the item's Pressable — fine on this platform: RN's
 // responder hands the touch to the innermost pressable, so a chip press never
 // also fires the item (web needed the chips outside the row's <a> instead).
 // "+N" opens the overflow tags as a dropdown (the popover stand-in — same
-// portaled content, same engagement reporting via useEngagedOpen); in bulk-edit
-// mode it toggles selection like every other chip (no menu), web verbatim.
+// portaled content, same engagement reporting via useEngagedOpen).
+//
+// In bulk-edit mode the whole strip goes INERT — plain Views, no press, no menu
+// — and the item's own Pressable takes the touch, since a non-pressable child
+// never claims the responder. Web makes the same strip inert for the same
+// reason (`_layouts/shared/link-tag-chips.tsx`), but it had to, and this doesn't:
+// there, the item's click sits on an ancestor, so a chip that toggled as well
+// toggled TWICE and the selection never moved, and the dead gaps between pills
+// were dead for real. Here the responder rule already covered the gaps and
+// already stopped the double fire, so this is only the strip declining to
+// duplicate the item's own press — one behaviour, in one place, spelled the same
+// way on both platforms. What it changes on a device is press FEEDBACK: pressing
+// a chip while selecting now lights the whole item (`active:bg-muted/50`), which
+// is what is actually about to happen.
 export function LinkTagChips({
   link,
   tagsById,
@@ -117,7 +145,7 @@ export function LinkTagChips({
   className?: string;
 }) {
   const { setSimpleQuery } = useLinksPage();
-  const { bulkEditing, toggleSelected } = useLinksViewState();
+  const { bulkEditing } = useLinksViewState();
   const [, onOverflowOpenChange] = useEngagedOpen();
   // The chip's own text obeys the app-wide ceiling (components/ui/text.tsx), so
   // the fit has to reason at the capped scale, not the raw one. The helper's
@@ -137,32 +165,35 @@ export function LinkTagChips({
   );
   const overflow = chips.slice(visibleCount);
 
-  const onTagPress = (id: string) =>
-    bulkEditing ? toggleSelected(link) : setSimpleQuery({ kind: 'tag', id });
+  const onTagPress = (id: string) => setSimpleQuery({ kind: 'tag', id });
 
   return (
     <View className={`flex-row items-center gap-1 overflow-hidden ${className}`}>
-      {chips.slice(0, visibleCount).map((chip) => (
-        <Pressable
-          role="button"
-          key={chip.id}
-          onPress={() => onTagPress(chip.id)}
-          className={`shrink ${TAG_CHIP_CLASS}`}
-        >
-          <Text numberOfLines={1} className="text-xs leading-4 text-foreground/70">
-            {chip.name}
-          </Text>
-        </Pressable>
-      ))}
-      {overflow.length > 0 &&
-        (bulkEditing ? (
+      {chips.slice(0, visibleCount).map((chip) =>
+        bulkEditing ? (
+          <View key={chip.id} className={`shrink ${TAG_CHIP_CLASS}`}>
+            <Text numberOfLines={1} className="text-xs leading-4 text-foreground/70">
+              {chip.name}
+            </Text>
+          </View>
+        ) : (
           <Pressable
             role="button"
-            onPress={() => toggleSelected(link)}
-            className={`shrink-0 ${TAG_CHIP_CLASS}`}
+            key={chip.id}
+            onPress={() => onTagPress(chip.id)}
+            className={`shrink ${TAG_CHIP_CLASS}`}
           >
-            <Text className="text-xs leading-4 text-foreground/70">+{overflow.length}</Text>
+            <Text numberOfLines={1} className="text-xs leading-4 text-foreground/70">
+              {chip.name}
+            </Text>
           </Pressable>
+        ),
+      )}
+      {overflow.length > 0 &&
+        (bulkEditing ? (
+          <View className={`shrink-0 ${TAG_CHIP_CLASS}`}>
+            <Text className="text-xs leading-4 text-foreground/70">+{overflow.length}</Text>
+          </View>
         ) : (
           <DropdownMenu onOpenChange={onOverflowOpenChange}>
             <DropdownMenuTrigger asChild>

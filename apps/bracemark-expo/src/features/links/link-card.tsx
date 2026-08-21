@@ -100,8 +100,29 @@ export function LinkCard({
         // No `grow`: the wrapper above fills the cell, this hugs its content.
         // `w-full max-w-105 self-center` is web's `mx-auto w-full max-w-105` —
         // the card takes the cell up to MAX_CARD_WIDTH, then centres in it.
-        className={`w-full max-w-105 self-center overflow-hidden rounded-lg border border-border ${
-          selected ? 'bg-muted' : 'active:bg-muted/50'
+        // The selected card takes the accent on its EXISTING 1pt border, where
+        // web draws `ring-1 ring-muted-foreground` outside its own — the same
+        // weight, and the different mechanism is forced rather than chosen. A
+        // ring is a box-shadow, which web adds without touching layout, while a
+        // second point of border here would reflow the card; and Uniwind does
+        // not close the gap, it only looks like it does. It "maps" `ring-1` —
+        // into a `--tw-ring-shadow` assembled from `--tw-ring-inset` /
+        // `--tw-ring-offset-width` / `--tw-ring-color`, none of which exist on
+        // this side — so the box-shadow lands as a garbage string rather than as
+        // an error. Exactly the silent-failure shape theme.md warns about, and
+        // the reason this stays a border colour.
+        //
+        // `bg-muted` alone was the whole selected state and it barely reads on
+        // this layout — the banner is 0.583 of the card's width in height, so
+        // the fill only shows in the text strip under it, under half the card
+        // and as little as a third of it. The 1pt accent is what makes a
+        // multi-select legible at grid distance. The one thing web's ring buys
+        // that this can't: a box-shadow paints OUTSIDE the card, always against
+        // the page background, where this border runs along the card's own edge
+        // and so composites with the banner photo for the top half of its
+        // travel.
+        className={`w-full max-w-105 self-center overflow-hidden rounded-lg border ${
+          selected ? 'border-muted-foreground bg-muted' : 'border-border active:bg-muted/50'
         }`}
       >
         {/* The banner: the preview image once its bytes are resident (fetched
@@ -110,6 +131,39 @@ export function LinkCard({
         <View style={{ height: previewHeight }}>
           <LinkPreviewImage link={link} className="h-full w-full" fallback="panel" />
         </View>
+        {/* The selection checkbox floats over the banner's top-leading corner,
+            web's card verbatim (`_layouts/shared/link-row-widgets.tsx` carries
+            why a card can't use the meta line's slot for it). Absolute against
+            the card, since every RN view is `position: relative` already, and
+            declared AFTER the banner so paint order alone lifts it — no zIndex
+            needed, and none asked for.
+
+            The wrapper shrink-wraps the 16pt control rather than boxing it at
+            size-8: the checkbox already carries `hitSlop={24}` (ui/checkbox.tsx),
+            so the target is generous whatever the visible box says. It is opaque
+            `bg-background` at the checkbox's own 4pt radius because an unchecked
+            checkbox is a 1pt `border-input` outline over a transparent middle,
+            which disappears against a light photo; checked, `bg-primary` covers
+            it. Opacity would have done as well here, but `bg-background/80` is
+            what web pairs with `backdrop-blur-sm`, and blur has no RN equivalent
+            — a translucent plate with nothing behind it is just a weaker plate. */}
+        {selectMode && (
+          <View className="absolute top-2 left-2 rounded-[4px] bg-background">
+            {/* size-6, where the list row keeps the component's size-4: a corner
+                floating over a photograph has nothing beside it to set its scale
+                (web's card, same call — and there it also stops a `rounded-[6px]`
+                16px box reading as a disc once it fills). `cn` is tailwind-merge,
+                so this replaces the component's size rather than racing it. The
+                12pt check inside is untouched — 12 of 24 is the proportion web
+                lands at with its 14 of 24. */}
+            <Checkbox
+              aria-label={`Select ${link.title || displayUrl(link.url)}`}
+              checked={selected}
+              onCheckedChange={onToggle}
+              className="size-6"
+            />
+          </View>
+        )}
         <View className="gap-2 p-3">
           {/* The meta line: host, then the badges, then the ⋯ menu at the
               trailing edge (web's card, verbatim). The badges ride this line in
@@ -135,15 +189,18 @@ export function LinkCard({
             {pinned && <PinnedBadge />}
             {link.note !== undefined && link.note !== '' && <NoteBadge />}
             {selectMode ? (
-              // The ⋯ menu's footprint (size-8), so entering bulk-edit swaps the
-              // slot's contents without moving the line (web's LinkRowSelect).
-              <View className="size-8 shrink-0 items-center justify-center">
-                <Checkbox
-                  aria-label={`Select ${link.title || displayUrl(link.url)}`}
-                  checked={selected}
-                  onCheckedChange={onToggle}
-                />
-              </View>
+              // A SPACER holding the ⋯ menu's footprint (size-8) while the
+              // checkbox is up in the banner's corner — web's card, verbatim.
+              // The menu itself can't stay: an action this mode doesn't offer
+              // shouldn't be painted, and leaving it pressable-but-dead would
+              // take the touch that should be selecting the card. Nor can the
+              // slot simply go: this line's height is that size-8 box, and the
+              // `flex-1` host above would take the freed width and carry the
+              // badges right with it. Reserved and empty, nothing on the line
+              // moves when the mode turns on, and a plain View claims no
+              // responder — so a touch here reaches the card's Pressable and
+              // selects, like any other empty part of the card.
+              <View aria-hidden className="size-8 shrink-0" />
             ) : (
               <LinkRowMenu link={link} pinned={pinned} isFirst={isFirst} isLast={isLast} />
             )}

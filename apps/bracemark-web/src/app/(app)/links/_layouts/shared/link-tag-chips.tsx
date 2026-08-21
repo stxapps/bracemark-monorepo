@@ -21,28 +21,46 @@ import { useEngagedOpen } from './hooks';
 //
 // `text-foreground/70` rather than the obvious `text-muted-foreground`, which is
 // the token for quiet text everywhere else in the row and is WRONG here for a
-// reason that only shows up in light mode: it is calibrated against the page
-// background, and the chip is not the page background. #737373 clears 4.74:1 on
-// white but only 4.35:1 on the pill's #F5F5F5 — under the 4.5:1 AA floor, at
-// 12px, from a change that touches no layout and breaks no test. The alpha is
-// mixed against the pill instead, landing 7.3:1 light / 7.8:1 dark: clearly
-// lighter than `text-secondary-foreground`'s 16.4:1, with margin to spare.
-// Anything below /60 walks back into muted-foreground's territory and its
-// problem.
+// reason that only shows up on the pill: that token is calibrated against the
+// page BACKGROUND, and the chip is not the page background. Ours is already
+// lowered to 0.54 for this whole family of wash surfaces (styles.css carries
+// that argument), and on the fills below it still reads 4.41:1 / 4.25:1 / 4.06:1
+// as the item moves under it — under the 4.5:1 AA floor, at 12px, from a change
+// that touches no layout and breaks no test. The alpha is mixed against the pill
+// instead, and lands 6.6:1 at worst in light and 6.8:1 in dark across every
+// state either can reach: clearly lighter than `text-secondary-foreground`'s
+// 16.4:1, with margin to spare. Anything below /60 walks back into
+// muted-foreground's territory and its problem.
 //
-// The hover is an OPAQUE mix toward the foreground, not `bg-secondary/80`, and
-// this is the one rule here that can't be eyeballed from the class list. The
-// shadcn default assumes a chip sitting on `--background`; ours sits inside a
-// row that is ITSELF hovering at the same moment (list-layout's
-// `hover:bg-muted/50`), and in this palette `--secondary` and `--muted` are the
-// same grey. So the alpha version composited the chip against a near-copy of
-// itself: 245 → 246 in light, and in dark it moved the WRONG WAY, 38 → 35. One
-// step of 255, in both themes — a hover state that renders as no hover state at
-// all, with nothing to fail. The mix is the same formula (and
-// the same 5%) the Button's secondary variant already uses for this exact
-// reason; being opaque, it is immune to whatever the row does behind it.
+// The FILL is an alpha toward the foreground, and this is the one rule here that
+// can't be eyeballed from the class list. A chip sits on an ITEM, and an item has
+// three surfaces: plain, `hover:bg-muted/50`, and `bg-muted` while selected.
+// `--secondary`, `--muted` and `--accent` are all the same grey in this palette,
+// so the obvious `bg-secondary` pill stepped 10/255 off a plain light row, 5 off
+// a hovered one, and 0 off a selected one — the strip vanishing outright at the
+// exact moment the user is picking links by hand, with nothing to fail. And
+// `bg-secondary/80` is worse rather than better: alpha toward a colour that
+// EQUALS the backdrop converges on it, 245 → 246 in light, and in dark it moved
+// the WRONG WAY, 38 → 35.
+//
+// Alpha toward `--foreground` diverges from all three by construction — every
+// item surface in both themes sits on the foreground's opposite side — so the
+// step is proportional to the alpha and to nothing else, and cannot collapse on
+// any of them: 15/14/14 of 255 across the three in light, 14/14/13 in dark, and
+// the same again on `--popover` behind the "+N" chip. Hover doubles the alpha,
+// for a step the size of the base one. An OPAQUE mix (`color-mix(in oklch,
+// var(--secondary), var(--foreground) 5%)`, the Button's secondary variant)
+// clears all three too, but unevenly: being a fixed colour, its step SHRINKS as
+// the surface moves toward it — down to 9/255 on a selected dark row, the state
+// that started this — and it would need a real theme token to say on expo, where
+// `color-mix` does not exist. The alpha is one string both apps share verbatim
+// (bracemark-expo's `features/links/link-tag-chips.tsx`, `active:` where this
+// has `hover:`).
+//
+// Which is also why nothing in this file reads the selection: one fill answers
+// all three surfaces, so a chip never has to know what its item is doing.
 const TAG_CHIP_CLASS =
-  'max-w-32 shrink-0 truncate rounded-full bg-secondary px-2 py-1 text-xs leading-4 text-foreground/70 hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)]';
+  'max-w-32 shrink-0 truncate rounded-full bg-foreground/6 px-2 py-1 text-xs leading-4 text-foreground/70 hover:bg-foreground/12';
 
 // Whether the strip renders anything for this link — EXACTLY the test the
 // component applies below, hoisted so a layout can ask it before rendering. Both
@@ -63,10 +81,20 @@ const CHIP_GAP_PX = 4;
 // each navigating to that tag's view via setSimpleQuery — the same canonical
 // `/links?tag=…` URL the sidebar writes, so highlight/back-button behavior comes
 // for free. Rendered OUTSIDE the row's <a> (a button inside an anchor is invalid
-// and would fire the navigation — same rule as LinkRowMenu). In bulk-edit mode a
-// chip toggles the row's selection instead, matching the row click. Ids the map
-// doesn't know (a tag deleted / not yet synced) are skipped; no tags renders
-// nothing.
+// and would fire the navigation — same rule as LinkRowMenu). Ids the map doesn't
+// know (a tag deleted / not yet synced) are skipped; no tags renders nothing.
+//
+// In bulk-edit mode the whole strip goes INERT: plain spans, and
+// `pointer-events-none` on the wrapper so a click passes straight through to
+// whatever owns the item's click (list-layout's row handler, card-layout's
+// full-card overlay). Chips that toggled the selection themselves — which is
+// what this did — looked equivalent and weren't: they ignored `shiftKey` where
+// every other part of the item extends a range, they left the gaps between pills
+// and the whole tail past the last one dead, and once the item owns the click a
+// chip that also toggles toggles TWICE, which reads as a row refusing to select.
+// Spans also drop the strip out of the tab order, which is honest — "filter by
+// this tag" is not available in the mode, and a focusable control that does
+// something else instead is worse than no focus stop.
 //
 // The strip gets a line budget (`maxLines`) and MEASURES how many chips fit it;
 // the rest collapse behind an in-flow "+N" chip that opens a popover holding
@@ -84,7 +112,7 @@ const CHIP_GAP_PX = 4;
 // the "+N" probe still fits after them — and a ResizeObserver re-measures as
 // the row resizes. The visible row paints only the kept chips, so nothing is
 // ever half-clipped or occluded; its overflow-hidden is just a backstop. In
-// bulk-edit mode "+N" toggles selection like every other chip (no popover).
+// bulk-edit mode "+N" is inert like every other chip (no popover).
 export function LinkTagChips({
   link,
   tagsById,
@@ -97,7 +125,7 @@ export function LinkTagChips({
   className?: string;
 }) {
   const { setSimpleQuery } = useLinksPage();
-  const { bulkEditing, toggleSelected } = useLinksViewState();
+  const { bulkEditing } = useLinksViewState();
   const [overflowOpen, setOverflowOpen] = useEngagedOpen();
 
   const tags = link.tagIds.flatMap((id) => {
@@ -149,8 +177,7 @@ export function LinkTagChips({
 
   if (tags.length === 0) return null;
 
-  const onTagClick = (id: string) =>
-    bulkEditing ? toggleSelected(link) : setSimpleQuery({ kind: 'tag', id });
+  const onTagClick = (id: string) => setSimpleQuery({ kind: 'tag', id });
 
   // State may lag a beat behind the tag list (the layout effect re-clamps
   // before paint); render from the clamped value so a shrink never overslices.
@@ -163,18 +190,31 @@ export function LinkTagChips({
   const wrapClass = maxLines > 1 ? 'flex-wrap' : '';
 
   return (
-    <div className={className}>
+    // The inert half of the bulk-edit rule above rides the OUTER div, so the
+    // caller's padding (card-layout's `px-3 pb-3`) is click-through as well —
+    // that padding is item surface too, and a strip that only passed its pills
+    // through would still hold a dead frame around them.
+    <div className={`${className} ${bulkEditing ? 'pointer-events-none' : ''}`}>
       <div className={`relative flex gap-1 overflow-hidden ${wrapClass}`}>
-        {visible.map(({ id, name }) => (
-          <button key={id} type="button" className={TAG_CHIP_CLASS} onClick={() => onTagClick(id)}>
-            {name}
-          </button>
-        ))}
+        {visible.map(({ id, name }) =>
+          bulkEditing ? (
+            <span key={id} className={TAG_CHIP_CLASS}>
+              {name}
+            </span>
+          ) : (
+            <button
+              key={id}
+              type="button"
+              className={TAG_CHIP_CLASS}
+              onClick={() => onTagClick(id)}
+            >
+              {name}
+            </button>
+          ),
+        )}
         {overflow.length > 0 &&
           (bulkEditing ? (
-            <button type="button" className={TAG_CHIP_CLASS} onClick={() => toggleSelected(link)}>
-              +{overflow.length}
-            </button>
+            <span className={TAG_CHIP_CLASS}>+{overflow.length}</span>
           ) : (
             <Popover open={overflowOpen} onOpenChange={setOverflowOpen}>
               <PopoverTrigger asChild>

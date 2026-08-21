@@ -110,7 +110,16 @@ export function LinkRow({
               onToggle();
             }
       }
-      className="flex-row items-center gap-3 border-b border-border py-3 pr-2 pl-4 active:bg-muted/50"
+      // The selected fill, `bg-muted`, is the same one link-card.tsx paints and the
+      // same one both web layouts paint — the checkbox is the state's precise
+      // readout, the fill is what makes a selection legible as a BLOCK while
+      // scanning a long list, and it is the only cue left on a row whose checkbox
+      // has scrolled under a thumb. It replaces the press highlight rather than
+      // layering on it: a selected row that could still light darker on press
+      // would read as a third state.
+      className={`flex-row items-center gap-3 border-b border-border py-3 pr-2 pl-4 ${
+        selected ? 'bg-muted' : 'active:bg-muted/50'
+      }`}
     >
       {selectMode && (
         <Checkbox

@@ -577,11 +577,88 @@ _existing_ links on web inherits the rule.
 ### bulk edit
 
 Bulk edit is a **mode**, not a separate editor: the topbar toggles `bulkEditing`
-in `view-state-provider`, rows swap their options-menu slot for a `LinkRowSelect`
-checkbox (`_layouts/shared.tsx` — sized to the menu trigger's footprint so row
-geometry doesn't shift), and the `BulkEditToolbar` acts on the hoisted
-`selectedLinks` map (keyed by the stable `link.path`).
+in `view-state-provider`, items grow a `LinkRowSelect` checkbox
+(`_layouts/shared/link-row-widgets.tsx`) and hide their options menu, and the
+`BulkEditToolbar` acts on the hoisted `selectedLinks` map (keyed by the stable
+`link.path`).
 
+- **Where the checkbox goes, per layout.** The list puts it in a leading-edge
+  column — one per row at the same x, scannable straight down the pane. A card
+  has no such column, and the meta line's trailing slot (the ⋯ menu's) buries a
+  16px box among the favicon, host and badges, so the card floats it over the
+  **banner's top-leading corner** instead: the same rule (the item's leading
+  edge), and where a grid of previews has taught people to look. It sits at
+  `size-6` on an opaque `bg-background` backing at the checkbox's own radius —
+  the control unchecked is a 1px outline over a transparent middle, invisible on
+  a light photo, and at the list's `size-4` a `rounded-[6px]` box is 37% radius,
+  which fills into something closer to a disc than a checkbox. Neither needs a
+  sized wrapper for the target: the checkbox carries its own hit expansion
+  (`after:-inset-*` on web, `hitSlop` on expo). The vacated menu slot holds an `aria-hidden` spacer at the trigger's
+  `size-8` — not the menu disabled, which would announce as a dimmed button and
+  swallow the click that should select the card, and not nothing, since that
+  line's height IS the trigger and the host would take the freed width and carry
+  the badges right. Reserved and empty, the card measures the same in both modes.
+  A **selected** card also takes an accent outline, because `bg-muted` alone
+  barely reads under a banner that covers most of the card: the fill shows only
+  in the text strip beneath it — between a third and a half of the card,
+  depending on the column width and the title's line count — and that fill is
+  10/255 in light. So `ring-1 ring-muted-foreground` on web (a box-shadow, so it
+  costs no layout, and it paints outside the card, always against the page
+  background rather than against the banner) and `border-muted-foreground` on the
+  expo card's existing 1pt border. Same weight, different mechanism, and the
+  difference is forced: a second point of border on expo would reflow the card,
+  and RN has no ring — Uniwind appears to map `ring-1` but assembles it from
+  `--tw-ring-*` vars that don't exist there, so it yields a broken box-shadow
+  string rather than an error (`theme.md`, the class-mapping tripwire). Not `primary`: the palette is fully
+  neutral (every token is chroma 0), so `--primary` is 0.205 in light — the
+  foreground itself, which shouts. `--muted-foreground` at 0.54/0.78 is the step
+  below it. Not `--ring` either, near as it looks: that token belongs to
+  `focus-visible`, and reusing it would make a selected card and a keyboard-focused
+  one the same picture.
+- **The chip pill is an alpha toward the foreground, which is what spares it a
+  selected variant.** A chip sits on an item, and an item has three surfaces:
+  plain, hovered/pressed at `bg-muted/50`, and `bg-muted` while selected.
+  `--secondary`, `--muted` and `--accent` are one grey in this palette, so a
+  wash-token pill stepped 10/255 off a plain light row, 5 off a hovered one and
+  **0** off a selected one — the strip gone outright at the moment the user is
+  picking links by hand, with nothing to fail. `bg-foreground/6` (hover/press
+  `/12`) diverges from all three by construction, every item surface in both
+  themes sitting on the foreground's opposite side: 15/14/14 of 255 across the
+  three in light, 14/14/13 in dark, and the same again on `--popover` behind the
+  "+N" chip. An opaque `color-mix` toward the foreground clears all three too,
+  but unevenly — a fixed colour's step shrinks as the surface moves toward it,
+  down to 9/255 on a selected dark row — and expo has no `color-mix`, so it would
+  owe a `--color-*` token there plus an entry in the formatter shim
+  (`theme.md`). Both chip components carry the one string and neither reads the
+  selection. The label stays `text-foreground/70` on it: 6.6:1 at worst in light,
+  6.8:1 in dark, where `--muted-foreground` would fail AA on the pill.
+
+- **The whole item is the click target.** In the mode a click anywhere on a row
+  or a card toggles that link's selection, and shift-click extends a range over
+  the displayed order; the checkbox is the visible state plus a small dedicated
+  target, not the only one. Each layout hangs that on the surface it has —
+  `list-layout` on the row element itself, `card-layout` on its title anchor's
+  full-card `after:inset-0` overlay — and everything interactive inside gives the
+  click up rather than eating it: `LinkRowSelect` stops propagation (in the list
+  the row is its ancestor, so an un-stopped click would toggle twice and land
+  back where it started) and `LinkTagChips` renders inert spans under
+  `pointer-events-none`, since a chip that toggled selection itself ignored
+  `shiftKey` and left the gaps around the pills dead. The list row also takes
+  `cursor-pointer` in the mode — `styles.css` gives the pointer to buttons and
+  `[role=button]`, and a div with an onClick is neither, so the row would toggle
+  while looking inert (the card's overlay is an `<a>`, so it already has it) — and
+  both take `select-none`, since shift-click otherwise drags a text selection
+  across the rows it ranges over. The row takes no `role`: `LinkRowSelect` is a
+  real checkbox inside it, and a second one in the AT tree for one selection is
+  worse than a pointer-only enhancement. Cmd/ctrl-click toggles too
+  rather than opening a new tab — the anchors' `preventDefault` is unconditional;
+  middle-click still opens, being `auxclick`. On bracemark-expo the item is one
+  `Pressable` and RN's responder hands a touch to the innermost pressable, so the
+  hit area comes free; its chip strip goes inert in the mode all the same, so the
+  press lives in one place on both platforms (and the item, not the pill, shows
+  the press). The selected item is filled `bg-muted` in all four layouts —
+  the checkbox is the precise readout, the fill is what makes a selection
+  scannable as a block.
 - The selection lives in `view-state-provider` (not in a layout) because rows are
   virtualized — a layout-owned selection would be lost on repaint. `bulkEditing`
   is also one of the six guards that hold a background sync back, so rows can't
