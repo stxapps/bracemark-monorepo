@@ -18,8 +18,34 @@
   // fetch(request, env, ctx) on it.
   "main": "src/worker.ts",
   "compatibility_date": "2026-06-01",
+  // Observability with the INVOCATION LOG OFF — the one config that decides whether
+  // this app keeps its central promise. Cloudflare's automatic per-request log
+  // records the request line, and `GET /v1/image?url=…` carries the user's URL in
+  // its query string, so leaving `invocation_logs` at its default would PERSIST
+  // exactly the URLs docs/link-extraction.md (_never log the URL_) promises stay
+  // transient — and would falsify the claim the privacy policy prints
+  // (apps/bracemark-site/src/app/privacy/page.tsx, _link previews_: "writes none to
+  // its logs"). `/extract` is a POST, so only the proxy leaks this way; the setting
+  // covers both regardless.
+  //
+  // What survives: everything we log ON PURPOSE. `lib/errors.ts` and
+  // `routes/extract.ts` are already written to this rule — the handler comment says
+  // "never the URL", `SafeFetchError`'s message is its error code, and extractOne
+  // logs `err.name` alone — so a 500 still reaches `wrangler tail` with its cause,
+  // minus the address. KEEP THAT DISCIPLINE: a future `console.error(err)` where the
+  // error embeds a URL re-opens this hole, and no test can see it.
+  //
+  // Rate limiting is UNAFFECTED — it runs on the native binding keyed by
+  // `cf-connecting-ip` (middleware/rate-limit.ts), and never reads a log.
+  //
+  // Not covered here: zone-level Logpush / HTTP request logging is a SEPARATE
+  // Cloudflare setting on extractor.bracemark.com. It must stay off for the same
+  // reason, and nothing in this repo can assert that it is.
   "observability": {
     "enabled": true,
+    "logs": {
+      "invocation_logs": false,
+    },
   },
   // Pin a distinct local port so it can run alongside bracemark-api (8787) under
   // `wrangler dev` without colliding / silently drifting to a random port. The

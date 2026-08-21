@@ -16,40 +16,8 @@ export const metadata: Metadata = {
 // listings are what lock the bundle ID in — so this route has to
 // carry real content before submission, not a placeholder.
 //
-// Adapted from the terms the same company published for Brace.to, with three
-// substantive changes, all forced by what Bracemark actually is:
-//   - The account section is rewritten end to end. The old one described a Stacks
-//     account, a Secret Key and a Gaia data server; this one describes the
-//     password-derived key and the recovery door (docs/account.md), and states
-//     plainly that a lost password with no recovery code is unrecoverable.
-//   - An acceptable-use section was added. The old terms had none, and store
-//     reviewers look for one.
-//   - The subscription section covers Paddle and both app stores, matching the
-//     three purchase paths in docs/iap.md.
 //
-// A FOURTH CHANGE, once the repo went public (docs/brand-assets.md — _the source_). These
-// terms are a contract about the SERVICE — the thing we host and the builds we
-// publish — while the AGPL-3.0 governs the SOURCE. The Brace.to terms predated the
-// repo being public and drew no line between the two, so three clauses ended up
-// forbidding what the licence grants: "we reserve all rights not expressly granted"
-// under _Our content_, and the redistribution and reverse-engineering bullets under
-// _Acceptable use_. A reader is entitled to rely on either document, so that had to
-// be resolved rather than left to interpretation:
-//   - the source-code paragraph says the licence prevails over these terms wherever
-//     the two disagree about rights IN THE SOURCE, and the terms govern the hosted
-//     service. The concession is real and deliberate — it is what makes publishing
-//     the repo mean anything.
-//   - the redistribution bullet is scoped to access to the hosted service.
-//   - the reverse-engineering bullet is GONE. It cannot coexist with publishing the
-//     source it protects, and a clause a reader can see is void undermines the ones
-//     that aren't.
-// Reserving the NAME is the one restriction that survives all of this: AGPL-3.0 §7(e)
-// expressly permits declining to grant trademark rights, so that paragraph and the
-// licence agree. It is written as a reservation rather than an assertion that a
-// registered mark exists — the mark is unregistered, the product is unlaunched.
-//
-// The company name and postal address come from `COMPANY` in lib/site.ts; verify the
-// address before publishing.
+// The company name and postal address come from `COMPANY` in lib/site.ts.
 //
 // The markup is plain h2/h3/p/ol under `.legal-prose` (globals.css) on purpose:
 // this document gets edited under time pressure while answering a reviewer, and
@@ -78,6 +46,12 @@ export default function Page() {
           uninstall the applications. Our <Link href="/privacy">Privacy Policy</Link> explains how
           we handle information and forms part of this agreement.
         </p>
+        <p>
+          <strong>Please read the Disputes section below before you agree.</strong> It sends most
+          disputes to individual arbitration rather than to a court, and it waives class actions and
+          jury trials. You can opt out of it within thirty days and keep everything else, and it
+          does not touch the rights your local consumer law gives you.
+        </p>
 
         <h2>Who may use the Service</h2>
         <p>
@@ -105,6 +79,12 @@ export default function Page() {
           you must stop using the Service; the sections that by their nature should survive —
           including those covering our content, disclaimers, liability, indemnity and disputes —
           continue to apply.
+        </p>
+        <p>
+          You can end this agreement whenever you like: stop using the Service and uninstall the
+          applications, or delete your account from Settings → Account, which removes what we hold
+          for it. Deleting an account does not cancel a subscription — see{' '}
+          <em>Plans, fees and subscriptions</em> below.
         </p>
 
         <h2>Your account, your password and your key</h2>
@@ -165,6 +145,15 @@ export default function Page() {
           for accounts that have been abandoned.
         </p>
 
+        <h2>Feedback</h2>
+        <p>
+          If you send us an idea, a bug report or a suggestion, you give us permission to use it —
+          in any way, anywhere, without payment, attribution or any obligation of confidence. Please
+          do not send us anything you consider secret or that belongs to someone else. This says
+          nothing about the links and notes in your library, which are covered by{' '}
+          <em>Your content</em> above.
+        </p>
+
         <h2>Acceptable use</h2>
         <p>You agree not to:</p>
         <ul>
@@ -193,6 +182,17 @@ export default function Page() {
           rules or threatens the stability of the Service.
         </p>
 
+        <h2>Copyright and other complaints</h2>
+        <p>
+          If you believe material on the Service infringes your copyright or another right, write to{' '}
+          <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a> with enough detail to identify the
+          material, the right you hold, and how to reach you. Please understand what we are able to
+          do before you write: a library is encrypted with a key we do not have, so we cannot search
+          it, read it, or remove one saved link from it. What we can do is act on the account —
+          including suspending or terminating the accounts of repeat infringers — and comply with a
+          valid legal order.
+        </p>
+
         <h2>Plans, fees and subscriptions</h2>
         <p>
           The Service has a free plan and one or more paid plans. The features and limits of each
@@ -217,7 +217,9 @@ export default function Page() {
           <li>
             <strong>Auto-renewal.</strong> Subscriptions renew automatically for successive periods
             of the same length, at the then-current price plus any applicable taxes, until you
-            cancel. Deleting your account does not cancel a subscription — cancel it through the
+            cancel. Paddle emails a receipt for each web renewal to the address you gave it, and
+            Apple and Google notify you through their own channels — we hold no email address to
+            write to. Deleting your account does not cancel a subscription: cancel it through the
             provider you bought it from.
           </li>
           <li>
@@ -301,6 +303,15 @@ export default function Page() {
           responsibility, and they may change over time.
         </p>
 
+        <h2>Accessibility</h2>
+        <p>
+          We build the Service to work with a screen reader, with a keyboard alone, and at the text
+          size you have chosen, and we aim to meet the Web Content Accessibility Guidelines 2.1 at
+          level AA. We do not claim to have got everything right. If some part of the Service is
+          unusable for you, write to <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a> and
+          tell us what and where — we treat those reports as faults, not as feature requests.
+        </p>
+
         <h2>Disclaimer of warranties</h2>
         <p className={cn('caps')}>
           THE SERVICE IS PROVIDED “AS IS”, “WITH ALL FAULTS” AND “AS AVAILABLE”. TO THE FULLEST
@@ -360,10 +371,39 @@ export default function Page() {
             Center, seated in Bangkok, before one or more neutral arbitrators.
           </li>
         </ol>
+        <p className={cn('caps')}>
+          ANY ARBITRATION UNDER THIS SECTION IS ON AN INDIVIDUAL BASIS ONLY. YOU AND{' '}
+          {COMPANY.shortName.toUpperCase()} EACH WAIVE THE RIGHT TO A TRIAL BY JURY AND THE RIGHT TO
+          BRING OR TAKE PART IN ANY CLASS, COLLECTIVE OR REPRESENTATIVE PROCEEDING. AN ARBITRATOR
+          MAY AWARD RELIEF ONLY TO THE INDIVIDUAL PARTY SEEKING IT. IF THIS PARAGRAPH IS HELD
+          UNENFORCEABLE FOR A PARTICULAR CLAIM, THAT CLAIM SHALL BE HEARD IN COURT AND THE REST OF
+          THIS SECTION STILL APPLIES TO EVERY OTHER CLAIM.
+        </p>
         <p>
-          Nothing in this section prevents either party from seeking urgent injunctive relief from a
-          competent court, or affects any right you have as a consumer to bring proceedings in the
-          courts of your country of residence where local law gives you that right.
+          <strong>You can opt out of arbitration.</strong> Write to{' '}
+          <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a> within thirty days of first
+          accepting these Terms, with your username if you have one and a clear statement that you
+          are opting out. Opting out costs you nothing, changes nothing else in these Terms, and we
+          will not treat it as a reason to close your account.
+        </p>
+        <p>
+          Nothing in this section prevents either party from bringing an individual claim in a
+          small-claims court that has jurisdiction over it, from seeking urgent injunctive relief
+          from a competent court, or affects any right you have as a consumer to bring proceedings
+          in the courts of your country of residence where local law gives you that right.
+        </p>
+
+        <h2>Notice for California residents</h2>
+        <p>
+          Under California Civil Code section 1789.3, California users of the Service are entitled
+          to this notice. The provider of the Service is {company},{' '}
+          {COMPANY.addressLines.join(', ')}. To file a complaint about the Service, or to ask for
+          more information about it, write to that address or to{' '}
+          <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>. You may also contact the
+          Complaint Assistance Unit of the Division of Consumer Services of the California
+          Department of Consumer Affairs at 1625 N. Market Blvd., Suite N112, Sacramento, CA 95834,
+          or by telephone at (800) 952-5210. Our <Link href="/privacy">Privacy Policy</Link>{' '}
+          describes the privacy rights California law gives you and how to use them.
         </p>
 
         <h2>Governing law</h2>
@@ -385,9 +425,24 @@ export default function Page() {
         <p>
           These Terms are an agreement between you and {COMPANY.shortName} alone, and not with any
           app store operator. An app store operator has no obligation to provide maintenance or
-          support for the applications, and {COMPANY.shortName} — not the operator — is responsible
-          for addressing any claim relating to them. App store operators and their subsidiaries are
+          support for the applications. If an application fails to conform to any warranty that
+          applies to it, you may notify Apple, and Apple will refund the purchase price of that
+          application, if any; to the maximum extent permitted by law, Apple has no other warranty
+          obligation for it. {COMPANY.shortName} — not the operator — is responsible for addressing
+          any claim relating to an application, including product-liability claims, any claim that
+          it fails to meet a legal or regulatory requirement, and any claim that it infringes
+          someone else’s intellectual property. App store operators and their subsidiaries are
           third-party beneficiaries of these Terms and may enforce them against you.
+        </p>
+        <p>
+          Because we hold no email address for you, we give notice through the applications or on
+          this website, and you agree that notice given that way reaches you. Give us notice at{' '}
+          <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a> or at the postal address below.
+        </p>
+        <p>
+          Neither party is liable for a failure to perform caused by something outside its
+          reasonable control — a network or provider outage, an act of government, a natural
+          disaster — though this does not excuse an obligation to pay for something already bought.
         </p>
         <p>
           You confirm that you are not located in, and are not listed on any restricted-party list

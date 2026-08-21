@@ -48,12 +48,8 @@ export { SOURCE };
 // The "last updated" line each policy carries. Dates live here rather than inline
 // so the two documents can never claim different vintages of the same rewrite —
 // and so bumping one after an edit is a deliberate act, not a forgotten one.
-// Both moved together on 9 August 2026, when the repo went public: the terms gained
-// the source-code carve-out (the licence prevails over them for rights in the
-// source) and the privacy policy gained the paragraph pointing at the repo. Neither
-// changed what we collect.
-export const TERMS_UPDATED = '9 August 2026';
-export const PRIVACY_UPDATED = '9 August 2026';
+export const TERMS_UPDATED = '21 August 2026';
+export const PRIVACY_UPDATED = '21 August 2026';
 
 export const HEADER_LINKS = [
   { href: '/pricing', label: 'Pricing' },

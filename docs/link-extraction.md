@@ -1330,6 +1330,10 @@ browser that can't fetch for itself. It is a **separate app**, not a route in
   one: the proxy's `?url=` lands in query strings, so default Cloudflare request
   logs / Logpush would **persist** exactly the URLs the design promises not to
   retain. Strip them at the edge; if you can't, don't log the request line.
+  **Configured:** `wrangler.jsonc` sets `observability.logs.invocation_logs: false`,
+  which drops the automatic request-line log and keeps the deliberate ones (the
+  error handler and `extractOne` are already written never to log the URL). The
+  zone's Logpush setting is the other half and lives outside this repo.
 
 The **app is committed** (a necessary build, see above) and so are the invariants
 (separate app, separate origin, anonymous, plaintext-return-only, stream-don't-store,
