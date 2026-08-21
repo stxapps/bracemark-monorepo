@@ -87,7 +87,17 @@ function BulkTagsForm({ links, onClose }: { links: LinkView[]; onClose: () => vo
 
   return (
     <Dialog open onOpenChange={(open) => !open && !isDirty && onClose()}>
-      <DialogContent className="sm:max-w-md">
+      {/* `flex flex-col` replaces the base `grid` (tailwind-merge drops it —
+          both are `display` utilities), and it is load-bearing rather than a
+          preference: a grid's `auto` rows are sized from their content and give
+          none of it back when the container hits its max-height, so the cap
+          would be honoured by spilling the footer off the bottom instead of by
+          shrinking the chip area. The `min-h-0 shrink` chain from here down to
+          that scroller is what carries the squeeze — `shrink`, not `flex-1`, at
+          every step, so a two-chip dialog stays content-sized and only a full
+          one gives way. link-edit-dialog.tsx is the same shape with `flex-1`,
+          because its form is meant to fill. */}
+      <DialogContent className="flex flex-col sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Edit tags</DialogTitle>
           <DialogDescription>
@@ -95,12 +105,30 @@ function BulkTagsForm({ links, onClose }: { links: LinkView[]; onClose: () => vo
             {links.length === 1 ? 'link' : 'links'}; a removed tag is removed from all of them.
           </DialogDescription>
         </DialogHeader>
-        <form className="flex flex-col gap-4" onSubmit={onSubmit} noValidate>
-          <div className="flex flex-col gap-1.5">
+        <form className="flex min-h-0 shrink flex-col gap-4" onSubmit={onSubmit} noValidate>
+          <div className="flex min-h-0 shrink flex-col gap-1.5">
             <Label htmlFor="bulk-tags" density="dense">
               Tags
             </Label>
-            <TagsField id="bulk-tags" value={tagIds} onChange={setTagIds} />
+            {/* TagsField sets no height of its own and its chip area grows with
+                the selection, so this is the one dialog body here that can
+                outgrow the viewport — and DialogContent's
+                `max-h-(--dialog-max-h)` caps the box without scrolling it (see
+                dialog.tsx for why the cap deliberately ships without an
+                `overflow-y-auto`). So the chip area owns the scroll: `max-h-60`
+                (~9 rows) is the PREFERRED height and `min-h-0 shrink` is what
+                lets even that give way on a short viewport, which is where the
+                whole box would otherwise overflow — a landscape phone leaves
+                ~316px for a dialog this one wants ~456 for. Exactly the pair
+                expo's port uses (`max-h-60 shrink`).
+
+                `-m-1 p-1` gives the chips' focus rings room the way the edit
+                dialog's body scroller does. The inline popover TagsField opens
+                is `fixed` and its containing block is DialogContent, not this
+                box, so nothing here clips it. */}
+            <div className="-m-1 max-h-60 min-h-0 shrink overflow-y-auto p-1">
+              <TagsField id="bulk-tags" value={tagIds} onChange={setTagIds} />
+            </div>
             <p className="text-xs text-muted-foreground">
               Only tags shared by every selected link are shown; a tag on just some of them is left
               untouched.

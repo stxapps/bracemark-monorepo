@@ -15,6 +15,7 @@
 // up (its state authoritative) until the destroy resolves.
 
 import { useState } from 'react';
+import { ScrollView } from 'react-native';
 
 import { useLinkMutations } from '@stxapps/expo-react';
 import { hostFromText } from '@stxapps/shared';
@@ -62,12 +63,31 @@ export function LinkDestroyConfirm() {
   return (
     <AlertDialog open onOpenChange={(open) => !open && !deleting && closeDestroy()}>
       <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Delete permanently?</AlertDialogTitle>
-          <AlertDialogDescription>
-            {what} will be removed from all your devices. This can’t be undone.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
+        {/* The scroller AlertDialogContent's `max-h-full` needs, and the reason
+            this file is the one alert dialog that has to have one: `what` above
+            interpolates a link TITLE, which is unbounded, and RN text scales
+            with the OS font setting while Uniwind's baked-rem padding does not.
+            So this header — alone among the two rows here — can outgrow the
+            window. `shrink` is what lets it give way, since RN children don't
+            shrink by default and the cap alone would keep pushing the title off
+            the TOP (the same cap/`shrink` pair bulk-tags-dialog.tsx and
+            list-command.tsx use under the plain Dialog).
+
+            It wraps the whole header rather than the description alone: the
+            `gap-1.5` binding a title to its description lives INSIDE
+            AlertDialogHeader, so splitting the two across the scroller boundary
+            would re-space them at the content's `gap-6`. The title scrolling
+            with its description is the right trade — it's one short line at the
+            top, and what must never scroll away is the footer, which is outside
+            this and stays pinned. */}
+        <ScrollView className="shrink" nestedScrollEnabled>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete permanently?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {what} will be removed from all your devices. This can’t be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+        </ScrollView>
         <AlertDialogFooter>
           <AlertDialogCancel disabled={deleting}>
             <Text>Cancel</Text>

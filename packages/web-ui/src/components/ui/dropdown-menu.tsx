@@ -1,7 +1,13 @@
+'use client';
+
 import * as React from 'react';
 import { CheckIcon, ChevronRightIcon } from 'lucide-react';
 import { DropdownMenu as DropdownMenuPrimitive } from 'radix-ui';
 
+import {
+  type CollisionPadding,
+  useCollisionPadding,
+} from '@stxapps/web-ui/hooks/use-collision-padding';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
 function DropdownMenu({ ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.Root>) {
@@ -24,11 +30,22 @@ function DropdownMenuContent({
   className,
   align = 'start',
   sideOffset = 4,
-  // Keep a gutter from the viewport edge (Radix defaults this to 0, which sits
-  // flush against the edge on collision) — same rationale as DropdownMenuSubContent.
-  collisionPadding = 8,
+  // Keep a gutter from the edge of the room the menu has (Radix defaults this to
+  // 0, which sits flush against the edge on collision) — same rationale as
+  // DropdownMenuSubContent. "The room it has" is the viewport MINUS the safe
+  // area, which is why this is a hook rather than the bare 8 it used to be: it
+  // does not take an unusual trigger to reach the unsafe band, only a menu tall
+  // enough to be pushed against an edge, and this app has several (the bulk-edit
+  // toolbar's ⋯, a row menu on the last row). useCollisionPadding carries the
+  // note; bracemark-expo's DropdownMenuContent defaults its `insets` prop from
+  // the same reasoning.
+  collisionPadding: collisionPaddingProp,
   ...props
-}: React.ComponentProps<typeof DropdownMenuPrimitive.Content>) {
+}: Omit<React.ComponentProps<typeof DropdownMenuPrimitive.Content>, 'collisionPadding'> & {
+  collisionPadding?: CollisionPadding;
+}) {
+  const collisionPadding = useCollisionPadding(collisionPaddingProp);
+
   return (
     <DropdownMenuPrimitive.Portal>
       <DropdownMenuPrimitive.Content
@@ -216,11 +233,17 @@ function DropdownMenuSubTrigger({
 
 function DropdownMenuSubContent({
   className,
-  // Keep a gutter from the viewport edge: a submenu flips to the other side on
-  // collision (0 padding = flush against the edge). Radix defaults this to 0.
-  collisionPadding = 8,
+  // Keep a gutter from the edge of the room the submenu has: it flips to the
+  // other side on collision (0 padding = flush against the edge, and Radix
+  // defaults this to 0). Safe-area aware for the same reason as the parent
+  // menu's — see DropdownMenuContent above.
+  collisionPadding: collisionPaddingProp,
   ...props
-}: React.ComponentProps<typeof DropdownMenuPrimitive.SubContent>) {
+}: Omit<React.ComponentProps<typeof DropdownMenuPrimitive.SubContent>, 'collisionPadding'> & {
+  collisionPadding?: CollisionPadding;
+}) {
+  const collisionPadding = useCollisionPadding(collisionPaddingProp);
+
   return (
     <DropdownMenuPrimitive.SubContent
       data-slot="dropdown-menu-sub-content"

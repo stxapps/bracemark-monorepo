@@ -418,12 +418,25 @@ breakpoint math.
 
 1. **Prefer shadcn/Radix** (`Dialog`, `Popover`, `DropdownMenu`, `Tooltip`,
    `HoverCard`). They handle portalling, focus trap, a11y, and collision/flip/shift
-   via Floating UI. Keep them out of the unsafe area by feeding insets:
+   via Floating UI. Keeping them out of the unsafe area is `collisionPadding`, and
+   **web-ui defaults it to the insets** — `PopoverContent`, `SelectContent`,
+   `DropdownMenuContent` and `DropdownMenuSubContent` all take theirs from
+   `useCollisionPadding()` (`hooks/use-collision-padding.ts`), which is
+   `useWindowInsets()` plus an 8px gutter. Pass your own `collisionPadding` only
+   to opt out.
 
-   ```tsx
-   const insets = useWindowInsets();
-   <PopoverContent collisionPadding={insets} />;
-   ```
+   This used to be written here as a rule for call sites, spelled
+   `collisionPadding={insets}` — and in that form it had **zero implementations**:
+   every component hardcoded a bare `8` and no caller ever overrode it. The reason
+   it kept getting missed is that the rule reads as being about the TRIGGER, and
+   all of ours sit inside safe-area'd chrome. It isn't: Floating UI clamps the
+   CONTENT to the raw viewport, so it takes only a surface tall enough to be
+   pushed against an edge, wherever it was anchored from. Hence the default.
+
+   It bites hardest in an installed PWA — `manifest.json` says
+   `"display": "standalone"`, so all four insets are live and the top one is ~59px
+   on a dynamic-island device — and in landscape, where the side inset is 44–59px
+   in Safari either way.
 
 2. **Hand-roll only when Radix can't express the UI** (custom anchored panel,
    coordinate-driven menu). Size against `visualViewport` (keyboard/pinch-zoom
@@ -460,6 +473,64 @@ breakpoint math.
    Live use: the links topbar's quick-add, which is an anchored popover at `md`
    and up and a keyboard-lifted bottom `Sheet` below it
    (`links/_components/link-add-surface.tsx`, [editors.md](./editors.md)).
+
+4. **A centred dialog needs a CAP, and the arithmetic is not the obvious one.**
+   `DialogContent` and `AlertDialogContent` are `fixed top-1/2 left-1/2
+-translate-1/2`, and "centred, so it never reaches an unsafe edge" holds only
+   while every dialog is short — which is not a property anything enforces (the
+   edit dialog fills the height by design; the destroy confirmation interpolates
+   an unbounded link title). Both carry `max-h-(--dialog-max-h)`, a token in
+   `web-ui/styles.css`:
+
+   ```css
+   --dialog-max-h: calc(
+     100dvh - 2 * max(env(safe-area-inset-top), env(safe-area-inset-bottom)) - 2rem
+   );
+   ```
+
+   **Twice the LARGER inset, not top + bottom.** A transform-centred box of height
+   H leaves `(100dvh − H) / 2` on _each_ side, so a cap that subtracts `top +
+bottom` splits the correction evenly between two edges that aren't — 59 against
+   34 on an iPhone, where the even split leaves 62px of top clearance against the
+   75px it needs. `link-edit-dialog.tsx` used to spell its own
+   `max-h-[calc(100dvh-2rem)]` and was wrong by exactly this.
+
+   It is a **token, not a `@utility`**, so the components can write
+   `max-h-(--dialog-max-h)`: tailwind-merge parses that as an ordinary `max-h`
+   utility and de-dupes it against a caller's own `max-h-*`, where a custom
+   utility name would be opaque to it and the two would fight by stylesheet order
+   (the `safe-area` + `p-4` hazard above).
+
+   **The cap deliberately ships without an `overflow-y-auto`**, and a growable
+   caller owns its own scroller instead — the same contract as expo, where the
+   cap is `max-h-full` and the caller pairs it with `shrink`. It can't be
+   defaulted: the `-translate-*` makes `DialogContent` the containing block for
+   `position: fixed` descendants, and Radix's Popper defaults to
+   `strategy: 'fixed'`, so an `overflow` on _that_ box (unlike one on any div
+   inside it, which is below the containing block and clips nothing) would newly
+   clip the non-portalled popovers `ListSelect` and `TagsField` open inside the
+   edit dialog.
+
+   **A scroller under the cap needs `flex flex-col` on the content**, overriding
+   the base `grid`. Measured in Chrome: a grid's `auto` rows are sized from their
+   content and give none of it back when the container hits a max-height, so the
+   box just overflows and the cap changes nothing. Flex items shrink by default,
+   and a child whose `overflow` isn't `visible` has its automatic minimum size
+   resolved to 0, so the scroller absorbs the squeeze. `flex-1` where the region
+   should also FILL (`link-edit-dialog.tsx`), `shrink` where it should stay
+   content-sized until it has to give (`link-destroy-confirm.tsx`,
+   `bulk-tags-dialog.tsx`).
+
+   `CommandDialog` is the exception and overrides both halves: it hangs from a
+   fixed `top-[33.3333dvh]` rather than centring, so all its slack is below it
+   and its cap is `calc(66.6667dvh - var(--env-safe-area-inset-bottom) - 1rem)`,
+   with `grid-rows-[minmax(0,1fr)]` to let the row shrink at all. (`top-1/3`
+   became `top-[33.3333dvh]` in the same change: a percentage on a `fixed` box
+   resolves against the initial containing block — the LARGE viewport — while the
+   cap subtracted from is `dvh`, and two references for two halves of one sum is
+   how a box ends up taller than the room it was measured for.) It has no caller
+   in the workspace today; `ListCommand` and `TagsCommand` render `Command` bare
+   inside a `Popover` or a `Sheet`.
 
 ### performance note
 
@@ -521,21 +592,61 @@ and both apps' surfaces are edge-to-edge by default (iOS always was; Android
     fill the height it has (`max-h-full`, next section), and a maxed-out box put
     its title under the dynamic island. So `DialogOverlay` applies
     `useSafeAreaInsets()` + 8 as its gutter on native — the hand-rolled rule
-    below, not an inheritance. `ui/alert-dialog.tsx` is untouched: it has no
-    input and no growable body, so it can neither fill the height nor summon a
-    keyboard. Insets are half the story — the keyboard is the other half, and
-    a portaled dialog inherits no more from the screen's
+    below, not an inheritance. Insets are half the story — the keyboard is the
+    other half, and a portaled dialog inherits no more from the screen's
     `KeyboardAwareScrollView` than from its `SafeAreaView`.
+
+    **`ui/alert-dialog.tsx` now carries the same pair**, and the reasoning that
+    exempted it was wrong. It said an alert dialog "has no input and no growable
+    body, so it can neither fill the height nor summon a keyboard" — the keyboard
+    half still holds (there is no `KeyboardAvoidingView` there, and `max-h-full`
+    therefore resolves against the overlay directly rather than against an
+    avoider inside it), but the body half does not: `link-destroy-confirm.tsx`
+    interpolates a link TITLE into its description, which is unbounded, and RN
+    text scales with the OS font setting while Uniwind's baked-rem padding does
+    not. So it gets the gutter, `max-h-full`, and — in that one caller — the
+    `shrink` scroller the cap needs, around the whole `AlertDialogHeader` so the
+    `gap-1.5` binding a title to its description doesn't cross the boundary and
+    re-space at the content's `gap-6`. The footer stays outside it, pinned.
+    Generalise from this rather than from the old exemption: what decides is
+    whether the body has a BOUND, not whether the component is called "alert".
+
   - **Anchored menus** (`ui/dropdown-menu.tsx`): @rn-primitives positions
     against the measured trigger with `avoidCollisions` (default on); its
     `insets` prop is the extra collision padding — the native analogue of
-    Radix's `collisionPadding` (rule 1 in _popups & dialogs_ above). Current
-    triggers all sit inside safe-area'd chrome, so nothing passes it yet; a
-    trigger near a raw screen edge should pass
-    `insets={useSafeAreaInsets()}`.
+    Radix's `collisionPadding` (rule 1 in _popups & dialogs_ above).
+    `DropdownMenuContent` **defaults it** to `useSafeAreaInsets()` + 8, matching
+    both DialogOverlay's gutter and web's default; a caller may override, and
+    `insets={{}}` opts out.
+
+    It used to pass nothing, on the reasoning that "current triggers all sit
+    inside safe-area'd chrome". That reasoning is about the TRIGGER and the
+    clamp is about the CONTENT: `getSidePosition` places a menu that doesn't fit
+    below its trigger at `dimensions.height - insets.bottom - contentHeight`,
+    against `Dimensions.get('screen')` — the PHYSICAL screen, not the app
+    window — with `insets.bottom` defaulting to 0. So the menu bottoms out flush
+    with the hardware edge however safely its trigger sits. Two did it every
+    time: the bulk-edit bar's ⋯ (`features/links/bulk-edit-bar.tsx`), whose bar
+    is anchored to the bottom of the screen so the clamp always fires, and the
+    last visible row's ⋯ (`features/links/link-row-menu.tsx`) — both putting
+    their final item inside the home indicator's own swipe region.
+
   - **Hand-rolled absolute positioning** (a future toast, a bottom bar in an
     overlay): nothing inherits — apply `useSafeAreaInsets()` offsets yourself,
     the native mirror of web's hand-rolled rule 2.
+- **An `absolute` child of a `SafeAreaView` escapes its inset**, and this is a
+  second, separate trap from the portal one above — it needs no portal at all.
+  `SafeAreaView` insets by PADDING, and an absolutely-positioned box is laid out
+  against the padding BOX: in CSS that is the definition of its containing
+  block, and RN's Yoga agrees — `AbsoluteLayout.cpp` adds only
+  `computeInlineStartBorder` when an inset is defined, so `bottom: 16` under a
+  `SafeAreaView` measures 16 from the hardware edge, not from the safe one.
+  (Padding enters only on the static-position path, where a child has no insets
+  at all, and even there it is gated by the `AbsolutePositionWithoutInsetsExcludesPadding` errata.) Nothing in the app trips this today: every `absolute` box we have —
+  `add-link-fab.tsx`, `shared.tsx`'s RefreshPill — hangs off a normal flex child
+  one level in, whose own border box already sits inside the padding. Keep it
+  that way; an `absolute` element placed DIRECTLY under a `SafeAreaView` is the
+  shape to catch in review, and it has no symptom until a notched device.
 
 ### keyboard avoidance on native (bracemark-expo)
 
@@ -616,8 +727,10 @@ behavior="padding"` around the centring box in `DialogOverlay` — the container
   `DialogContent` — the percentage resolves against the avoider, whose height is
   definite, so it reads "the window, minus the keyboard, minus the gutter"
   without measuring anything — plus `shrink` on the one scroller each growable
-  body owns (`list-command.tsx`, `bulk-tags-dialog.tsx`), since RN children do
-  not shrink by default and the cap alone would keep pushing the title off. The
+  body owns (`list-command.tsx`, `bulk-tags-dialog.tsx`, and now
+  `link-destroy-confirm.tsx` under the alert dialog's copy of the cap), since RN
+  children do not shrink by default and the cap alone would keep pushing the
+  title off. The
   margin was thinner than it looked: an iPhone 17 Pro leaves ~566pt above the
   keyboard and bulk "Edit tags" wants ~520. Both halves were driven on a
   simulator and an emulator against a deliberately oversized body. Related: this finding put the two plain-KAV

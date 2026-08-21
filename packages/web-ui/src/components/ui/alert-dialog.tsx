@@ -49,8 +49,16 @@ function AlertDialogContent({
       <AlertDialogPrimitive.Content
         data-slot="alert-dialog-content"
         data-size={size}
+        // `max-h-(--dialog-max-h)`, the same cap DialogContent carries and for
+        // the same reason — this box is transform-centred over the viewport, so
+        // once its body outgrows the room it has, its title goes under the
+        // notch. The one caller today (link-destroy-confirm.tsx) interpolates a
+        // link TITLE into its description, which is unbounded, so "an alert
+        // dialog is always short" is not a property anything enforces. See
+        // dialog.tsx for the full note, including why no `overflow-y-auto` comes
+        // with it and where a growable caller puts its scroller instead.
         className={cn(
-          'group/alert-dialog-content fixed top-1/2 left-1/2 z-50 grid w-full -translate-x-1/2 -translate-y-1/2 gap-6 rounded-4xl bg-popover p-6 text-popover-foreground ring-1 ring-foreground/5 duration-100 outline-none data-[size=default]:max-w-xs data-[size=sm]:max-w-xs data-[size=default]:sm:max-w-md data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95',
+          'group/alert-dialog-content fixed top-1/2 left-1/2 z-50 grid max-h-(--dialog-max-h) w-full -translate-x-1/2 -translate-y-1/2 gap-6 rounded-4xl bg-popover p-6 text-popover-foreground ring-1 ring-foreground/5 duration-100 outline-none data-[size=default]:max-w-xs data-[size=sm]:max-w-xs data-[size=default]:sm:max-w-md data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95',
           className,
         )}
         {...props}

@@ -56,13 +56,43 @@ export function LinkDestroyConfirm() {
 
   return (
     <AlertDialog open onOpenChange={(open) => !open && closeDestroy()}>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Delete permanently?</AlertDialogTitle>
-          <AlertDialogDescription>
-            {what} will be removed from all your devices. This can&rsquo;t be undone.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
+      {/* `flex flex-col` overrides the base `grid`, and it is what makes the
+          scroller below WORK rather than a stylistic preference. A grid's `auto`
+          rows are sized from their content and do not give any of it back when
+          the container hits a max-height — measured in Chrome: the rows keep
+          their full height and the box simply overflows, so the cap changes
+          nothing and the footer still lands off-screen. Flex items shrink by
+          default, and a child with `overflow` other than `visible` has its
+          automatic minimum size resolved to 0, so the scroller absorbs the
+          squeeze. (tailwind-merge drops the base `grid` for us — both are
+          `display` utilities. link-edit-dialog.tsx overrides the same way.) */}
+      <AlertDialogContent className="flex flex-col">
+        {/* The scroller AlertDialogContent's `max-h-(--dialog-max-h)` needs, and
+            the reason this file is the one alert dialog that has to have one:
+            `what` above interpolates a link TITLE, which is unbounded. So this
+            header is the only part of the box that can outgrow the viewport, and
+            a cap with nothing to scroll would spill it past both viewport edges
+            rather than reveal it (the cap deliberately ships without an
+            `overflow-y-auto` of its own — see dialog.tsx for why it can't).
+            `shrink` is the default in CSS and spelled out only to say that this
+            row is the one meant to give way; `min-h-0` states the automatic
+            minimum the `overflow-y-auto` already implies. Never the footer,
+            which stays outside this and pinned. The expo port is the same shape
+            (features/links/link-destroy-confirm.tsx), where `shrink` is load-
+            bearing rather than decorative — RN children don't shrink by default.
+
+            It wraps the whole header rather than the description alone: the gap
+            binding a title to its description lives INSIDE AlertDialogHeader, so
+            splitting the two across the scroller boundary would re-space them at
+            the content's `gap-6`. */}
+        <div className="min-h-0 shrink overflow-y-auto">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete permanently?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {what} will be removed from all your devices. This can&rsquo;t be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+        </div>
         <AlertDialogFooter>
           <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
           <AlertDialogAction

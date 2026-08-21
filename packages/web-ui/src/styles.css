@@ -242,6 +242,30 @@
     --env-safe-area-inset-right: env(safe-area-inset-right);
     --env-safe-area-inset-bottom: env(safe-area-inset-bottom);
     --env-safe-area-inset-left: env(safe-area-inset-left);
+
+    /*
+     * The tallest a VIEWPORT-CENTRED `position: fixed` box may be while both of
+     * its edges stay clear of the safe area — Dialog and AlertDialog, which
+     * Radix places with `top-1/2 left-1/2 -translate-1/2`. It is a token rather
+     * than a `@utility` so the components can spell it `max-h-(--dialog-max-h)`:
+     * tailwind-merge parses that as an ordinary `max-h` utility and de-dupes it
+     * against a caller's own `max-h-*`, where a custom utility name would be
+     * opaque to it and the two would silently fight by stylesheet order (the
+     * `safe-area` + `p-4` hazard, docs/safe-area.md, _applying safe area_).
+     *
+     * TWICE the LARGER inset, not top + bottom. A transform-centred box of
+     * height H leaves (100dvh − H) / 2 of clearance on EACH side, so a cap that
+     * subtracts top + bottom under-corrects the moment the two differ — which is
+     * the iPhone case exactly (~59 top against ~34 bottom in a standalone PWA,
+     * where all four insets are live). `max()` keeps whichever edge is tighter
+     * honest and the arithmetic symmetric, the way the centring already is.
+     *
+     * The extra 2rem is the gutter, so the box reads as floating over the page
+     * rather than wedged between the notch and the home indicator.
+     */
+    --dialog-max-h: calc(
+      100dvh - 2 * max(env(safe-area-inset-top), env(safe-area-inset-bottom)) - 2rem
+    );
   }
 }
 

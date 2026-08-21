@@ -50,8 +50,37 @@ function DialogContent({
       <DialogOverlay />
       <DialogPrimitive.Content
         data-slot="dialog-content"
+        // `max-h-(--dialog-max-h)` is the web counterpart of the `max-h-full` on
+        // bracemark-expo's DialogContent, and it lives HERE rather than on the
+        // overlay because the two platforms centre a dialog differently: expo's
+        // DialogOverlay is a flex box the content centres inside, so the inset
+        // gutter can be its padding and a percentage cap resolves against it,
+        // whereas Radix places this element itself with `top-1/2 left-1/2
+        // -translate-1/2` and leaves the overlay a mere sibling backdrop —
+        // there is nothing for a `max-h-full` to resolve against. The token
+        // bakes in the doubled-inset arithmetic a transform-centred box needs
+        // (web-ui/styles.css). It matters most in an installed PWA, where
+        // `display: standalone` (bracemark-web's manifest.json) makes all four
+        // insets live and the top one ~59px.
+        //
+        // The cap does NOT come with `overflow-y-auto`, and that is deliberate
+        // rather than an omission — it is the same contract as expo, where a
+        // caller whose body can grow pairs the cap with `shrink` on its own
+        // scroller. The reason it can't be defaulted here is the `-translate-*`
+        // above: a transform makes this element the containing block for
+        // `position: fixed` descendants, and Radix's Popper defaults to
+        // `strategy: 'fixed'` — so an `overflow` on THIS box (unlike one on any
+        // div inside it, which is below the containing block and clips nothing)
+        // would newly clip the NON-PORTALLED popovers ListSelect and TagsField
+        // open inside the edit dialog, whose whole reason for being inline is
+        // the modal scroll-lock (see PopoverContent's `portal` prop). So a
+        // growable caller gives ITSELF the scroller, one level in, where it also
+        // gets to keep its header and footer pinned: link-edit-dialog.tsx
+        // (`flex flex-col` + an inner `min-h-0 flex-1` scroller) and
+        // bulk-tags-dialog.tsx (a capped scroller around the chip area) are the
+        // two worked examples.
         className={cn(
-          'fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-6 rounded-4xl bg-popover p-6 text-sm text-popover-foreground ring-1 ring-foreground/5 duration-100 outline-none sm:max-w-md data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95',
+          'fixed top-1/2 left-1/2 z-50 grid max-h-(--dialog-max-h) w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-6 rounded-4xl bg-popover p-6 text-sm text-popover-foreground ring-1 ring-foreground/5 duration-100 outline-none sm:max-w-md data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95',
           className,
         )}
         {...props}

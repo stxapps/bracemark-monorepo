@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { Platform, type StyleProp, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import { FadeIn, ReduceMotion } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FullWindowOverlay as RNFullWindowOverlay } from 'react-native-screens';
 import * as DropdownMenuPrimitive from '@rn-primitives/dropdown-menu';
 import { Check, ChevronDown, ChevronRight, ChevronUp } from 'lucide-react-native';
@@ -93,6 +94,7 @@ const FullWindowOverlay = Platform.OS === 'ios' ? RNFullWindowOverlay : React.Fr
 
 function DropdownMenuContent({
   className,
+  insets,
   overlayClassName,
   overlayStyle,
   portalHost,
@@ -102,6 +104,35 @@ function DropdownMenuContent({
   overlayClassName?: string;
   portalHost?: string;
 }) {
+  // The collision padding @rn-primitives clamps the menu to, and it DEFAULTS to
+  // the safe-area insets rather than waiting for a caller to pass them
+  // (docs/safe-area.md, _safe area on native_). The clamp is about the CONTENT,
+  // not the trigger: `getSidePosition` places a menu that doesn't fit below its
+  // trigger at `dimensions.height - insets.bottom - contentHeight`, against
+  // `Dimensions.get('screen')` — the PHYSICAL screen — with `insets.bottom`
+  // defaulting to 0. So a menu bottoms out flush with the hardware edge no
+  // matter how safely its trigger sits: the bulk-edit bar's ⋯ (a bar anchored to
+  // the bottom of the screen, so its menu is clamped every single time) and the
+  // last visible row's ⋯ both put their final item inside the home indicator's
+  // own swipe region. Same reasoning as DialogOverlay's gutter in dialog.tsx —
+  // portaled content inherits no screen insets — and the same +8, which is also
+  // web's `collisionPadding` default (web-ui/components/ui/dropdown-menu.tsx).
+  //
+  // A caller may still override with its own `insets`; passing `{}` opts out.
+  // Native-only in effect: on web @rn-primitives defers to Radix, which does its
+  // own collision handling and ignores this prop.
+  const safeAreaInsets = useSafeAreaInsets();
+  const collisionInsets = React.useMemo(
+    () =>
+      insets ?? {
+        top: safeAreaInsets.top + 8,
+        bottom: safeAreaInsets.bottom + 8,
+        left: safeAreaInsets.left + 8,
+        right: safeAreaInsets.right + 8,
+      },
+    [insets, safeAreaInsets.top, safeAreaInsets.bottom, safeAreaInsets.left, safeAreaInsets.right],
+  );
+
   return (
     <DropdownMenuPrimitive.Portal hostName={portalHost}>
       <FullWindowOverlay>
@@ -124,6 +155,7 @@ function DropdownMenuContent({
           >
             <TextClassContext.Provider value="text-popover-foreground">
               <DropdownMenuPrimitive.Content
+                insets={collisionInsets}
                 className={cn(
                   'min-w-32 overflow-hidden rounded-md border border-border bg-popover p-1 shadow-lg shadow-black/5',
                   Platform.select({

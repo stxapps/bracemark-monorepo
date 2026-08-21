@@ -1,7 +1,13 @@
+'use client';
+
 import * as React from 'react';
 import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from 'lucide-react';
 import { Select as SelectPrimitive } from 'radix-ui';
 
+import {
+  type CollisionPadding,
+  useCollisionPadding,
+} from '@stxapps/web-ui/hooks/use-collision-padding';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
 function Select({ ...props }: React.ComponentProps<typeof SelectPrimitive.Root>) {
@@ -53,13 +59,19 @@ function SelectContent({
   children,
   position = 'item-aligned',
   align = 'center',
-  // Keep an 8px gutter from the viewport edge (Radix defaults this to 0, which
-  // sits flush) — same idiom as popover/dropdown content, and it feeds the
-  // available-height cap in the className so a tall list scrolls inside instead
-  // of running off-screen.
-  collisionPadding = 8,
+  // Keep a gutter from the edge of the room the list has (Radix defaults this to
+  // 0, which sits flush) — same idiom as popover/dropdown content, and it feeds
+  // the available-height cap in the className so a tall list scrolls inside
+  // instead of running off-screen. "The room it has" is the viewport MINUS the
+  // safe area, which is why this is a hook rather than the bare 8 it used to be
+  // (useCollisionPadding carries the note).
+  collisionPadding: collisionPaddingProp,
   ...props
-}: React.ComponentProps<typeof SelectPrimitive.Content>) {
+}: Omit<React.ComponentProps<typeof SelectPrimitive.Content>, 'collisionPadding'> & {
+  collisionPadding?: CollisionPadding;
+}) {
+  const collisionPadding = useCollisionPadding(collisionPaddingProp);
+
   return (
     <SelectPrimitive.Portal>
       <SelectPrimitive.Content

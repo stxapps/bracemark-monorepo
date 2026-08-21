@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { Platform, View, type ViewProps } from 'react-native';
 import { FadeIn, FadeOut, ReduceMotion } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FullWindowOverlay as RNFullWindowOverlay } from 'react-native-screens';
 import * as AlertDialogPrimitive from '@rn-primitives/alert-dialog';
 import type { VariantProps } from 'class-variance-authority';
@@ -34,16 +35,42 @@ function AlertDialogOverlay({
 }: Omit<React.ComponentProps<typeof AlertDialogPrimitive.Overlay>, 'asChild'> & {
   children?: React.ReactNode;
 }) {
+  // The insets gutter, identical to DialogOverlay's in dialog.tsx and carrying
+  // the same reasoning: this subtree is PORTALED to the root PortalHost, so it
+  // sits outside every screen's SafeAreaView and inherits nothing from it, and
+  // "centred, so it never reaches an unsafe edge" only held while every alert
+  // dialog was short. It isn't: link-destroy-confirm.tsx interpolates a link
+  // TITLE — unbounded, and the text scales with the OS font setting while
+  // Uniwind's baked-rem padding does not — so its description can outgrow the
+  // window, and a centred box that outgrows the window puts its title under the
+  // dynamic island. Applied here because the overlay is the box the dialog
+  // centres in; the `max-h-full` cap on AlertDialogContent below is the other
+  // half. Native only: on web the overlay is `position: fixed` inside a document
+  // that already handles this, so `p-2` stays.
+  //
+  // No KeyboardAvoidingView, unlike dialog.tsx — an alert dialog has no input,
+  // so it can't summon a keyboard, and the `max-h-full` below therefore resolves
+  // against this box directly rather than against an avoider inside it.
+  const insets = useSafeAreaInsets();
+
   return (
     <FullWindowOverlay>
       <AlertDialogPrimitive.Overlay
         className={cn(
-          'absolute top-0 right-0 bottom-0 left-0 z-50 flex items-center justify-center bg-black/50 p-2',
+          'absolute top-0 right-0 bottom-0 left-0 z-50 flex items-center justify-center bg-black/50',
           Platform.select({
-            web: 'animate-in fade-in-0 fixed',
+            web: 'animate-in fade-in-0 fixed p-2',
           }),
           className,
         )}
+        style={Platform.select({
+          native: {
+            paddingTop: insets.top + 8,
+            paddingBottom: insets.bottom + 8,
+            paddingLeft: insets.left + 8,
+            paddingRight: insets.right + 8,
+          },
+        })}
         {...props}
         asChild={Platform.OS !== 'web'}
       >
@@ -73,7 +100,17 @@ function AlertDialogContent({
           className={cn(
             // `gap-6`, matching web-ui's AlertDialogContent — and the sibling
             // dialog.tsx, which carries the note for both.
-            'z-50 flex flex-col gap-6 rounded-lg border border-border bg-background p-6 shadow-lg shadow-black/5 sm:max-w-lg',
+            // `max-h-full`, ported from DialogContent for the same reason: the
+            // percentage resolves against the overlay above, whose height IS
+            // definite (`absolute` on all four edges), so this one class means
+            // "the window, minus the overlay's inset gutter" without measuring
+            // anything. Without it the box is content-sized and centred, and a
+            // description taller than that space overflows off the TOP, losing
+            // the title — which is the half of the problem the gutter alone
+            // cannot reach. A caller whose body can grow pairs this with
+            // `shrink` on its own scroller (link-destroy-confirm.tsx), since RN
+            // children do not shrink by default.
+            'z-50 flex max-h-full flex-col gap-6 rounded-lg border border-border bg-background p-6 shadow-lg shadow-black/5 sm:max-w-lg',
             Platform.select({
               web: 'animate-in fade-in-0 zoom-in-95 duration-200 web:max-w-[calc(100%-2rem)]',
             }),

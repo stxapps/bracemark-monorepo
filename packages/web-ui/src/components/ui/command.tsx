@@ -44,8 +44,44 @@ function CommandDialog({
         <DialogTitle>{title}</DialogTitle>
         <DialogDescription>{description}</DialogDescription>
       </DialogHeader>
+      {/* This is the one dialog in the package that ISN'T viewport-centred, so
+          DialogContent's `max-h-(--dialog-max-h)` — which subtracts twice the
+          larger inset because a centred box splits its clearance across both
+          edges — is the wrong cap here and is overridden. A palette hangs from a
+          FIXED top edge, so all of its slack is below it: what it may grow to is
+          the distance from that edge to the bottom of the safe area, and the top
+          inset doesn't enter into it at all (a third of the viewport clears any
+          notch on anything wider than it is tall, and in landscape — the short
+          case — the iPhone top inset is 0 and the notch becomes a side one).
+
+          `top-[33.3333dvh]` rather than the `top-1/3` this used to carry: a
+          percentage on a `fixed` box resolves against the initial containing
+          block, which is the LARGE viewport (URL bar retracted), while the cap
+          below is in `dvh`. Two different references for the two halves of one
+          sum is how a box ends up taller than the room it was measured for; this
+          makes both `dvh` (docs/safe-area.md, _applying safe area_, on why every
+          viewport unit here is `dvh`).
+
+          `grid-rows-[minmax(0,1fr)]` is what lets the cap actually reach
+          CommandList: the base is a grid, and a grid row's automatic minimum
+          size would otherwise refuse to shrink below its content, so the box
+          would honour the max-height by clipping (it is `overflow-hidden`)
+          rather than by handing the list less room. With the row free to shrink,
+          `Command`'s `size-full overflow-hidden` passes the squeeze down to
+          CommandList, whose own `overflow-y-auto` already zeroes ITS automatic
+          minimum — so `max-h-72` becomes the preferred height and the real one
+          is whatever is left, which is the web equivalent of the cap/`shrink`
+          pair expo's dialogs use.
+
+          Note this component currently has no caller in the workspace —
+          ListCommand and TagsCommand render `Command` bare inside a Popover or a
+          Sheet. It stays correct because it's exported API, and because the
+          shape it wants is the least obvious of the three. */}
       <DialogContent
-        className={cn('top-1/3 translate-y-0 overflow-hidden rounded-4xl! p-0', className)}
+        className={cn(
+          'top-[33.3333dvh] max-h-[calc(66.6667dvh-var(--env-safe-area-inset-bottom)-1rem)] translate-y-0 grid-rows-[minmax(0,1fr)] overflow-hidden rounded-4xl! p-0',
+          className,
+        )}
         showCloseButton={showCloseButton}
       >
         {children}

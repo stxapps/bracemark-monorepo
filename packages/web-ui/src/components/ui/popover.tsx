@@ -1,6 +1,12 @@
+'use client';
+
 import * as React from 'react';
 import { Popover as PopoverPrimitive } from 'radix-ui';
 
+import {
+  type CollisionPadding,
+  useCollisionPadding,
+} from '@stxapps/web-ui/hooks/use-collision-padding';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
 function Popover({ ...props }: React.ComponentProps<typeof PopoverPrimitive.Root>) {
@@ -15,13 +21,20 @@ function PopoverContent({
   className,
   align = 'center',
   sideOffset = 4,
-  // Never let the popover outgrow the viewport: cap it at Radix's
-  // collision-computed available height (via the max-h below, leaving an 8px
-  // gutter) and scroll inside. Same idiom as select/dropdown content. Without
-  // this a tall popover — the quick-add form with Advanced open on a
-  // short/landscape screen, or the list picker near a screen edge — runs
-  // off-screen with its bottom (Save button / last list row) unreachable.
-  collisionPadding = 8,
+  // Never let the popover outgrow the room it has: cap it at Radix's
+  // collision-computed available height (via the max-h below) and scroll inside.
+  // Same idiom as select/dropdown content. Without this a tall popover — the
+  // quick-add form with Advanced open on a short/landscape screen, or the list
+  // picker near a screen edge — runs off-screen with its bottom (Save button /
+  // last list row) unreachable.
+  //
+  // "The room it has" is the viewport MINUS the safe area, which is why this is
+  // a hook and not the bare 8 it used to be: Floating UI clamps to the raw
+  // viewport, and under `viewport-fit=cover` that reaches under the notch
+  // (useCollisionPadding carries the note). Both the padding and this max-h read
+  // from it — the available-height variable Radix exposes is computed from the
+  // same collision padding — so the cap and the placement stay in step.
+  collisionPadding: collisionPaddingProp,
   // Portal to <body> by default. Pass `portal={false}` when the popover opens
   // from inside a modal Dialog: a portalled popover escapes the Dialog's
   // scroll-lock subtree (react-remove-scroll), which then swallows every
@@ -30,7 +43,11 @@ function PopoverContent({
   // keeps the popover inside the lock's allowed subtree so scrolling works.
   portal = true,
   ...props
-}: React.ComponentProps<typeof PopoverPrimitive.Content> & { portal?: boolean }) {
+}: Omit<React.ComponentProps<typeof PopoverPrimitive.Content>, 'collisionPadding'> & {
+  collisionPadding?: CollisionPadding;
+  portal?: boolean;
+}) {
+  const collisionPadding = useCollisionPadding(collisionPaddingProp);
   const content = (
     <PopoverPrimitive.Content
       data-slot="popover-content"

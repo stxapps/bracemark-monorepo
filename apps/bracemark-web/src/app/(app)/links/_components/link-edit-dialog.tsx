@@ -232,11 +232,17 @@ function LinkEditForm({
     // the user must then reach for Save or the explicit Cancel below (which calls
     // onClose directly, bypassing this — a deliberate discard stays one click).
     <Dialog open onOpenChange={(open) => !open && !isDirty && onClose()}>
-      {/* Cap to the viewport and scroll the fields region (below) rather than
-          the whole dialog, so the header and Save/Cancel footer stay pinned
-          when the form (image preview + tags + note) outgrows a short screen. */}
+      {/* Scroll the fields region (below) rather than the whole dialog, so the
+          header and Save/Cancel footer stay pinned when the form (image preview
+          + tags + note) outgrows a short screen. The CAP that region shrinks
+          against is DialogContent's own `max-h-(--dialog-max-h)`; this used to
+          spell its own `max-h-[calc(100dvh-2rem)]` here, which was both a
+          duplicate and wrong — a 1rem half-gutter against a ~59px top inset put
+          the title under the dynamic island in an installed PWA
+          (docs/safe-area.md, _popups & dialogs_). `flex flex-col` overrides the
+          base `grid` purely so the region below can be a `min-h-0 flex-1` row. */}
       <DialogContent
-        className="flex max-h-[calc(100dvh-2rem)] flex-col sm:max-w-md"
+        className="flex flex-col sm:max-w-md"
         // Radix's default open-autofocus grabs the first focusable — the title
         // input — so "Edit note"/"Edit tags" would still land on title. Take
         // over: focus the field the opener asked for. The tags trigger rings
