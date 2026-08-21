@@ -682,7 +682,13 @@ The fold, `iap/status`, and the quota gate don't change at all. Manage/cancel
 for store purchases lives in the platform store's own surface (the app
 deep-links to it); a Paddle purchase seen from the app gets a
 "manage on the web" note, the converse of the web's store note.
-`source: 'manual'` covers comps/lifetime grants (non-expiring rows).
+`source: 'manual'` covers comps/lifetime grants (non-expiring rows) — and, on a
+developer machine, it is how you get a paid account without Paddle's sandbox at
+all: `npm run seed` writes one straight into local D1
+([e2e.md](./e2e.md), _seeding a dev account_). Nothing test-only is needed here
+for that to work, which is the point — a grant with no provider behind it was
+always a real product state, so `isEntitled` reads a null expiry on a `manual`
+row as never-expiring and `needsRefresh` skips it outright.
 
 ### config per env
 

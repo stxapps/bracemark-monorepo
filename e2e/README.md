@@ -29,6 +29,32 @@ npx nx e2e-contract @stxapps/e2e    # web → mobile, then mobile → web
 The three run-it targets also have root scripts: `npm run e2e:web`, `e2e:mobile`,
 `e2e:contract`. There is no bare `npm run e2e` — see `docs/e2e.md`, _running_.
 
+## seeding a dev account
+
+Not a test — `init` for looking at the app by hand. Four accounts on the local
+stack, two with a full library, so paging, the list/tag tree, filtering,
+drag-and-drop and the search editor have something to work on.
+
+```sh
+npm run seed                  # all four (needs `npm run dev` up)
+npm run seed -- free-full     # or just one
+npm run seed:fixtures         # the backup archives only — no browser, no api
+```
+
+| key          | username          | plan | library                                      |
+| ------------ | ----------------- | ---- | -------------------------------------------- |
+| `free-empty` | `seed_free_empty` | Free | nothing                                      |
+| `plus-empty` | `seed_plus_empty` | Plus | nothing                                      |
+| `free-full`  | `seed_free_full`  | Free | 190 links, 8 flat lists, 14 flat tags        |
+| `plus-full`  | `seed_plus_full`  | Plus | 1,000 links, 24 nested lists, 40 nested tags |
+
+Passwords land in `credentials/accounts.json` (gitignored). The whole design —
+why the library is imported through the app while the plan is written straight to
+D1, and the four things that will surprise you — is `docs/e2e.md`, _seeding a dev
+account_. The one to know before you edit `seed/library.ts`: **re-seeding does
+not update an account that already exists** (a backup merge is skip-existing by
+path), so delete all data in Settings → Data first.
+
 A single spec, from this directory: `npx playwright test web/links.e2e.ts`.
 
 The mobile and contract targets also need a **bracemark-expo dev build installed
@@ -59,7 +85,9 @@ terminal.
 | `mobile/flows/`    | Maestro flows that run standalone                               |
 | `mobile/contract/` | Maestro legs of a contract run — parameterised, never run alone |
 | `runner/`          | orchestrators: mobile, web→mobile, mobile→web                   |
+| `seed/`            | the dev-account seed — not a test (above)                       |
 | `.artifacts/`      | gitignored — traces, reports, run manifests, browser profiles   |
+| `credentials/`     | gitignored — the accounts `npm run seed` created                |
 
 ## four things that will surprise you
 

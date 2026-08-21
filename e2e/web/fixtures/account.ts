@@ -111,11 +111,18 @@ async function fillCredentialSteps(page: Page, credentials: Credentials): Promis
 }
 
 // Sign in an already-created account. Used by the contract runner's reverse leg,
-// where the account was made on the phone.
+// where the account was made on the phone, and by the seed re-running against an
+// account it made earlier.
+//
+// Targeted by id, like the create-account steps above, and NOT by label: the
+// password field ships a "Show password" toggle inside its wrapper
+// (web-ui password-input.tsx), so `getByLabel(/password/i)` matches the input AND
+// the toggle button and fails strict mode. The ids are the form's own
+// (`sign-in-form.tsx`), and stable for the same reason `#signup-new-password` is.
 export async function signIn(page: Page, credentials: Credentials): Promise<void> {
   await page.goto('/sign-in');
-  await page.getByLabel(/username/i).fill(credentials.username);
-  await page.getByLabel(/password/i).fill(credentials.password);
+  await page.locator('#username').fill(credentials.username);
+  await page.locator('#password').fill(credentials.password);
   await page.getByRole('button', { name: /sign in/i }).click();
   await expect(page).toHaveURL(/\/links/, { timeout: 60_000 });
 }

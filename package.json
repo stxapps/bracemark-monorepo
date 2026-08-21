@@ -25,6 +25,8 @@
     "e2e:web": "nx e2e-web @stxapps/e2e",
     "e2e:mobile": "nx e2e-mobile @stxapps/e2e",
     "e2e:contract": "nx e2e-contract @stxapps/e2e",
+    "seed": "nx seed @stxapps/e2e",
+    "seed:fixtures": "nx seed:fixtures @stxapps/e2e",
     "build": "nx run-many -t build --output-style=stream"
   },
   "private": true,

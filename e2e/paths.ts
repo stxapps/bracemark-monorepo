@@ -24,3 +24,20 @@ export const ARTIFACTS = join(E2E_ROOT, '.artifacts');
 export function profileDir(name: string): string {
   return join(ARTIFACTS, 'profiles', name);
 }
+
+// Where the seed writes (docs/e2e.md, _seeding a dev account_). Two directories,
+// and the split is deliberate.
+//
+// The generated backup archives are RUN OUTPUT — regenerated from seed/library.ts
+// on every seed, disposable, and covered by the `/e2e/.artifacts/` line the
+// profiles and traces already sit behind.
+export const SEED_ARCHIVES = join(ARTIFACTS, 'seed');
+
+// The credentials are NOT run output. They are working sign-ins for accounts that
+// outlive the run that made them — the whole point is to open a browser tomorrow
+// and use them — so clearing `.artifacts` to reclaim disk (or to unstick a
+// Playwright report) must not take them with it. They get their own anchored
+// .gitignore line for the same reason the archives don't need one: a file here is
+// a password in plain text, and it must never be one `rm -rf .artifacts` away from
+// being silently re-created empty.
+export const SEED_CREDENTIALS = join(E2E_ROOT, 'credentials');

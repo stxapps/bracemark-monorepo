@@ -37,6 +37,13 @@ export interface LaunchOptions {
   // Sign in to an existing account instead of creating a new one. The contract
   // runner's reverse leg uses this: the account was made on the phone.
   existing?: Credentials;
+  // Create an account with THESE credentials instead of freshly minted ones.
+  // Only the seed wants this (seed/seed.ts): its accounts are named so a human
+  // can sign back into them tomorrow, which is the opposite of what a spec wants
+  // and the reason `newCredentials()` stays the default. It still goes through
+  // the same create-account ceremony — there is no seeding shortcut here either
+  // (see ./account.ts) — so the only thing it changes is who gets created.
+  create?: Credentials;
   // Take create-account's recovery-code exit instead of skipping it, and return
   // the minted code as `recoveryCode`. Only the mobile runner wants this — see
   // createAccountWithRecovery. Ignored when `existing` is set: that account was
@@ -66,7 +73,7 @@ export async function launchApp(
     viewport: { width: 1280, height: 900 },
   });
 
-  const credentials = options.existing ?? newCredentials();
+  const credentials = options.existing ?? options.create ?? newCredentials();
   const page = context.pages()[0] ?? (await context.newPage());
 
   let recoveryCode: string | undefined;

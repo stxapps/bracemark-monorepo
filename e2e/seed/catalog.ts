@@ -1,0 +1,125 @@
+import { createHash } from 'node:crypto';
+
+// THE four dev accounts — the one place to edit what gets seeded.
+//
+// This is not an e2e fixture. A spec creates a throwaway account per worker and
+// asserts on what it just made; these accounts exist so a HUMAN can open a
+// browser and look at a full library without spending twenty minutes making one.
+// They live here anyway because everything the job needs — a scripted
+// create-account flow, a persistent-profile launcher, `tsx`, and Playwright
+// itself — is already in this project, and a second project holding a second copy
+// of the create-account ceremony is the thing most worth not doing.
+//
+// The four are a 2×2: plan × library. Empty accounts prove a first-run screen is
+// really empty; full ones exercise paging, the list/tag tree, and search. The
+// plan axis is what splits them beyond size — `nestedLists`, `searchEditor` and
+// `locks` are Plus-only (packages/shared/src/iap/plans.ts), so "the same library
+// on a free account" is a genuinely different set of screens, not a smaller one.
+
+export type SeedPlan = 'free' | 'plus';
+
+export interface SeedUser {
+  // The CLI selector (`npm run seed -- free-full`) and the archive filename.
+  key: string;
+  username: string;
+  // 'plus' is granted as a `manual` purchase row — see seed/plan.ts. Pro is a
+  // valid grant too, but Plus is the only plan actually on sale
+  // (AVAILABLE_PAID_PLANS), so it's what a paying account really looks like.
+  plan: SeedPlan;
+  // 0 links means no archive at all — nothing is generated and nothing imported.
+  links: number;
+  lists: number;
+  tags: number;
+  // Nest the list and tag trees. Free accounts are deliberately FLAT: a backup
+  // restores `parentId` verbatim on any plan, so a nested free library is a state
+  // the product itself cannot produce (`nestedLists` gates creating one), and a
+  // seed that hands you an impossible account is worse than no seed.
+  nested: boolean;
+  pins: number;
+}
+
+// Free holds 200 links (ENTITLEMENTS.free.maxLinks) and a Bracemark backup is
+// refused WHOLE when it doesn't fit — `assertUnderImportQuota`, which the backup
+// path calls instead of the interop path's take-what-fits prompt
+// (docs/data-lifecycle.md, _the import's quota gate_). So the free library is
+// sized under the cap on purpose, with ten links of headroom: enough to add a few
+// by hand and watch the create surfaces refuse at 200, which is the more
+// interesting half of the free experience anyway.
+const FREE_LINKS = 190;
+
+// Plus is uncapped, so this is only a wall-clock decision: every link is 2 synced
+// blobs before its preview image makes 3, and the seed waits for all of them to
+// reach local R2 before it hands the account over. A thousand links is ~12 pages
+// of "Show more" (PAGE_SIZE is 50) and a few minutes of upload.
+const PLUS_LINKS = 1000;
+
+export const SEED_USERS: readonly SeedUser[] = [
+  {
+    key: 'free-empty',
+    username: 'seed_free_empty',
+    plan: 'free',
+    links: 0,
+    lists: 0,
+    tags: 0,
+    nested: false,
+    pins: 0,
+  },
+  {
+    key: 'plus-empty',
+    username: 'seed_plus_empty',
+    plan: 'plus',
+    links: 0,
+    lists: 0,
+    tags: 0,
+    nested: false,
+    pins: 0,
+  },
+  {
+    key: 'free-full',
+    username: 'seed_free_full',
+    plan: 'free',
+    links: FREE_LINKS,
+    lists: 8,
+    tags: 14,
+    nested: false,
+    pins: 3,
+  },
+  {
+    key: 'plus-full',
+    username: 'seed_plus_full',
+    plan: 'plus',
+    links: PLUS_LINKS,
+    lists: 24,
+    tags: 40,
+    nested: true,
+    pins: 8,
+  },
+];
+
+export function seedUser(key: string): SeedUser {
+  const user = SEED_USERS.find((u) => u.key === key);
+  if (!user) {
+    throw new Error(
+      `unknown seed user "${key}" — known: ${SEED_USERS.map((u) => u.key).join(', ')}`,
+    );
+  }
+  return user;
+}
+
+// The password for a seeded account, derived from its key so a re-run of the seed
+// signs into the SAME account instead of colliding with it.
+//
+// Two gates it has to clear, both in `newPasswordSchema` and the strength meter
+// behind it (packages/shared/src/auth/credentials.ts): 20 characters, and zxcvbn
+// `guessesLog10 >= 18`. A 43-char base64url digest clears both with room to spare
+// — zxcvbn models an unmatched string as 10^length, so length alone carries it
+// — and, unlike a memorable passphrase, it cannot drift under the meter when the
+// dictionaries move.
+//
+// Derived rather than random because the credentials file is meant to be read by
+// a human on a second machine and a re-seed must not invalidate what they saved.
+// It is still a real, working password to a real account: local, throwaway, and
+// gitignored, but never paste one of these into anything that is not localhost.
+export function seedPassword(key: string): string {
+  return createHash('sha256').update(`bracemark-seed-account:${key}`).digest('base64url');
+}

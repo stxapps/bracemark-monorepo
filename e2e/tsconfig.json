@@ -12,9 +12,15 @@
   "include": [
     "web/**/*.ts",
     "runner/**/*.ts",
+    "seed/**/*.ts",
     "global-setup.ts",
     "paths.ts",
     "playwright.config.ts"
   ],
-  "exclude": [".artifacts", "node_modules", "eslint.config.mjs"]
+  "exclude": [".artifacts", "node_modules", "eslint.config.mjs"],
+  "references": [
+    {
+      "path": "../packages/shared"
+    }
+  ]
 }

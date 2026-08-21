@@ -59,7 +59,9 @@ e2e/
   mobile/flows/           maestro flows, run standalone
   mobile/contract/        maestro legs of a contract run (parameterised)
   runner/                 the orchestrators: mobile, web→mobile, mobile→web
+  seed/                   the dev-account seed — not a test (below)
   .artifacts/             gitignored — traces, reports, run manifests, profiles
+  credentials/            gitignored — what `npm run seed` created
 ```
 
 ### staying out of `npm run test`
@@ -402,6 +404,95 @@ failed run left behind can be signed into and looked at.
 Local api state lives in `apps/bracemark-api/.wrangler/`. Nothing resets it, on
 purpose: a throwaway account per worker is cheaper and less brittle than clearing
 that directory, and it means two runs never contend for the same rows.
+
+### seeding a dev account
+
+`e2e/seed/` is not a test. It is `init` for a session of looking at the app by
+hand: four accounts on the local stack, two of them with a full library, so
+"Show more", the list/tag tree, filtering, drag-and-drop and the search editor
+have something to work on without anyone typing 190 links into a form.
+
+```sh
+npm run dev            # the stack, as always
+npm run seed           # all four accounts
+npm run seed -- free-full        # or just one
+npm run seed:fixtures            # the archives only — no browser, no api
+```
+
+Credentials land in `e2e/credentials/accounts.json` (gitignored, and **not**
+under `.artifacts`: they outlive the run that made them, so clearing run output
+must not take them with it). The catalog:
+
+| key          | username          | plan | library                                      |
+| ------------ | ----------------- | ---- | -------------------------------------------- |
+| `free-empty` | `seed_free_empty` | Free | nothing — the first-run screens              |
+| `plus-empty` | `seed_plus_empty` | Plus | nothing — paid, and still empty              |
+| `free-full`  | `seed_free_full`  | Free | 190 links, 8 flat lists, 14 flat tags        |
+| `plus-full`  | `seed_plus_full`  | Plus | 1,000 links, 24 nested lists, 40 nested tags |
+
+#### the split down the encryption boundary
+
+The seed is two mechanisms, not one, and which half does what is forced:
+
+- **The library goes in through the app.** Links, lists, tags and pins are E2E
+  encrypted — bracemark-api holds AES-GCM blobs it cannot read (_crypto
+  boundary_, [local-first-sync.md](./local-first-sync.md)) — so there is no
+  database to seed them into. The only writer that can produce them is a
+  signed-in client holding the key. So `seed/library.ts` generates the entities,
+  `seed/archive.ts` packs them into a real Bracemark backup, and the seed picks
+  that file in Settings → Data → Import. It lands through `bulkWriteEntities`
+  like any other local edit ([data-lifecycle.md](./data-lifecycle.md)).
+- **The plan goes in through D1.** A subscription is the opposite: plaintext
+  server state. `seed/plan.ts` writes a `manual` purchase row with a null expiry
+  — the source that already exists for comps and lifetime grants — via
+  `wrangler d1 execute --local`. Nothing test-only was added to bracemark-api to
+  make this work, and `needsRefresh` skips `manual` rows because there is no
+  provider to ask ([iap.md](./iap.md)).
+
+Accounts are still created through the real create-account form, Argon2id and
+all: the rule in `web/fixtures/account.ts` — there is no seeding shortcut and
+there should not be one — holds here too. The only thing the seed adds is
+`launchApp`'s `create` option, which chooses the credentials instead of minting
+throwaway ones, because these accounts are meant to be signed back into tomorrow.
+
+#### four things that will surprise you
+
+- **Re-seeding does not update an account that already exists.** A backup merge
+  is skip-existing **by path**, so an account seeded before you edited
+  `seed/library.ts` keeps its old entities. That is the right behaviour for a
+  restore and the wrong one for iterating on a fixture: use Settings → Data →
+  Delete all data first, then re-seed. (Re-running with no edits is a genuine
+  no-op, which is what makes a half-finished run safe to repeat.)
+- **The seed waits for sync, and must.** An import lands in Dexie and pushes in
+  the background, and the browser profile is deleted when the run ends. Close
+  early and the account exists, the plan is granted, and the library is nowhere —
+  an empty account with nothing to explain it. The wait reads the Data section's
+  own sync row and requires the settled reading three polls running, because both
+  halves of it can lie for one frame after a navigation.
+- **The free library is 190 links, and that is not a round number by accident.**
+  Free holds 200 and a backup over the cap is refused **whole** (the
+  take-what-fits prompt is the interop path only), so the fixture is sized under
+  it with room to add a few by hand and watch the create surfaces refuse.
+- **The free trees are flat.** A backup restores `parentId` verbatim on any plan,
+  so nesting a free account would hand you a state `nestedLists` means the
+  product cannot produce.
+
+#### what the generator guarantees
+
+Everything you would search for or point at is a pure function of the account
+key: ids (`seed-link-0042`, `seed-list-00` — readable on purpose, they show up in
+URLs), urls, titles, tags and list membership are identical on every machine and
+every re-seed. Topics and hosts are assigned round-robin, so the distribution is
+predictable rather than merely plausible — a thousand-link library holds 41 or 42
+links per topic, and "rust" is a number you can count, not "some results".
+
+Timestamps are the one exception: they walk backwards from the moment you seed,
+so the library reads as one someone has been keeping. Every state worth seeing is
+deliberately represented — links in Trash and Archive, a failed and a permanent
+extraction (both render `host(url)` with a monogram), a user `customTitle` over an
+extracted title, notes, pins spread through the library rather than sitting on
+top, and a generated preview image on every third link so the `files/` half of the
+backup format is exercised at all.
 
 ### state today
 
