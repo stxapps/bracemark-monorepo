@@ -15,12 +15,7 @@ import { Button } from '@stxapps/web-ui/components/ui/button';
 import { Input } from '@stxapps/web-ui/components/ui/input';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
-export function LockPane({
-  title,
-  description,
-  onUnlock,
-  className,
-}: {
+interface LockPaneProps {
   title: string;
   description: string;
   // Resolves false on a wrong password (the pane shows the inline error);
@@ -32,7 +27,9 @@ export function LockPane({
   // prop would collide with it rather than stack (docs/safe-area.md); the app
   // gate insets its wrapper instead.
   className?: string;
-}) {
+}
+
+export function LockPane({ title, description, onUnlock, className }: LockPaneProps) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);

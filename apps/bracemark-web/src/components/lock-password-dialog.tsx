@@ -26,14 +26,7 @@ import {
 import { Input } from '@stxapps/web-ui/components/ui/input';
 import { Label } from '@stxapps/web-ui/components/ui/label';
 
-export function LockPasswordDialog({
-  onOpenChange,
-  title,
-  description,
-  submitLabel,
-  checkboxLabel,
-  onSubmit,
-}: {
+interface LockPasswordDialogProps {
   onOpenChange: (open: boolean) => void;
   title: string;
   description: string;
@@ -41,7 +34,16 @@ export function LockPasswordDialog({
   // Present only on "Lock list" — the "Hide this list while locked" opt-in.
   checkboxLabel?: string;
   onSubmit: (password: string, checked: boolean) => Promise<void>;
-}) {
+}
+
+export function LockPasswordDialog({
+  onOpenChange,
+  title,
+  description,
+  submitLabel,
+  checkboxLabel,
+  onSubmit,
+}: LockPasswordDialogProps) {
   const [password, setPassword] = useState('');
   const [checked, setChecked] = useState(false);
   const [error, setError] = useState<string | null>(null);

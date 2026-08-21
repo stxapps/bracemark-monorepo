@@ -638,6 +638,66 @@ The consumer side of this rule, and the numbers behind it, live in
 [share-sheet.md](./share-sheet.md), _keep `index.share.js` lean_ — including the
 lint rule that enforces it for the one tree where it is load-bearing.
 
+### client component props in bracemark-web
+
+Props on an exported component in a `'use client'` file go in a **named
+`interface`**, never an inline type literal:
+
+```ts
+// ✅
+interface LockPaneProps {
+  onUnlock: (password: string) => Promise<boolean>;
+}
+export function LockPane({ onUnlock }: LockPaneProps) {}
+
+// ❌ warns, falsely — see below
+export function LockPane({ onUnlock }: { onUnlock: (password: string) => Promise<boolean> }) {}
+```
+
+The reason is Next's TypeScript plugin (`"plugins": [{ "name": "next" }]` in
+`apps/bracemark-web/tsconfig.json`). Its client-boundary rule warns 71007,
+_"Props must be serializable for components in the `use client` entry file …
+Rename `onSubmit` … to `onSubmitAction` to indicate it is a Server Action"_, on
+every function-typed prop it sees. On a **real** server→client boundary that is
+a genuine check. But the rule fires on _any_ file carrying the directive, not
+just files a server component imports — the plugin's other rules gate on
+`isAppEntryFile` (a `page.*`/`layout.*` inside the app dir), this one doesn't.
+So a leaf component that only ever renders inside other client components gets
+flagged for callbacks that never cross a boundary. Next's own source concedes
+the check is nothing but a name match:
+
+> there's no difference between a Server Action and a normal function until
+> TypeScript exposes directives in the type of a function.
+>
+> — `next/dist/server/typescript/rules/client-boundary.js`
+
+Taking the message's advice would rename ~every callback in the app to
+`…Action`, asserting a Server Action where there is none. The `interface` is the
+honest way out: the rule reads the first parameter's type and returns early
+unless that type is an inline type literal (`ts.isTypeLiteralNode`), and an
+`interface` declaration isn't one, so the check never runs.
+
+Three things worth knowing before you touch this:
+
+- **`type Props = { … }` does not work.** A type alias to an object literal
+  still has a `TypeLiteralNode` as its symbol declaration, so the rule descends
+  into it exactly as before. It has to be `interface`.
+- **The warning never reaches CI.** `tsc` ignores `plugins` — that's
+  language-service config, so it is editor-only. `npm run typecheck` and
+  `next build` never saw it, which is why this convention is about noise, not
+  correctness. The plugin's only knob is all-or-nothing
+  (`{ "name": "next", "enabled": false }`), and turning it off would also lose
+  the metadata-export, route-config and server-boundary checks that _do_ apply
+  to real app entries.
+- **Name it `<ComponentName>Props`.** Several of these files export more than
+  one component (`table-kit.tsx` exports three), so a bare `Props` doesn't
+  scale.
+
+Only exported top-level components are checked, so components local to a file
+are unaffected and can keep an inline literal. If the warnings ever reappear
+after a Next upgrade, this is the first thing to re-check — the escape hatch
+rests on that `isTypeLiteralNode` early return, not on a documented option.
+
 ### bundling bracemark-api
 
 `bracemark-api` runs on **Cloudflare Workers**, with `src/worker.ts`

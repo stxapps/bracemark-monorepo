@@ -67,6 +67,11 @@ export function useOpRunner() {
   return { error, run, runAwait };
 }
 
+interface CreateRowProps {
+  noun: string;
+  onCreate: (name: string) => Promise<unknown>;
+}
+
 // The create-an-item row pinned at the top of the table. The plus focuses the
 // field — which is what starts an item — and turns into a cancel once the field
 // is active (focused or non-empty); a confirm (check) appears on the right.
@@ -75,13 +80,7 @@ export function useOpRunner() {
 //
 // `noun` is the singular ("list", "tag") and drives every label, so the two
 // tables cannot end up describing the same control differently.
-export function CreateRow({
-  noun,
-  onCreate,
-}: {
-  noun: string;
-  onCreate: (name: string) => Promise<unknown>;
-}) {
+export function CreateRow({ noun, onCreate }: CreateRowProps) {
   const [value, setValue] = useState('');
   const [focused, setFocused] = useState(false);
   const active = focused || value !== '';
@@ -175,22 +174,19 @@ export function CreateRow({
   );
 }
 
-// Inline rename. Uncontrolled so typing never round-trips through the store;
-// commits on blur and Enter, reverts on Escape. `key` it by the stored name at
-// the call site so an external rename (another device) refreshes the field.
-export function RenameField({
-  name,
-  label,
-  onRename,
-  ref,
-}: {
+interface RenameFieldProps {
   name: string;
   // The accessible name of the field itself — "List name", "Tag name". The
   // visible text is the value, so without this the field announces as unlabelled.
   label: string;
   onRename: (name: string) => void;
   ref?: React.Ref<HTMLInputElement>;
-}) {
+}
+
+// Inline rename. Uncontrolled so typing never round-trips through the store;
+// commits on blur and Enter, reverts on Escape. `key` it by the stored name at
+// the call site so an external rename (another device) refreshes the field.
+export function RenameField({ name, label, onRename, ref }: RenameFieldProps) {
   return (
     <Input
       ref={ref}
@@ -242,15 +238,14 @@ export function useRenameOnClose(onFocusName: () => void) {
   };
 }
 
-// The table's sort toolbar, right-aligned above it. Sorts whatever group the
-// caller decides — the whole table, or one row's children.
-export function SortMenu({
-  disabled,
-  onSort,
-}: {
+interface SortMenuProps {
   disabled?: boolean;
   onSort: (dir: SortDir) => void;
-}) {
+}
+
+// The table's sort toolbar, right-aligned above it. Sorts whatever group the
+// caller decides — the whole table, or one row's children.
+export function SortMenu({ disabled, onSort }: SortMenuProps) {
   return (
     <div className="flex justify-end">
       <DropdownMenu>
