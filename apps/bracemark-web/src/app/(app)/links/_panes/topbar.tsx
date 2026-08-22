@@ -1,10 +1,11 @@
 'use client';
 
 // The bar to the right of the sidebar. Left: the active selection's name (what
-// the main pane is showing). Right: the primary actions — add, bulk edit,
-// overflow (more-options-menu.tsx) — with the search box between them. The
-// list/card layout switch used to live here too; it moved to Settings → Misc (a
-// choose-once setting with a sync/device split), so the topbar stays minimal.
+// the main pane is showing). Right: the primary actions — add, then search,
+// bulk edit, overflow (more-options-menu.tsx) — with the search box between the
+// title and them. The list/card layout switch used to live here too; it moved to
+// Settings → Misc (a choose-once setting with a sync/device split), so the
+// topbar stays minimal.
 //
 // It carries the frame's whole narrow-width adaptation, in three moves, because
 // this is the one bar that survives at every width:
@@ -24,9 +25,12 @@
 //   otherwise closing the row would leave the list filtered by a query with
 //   nothing left on screen to show or clear it.
 //
-//   THE ACTIONS SHED THEIR LABELS, NOT THEMSELVES. "Add" loses its word below
-//   `sm`; every action keeps its slot at every width. Nothing here hides in an
-//   overflow menu on a phone — these four are the page's whole verb set.
+//   THE ACTIONS ARE WORDLESS, BUT NOT ONE OF THEM HIDES. All four are icon-only
+//   at every width — Add gave up its word too, since what marks it as the one
+//   that CREATES is its fill and the gap holding it off the other three, not a
+//   label (link-add-surface.tsx carries that reasoning; the empty pane's CTA is
+//   where the word still teaches the verb). Nothing folds into an overflow menu
+//   on a phone either: these four are the page's whole verb set.
 //
 // The overflow menu (More options) and bulk edit are wired up (the latter
 // toggles view-state-provider's `bulkEditing` — rows become selectable and the
@@ -142,42 +146,55 @@ export function Topbar() {
             (no search slot to cap) and where the bulk-edit toolbar's own right
             group sits in the bar directly beneath this one.
 
-            Every control in this group is 36 tall — `icon` for the square ones,
-            `default` for Add — matching the search box beside it, so the bar
-            reads as one band rather than a tall field next to short buttons.
+            Every control in this group is a 36 square — `icon` for the three
+            ghosts, `default` plus an explicit `w-9` for Add — matching the
+            search box's height beside it, so the bar reads as one band rather
+            than a tall field next to short buttons.
             The icons stay `size-4`: 16 is the grid the sidebar, the drawer and
             the bulk-edit toolbar all use, and that toolbar swaps into the slot
-            directly below, where a mismatch would show as a jump. */}
-        <div className="ml-auto flex shrink-0 items-center gap-2">
-          <Button
-            variant={searchVisible ? 'secondary' : 'ghost'}
-            size="icon"
-            // The name states what pressing it DOES, which also keeps every
-            // state collision-free: closed, it is the only "Search links" on
-            // screen (the inline box is `display:none` below `md`, so it isn't
-            // in the a11y tree); open, the box owns that name and this becomes
-            // "Close search" — which is honest, since dismissing a committed
-            // search also restores the view it was run from. And the title
-            // button can only read "Search" while a search IS committed, i.e.
-            // while this one is named "Close search".
-            aria-label={searchVisible ? 'Close search' : 'Search links'}
-            aria-expanded={searchVisible}
-            onClick={toggleSearch}
-            className="md:hidden"
-          >
-            <Search className="size-4" />
-          </Button>
+            directly below, where a mismatch would show as a jump.
+
+            TWO FAMILIES, AND THE GAP IS WHAT SAYS SO. Search and Bulk edit are
+            mode toggles on the view you're already in — same square box, same
+            ghost→secondary state grammar — and More options is the container for
+            everything else in this bar, so nothing may sit after it. Add is the
+            odd one by kind (it CREATES) and by paint (the only filled control
+            here), so it leads and the other three run together: `gap-1` closes
+            the trio into one segmented run (safe because ghost buttons have no
+            visible edge), `gap-3` holds Add off it. A uniform gap can't express
+            that, which is what left Add stranded mid-group when it sat second. */}
+        <div className="ml-auto flex shrink-0 items-center gap-3">
           <LinkAddSurface />
-          <Button
-            variant={bulkEditing ? 'secondary' : 'ghost'}
-            size="icon"
-            aria-label="Bulk edit"
-            aria-pressed={bulkEditing}
-            onClick={() => (bulkEditing ? exitBulkEdit() : enterBulkEdit())}
-          >
-            <SquarePen className="size-4" />
-          </Button>
-          <MoreOptionsMenu />
+          <div className="flex items-center gap-1">
+            <Button
+              variant={searchVisible ? 'secondary' : 'ghost'}
+              size="icon"
+              // The name states what pressing it DOES, which also keeps every
+              // state collision-free: closed, it is the only "Search links" on
+              // screen (the inline box is `display:none` below `md`, so it isn't
+              // in the a11y tree); open, the box owns that name and this becomes
+              // "Close search" — which is honest, since dismissing a committed
+              // search also restores the view it was run from. And the title
+              // button can only read "Search" while a search IS committed, i.e.
+              // while this one is named "Close search".
+              aria-label={searchVisible ? 'Close search' : 'Search links'}
+              aria-expanded={searchVisible}
+              onClick={toggleSearch}
+              className="md:hidden"
+            >
+              <Search className="size-4" />
+            </Button>
+            <Button
+              variant={bulkEditing ? 'secondary' : 'ghost'}
+              size="icon"
+              aria-label="Bulk edit"
+              aria-pressed={bulkEditing}
+              onClick={() => (bulkEditing ? exitBulkEdit() : enterBulkEdit())}
+            >
+              <SquarePen className="size-4" />
+            </Button>
+            <MoreOptionsMenu />
+          </div>
         </div>
       </header>
 

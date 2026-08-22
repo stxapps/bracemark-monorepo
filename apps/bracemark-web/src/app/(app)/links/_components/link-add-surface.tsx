@@ -156,10 +156,11 @@ function useSheetGeometry(): { bottom: number; maxHeight: number } | null {
 export function LinkAddSurface({
   // The empty pane renders a second instance of this as its call to action,
   // where the trigger is the only control on screen rather than one of four in a
-  // bar — so it gets full size, keeps its label at every width, and hangs its
-  // content centred under itself. That's the whole difference: the trigger's
-  // size and where the panel hangs from it, never the form behind it, which is
-  // one add form wherever it is summoned from. (Below `md` there's nothing to
+  // bar — so it gets full size, keeps the word Add (which the topbar's trigger no
+  // longer carries at any width), and hangs its content centred under itself.
+  // That's the whole difference: the trigger's size and where the panel hangs
+  // from it, never the form behind it, which is one add form wherever it is
+  // summoned from. (Below `md` there's nothing to
   // hang from — the sheet is edge-to-edge either way — so `prominent` there
   // varies only the trigger.)
   prominent = false,
@@ -328,31 +329,79 @@ export function LinkAddSurface({
     onOpenChange(next);
   };
 
-  // The label goes below `sm`, the button never does: on a phone the topbar's
-  // four actions plus a title need the width more than the primary action needs
-  // its word, and a filled ＋ is the one control on this page that reads without
-  // one. `aria-label` carries the name in both states (and contains the visible
-  // text, so the two agree).
+  // THE TOPBAR TRIGGER IS WORDLESS AT EVERY WIDTH; only the prominent one keeps
+  // the word. It used to appear at `sm` and up, on the reasoning that a phone bar
+  // holding a title and four actions needs the width more than the primary action
+  // needs its name — but that argument doesn't stop at 640px. A filled ＋ is the
+  // one control on this page that reads without a label (nothing else here
+  // creates, and no other ＋ exists on the page), and what marks Add as the odd
+  // one in that group is its PAINT and the gap holding it off the other three
+  // (topbar.tsx) — not its word. So labelling it wide bought nothing and cost two
+  // things: ~35px of a bar whose job is to name where you are, and a SHAPE FORK,
+  // a 32px disc below `sm` becoming a ~70px pill above it, in a row of four 36px
+  // boxes that is supposed to read as one band. The breakpoint was an orphan
+  // besides — everything else in that bar forks at `md` (rail → drawer, search
+  // box → summoned row), so between 640 and 767 the widest Add stood in the
+  // tightest bar.
   //
-  // Both instances are `default` (h-9): in the topbar that's the height of the
-  // search box and the icon buttons flanking it, so `prominent` varies only the
-  // word, the padding and the popover's alignment — not the size.
+  // `aria-label` is now the ONLY carrier of the name: this is an icon-only control
+  // with no tooltip, the same bargain the three ghost buttons beside it already
+  // make, and ＋ is the most legible glyph of the four. What keeps that honest is
+  // the other trigger — the empty pane's CTA is a full `Add` pill, and an empty
+  // library is exactly when someone is looking for this verb for the first time.
+  // The word teaches there, once; the topbar keeps the glyph.
+  //
+  // TWO TRIGGERS, BECAUSE THE TWO INSTANCES WANT OPPOSITE THINGS. The empty
+  // pane's CTA is the only control on screen and should be as loud as it can be,
+  // so it stays a plain `default` Button: a filled 36-tall pill, `font-medium`,
+  // the size variant's own padding. The topbar's stands in a row of three 36px
+  // ghost squares, where a fill that occupies its whole box reads HEAVIER than
+  // them at the same measure — filled shapes always do — and drags the eye off
+  // the title. So there the paint shrinks while the BOX does not.
+  //
+  //   THE BOX IS 36, THE PAINT IS 32. `h-9` (from `size="default"`) squared by an
+  //   explicit `w-9`, with the variant's own background neutralized —
+  //   `bg-transparent hover:bg-transparent`, which tailwind-merge resolves by
+  //   DROPPING `bg-primary`/`hover:bg-primary/80` from the output rather than
+  //   layering over them — and every painted pixel moved to the inner span, a
+  //   `size-8` disc. The hit area, the focus ring and the band alignment all stay on
+  //   the 36 box, so the row still measures as one 36px band and the ring still
+  //   matches the ghosts beside it; only the fill is inset. `group-hover/button:`
+  //   is how the hover fade reaches the span — the Button base names itself
+  //   `group/button` for exactly this.
+  //
+  //   Sizing the disc as a BOX (`size-8`) and not by padding is what keeps it
+  //   round. The base reserves 1px of transparent border on each edge, so a
+  //   padded `size-9` box measures 34 inside, and `p-px`-style arithmetic to land
+  //   32 breaks the moment that border changes. A fixed `size-8` centred in the
+  //   36 box is the same 2px inset on every edge and depends on nothing.
   //
   // `data-icon="inline-start"` is what arms the size variant's
   // `has-data-[icon=inline-start]:pl-2.5` (button.tsx) — the rule is
   // `:has([data-icon=inline-start])`, so without the attribute on the icon it
-  // never matches and the leading padding stays the symmetric px-3. With it, the
-  // label-bearing state gets 10px before the ＋ and 12px after the word, which is
-  // the optical balance the variant is for.
-  const trigger = (
+  // never matches and the leading padding stays the symmetric px-3. It belongs to
+  // the PROMINENT trigger alone, whose padding really does live on the button.
+  // On the topbar trigger the padding lives on the inner span, and the attribute
+  // was actively wrong: `:has()` is depth-agnostic, so it matched from inside the
+  // span, and the rule's specificity (0,2,0) beat the `p-0` sitting beside it —
+  // 10px of leading padding inside a 36px box the ＋ was supposed to be centred
+  // in, pushing it visibly right of centre. Nothing catches that: no overflow and
+  // no type error, and on the prominent trigger the identical attribute is right.
+  const trigger = prominent ? (
+    <Button variant="default" size="default" aria-label="Add link">
+      <Plus data-icon="inline-start" className="size-4" />
+      <span>Add</span>
+    </Button>
+  ) : (
     <Button
       variant="default"
       size="default"
       aria-label="Add link"
-      className={cn(!prominent && 'px-2.5 sm:px-3')}
+      className="w-9 bg-transparent p-0 hover:bg-transparent"
     >
-      <Plus data-icon="inline-start" className="size-4" />
-      <span className={cn(!prominent && 'hidden sm:inline')}>Add</span>
+      <span className="flex size-8 items-center justify-center rounded-4xl bg-primary transition-colors group-hover/button:bg-primary/80">
+        <Plus className="size-4" />
+      </span>
     </Button>
   );
 
