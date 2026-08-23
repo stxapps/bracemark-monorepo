@@ -70,6 +70,7 @@ export function AuthScreen({
       <StyledKeyboardAwareScrollView
         contentContainerClassName="grow justify-center px-4 py-12"
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         bottomOffset={16}
       >
         <View className="w-full max-w-sm gap-6 self-center">

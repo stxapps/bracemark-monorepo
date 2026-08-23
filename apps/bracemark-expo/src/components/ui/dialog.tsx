@@ -91,7 +91,7 @@ function DialogOverlay({
               nothing from it; without this, a dialog stays centred in the WHOLE
               window while the keyboard covers its bottom third — which for the
               lock dialogs is the Cancel/submit row (docs/safe-area.md,
-              _keyboard avoidance on native_).
+              docs/soft-keyboard.md, _avoidance_).
 
               keyboard-controller's KeyboardAvoidingView, NOT react-native's.
               Both were driven on the emulator against a deliberately tall

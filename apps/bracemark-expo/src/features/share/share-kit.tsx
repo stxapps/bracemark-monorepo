@@ -24,7 +24,7 @@
 //     the pickers are screens within the sheet rather than overlays over it.
 
 import { type ReactNode } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, View } from 'react-native';
+import { Keyboard, KeyboardAvoidingView, Platform, Pressable, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { LucideIcon } from 'lucide-react-native';
 import ChevronLeft from 'lucide-react-native/icons/chevron-left';
@@ -74,18 +74,63 @@ const BOTTOM_EDGE = { bottom: 'additive' } as const;
 // Keyboard: both hosts overlay it, so the sheet moves itself. Deliberately a
 // plain KeyboardAvoidingView, NOT react-native-keyboard-controller like the app
 // tree — its iOS native layer is built on `UIApplication.shared`, which does not
-// exist in an extension process (docs/safe-area.md, _keyboard avoidance_).
+// exist in an extension process (docs/soft-keyboard.md, _avoidance_).
 // `behavior="padding"` on both so the two hosts render the same tree.
+//
+// DISMISSING that keyboard is this frame's job too, and it has to be, because
+// the pickers below cannot do it themselves: their inputs are
+// `submitBehavior="submit"` on purpose (return ADDS a tag/list and keeps the
+// keyboard for the next one — share-tags-picker.tsx), so return never blurs.
+// Without the layer below, the iOS sheet had NO gesture that closed the
+// keyboard at all: the panel is a plain SafeAreaView, the host owns the space
+// around it, and Android's backdrop closes the whole sheet rather than the
+// keyboard. The keyboard then eats ~335 of a fixed 520pt host and the tag list
+// you are picking from is behind it. The pickers' scrollers pair this with
+// `keyboardDismissMode="on-drag"`, so scrolling the results dismisses too.
 export function ShareSheet({ children }: { children: ReactNode }) {
   const panel = (
     <StyledSafeAreaView
       edges={BOTTOM_EDGE}
       className={cn(
-        'gap-4 px-4 pt-4 pb-4',
+        'px-4 pt-4 pb-4',
         Platform.OS === 'android' && 'max-h-[85%] rounded-t-2xl bg-background',
       )}
     >
-      {children}
+      {/* Tap-anywhere-dead to drop the keyboard, and it WRAPS the children
+          rather than sitting behind them as an absolute layer. The absolute
+          version was tried first and is wrong: driven on the simulator with a
+          debug tint, `absolute inset-0` inside this SafeAreaView laid out as a
+          thin full-width band ABOVE the panel instead of covering it —
+          safe-area-context's SafeAreaView is a NATIVE view that applies its
+          insets outside Yoga, so an absolutely-positioned child does not
+          resolve against the box you see. Nothing about that is visible without
+          rendering it.
+
+          As a wrapper it is an ordinary flex column, so it covers exactly the
+          panel and nothing else. It carries the `gap-4` the SafeAreaView used
+          to, because it is now the parent the seams belong to; `shrink min-h-0`
+          keeps the squeeze chain intact so the pickers' `max-h-72` scroller and
+          Android's `max-h-[85%]` cap still absorb the keyboard.
+
+          Child-first responder negotiation is what keeps this from eating taps:
+          a press on a button or a picker row is claimed by that child, and this
+          only fires on what reaches the panel's own padding and seams.
+
+          UNVERIFIED ON DEVICE, and it cannot be with the tools here: once the
+          keyboard is presented over the iOS extension, the whole panel drops
+          out of the accessibility tree, so Maestro can neither see nor address
+          it (`share-back` goes not-found mid-flow) and a coordinate tap has
+          nothing to confirm against. The structure above is the standard RN
+          pattern and is right on reasoning; the ABSENCE of a check is the risk.
+          If this surface is ever driven by hand, this tap is the thing to try
+          first. Android's half rides the main bundle and has no such problem.
+
+          `accessible={false}` for the reason the Android backdrop below carries
+          verbatim: as a focus stop this would announce as one enormous
+          unlabelled control over the whole sheet. */}
+      <Pressable accessible={false} onPress={Keyboard.dismiss} className="min-h-0 shrink gap-4">
+        {children}
+      </Pressable>
     </StyledSafeAreaView>
   );
 

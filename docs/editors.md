@@ -119,7 +119,7 @@ are **modal-presented expo-router screens** (`/add-link` pushed by the links
 screen's FAB, `/edit-link` pushed by the row menu with a `linkId` + optional
 `focus` param) — router screens, not RN `Modal`s, so they inherit the screens'
 `KeyboardAwareScrollView` path for free and portalled dialogs work inside them
-(docs/safe-area.md — the presentation decides the keyboard mechanism). Two structural consequences: the edit screen
+(docs/soft-keyboard.md — the presentation decides the keyboard mechanism). Two structural consequences: the edit screen
 needs **no hoisted `editing` view state** (web hoists its dialog because
 virtualized rows repaint under it; a pushed screen isn't row-anchored and its
 draft is a snapshot), and its custom-image flow is **uri/path-based end to
@@ -734,7 +734,7 @@ leaves: portaled content inherits nothing from the screen's scroll container, so
 `ui/dialog.tsx` carries its own avoider and bounds itself to what is left, and a
 picker whose body can grow pairs that with `shrink` on its own scroller — which
 is why the bulk tags editor stays a dialog rather than becoming a route screen
-([safe-area.md](./safe-area.md), _keyboard avoidance on native_). And the
+([soft-keyboard.md](./soft-keyboard.md), _avoidance_). And the
 bulk tags dialog seeds the same native `TagsField` cousin the in-app editors
 render (like web's seeds `TagsField` — filter input and reuse-or-mint Create
 included; the single-link case no longer rides this dialog anyway — the row

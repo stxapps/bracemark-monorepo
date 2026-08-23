@@ -129,6 +129,7 @@ export function SettingsScrollHost({ children }: { children: ReactNode }) {
           ref={scrollRef}
           className="flex-1"
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           bottomOffset={16}
           scrollEnabled={scrollEnabled}
           // keyboard-controller forces scrollEventThrottle={16} and claims the

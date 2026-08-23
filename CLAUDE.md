@@ -56,38 +56,39 @@ responsibilities, and the reasoning: `docs/architecture.md`.
 its area, and update it in the same change when the design moves. Each is
 self-contained and cross-links its neighbours.
 
-| working on                                                       | read                            |
-| ---------------------------------------------------------------- | ------------------------------- |
-| workspace layout, package boundaries, module resolution          | `architecture.md`               |
-| **any dependency version / `package.json` / Expo SDK bump**      | `architecture.md` ⚠             |
-| local store + encrypted file sync (the data path)                | `local-first-sync.md`           |
-| the read edge — indexes, liveQuery, virtual scrolling, paging    | `client-queries.md`             |
-| links-page search (the URL⇄`LinkQuery` grammar, the UI)          | `search.md`                     |
-| accounts — key derivation, username/password rules               | `account.md`                    |
-| API endpoints (contract-first, typed once in `shared`)           | `api-contracts.md`              |
-| link editors, list/tag trees, bulk edit                          | `editors.md`                    |
-| title/image/screenshot/page-copy capture, `bracemark-extractor`  | `link-extraction.md`            |
-| import/export, sign-out wipe, delete all data, delete account    | `data-lifecycle.md`             |
-| subscriptions — Paddle, store IAP, the entitlement fold          | `iap.md`                        |
-| app lock + list locks                                            | `locks.md`                      |
-| **error messages, labels, roles, font scaling**                  | `accessibility.md` ⚠            |
-| light/dark theme                                                 | `theme.md`                      |
-| safe-area insets, viewport sizing, popup positioning             | `safe-area.md`                  |
-| `bracemark-extension` auth flow                                  | `browser-extension.md`          |
-| `bracemark-expo` share sheet (iOS + Android)                     | `share-sheet.md`                |
-| an expo dependency — router, uniwind, expo-image, fonts, IAP     | `expo-native-deps.md`           |
-| prebuild, `app.config.ts`, the npm scripts, R8, signing          | `expo-build.md`                 |
-| test layers, jest vs vitest, driving an app to see a change      | `testing.md`                    |
-| whole-flow e2e — `e2e/`, playwright, maestro, the contract runs  | `e2e.md`                        |
-| seeded dev accounts — a filled library, a paid plan, locally     | `e2e.md`                        |
-| env vars, per app and per mode                                   | `env-files.md`                  |
-| which host each app answers, the CSP, `nx start` preview         | `hosting.md`                    |
-| leaving an origin — cross-origin nav vs. the Next router         | `hosting.md`                    |
-| **the public repo, the AGPL licence, what we claim about it**    | `brand-assets.md` ⚠             |
-| **the mark** — the icon shape, its two components, the icon PNGs | `brand-assets.md`               |
-| **user-facing wording** — the voice, "bookmark" vs "link", lines | `brand-assets.md`               |
-| the marketing site — its pages, its apex, why it's in this repo  | `architecture.md`, `hosting.md` |
-| how the workspace was originally scaffolded (run-once history)   | `setup.md`                      |
+| working on                                                         | read                            |
+| ------------------------------------------------------------------ | ------------------------------- |
+| workspace layout, package boundaries, module resolution            | `architecture.md`               |
+| **any dependency version / `package.json` / Expo SDK bump**        | `architecture.md` ⚠             |
+| local store + encrypted file sync (the data path)                  | `local-first-sync.md`           |
+| the read edge — indexes, liveQuery, virtual scrolling, paging      | `client-queries.md`             |
+| links-page search (the URL⇄`LinkQuery` grammar, the UI)            | `search.md`                     |
+| accounts — key derivation, username/password rules                 | `account.md`                    |
+| API endpoints (contract-first, typed once in `shared`)             | `api-contracts.md`              |
+| link editors, list/tag trees, bulk edit                            | `editors.md`                    |
+| title/image/screenshot/page-copy capture, `bracemark-extractor`    | `link-extraction.md`            |
+| import/export, sign-out wipe, delete all data, delete account      | `data-lifecycle.md`             |
+| subscriptions — Paddle, store IAP, the entitlement fold            | `iap.md`                        |
+| app lock + list locks                                              | `locks.md`                      |
+| **error messages, labels, roles, font scaling**                    | `accessibility.md` ⚠            |
+| light/dark theme                                                   | `theme.md`                      |
+| safe-area insets, viewport sizing, popup positioning               | `safe-area.md`                  |
+| **the soft keyboard** — avoidance, dismissal, why a field is stuck | `soft-keyboard.md` ⚠            |
+| `bracemark-extension` auth flow                                    | `browser-extension.md`          |
+| `bracemark-expo` share sheet (iOS + Android)                       | `share-sheet.md`                |
+| an expo dependency — router, uniwind, expo-image, fonts, IAP       | `expo-native-deps.md`           |
+| prebuild, `app.config.ts`, the npm scripts, R8, signing            | `expo-build.md`                 |
+| test layers, jest vs vitest, driving an app to see a change        | `testing.md`                    |
+| whole-flow e2e — `e2e/`, playwright, maestro, the contract runs    | `e2e.md`                        |
+| seeded dev accounts — a filled library, a paid plan, locally       | `e2e.md`                        |
+| env vars, per app and per mode                                     | `env-files.md`                  |
+| which host each app answers, the CSP, `nx start` preview           | `hosting.md`                    |
+| leaving an origin — cross-origin nav vs. the Next router           | `hosting.md`                    |
+| **the public repo, the AGPL licence, what we claim about it**      | `brand-assets.md` ⚠             |
+| **the mark** — the icon shape, its two components, the icon PNGs   | `brand-assets.md`               |
+| **user-facing wording** — the voice, "bookmark" vs "link", lines   | `brand-assets.md`               |
+| the marketing site — its pages, its apex, why it's in this repo    | `architecture.md`, `hosting.md` |
+| how the workspace was originally scaffolded (run-once history)     | `setup.md`                      |
 
 # Tripwires
 
@@ -144,6 +145,20 @@ test. Check the linked doc before acting on any of these.
   safe on Radix, which omits the attribute when off. The `@custom-variant` bridges
   at the top of `packages/web-ui/src/styles.css` cover the `data-state`/
   `data-orientation` shorthands and nothing else. → `theme.md`.
+- **A text field with no way to close the keyboard.** RN's two defaults fail in
+  opposite directions and neither says so. `submitBehavior` resolves to
+  `'newline'` for a **`multiline`** field, so return never blurs it — and three
+  fields set `submitBehavior="submit"` deliberately (tags-field, both share
+  pickers) so return adds an entry instead. Those depend entirely on tap-outside
+  and scroll-to-dismiss, which is the other default: `keyboardShouldPersistTaps`
+  defaults to `'never'`, which dismisses the keyboard but **withholds the tap
+  from the child**, so the first press on the row you just filtered for does
+  nothing. Put `keyboardShouldPersistTaps="handled"` and
+  `keyboardDismissMode="on-drag"` on EVERY scroller that can be on screen under
+  a keyboard, and give a surface with no scroller its own tap target. Nothing
+  lints any of this, jest doesn't render it, and the Maestro flows use the
+  native `hideKeyboard`, which bypasses the app's affordances entirely — so the
+  suite stays green through a field the user cannot escape. → `soft-keyboard.md`
 - **An error message that MOUNTS must carry `role="alert"`.** Nothing catches its
   absence — no lint rule, no type error, no test — and you cannot see the symptom
   without driving the app through a screen reader: the button finishes and

@@ -296,6 +296,17 @@ function UnlockedMain() {
             data={links}
             extraData={itemExtra}
             numColumns={numColumns}
+            // The keyboard pair, and this list is where it matters most: the
+            // search box (links/search-bar.tsx) is `autoFocus`, so the common
+            // state is a keyboard up over the very results it just filtered.
+            // `on-drag` is the dismissal — scrolling the results is the gesture
+            // already in the user's hand, and nothing else here offers one
+            // (the box's own return key does blur, but it is off at the top of
+            // the screen by then). `"handled"` is the other half: FlashList
+            // forwards these to its ScrollView, whose default `"never"` would
+            // eat the first tap on a result and open nothing.
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
             contentContainerStyle={contentPadding ? { padding: contentPadding } : undefined}
             keyExtractor={(link) => link.path}
             getItemType={itemType ? (link) => itemType(link, tagsById) : undefined}

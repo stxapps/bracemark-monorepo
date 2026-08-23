@@ -223,8 +223,18 @@ function TriCheckList({
         />
       )}
       <View className="max-h-40 rounded-md border border-border p-1">
-        {/* Nested same-direction scrolling: fine on iOS, opt-in on Android. */}
-        <ScrollView nestedScrollEnabled>
+        {/* Nested same-direction scrolling: fine on iOS, opt-in on Android.
+
+            `keyboardShouldPersistTaps="handled"` matches the modal body that
+            wraps this (below) — it was missed here, and the omission showed:
+            the filter box sits directly above these rows, so with the default
+            `"never"` the first tap on a filtered row only dismissed the
+            keyboard and never reached the checkbox. */}
+        <ScrollView
+          nestedScrollEnabled
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+        >
           {visible.length === 0 && (
             <Text className="px-1.5 py-1 text-sm text-muted-foreground">No matches</Text>
           )}
@@ -475,7 +485,7 @@ function AdvancedSearch() {
               iPhone 17 Pro) and the Clear/Search row sat behind the keyboard
               once the body was tall enough to scroll. Android's modal is
               full-screen — offset 0 — and always cleared it (docs/safe-area.md,
-              _keyboard avoidance on native_). */}
+              docs/soft-keyboard.md, _avoidance_). */}
           <StyledKeyboardAvoidingView
             behavior="padding"
             keyboardVerticalOffset={keyboardVerticalOffset}
@@ -492,7 +502,11 @@ function AdvancedSearch() {
                 <Icon as={X} className="size-5 text-foreground" />
               </Pressable>
             </View>
-            <ScrollView keyboardShouldPersistTaps="handled" contentContainerClassName="gap-4 p-4">
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+              contentContainerClassName="gap-4 p-4"
+            >
               {!entitlements.searchEditor && (
                 <LockedBanner
                   onSeePlans={() => {

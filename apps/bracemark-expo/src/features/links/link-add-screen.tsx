@@ -232,6 +232,7 @@ export function LinkAddScreen() {
         className="flex-1"
         contentContainerClassName="gap-4 p-4"
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         bottomOffset={16}
       >
         {atLimit && max !== null ? (

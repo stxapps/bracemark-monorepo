@@ -129,8 +129,20 @@ export function ShareListPicker({
           (the host's fixed 520pt) but not on Android (it grows to content, up to
           85%), and a max-height behaves correctly in both. No
           `nestedScrollEnabled` any more — this no longer scrolls inside another
-          scroller. */}
-      <ScrollView className="max-h-72" keyboardShouldPersistTaps="handled">
+          scroller.
+
+          `keyboardDismissMode="on-drag"`: the input above is
+          `submitBehavior="submit"`, so return never blurs it — scrolling the
+          results is one of this screen's two ways out of the keyboard (the
+          other is the tap layer in ShareSheet, whose header carries the whole
+          argument). `"handled"` beside it keeps a row tap a row tap: without it
+          the default `"never"` would swallow the first press on the very row
+          you filtered for. */}
+      <ScrollView
+        className="max-h-72"
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+      >
         {visible.length === 0 && !canCreate && (
           <Text className="px-2 py-2.5 text-sm text-muted-foreground">No lists found.</Text>
         )}

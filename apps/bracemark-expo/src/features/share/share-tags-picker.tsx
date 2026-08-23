@@ -97,7 +97,11 @@ export function ShareTagsPicker({
       />
 
       {/* Bounded, not `flex-1` — see the list picker's note. */}
-      <ScrollView className="max-h-72" keyboardShouldPersistTaps="handled">
+      <ScrollView
+        className="max-h-72"
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+      >
         {visibleTags.length === 0 && visibleNew.length === 0 && !canCreate && (
           <Text className="px-2 py-2.5 text-sm text-muted-foreground">
             {tags.length === 0 && newTags.length === 0

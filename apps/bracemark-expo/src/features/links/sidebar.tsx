@@ -481,7 +481,18 @@ export function Sidebar({ closeDrawer }: { closeDrawer: () => void }) {
         </View>
       )}
 
-      <ScrollView className="flex-1 px-2 pb-4">
+      {/* `keyboardShouldPersistTaps="handled"` because the filter box above
+          sits OUTSIDE this scroller: with the default `"never"`, a tap made
+          while the keyboard is up dismisses it AND is withheld from the row —
+          so filtering to a list and tapping it did nothing the first time, and
+          navigated only on a second press. That is this rail's primary flow.
+          `on-drag` covers the other half: the tree is what you scroll to read
+          past the keyboard. */}
+      <ScrollView
+        className="flex-1 px-2 pb-4"
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+      >
         {/* Lists: the system three (My List / Archive / Trash) plus the user's
             own, merged in the read layer, ordered by `rank`, nested by
             `parentId` (see use-lists). My List is the default landing

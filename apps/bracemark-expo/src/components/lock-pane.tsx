@@ -8,17 +8,23 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { Lock, ScanFace } from 'lucide-react-native';
+import { withUniwind } from 'uniwind';
 
 import { useSignOut } from '@stxapps/expo-react';
 import { LOCK_COPY } from '@stxapps/react';
 
-import { cn } from '../lib/utils';
 import { Button } from './ui/button';
 import { Icon } from './ui/icon';
 import { Input } from './ui/input';
 import { Text } from './ui/text';
 import { ErrorText } from './error-text';
+
+// A composite, not a core host, so Uniwind's HOC is what lets it take
+// `className` — and map `contentContainerClassName` onto `contentContainerStyle`
+// (auth-screen.tsx carries the canonical note).
+const StyledKeyboardAwareScrollView = withUniwind(KeyboardAwareScrollView);
 
 export function LockPane({
   title,
@@ -89,8 +95,36 @@ export function LockPane({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [biometric]);
 
+  // A scroller, not the plain centred View this used to be, and it belongs HERE
+  // rather than in either gate — both hosts (AppLockGate full-screen, the links
+  // screen's list-lock pane) had the same bug, and a fix typed into two places
+  // drifts into two behaviours.
+  //
+  // The bug: the password field is `autoFocus` when there's no biometric, so
+  // the keyboard is up on mount — and with nothing keyboard-aware above it, the
+  // pane stayed centred in the WHOLE window while the keyboard covered its
+  // bottom third. What sits in that third is the Unlock button and the "forgot
+  // the password" escape hatch, i.e. both ways forward. docs/safe-area.md's
+  // table already asked for this ("regular expo-router screen →
+  // KeyboardAwareScrollView in the screen wrapper"); these two were the miss.
+  //
+  // `grow justify-center` is auth-screen.tsx's pattern verbatim: centred while
+  // the content fits, scrollable the moment it doesn't — which is the keyboard
+  // being up, or a large font scale, or both. `className` still comes from the
+  // caller (both pass `flex-1`) so the scroller fills whatever box it's given.
+  //
+  // The keyboard pair completes the exit. Return already blurred (the field is
+  // single-line, so RN resolves `submitBehavior` to `'blurAndSubmit'`) but it
+  // was the ONLY way out; now a tap on the pane's own padding drops the
+  // keyboard, and so does dragging the pane.
   return (
-    <View className={cn('items-center justify-center gap-4 px-6 py-8', className)}>
+    <StyledKeyboardAwareScrollView
+      className={className}
+      contentContainerClassName="grow items-center justify-center gap-4 px-6 py-8"
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="on-drag"
+      bottomOffset={16}
+    >
       <View className="size-12 items-center justify-center rounded-full bg-muted">
         <Icon as={Lock} className="size-5 text-muted-foreground" />
       </View>
@@ -147,6 +181,6 @@ export function LockPane({
           {LOCK_COPY.forgot.after}
         </Text>
       </View>
-    </View>
+    </StyledKeyboardAwareScrollView>
   );
 }

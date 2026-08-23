@@ -141,6 +141,7 @@ export function ListCommand({
         className="max-h-80 shrink"
         nestedScrollEnabled
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
       >
         {/* Suppressed when there's a Create row: that row IS the next step. */}
         {visibleRows.length === 0 && !canCreate && (

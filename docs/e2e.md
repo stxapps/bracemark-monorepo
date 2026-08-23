@@ -203,6 +203,19 @@ If an end-to-end extraction proof is ever wanted, it needs one real public URL i
 exactly one spec, tagged so it can be skipped offline — a deliberate network
 dependency, not the default.
 
+**Keyboard dismissal.** The flows reach for Maestro's `hideKeyboard`
+(`mobile/flows/add-link.yaml`, `subflows/sign-in.yaml`), which is a **native**
+command — it puts the keyboard away without touching the app's own affordances.
+So every one of the app's dismissal paths (return/done, tap-outside,
+scroll-to-dismiss) can regress with the whole suite still green, and a field can
+end up with no way to close the keyboard at all. That is not a gap to close by
+asserting harder here: the mechanisms are RN defaults that jest doesn't render
+and the a11y tree doesn't expose. It is a **manual** check, and
+[soft-keyboard.md](./soft-keyboard.md) carries the contract, the surfaces to
+check, and the four ways Maestro itself misleads you on this (portals and
+keyboard-covered panels dropping out of the tree, the autocorrect strip
+intercepting taps, and `appId` deciding what is addressable).
+
 ### driving the native apps
 
 Maestro, for the reasons in [testing.md](./testing.md) (_the driver: Maestro, not
