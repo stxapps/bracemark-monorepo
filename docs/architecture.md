@@ -433,11 +433,17 @@ Hence: **a version is chosen in exactly one place, and everyone else defers.**
 - **Root pins; the app declares `*`.** The app is private and never published, so
   a range in it can only ever disagree with root. (One deliberate exception:
   `tailwindcss@^4.x`, which root does _not_ pin — see expo-native-deps.md, _uniwind_.)
-- **A workspace sibling — any `@stxapps/*` — is `"*"` in `dependencies`, and an
-  APP has to declare the ones it imports.** Nothing checks that half:
-  `@nx/dependency-checks` runs on the `**/*.json` manifests of the packages, so a
-  package that imports an undeclared sibling fails `npm run lint` (and `lint --fix`
-  adds the line), but an app that does the same passes everything. Resolution
+- **A workspace sibling — any `@stxapps/*` — is `"*"` in `dependencies`, and
+  whoever imports one has to declare it by hand — an app and a package alike.**
+  Nothing checks either half, and both silences trace to `@nx/dependency-checks`
+  needing a `build` target. On a package manifest the rule bails at the top
+  (`if (!buildTarget) return {}`) because no `@stxapps/*` package has one — their
+  targets are `typecheck`, `lint`, `test`. On an app manifest it does run, but it
+  counts a workspace sibling as an expected dependency only when that sibling
+  carries the same build target, so an unbuilt `@stxapps/*` never joins the list.
+  What the rule earns us in an app is the **external** deps: drop `zod` from
+  `bracemark-api` and `npm run lint` fails and `--fix` re-adds it, while dropping
+  `@stxapps/shared` from the same manifest passes clean. Resolution
   succeeds anyway through npm workspace hoisting, so the miss is invisible —
   `bracemark-api` and `bracemark-extractor` imported `shared`, and `bracemark-web`
   imported `react` and `web-react`, undeclared, for a long stretch. Re-check with
@@ -473,8 +479,10 @@ Hence: **a version is chosen in exactly one place, and everyone else defers.**
   `*` mirror of their peers. The mirror's only job would be to make `typecheck`/
   `jest` resolve, but resolution is plain Node upward traversal
   (`packages/expo-crypto/src` → … → root `node_modules`, hit) and never reads the
-  package's own manifest; and `@nx/dependency-checks` already counts the **peer**
-  as the declaration, so `lint --fix` doesn't repopulate. A mirror would therefore
+  package's own manifest; and `lint --fix` won't repopulate one either — the
+  **peer** line would count as the declaration, and on a package manifest
+  `@nx/dependency-checks` doesn't even run (no `build` target — see the sibling
+  bullet above). A mirror would therefore
   carry no information the peer line doesn't — while reintroducing exactly the
   drift that nests a duplicate. This leans on npm workspace hoisting and is only
   sound because these packages are private and consumed as source by `bracemark-expo`
@@ -491,10 +499,11 @@ is its sole owner: `expo-crypto` declares it **only** as a peer `*` and carries 
 devDep for it, which resolves (verified via `npm ls`) to expo's exact `3.0.30`,
 deduped to one hoisted copy. A bare `*` is safe **only** because expo's exact edge
 constrains the intersection — on its own it would resolve to `latest`, which is
-`57.x` (the package renumbered to track SDK versions). `@nx/dependency-checks`
-counts the peer as a declaration, so `lint --fix` won't repopulate a pin; the app
-gets the same outcome via `ignoredDependencies: ['expo-modules-core']` in the root
-`eslint.config.mjs`.
+`57.x` (the package renumbered to track SDK versions). `lint --fix` won't
+repopulate a pin: `@nx/dependency-checks` doesn't run on `expo-crypto`'s manifest
+at all (no `build` target), and the peer would count as the declaration if it did.
+The app, where the rule DOES run, gets the same outcome a different way — via
+`ignoredDependencies: ['expo-modules-core']` in the root `eslint.config.mjs`.
 
 **`*` is safe in a package peer, NOT in the root manifest.** The intersection
 argument above holds only where some _other_ edge is exact. A package's
