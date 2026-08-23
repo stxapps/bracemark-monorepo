@@ -24,7 +24,7 @@ describe('the source repository', () => {
   });
 });
 
-describe('the apostrophe', () => {
+describe('the apostrophe and the quotation marks', () => {
   // The typographic ’, never a straight ' (docs/brand-assets.md — _mechanics_).
   // `no-restricted-syntax` in the root eslint config catches the straight one in
   // SOURCE TEXT; this catches it in an exported VALUE, which is what actually
@@ -45,6 +45,17 @@ describe('the apostrophe', () => {
   it('is the typographic ’ in every exported string', () => {
     const offenders = everyString(BRAND_MODULE, 'brand')
       .filter(([, value]) => /[A-Za-z]'[A-Za-z]/.test(value))
+      .map(([path]) => path);
+    expect(offenders).toEqual([]);
+  });
+
+  // The quotation mark is `“ ”` by the same editorial rule, and it is asserted
+  // in the same walk because the cost is one line. No brand line quotes anything
+  // today; the tagline or a future descriptor easily could, and the store console
+  // half of that is pinned next door rather than here.
+  it('is the typographic “ ” in every exported string', () => {
+    const offenders = everyString(BRAND_MODULE, 'brand')
+      .filter(([, value]) => value.includes('"'))
       .map(([path]) => path);
     expect(offenders).toEqual([]);
   });

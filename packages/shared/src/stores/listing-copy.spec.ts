@@ -116,7 +116,7 @@ describe('the long description', () => {
   });
 });
 
-describe('the apostrophe', () => {
+describe('the apostrophe and the quotation marks', () => {
   // The apostrophe is an editorial choice, not a consequence of the quote character
   // the literal happens to sit in (docs/brand-assets.md — _mechanics_). Prettier
   // picks whichever quote needs fewer escapes, so a straight `'` in prose quietly
@@ -145,6 +145,20 @@ describe('the apostrophe', () => {
     // left alone: no exported string is a quotation today, but one could be.
     const offenders = everyString(LISTING_COPY, 'listing-copy')
       .filter(([, value]) => /[A-Za-z]'[A-Za-z]/.test(value))
+      .map(([path]) => path);
+    expect(offenders).toEqual([]);
+  });
+
+  // `“ ”`, never a straight `"` — the same editorial rule, and it matters most
+  // exactly here. FULL_DESCRIPTION is the one export long enough to quote
+  // anything, `no-restricted-syntax` cannot see a straight `"` inside a
+  // single-quoted literal, and the value goes into a store console by hand where
+  // a review would be the only other check. Unlike the apostrophe there is no
+  // between-two-letters test to write: a `"` in an exported listing string is a
+  // quotation mark in every case, so the whole character is barred.
+  it('is the typographic “ ” in every exported string', () => {
+    const offenders = everyString(LISTING_COPY, 'listing-copy')
+      .filter(([, value]) => value.includes('"'))
       .map(([path]) => path);
     expect(offenders).toEqual([]);
   });

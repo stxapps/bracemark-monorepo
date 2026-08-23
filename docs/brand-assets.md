@@ -435,6 +435,56 @@ the one that earns the rule, for the `&apos;` reason above. `listing-copy.spec.t
 keeps its own assertion regardless — the rule fires on the source, the spec fires
 on the exported VALUES, which is what actually reaches a store console.
 
+⚠ **The quotation mark is the typographic pair `“ ”` (U+201C/U+201D)**, by the
+same editorial rule and with the same scope — every string, one pair, never a
+straight `"`, never `&quot;` or `&ldquo;`.
+
+**The mechanism that broke the apostrophe does not exist here, and that is the
+point.** Prettier flips a literal to double quotes only when the content holds
+more single quotes than doubles, so a `"` in prose needs no escaping and forces
+no flip — nothing was ever pulling the choice wrong. It has consequently been
+right by taste alone since the beginning: all 25 quotation marks in the workspace
+are `“ ”`, and every straight `"` in a `.ts`/`.tsx` is a **comment** or **data**
+(the CSV quoting in `import/csv.ts` and `export/csv.ts`, the HTML attributes in
+`export/netscape.ts`, the entity table in `expo-react`'s `parse-html-head.ts`).
+Which is exactly why it is written down at zero rather than after a drift:
+nothing was pulling it wrong, and nothing is pulling it right either.
+
+**Three jobs, all of them already in the code.** A delimiter around **content the
+user typed**, which is the common one and is not optional — `Create “{trimmed}”`
+in the four list/tag pickers across both platforms, `Move “{name}” to`,
+`“{title}” and its saved content`. A **defined term** in the legal pages —
+`(“{COMPANY.shortName}”, “we”, “us”)`, the “Service”, “AS IS”. And a **mention**,
+where a phrase is being discussed rather than asserted — _there is no “we promise
+not to look” in that sentence_ on /about, _What does “end-to-end encrypted”
+actually mean here?_ in the FAQ.
+
+**Nesting is barred, and the reason is the rule above it.** The standard inner
+pair is `‘ ’`, whose closing mark is the SAME codepoint as the apostrophe — so a
+nested quotation puts a character that means _apostrophe_ everywhere else in the
+product at the end of a phrase, one word away from a real one. Restructure the
+sentence instead. There is no nesting today, and the only `‘` in the workspace is
+a parser token in `parse-html-head.ts`.
+
+**Whether to quote a UI label is the one case with a real choice in it**, and the
+line is what the reader has to do with the string. A **named surface or system
+list** stays bare — My List, Archive, Trash, Show All are data
+(`sync/system-lists.ts`), a user navigates to them, and the terminology table
+already treats them as names rather than as copy. An **option value inside a
+control** takes the quotes, because the reader has to find that exact string in a
+row of radios and click it: _switch the setting from “Sync” to “Device”_
+(`content/faq.tsx`) is right as it stands.
+
+**What holds it is weaker than the apostrophe's guard, deliberately.** A fourth
+`no-restricted-syntax` selector covers `JSXText`, where a straight `"` is
+unambiguously prose, and the two spec walkers assert it over the exported values
+alongside `’`. There is no `Literal` selector, because `"` is real data in this
+workspace and such a rule would be per-file disables forever — so a **prose
+string in a single-quoted literal** (`'the "Service"'`) is the gap, and this page
+is what covers it. `listing-copy.spec.ts` is where that gap matters most:
+`FULL_DESCRIPTION` is the one export long enough to quote anything, and it is
+pasted into a store console by hand.
+
 #### terminology
 
 The load-bearing pair — bookmark and link — has its own section below. The rest:

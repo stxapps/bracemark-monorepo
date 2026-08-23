@@ -147,6 +147,19 @@ export default [
     // Specs and e2e are out of scope: a test NAME is prose nobody reads in the
     // product, and `it("a child's own lock…")` is fine. A spec asserting on real
     // copy still has to spell that copy exactly, or it stops passing.
+    //
+    // The QUOTATION MARK is `“ ”` (U+201C/U+201D) by the same rule, and it gets
+    // one selector rather than three. Prettier's heuristic never touched it —
+    // a `"` inside a single-quoted literal needs no escape, so nothing ever
+    // flipped a literal on its account and nothing pulled the choice wrong. But
+    // nothing pulls it RIGHT either, which is the whole reason the apostrophe
+    // drifted, so the one place a straight `"` is unambiguously prose is linted
+    // before it has a first hit: JSX text. A Literal cannot be, because `"` is
+    // real DATA in this workspace — the CSV quoting in shared/src/{im,ex}port,
+    // the HTML attributes in export/netscape.ts, the entity table in
+    // expo-react's parse-html-head.ts — and a selector over those would be
+    // per-file disables forever. The single-quoted prose literal (`'the "Service"'`)
+    // is the gap, and docs/brand-assets.md is what covers it.
     files: ['**/*.ts', '**/*.tsx'],
     ignores: ['**/*.spec.ts', '**/*.spec.tsx', 'e2e/**'],
     rules: {
@@ -163,6 +176,10 @@ export default [
         {
           selector: "JSXText[value=/[A-Za-z]'[A-Za-z]/]",
           message: "Use the typographic apostrophe ’ (U+2019), not ' or &apos;.",
+        },
+        {
+          selector: 'JSXText[value=/"/]',
+          message: 'Use the typographic quotation marks “ ” (U+201C/U+201D), not " or &quot;.',
         },
       ],
     },
