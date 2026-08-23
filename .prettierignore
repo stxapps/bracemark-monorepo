@@ -20,3 +20,10 @@
 
 # Lockfiles
 package-lock.json
+
+# Vendored agent skills — upstream expo/skills (MIT), see each SKILL.md header.
+# Kept byte-identical to upstream apart from the marked local edits so the copy
+# stays diffable against the source; reformatting would rewrite whole files and
+# bury those edits on the first refresh.
+/.claude/skills/expo-animation
+/.claude/skills/expo-module
