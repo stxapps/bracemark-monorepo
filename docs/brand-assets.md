@@ -3,8 +3,9 @@
 The **invariants** that keep the brand consistent across seven surfaces and the
 four apps that carry the mark: what the mark is, where its copies live and why
 they must not drift, the one set of lockup measurements, the two meanings the 45°
-fold is allowed to carry, the three brand lines, the two nouns the product uses
-for what it stores, and what the public repo entitles us to claim.
+fold is allowed to carry, the three brand lines, the voice everything else is
+written in, the two nouns the product uses for what it stores, and what the
+public repo entitles us to claim.
 
 Every rule here is enforced by nothing but this file. There is no test that
 compares two SVG paths, no lint rule that catches a hand-typed lockup, and no
@@ -239,6 +240,157 @@ claim inverted to a positive.
 product whose whole argument is that intent is worthless — putting them next to
 "we don't promise not to look" contradicts it out loud. Prose says the mechanism
 ("a path, a size, and bytes we hold no key for").
+
+### the voice
+
+The three lines above are what we say where a surface gives us one sentence. This
+is how everything **else** is written — the marketing site's prose, an FAQ answer,
+a button, an empty state, the sentence a failed request puts on screen. It is the
+same kind of rule as the two nouns below and carries the same warning: nothing
+enforces a word of it, and a paragraph in the wrong register type-checks, lints
+and ships.
+
+**Four attributes.** Each is stated with the misreading it invites, because the
+misreadings are what actually happen — "plain" drifts into slack, "we" drifts
+into corporate.
+
+**Mechanical — describe the machine, never our intentions.**
+
+- **We are**: specific about what the software does and precisely what our servers
+  hold.
+- **We are not**: reassuring. "Privacy-focused", "bank-grade", "your data is safe
+  with us" are claims about intent, in a product whose whole argument is that
+  intent is worth nothing beside architecture. Putting one next to _"we don't
+  promise not to look"_ contradicts it out loud.
+- **Sounds like**: "A path, a size, and bytes we hold no key for. Not the title,
+  not the address, not the tags." (the home page's inverted half)
+- **Does not sound like**: "Your bookmarks are private and secure."
+
+**States its own costs, unprompted.** The distinctive one, and the one most
+easily edited out by someone tidying.
+
+- **We are**: willing to spend a section arguing against the product.
+  `FULL_DESCRIPTION` ends on "WHAT IT COSTS TO BUILD IT THIS WAY"; /about carries
+  the same heading in prose; the create-account ceremony says saving the recovery
+  code is "genuinely on you".
+- **We are not**: modest, and not hedging. The concession is load-bearing: every
+  other claim on the page is one the reader has no way to check, made by the party
+  who benefits, and the costs are the only part of it they can verify against
+  their own use.
+- **The rule**: any surface long enough to make the case must also say what the
+  architecture costs — no password reset, search that runs on the device, no
+  shared or public lists. Not relegated to /faq.
+
+**Second person, present tense, ordinary words.**
+
+- **We are**: writing to one person doing one thing.
+- **We are not**: casual. No exclamation marks, no "Oops", no jokes; the register
+  is plain, not chatty.
+- **Sounds like**: "Archive a link when you are done with it — it leaves My List
+  but stays saved." / "Save a link and it lands here."
+- **Does not sound like**: "Users can leverage the archive to keep their library
+  tidy!"
+
+**First person plural, and it takes the blame.**
+
+- **We are**: a "we" that owns the mechanism and owns the failure. "We hold no
+  key." "We cannot look, so we cannot be asked to." "Could not sign in."
+- **We are not**: a "Bracemark" that refers to itself in the third person in
+  running prose. The name is the subject where the sentence is about the product
+  ("Bracemark is a bookmark manager that cannot read your bookmarks"); "we" is the
+  subject where it is about the people running it, and that is every sentence
+  about a promise, a cost, or a mistake.
+
+#### tone by surface
+
+The four attributes hold everywhere. What moves is how much room there is to
+argue, and the register follows the room rather than the channel.
+
+| surface                                | tone                                                                   | specimen                                                                                                        |
+| -------------------------------------- | ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| hero, store name/subtitle, OG title    | flat and declarative — one claim, no hedge, no supporting clause       | "Bookmarks only you can read"                                                                                   |
+| /about, /faq, `FULL_DESCRIPTION`       | argued and long — makes the case, then concedes                        | "That is not a privacy policy. It is the architecture."                                                         |
+| in-app labels and helper text          | instructional — what this does, in the user's own words                | "Every link you save shows up here, whichever list it lives in."                                                |
+| empty states                           | names the next act, never the absence                                  | "No tags yet. Type a name to make one."                                                                         |
+| upgrade and paywall copy               | names what stays **free** in the same breath as what does not          | "Nesting a list inside another is a Plus feature. Flat lists and tags stay free and fully usable."              |
+| errors                                 | fixed shape, below                                                     | "Could not change your password. Please try again."                                                             |
+| /terms, /privacy, the consent sentence | plain and literal — full document titles, no marketing register at all | "By creating an account, you agree to our Terms of Service and Privacy Policy" (`components/legal-consent.tsx`) |
+
+#### errors have a fixed shape, and it is already in the code
+
+Two forms, and the choice between them is whether the user can do anything.
+
+- **Nothing they can act on** — _"Could not ⟨their own verb⟩. Please try again."_
+  "Could not sign in.", "Could not create account.", "Could not change your
+  password.", "Could not generate a recovery code.", "Could not sign out your
+  other devices." The subject is **us**. There is no "Error:", no status code, no
+  "Something went wrong", and nothing cute — a product whose case is precision
+  does not get to be playful at the one moment it failed.
+- **Something they can act on** — name what was wrong, then the act.
+  "That recovery code didn't work. Check it and try again." / "This doesn't look
+  like a valid URL. Click Confirm to save it anyway." / "This link is in your
+  Trash. Restore it, or click Confirm to save a new copy."
+
+⚠ Every one of these **mounts**, which means every one of them needs
+`role="alert"` and a carrier that provides it. That is not a wording rule and it
+is the one with a worse failure mode: the text appears and nothing is announced.
+[accessibility.md](./accessibility.md) owns it.
+
+#### the mechanics
+
+Written down because they are already kept, not because they are being decided
+here — the point is that the next string matches the last two hundred.
+
+| rule                      | this                                                                               | not this                                         |
+| ------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------ |
+| headings, buttons, labels | sentence case — "What it costs to build it this way", "Create account"             | Title Case                                       |
+| em dash                   | spaced — "…when you are done with it — it leaves My List but stays saved"          | unspaced, or a hyphen standing in                |
+| exclamation marks         | none, on any user-facing surface                                                   | one "!" anywhere                                 |
+| serial comma              | yes — "links, lists, tags, pins, files, and settings"                              | dropping it before the final "and"               |
+| contractions              | the default — "won't be shown again", "doesn't look like a valid URL"              | uncontracted-by-habit, which reads legal         |
+| the platform verb         | **click** on web, **tap** on expo — the ported string differs in exactly this word | "select", "press", or one string serving both    |
+| plan names and numbers    | read `PLAN_LABELS` and `iap/plans`; store copy carries **no** numbers at all       | typing "Plus", a price, a cap, or a trial length |
+
+**The one place contractions are dropped is a decision, not an oversight.** The
+tagline says _can't_ and `FULL_DESCRIPTION` opens with _cannot_ — "Bracemark is a
+bookmark manager that **cannot** read your bookmarks", and later "We **cannot**
+look, so we cannot be asked to." The uncontracted form is the heavier one and is
+reserved for the sentence making the claim most flatly. Everywhere else the
+contraction is right, and reaching for "cannot" in helper text just sounds stiff.
+
+⚠ **The apostrophe is currently being chosen by the quote character rather than by
+us.** The rule is the typographic `’` in everything a user reads. The codebase
+does not keep it, for a mechanical reason: a single-quoted TypeScript literal
+takes `’` because a straight `'` would have to be escaped, and a double-quoted
+literal or a JSX text node takes `'` because it would not. So the same sentence
+exists in both forms, one screen apart —
+
+- `'Save this somewhere safe — it won’t be shown again. It’s your only way back into your account if you forget your password.'` (Settings → Account, both apps)
+- `"Save this recovery code somewhere safe. It's the only way back into your account if you ever lose your password."` (create-account, both apps)
+
+— and nothing catches it: no lint rule, no test, and the two forms are the same
+character count, so even the store budgets in `listing-copy.spec.ts` are
+unmoved. Two strings in `listing-copy.ts` are on the wrong side of it as well
+(`BROWSER_EXTENSION_LISTING.description` and `FIREFOX_ADDONS_SUMMARY`), and those
+two are **imported into `manifest.json`** rather than pasted, so they ship. The
+sweep has not been done; the rule is stated here so new strings stop adding to it.
+
+#### terminology
+
+The load-bearing pair — bookmark and link — has its own section below. The rest:
+
+| use                                         | not                            | why                                                                                                                                                                                      |
+| ------------------------------------------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **browser extension** / **share extension** | "extension", bare              | two unrelated things carry the name; a store listing is read by people who know neither exists ([architecture.md](./architecture.md#apps))                                               |
+| **password**                                | "passphrase", for the field    | the field is a password and says so; _passphrase_ names the **generated** default specifically, so it belongs in prose explaining where the value came from ([account.md](./account.md)) |
+| **recovery code**                           | "backup code", "recovery key"  | one name, and it is the one the crypto uses (`crypto/recovery-code.ts`)                                                                                                                  |
+| **sign in / sign out / create account**     | "log in", "login", "sign up"   | already unanimous across both apps; "login" is a noun and never a verb                                                                                                                   |
+| **My List, Archive, Trash, Show All**       | "inbox", "bin", "all items"    | these are data (`sync/system-lists.ts`), not copy — never retyped, never translated in prose                                                                                             |
+| **Free, Plus, Pro**                         | "premium", "paid tier"         | `PLAN_LABELS` is the source; see the mechanics table                                                                                                                                     |
+| **list, tag, pin**                          | "folder", "label", "favourite" | the UI names places and the schema agrees; a synonym in prose teaches a second vocabulary for one feature                                                                                |
+
+And the collection still gets no noun — "vault" and "library" are ruled on in the
+next section, which is where the whole terminology argument is made at length.
 
 ### the two nouns — bookmark and link
 
