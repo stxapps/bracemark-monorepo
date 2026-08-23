@@ -547,7 +547,7 @@ function ExportView({ onBack }: { onBack: () => void }) {
           <Icon as={Lock} className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
           <Text className="min-w-0 flex-1 text-sm text-muted-foreground">
             {lockedCount} locked {lockedCount === 1 ? 'list' : 'lists'} — and the links inside{' '}
-            {lockedCount === 1 ? 'it' : 'them'} — won&apos;t be included. Unlock{' '}
+            {lockedCount === 1 ? 'it' : 'them'} — won’t be included. Unlock{' '}
             {lockedCount === 1 ? 'it' : 'them'} first if you want everything.
           </Text>
         </View>
@@ -636,8 +636,8 @@ function DeleteView({ onBack }: { onBack: () => void }) {
             </Text>
             <Text className="text-sm text-muted-foreground">
               This removes your data only, not your account — you can still sign in. If another
-              device has changes that haven&apos;t synced yet, those changes may sync back
-              afterward. Consider exporting a copy first (Settings → Data).
+              device has changes that haven’t synced yet, those changes may sync back afterward.
+              Consider exporting a copy first (Settings → Data).
             </Text>
             <Text className="text-sm font-medium text-destructive">
               This action cannot be undone.
@@ -668,7 +668,7 @@ function DeleteView({ onBack }: { onBack: () => void }) {
           className="mt-0.5"
         />
         <Text className="min-w-0 flex-1 text-sm">
-          Yes, I&apos;m absolutely sure I want to delete all my data.
+          Yes, I’m absolutely sure I want to delete all my data.
         </Text>
       </Pressable>
 

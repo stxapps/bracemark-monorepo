@@ -3,7 +3,7 @@ import { Pressable, View } from 'react-native';
 import { ChevronLeft, RefreshCw } from 'lucide-react-native';
 
 import { useCreateAccount, UsernameTakenError } from '@stxapps/expo-react';
-import { usernameMessage, useUsernameAvailable } from '@stxapps/react';
+import { RECOVERY_CODE_COPY, usernameMessage, useUsernameAvailable } from '@stxapps/react';
 import { canonicalizePassword, canonicalizeUsername, generateRecoveryCode } from '@stxapps/shared';
 
 import { ErrorText } from '../../components/error-text';
@@ -72,9 +72,8 @@ const STEP_HEADINGS: Record<Step, { title: string; description: string }> = {
     description: 'Re-enter it to make sure you have it saved correctly.',
   },
   recovery: {
-    title: 'Recovery code',
-    description:
-      "Save this recovery code somewhere safe. It's the only way back into your account if you ever lose your password.",
+    title: RECOVERY_CODE_COPY.title,
+    description: RECOVERY_CODE_COPY.description.create,
   },
 };
 
@@ -224,7 +223,7 @@ export function CreateAccountForm() {
               screen, so without it TalkBack gets a button that silently
               re-enables and no reason why. */}
           {confirmError ? (
-            <ErrorText>That doesn&apos;t match. Check what you saved and try again.</ErrorText>
+            <ErrorText>That doesn’t match. Check what you saved and try again.</ErrorText>
           ) : null}
         </View>
         <Button onPress={goRecovery}>
@@ -244,10 +243,10 @@ export function CreateAccountForm() {
             the StepHeader is the only heading this content needs. */}
         <ShowOnceSecret
           secret={recoveryCode}
-          label="Your recovery code"
+          label={RECOVERY_CODE_COPY.secretLabel}
           saved={recoverySaved}
           onSavedChange={setRecoverySaved}
-          confirmLabel="I've saved my recovery code somewhere safe."
+          confirmLabel={RECOVERY_CODE_COPY.confirmLabel}
           actions={
             <Pressable
               role="button"

@@ -229,7 +229,7 @@ export function TagsSection() {
     <SettingsPane>
       <SettingsHeader
         title="Tags"
-        description="Create, rename, and reorder your tags. Tags are flat labels — a link can have many, so there's no nesting."
+        description="Create, rename, and reorder your tags. Tags are flat labels — a link can have many, so there’s no nesting."
       />
 
       {error && <SettingsNotice tone="error">{error}</SettingsNotice>}

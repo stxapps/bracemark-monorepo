@@ -199,7 +199,7 @@ test. Check the linked doc before acting on any of these.
   `index.share.js` lean_.
 - **The licence is stated in three places.** Root `LICENSE` (AGPL-3.0), root
   `package.json`'s `license` field, and `SOURCE.license` in
-  `packages/shared/src/stores/listing-copy.ts` — which is what four public surfaces
+  `packages/shared/src/brand/brand.ts` — which is what four public surfaces
   print. `package.json` said `MIT` against an AGPL `LICENSE` for the repo's whole
   first public stretch, and nothing caught it; a reader is entitled to rely on the
   permissive one. Only the third copy is pinned by a spec. Relatedly, no surface may

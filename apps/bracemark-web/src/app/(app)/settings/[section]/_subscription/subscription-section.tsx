@@ -111,7 +111,7 @@ export function SubscriptionSection() {
         // still reads "Some changes aren't syncing" until they reload or make an
         // edit. Safe to fire eagerly — cycles single-flight per account.
         requestSync();
-        setNotice(`You're on ${PLAN_LABELS[data.plan]} now — thank you!`);
+        setNotice(`You’re on ${PLAN_LABELS[data.plan]} now — thank you!`);
         return;
       }
       await new Promise((r) => setTimeout(r, ACTIVATION_INTERVAL_MS));
@@ -250,10 +250,10 @@ export function SubscriptionSection() {
                     status === 'trialing'
                     ? willRenew
                       ? `Free trial — your first payment is on ${formatDate(expiresAt)}.`
-                      : `Free trial ends on ${formatDate(expiresAt)} — you won't be charged.`
+                      : `Free trial ends on ${formatDate(expiresAt)} — you won’t be charged.`
                     : willRenew
                       ? `Renews on ${formatDate(expiresAt)}.`
-                      : `Ends on ${formatDate(expiresAt)} — it won't renew.`}
+                      : `Ends on ${formatDate(expiresAt)} — it won’t renew.`}
             </span>
           </div>
           {/* `outline`, like the sync row's Sync now (_data/data-section.tsx) — the
@@ -271,8 +271,8 @@ export function SubscriptionSection() {
 
         {status === 'grace' && (
           <SettingsNotice tone="error" className="mt-3">
-            Your last payment didn't go through. Update your payment method to keep your plan —
-            we'll retry for a while before it lapses.
+            Your last payment didn’t go through. Update your payment method to keep your plan —
+            we’ll retry for a while before it lapses.
           </SettingsNotice>
         )}
 
@@ -283,7 +283,7 @@ export function SubscriptionSection() {
               {busy === 'portal' ? 'Opening…' : 'Manage billing'}
             </Button>
             <p className="mt-2 text-xs text-muted-foreground">
-              Payment method, invoices, and cancellation — in Paddle's secure portal.
+              Payment method, invoices, and cancellation — in Paddle’s secure portal.
             </p>
           </div>
         )}

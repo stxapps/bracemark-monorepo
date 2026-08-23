@@ -34,6 +34,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FlashList, type FlashListRef, type ViewToken } from '@shopify/flash-list';
 
 import { type LinkView, useExtraction, useLocks, useSettings, useSync } from '@stxapps/expo-react';
+import { LOCK_COPY } from '@stxapps/react';
 
 import { LockPane } from '../../components/lock-pane';
 import { BulkEditBar } from './bulk-edit-bar';
@@ -142,8 +143,8 @@ export function Main() {
       <View className="min-h-0 flex-1">
         <LockPane
           className="flex-1"
-          title="This list is locked"
-          description="Enter the list's password to view its links."
+          title={LOCK_COPY.list.title}
+          description={LOCK_COPY.list.description}
           onUnlock={(password) => unlockList(listId, password)}
           biometric={
             biometricForList(listId)

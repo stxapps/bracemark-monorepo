@@ -183,7 +183,7 @@ export function ExtractionSection() {
 
       {deviceExtractionMode === 'all' && !enabled ? (
         <SettingsNotice tone="pending">
-          Previews are on but paused — they resume once you&apos;re signed in and your links have
+          Previews are on but paused — they resume once you’re signed in and your links have
           finished loading.
         </SettingsNotice>
       ) : enabled ? (

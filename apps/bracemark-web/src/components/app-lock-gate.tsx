@@ -2,6 +2,7 @@
 
 import type { ReactNode } from 'react';
 
+import { LOCK_COPY } from '@stxapps/react';
 import { useLocks } from '@stxapps/web-react';
 
 import { LockPane } from './lock-pane';
@@ -33,8 +34,8 @@ export function AppLockGate({ children }: { children: ReactNode }) {
       <div className="flex min-h-dvh flex-col safe-area">
         <LockPane
           className="flex-1"
-          title="Bracemark is locked"
-          description="Enter your app lock password to continue."
+          title={LOCK_COPY.app.title}
+          description={LOCK_COPY.app.description}
           onUnlock={unlockApp}
         />
       </div>

@@ -89,7 +89,7 @@ export function LinkDestroyConfirm() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete permanently?</AlertDialogTitle>
             <AlertDialogDescription>
-              {what} will be removed from all your devices. This can&rsquo;t be undone.
+              {what} will be removed from all your devices. This can’t be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
         </div>

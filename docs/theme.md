@@ -490,8 +490,10 @@ muted colour exactly when they land on the wash.
 - **A new mode** — add it to `THEME_MODES` (`theme/theme.ts`), handle it in
   `resolveTheme` (and `msUntilNextThemeSwitch` if it's time-based), mirror the
   branch in `themeInitScript`'s ES5 IIFE (web FOUC only), and add a radio in both
-  apps' `misc-section.tsx`. `coerceThemeState` accepts any value in `THEME_MODES`
-  automatically. bracemark-expo's `ThemeProvider` needs no change for a normal
+  apps' `misc-section.tsx` — its label and hint go in `@stxapps/react`
+  `lib/misc-settings-copy.ts`, whose `Record<ThemeMode, …>` will not typecheck
+  until they do; only the icon stays at the call site. `coerceThemeState` accepts
+  any value in `THEME_MODES` automatically. bracemark-expo's `ThemeProvider` needs no change for a normal
   resolve-and-pin mode (it goes through the shared `resolveTheme`); it only needs
   a new branch if the mode requires a distinct apply path like `system`'s (leave
   the `Appearance` override clear) or a non-`Appearance`/non-timer trigger.

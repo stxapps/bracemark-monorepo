@@ -3,6 +3,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { withUniwind } from 'uniwind';
 
 import { useLocks } from '@stxapps/expo-react';
+import { LOCK_COPY } from '@stxapps/react';
 
 import { LockPane } from './lock-pane';
 
@@ -28,8 +29,8 @@ export function AppLockGate({ children }: { children: ReactNode }) {
       <StyledSafeAreaView className="flex-1 bg-background">
         <LockPane
           className="flex-1"
-          title="Bracemark is locked"
-          description="Enter your app lock password to continue."
+          title={LOCK_COPY.app.title}
+          description={LOCK_COPY.app.description}
           onUnlock={unlockApp}
           biometric={
             appLock.biometric && biometricAvailable

@@ -51,7 +51,7 @@ export class ImportQuotaError extends Error {
   constructor(newCount: number, existingCount: number, maxLinks: number) {
     super(
       `Importing ${newCount} new ${newCount === 1 ? 'link' : 'links'} would exceed your ` +
-        `plan's limit of ${maxLinks} links (you have ${existingCount}). ` +
+        `plan’s limit of ${maxLinks} links (you have ${existingCount}). ` +
         'Upgrade your plan or import fewer links.',
     );
     this.name = 'ImportQuotaError';

@@ -118,7 +118,7 @@ export function usernameMessage(
                   // two lines below a ~500px viewport. Shortening to just the subject
                   // was tempting and wrong — the instruction is the half this rung owes,
                   // per the paragraph above. 173px.
-                  { text: "Couldn't check. Try again.", tone: 'warn' }
+                  { text: 'Couldn’t check. Try again.', tone: 'warn' }
                 : // No data and no error: the query is enabled but hasn't settled — the
                   // frame between mount and fetch start, or a request aborted by a newer
                   // keystroke (`signal`), both of which leave `isFetching` false for a
@@ -192,7 +192,7 @@ export function newPasswordMessage(
           // zxcvbn had just scored as strong, telling the user to retry the thing that
           // already worked. The estimate is the more specific signal; a flag about how
           // the estimate was obtained can never outrank having one.
-          { text: "Couldn't check. Try again.", tone: 'warn' }
+          { text: 'Couldn’t check. Try again.', tone: 'warn' }
         : guessesLog10 === null
           ? { text: 'Checking strength…', tone: 'muted' }
           : guessesLog10 < PASSWORD_MIN_GUESSES_LOG10

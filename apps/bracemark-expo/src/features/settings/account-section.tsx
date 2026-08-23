@@ -29,7 +29,7 @@ import {
   useHasRecoveryDoor,
   useRecoveryCode,
 } from '@stxapps/expo-react';
-import { hasRecoveryDoorQueryKey, useSignOutOthers } from '@stxapps/react';
+import { hasRecoveryDoorQueryKey, RECOVERY_CODE_COPY, useSignOutOthers } from '@stxapps/react';
 
 import { ErrorText } from '../../components/error-text';
 import { Button } from '../../components/ui/button';
@@ -99,9 +99,9 @@ function DeleteAccountView({ onBack }: { onBack: () => void }) {
               devices, your account keys, and every signed-in session.
             </Text>
             <Text className="text-sm text-muted-foreground">
-              Your username stays reserved and can&apos;t be registered again — by you or anyone
-              else. If you have a canceled subscription with paid time remaining, that time is
-              forfeited. Consider exporting your data first (Settings → Data).
+              Your username stays reserved and can’t be registered again — by you or anyone else. If
+              you have a canceled subscription with paid time remaining, that time is forfeited.
+              Consider exporting your data first (Settings → Data).
             </Text>
             <Text className="text-sm font-medium text-destructive">
               This action cannot be undone. There is no grace period and no recovery.
@@ -123,7 +123,7 @@ function DeleteAccountView({ onBack }: { onBack: () => void }) {
             >
               Subscription settings
             </Text>{' '}
-            first — deleting the account doesn&apos;t stop the billing.
+            first — deleting the account doesn’t stop the billing.
           </Text>
         </SettingsNotice>
       )}
@@ -258,15 +258,15 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
         <View className="mt-3 flex-row items-start gap-2">
           <Icon as={ShieldCheck} className="mt-0.5 size-4 shrink-0 text-primary" />
           <Text className="min-w-0 flex-1 text-sm">
-            Your password has been changed. You&apos;re still signed in on this device, and your
-            other devices have been signed out.
+            Your password has been changed. You’re still signed in on this device, and your other
+            devices have been signed out.
           </Text>
         </View>
         <Text className="mt-4 text-xs text-muted-foreground">
-          This changed how you sign in, but didn&apos;t re-encrypt data you&apos;ve already synced.
-          If your old password may have been compromised, a password change alone won&apos;t protect
-          data an attacker could already have copied — export your data (Settings → Data on the web
-          app), delete this account, and create a new one.
+          This changed how you sign in, but didn’t re-encrypt data you’ve already synced. If your
+          old password may have been compromised, a password change alone won’t protect data an
+          attacker could already have copied — export your data (Settings → Data on the web app),
+          delete this account, and create a new one.
         </Text>
       </View>
     );
@@ -276,7 +276,7 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
     <View>
       <SettingsHeader
         title="Change password"
-        description="You'll need your current password. There is no email reset, so keep the new one safe."
+        description="You’ll need your current password. There is no email reset, so keep the new one safe."
         back={{ label: 'Account', onPress: onBack }}
       />
 
@@ -357,10 +357,10 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
         {/* Honest boundary of what a password change is: a door rotation, not a
             DEK rotation (docs/account.md) — see web for the full note. */}
         <Text className="mt-2 border-t border-border pt-4 text-xs text-muted-foreground">
-          Changing your password replaces how you sign in — it doesn&apos;t re-encrypt data
-          you&apos;ve already synced. If you think someone actually had your old password, changing
-          it alone won&apos;t protect data they may have already copied. In that case the safe path
-          is to export your data (Settings → Data), delete this account, and create a new one.
+          Changing your password replaces how you sign in — it doesn’t re-encrypt data you’ve
+          already synced. If you think someone actually had your old password, changing it alone
+          won’t protect data they may have already copied. In that case the safe path is to export
+          your data (Settings → Data), delete this account, and create a new one.
         </Text>
       </View>
     </View>
@@ -410,20 +410,20 @@ function RecoveryCodeView({ onBack, hasRecovery }: { onBack: () => void; hasReco
             one) — the mint has landed and the old door is dead; Done (gated on
             `saved`) is the only exit. See web's rationale in full. */}
         <SettingsHeader
-          title="Recovery code"
+          title={RECOVERY_CODE_COPY.title}
           description={
             hadRecovery
-              ? 'Save this somewhere safe — it won’t be shown again. Your previous code has stopped working, so this is the only one that can get you back into your account.'
-              : 'Save this somewhere safe — it won’t be shown again. It’s your only way back into your account if you forget your password.'
+              ? RECOVERY_CODE_COPY.description.remint
+              : RECOVERY_CODE_COPY.description.mint
           }
         />
         <View className="mt-4 max-w-sm">
           <ShowOnceSecret
             secret={code}
-            label="Your recovery code"
+            label={RECOVERY_CODE_COPY.secretLabel}
             saved={saved}
             onSavedChange={setSaved}
-            confirmLabel="I've saved my recovery code somewhere safe."
+            confirmLabel={RECOVERY_CODE_COPY.confirmLabel}
           />
           <View className="mt-4 flex-row">
             <Button disabled={!saved} onPress={onBack}>
@@ -522,7 +522,7 @@ function SignOutOtherDevicesView({ onBack }: { onBack: () => void }) {
         <View className="mt-3 flex-row items-start gap-2">
           <Icon as={ShieldCheck} className="mt-0.5 size-4 shrink-0 text-primary" />
           <Text className="min-w-0 flex-1 text-sm">
-            Your other devices have been signed out. They&apos;ll need to sign in again. This device
+            Your other devices have been signed out. They’ll need to sign in again. This device
             stays signed in.
           </Text>
         </View>
@@ -572,7 +572,7 @@ export function AccountSection() {
               icon={<Icon as={CircleAlert} className="size-4 text-muted-foreground" />}
             >
               <Text className="text-sm text-muted-foreground">
-                You haven&apos;t set up a recovery code. Without one, a lost password means a lost
+                You haven’t set up a recovery code. Without one, a lost password means a lost
                 account — there is no email reset.{' '}
                 <Text
                   className="text-sm text-muted-foreground underline"

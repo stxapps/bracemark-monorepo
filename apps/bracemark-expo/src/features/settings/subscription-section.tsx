@@ -127,7 +127,7 @@ export function SubscriptionSection() {
           // single-flight per account.
           requestSync();
           setBusy(null);
-          setNotice(`You're on ${PLAN_LABELS[status.plan]} now — thank you!`);
+          setNotice(`You’re on ${PLAN_LABELS[status.plan]} now — thank you!`);
         },
         onFailed: (message) => {
           if (unmounted.current) return;
@@ -157,7 +157,7 @@ export function SubscriptionSection() {
         // Same reason as the checkout path: a restore widens the entitlement on
         // THIS device, so anything the plan gate refused here can push now.
         requestSync();
-        setNotice(`Restored — you're on ${PLAN_LABELS[status.plan]}.`);
+        setNotice(`Restored — you’re on ${PLAN_LABELS[status.plan]}.`);
       } else {
         setNotice('No purchases to restore on this store account.');
       }
@@ -266,10 +266,10 @@ export function SubscriptionSection() {
                     status === 'trialing'
                     ? willRenew
                       ? `Free trial — your first payment is on ${formatDate(expiresAt)}.`
-                      : `Free trial ends on ${formatDate(expiresAt)} — you won't be charged.`
+                      : `Free trial ends on ${formatDate(expiresAt)} — you won’t be charged.`
                     : willRenew
                       ? `Renews on ${formatDate(expiresAt)}.`
-                      : `Ends on ${formatDate(expiresAt)} — it won't renew.`}
+                      : `Ends on ${formatDate(expiresAt)} — it won’t renew.`}
             </Text>
           </View>
           {/* `outline`, like the sync row's Sync now (settings/data-section.tsx) —
@@ -288,8 +288,8 @@ export function SubscriptionSection() {
 
         {status === 'grace' && (
           <SettingsNotice tone="error" className="mt-3">
-            Your last payment didn&apos;t go through. Update your payment method to keep your plan —
-            we&apos;ll retry for a while before it lapses.
+            Your last payment didn’t go through. Update your payment method to keep your plan —
+            we’ll retry for a while before it lapses.
           </SettingsNotice>
         )}
 
@@ -304,15 +304,14 @@ export function SubscriptionSection() {
             </Button>
             <Text className="mt-2 text-xs text-muted-foreground">
               Payment method, cancellation, and renewals — in the{' '}
-              {STORE_SOURCE === 'appstore' ? 'App Store' : 'Play Store'}&apos;s subscription
-              settings.
+              {STORE_SOURCE === 'appstore' ? 'App Store' : 'Play Store'}’s subscription settings.
             </Text>
           </View>
         )}
         {plan !== 'free' && source === 'paddle' && (
           <Text className="mt-3 text-sm text-muted-foreground">
             This subscription was purchased on the web — manage billing or cancel it in the web
-            app&apos;s Subscription settings.
+            app’s Subscription settings.
           </Text>
         )}
         {(source === 'appstore' || source === 'playstore') && source !== STORE_SOURCE && (
@@ -427,7 +426,7 @@ export function SubscriptionSection() {
               another device); this re-drives verify for one the STORE holds and the
               server never recorded. Same shape as the Manage note above. */}
           <Text className="mt-2 text-xs text-muted-foreground">
-            Already subscribed with this device&apos;s{' '}
+            Already subscribed with this device’s{' '}
             {STORE_SOURCE === 'appstore' ? 'App Store' : 'Play Store'} account? This brings it back
             — after a reinstall, or on a new device.
           </Text>

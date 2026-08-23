@@ -1,11 +1,11 @@
+import { BRAND } from '../brand/brand';
+import * as LISTING_COPY from './listing-copy';
 import {
   APP_STORE,
-  BRAND,
   BROWSER_EXTENSION_LISTING,
   FIREFOX_ADDONS_SUMMARY,
   FULL_DESCRIPTION,
   PLAY,
-  SOURCE,
   STORE_LIMITS,
 } from './listing-copy';
 
@@ -54,22 +54,6 @@ describe('store listing copy — character budgets', () => {
     // copy would reach for the tagline here, and it is 51 characters.
     expect(BRAND.tagline.length).toBeGreaterThan(STORE_LIMITS.appStore.subtitle);
     expect(APP_STORE.subtitle).toBe(BRAND.subtitle);
-  });
-});
-
-describe('the source repository', () => {
-  // `label` exists so a surface can PRINT the repo without a scheme in front of
-  // it — the About colophon does. Two strings that have to say the same thing is
-  // the drift this file exists to prevent, so it is asserted rather than trusted.
-  it('prints the same repository it links to', () => {
-    expect(`https://${SOURCE.label}`).toBe(SOURCE.url);
-  });
-
-  // The one that a licence change would otherwise leave stale on four pages. The
-  // root LICENSE file and the root package.json are the other two copies of this
-  // fact; they cannot be read from here, so this pins the third.
-  it('names an SPDX licence id', () => {
-    expect(SOURCE.license).toBe('AGPL-3.0');
   });
 });
 
@@ -129,5 +113,39 @@ describe('the long description', () => {
     // outside the review cycle. Anything here goes stale on the storefront for as
     // long as a review takes. Bullets are "•", so no digit is legitimate.
     expect(FULL_DESCRIPTION).not.toMatch(/\d/);
+  });
+});
+
+describe('the apostrophe', () => {
+  // The apostrophe is an editorial choice, not a consequence of the quote character
+  // the literal happens to sit in (docs/brand-assets.md — _mechanics_). Prettier
+  // picks whichever quote needs fewer escapes, so a straight `'` in prose quietly
+  // flips its literal to double quotes and the next sentence gets written to match
+  // — which is how the same recovery-code sentence ended up existing in both forms.
+  //
+  // This is asserted HERE rather than left to review because these strings are the
+  // ones that leave the repo: BROWSER_EXTENSION_LISTING and FIREFOX_ADDONS_SUMMARY
+  // are read into the browser extension's manifest at build time, and the rest are
+  // pasted into a store console. The budget cases above cannot catch it — U+2019 is
+  // one UTF-16 code unit, exactly like `'`, so no length moves.
+  //
+  // Walks the whole module rather than a list of names, so an export added later
+  // is covered without anyone remembering to add it here. Its twin lives in
+  // brand/brand.spec.ts and does the same for the brand lines, COMPANY and SOURCE.
+  const everyString = (value: unknown, path: string): [string, string][] => {
+    if (typeof value === 'string') return [[path, value]];
+    if (value && typeof value === 'object') {
+      return Object.entries(value).flatMap(([key, inner]) => everyString(inner, `${path}.${key}`));
+    }
+    return [];
+  };
+
+  it('is the typographic ’ in every exported string', () => {
+    // Between two letters, which is an apostrophe and nothing else. A bare `'` is
+    // left alone: no exported string is a quotation today, but one could be.
+    const offenders = everyString(LISTING_COPY, 'listing-copy')
+      .filter(([, value]) => /[A-Za-z]'[A-Za-z]/.test(value))
+      .map(([path]) => path);
+    expect(offenders).toEqual([]);
   });
 });

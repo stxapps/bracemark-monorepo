@@ -32,7 +32,7 @@ describe('newPasswordMessage — the three ways there is no estimate', () => {
   it('says the check FAILED, not that it is still running, once the load is lost', () => {
     const { tone, text } = newPasswordMessage(strong, null, true);
     expect(text).not.toBe('Checking strength…');
-    expect(text).toBe("Couldn't check. Try again.");
+    expect(text).toBe('Couldn’t check. Try again.');
     // `warn`, never `error`: the check failed, not the password. `error` is what both
     // forms spell `aria-invalid` as, and this password may well be strong.
     expect(tone).toBe('warn');

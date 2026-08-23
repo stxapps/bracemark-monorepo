@@ -24,7 +24,7 @@ import { Text } from './ui/text';
 // door into it.
 //
 // The name comes from `BRAND.name` rather than the literal so the one file that
-// owns what the product is called (shared `stores/listing-copy.ts`) owns it here
+// owns what the product is called (shared `brand/brand.ts`) owns it here
 // too — that file exists because five consoles and three apps have to agree, and
 // a hardcoded wordmark is precisely the drift it was written to stop.
 export function BrandLockup({

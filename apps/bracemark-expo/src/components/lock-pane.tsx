@@ -11,6 +11,7 @@ import { View } from 'react-native';
 import { Lock, ScanFace } from 'lucide-react-native';
 
 import { useSignOut } from '@stxapps/expo-react';
+import { LOCK_COPY } from '@stxapps/react';
 
 import { cn } from '../lib/utils';
 import { Button } from './ui/button';
@@ -47,7 +48,7 @@ export function LockPane({
   const submit = async () => {
     if (busy) return;
     if (password === '') {
-      setError('Please enter a password');
+      setError(LOCK_COPY.errors.empty);
       return;
     }
     setBusy(true);
@@ -55,9 +56,9 @@ export function LockPane({
     try {
       const ok = await onUnlock(password);
       if (ok) setPassword('');
-      else setError('Password is not correct. Please try again.');
+      else setError(LOCK_COPY.errors.wrong);
     } catch {
-      setError('Could not unlock. Please try again.');
+      setError(LOCK_COPY.errors.failed);
     } finally {
       setBusy(false);
     }
@@ -117,8 +118,8 @@ export function LockPane({
             autoFocus={!biometric}
             autoCapitalize="none"
             autoCorrect={false}
-            placeholder="Password"
-            aria-label="Password"
+            placeholder={LOCK_COPY.passwordLabel}
+            aria-label={LOCK_COPY.passwordLabel}
             value={password}
             editable={!busy}
             onChangeText={(text) => {
@@ -130,20 +131,20 @@ export function LockPane({
           {error && <ErrorText>{error}</ErrorText>}
         </View>
         <Button onPress={() => void submit()} disabled={busy}>
-          <Text>{busy ? 'Unlocking…' : 'Unlock'}</Text>
+          <Text>{busy ? LOCK_COPY.unlocking : LOCK_COPY.unlock}</Text>
         </Button>
       </View>
 
       <View className="max-w-xs">
         <Text className="text-center text-xs text-muted-foreground">
-          Forgot the password? You can{' '}
+          {LOCK_COPY.forgot.before}{' '}
           <Text
             className="text-xs text-muted-foreground underline"
             onPress={() => !signOut.isPending && signOut.mutate()}
           >
-            sign out
+            {LOCK_COPY.forgot.action}
           </Text>{' '}
-          and sign back in — signing out removes all locks on this device.
+          {LOCK_COPY.forgot.after}
         </Text>
       </View>
     </View>

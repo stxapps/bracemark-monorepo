@@ -35,7 +35,7 @@ import { BrandLockup } from './brand-lockup';
 // other, and docs/brand-assets.md says the tagline is safest exactly where supporting copy
 // does that immediately.
 //
-// All three lines come from `BRAND` (shared `stores/listing-copy.ts`) rather than
+// All three lines come from `BRAND` (shared `brand/brand.ts`) rather than
 // being typed here. That file exists because five consoles and three apps have to
 // agree on them, and this screen is a store screenshot's worth of surface — a
 // hand-typed variant would ship to a storefront and disagree with the listing

@@ -151,11 +151,11 @@ export function ExtractionSection() {
       <SettingsPane>
         <SettingsHeader
           title="Link previews"
-          description="Bracemark fills in each saved link's title and preview image automatically. Links saved from the Bracemark extension are previewed right on your device; previews for links saved on the web or added by import are part of the Plus plan."
+          description="Bracemark fills in each saved link’s title and preview image automatically. Links saved from the Bracemark extension are previewed right on your device; previews for links saved on the web or added by import are part of the Plus plan."
         />
         <SettingsRow
           title="Server-side previews"
-          description="Upgrade to fill in titles and preview images for links that weren't previewed on the device that saved them."
+          description="Upgrade to fill in titles and preview images for links that weren’t previewed on the device that saved them."
           action={
             <Button asChild variant="outline" size="sm">
               <Link href="/settings/subscription">Upgrade to Plus</Link>
@@ -170,7 +170,7 @@ export function ExtractionSection() {
     <SettingsPane>
       <SettingsHeader
         title="Link previews"
-        description="Bracemark fills in each saved link's title and preview image automatically — you don't need to do it by hand. Links you save from the Bracemark extension or mobile app are previewed right on your device, so the page never leaves it. For links saved on the web or added by import, turn on server-side previews below and Bracemark will fetch them for you."
+        description="Bracemark fills in each saved link’s title and preview image automatically — you don’t need to do it by hand. Links you save from the Bracemark extension or mobile app are previewed right on your device, so the page never leaves it. For links saved on the web or added by import, turn on server-side previews below and Bracemark will fetch them for you."
       />
 
       <SettingsRow
@@ -193,7 +193,7 @@ export function ExtractionSection() {
             Server-side previews
           </Label>
         }
-        description="Fetch each link on the server to fill in its title and preview image — for links that weren't previewed on the device that saved them. Only the link's URL is sent, never your account or anything else, and only while this is on."
+        description="Fetch each link on the server to fill in its title and preview image — for links that weren’t previewed on the device that saved them. Only the link’s URL is sent, never your account or anything else, and only while this is on."
         action={
           <Switch id="server-extraction" checked={serverExtraction} onCheckedChange={setEnabled} />
         }
@@ -203,7 +203,7 @@ export function ExtractionSection() {
 
       {serverExtraction && !enabled ? (
         <SettingsNotice tone="pending">
-          Server-side previews are on but currently unavailable — they resume once you're signed in
+          Server-side previews are on but currently unavailable — they resume once you’re signed in
           and the server is reachable.
         </SettingsNotice>
       ) : enabled ? (

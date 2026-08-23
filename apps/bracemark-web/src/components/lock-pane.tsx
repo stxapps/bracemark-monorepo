@@ -10,6 +10,7 @@
 import { useState } from 'react';
 import { Lock } from 'lucide-react';
 
+import { LOCK_COPY } from '@stxapps/react';
 import { useSignOut } from '@stxapps/web-react';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import { Input } from '@stxapps/web-ui/components/ui/input';
@@ -39,7 +40,7 @@ export function LockPane({ title, description, onUnlock, className }: LockPanePr
     e.preventDefault();
     if (busy) return;
     if (password === '') {
-      setError('Please enter a password');
+      setError(LOCK_COPY.errors.empty);
       return;
     }
     setBusy(true);
@@ -47,9 +48,9 @@ export function LockPane({ title, description, onUnlock, className }: LockPanePr
     try {
       const ok = await onUnlock(password);
       if (ok) setPassword('');
-      else setError('Password is not correct. Please try again.');
+      else setError(LOCK_COPY.errors.wrong);
     } catch {
-      setError('Could not unlock. Please try again.');
+      setError(LOCK_COPY.errors.failed);
     } finally {
       setBusy(false);
     }
@@ -75,8 +76,8 @@ export function LockPane({ title, description, onUnlock, className }: LockPanePr
             type="password"
             autoFocus
             autoComplete="off"
-            placeholder="Password"
-            aria-label="Password"
+            placeholder={LOCK_COPY.passwordLabel}
+            aria-label={LOCK_COPY.passwordLabel}
             value={password}
             onChange={(e) => {
               setPassword(e.target.value);
@@ -90,21 +91,21 @@ export function LockPane({ title, description, onUnlock, className }: LockPanePr
           )}
         </div>
         <Button type="submit" disabled={busy}>
-          {busy ? 'Unlocking…' : 'Unlock'}
+          {busy ? LOCK_COPY.unlocking : LOCK_COPY.unlock}
         </Button>
       </form>
 
       <p className="max-w-xs text-center text-xs text-muted-foreground">
-        Forgot the password? You can{' '}
+        {LOCK_COPY.forgot.before}{' '}
         <button
           type="button"
           onClick={() => signOut.mutate()}
           disabled={signOut.isPending}
           className="underline"
         >
-          sign out
+          {LOCK_COPY.forgot.action}
         </button>{' '}
-        and sign back in — signing out removes all locks on this device.
+        {LOCK_COPY.forgot.after}
       </p>
     </div>
   );

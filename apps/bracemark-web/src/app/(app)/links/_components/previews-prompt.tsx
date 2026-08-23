@@ -92,8 +92,8 @@ export function PreviewsPrompt() {
           <>
             <p className="text-sm text-muted-foreground">
               Bracemark can fill in their titles and images by fetching each page through its
-              preview service. Only the link&apos;s URL is sent, nothing is stored, and it never
-              runs until you turn it on.
+              preview service. Only the link’s URL is sent, nothing is stored, and it never runs
+              until you turn it on.
             </p>
             <div className="mt-1 flex flex-wrap items-center gap-2">
               <Button asChild size="sm" variant="outline">

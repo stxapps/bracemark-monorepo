@@ -218,8 +218,10 @@ The two platforms draw it differently, and on RN the technique is chosen by
 ### the brand lines
 
 **Three lines, three jobs, never substituted for each other.** They live in
-`packages/shared/src/stores/listing-copy.ts` because five consoles and three apps
-have to agree and nothing else enforces that.
+`packages/shared/src/brand/brand.ts` because five consoles and three apps have to
+agree and nothing else enforces that. Not in `stores/listing-copy.ts` next door:
+a store listing is only one of their consumers, and Settings → About, the
+marketing site and the app chrome are the others.
 
 | line           | text                                                   | for                                                                      |
 | -------------- | ------------------------------------------------------ | ------------------------------------------------------------------------ |
@@ -358,22 +360,80 @@ look, so we cannot be asked to." The uncontracted form is the heavier one and is
 reserved for the sentence making the claim most flatly. Everywhere else the
 contraction is right, and reaching for "cannot" in helper text just sounds stiff.
 
-⚠ **The apostrophe is currently being chosen by the quote character rather than by
-us.** The rule is the typographic `’` in everything a user reads. The codebase
-does not keep it, for a mechanical reason: a single-quoted TypeScript literal
-takes `’` because a straight `'` would have to be escaped, and a double-quoted
-literal or a JSX text node takes `'` because it would not. So the same sentence
-exists in both forms, one screen apart —
+⚠ **The apostrophe is the typographic `’` in everything a user reads — an
+editorial choice, not a consequence of the quote character.** The distinction
+matters because the codebase spent a long stretch making it the other way round.
+`.prettierrc` sets `singleQuote: true`, and prettier picks whichever quote needs
+fewer escapes, so a straight `'` in prose silently flips its literal to double
+quotes — and the next sentence gets written to match whatever quote it landed in.
+A single-quoted literal took `’` because a straight `'` would have to be escaped;
+a double-quoted literal or a JSX text node took `'` because it would not. The same
+recovery-code sentence ended up existing in both forms, one screen apart, in four
+hand-copied files.
 
-- `'Save this somewhere safe — it won’t be shown again. It’s your only way back into your account if you forget your password.'` (Settings → Account, both apps)
-- `"Save this recovery code somewhere safe. It's the only way back into your account if you ever lose your password."` (create-account, both apps)
+Following the rule dissolves the mechanism: copy that carries `’` needs no
+escaping, so prettier keeps single quotes throughout, and a double-quoted literal
+in a copy file becomes a smell rather than a normal outcome.
 
-— and nothing catches it: no lint rule, no test, and the two forms are the same
-character count, so even the store budgets in `listing-copy.spec.ts` are
-unmoved. Two strings in `listing-copy.ts` are on the wrong side of it as well
-(`BROWSER_EXTENSION_LISTING.description` and `FIREFOX_ADDONS_SUMMARY`), and those
-two are **imported into `manifest.json`** rather than pasted, so they ship. The
-sweep has not been done; the rule is stated here so new strings stop adding to it.
+Two things now hold it, because "the rule is written down" is exactly what failed
+here:
+
+- **Two specs assert it** over every exported string in the published-copy
+  modules: `listing-copy.spec.ts` for the store copy — the strings that leave the
+  repo, either into the browser extension's `manifest.json` at build time or into
+  a store console by hand — and `brand.spec.ts` for the brand lines, `COMPANY` and
+  `SOURCE`. Each walks its module rather than a list of names, so a new export is
+  covered without anyone remembering to add it. The character budgets cannot catch
+  this on their own: `’` is one UTF-16 code unit, exactly like `'`, so no length
+  moves.
+- **The copy that exists twice lives in one file.** `packages/react/src/lib/`
+  holds it: `recovery-code-copy.ts` (create-account and Settings → Account),
+  `lock-copy.ts` (the unlock pane and its two gates), `misc-settings-copy.ts`
+  (every radio row in Settings → Misc.), beside the `new-password-copy.ts` that
+  set the pattern. Each covers a surface that exists once per platform, where the
+  native half is a hand port of the web one and nothing but the shared file keeps
+  the two saying the same words. The rule for what goes in: only the WORDS, and
+  only when there are two of them — a string that exists on one platform only
+  (the biometric button) stays at its call site rather than moving somewhere that
+  implies a twin.
+
+The sweep **is** done — every string a user reads carries `’`, across both apps,
+the packages and the marketing site — and **`no-restricted-syntax` in the root
+`eslint.config.mjs` now holds it**, so this is the one rule in this section a
+reader does not have to remember. Three things are worth keeping.
+
+**There was a second spelling, and it hid from the obvious grep.** In JSX TEXT
+the straight apostrophe was written as the HTML entity `&apos;` — forty-four of
+them, none of which a search for `'` can find. Babel decodes it at parse time (on
+Metro as well as on web) into exactly the straight `'`, so it was never a fix for
+anything, only a disguise. Nothing in this repo asks for it, either:
+`react/no-unescaped-entities` is NOT enabled here, and a bare `'` in JSX text
+passes `npm run lint` — the entity is a habit carried in from projects that do
+enable that rule (it was a Next.js default for years). A third spelling, `&rsquo;`, was in two files and was the only
+correct one of the three. Both entities are gone; the literal `’` needs no entity
+and does not trip the rule. **Write `’`, not `&rsquo;`** — one spelling, and it
+greps.
+
+**The rule is about the CHARACTER, not about who reads the string.** It covers
+every `.ts`/`.tsx` in the workspace, and fixing a hit is always the same thing:
+type `’`. A log line, a thrown `Error`, a dev-only warning — all of them take `’`
+too. That is deliberate and it is the cheaper rule to live under: the alternative
+makes every author judge whether a string might reach a user one day, which is
+exactly the kind of call that produced the drift above. The one real exception is
+a string where the apostrophe is **data** rather than prose — a parser token, a
+fixture, a value compared against user input — where `’` would be a bug and a
+disable comment is right. There are none today.
+
+Out of scope: **comments** (not a string literal, so the rule never sees them) and
+**specs and `e2e/`**, which are ignored — a test NAME is prose nobody reads in the
+product, so `it("applies a child's own hide …")` stays as it is. A spec asserting
+on real copy still has to spell that copy exactly, or it stops passing, which is
+how `listing-copy.spec.ts` and `field-messages.spec.ts` already work.
+
+The three selectors are `Literal`, `TemplateElement` and `JSXText`; the last is
+the one that earns the rule, for the `&apos;` reason above. `listing-copy.spec.ts`
+keeps its own assertion regardless — the rule fires on the source, the spec fires
+on the exported VALUES, which is what actually reaches a store console.
 
 #### terminology
 
@@ -478,14 +538,14 @@ audience that matters here.
 
 ⚠ **The licence is stated in three places and they have disagreed once already.**
 The root `LICENSE` file (AGPL-3.0), the root `package.json` `license` field, and
-`SOURCE.license` in `packages/shared/src/stores/listing-copy.ts`.
+`SOURCE.license` in `packages/shared/src/brand/brand.ts`.
 `package.json` said `MIT` against an AGPL `LICENSE` for the repo's whole first
 stretch, which is not cosmetic: a reader may rely on either, and the permissive
-one is the one they would rely on. `listing-copy.spec.ts` pins the third copy;
+one is the one they would rely on. `brand.spec.ts` pins the third copy;
 the other two are on you.
 
 **Where it is published, and why each.** The URL and licence come from `SOURCE`
-in `listing-copy.ts`, beside `COMPANY`, for the same reason `COMPANY` is there.
+in `brand/brand.ts`, beside `COMPANY`, for the same reason `COMPANY` is there.
 
 | surface                            | what it says                                                 |
 | ---------------------------------- | ------------------------------------------------------------ |

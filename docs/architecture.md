@@ -127,6 +127,38 @@ authority to the one domain instead of a second host.
 - **not** bracemark-site: the marketing site renders no stateful UI, so it stops
   at `shared` + `web-ui`
 
+#### where a copy module goes
+
+User-facing STRINGS get their own modules, so that a sentence rendered on more
+than one surface has exactly one definition ([brand-assets.md](./brand-assets.md)
+has the why, and the drift that produced the rule). There are two homes for them
+and the deciding question is **who reads the module**, not what the strings say:
+
+| read by                                                                   | lives in                                                                                                 |
+| ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| anything OUTSIDE a React tree — a build config, a manifest, page metadata | `shared` — `brand/brand.ts` (the name, the company, the source), `stores/listing-copy.ts` (the stores)   |
+| only React components, on both platforms                                  | `react` — `lib/*-copy.ts` (`new-password-copy`, `recovery-code-copy`, `lock-copy`, `misc-settings-copy`) |
+
+The first row is load-bearing: `bracemark-extension`'s `wxt.config.ts` reads
+`BROWSER_EXTENSION_LISTING` to write `manifest.json`, and `bracemark-site`'s
+`layout.tsx` reads `BRAND` for Next's metadata export. Neither is a component, and
+a build config reaching into the React layer to generate a manifest would be
+wrong even though the boundary rules permit it.
+
+The second row is not about a React dependency — none of those modules imports
+React, and all of them would compile in `shared`. Keep them out of it anyway:
+`shared` is `platform:agnostic` and carries a portability contract that `react`
+does not (one compilation, three engines — see _the globals a `platform:agnostic`
+package may assume_ below, and `bracemark-api`'s `shared-portability.spec.ts`,
+which executes it inside workerd). Strings cannot violate that contract, but
+growing the package with content only a React tree ever renders dilutes what
+those guards point at.
+
+One thing that is NOT copy and must stay in `react`: `lib/field-messages.ts`. It
+computes `(tone, text)` from form state, so it is presentation logic tied to the
+React form contract, not a string table. Its neighbours sit beside it because
+they are read by the same components, not because it is one of them.
+
 #### @stxapps/web-ui
 
 - used by bracemark-web, bracemark-extension, bracemark-site
@@ -401,6 +433,19 @@ Hence: **a version is chosen in exactly one place, and everyone else defers.**
 - **Root pins; the app declares `*`.** The app is private and never published, so
   a range in it can only ever disagree with root. (One deliberate exception:
   `tailwindcss@^4.x`, which root does _not_ pin — see expo-native-deps.md, _uniwind_.)
+- **A workspace sibling — any `@stxapps/*` — is `"*"` in `dependencies`, and an
+  APP has to declare the ones it imports.** Nothing checks that half:
+  `@nx/dependency-checks` runs on the `**/*.json` manifests of the packages, so a
+  package that imports an undeclared sibling fails `npm run lint` (and `lint --fix`
+  adds the line), but an app that does the same passes everything. Resolution
+  succeeds anyway through npm workspace hoisting, so the miss is invisible —
+  `bracemark-api` and `bracemark-extractor` imported `shared`, and `bracemark-web`
+  imported `react` and `web-react`, undeclared, for a long stretch. Re-check with
+  a scan of `from '@stxapps/…'` against each manifest; there is no rule for it.
+  Note that `npm install <pkg> --workspace <app>` writes `^0.0.1`, NOT `*`: every
+  package here is version `0.0.1`, and a caret on a `0.0.x` version pins to that
+  exact patch, so the first version bump would send npm to the registry looking
+  for a private package. Fix the line to `"*"` after running it.
 - **`react` is pinned _exactly_, not with a caret** — `react`, `react-dom`, and
   `react-test-renderer` are all `19.1.0`, the version `expo/bundledNativeModules.json`
   names for SDK 54. React Native ships its **own** copy of the renderer built for one

@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { ChevronLeft, RefreshCw } from 'lucide-react';
 
-import { usernameMessage, useUsernameAvailable } from '@stxapps/react';
+import { RECOVERY_CODE_COPY, usernameMessage, useUsernameAvailable } from '@stxapps/react';
 import { canonicalizePassword, canonicalizeUsername, generateRecoveryCode } from '@stxapps/shared';
 import { useCreateAccount, UsernameTakenError } from '@stxapps/web-react';
 import {
@@ -65,9 +65,8 @@ const STEP_HEADINGS: Record<Step, { title: string; description: string }> = {
     description: 'Re-enter it to make sure you have it saved correctly.',
   },
   recovery: {
-    title: 'Recovery code',
-    description:
-      "Save this recovery code somewhere safe. It's the only way back into your account if you ever lose your password.",
+    title: RECOVERY_CODE_COPY.title,
+    description: RECOVERY_CODE_COPY.description.create,
   },
 };
 
@@ -239,7 +238,7 @@ export function CreateAccountForm() {
               re-enables and no idea why. Same reason sign-in-form uses it for
               `errors.root`. */}
           {confirmError ? (
-            <FieldError>That doesn&apos;t match. Check what you saved and try again.</FieldError>
+            <FieldError>That doesn’t match. Check what you saved and try again.</FieldError>
           ) : null}
         </Field>
         <Field>
@@ -262,10 +261,10 @@ export function CreateAccountForm() {
         <ShowOnceSecret
           id="recovery-saved"
           secret={recoveryCode}
-          label="Your recovery code"
+          label={RECOVERY_CODE_COPY.secretLabel}
           saved={recoverySaved}
           onSavedChange={setRecoverySaved}
-          confirmLabel="I've saved my recovery code somewhere safe."
+          confirmLabel={RECOVERY_CODE_COPY.confirmLabel}
           actions={
             <button
               type="button"

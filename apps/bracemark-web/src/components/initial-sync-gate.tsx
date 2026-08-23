@@ -143,7 +143,7 @@ function DecryptingScreen({ progress }: { progress: InitialSyncProgress | null }
         is itself the counterexample to: the key derives from the password
         (docs/account.md), so a first pull on a SECOND device is exactly what is
         being narrated here. Matches BRAND's "Bookmarks only you can read"
-        (stores/listing-copy.ts), and the password clause is what makes the wait
+        (brand/brand.ts), and the password clause is what makes the wait
         legible rather than just reassuring.
       */}
       <p className="max-w-xs text-center text-xs text-muted-foreground">

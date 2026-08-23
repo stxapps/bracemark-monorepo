@@ -34,6 +34,12 @@ import {
   useSettings,
 } from '@stxapps/expo-react';
 import {
+  LAYOUT_OPTION_COPY,
+  SORT_ON_OPTION_COPY,
+  SORT_ORDER_OPTION_COPY,
+  THEME_MODE_OPTION_COPY,
+} from '@stxapps/react';
+import {
   LINK_SORT_ONS,
   LINK_SORT_ORDERS,
   LINKS_LAYOUTS,
@@ -58,38 +64,26 @@ import { SettingsGroup, SettingsHeader, SettingsNotice, SettingsPane } from './s
 import { TimeField } from './time-field';
 
 const LAYOUT_OPTIONS: Record<LinksLayout, { label: string; hint: string; icon: LucideIcon }> = {
-  list: { label: 'List', hint: 'A dense, single-column list.', icon: List },
-  card: { label: 'Card', hint: 'A grid of preview cards.', icon: LayoutGrid },
+  list: { ...LAYOUT_OPTION_COPY.list, icon: List },
+  card: { ...LAYOUT_OPTION_COPY.card, icon: LayoutGrid },
 };
 
 const SORT_ON_OPTIONS: Record<LinkSortOn, { label: string; hint: string; icon: LucideIcon }> = {
-  updatedAt: {
-    label: 'Date modified',
-    hint: 'Order by when a link was last changed.',
-    icon: Clock,
-  },
-  createdAt: {
-    label: 'Date added',
-    hint: 'Order by when a link was saved.',
-    icon: CalendarPlus,
-  },
+  updatedAt: { ...SORT_ON_OPTION_COPY.updatedAt, icon: Clock },
+  createdAt: { ...SORT_ON_OPTION_COPY.createdAt, icon: CalendarPlus },
 };
 
 const SORT_ORDER_OPTIONS: Record<LinkSortOrder, { label: string; hint: string; icon: LucideIcon }> =
   {
-    desc: { label: 'Newest first', hint: 'The most recent links at the top.', icon: ArrowDown },
-    asc: { label: 'Oldest first', hint: 'The oldest links at the top.', icon: ArrowUp },
+    desc: { ...SORT_ORDER_OPTION_COPY.desc, icon: ArrowDown },
+    asc: { ...SORT_ORDER_OPTION_COPY.asc, icon: ArrowUp },
   };
 
 const THEME_MODE_OPTIONS: Record<ThemeMode, { label: string; hint: string; icon: LucideIcon }> = {
-  light: { label: 'Light', hint: 'Always use the light theme.', icon: Sun },
-  dark: { label: 'Dark', hint: 'Always use the dark theme.', icon: Moon },
-  system: { label: 'System', hint: "Follow your device's appearance.", icon: Monitor },
-  custom: {
-    label: 'Custom time',
-    hint: 'Light by day, dark by night — you set the times.',
-    icon: Clock,
-  },
+  light: { ...THEME_MODE_OPTION_COPY.light, icon: Sun },
+  dark: { ...THEME_MODE_OPTION_COPY.dark, icon: Moon },
+  system: { ...THEME_MODE_OPTION_COPY.system, icon: Monitor },
+  custom: { ...THEME_MODE_OPTION_COPY.custom, icon: Clock },
 };
 
 // A reusable radio row, shared by the layout, sort, and theme option lists so
@@ -368,8 +362,8 @@ export function MiscSection() {
         title="Theme"
         description={
           <Text className="text-sm text-muted-foreground">
-            Choose the app&apos;s appearance. <Text className="text-sm font-semibold">Sync</Text>{' '}
-            applies your choice across all your devices.{' '}
+            Choose the app’s appearance. <Text className="text-sm font-semibold">Sync</Text> applies
+            your choice across all your devices.{' '}
             <Text className="text-sm font-semibold">Device</Text> keeps a separate choice for this
             device only (cleared when you sign out).
           </Text>

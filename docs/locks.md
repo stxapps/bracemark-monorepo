@@ -319,6 +319,10 @@ would wrongly drop every list lock).
 - **UI:** the settings Misc/Lists sections, the links sidebar + overflow menu,
   `app-lock-gate.tsx`, `lock-password-dialog.tsx`, `lock-pane.tsx`, and (web)
   `list-lock-pane.tsx`.
+- **Copy:** `@stxapps/react` `lib/lock-copy.ts` — every word the pane and its two
+  gates print, in one place because the two `LockPane` implementations are hand
+  ports of each other with no shared ancestor. Edit the words there, not at the
+  call site; the biometric button stays inline, being native-only.
 - **Biometric (expo-only):** `expo-react` `lib/biometric.ts` +
   `expo-local-authentication` (config plugin in `app.config.ts`); the `biometric`
   column in expo's `data/db.ts` / `lock-store.ts`.

@@ -73,7 +73,7 @@ export const viewport = {
 const DESCRIPTION =
   'Bracemark is an end-to-end encrypted bookmark manager. Every link is encrypted on your device before it syncs, so the server holds ciphertext and nothing else.';
 
-// The tagline itself, verbatim from shared's stores/listing-copy.ts, so the OG
+// The tagline itself, verbatim from shared's brand/brand.ts, so the OG
 // title, the hero, and every store listing say one sentence rather than four
 // versions of it. 63 characters — past where Google truncates a title in results,
 // which is accepted here: the tagline IS the pitch, and the brand name and the

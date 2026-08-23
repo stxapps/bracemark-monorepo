@@ -39,8 +39,8 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             values have to be kept level by hand. Same slot, same classes, in
             `app/not-found.tsx` and `app/error.tsx`. */}
         <p className={cn('px-6 text-xs leading-5 text-balance text-muted-foreground')}>
-          Your links are encrypted on your device before they&apos;re stored. Bracemark&apos;s
-          servers never see your password.
+          Your links are encrypted on your device before they’re stored. Bracemark’s servers never
+          see your password.
         </p>
       </FocusedPage>
     </GuestGuard>

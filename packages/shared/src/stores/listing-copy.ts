@@ -4,11 +4,16 @@
 // agree with itself across five consoles and three repos-worth of surfaces, and
 // nothing enforces that agreement except keeping it in one file.
 //
+// The BRAND lines, COMPANY and SOURCE are NOT here — they are in ../brand/brand.ts.
+// They are read by Settings → About, the marketing site and the app chrome, and a
+// store listing is only one of their consumers; they sat in this file (under a
+// folder named `stores/`) for longer than that was true.
+//
 // This module has TWO kinds of export and they are used completely differently:
 //
-//   - IMPORTED BY CODE. `BRAND` and `BROWSER_EXTENSION_LISTING` are read at build
-//     time — the marketing site's metadata, the browser extension's manifest. If
-//     these drift, they drift silently and ship.
+//   - IMPORTED BY CODE. `BROWSER_EXTENSION_LISTING` is read at build time by the
+//     browser extension's wxt.config.ts, which writes it into manifest.json. If it
+//     drifts, it drifts silently and ships.
 //   - PASTED BY A HUMAN, once per submission, into App Store Connect and the Play
 //     Console. Nothing imports them. They live here anyway because they are the
 //     same product argument as the strings above, and the failure mode is real:
@@ -28,67 +33,7 @@
 // lets it change WITHOUT a review, which is exactly why it is separate from the
 // description.
 
-/** The three brand lines, in the order of how much room the surface has. */
-export const BRAND = {
-  name: 'Bracemark',
-
-  /** What it is, with no wit, for surfaces that supply no context of their own. */
-  descriptor: 'End-to-end encrypted bookmark manager',
-
-  /**
-   * The hook. Names the category and the mechanism in one clause, and states it
-   * as an inability rather than an intention — which is the whole positioning.
-   * Too long (51) for any store's name or subtitle field; those get `SUBTITLE`.
-   */
-  tagline: 'The bookmark manager that can’t read your bookmarks',
-
-  /** The belief, for sign-offs. Deliberately the shortest thing we say. */
-  slogan: 'We don’t promise not to look. We built it so we can’t.',
-
-  /**
-   * The tagline's positive inversion, for the ~30-character store fields. Says
-   * the same thing without the momentary "…is it broken?" reading that "can't
-   * read" carries when it appears with no supporting copy around it.
-   */
-  subtitle: 'Bookmarks only you can read',
-} as const;
-
-// The legal entity behind Bracemark, and the postal address of record.
-//
-// It moved here from bracemark-site's `lib/site.ts` when a fifth and sixth surface
-// needed it: the marketing site's /terms, /privacy and footer, and now Settings →
-// About in both bracemark-web and bracemark-expo. Site-local was right while the
-// site was the only thing that published a company name; an app that names a
-// DIFFERENT entity than the store listing does is a review rejection, which is the
-// same failure mode the brand lines above live here to prevent.
-export const COMPANY = {
-  legalName: 'STX Apps Co., Ltd.',
-  shortName: 'STX Apps',
-  attn: 'Bracemark Team',
-  addressLines: ['247 Chan 31 Sathon', 'Bangkok 10120', 'Thailand'],
-} as const;
-
-// The public repository, and the licence it is published under. Here for the same
-// reason COMPANY is: six surfaces name it — the marketing site's footer, /about,
-// /faq and /privacy, Settings → About in both apps — and a URL that is right in
-// five of them is worth nothing.
-//
-// `license` is the SPDX id of the root LICENSE file, and the root package.json
-// must agree with it. It said `MIT` for a while against an AGPL-3.0 LICENSE, which
-// is not a cosmetic disagreement: a reader is entitled to rely on either, and the
-// permissive one is the one they would rely on.
-//
-// WHAT THIS DOES AND DOES NOT LET US CLAIM (docs/brand-assets.md — _the source_). It lets
-// a visitor READ what we do. It does NOT let them verify that the JavaScript their
-// browser just ran was built from it — there is no reproducible build and no
-// signed release. Every surface below is written to the first claim. "See for
-// yourself what we do", never "verify what you are running".
-export const SOURCE = {
-  url: 'https://github.com/stxapps/bracemark-monorepo',
-  /** The URL without its scheme, for surfaces that print it rather than link it. */
-  label: 'github.com/stxapps/bracemark-monorepo',
-  license: 'AGPL-3.0',
-} as const;
+import { BRAND } from '../brand/brand';
 
 // --- what the stores allow ---------------------------------------------------
 // Every limit below is a SILENT constraint until submission day, when a 31-character
@@ -221,7 +166,7 @@ Bracemark is paid for by subscriptions. There is no advertising, no data to sell
 export const BROWSER_EXTENSION_LISTING = {
   name: APP_STORE.name,
   description:
-    "Save the tab you're reading in one click. Bracemark encrypts every link in your browser before it syncs — only you can read it.",
+    'Save the tab you’re reading in one click. Bracemark encrypts every link in your browser before it syncs — only you can read it.',
 } as const;
 
 /**
@@ -229,4 +174,4 @@ export const BROWSER_EXTENSION_LISTING = {
  * it be set on the listing rather than in the manifest — so this is a paste field,
  * and the manifest keeps the shorter string above for both browsers.
  */
-export const FIREFOX_ADDONS_SUMMARY = `${BRAND.tagline}. Save the tab you're reading in one click; it is encrypted in your browser, with a key derived from your password, before it syncs. Our servers hold a path, a size, and bytes we have no key for.`;
+export const FIREFOX_ADDONS_SUMMARY = `${BRAND.tagline}. Save the tab you’re reading in one click; it is encrypted in your browser, with a key derived from your password, before it syncs. Our servers hold a path, a size, and bytes we have no key for.`;

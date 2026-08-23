@@ -143,7 +143,7 @@ function DecryptingScreen({ progress }: { progress: InitialSyncProgress | null }
           screen is itself the counterexample to: the key derives from the
           password (docs/account.md), so a first pull on a SECOND device is
           exactly what is being narrated here. Matches BRAND's "Bookmarks only
-          you can read" (stores/listing-copy.ts).
+          you can read" (brand/brand.ts).
         */}
         <Text className="text-center text-xs text-muted-foreground">
           Your links are encrypted — only you, with your password, can read them.

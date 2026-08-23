@@ -6,6 +6,7 @@
 // readers), and there's nothing to peek at. Unlocking flips lock-provider's
 // in-memory state and Main mounts the layout fresh.
 
+import { LOCK_COPY } from '@stxapps/react';
 import { useLocks } from '@stxapps/web-react';
 
 import { LockPane } from '@/components/lock-pane';
@@ -16,8 +17,8 @@ export function ListLockPane({ listId }: { listId: string }) {
   return (
     <LockPane
       className="h-full"
-      title="This list is locked"
-      description="Enter the list's password to view its links."
+      title={LOCK_COPY.list.title}
+      description={LOCK_COPY.list.description}
       onUnlock={(password) => unlockList(listId, password)}
     />
   );

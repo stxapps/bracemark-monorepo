@@ -29,6 +29,12 @@ import {
 } from 'lucide-react';
 
 import {
+  LAYOUT_OPTION_COPY,
+  SORT_ON_OPTION_COPY,
+  SORT_ORDER_OPTION_COPY,
+  THEME_MODE_OPTION_COPY,
+} from '@stxapps/react';
+import {
   LINK_SORT_ONS,
   LINK_SORT_ORDERS,
   LINKS_LAYOUTS,
@@ -66,72 +72,32 @@ import { usePaywall } from '@/contexts/paywall-provider';
 
 const LAYOUT_OPTIONS: Record<LinksLayout, { label: string; hint: string; icon: React.ReactNode }> =
   {
-    list: {
-      label: 'List',
-      hint: 'A dense, single-column list.',
-      icon: <List className="size-4" />,
-    },
-    card: {
-      label: 'Card',
-      hint: 'A grid of preview cards.',
-      icon: <LayoutGrid className="size-4" />,
-    },
+    list: { ...LAYOUT_OPTION_COPY.list, icon: <List className="size-4" /> },
+    card: { ...LAYOUT_OPTION_COPY.card, icon: <LayoutGrid className="size-4" /> },
   };
 
 const SORT_ON_OPTIONS: Record<LinkSortOn, { label: string; hint: string; icon: React.ReactNode }> =
   {
-    updatedAt: {
-      label: 'Date modified',
-      hint: 'Order by when a link was last changed.',
-      icon: <Clock className="size-4" />,
-    },
-    createdAt: {
-      label: 'Date added',
-      hint: 'Order by when a link was saved.',
-      icon: <CalendarPlus className="size-4" />,
-    },
+    updatedAt: { ...SORT_ON_OPTION_COPY.updatedAt, icon: <Clock className="size-4" /> },
+    createdAt: { ...SORT_ON_OPTION_COPY.createdAt, icon: <CalendarPlus className="size-4" /> },
   };
 
 const SORT_ORDER_OPTIONS: Record<
   LinkSortOrder,
   { label: string; hint: string; icon: React.ReactNode }
 > = {
-  desc: {
-    label: 'Newest first',
-    hint: 'The most recent links at the top.',
-    icon: <ArrowDown className="size-4" />,
-  },
-  asc: {
-    label: 'Oldest first',
-    hint: 'The oldest links at the top.',
-    icon: <ArrowUp className="size-4" />,
-  },
+  desc: { ...SORT_ORDER_OPTION_COPY.desc, icon: <ArrowDown className="size-4" /> },
+  asc: { ...SORT_ORDER_OPTION_COPY.asc, icon: <ArrowUp className="size-4" /> },
 };
 
 const THEME_MODE_OPTIONS: Record<
   ThemeMode,
   { label: string; hint: string; icon: React.ReactNode }
 > = {
-  light: {
-    label: 'Light',
-    hint: 'Always use the light theme.',
-    icon: <Sun className="size-4" />,
-  },
-  dark: {
-    label: 'Dark',
-    hint: 'Always use the dark theme.',
-    icon: <Moon className="size-4" />,
-  },
-  system: {
-    label: 'System',
-    hint: "Follow your device's appearance.",
-    icon: <Monitor className="size-4" />,
-  },
-  custom: {
-    label: 'Custom time',
-    hint: 'Light by day, dark by night — you set the times.',
-    icon: <Clock className="size-4" />,
-  },
+  light: { ...THEME_MODE_OPTION_COPY.light, icon: <Sun className="size-4" /> },
+  dark: { ...THEME_MODE_OPTION_COPY.dark, icon: <Moon className="size-4" /> },
+  system: { ...THEME_MODE_OPTION_COPY.system, icon: <Monitor className="size-4" /> },
+  custom: { ...THEME_MODE_OPTION_COPY.custom, icon: <Clock className="size-4" /> },
 };
 
 // A reusable radio-row Label, shared by the layout and theme option lists so both
@@ -410,7 +376,7 @@ export function MiscSection() {
         title="Theme"
         description={
           <>
-            Choose the app's appearance. <strong>Sync</strong> applies your choice across all your
+            Choose the app’s appearance. <strong>Sync</strong> applies your choice across all your
             devices. <strong>Device</strong> keeps a separate choice for this device only (cleared
             when you sign out).
           </>

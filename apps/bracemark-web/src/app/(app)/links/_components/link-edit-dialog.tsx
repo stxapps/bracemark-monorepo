@@ -287,7 +287,7 @@ function LinkEditForm({
                   which is exactly what editing the title means. */}
               <div className="flex items-baseline justify-between gap-2">
                 <p className="text-xs text-muted-foreground">
-                  Leave blank to use the page&rsquo;s own title.
+                  Leave blank to use the page’s own title.
                 </p>
                 {title.trim() === '' && extractedTitle && (
                   <button

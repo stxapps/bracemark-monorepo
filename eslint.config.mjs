@@ -123,6 +123,51 @@ export default [
     },
   },
   {
+    // The apostrophe is `’` (U+2019), never a straight `'`, in every string this
+    // workspace writes — docs/brand-assets.md, _mechanics_. The rule is here
+    // because stating it was already tried and did not hold: the same
+    // recovery-code sentence shipped in both forms, one screen apart, because
+    // the choice was being made by prettier's quote heuristic rather than by
+    // anyone. See that doc for the whole story.
+    //
+    // The JSXText selector is the load-bearing one. `&apos;` decodes to a
+    // straight `'` at parse time and had accumulated 44 times, invisible to
+    // every grep for `'` — this rule sees it because the parser hands the
+    // selector the DECODED text. (`&rsquo;` decodes to `’` and is correct, but
+    // write the literal character: one spelling, and it greps.)
+    //
+    // FIXING A HIT IS ALWAYS THE SAME: type `’`. There is no user-facing/
+    // developer-facing split — a log line, a thrown Error, a dev-only warning
+    // all take `’` too, so that nobody has to judge whether a string might reach
+    // a user one day. The single exception is a string where the apostrophe is
+    // DATA rather than prose (a parser token, a fixture, something compared
+    // against input); there `’` would be a bug, and that is what a disable
+    // comment is for. There are none today.
+    //
+    // Specs and e2e are out of scope: a test NAME is prose nobody reads in the
+    // product, and `it("a child's own lock…")` is fine. A spec asserting on real
+    // copy still has to spell that copy exactly, or it stops passing.
+    files: ['**/*.ts', '**/*.tsx'],
+    ignores: ['**/*.spec.ts', '**/*.spec.tsx', 'e2e/**'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "Literal[value=/[A-Za-z]'[A-Za-z]/]",
+          message: "Use the typographic apostrophe ’ (U+2019), not '.",
+        },
+        {
+          selector: "TemplateElement[value.raw=/[A-Za-z]'[A-Za-z]/]",
+          message: "Use the typographic apostrophe ’ (U+2019), not '.",
+        },
+        {
+          selector: "JSXText[value=/[A-Za-z]'[A-Za-z]/]",
+          message: "Use the typographic apostrophe ’ (U+2019), not ' or &apos;.",
+        },
+      ],
+    },
+  },
+  {
     files: ['**/*.json'],
     languageOptions: {
       parser: jsoncParser,

@@ -39,9 +39,9 @@ export type NewPasswordCopy = {
 // stays true in both places: a rotated password has no reset either.
 const COMMON = {
   generatedHelp:
-    "We generated a strong password for you. Save it in a password manager, or anywhere you'll still have it later — there is no way to reset it if it's lost.",
+    'We generated a strong password for you. Save it in a password manager, or anywhere you’ll still have it later — there is no way to reset it if it’s lost.',
   ownHelp:
-    "A password of random words is stronger than most passwords you'd type. If you use your own, make it long and unique — there is no way to reset it if it's lost.",
+    'A password of random words is stronger than most passwords you’d type. If you use your own, make it long and unique — there is no way to reset it if it’s lost.',
   chooseOwn: 'Choose my own',
   generateInstead: 'Generate one instead',
   regenerate: 'Regenerate',
@@ -55,12 +55,12 @@ export const NEW_PASSWORD_COPY: Record<'create' | 'change', NewPasswordCopy> = {
     ...COMMON,
     label: 'Password',
     secretLabel: 'Your password',
-    confirmLabel: "I've saved my password somewhere safe.",
+    confirmLabel: 'I’ve saved my password somewhere safe.',
   },
   change: {
     ...COMMON,
     label: 'New password',
     secretLabel: 'Your new password',
-    confirmLabel: "I've saved my new password somewhere safe.",
+    confirmLabel: 'I’ve saved my new password somewhere safe.',
   },
 };
