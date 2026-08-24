@@ -246,6 +246,20 @@ test. Check the linked doc before acting on any of these.
   permissive one. Only the third copy is pinned by a spec. Relatedly, no surface may
   claim a visitor can **verify** what they are running — public source proves what
   the code does, not which build was served. → `brand-assets.md`, _the source_.
+- **`/extractor` publishes the extractor's caps as prose, and nothing links the
+  two.** `bracemark-extractor` names `https://bracemark.com/extractor` in the
+  `User-Agent` of every outbound fetch, so that page is read by operators of the
+  sites our users save from — and it prints the timeout, redirect cap, HTML
+  ceiling, image ceiling and batch cap as sentences. `bracemark-site` does not
+  depend on `bracemark-extractor`, so moving `FETCH_TIMEOUT_MS`, `MAX_REDIRECTS`,
+  `MAX_HTML_BYTES`, `MAX_IMAGE_BYTES` or `MAX_EXTRACT_URLS` leaves a public
+  commitment quietly false, with no lint error, type error or failing test. The
+  page's blocking advice is pinned the same way to `verdictForStatus`
+  (`packages/shared/src/extract/retry.ts`): it tells operators to answer `403`
+  because that is what settles as `permanent`. And its robots.txt paragraph is a
+  DISCLOSURE — the extractor does not read robots.txt — which must not drift into
+  sounding like compliance unless the code changes first. →
+  `link-extraction.md`, _server extraction_.
 - **Never write "extension" bare.** Two unrelated things carry the name: the
   **browser extension** (`bracemark-extension`) and the iOS **share extension** (a
   target inside `bracemark-expo`). Qualify which one on first mention, in code

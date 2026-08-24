@@ -177,7 +177,9 @@ export default function Page() {
           that service receives the address you saved, fetches the page, returns the title and
           image, and keeps nothing: it stores no URLs, writes none to its logs, holds no key, and is
           not told which account asked. Its rate limiter does record IP addresses, so that a single
-          source cannot abuse it.
+          source cannot abuse it. The same service is described from the other side — for the people
+          who run the sites it fetches — on <Link href="/extractor">its own page</Link>, including
+          the caps it holds itself to and how to turn it away.
         </p>
 
         <h3>If you contact us</h3>

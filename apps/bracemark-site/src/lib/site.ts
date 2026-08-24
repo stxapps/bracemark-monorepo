@@ -33,6 +33,14 @@ export const SUPPORT_EMAIL = 'support@bracemark.com';
 // import from Raindrop".
 export const SECURITY_EMAIL = 'security@bracemark.com';
 
+// The inbound-only alias for network-abuse reports about bracemark-extractor, and
+// the reason that alias has to exist at all: the extractor names /extractor in the
+// User-Agent of every outbound fetch, so its contact page is read by operators of
+// sites we fetched rather than by users. RFC 2142 is what an operator guesses when
+// a page gives them nothing, so guessing it should reach us — and a "your bot is
+// hammering me" mail is time-critical in a way the support queue is not.
+export const ABUSE_EMAIL = 'abuse@bracemark.com';
+
 // The legal entity behind Bracemark. Re-exported, not defined: it lives in
 // @stxapps/shared beside the brand lines, because the two apps' Settings → About
 // name the same company and a store listing that disagrees with the app is a

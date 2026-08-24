@@ -1334,10 +1334,37 @@ browser that can't fetch for itself. It is a **separate app**, not a route in
   which drops the automatic request-line log and keeps the deliberate ones (the
   error handler and `extractOne` are already written never to log the URL). The
   zone's Logpush setting is the other half and lives outside this repo.
+- **It identifies itself, and the address it gives has to answer.** Every fetch
+  carries `bracemark-extractor/1.0 (+https://bracemark.com/extractor)` — honest,
+  never a spoofed browser (`lib/safe-fetch.ts`), because a service that fetches
+  strangers' sites anonymously and won't say who it is has picked the wrong side
+  of its own argument. The consequence is that the UA **publishes a URL into the
+  access log of every site a user has ever saved from**, so `/extractor` is a
+  route the marketing site owes them: what it is, why it came, the caps, and how
+  to block it (`apps/bracemark-site/src/app/extractor/page.tsx`). Two things that
+  page pins, neither of which anything can check for you:
+  - **Its numbers are these constants.** The timeout, redirect cap, HTML ceiling,
+    image ceiling and batch cap are printed as prose on a public page, and
+    `bracemark-site` does not depend on `bracemark-extractor` — so moving
+    `FETCH_TIMEOUT_MS`, `MAX_REDIRECTS`, `MAX_HTML_BYTES`, `MAX_IMAGE_BYTES` or
+    `MAX_EXTRACT_URLS` silently turns a published commitment into a false one,
+    with no failing test. Move the page in the same change.
+  - **Its blocking advice is `verdictForStatus`.** The page tells an operator to
+    answer `403` because that is what the retry ladder settles as `permanent`;
+    `429`/`5xx` stay transient forever by design (`extract/retry.ts`). Change that
+    mapping and the advice quietly stops working for the people who took it.
+  - **robots.txt is disclosed, not obeyed.** The extractor does not fetch it —
+    these are one-shot fetches a person asked for, the same posture as a chat
+    app's link unfurl — and the page says so in those words rather than implying
+    compliance. If it ever does read robots.txt, that section becomes a promise
+    and has to be rewritten; until then it must not read as one.
+    Network-abuse reports land at `abuse@bracemark.com` (`ABUSE_EMAIL`,
+    `apps/bracemark-site/src/lib/site.ts`), an address that exists for this service
+    specifically — nothing else in the product generates a reason to write to it.
 
 The **app is committed** (a necessary build, see above) and so are the invariants
 (separate app, separate origin, anonymous, plaintext-return-only, stream-don't-store,
-never-log-the-URL); what stays
+never-log-the-URL, honest-UA-with-a-page-behind-it); what stays
 **off by default** is the _feature_ — server extraction never runs until the user
 takes the second, explicit opt-in.
 
@@ -1381,6 +1408,28 @@ that opt-in.
   (fall back to `title = host`) rather than return garbage; richer per-type handling
   (PDF title, oEmbed, eventual Browser-Rendering JS execution) is the open scope
   call.
+- **Does server-side read-mode honour `robots.txt`?** Open, and it wants settling
+  BEFORE read-mode ships on this tier rather than after: it is a fetch-path change
+  (a second request per host, plus somewhere to cache the verdict — the extractor
+  is stateless and has no KV, so that means the Workers `caches` API or nothing),
+  and it is cheaper designed in than bolted on. Today the extractor does not read
+  the file, and `/extractor` **discloses** that rather than claiming compliance
+  (`apps/bracemark-site/src/app/extractor/page.tsx`). The disclosure's argument is
+  written to the axis that read-mode does not move — one person chose one address,
+  one request went out, the result went only to them — so read-mode needs it
+  re-checked, not rewritten. What read-mode does change is the OBJECTION: a title
+  is promotional and a publisher usually wants it in the unfurl, while the article
+  body is the thing they sell, so the population with a reason to complain is
+  different from the population `robots.txt` was aimed at. Three ways to land it:
+  read the file and honour it for every facet (simplest to explain; blanket
+  `User-agent: *` rules aimed at crawlers would start costing users titles on sites
+  that never meant to block an unfurl); honour it for `readMode` only and still
+  return `titleImage` (defensible, and the split matches the objection); or honour
+  only a rule that names **this** UA — treating a deliberate `bracemark-extractor`
+  block as authoritative while ignoring blanket ones — which is the current
+  disclosure's own distinction made mechanical, and the only option that turns that
+  section of the page from a disclosure into a claim. Whichever wins, the page
+  changes in the same release.
 - **Re-extract / upgrade UX.** The derived tier (`tierOf(extractedBy)`) _enables_
   upgrading a low-tier result, but the trigger (automatic on a higher-tier sighting vs. a manual
   "re-extract" button) is an open product call.

@@ -13,6 +13,7 @@ app, the browser extension, the sync API and the link extractor.
 - **Product** — [bracemark.com](https://bracemark.com)
 - **App** — [app.bracemark.com](https://app.bracemark.com)
 - **Security reports** — security@bracemark.com ([SECURITY.md](SECURITY.md))
+- **Our link fetcher** — abuse@bracemark.com ([what it is, how to block it](https://bracemark.com/extractor))
 
 ## What being public here does and doesn't prove
 
