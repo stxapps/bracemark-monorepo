@@ -237,6 +237,65 @@ reason given [above](#why-staging-is-a-separate-registrable-domain). The `*-dev`
 peers (`bracemark-directory-db-dev`, `bracemark-user-files-dev`, and the rest)
 are the local `wrangler dev` bindings and are never deployed.
 
+### deploying the static sites — `deploy-static.sh`
+
+Both web apps are `output: 'export'`, so deploying one is "upload a directory to
+S3 and invalidate the CDN". `tools/scripts/deploy-static.sh` does that, and the
+root `package.json` wraps it:
+
+```bash
+npm run deploy:web:staging       npm run deploy:web:production
+npm run deploy:site:staging      npm run deploy:site:production
+```
+
+It builds for the tier, checks the artifact, syncs, then invalidates. The
+distribution id comes from `CLOUDFRONT_DISTRIBUTION_ID_<APP>_<TIER>` (e.g.
+`CLOUDFRONT_DISTRIBUTION_ID_WEB_PRODUCTION`); `--dry-run`, `--skip-build` and
+`--no-invalidate` are there for the obvious reasons, and a production run
+prompts for the bucket name unless `--yes` is passed.
+
+**It builds rather than uploading whatever is in `out/`, and then verifies the
+tier.** This is the enforcement half of _built once per tier, never promoted_
+[below](#cors--frontendbackend-wiring): a bundle carries its API and app origins
+inlined, so pushing a staging `out/` to the production bucket yields a site that
+looks entirely correct until someone tries to sign in — pointing at
+`api.dryrunbase.com`, holding the Paddle sandbox token. The check works because
+the two tiers are on **different registrable domains**
+([above](#why-staging-is-a-separate-registrable-domain)): the script reads every
+`NEXT_PUBLIC_*_URL` out of both tiers' env files, reduces them to registrable
+domains, and refuses to upload a bundle that mentions the other tier's. It is
+keyed on the domain and not on a specific host because bracemark-site never
+mentions `api.*` at all — it only bakes `NEXT_PUBLIC_APP_URL` — so an api-host
+check would reject every site deploy. A domain shared by both tiers cancels out
+of the comparison, so adding a third-party origin doesn't blunt it.
+
+**Three cache classes, keyed off the path rather than a list of filenames.**
+
+| what                                         | `Cache-Control`               | `--delete` |
+| -------------------------------------------- | ----------------------------- | ---------- |
+| `_next/**` — content-hashed, build-ID-scoped | `max-age=31536000, immutable` | no         |
+| images and icons — stable names              | `max-age=604800`              | yes        |
+| `.html`, `.txt`, `sw.js`, `manifest.json`    | `max-age=0, must-revalidate`  | yes        |
+
+Uploaded in that order, so a client loading a page mid-deploy can always resolve
+the chunks it was just handed. The `.txt` files are Next 16's RSC payloads and
+travel with the HTML, not with the assets — they must not outlive it. `_next/`
+is the one pass without `--delete`: a client on the previous build is still
+fetching chunks by hash, and deleting them mid-session breaks navigation. That
+means old builds accumulate, so **expire them with an S3 lifecycle rule on the
+`_next/` prefix** rather than by deleting at deploy time.
+
+**No `--acl public-read` anywhere.** Buckets created since April 2023 have ACLs
+disabled by default (`BucketOwnerEnforced`), which makes that flag an
+`AccessControlListNotSupported` error rather than a no-op — and the buckets are
+private regardless, reached only through CloudFront via an Origin Access
+Control. Public read is a distribution concern here, not an object one.
+
+The CSP and the clean-URL rewrites are **not** the script's business — they live
+in a response headers policy and a CloudFront function, per _security headers_
+[above](#security-headers--where-the-csp-has-to-live). A deploy never touches
+them.
+
 ### cors & frontend↔backend wiring
 
 Each frontend tier points at the matching api tier, and each api tier allows only
