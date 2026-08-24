@@ -93,21 +93,40 @@ const config: ExpoConfig = {
       'expo-share-extension',
       {
         activationRules: [{ type: 'url', max: 1 }, { type: 'text' }],
-        // The band the extension mounts into, and it must NOT paint. Left
+        // The surface the extension mounts into, and it must NOT paint. Left
         // undefined the plugin writes no `ShareExtensionBackgroundColor`, and
         // ShareExtensionViewController falls back to `.systemBackground` — an
-        // opaque 520pt slab pinned to the screen bottom. The sheet's four
-        // screens are not all 520 tall (compose and saved are ~280), and the
-        // difference showed as dead white above the header. Alpha 0 makes the
-        // band clear so the sheet draws its OWN panel inside it, the way the
-        // Android half already does; what shows through is the host app under
-        // the system's dimming. `features/share/share-kit.tsx` is the other
-        // half of this and says so. (`alpha` is 0–1 in the Swift, unlike the
-        // 0–255 channels beside it.)
+        // opaque slab with square corners. The sheet's four screens are not all
+        // one height (compose and saved are ~280, the pickers ~520), and the
+        // difference showed as dead white above the header. Alpha 0 makes it
+        // clear so the sheet draws its OWN panel inside it, the way the Android
+        // half already does; what shows through is the host app under the
+        // system's dimming. `features/share/share-kit.tsx` is the other half of
+        // this and says so. (`alpha` is 0–1 in the Swift, unlike the 0–255
+        // channels beside it.)
         backgroundColor: { red: 0, green: 0, blue: 0, alpha: 0 },
-        // Sized for the PICKERS, which are the tallest of the four screens; the
-        // shorter ones simply leave the top of the band transparent.
-        height: 520,
+        // NO `height`, and that is a decision rather than an omission.
+        //
+        // The plugin writes `ShareExtensionHeight` into the extension's
+        // Info.plist, and ShareExtensionViewController turns it into a root
+        // view of exactly that many points pinned to the bottom of the screen
+        // (`y = screenBounds.height - height`); with the key absent it uses
+        // `screenBounds` — the full screen — instead. This used to say 520,
+        // "sized for the PICKERS", and it is what made the keyboard
+        // unsurvivable on this surface: a picker is ~520pt of chrome and list,
+        // the keyboard covers ~340pt of the screen, and a 520pt container
+        // cannot hold the first above the second no matter how correctly the
+        // sheet lifts itself. The panel is bottom-anchored and draws its own
+        // background, so a full-screen container changes NOTHING visually while
+        // the keyboard is down — it only stops being the ceiling when it is up.
+        //
+        // Two consequences worth knowing. The transparent root now covers the
+        // screen and still takes touches, which is why share-kit.tsx's
+        // `share-backdrop` (already there for the band) matters more: it is the
+        // tap-outside-to-close for the whole screen now. And nothing in JS may
+        // assume the surface's origin any more — the lift is computed from the
+        // keyboard's own top edge (features/share/share-keyboard.ts), not from
+        // where this container starts.
         excludedPackages: [
           'expo-dev-client',
           'expo-splash-screen',

@@ -23,16 +23,8 @@
 //   - NO PORTALS, NO REANIMATED. Nothing here is a Dialog or a DropdownMenu;
 //     the pickers are screens within the sheet rather than overlays over it.
 
-import { type ReactNode, useCallback, useState } from 'react';
-import {
-  Dimensions,
-  Keyboard,
-  KeyboardAvoidingView,
-  type LayoutChangeEvent,
-  Platform,
-  Pressable,
-  View,
-} from 'react-native';
+import type { ReactNode } from 'react';
+import { Keyboard, KeyboardAvoidingView, Platform, Pressable, View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { LucideIcon } from 'lucide-react-native';
 import ChevronLeft from 'lucide-react-native/icons/chevron-left';
@@ -45,6 +37,7 @@ import { Icon } from '../../components/ui/icon';
 import { Text } from '../../components/ui/text';
 import { cn } from '../../lib/utils';
 import { closeShareSheet } from './share-host';
+import { useShareKeyboardLift } from './share-keyboard';
 
 // The panel's own padding, in points, because the bottom edge is no longer a
 // class: it is `SHEET_PAD + insets.bottom` in a style prop (below).
@@ -75,71 +68,49 @@ const INITIAL_METRICS = {
   frame: { x: 0, y: 0, width: 0, height: 0 },
 };
 
-// The iOS half of the sheet's keyboard avoidance, and the reason is the same
-// host that forced a plain KeyboardAvoidingView on this surface at all.
-// expo-share-extension does not hand the extension a full-screen RN surface: its
-// ShareExtensionViewController places our root view at
-// `y = UIScreen.main.bounds.height - ShareExtensionHeight` — a 520pt band pinned
-// to the bottom of the screen (the height is set in app.config.ts and written
-// into the extension's Info.plist from there).
-//
-// KeyboardAvoidingView lifts by `frame.y + frame.height - keyboardFrame.screenY`,
-// and inside that band the two terms are in DIFFERENT coordinate spaces:
-// `frame` comes from its own onLayout, so it reads y=0, height=520, while
-// `screenY` is the keyboard's origin ON THE SCREEN (~516 on an 852pt phone).
-// The subtraction yields a few points instead of the keyboard's height — which
-// is why the panel sat UNDER the keyboard, and why it appeared to creep up
-// later: it was tracking changes to the keyboard's own frame (the accessory bar
-// arriving, a picker swapping fields) rather than ever avoiding it.
-// `keyboardVerticalOffset` is exactly this knob — RN documents it as "distance
-// between the top of the user screen and the React Native view" — so the value
-// is the band's screen origin. Android's activity IS full-screen, so 0 is
-// correct there and this stays wired to the iOS branch only.
-const useShareKeyboardOffset = () => {
-  const [offset, setOffset] = useState(0);
-
-  // Measured, not the literal 520: that number is app.config.ts's to own, and a
-  // copy here would be a second opinion with nothing to catch it drifting. The
-  // band's origin is `screen height − the height this view measures`, and this
-  // view measures the band exactly — it is the extension surface's only child,
-  // `flex-1` inside a root whose frame is fixed. That also means the layout does
-  // not re-fire under the lift (`behavior="padding"` moves padding, not this
-  // box's height), so it runs once on mount, long before any keyboard.
-  const onLayout = useCallback((event: LayoutChangeEvent) => {
-    setOffset(Math.max(Dimensions.get('screen').height - event.nativeEvent.layout.height, 0));
-  }, []);
-
-  return { offset, onLayout };
-};
-
 // The sheet's frame. Two very different native hosts, one tree below this
 // point (docs/share-sheet.md):
 //
-//   - iOS — expo-share-extension hands us a bottom-pinned, 520pt-tall root view
-//     with SQUARE corners (its ShareExtensionViewController sets no corner
-//     radius) — a BAND, not a panel, and one whose height is fixed for all four
-//     screens because it is baked into the extension's Info.plist. The pickers
-//     want all 520 of it; the compose and saved screens are barely 280 tall, and
-//     the band used to paint `.systemBackground` behind the whole thing, so the
-//     ~240pt those screens don't use showed up as an opaque slab of dead white
-//     above the header. The band is CLEAR now (`backgroundColor` alpha 0 on the
-//     plugin, app.config.ts) and the panel below is ours — rounded top, its own
-//     background, bottom-aligned so Save stays under the thumb. What shows in
-//     the space it doesn't fill is the host app under the system's own dimming,
-//     which is what every other iOS sheet does.
+//   - iOS — expo-share-extension hands us a FULL-SCREEN root view with square
+//     corners and, since `backgroundColor` alpha 0 (app.config.ts), no fill of
+//     its own. It is a layout container, not a sheet: the panel below is ours —
+//     rounded top, its own background, bottom-aligned so Save stays under the
+//     thumb — and what shows above it is the host app under the system's own
+//     dimming, which is what every other iOS sheet does. It used to be a fixed
+//     520pt BAND pinned to the screen bottom, and that number is what made a
+//     keyboard unsurvivable rather than merely awkward: a picker is ~520 of
+//     chrome and list, the keyboard takes ~340 of the screen, and no amount of
+//     correct lifting fits the first into what is left of the second.
+//     app.config.ts's `height` note is the other half of this.
 //   - Android — the activity is translucent and full-screen, so the panel was
 //     already ours: same rounded top and background, plus its own scrim, capped
 //     at 85% so a long list can never swallow the whole window.
 //
-// Which leaves ONE panel and one frame for both hosts, differing in two props
-// (the scrim's tint, the height cap) rather than in two return statements.
+// Which leaves ONE panel for both hosts, differing in two props (the scrim's
+// tint, the height cap) rather than in two return statements.
 //
-// Keyboard: both hosts overlay it, so the sheet moves itself. Deliberately a
-// plain KeyboardAvoidingView, NOT react-native-keyboard-controller like the app
-// tree — its iOS native layer is built on `UIApplication.shared`, which does not
-// exist in an extension process (docs/soft-keyboard.md, _avoidance_).
-// `behavior="padding"` on both so the two hosts render the same tree. iOS also
-// needs a `keyboardVerticalOffset`, which is `useShareKeyboardOffset` above.
+// KEYBOARD AVOIDANCE IS THE ONE THING THE HOSTS CANNOT SHARE, and the reason is
+// not layout: inside the iOS extension process RN reports EVERY keyboard frame
+// as zero, because it converts them through `RCTKeyWindow()`, which is nil
+// there (share-keyboard.ts carries the full derivation, and it is the same
+// family of bug as the font-scale one in lib/font-scale.ts). So the two hosts
+// reach the same padding by different routes:
+//
+//   - Android's share activity rides the app's OWN process, where RN's numbers
+//     are real, and a plain KeyboardAvoidingView does the work. Plain, not
+//     react-native-keyboard-controller like the app tree: this file also renders
+//     inside the extension, and that library's iOS layer is built on
+//     `UIApplication.shared.windows`, which an extension does not have
+//     (docs/soft-keyboard.md, _avoidance_).
+//   - iOS pads the frame by `useShareKeyboardLift()` — the same quantity KAV's
+//     `behavior="padding"` would have applied, computed from our own native
+//     module's reading of the keyboard's top edge.
+//
+// Both end in bottom padding on a `justify-end` column, so everything below —
+// the panel, the tap layer, the pickers' scrollers — squeezes identically on
+// the two hosts. That squeeze chain is `min-h-0 shrink` at each link, and it is
+// load-bearing: a panel that cannot shrink does not clip, it OVERFLOWS, and
+// what you get is a sheet whose header floats above its own background.
 //
 // DISMISSING that keyboard is this frame's job too, and it has to be, because
 // the pickers below cannot do it themselves: their inputs are
@@ -148,8 +119,8 @@ const useShareKeyboardOffset = () => {
 // Without the layer below, the iOS sheet had NO gesture that closed the
 // keyboard at all: the panel is a plain box, the host owns the space around it,
 // and either host's backdrop closes the whole sheet rather than the keyboard.
-// The keyboard then eats ~335 of a fixed 520pt host and the tag list you are
-// picking from is behind it. The pickers' scrollers pair this with
+// The keyboard then eats ~340pt of the screen and the tag list you are picking
+// from is behind it. The pickers' scrollers pair this with
 // `keyboardDismissMode="on-drag"`, so scrolling the results dismisses too.
 export function ShareSheet({ children }: { children: ReactNode }) {
   return (
@@ -162,7 +133,10 @@ export function ShareSheet({ children }: { children: ReactNode }) {
 const isAndroid = Platform.OS === 'android';
 
 function ShareSheetFrame({ children }: { children: ReactNode }) {
-  const keyboard = useShareKeyboardOffset();
+  // iOS: how much of the sheet the keyboard covers, from our own native module
+  // (share-keyboard.ts). Zero on Android, where the KeyboardAvoidingView at the
+  // bottom of this function is the mechanism instead.
+  const lift = useShareKeyboardLift();
   // Read in JS and applied as padding rather than handed to a `<SafeAreaView>`:
   // see INITIAL_METRICS above for why that view is gone. `pb` is the panel's own
   // padding PLUS the inset — the `additive` mode it replaces — so the Save
@@ -171,7 +145,15 @@ function ShareSheetFrame({ children }: { children: ReactNode }) {
   const panel = (
     <View
       style={{ paddingBottom: SHEET_PAD + insets.bottom }}
-      className={cn('rounded-t-2xl bg-background px-4 pt-4', isAndroid && 'max-h-[85%]')}
+      // `min-h-0 shrink`: the first link of the squeeze chain (see the header).
+      // Without it the panel keeps its content height when the keyboard takes
+      // the room out from under it and overflows the frame instead of passing
+      // the squeeze down to the pickers' scrollers — which does not clip, it
+      // paints outside the box.
+      className={cn(
+        'min-h-0 shrink rounded-t-2xl bg-background px-4 pt-4',
+        isAndroid && 'max-h-[85%]',
+      )}
     >
       {/* Tap-anywhere-dead to drop the keyboard, and it WRAPS the children
           rather than sitting behind them as an absolute layer. The absolute
@@ -212,16 +194,8 @@ function ShareSheetFrame({ children }: { children: ReactNode }) {
     </View>
   );
 
-  return (
-    <KeyboardAvoidingView
-      behavior="padding"
-      // iOS only: the band is not the screen, so the lift needs its origin.
-      // Android's activity IS full-screen, where 0 — the default — is right.
-      {...(isAndroid
-        ? null
-        : { keyboardVerticalOffset: keyboard.offset, onLayout: keyboard.onLayout })}
-      className="flex-1 justify-end"
-    >
+  const sheet = (
+    <>
       {/* `accessible={false}`, NOT `role="button"`: this is a full-bleed dismiss
           target behind the sheet, and as a focus stop it would announce as one
           enormous unlabelled control sitting over everything. The sheet's own
@@ -229,9 +203,14 @@ function ShareSheetFrame({ children }: { children: ReactNode }) {
 
           Untinted on iOS, `bg-black/40` on Android: the iOS host dims the app
           behind the extension itself, so a second scrim would double it, while
-          Android's activity is merely translucent and this IS its scrim. On iOS
-          it covers only the band, not the screen — but it has to exist there,
-          because a transparent area that swallows taps reads as broken. */}
+          Android's activity is merely translucent and this IS its scrim. It has
+          to exist on iOS all the same, because the extension's root view is
+          transparent and STILL TAKES TOUCHES — an area that looks like Safari
+          and swallows taps reads as broken.
+
+          Absolute, so it fills the frame's padding box: while the keyboard is
+          up that stops at the keyboard's top edge, which is exactly right —
+          there is nothing to dismiss underneath it. */}
       <Pressable
         accessible={false}
         testID="share-backdrop"
@@ -239,7 +218,21 @@ function ShareSheetFrame({ children }: { children: ReactNode }) {
         className={cn('absolute top-0 right-0 bottom-0 left-0', isAndroid && 'bg-black/40')}
       />
       {panel}
+    </>
+  );
+
+  // The two routes to the same bottom padding (see the header). Android's
+  // KeyboardAvoidingView is doing what `lift` does on iOS, in a process where
+  // RN's keyboard frames are real; iOS applies ours directly, because there the
+  // same component would lift by the panel's whole height.
+  return isAndroid ? (
+    <KeyboardAvoidingView behavior="padding" className="flex-1 justify-end">
+      {sheet}
     </KeyboardAvoidingView>
+  ) : (
+    <View style={{ paddingBottom: lift }} className="flex-1 justify-end">
+      {sheet}
+    </View>
   );
 }
 

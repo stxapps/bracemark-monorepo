@@ -96,9 +96,10 @@ export function ShareTagsPicker({
         className="h-9"
       />
 
-      {/* Bounded, not `flex-1` — see the list picker's note. */}
+      {/* Bounded, not `flex-1`, and `min-h-0 shrink` so this is what gives up
+          height to the keyboard — see the list picker's note. */}
       <ScrollView
-        className="max-h-72"
+        className="max-h-72 min-h-0 shrink"
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
       >

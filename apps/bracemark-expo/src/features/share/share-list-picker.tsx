@@ -125,11 +125,17 @@ export function ShareListPicker({
         className="h-9"
       />
 
-      {/* Bounded rather than `flex-1`: the panel has a definite height on iOS
-          (the host's fixed 520pt) but not on Android (it grows to content, up to
-          85%), and a max-height behaves correctly in both. No
-          `nestedScrollEnabled` any more — this no longer scrolls inside another
-          scroller.
+      {/* Bounded rather than `flex-1`, since neither host gives the panel a
+          height to fill — both grow it to content (Android caps at 85%) — and a
+          max-height behaves correctly in both. No `nestedScrollEnabled` any
+          more: this no longer scrolls inside another scroller.
+
+          `min-h-0 shrink` is the LAST link of the sheet's squeeze chain
+          (share-kit.tsx's header): the scroller is the only child of either
+          picker that may lose height, so when the keyboard takes the room this
+          is what gives it up, and the header, the field and Done stay put. Miss
+          it and the panel overflows the frame instead — nothing clips, it just
+          paints outside its own background.
 
           `keyboardDismissMode="on-drag"`: the input above is
           `submitBehavior="submit"`, so return never blurs it — scrolling the
@@ -139,7 +145,7 @@ export function ShareListPicker({
           the default `"never"` would swallow the first press on the very row
           you filtered for. */}
       <ScrollView
-        className="max-h-72"
+        className="max-h-72 min-h-0 shrink"
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
       >

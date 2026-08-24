@@ -116,36 +116,43 @@ behavior="padding"` around the centring box in `DialogOverlay` — the container
   surfaces in question on Android. AdvancedSearch has since been driven on both
   platforms and swapped to keyboard-controller (bullet above) — RN's KAV turned
   out to work there, so the swap is for consistency, not repair. The share sheet
-  still has no swap available (next bullet) and has not been re-driven.
+  still has no swap available (next bullet); its iOS half no longer uses a KAV
+  at all, for a reason that turned out to be more fundamental than the lift
+  arithmetic (bullet after next).
 - **Why the share sheet can't use it at all** (the stronger constraint):
   keyboard-controller's iOS layer is built on `UIApplication.shared`, which
   doesn't exist in an app-extension process — expo-share-extension's
   `APPLICATION_EXTENSION_API_ONLY=No` only makes such pods compile, not work.
   Even nesting a fresh `KeyboardProvider` wouldn't help. Android's
-  `ShareActivity` could technically differ, but one plain KAV keeps the two
-  hosts rendering the same tree (docs/share-sheet.md).
-- **…and the plain KAV needs a `keyboardVerticalOffset` on iOS, for a reason
-  that is invisible in the tree.** The extension's RN surface is not the window:
-  `ShareExtensionViewController` pins the root view at
-  `y = UIScreen.main.bounds.height - ShareExtensionHeight`, a 520pt band at the
-  bottom of the screen. RN's KAV lifts by
-  `frame.y + frame.height - keyboardFrame.screenY`, and inside that band the two
-  terms are in different coordinate spaces — `frame` is the view's own
-  `onLayout` (y = 0, height = 520), `screenY` is the keyboard's origin on the
-  SCREEN (~516 on an 852pt phone). It therefore lifted ~4pt: the panel sat
-  _under_ the keyboard and appeared to rise later only because it was tracking
-  changes to the keyboard's own frame (the accessory bar arriving, a picker
-  swapping fields), never actually avoiding it. `keyboardVerticalOffset` is the
-  documented knob — "distance between the top of the user screen and the React
-  Native view" — so the value is the band's screen origin, measured in
-  `share-kit.tsx`'s `useShareKeyboardOffset` as
-  `Dimensions.get('screen').height` minus the height the view reports (measured,
-  not typed as 520, because that number is `app.config.ts`'s). Android's
-  activity is genuinely full-screen, so 0 is right there and the offset is wired
-  to the iOS branch only. Nothing catches this: the tree, the types and the
-  Maestro flows are identical either way, and over the iOS extension the panel
-  leaves the accessibility tree the moment the keyboard is up (bullet below), so
-  the flows cannot even see the panel to measure it.
+  `ShareActivity` runs in the app's own process and could technically differ,
+  but it keeps the plain KAV so the two hosts render one tree
+  (docs/share-sheet.md).
+- **…and on iOS no KAV can work there, because RN reports every keyboard frame
+  as ZERO.** This bullet used to prescribe a `keyboardVerticalOffset` for a
+  coordinate-space mismatch. That diagnosis was wrong, and the offset it
+  prescribed made things worse. `RCTKeyboardObserver.mm` converts the
+  notification's frame through `RCTKeyWindow()`, which returns nil in an app
+  extension by contract, so every payload JS sees is `screenY: 0, height: 0`.
+  KAV's lift is `frame.y + frame.height - (screenY - keyboardVerticalOffset)`;
+  against `screenY: 0` that is the panel's whole height plus the offset, i.e.
+  padding larger than the surface it pads — the content box collapses and
+  `justify-end` parks the shrunken panel above the sheet. The repair is a native
+  module of ours, `BracemarkShareKeyboard`
+  (`modules/bracemark-share/ios/`), which reads
+  `UIKeyboardFrameEndUserInfoKey` straight off the notification — UIKit posts it
+  in screen coordinates, so no window is needed — and emits the keyboard's top
+  edge plus the system's animation duration. `features/share/share-keyboard.ts`
+  turns that into `useShareKeyboardLift()` and `share-kit.tsx` applies it as
+  bottom padding on the iOS branch, leaving Android's KAV alone. The other half
+  of the fix is not JS at all: the extension's `height` is now omitted from
+  `app.config.ts` so the host view is full-screen, because a ~520pt container
+  cannot hold a ~520pt picker above a ~340pt keyboard however correctly it
+  lifts. Nothing catches any of this: the tree, the types and the Maestro flows
+  are identical either way, and over the iOS extension the panel leaves the
+  accessibility tree the moment the keyboard is up (bullet below), so the flows
+  cannot even see the panel to measure it. Full derivation in
+  [share-sheet.md](./share-sheet.md), _what an app-extension process breaks in
+  React Native itself_.
 - **For a new surface, decide the presentation first; the keyboard answer
   follows.** A future link-add/link-edit built as a router screen inherits the
   keyboard-controller path for free; built as a page-sheet `Modal` (like

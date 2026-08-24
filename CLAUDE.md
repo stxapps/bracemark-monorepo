@@ -216,11 +216,17 @@ test. Check the linked doc before acting on any of these.
   back to the system face rather than rendering nothing). The fix is
   `allowFontScaling={false}`, set from `index.share.js` via `lib/font-scale.ts` —
   which costs Dynamic Type on that one surface and cannot be avoided. Second:
-  the extension's RN root is a 520pt band pinned to the screen bottom, NOT the
-  window, so `KeyboardAvoidingView` needs `keyboardVerticalOffset` (its frame and
-  the keyboard's `screenY` are in different coordinate spaces) or the panel sits
-  under the keyboard. Anything new in this tree that reads the key window, the
-  screen or the shared application is suspect the same way. →
+  RN converts every keyboard frame through `RCTKeyWindow()`, which returns nil
+  here by contract, so JS sees `screenY: 0, height: 0` and NO
+  `KeyboardAvoidingView` can work — with `screenY: 0` it lifts by the panel's
+  whole height, collapsing it and parking it above the sheet, and
+  `keyboardVerticalOffset` only makes that bigger. The share sheet's iOS branch
+  therefore takes its lift from our own `BracemarkShareKeyboard` module
+  (`modules/bracemark-share/ios/`) via `features/share/share-keyboard.ts`, and
+  the extension's `height` is omitted from `app.config.ts` so the host view is
+  full-screen — a 520pt one cannot hold a ~520pt picker above the keyboard
+  however correctly it lifts. Anything new in this tree that reads the key
+  window, the screen or the shared application is suspect the same way. →
   `share-sheet.md`, _what an app-extension process breaks in React Native
   itself_; `accessibility.md`; `soft-keyboard.md`.
 - **The lazy requires on the iOS share path.** `data/share-store.ts` (the whole

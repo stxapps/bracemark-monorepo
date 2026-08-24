@@ -52,9 +52,10 @@ The process split above is usually about **data** — no sqlite, no settings, no
 keychain without an access group. Two things it breaks are not about data at
 all: they are React Native features that quietly compute the wrong number
 because the APIs they read do not exist in an extension. Both are invisible to
-every automated check we have, both were live in the shipped sheet, and both are
-repaired in JS. Neither can be found by reading the share tree — the share tree
-looks correct.
+every automated check we have, and both were live in the shipped sheet. One is
+repaired in JS; the other needs native code of our own, because a number RN
+cannot compute has to come from somewhere. Neither can be found by reading the
+share tree — the share tree looks correct.
 
 **Text renders at zero point.** RN scales every piece of text by
 `RCTFontSizeMultiplier()` (`React/Base/RCTUtils.mm`), which is
@@ -100,42 +101,84 @@ derivation, and `lib/font-scale.spec.tsx` pins the entry→chokepoint wiring
 [accessibility.md](./accessibility.md), _font scaling_: Dynamic Type does not
 reach the iOS share sheet.
 
-**KeyboardAvoidingView lifts by the wrong amount.** The extension's RN surface
-is not the window: `ShareExtensionViewController` places the root view at
-`y = UIScreen.main.bounds.height - ShareExtensionHeight`, a 520pt band pinned to
-the bottom of the screen. RN's KAV lifts by
-`frame.y + frame.height - keyboardFrame.screenY`, and in that band those terms
-are in different coordinate spaces — `frame` is the view's own `onLayout`
-(y = 0, height = 520) while `screenY` is the keyboard's origin on the SCREEN
-(~516 on an 852pt phone). The subtraction yields a few points instead of the
-keyboard's height: the panel sits under the keyboard, and appears to creep up
-later only because it is tracking changes to the keyboard's own frame.
-`keyboardVerticalOffset` is the documented knob for exactly this ("distance
-between the top of the user screen and the React Native view"), so the fix is to
-pass the band's screen origin — `Dimensions.get('screen').height` minus the
-height the view measures, in `share-kit.tsx`'s `useShareKeyboardOffset`. It is
-measured rather than typed as 520 because that number belongs to `app.config.ts`.
-Android's activity is genuinely full-screen, so 0 is correct there and the offset
-stays on the iOS branch. See [soft-keyboard.md](./soft-keyboard.md), _avoidance_.
+**Every keyboard frame RN reports is zero.** `RCTKeyboardObserver.mm` reads the
+notification's `UIKeyboardFrameEndUserInfoKey` correctly, then converts it into
+window coordinates: `RCTKeyWindow()`, then
+`[window convertRect:endFrame fromCoordinateSpace:window.screen.coordinateSpace]`.
+`RCTKeyWindow()` returns **nil in an app extension by contract** — its first line
+is `if (RCTRunningInAppExtension()) return nil;` — and a message to nil yields
+`CGRectZero`. So `Keyboard.metrics()`, every `keyboardWillShow` payload and
+therefore `KeyboardAvoidingView` all report `screenY: 0, height: 0`: a plausible
+number, not an error.
 
-**The band is not the panel, and it must not paint.** The same fixed 520pt root
-view is a LAYOUT container, not a sheet. It is sized for the tallest of the four
-screens — the two pickers — while compose and saved are barely 280pt, and left
-to itself `ShareExtensionViewController` fills it with `.systemBackground` and
-square corners. The difference showed as an opaque slab of dead white above the
-header, roughly 240pt of it, which reads as a broken sheet rather than as a
-short one. The plugin's `backgroundColor` takes an alpha (`app.config.ts`,
-0 there; note the Swift divides r/g/b by 255 but uses alpha as-is), so the band
-is clear and `share-kit.tsx` draws its own rounded, `bg-background` panel inside
-it — the shape the Android half always had. What shows through the part it does
-not fill is the host app under the system's own dimming.
+What that does to KAV is worse than under-lifting. Its lift is
+`frame.y + frame.height - (screenY - keyboardVerticalOffset)`, and against
+`screenY: 0` that is the panel's WHOLE height plus the offset — padding that
+exceeds the surface it pads. The content box collapses to nothing, the panel
+shrinks to its own paddings, and `justify-end` parks the remains above the
+sheet. No `keyboardVerticalOffset` rescues this; raising it makes the lift
+bigger, and it feeds back into KAV's own `onLayout`.
 
-That transparency has a consequence worth stating: **a clear RN root view still
-takes touches.** The band's unfilled region looks like Safari and is not, so the
-sheet puts a `share-backdrop` `Pressable` under the panel on BOTH hosts —
-untinted on iOS, where the system already dims, `bg-black/40` on Android, whose
-activity is merely translucent. It is `accessible={false}`, and `share-close`
-remains the announced way out.
+The notification itself is fine — UIKit posts `UIKeyboardFrameEndUserInfoKey` in
+SCREEN coordinates, and reading it needs no window. So the number comes from our
+own module: `BracemarkShareKeyboard`
+(`modules/bracemark-share/ios/BracemarkShareKeyboardModule.swift`) observes
+`keyboardWillChangeFrame` and `keyboardWillHide` and emits the keyboard's top
+edge in screen points plus the system's animation duration.
+`features/share/share-keyboard.ts` turns that into `useShareKeyboardLift()` —
+`max(panelBottomOnScreen - keyboardTop, 0)`, played onto the system's own curve
+with `LayoutAnimation` — and `share-kit.tsx` applies it as bottom padding on the
+iOS branch. A hide is reported as "top edge = bottom of the screen", so the lift
+falls to zero without a special case.
+
+**Android goes through none of that.** Its `ShareActivity` rides the app's own
+process, where RN's keyboard frames are real, so that branch keeps a plain
+`KeyboardAvoidingView` with `behavior="padding"`. Both branches end in bottom
+padding on the same `justify-end` column, which is what keeps one tree serving
+two hosts. Plain KAV rather than react-native-keyboard-controller because this
+file also renders inside the extension — see
+[soft-keyboard.md](./soft-keyboard.md), _avoidance_.
+
+**The squeeze chain under that padding is load-bearing.** Whichever route
+supplies it, the padding takes room away from the column above it, and every
+link down to the scrollable content must be able to give height up: `min-h-0
+shrink` on the panel (`share-kit.tsx`) and on each picker's `ScrollView`
+alongside its `max-h-72` (`share-list-picker.tsx`, `share-tags-picker.tsx`). RN
+children do not shrink by default, and a panel that cannot shrink does not clip
+— it OVERFLOWS, painting its header outside its own background.
+
+**The host view is full-screen, and that is what made a keyboard survivable at
+all.** `ShareExtensionViewController` sizes its root view from
+`ShareExtensionHeight` in the extension's Info.plist, pinning it at
+`y = UIScreen.main.bounds.height - height`; with the key absent it uses the full
+`screenBounds` instead. `app.config.ts` used to set `height: 520`, "sized for the
+pickers" — and no amount of correct lifting fits a ~520pt picker above a ~340pt
+keyboard inside a 520pt container. The key is now **omitted on purpose**. The
+panel is bottom-anchored and paints its own background, so a full-screen
+container looks identical while the keyboard is down and simply stops being the
+ceiling when it is up. Nothing in JS may assume the surface's origin any more:
+the lift is computed from the keyboard's own top edge, not from where the
+container starts.
+
+**The root must not paint, whatever its size.** Left to itself
+`ShareExtensionViewController` fills that view with `.systemBackground` and
+square corners. The sheet's four screens are not one height — compose and saved
+are barely 280pt against the pickers' ~520 — and the difference showed as an
+opaque slab of dead white above the header, which reads as a broken sheet rather
+than as a short one. The plugin's `backgroundColor` takes an alpha
+(`app.config.ts`, 0 there; note the Swift divides r/g/b by 255 but uses alpha
+as-is), so the root is clear and `share-kit.tsx` draws its own rounded,
+`bg-background` panel inside it — the shape the Android half always had. What
+shows above it is the host app under the system's own dimming.
+
+That transparency has a consequence worth stating, and a full-screen root
+sharpens it: **a clear RN root view still takes touches.** The unfilled region
+looks like Safari and is not — and it is now the whole screen above the panel,
+not the leftovers of a 520pt band — so the sheet puts a `share-backdrop`
+`Pressable` under the panel on BOTH hosts, and that is the tap-outside-to-close
+for everything around it. Untinted on iOS, where the system already dims,
+`bg-black/40` on Android, whose activity is merely translucent. It is
+`accessible={false}`, and `share-close` remains the announced way out.
 
 **Neither the provider nor the insets come for free.** `SafeAreaView` has needed
 an `RNCSafeAreaProvider` ancestor since react-native-safe-area-context v5 and
@@ -300,9 +343,9 @@ carrying one. Three rules hold them together:
   on all four screens, so nothing under it ever shifts as the sheet switches. It
   carries the **brand lockup** — this is the one surface in the product that
   floats over another app and has no other carrier — plus a close control, which
-  is not decoration: iOS offers no swipe to dismiss, and the band's backdrop
-  covers only the part of a fixed 520pt host the panel leaves over, so this is
-  the one way out that is on every screen at every height. The lockup's row is
+  is not decoration: iOS offers no swipe to dismiss, and the backdrop is a
+  tap target with nothing to announce it, so this is the one way out that is on
+  every screen at every height. The lockup's row is
   the full width of the header — it places that control with `ml-auto`, so a
   `flex-row` PARENT collapses it to its content and strands the control against
   the wordmark; both rails put the lockup in a column for the same reason
@@ -650,7 +693,8 @@ icons), and culori (uniwind's runtime).
 | session mirror in the shared Keychain (App Group id as access group) + `loadSharedSession`                           | `@stxapps/expo-react` `data/session-store.ts` over `@stxapps/expo-crypto` `lib/shared-keychain.ts` (BracemarkSharedKeychain, iOS Swift)                                                                                                                                                                             |
 | write edge (writeLink/writeTag/writeExtraction)                                                                      | `@stxapps/expo-react` `data/mutations.ts`                                                                                                                                                                                                                                                                           |
 | iOS extension target, App Group, preprocessing JS                                                                    | `expo-share-extension` plugin in `app.config.ts` + `share-extension/preprocessing.js` + `withShareExtension` in `metro.config.js`                                                                                                                                                                                   |
-| Android ShareActivity + close() module                                                                               | `apps/bracemark-expo/modules/bracemark-share/` (autolinked local module; activity + intent-filter merged from its AndroidManifest)                                                                                                                                                                                  |
+| Android ShareActivity + close() module                                                                               | `apps/bracemark-expo/modules/bracemark-share/android/` (autolinked local module; activity + intent-filter merged from its AndroidManifest)                                                                                                                                                                          |
+| iOS keyboard frames for the extension (`BracemarkShareKeyboard`) + the lift JS reads them through                    | `apps/bracemark-expo/modules/bracemark-share/ios/` (same local module, `BracemarkShare.podspec` path-linked into BOTH targets by `use_expo_modules!`) + `features/share/share-keyboard.ts`                                                                                                                          |
 
 Like the other native pieces (the `BracemarkCrypto` pod's modules, the embedded
 font), none of
