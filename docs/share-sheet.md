@@ -46,6 +46,84 @@ payload (plus `preprocessing.js`'s `{ title, url }`) arrives the same way,
 through the extension bundle. So the divergent native wiring converges before a
 single pixel is drawn.
 
+### what an app-extension process breaks in React Native itself
+
+The process split above is usually about **data** — no sqlite, no settings, no
+keychain without an access group. Two things it breaks are not about data at
+all: they are React Native features that quietly compute the wrong number
+because the APIs they read do not exist in an extension. Both are invisible to
+every automated check we have, both were live in the shipped sheet, and both are
+repaired in JS. Neither can be found by reading the share tree — the share tree
+looks correct.
+
+**Text renders at zero point.** RN scales every piece of text by
+`RCTFontSizeMultiplier()` (`React/Base/RCTUtils.mm`), which is
+`mapping[RCTSharedApplication().preferredContentSizeCategory].floatValue` —
+and `RCTSharedApplication()` returns **nil in an app extension** by design
+(`UIApplication.sharedApplication` is unavailable there). The lookup yields nil,
+`.floatValue` on nil is **0.0**, that 0 becomes the surface's
+`layoutContext.fontSizeMultiplier`, and
+`RCTEffectiveFontSizeMultiplierFromTextAttributes` then takes
+`fminf(maxFontSizeMultiplier, 0)` — so our 1.3 cap cannot save it and every font
+size in the extension resolves to zero. `TextInput` gets the same value by a
+different route (`RCTTextInputComponentView` calls `RCTFontSizeMultiplier()`
+itself), so a typed character is invisible too.
+
+The symptom is not a crash and not a fallback to the system face: the text nodes
+exist, lay out at zero height, carry the right strings, and paint nothing. The
+sheet shows a mark with no wordmark, two rows of icons and chevrons with no
+labels, a specimen tile with no title or URL, and a filled Save bar with no word
+on it — while `maestro hierarchy` reads back `"List: My List"`, `"Tags: none"`,
+`"Save"`, `"Close"`, taps route correctly and the pickers filter. **Only a
+screenshot shows it.** (The obvious suspect — the embedded Inter face not
+reaching the extension target — is a red herring worth ruling out first and
+quickly: `expo-share-extension` reads the `expo-font` plugin's `fonts` array
+straight out of `app.config.ts` and copies the file into the extension target's
+resources AND its `UIAppFonts`. Check the generated
+`ios/BracemarkShareExtension/Info.plist` before spending time there. A missing
+family falls back to the system face anyway; it does not render nothing.)
+
+`allowFontScaling={false}` is the only lever, and it is what
+`expo-share-extension`'s own `Text`/`TextInput` wrappers set — its README calls
+this "a font scaling issue". We set the same flag at **our** two chokepoints
+(`components/ui/text.tsx`, `components/ui/input.tsx`) rather than importing its
+components, so the sheet keeps Inter, `TextClassContext` and the heading roles.
+The multiplier cannot be corrected instead of disabled: `ParagraphShadowNode`
+overwrites `textAttributes.fontSizeMultiplier` with the layout context's value,
+so a hand-passed one is discarded. Nor can the process be detected from JS —
+`Dimensions.fontScale` reports a clean 1.0, because its native side
+(`RCTAccessibilityManager`) carries the `<= 0` guard `RCTFontSizeMultiplier`
+lacks. So the flag is set **explicitly, from `index.share.js`**, which is the
+one file that IS the extension process; `lib/font-scale.ts` holds it and the
+derivation, and `lib/font-scale.spec.tsx` pins the entry→chokepoint wiring
+(the only part of this jest can see). The cost is stated in
+[accessibility.md](./accessibility.md), _font scaling_: Dynamic Type does not
+reach the iOS share sheet.
+
+**KeyboardAvoidingView lifts by the wrong amount.** The extension's RN surface
+is not the window: `ShareExtensionViewController` places the root view at
+`y = UIScreen.main.bounds.height - ShareExtensionHeight`, a 520pt band pinned to
+the bottom of the screen. RN's KAV lifts by
+`frame.y + frame.height - keyboardFrame.screenY`, and in that band those terms
+are in different coordinate spaces — `frame` is the view's own `onLayout`
+(y = 0, height = 520) while `screenY` is the keyboard's origin on the SCREEN
+(~516 on an 852pt phone). The subtraction yields a few points instead of the
+keyboard's height: the panel sits under the keyboard, and appears to creep up
+later only because it is tracking changes to the keyboard's own frame.
+`keyboardVerticalOffset` is the documented knob for exactly this ("distance
+between the top of the user screen and the React Native view"), so the fix is to
+pass the band's screen origin — `Dimensions.get('screen').height` minus the
+height the view measures, in `share-kit.tsx`'s `useShareKeyboardOffset`. It is
+measured rather than typed as 520 because that number belongs to `app.config.ts`.
+Android's activity is genuinely full-screen, so 0 is correct there and the offset
+stays on the iOS branch. See [soft-keyboard.md](./soft-keyboard.md), _avoidance_.
+
+**The rule this leaves behind:** anything the RN core computes from
+`UIApplication`, the key window or the screen is suspect in this process, and it
+will be wrong SILENTLY rather than throwing. `RCTKeyWindow()` and
+`RCTSharedApplication()` (both nil-returning here) are the things to grep for
+when a shared component behaves differently in the sheet than in the app.
+
 ### why not share the sqlite DB with the iOS extension
 
 Putting `bracemark-data.db` in the App Group container so both processes open it

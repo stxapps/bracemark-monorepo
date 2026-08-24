@@ -124,6 +124,28 @@ behavior="padding"` around the centring box in `DialogOverlay` — the container
   Even nesting a fresh `KeyboardProvider` wouldn't help. Android's
   `ShareActivity` could technically differ, but one plain KAV keeps the two
   hosts rendering the same tree (docs/share-sheet.md).
+- **…and the plain KAV needs a `keyboardVerticalOffset` on iOS, for a reason
+  that is invisible in the tree.** The extension's RN surface is not the window:
+  `ShareExtensionViewController` pins the root view at
+  `y = UIScreen.main.bounds.height - ShareExtensionHeight`, a 520pt band at the
+  bottom of the screen. RN's KAV lifts by
+  `frame.y + frame.height - keyboardFrame.screenY`, and inside that band the two
+  terms are in different coordinate spaces — `frame` is the view's own
+  `onLayout` (y = 0, height = 520), `screenY` is the keyboard's origin on the
+  SCREEN (~516 on an 852pt phone). It therefore lifted ~4pt: the panel sat
+  _under_ the keyboard and appeared to rise later only because it was tracking
+  changes to the keyboard's own frame (the accessory bar arriving, a picker
+  swapping fields), never actually avoiding it. `keyboardVerticalOffset` is the
+  documented knob — "distance between the top of the user screen and the React
+  Native view" — so the value is the band's screen origin, measured in
+  `share-kit.tsx`'s `useShareKeyboardOffset` as
+  `Dimensions.get('screen').height` minus the height the view reports (measured,
+  not typed as 520, because that number is `app.config.ts`'s). Android's
+  activity is genuinely full-screen, so 0 is right there and the offset is wired
+  to the iOS branch only. Nothing catches this: the tree, the types and the
+  Maestro flows are identical either way, and over the iOS extension the panel
+  leaves the accessibility tree the moment the keyboard is up (bullet below), so
+  the flows cannot even see the panel to measure it.
 - **For a new surface, decide the presentation first; the keyboard answer
   follows.** A future link-add/link-edit built as a router screen inherits the
   keyboard-controller path for free; built as a page-sheet `Modal` (like

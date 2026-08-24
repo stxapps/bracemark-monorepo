@@ -203,6 +203,26 @@ test. Check the linked doc before acting on any of these.
   `'./lib/theme.js'` — packages are `bundler=none` and consumed as raw source, so
   the NodeNext spelling resolves literally and 404s in Turbopack/Metro.
   → `architecture.md`, _module resolution in packages_.
+- **RN core APIs that read `UIApplication` are WRONG, not broken, inside the iOS
+  share extension's process.** They return a plausible number instead of
+  throwing. Two are live today and both were shipped blank: RN's font-scale
+  multiplier is `RCTSharedApplication().preferredContentSizeCategory`, which is
+  nil in an app extension, so the multiplier is **0** and EVERY `Text`/
+  `TextInput` lays out at zero point — invisible, with the accessibility tree
+  fully correct, so jest, the Maestro flows and the contract runs all pass while
+  the sheet shows icons and no words. Only a screenshot shows it; the embedded
+  Inter face is a red herring (`expo-share-extension` copies it into the target's
+  `UIAppFonts` from the `expo-font` plugin's array, and a missing family falls
+  back to the system face rather than rendering nothing). The fix is
+  `allowFontScaling={false}`, set from `index.share.js` via `lib/font-scale.ts` —
+  which costs Dynamic Type on that one surface and cannot be avoided. Second:
+  the extension's RN root is a 520pt band pinned to the screen bottom, NOT the
+  window, so `KeyboardAvoidingView` needs `keyboardVerticalOffset` (its frame and
+  the keyboard's `screenY` are in different coordinate spaces) or the panel sits
+  under the keyboard. Anything new in this tree that reads the key window, the
+  screen or the shared application is suspect the same way. →
+  `share-sheet.md`, _what an app-extension process breaks in React Native
+  itself_; `accessibility.md`; `soft-keyboard.md`.
 - **The lazy requires on the iOS share path.** `data/share-store.ts` (the whole
   sqlite/write-edge/sync half, plus `share-upload`) and `expo-crypto`'s
   `lib/ids.ts` defer their imports behind `require()` at the call site **on

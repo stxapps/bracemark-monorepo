@@ -360,6 +360,28 @@ the setting. That is an accessibility regression aimed at the people the setting
 exists for. So: cap, don't disable. 1.3 keeps the common small bumps working and
 bounds the overflow to what the surrounding chrome absorbs.
 
+**The one exemption is a repair, not a policy: the iOS share-extension process.**
+RN computes its scale factor from `UIApplication.sharedApplication`, which does
+not exist in an app extension, so the multiplier there is **0** — and
+`fminf(1.3, 0)` is 0, which means the cap above cannot rescue it. Every `Text`
+and `TextInput` in that process lays out at zero point: invisible, with the
+right strings still in the accessibility tree and every check green. The only
+lever RN offers is `allowFontScaling={false}`, so both chokepoints ask
+`allowsFontScaling()` and `index.share.js` — the extension bundle's entry, and
+the only file that IS that process — answers no. `lib/font-scale.ts` carries the
+derivation; [share-sheet.md](./share-sheet.md) carries the symptom.
+
+State the cost plainly rather than filing it as a detail: **Dynamic Type does
+not reach the iOS share sheet.** That is a real loss for the users this whole
+section exists for, and it is not one we can buy back — the alternative is text
+that renders at zero size for everybody, and the multiplier cannot be corrected
+from JS (`ParagraphShadowNode` overwrites a hand-passed one). It is scoped as
+tightly as it goes: one process, one surface, a few seconds, and the same link
+is fully scalable in the app the sheet saves into. Android's share sheet runs in
+the app's own process and keeps the 1.3 cap like every other screen. If RN ever
+falls back to `UIFont.preferredFont(forTextStyle:)` — which does work in an
+extension — this exemption should go.
+
 Both chokepoints spread `{...props}` _after_ the default, so a call site can
 still opt out or choose its own ceiling. For the rare place that must do
 ARITHMETIC on scaling text, `useCappedFontScale()` returns the device scale

@@ -1,7 +1,7 @@
 import { Platform, TextInput } from 'react-native';
 import { useUniwind } from 'uniwind';
 
-import { MAX_FONT_SIZE_MULTIPLIER } from '../../lib/font-scale';
+import { allowsFontScaling, MAX_FONT_SIZE_MULTIPLIER } from '../../lib/font-scale';
 import { cn } from '../../lib/utils';
 
 // react-native-reusables `input` (uniwind variant), copied from the registry —
@@ -15,8 +15,11 @@ import { cn } from '../../lib/utils';
 // `placeholder:` variant in the classes below); `maxFontSizeMultiplier`
 // defaulted — this is the second of the two font-scale-cap chokepoints (the
 // first is `text.tsx`; lib/font-scale.ts carries the rationale), set before the
-// `{...props}` spread so a call site can still override it; and
-// `keyboardAppearance` bound to the active theme (below).
+// `{...props}` spread so a call site can still override it; `allowFontScaling`
+// asked rather than left to RN's `true`, since scaling is BROKEN in the iOS
+// share-extension process and a typed character there renders at zero point
+// (lib/font-scale.ts owns that story — the pickers' fields are the sites it
+// saves); and `keyboardAppearance` bound to the active theme (below).
 
 function Input({
   className,
@@ -49,6 +52,7 @@ function Input({
         }),
         className,
       )}
+      allowFontScaling={allowsFontScaling()}
       maxFontSizeMultiplier={MAX_FONT_SIZE_MULTIPLIER}
       keyboardAppearance={theme === 'dark' ? 'dark' : 'light'}
       {...props}

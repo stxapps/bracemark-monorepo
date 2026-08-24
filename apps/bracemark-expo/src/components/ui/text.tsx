@@ -3,7 +3,7 @@ import { Platform, type Role, Text as RNText } from 'react-native';
 import { Slot } from '@rn-primitives/slot';
 import { cva, type VariantProps } from 'class-variance-authority';
 
-import { MAX_FONT_SIZE_MULTIPLIER } from '../../lib/font-scale';
+import { allowsFontScaling, MAX_FONT_SIZE_MULTIPLIER } from '../../lib/font-scale';
 import { cn } from '../../lib/utils';
 
 // react-native-reusables `text` (uniwind variant), copied from the registry —
@@ -16,6 +16,10 @@ import { cn } from '../../lib/utils';
 //     chokepoints where the app-wide font-scale cap lives (lib/font-scale.ts
 //     carries the rationale). Set BEFORE the `{...props}` spread so a call site
 //     can still opt out or choose its own ceiling.
+//   • `allowFontScaling` asked rather than left to RN's `true` — scaling is
+//     BROKEN in the iOS share-extension process (multiplier 0 → every font size
+//     resolves to zero point → nothing paints, with a correct accessibility
+//     tree). lib/font-scale.ts owns that story; this is where the answer lands.
 
 const textVariants = cva(
   cn(
@@ -94,6 +98,7 @@ function Text({
       className={cn(textVariants({ variant }), textClass, className)}
       role={variant ? ROLE[variant] : undefined}
       aria-level={variant ? ARIA_LEVEL[variant] : undefined}
+      allowFontScaling={allowsFontScaling()}
       maxFontSizeMultiplier={MAX_FONT_SIZE_MULTIPLIER}
       {...props}
     />

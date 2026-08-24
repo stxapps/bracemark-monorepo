@@ -23,8 +23,16 @@
 //   - NO PORTALS, NO REANIMATED. Nothing here is a Dialog or a DropdownMenu;
 //     the pickers are screens within the sheet rather than overlays over it.
 
-import { type ReactNode } from 'react';
-import { Keyboard, KeyboardAvoidingView, Platform, Pressable, View } from 'react-native';
+import { type ReactNode, useCallback, useState } from 'react';
+import {
+  Dimensions,
+  Keyboard,
+  KeyboardAvoidingView,
+  type LayoutChangeEvent,
+  Platform,
+  Pressable,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { LucideIcon } from 'lucide-react-native';
 import ChevronLeft from 'lucide-react-native/icons/chevron-left';
@@ -56,6 +64,43 @@ const StyledSafeAreaView = withUniwind(SafeAreaView);
 // the home indicator's own swipe region.
 const BOTTOM_EDGE = { bottom: 'additive' } as const;
 
+// The iOS half of the sheet's keyboard avoidance, and the reason is the same
+// host that forced a plain KeyboardAvoidingView on this surface at all.
+// expo-share-extension does not hand the extension a full-screen RN surface: its
+// ShareExtensionViewController places our root view at
+// `y = UIScreen.main.bounds.height - ShareExtensionHeight` — a 520pt band pinned
+// to the bottom of the screen (the height is set in app.config.ts and written
+// into the extension's Info.plist from there).
+//
+// KeyboardAvoidingView lifts by `frame.y + frame.height - keyboardFrame.screenY`,
+// and inside that band the two terms are in DIFFERENT coordinate spaces:
+// `frame` comes from its own onLayout, so it reads y=0, height=520, while
+// `screenY` is the keyboard's origin ON THE SCREEN (~516 on an 852pt phone).
+// The subtraction yields a few points instead of the keyboard's height — which
+// is why the panel sat UNDER the keyboard, and why it appeared to creep up
+// later: it was tracking changes to the keyboard's own frame (the accessory bar
+// arriving, a picker swapping fields) rather than ever avoiding it.
+// `keyboardVerticalOffset` is exactly this knob — RN documents it as "distance
+// between the top of the user screen and the React Native view" — so the value
+// is the band's screen origin. Android's activity IS full-screen, so 0 is
+// correct there and this stays wired to the iOS branch only.
+const useShareKeyboardOffset = () => {
+  const [offset, setOffset] = useState(0);
+
+  // Measured, not the literal 520: that number is app.config.ts's to own, and a
+  // copy here would be a second opinion with nothing to catch it drifting. The
+  // band's origin is `screen height − the height this view measures`, and this
+  // view measures the band exactly — it is the extension surface's only child,
+  // `flex-1` inside a root whose frame is fixed. That also means the layout does
+  // not re-fire under the lift (`behavior="padding"` moves padding, not this
+  // box's height), so it runs once on mount, long before any keyboard.
+  const onLayout = useCallback((event: LayoutChangeEvent) => {
+    setOffset(Math.max(Dimensions.get('screen').height - event.nativeEvent.layout.height, 0));
+  }, []);
+
+  return { offset, onLayout };
+};
+
 // The sheet's frame. Two very different native hosts, one tree below this
 // point (docs/share-sheet.md):
 //
@@ -75,7 +120,8 @@ const BOTTOM_EDGE = { bottom: 'additive' } as const;
 // plain KeyboardAvoidingView, NOT react-native-keyboard-controller like the app
 // tree — its iOS native layer is built on `UIApplication.shared`, which does not
 // exist in an extension process (docs/soft-keyboard.md, _avoidance_).
-// `behavior="padding"` on both so the two hosts render the same tree.
+// `behavior="padding"` on both so the two hosts render the same tree. iOS also
+// needs a `keyboardVerticalOffset`, which is `useShareKeyboardOffset` above.
 //
 // DISMISSING that keyboard is this frame's job too, and it has to be, because
 // the pickers below cannot do it themselves: their inputs are
@@ -88,6 +134,7 @@ const BOTTOM_EDGE = { bottom: 'additive' } as const;
 // you are picking from is behind it. The pickers' scrollers pair this with
 // `keyboardDismissMode="on-drag"`, so scrolling the results dismisses too.
 export function ShareSheet({ children }: { children: ReactNode }) {
+  const keyboard = useShareKeyboardOffset();
   const panel = (
     <StyledSafeAreaView
       edges={BOTTOM_EDGE}
@@ -136,7 +183,12 @@ export function ShareSheet({ children }: { children: ReactNode }) {
 
   if (Platform.OS === 'ios') {
     return (
-      <KeyboardAvoidingView behavior="padding" className="flex-1 justify-end bg-background">
+      <KeyboardAvoidingView
+        behavior="padding"
+        keyboardVerticalOffset={keyboard.offset}
+        onLayout={keyboard.onLayout}
+        className="flex-1 justify-end bg-background"
+      >
         {panel}
       </KeyboardAvoidingView>
     );
