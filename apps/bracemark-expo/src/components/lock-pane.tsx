@@ -15,9 +15,9 @@ import { withUniwind } from 'uniwind';
 import { useSignOut } from '@stxapps/expo-react';
 import { LOCK_COPY } from '@stxapps/react';
 
+import { PasswordInput } from '../features/auth/password-input';
 import { Button } from './ui/button';
 import { Icon } from './ui/icon';
-import { Input } from './ui/input';
 import { Text } from './ui/text';
 import { ErrorText } from './error-text';
 
@@ -147,11 +147,8 @@ export function LockPane({
           </Button>
         )}
         <View className="gap-2">
-          <Input
-            secureTextEntry
+          <PasswordInput
             autoFocus={!biometric}
-            autoCapitalize="none"
-            autoCorrect={false}
             placeholder={LOCK_COPY.passwordLabel}
             aria-label={LOCK_COPY.passwordLabel}
             value={password}

@@ -133,10 +133,7 @@ function DeleteAccountView({ onBack }: { onBack: () => void }) {
           even though you're signed in. */}
       <View className="mt-6 max-w-sm gap-2">
         <Text className="text-sm font-medium">Confirm your password</Text>
-        <Input
-          secureTextEntry
-          autoCapitalize="none"
-          autoCorrect={false}
+        <PasswordInput
           autoComplete="current-password"
           value={password}
           editable={!isPending}

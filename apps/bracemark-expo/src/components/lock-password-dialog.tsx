@@ -14,6 +14,7 @@ import { Pressable, View } from 'react-native';
 
 import { lockPasswordSchema } from '@stxapps/shared';
 
+import { PasswordInput } from '../features/auth/password-input';
 import { Button } from './ui/button';
 import { Checkbox } from './ui/checkbox';
 import {
@@ -24,7 +25,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from './ui/dialog';
-import { Input } from './ui/input';
 import { Text } from './ui/text';
 import { ErrorText } from './error-text';
 
@@ -85,11 +85,8 @@ export function LockPasswordDialog({
             where it took a full 16 on each side. */}
         <View className="gap-4">
           <View className="gap-2">
-            <Input
-              secureTextEntry
+            <PasswordInput
               autoFocus
-              autoCapitalize="none"
-              autoCorrect={false}
               placeholder="Password"
               aria-label="Password"
               value={password}

@@ -12,7 +12,9 @@ import { cn } from '../../lib/utils';
 // typing, and it composes with the generated-passphrase path). RN differences:
 // `secureTextEntry` instead of type=password, and the platform's own
 // autofill/keyboard hints (`autoComplete` / iOS `textContentType`) are supplied
-// by the caller alongside the rest of the TextInput props.
+// by the caller alongside the rest of the TextInput props. Same caller rule as
+// web: never pass `secureTextEntry` back in — `{...props}` spreads last and would
+// pin the field masked while the eye keeps flipping its `aria-label`.
 export function PasswordInput({
   className,
   ref,

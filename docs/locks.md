@@ -280,6 +280,13 @@ app-global overflow menu, not the rail. The password dialog behind every _edit_
 is one shared `LockPasswordDialog`; the _unlock_ surfaces users hit while
 browsing are the in-place `LockPane`, not that dialog.
 
+Both take the password through **`PasswordInput`**, the same show/hide field the
+auth forms use, on both platforms — a lock password has no recovery beyond signing
+out (which wipes every lock), so a typo at set-time is as expensive here as it is
+in the account ceremony. The reveal is default-off per mount and must stay that
+way: the onlooker in the threat model above is the person who'd be reading it.
+See `docs/account.md`, _every field that takes a secret reveals it_.
+
 `AppLockGate` is a **content swap, not a redirect**, mounted above
 `InitialSyncGate` so the lock screen is the first thing shown and the first sync
 proceeds behind it. Its `'checking'` phase (the first locks read) renders

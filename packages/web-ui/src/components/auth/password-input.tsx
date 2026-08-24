@@ -10,9 +10,13 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 // account model needs at create-account (there's no password reset, so a mistyped
 // secret is a permanent lockout of any data encrypted under it). We deliberately
 // use a reveal toggle instead of a separate "confirm password" input: same
-// protection, half the typing, and it composes with the generated-passphrase path
-// (docs/account.md). forwardRef + full input-props passthrough so react-hook-form's
-// register() (which supplies ref/name/onChange/onBlur) works unchanged.
+// protection, half the typing, and it composes with the generated-passphrase path.
+// This is the ONLY spelling of a secret field on either platform — auth forms,
+// settings, delete-account and both lock surfaces alike — so callers must NOT pass
+// `type="password"`: `{...props}` spreads last and would win, leaving the eye
+// toggling nothing (docs/account.md, _every field that takes a secret reveals it_).
+// forwardRef + full input-props passthrough so react-hook-form's register() (which
+// supplies ref/name/onChange/onBlur) works unchanged.
 export const PasswordInput = React.forwardRef<HTMLInputElement, React.ComponentProps<'input'>>(
   function PasswordInput({ className, ...props }, ref) {
     const [show, setShow] = React.useState(false);

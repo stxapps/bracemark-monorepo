@@ -150,9 +150,8 @@ function DeleteAccountView({ onBack }: { onBack: () => void }) {
             even though you're signed in. */}
         <div className="flex max-w-sm flex-col gap-2">
           <Label htmlFor="delete-account-password">Confirm your password</Label>
-          <Input
+          <PasswordInput
             id="delete-account-password"
-            type="password"
             autoComplete="current-password"
             value={password}
             disabled={isPending}

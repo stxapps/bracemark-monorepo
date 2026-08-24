@@ -12,8 +12,8 @@ import { Lock } from 'lucide-react';
 
 import { LOCK_COPY } from '@stxapps/react';
 import { useSignOut } from '@stxapps/web-react';
+import { PasswordInput } from '@stxapps/web-ui/components/auth/password-input';
 import { Button } from '@stxapps/web-ui/components/ui/button';
-import { Input } from '@stxapps/web-ui/components/ui/input';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
 interface LockPaneProps {
@@ -72,8 +72,7 @@ export function LockPane({ title, description, onUnlock, className }: LockPanePr
           belongs to the input rather than standing as a block of its own. */}
       <form onSubmit={submit} className="flex w-full max-w-xs flex-col gap-4">
         <div className="flex flex-col gap-2">
-          <Input
-            type="password"
+          <PasswordInput
             autoFocus
             autoComplete="off"
             placeholder={LOCK_COPY.passwordLabel}

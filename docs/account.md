@@ -482,6 +482,42 @@ Try again.`, `warn` — the same sentence and the same tone as the username ladd
 > weakness detector, not a strength certificate, which is why the **generated**
 > passphrase is the default and the typed path is only an escape hatch.
 
+### every field that takes a secret reveals it
+
+`PasswordInput` — `web-ui/components/auth/password-input.tsx`, ported at
+`bracemark-expo/features/auth/password-input.tsx` — is the **only** spelling of a
+secret field on either platform. A masked input hides the one thing that would let
+a user fix a typo, and this account model has no reset: a mistyped secret at
+create-time permanently locks the data encrypted under it, and at sign-in the only
+feedback is a failure message that can't say _which_ character was wrong. NIST
+SP 800-63B says the same thing from the other side — verifiers SHOULD offer to
+display the entered secret — and it's why there is no separate "confirm password"
+input at the field level: same typo protection, half the typing, and it composes
+with the generated-passphrase path below.
+
+The rule is **universal, and that is the point.** It covers both auth forms,
+`NewPasswordField` (create + Settings → change password), the current-password and
+recovery-code doors, the fresh-password proof on delete-account, and both lock
+surfaces — `LockPane` and `LockPasswordDialog` on both platforms
+(`docs/locks.md`). The lock dialog is the one where the toggle is load-bearing
+rather than pleasant: it _creates_ a secret with no recovery path at all, so a
+typo there costs a sign-out that wipes every lock. Those six sites spent a stretch
+on a raw `Input` instead, which put an eye on `/signin` and no eye on the
+delete-account confirm two clicks away — the same secret, typed into two fields
+that disagreed about whether it could be checked.
+
+Two things the component settles, neither of which lints:
+
+- **Callers must not pass `type="password"` / `secureTextEntry`.** Both ports
+  spread `{...props}` _after_ their own, so a leftover one wins: the field stays
+  masked while the eye keeps flipping its `aria-label` / `aria-pressed`. The
+  toggle looks present and does nothing.
+- **The reveal is per-mount `useState`, default off, and must not become a
+  persisted preference.** On the auth screens that's merely tidy; on the lock
+  surfaces it's the threat model, which `docs/locks.md` names as a friend
+  scrolling your unattended phone — i.e. exactly the person standing next to the
+  screen the toggle would have left revealed.
+
 ### generated password (recommended default)
 
 > **STATUS — ✅ built.** The create-account form is a three-step "Secure your

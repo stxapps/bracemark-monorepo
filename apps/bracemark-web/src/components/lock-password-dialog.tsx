@@ -13,6 +13,7 @@
 import { useState } from 'react';
 
 import { lockPasswordSchema } from '@stxapps/shared';
+import { PasswordInput } from '@stxapps/web-ui/components/auth/password-input';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import { Checkbox } from '@stxapps/web-ui/components/ui/checkbox';
 import {
@@ -23,7 +24,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@stxapps/web-ui/components/ui/dialog';
-import { Input } from '@stxapps/web-ui/components/ui/input';
 import { Label } from '@stxapps/web-ui/components/ui/label';
 
 interface LockPasswordDialogProps {
@@ -86,8 +86,7 @@ export function LockPasswordDialog({
             buttons where it took a full 16 on each side. */}
         <form onSubmit={submit} className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
-            <Input
-              type="password"
+            <PasswordInput
               autoFocus
               autoComplete="off"
               placeholder="Password"
