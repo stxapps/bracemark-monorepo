@@ -33,12 +33,11 @@ import {
   Pressable,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { LucideIcon } from 'lucide-react-native';
 import ChevronLeft from 'lucide-react-native/icons/chevron-left';
 import ChevronRight from 'lucide-react-native/icons/chevron-right';
 import X from 'lucide-react-native/icons/x';
-import { withUniwind } from 'uniwind';
 
 import { BrandLockup } from '../../components/brand-lockup';
 import { Button } from '../../components/ui/button';
@@ -47,22 +46,34 @@ import { Text } from '../../components/ui/text';
 import { cn } from '../../lib/utils';
 import { closeShareSheet } from './share-host';
 
-// A composite, not a core host, so Uniwind's HOC is what lets it take
-// `className` (the note in components/landing.tsx).
-const StyledSafeAreaView = withUniwind(SafeAreaView);
+// The panel's own padding, in points, because the bottom edge is no longer a
+// class: it is `SHEET_PAD + insets.bottom` in a style prop (below).
+const SHEET_PAD = 16;
 
-// Only the bottom edge, and `additive` so the inset stacks on the panel's own
-// padding rather than replacing it. This is the one tree in the app outside any
-// SafeAreaProvider (docs/safe-area.md) — which is fine, and worth knowing:
-// `SafeAreaView` is a NATIVE view that measures its own insets and reads no
-// context, unlike `useSafeAreaInsets`. The other three edges are `off`: the iOS
-// host view is bottom-pinned and 520pt tall, so it never reaches the notch, and
-// Android's panel is bottom-anchored under a full-bleed backdrop.
+// THE SHEET NEEDS A PROVIDER, and the version this was first written against is
+// why it didn't have one. react-native-safe-area-context's `<SafeAreaView>` was
+// a self-measuring native view once; since v5 it is not. `RNCSafeAreaView`
+// walks `reactSuperview` for an `RNCSafeAreaProvider` (`findNearestProvider`)
+// and, finding none, returns from `invalidateSafeAreaInsets` before it ever
+// calls `updateLocalData` — so the view lays out with ZERO insets and reports
+// no error. That is exactly what shipped here: `edges={{ bottom: 'additive' }}`
+// on a provider-less tree, and the Save button back under the home indicator's
+// swipe region, which is the bug the edge was added to fix in the first place.
+// So the sheet now carries its own provider and reads the inset in JS.
 //
-// It was previously omitted entirely, and the omission was visible: the Save
-// button's bottom edge sat 16px off the screen bottom on iOS, i.e. underneath
-// the home indicator's own swipe region.
-const BOTTOM_EDGE = { bottom: 'additive' } as const;
+// `initialMetrics` is what makes that safe rather than a new failure mode:
+// `SafeAreaProvider` renders NOTHING until its first `onInsetsChange`, and in
+// this process there is no fallback for it to fall back to — the module's
+// `initialWindowMetrics` constant comes from `RCTKeyWindow()`, i.e.
+// `UIApplication.shared`, which an app-extension process does not have
+// (docs/share-sheet.md). Seeding zero insets means the sheet paints on the
+// first frame exactly as it does today and only ever moves DOWN-safe when the
+// real measurement lands a frame later. Android's activity is full-screen and
+// measures the same way, so one provider covers both hosts.
+const INITIAL_METRICS = {
+  insets: { top: 0, right: 0, bottom: 0, left: 0 },
+  frame: { x: 0, y: 0, width: 0, height: 0 },
+};
 
 // The iOS half of the sheet's keyboard avoidance, and the reason is the same
 // host that forced a plain KeyboardAvoidingView on this surface at all.
@@ -104,17 +115,24 @@ const useShareKeyboardOffset = () => {
 // The sheet's frame. Two very different native hosts, one tree below this
 // point (docs/share-sheet.md):
 //
-//   - iOS — expo-share-extension provides the floating panel itself: a
-//     bottom-pinned, 520pt-tall root view whose background is `.systemBackground`
-//     and whose corners are SQUARE (its ShareExtensionViewController sets no
-//     corner radius). So this fills it rather than drawing a panel inside it —
-//     rounding our own content would leave the host's square corners painted
-//     behind it. Content is bottom-aligned within the fixed height, which is
-//     what keeps Save under the thumb on a screen that is 520pt tall no matter
-//     how short the screen above it is.
-//   - Android — the activity is translucent and full-screen, so the panel IS
-//     ours: rounded top, tap-to-dismiss backdrop, capped at 85% so a long list
-//     can never swallow the whole window.
+//   - iOS — expo-share-extension hands us a bottom-pinned, 520pt-tall root view
+//     with SQUARE corners (its ShareExtensionViewController sets no corner
+//     radius) — a BAND, not a panel, and one whose height is fixed for all four
+//     screens because it is baked into the extension's Info.plist. The pickers
+//     want all 520 of it; the compose and saved screens are barely 280 tall, and
+//     the band used to paint `.systemBackground` behind the whole thing, so the
+//     ~240pt those screens don't use showed up as an opaque slab of dead white
+//     above the header. The band is CLEAR now (`backgroundColor` alpha 0 on the
+//     plugin, app.config.ts) and the panel below is ours — rounded top, its own
+//     background, bottom-aligned so Save stays under the thumb. What shows in
+//     the space it doesn't fill is the host app under the system's own dimming,
+//     which is what every other iOS sheet does.
+//   - Android — the activity is translucent and full-screen, so the panel was
+//     already ours: same rounded top and background, plus its own scrim, capped
+//     at 85% so a long list can never swallow the whole window.
+//
+// Which leaves ONE panel and one frame for both hosts, differing in two props
+// (the scrim's tint, the height cap) rather than in two return statements.
 //
 // Keyboard: both hosts overlay it, so the sheet moves itself. Deliberately a
 // plain KeyboardAvoidingView, NOT react-native-keyboard-controller like the app
@@ -128,34 +146,47 @@ const useShareKeyboardOffset = () => {
 // `submitBehavior="submit"` on purpose (return ADDS a tag/list and keeps the
 // keyboard for the next one — share-tags-picker.tsx), so return never blurs.
 // Without the layer below, the iOS sheet had NO gesture that closed the
-// keyboard at all: the panel is a plain SafeAreaView, the host owns the space
-// around it, and Android's backdrop closes the whole sheet rather than the
-// keyboard. The keyboard then eats ~335 of a fixed 520pt host and the tag list
-// you are picking from is behind it. The pickers' scrollers pair this with
+// keyboard at all: the panel is a plain box, the host owns the space around it,
+// and either host's backdrop closes the whole sheet rather than the keyboard.
+// The keyboard then eats ~335 of a fixed 520pt host and the tag list you are
+// picking from is behind it. The pickers' scrollers pair this with
 // `keyboardDismissMode="on-drag"`, so scrolling the results dismisses too.
 export function ShareSheet({ children }: { children: ReactNode }) {
+  return (
+    <SafeAreaProvider initialMetrics={INITIAL_METRICS}>
+      <ShareSheetFrame>{children}</ShareSheetFrame>
+    </SafeAreaProvider>
+  );
+}
+
+const isAndroid = Platform.OS === 'android';
+
+function ShareSheetFrame({ children }: { children: ReactNode }) {
   const keyboard = useShareKeyboardOffset();
+  // Read in JS and applied as padding rather than handed to a `<SafeAreaView>`:
+  // see INITIAL_METRICS above for why that view is gone. `pb` is the panel's own
+  // padding PLUS the inset — the `additive` mode it replaces — so the Save
+  // button clears the home indicator instead of sitting inside its swipe region.
+  const insets = useSafeAreaInsets();
   const panel = (
-    <StyledSafeAreaView
-      edges={BOTTOM_EDGE}
-      className={cn(
-        'px-4 pt-4 pb-4',
-        Platform.OS === 'android' && 'max-h-[85%] rounded-t-2xl bg-background',
-      )}
+    <View
+      style={{ paddingBottom: SHEET_PAD + insets.bottom }}
+      className={cn('rounded-t-2xl bg-background px-4 pt-4', isAndroid && 'max-h-[85%]')}
     >
       {/* Tap-anywhere-dead to drop the keyboard, and it WRAPS the children
           rather than sitting behind them as an absolute layer. The absolute
           version was tried first and is wrong: driven on the simulator with a
-          debug tint, `absolute inset-0` inside this SafeAreaView laid out as a
-          thin full-width band ABOVE the panel instead of covering it —
-          safe-area-context's SafeAreaView is a NATIVE view that applies its
-          insets outside Yoga, so an absolutely-positioned child does not
-          resolve against the box you see. Nothing about that is visible without
-          rendering it.
+          debug tint, `absolute inset-0` laid out as a thin full-width band
+          ABOVE the panel instead of covering it — the panel was a native
+          `<SafeAreaView>` then, which applies its insets outside Yoga, so an
+          absolutely-positioned child did not resolve against the box you see.
+          The panel is a plain `View` now (INITIAL_METRICS above), so that
+          particular trap is gone; the wrapper stays because it is also the
+          simpler shape.
 
           As a wrapper it is an ordinary flex column, so it covers exactly the
-          panel and nothing else. It carries the `gap-4` the SafeAreaView used
-          to, because it is now the parent the seams belong to; `shrink min-h-0`
+          panel and nothing else. It carries the `gap-4` the panel used to,
+          because it is now the parent the seams belong to; `shrink min-h-0`
           keeps the squeeze chain intact so the pickers' `max-h-72` scroller and
           Android's `max-h-[85%]` cap still absorb the keyboard.
 
@@ -178,33 +209,34 @@ export function ShareSheet({ children }: { children: ReactNode }) {
       <Pressable accessible={false} onPress={Keyboard.dismiss} className="min-h-0 shrink gap-4">
         {children}
       </Pressable>
-    </StyledSafeAreaView>
+    </View>
   );
 
-  if (Platform.OS === 'ios') {
-    return (
-      <KeyboardAvoidingView
-        behavior="padding"
-        keyboardVerticalOffset={keyboard.offset}
-        onLayout={keyboard.onLayout}
-        className="flex-1 justify-end bg-background"
-      >
-        {panel}
-      </KeyboardAvoidingView>
-    );
-  }
-
   return (
-    <KeyboardAvoidingView behavior="padding" className="flex-1 justify-end">
+    <KeyboardAvoidingView
+      behavior="padding"
+      // iOS only: the band is not the screen, so the lift needs its origin.
+      // Android's activity IS full-screen, where 0 — the default — is right.
+      {...(isAndroid
+        ? null
+        : { keyboardVerticalOffset: keyboard.offset, onLayout: keyboard.onLayout })}
+      className="flex-1 justify-end"
+    >
       {/* `accessible={false}`, NOT `role="button"`: this is a full-bleed dismiss
           target behind the sheet, and as a focus stop it would announce as one
           enormous unlabelled control sitting over everything. The sheet's own
-          close control (share-close, below) is the announced way out. */}
+          close control (share-close, below) is the announced way out.
+
+          Untinted on iOS, `bg-black/40` on Android: the iOS host dims the app
+          behind the extension itself, so a second scrim would double it, while
+          Android's activity is merely translucent and this IS its scrim. On iOS
+          it covers only the band, not the screen — but it has to exist there,
+          because a transparent area that swallows taps reads as broken. */}
       <Pressable
         accessible={false}
         testID="share-backdrop"
         onPress={closeShareSheet}
-        className="absolute top-0 right-0 bottom-0 left-0 bg-black/40"
+        className={cn('absolute top-0 right-0 bottom-0 left-0', isAndroid && 'bg-black/40')}
       />
       {panel}
     </KeyboardAvoidingView>
@@ -252,8 +284,16 @@ export function ShareHeader({
     );
   }
 
+  // A COLUMN, not a row — the two rails that render the same lockup with a
+  // trailing control put it in one too (features/{links,settings}/sidebar.tsx,
+  // `h-14 justify-center`), and this is why: `BrandLockup` pushes its `action`
+  // over with `ml-auto`, which needs the lockup's own row to be as wide as the
+  // header. As a child of a `flex-row` it was sized to its content instead, so
+  // the close control sat tight against the wordmark in the middle of the sheet
+  // rather than at the right edge. `justify-center` keeps the vertical centring
+  // the row gave it.
   return (
-    <View className="h-9 flex-row items-center">
+    <View className="h-9 justify-center">
       <BrandLockup
         action={
           dismissible ? (

@@ -31,6 +31,14 @@ export function BrandLockup({
   // Trailing control on the lockup's row. The rails have nothing to put there;
   // the settings topbar puts its surface label there, so the label sits ON the
   // brand row rather than floating in the bar beside it.
+  //
+  // IT IS PLACED WITH `ml-auto`, so it is only rightmost if this component's own
+  // row is as wide as the header — which makes the PARENT's flex direction part
+  // of the contract. Give it a column (`h-14 justify-center`, as both rails do;
+  // `h-9 justify-center` in the share sheet's header) and the row stretches; put
+  // it in a `flex-row` and it shrinks to its content, which parks the control
+  // mid-header hard against the wordmark. The share sheet shipped that way, and
+  // nothing but the eye can catch it: it is a valid layout of a valid tree.
   action,
   testID,
 }: {

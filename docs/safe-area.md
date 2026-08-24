@@ -550,19 +550,38 @@ is no `env()`/CSS cascade — insets come from **react-native-safe-area-context*
 and both apps' surfaces are edge-to-edge by default (iOS always was; Android
 15+ enforces it), so every screen must handle them.
 
-- **Provider: already there — don't add one.** expo-router's
+- **Provider: already there for the router tree — don't add one.** expo-router's
   NavigationContainer mounts react-navigation's `SafeAreaProviderCompat`, so
   screens can use `SafeAreaView`/`useSafeAreaInsets` with **no explicit
-  `SafeAreaProvider` in `_layout.tsx`** (see its header comment). The one tree
-  outside any provider is the share sheet (`features/share/share-kit.tsx`), and
-  it uses `SafeAreaView` anyway — **which is legal, and the distinction is worth
-  knowing: `SafeAreaView` is a native view that measures its OWN insets and
-  reads no context; only `useSafeAreaInsets` needs the provider.** It takes
-  `edges={{ bottom: 'additive' }}` and nothing else. Bottom, because the iOS
-  host view is pinned to the screen bottom and the Android panel is a bottom
-  sheet, so both land under the home indicator / nav bar — the omission was
-  visible as a Save button whose bottom edge sat inside the home indicator's own
-  swipe region. Nothing else, because neither host ever reaches the notch.
+  `SafeAreaProvider` in `_layout.tsx`** (see its header comment).
+- **EVERYTHING needs the provider, `SafeAreaView` included — and this file said
+  otherwise for as long as it took to ship the bug.** It claimed
+  "`SafeAreaView` is a native view that measures its OWN insets and reads no
+  context; only `useSafeAreaInsets` needs the provider". That was true of
+  react-native-safe-area-context v3; it has not been true since v5, which this
+  workspace is on. `RNCSafeAreaView` walks `reactSuperview` for an
+  `RNCSafeAreaProvider` (`findNearestProvider`) and, finding none, returns out
+  of `invalidateSafeAreaInsets` before it reaches `updateLocalData` — so the
+  view lays out with **zero insets, silently**. No error, no warning, no
+  failing test; the only symptom is content sitting under the hardware.
+  - The one tree outside the router's provider is the share sheet
+    (`features/share/share-kit.tsx`), and it was written against the old rule:
+    a bare `<SafeAreaView edges={{ bottom: 'additive' }}>` with no provider
+    above it, which did nothing at all. The Save button sat inside the home
+    indicator's own swipe region — the exact defect that `edges` had been added
+    to fix, re-introduced by the fix itself. The sheet now mounts its **own
+    `SafeAreaProvider`** and reads `useSafeAreaInsets().bottom` into the panel's
+    `paddingBottom` (bottom only: the iOS host view is pinned to the screen
+    bottom and the Android panel is a bottom sheet, so neither ever reaches the
+    notch).
+  - **That provider needs `initialMetrics`**, and the share sheet is the one
+    place in this repo where the usual fallback does not exist.
+    `SafeAreaProvider` renders **nothing** until its first `onInsetsChange`, and
+    the module's `initialWindowMetrics` constant is derived from
+    `RCTKeyWindow()` — i.e. `UIApplication.shared`, which an app-extension
+    process does not have ([share-sheet.md](./share-sheet.md)), so it is null
+    there. Seeding zero insets keeps the first frame painting and lets the real
+    measurement land a frame later, which can only move content to safety.
 - **Screens: `SafeAreaView` from `react-native-safe-area-context`** (never the
   deprecated RN-core one), wrapped once per file as
   `const StyledSafeAreaView = withUniwind(SafeAreaView)` so it accepts

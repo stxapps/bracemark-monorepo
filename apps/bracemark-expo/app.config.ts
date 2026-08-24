@@ -93,6 +93,20 @@ const config: ExpoConfig = {
       'expo-share-extension',
       {
         activationRules: [{ type: 'url', max: 1 }, { type: 'text' }],
+        // The band the extension mounts into, and it must NOT paint. Left
+        // undefined the plugin writes no `ShareExtensionBackgroundColor`, and
+        // ShareExtensionViewController falls back to `.systemBackground` — an
+        // opaque 520pt slab pinned to the screen bottom. The sheet's four
+        // screens are not all 520 tall (compose and saved are ~280), and the
+        // difference showed as dead white above the header. Alpha 0 makes the
+        // band clear so the sheet draws its OWN panel inside it, the way the
+        // Android half already does; what shows through is the host app under
+        // the system's dimming. `features/share/share-kit.tsx` is the other
+        // half of this and says so. (`alpha` is 0–1 in the Swift, unlike the
+        // 0–255 channels beside it.)
+        backgroundColor: { red: 0, green: 0, blue: 0, alpha: 0 },
+        // Sized for the PICKERS, which are the tallest of the four screens; the
+        // shorter ones simply leave the top of the band transparent.
         height: 520,
         excludedPackages: [
           'expo-dev-client',

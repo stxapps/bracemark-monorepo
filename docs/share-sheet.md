@@ -118,11 +118,41 @@ measured rather than typed as 520 because that number belongs to `app.config.ts`
 Android's activity is genuinely full-screen, so 0 is correct there and the offset
 stays on the iOS branch. See [soft-keyboard.md](./soft-keyboard.md), _avoidance_.
 
+**The band is not the panel, and it must not paint.** The same fixed 520pt root
+view is a LAYOUT container, not a sheet. It is sized for the tallest of the four
+screens — the two pickers — while compose and saved are barely 280pt, and left
+to itself `ShareExtensionViewController` fills it with `.systemBackground` and
+square corners. The difference showed as an opaque slab of dead white above the
+header, roughly 240pt of it, which reads as a broken sheet rather than as a
+short one. The plugin's `backgroundColor` takes an alpha (`app.config.ts`,
+0 there; note the Swift divides r/g/b by 255 but uses alpha as-is), so the band
+is clear and `share-kit.tsx` draws its own rounded, `bg-background` panel inside
+it — the shape the Android half always had. What shows through the part it does
+not fill is the host app under the system's own dimming.
+
+That transparency has a consequence worth stating: **a clear RN root view still
+takes touches.** The band's unfilled region looks like Safari and is not, so the
+sheet puts a `share-backdrop` `Pressable` under the panel on BOTH hosts —
+untinted on iOS, where the system already dims, `bg-black/40` on Android, whose
+activity is merely translucent. It is `accessible={false}`, and `share-close`
+remains the announced way out.
+
+**Neither the provider nor the insets come for free.** `SafeAreaView` has needed
+an `RNCSafeAreaProvider` ancestor since react-native-safe-area-context v5 and
+lays out with zero insets without one, so the sheet mounts its own provider —
+seeded with `initialMetrics`, because `SafeAreaProvider` renders nothing until
+its first measurement and the usual fallback, `initialWindowMetrics`, is null
+here (it is `RCTKeyWindow()` again). Full derivation in
+[safe-area.md](./safe-area.md), _safe area on native_.
+
 **The rule this leaves behind:** anything the RN core computes from
 `UIApplication`, the key window or the screen is suspect in this process, and it
 will be wrong SILENTLY rather than throwing. `RCTKeyWindow()` and
 `RCTSharedApplication()` (both nil-returning here) are the things to grep for
-when a shared component behaves differently in the sheet than in the app.
+when a shared component behaves differently in the sheet than in the app — and
+the grep pays out beyond RN core: safe-area-context's `initialWindowMetrics`
+constant is `RCTKeyWindow()`, which is why it is null in the sheet and why the
+provider above has to be seeded by hand.
 
 ### why not share the sqlite DB with the iOS extension
 
@@ -270,8 +300,13 @@ carrying one. Three rules hold them together:
   on all four screens, so nothing under it ever shifts as the sheet switches. It
   carries the **brand lockup** — this is the one surface in the product that
   floats over another app and has no other carrier — plus a close control, which
-  is not decoration: on iOS there is no backdrop to tap and no swipe to dismiss,
-  so before it the compose screen had no way out except saving.
+  is not decoration: iOS offers no swipe to dismiss, and the band's backdrop
+  covers only the part of a fixed 520pt host the panel leaves over, so this is
+  the one way out that is on every screen at every height. The lockup's row is
+  the full width of the header — it places that control with `ml-auto`, so a
+  `flex-row` PARENT collapses it to its content and strands the control against
+  the wordmark; both rails put the lockup in a column for the same reason
+  (`features/{links,settings}/sidebar.tsx`).
 - **The two disclosure rows say what they are to a screen reader**, even though
   they carry no visible label: `ShareRow` takes a `label` + `value` and announces
   "List: Reading" / "Tags: alpha, beta". Dropping a word of type from a 520pt
