@@ -113,12 +113,21 @@ function handler(event) {
   //    object, so both are live URLs for one page and one of them has to be
   //    canonical; neither app emits a <link rel="canonical"> to settle it.
   //
-  //    `/index.html` is EXEMPT and must stay that way. If a distribution ever gets
-  //    a default root object configured — a common hardening recommendation, and
-  //    something compliance scanners flag as MISSING — CloudFront may resolve `/`
-  //    to `/index.html` before this function runs, and redirecting that back to `/`
-  //    would be an infinite loop. Rule 4 below serves the root without that setting,
-  //    so leave it empty (docs/hosting.md).
+  //    `/index.html` is EXEMPT and must stay that way, which leaves the root the one
+  //    page with more than one live URL. That is a deliberate trade, and the reason
+  //    is not the exemption's own arithmetic: this rule strips the EXTENSION, so
+  //    without the exemption `/index.html` canonicalizes to `/index`, not to `/`.
+  //    It fires when a distribution gets a default root object configured — a common
+  //    hardening recommendation, and something compliance scanners flag as MISSING —
+  //    because CloudFront may then resolve `/` to `/index.html` before this function
+  //    runs, leaving the homepage answering a 301 to `/index` for REDIRECT_MAX_AGE.
+  //    Completing the rule instead (`/index.html` -> `/`, and `/index` with it, which
+  //    rule 6 otherwise serves as a second 200) would canonicalize the root properly,
+  //    but it turns that same misconfiguration into an INFINITE redirect on `/` — and
+  //    nothing here can defend against it, because a default-root-object rewrite is
+  //    indistinguishable from a viewer asking for `/index.html`. A stale duplicate is
+  //    the cheaper half of the trade; a dead apex homepage is not. Rule 4 below serves
+  //    the root without the setting, so leave it empty (docs/hosting.md).
   if (path.endsWith('.html') && path !== '/index.html') path = path.slice(0, -5) || '/';
 
   if (canonicalHost !== host || path !== uri) {

@@ -218,11 +218,22 @@ which a browser reads as scheme-relative and follows off-site.
 
 - **No default root object.** The function serves `/` itself, so the setting is
   redundant — and when it is set, CloudFront may resolve `/` to `/index.html` before
-  the function runs. That is why `/index.html` is the one path exempt from the
-  `.html` redirect: without the exemption, the two together are an infinite redirect
-  loop. Leave the field empty; the exemption is there because "distribution has no
-  default root object" is something a compliance scanner will flag as missing, and
-  someone will eventually fill it in.
+  the function runs, which is what `/index.html`'s exemption from the `.html`
+  redirect is guarding. Without the exemption the two together answer the apex
+  homepage with a 301 to `/index` (the rule strips the extension, so it does not
+  produce `/`), cached for an hour. Leave the field empty; the exemption is there
+  because "distribution has no default root object" is something a compliance
+  scanner will flag as missing, and someone will eventually fill it in.
+
+  The exemption is why the root is the one page with two live URLs — `/index.html`
+  and `/index` both answer 200 beside `/`, and no `<link rel="canonical">` settles
+  it. Canonicalizing them (`/index.html` → `/`) is a one-line change and is
+  deliberately not made: it converts that same misconfiguration from an ugly
+  redirect into an **infinite** one on `/`, taking the homepage down, and the
+  function cannot detect the case — a default-root-object rewrite arrives
+  byte-identical to a viewer requesting `/index.html`. If the duplicates ever need
+  to go, drop the two keys at the origin instead of redirecting them.
+
 - **Custom error responses: 403 _and_ 404 → `/404.html`, with response code 404.** A
   path matching no key (`/nope` → `/nope.html`) 404s at S3, or 403s if the bucket
   policy grants only `s3:GetObject` and not `s3:ListBucket` — this is what turns
