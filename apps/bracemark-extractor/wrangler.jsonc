@@ -58,13 +58,20 @@
   },
   // --- per-tier environments -------------------------------------------------
   // Bindings (`vars`, `ratelimits`) are NOT inherited from the top level — each
-  // environment declares its own. Each tier is a SEPARATE Cloudflare account
-  // (account_id differs). Worker names auto-suffix to bracemark-extractor-staging /
-  // bracemark-extractor-production. There are no secrets here: v1 is ANONYMOUS (no
-  // session, no key), so there's nothing to `wrangler secret put`.
+  // environment declares its own. Worker names auto-suffix to
+  // bracemark-extractor-staging / bracemark-extractor-production. There are no
+  // secrets here: v1 is ANONYMOUS (no session, no key), so there's nothing to
+  // `wrangler secret put`.
+  //
+  // NO `account_id` HERE, deliberately — the same call as bracemark-api's
+  // wrangler.jsonc, for the same reason: each tier IS a separate Cloudflare
+  // account, but this file is public and an account id is inventory. The target
+  // comes from CLOUDFLARE_ACCOUNT_ID in the deploy environment:
+  //   CLOUDFLARE_ACCOUNT_ID=<staging id> wrangler deploy --env staging
+  // With nothing pinning the account in the config, the API token's scope is the
+  // only thing left that stops a wrong-tier deploy — always _Specific account_.
   "env": {
-    // Local-only — used by `wrangler dev --env development`, never deployed (no
-    // account_id).
+    // Local-only — used by `wrangler dev --env development`, never deployed.
     "development": {
       "vars": {
         // Comma-separated exact origins (corsOrigins() splits on ','). The web app
@@ -102,7 +109,6 @@
       ],
     },
     "staging": {
-      "account_id": "TODO: staging Cloudflare account id",
       "vars": {
         // Web origins ONLY (see development note). The web app is the CORS caller.
         // Staging lives on its OWN registrable domain (dryrunbase.com), not a
@@ -140,7 +146,6 @@
       // docs/link-extraction.md ("Never log the URL").
     },
     "production": {
-      "account_id": "TODO: production Cloudflare account id",
       "vars": {
         "CORS_ORIGINS": "https://bracemark.com,https://app.bracemark.com",
       },

@@ -33,11 +33,20 @@
   },
   // --- per-tier environments -------------------------------------------------
   // Bindings (`vars`, `d1_databases`, `r2_buckets`) are NOT inherited from the
-  // top level — each environment must declare its own. Each tier is a SEPARATE
-  // Cloudflare account, so `account_id` differs. Worker names auto-suffix to
-  // `bracemark-api-staging` / `bracemark-api-production`. Deploy with:
-  //   wrangler deploy --env staging      (staging account's API token)
-  //   wrangler deploy --env production   (production account's API token)
+  // top level — each environment must declare its own. Worker names auto-suffix
+  // to `bracemark-api-staging` / `bracemark-api-production`.
+  //
+  // NO `account_id` HERE, deliberately. Each tier IS a separate Cloudflare
+  // account, but this file is public and an account id is inventory — it names
+  // what exists and where. The deploy target comes from the environment instead,
+  // alongside that tier's own API token:
+  //   CLOUDFLARE_ACCOUNT_ID=<staging id>    wrangler deploy --env staging
+  //   CLOUDFLARE_ACCOUNT_ID=<production id> wrangler deploy --env production
+  // That gives up a guard, so the remaining one has to hold: mint every token
+  // against _Specific account_, never _All accounts_. One user owns both
+  // accounts, so an all-accounts token plus the wrong CLOUDFLARE_ACCOUNT_ID
+  // deploys to the wrong tier without complaining — where the pinned
+  // `account_id` used to make that a config mismatch instead.
   //
   // Secrets are NOT stored here — set them per env:
   //   wrangler secret put <NAME> --env staging|production
@@ -46,8 +55,8 @@
   // shared. `.dev.vars` (gitignored) is only for local *secrets* you can't put
   // in this committed file.
   "env": {
-    // Local-only — used by `wrangler dev --env development`, never deployed (no
-    // account_id). D1/R2 are emulated by miniflare (state under .wrangler/). The
+    // Local-only — used by `wrangler dev --env development`, never deployed.
+    // D1/R2 are emulated by miniflare (state under .wrangler/). The
     // ids here are placeholders (no real Cloudflare DB is hit locally) BUT they
     // must be DISTINCT: miniflare keys each local D1 store by `database_id`, so
     // reusing one id (e.g. "local") collapses all three roles into a single
@@ -161,7 +170,6 @@
       ],
     },
     "staging": {
-      "account_id": "TODO: staging Cloudflare account id",
       "vars": {
         // Comma-separated exact origins (corsOrigins() splits on ','). No
         // wildcards — the matcher compares literally, so list each subdomain.
@@ -175,13 +183,16 @@
         // subdomain of bracemark.com — docs/hosting.md, _why staging is a
         // separate domain_. Apex = bracemark-site, app. = bracemark-web.
         "CORS_ORIGINS": "https://dryrunbase.com,https://app.dryrunbase.com",
-        // R2 presigning config (lib/r2-presign.ts). account_id + bucket are
-        // non-secret vars; the key PAIR are secrets, set separately:
+        // R2 presigning config (r2/presign.ts). Only the bucket is a var here.
+        // R2_ACCOUNT_ID is the same Cloudflare account id that
+        // CLOUDFLARE_ACCOUNT_ID carries at deploy time, so it is kept out of this
+        // public file the same way — set as a SECRET even though it is not one.
+        // The key PAIR genuinely are secrets:
+        //   wrangler secret put R2_ACCOUNT_ID --env staging
         //   wrangler secret put R2_ACCESS_KEY_ID --env staging
         //   wrangler secret put R2_SECRET_ACCESS_KEY --env staging
         // Mint the keys in the R2 dashboard (Manage R2 API Tokens) scoped to the
         // bucket below. See docs/hosting.md.
-        "R2_ACCOUNT_ID": "TODO: staging Cloudflare account id (same as account_id)",
         "R2_USER_FILES_BUCKET": "bracemark-user-files-staging",
         // Paddle Billing — staging uses the Paddle SANDBOX (separate account,
         // separate pri_… catalog from live). Secrets, set separately:
@@ -273,7 +284,6 @@
       // "routes": [{ "pattern": "api.dryrunbase.com", "custom_domain": true }]
     },
     "production": {
-      "account_id": "TODO: production Cloudflare account id",
       "vars": {
         // Comma-separated exact origins (corsOrigins() splits on ','). No
         // wildcards — the matcher compares literally, so list each subdomain.
@@ -284,13 +294,16 @@
         // native apps have no CORS. So do NOT add chrome-extension://,
         // moz-extension://, or safari-web-extension:// origins here.
         "CORS_ORIGINS": "https://bracemark.com,https://app.bracemark.com",
-        // R2 presigning config (lib/r2-presign.ts). account_id + bucket are
-        // non-secret vars; the key PAIR are secrets, set separately:
+        // R2 presigning config (r2/presign.ts). Only the bucket is a var here.
+        // R2_ACCOUNT_ID is the same Cloudflare account id that
+        // CLOUDFLARE_ACCOUNT_ID carries at deploy time, so it is kept out of this
+        // public file the same way — set as a SECRET even though it is not one.
+        // The key PAIR genuinely are secrets:
+        //   wrangler secret put R2_ACCOUNT_ID --env production
         //   wrangler secret put R2_ACCESS_KEY_ID --env production
         //   wrangler secret put R2_SECRET_ACCESS_KEY --env production
         // Mint the keys in the R2 dashboard (Manage R2 API Tokens) scoped to the
         // bucket below. See docs/hosting.md.
-        "R2_ACCOUNT_ID": "TODO: production Cloudflare account id (same as account_id)",
         "R2_USER_FILES_BUCKET": "bracemark-user-files-production",
         // Paddle Billing — LIVE Paddle. Secrets, set separately:
         //   wrangler secret put PADDLE_WEBHOOK_SECRET --env production

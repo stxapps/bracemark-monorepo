@@ -163,9 +163,27 @@ bake in:
   scripts need either a build-time hash union (regenerated every deploy) or
   `'unsafe-inline'`, with `connect-src` as the load-bearing exfiltration block.
 - `worker-src 'self'` covers the Argon2 worker and the serwist service worker.
-- `connect-src` is pinned to `'self'` plus that tier's api and extractor origins.
-  This is what makes `'unsafe-inline'` on `script-src` survivable, so every host
-  added here widens the one control that is holding — add deliberately.
+- `connect-src` is `'self'`, that tier's api and extractor origins, **and that
+  tier's R2 endpoint** — `https://<cloudflare-account-id>.r2.cloudflarestorage.com`.
+  R2 is the one that gets forgotten, because it is the one data path that never
+  touches the api: `packages/web-react/src/sync/r2.ts` PUTs and GETs the encrypted
+  blobs straight from the browser over a presigned URL
+  ([local-first-sync.md](./local-first-sync.md)). Omit it and the app still signs
+  in, still lists links, and silently loses every image, screenshot and page copy —
+  a console violation is the only symptom, and no test in either runner executes
+  under a CSP. Name the tier's **exact** account host rather than
+  `https://*.r2.cloudflarestorage.com`; the wildcard authorises every Cloudflare
+  account's R2 as a destination, and the id it hides is already visible to any
+  signed-in user in devtools.
+- `img-src` needs `blob:`. Favicons and link images are decrypted locally and
+  rendered from `URL.createObjectURL` (`use-favicon-url.ts`,
+  `use-image-file-url.ts`), never fetched from the site they came from — which is
+  also why neither `img-src` nor `connect-src` needs a bare `https:`. Extraction
+  and favicon fetches go through the extractor origin, and that property is worth
+  more than any directive here: keep it.
+- Both of the above are what makes `'unsafe-inline'` on `script-src` survivable,
+  so every host added to `connect-src` widens the one control that is holding —
+  add deliberately.
 - `frame-ancestors` is ignored in a `<meta>` tag and only works from a real
   header, which is another reason this cannot live in the app.
 - **Paddle.js** ([iap.md](./iap.md)) loads from Paddle's CDN and opens checkout as
@@ -173,11 +191,37 @@ bake in:
   `checkout-service.paddle.com`, and their `sandbox-*` peers) is one label under
   `paddle.com`, so a single `https://*.paddle.com` per directive covers sandbox
   and live alike — the Paddle allowances are **identical across tiers**, and only
-  the api/extractor `connect-src` hosts differ. Add it to `script-src`,
+  the api, extractor and R2 `connect-src` hosts differ. Add it to `script-src`,
   `frame-src`, `connect-src`, `img-src` and `style-src`. The `connect-src` entry
   is the one that widens the exfiltration block above; that is the price of
   overlay checkout. Re-check this against Paddle's own CSP guidance at
   integration time.
+
+**The other security headers are not the CSP and are not free of choices.** HSTS,
+`nosniff` and a `strict-origin-when-cross-origin` referrer policy are the
+uncontroversial three. Two are not:
+`X-Frame-Options` should be **`DENY`**, agreeing with `frame-ancestors 'none'` —
+nothing frames either app, and Paddle is the app framing _them_. And
+**`X-XSS-Protection` should be omitted**, not set: the auditor it enabled is gone
+from Chrome and Edge, was never in Firefox, and had bypasses that could leak
+cross-origin data. It is in every "security headers" preset you will be offered,
+including AWS's own managed one, which is the only reason it needs saying.
+
+Two more sit outside every such preset and are worth setting by hand.
+**`Cross-Origin-Opener-Policy: same-origin-allow-popups`** severs `window.opener`
+for anything that opens the app cross-origin, which is worth more here than on an
+ordinary site given what the app holds in memory — `same-origin-allow-popups`
+rather than plain `same-origin` so a popup the app itself opens keeps working
+(Settings → Subscription reaches Paddle's portal through `window.open`). And a
+**`Permissions-Policy`** disabling the features neither app uses — camera,
+microphone, geolocation, and the sensor family. Leave `payment` out of that list
+and settle it deliberately at IAP integration time: its default allowlist is
+already `self`, so Paddle's cross-origin checkout iframe cannot use the Payment
+Request API unless the header **delegates** it to Paddle's origin. Note the
+allowlist there takes exact origins, so the `https://*.paddle.com` wildcard that
+works throughout the CSP is invalid in it. COEP is not wanted — it buys
+cross-origin isolation for `SharedArrayBuffer`, which the Argon2 worker does not
+need.
 
 **The marketing site gets its own, much smaller policy — do not reuse the app's.**
 The apex holds no credentials, runs no crypto and has no service worker, so it
@@ -246,19 +290,21 @@ which a browser reads as scheme-relative and follows off-site.
 A deploy touches none of it: `deploy-static.sh` uploads objects and invalidates.
 
 **One function per tier — `rewrite-url-staging`, `rewrite-url-production` — each
-shared by that tier's two distributions.** Sharing within a tier is the point: web
-and site want identical rules, and one publish updates both. Splitting across tiers
-isn't a preference — each tier is its own AWS account and a function is an
-account-scoped resource, so two copies exist whether the names say so or not.
+shared by that tier's two distributions, and both published from this one file.**
+Sharing within a tier is the point: web and site want identical rules, and one
+publish updates both.
 
-The split is also the only way to test a change. A function has exactly two stages,
+Splitting across tiers is a deliberate copy rather than a constraint, and it is the
+only thing that makes a change testable. A function has exactly two stages,
 `DEVELOPMENT` and `LIVE`, and publishing promotes the code to every associated
-distribution at once — no per-distribution rollout, no canary. So: edit the file,
-push it to the staging function, test, publish, click through `dryrunbase.com` and
-`app.dryrunbase.com`, then send the identical file to production.
+distribution at once — no per-distribution rollout, no canary. One function across
+all four distributions would make every publish a production publish. So: edit the
+file, push it to the staging function, test, publish, click through
+`dryrunbase.com` and `app.dryrunbase.com`, then send the identical file to
+production.
 
 ```bash
-# once per account
+# once per tier
 aws cloudfront create-function --name rewrite-url-staging \
   --function-config 'Comment=clean URLs for the static sites,Runtime=cloudfront-js-2.0' \
   --function-code fileb://tools/cloudfront/rewrite-url.js

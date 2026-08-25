@@ -25,7 +25,7 @@
 # verifies the tier afterwards regardless of who built it (see `verify_tier`),
 # which is also what makes `--skip-build` safe.
 #
-# Requires: aws-cli v2, credentials for the tier's AWS account.
+# Requires: aws-cli v2, and this tier's AWS credentials.
 
 set -euo pipefail
 
@@ -139,7 +139,8 @@ if ! CALLER="$(aws sts get-caller-identity --query 'Account' --output text 2>/de
 fi
 note "aws account: $CALLER${AWS_PROFILE:+  (profile: $AWS_PROFILE)}"
 
-# Each tier is its own account. Failing here beats discovering it half-synced.
+# Credentials are scoped per tier, so the wrong ones may not reach this bucket at
+# all. Failing here beats discovering it half-synced.
 aws s3api head-bucket --bucket "$BUCKET" >/dev/null 2>&1 \
   || die "bucket '$BUCKET' is not reachable from account $CALLER"
 

@@ -263,14 +263,21 @@ non-Workers callers like `app.request()` in jest tests. `globalThis.process`
 
 **Per-environment values live in `wrangler.jsonc`**, as three wrangler
 environments matching the project's tiers — `development` / `staging` /
-`production` (staging & production each pin their own Cloudflare account via
-`account_id`; `development` has none — it's never deployed):
+`production`. **No environment names a Cloudflare account.** `account_id` is
+deliberately absent from both Worker configs — these files are public, and an
+account id is inventory — so the deploy target comes from `CLOUDFLARE_ACCOUNT_ID`
+in the deploy environment instead. The cost is that nothing in the config pins
+the account any more, which puts the whole burden of "deploy to the right tier"
+on the API token: mint every one against a _specific_ account, never all of
+them.
 
 - non-secret vars (e.g. `CORS_ORIGINS`) → `vars` under each `env.*`. The
   `development` env sets `CORS_ORIGINS=http://localhost:3000` so local dev needs
   no extra file.
 - secrets → `wrangler secret put <NAME> --env staging|production` (never
-  committed).
+  committed). `R2_ACCOUNT_ID` is set this way too, for the reason above rather
+  than because it is a secret — it is the same account id `CLOUDFLARE_ACCOUNT_ID`
+  carries at deploy time.
 - D1 / R2 → per-env `d1_databases` / `r2_buckets` bindings. `development`'s are
   emulated locally by miniflare (state under `.wrangler/`), so its ids are
   placeholders.
