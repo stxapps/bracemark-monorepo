@@ -68,6 +68,30 @@ execution, `npx nx reset` or scope to one project with
 
 `bracemark-extension` has no test target and no specs.
 
+### the one thing outside the two runners
+
+`tools/cloudfront/rewrite-url.js` is the CloudFront function that gives both static
+sites their clean URLs ([hosting.md](./hosting.md#clean-urls--the-cloudfront-function)).
+It is the only thing in `tools/` that nothing in this repo executes — the eslint rule
+runs under `npm run lint`, `check-private.mjs` under the pre-commit hook,
+`deploy-static.sh` under a deploy script, but that file is an artifact you upload to
+AWS. So it gets `rewrite-url.test.mjs` beside it, run by **node's own test runner**:
+
+```bash
+npm run test:cloudfront
+```
+
+Not an Nx project, so **not part of `npm run test`** — a package.json and a jest config
+for one dependency-free file would put a thing in the project graph that is not a
+package. The tradeoff is that it only runs when someone runs it, which is the same
+deal as every other test here.
+
+Node is not the runtime it will execute in, and this is the rare case where that gap
+is not fixable from inside the repo: `cloudfront-js-2.0` is ES 5.1 plus a subset of
+ES 6-12, and only `aws cloudfront test-function` runs the real thing. The node suite
+pins the RULES — the redirect table, the query-string handling, the 10 KB size
+ceiling — and says so at the top of the file, including what it cannot catch.
+
 ### the portability suites
 
 The runner table above splits by the runtime code executes in, which leaves one

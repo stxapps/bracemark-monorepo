@@ -186,6 +186,101 @@ checkout happens in the app. A tight `default-src 'self'` plus its tier's api
 origin in `connect-src` is the whole policy. Copying bracemark-web's would
 silently widen the apex to every host the app needs, for nothing.
 
+### clean URLs — the CloudFront function
+
+`tools/cloudfront/rewrite-url.js`, associated with the **viewer request** event on
+both of a tier's distributions.
+
+The buckets are private and reached through an Origin Access Control, so the origin
+is the S3 **API**, not an S3 website endpoint: no index document, no directory
+semantics, no clean URLs. `next build` writes the page for `/support` to the key
+`support.html`, which means that without a function the only URL that works is
+`/support.html`. Everything either app's URL space assumes is this one file:
+
+| request                                   | what happens                                                 |
+| ----------------------------------------- | ------------------------------------------------------------ |
+| `www.<domain>/x`                          | 301 to the apex (only the site has a `www.` alias)           |
+| `/support/`, `/support///`                | 301, trailing slashes stripped                               |
+| `/support.html`                           | 301 to `/support` — `/index.html` is exempt, see below       |
+| `/`                                       | rewritten to `/index.html`                                   |
+| `/favicon.ico`, `/_next/**`, `/links.txt` | passed through — a dot in the last segment means a real file |
+| `/settings/misc`                          | rewritten to the key `settings/misc.html`                    |
+
+The redirect rules are evaluated together and emit **one** 301, so
+`https://www.bracemark.com/support/` is a single hop, and every redirect carries the
+query string through verbatim and lands on an absolute `https://` URL. Both of those
+matter: `/links?list=inbox&q=…` is bracemark-web's whole addressing scheme
+([search.md](./search.md)), and a redirect built from the request path alone is an
+open redirect — a request for `//evil.com/` would answer `Location: //evil.com`,
+which a browser reads as scheme-relative and follows off-site.
+
+**What the distribution has to be configured with, for the above to hold:**
+
+- **No default root object.** The function serves `/` itself, so the setting is
+  redundant — and when it is set, CloudFront may resolve `/` to `/index.html` before
+  the function runs. That is why `/index.html` is the one path exempt from the
+  `.html` redirect: without the exemption, the two together are an infinite redirect
+  loop. Leave the field empty; the exemption is there because "distribution has no
+  default root object" is something a compliance scanner will flag as missing, and
+  someone will eventually fill it in.
+- **Custom error responses: 403 _and_ 404 → `/404.html`, with response code 404.** A
+  path matching no key (`/nope` → `/nope.html`) 404s at S3, or 403s if the bucket
+  policy grants only `s3:GetObject` and not `s3:ListBucket` — this is what turns
+  either into each app's own 404 page (`not-found.tsx`). CloudFront fetches that page
+  itself, so it does not come back through the function.
+- The **CSP and the other security headers** belong to a response headers policy, not
+  to this function — _[security headers](#security-headers--where-the-csp-has-to-live)_
+  above.
+
+A deploy touches none of it: `deploy-static.sh` uploads objects and invalidates.
+
+**One function per tier — `rewrite-url-staging`, `rewrite-url-production` — each
+shared by that tier's two distributions.** Sharing within a tier is the point: web
+and site want identical rules, and one publish updates both. Splitting across tiers
+isn't a preference — each tier is its own AWS account and a function is an
+account-scoped resource, so two copies exist whether the names say so or not.
+
+The split is also the only way to test a change. A function has exactly two stages,
+`DEVELOPMENT` and `LIVE`, and publishing promotes the code to every associated
+distribution at once — no per-distribution rollout, no canary. So: edit the file,
+push it to the staging function, test, publish, click through `dryrunbase.com` and
+`app.dryrunbase.com`, then send the identical file to production.
+
+```bash
+# once per account
+aws cloudfront create-function --name rewrite-url-staging \
+  --function-config 'Comment=clean URLs for the static sites,Runtime=cloudfront-js-2.0' \
+  --function-code fileb://tools/cloudfront/rewrite-url.js
+
+# every change after that: update -> test -> publish (each --if-match takes the
+# ETag the previous call returned)
+aws cloudfront update-function  --name rewrite-url-staging --if-match <ETag> \
+  --function-config 'Comment=clean URLs for the static sites,Runtime=cloudfront-js-2.0' \
+  --function-code fileb://tools/cloudfront/rewrite-url.js
+aws cloudfront test-function    --name rewrite-url-staging --if-match <ETag> \
+  --stage DEVELOPMENT --event-object fileb://event.json
+aws cloudfront publish-function --name rewrite-url-staging --if-match <ETag>
+```
+
+`test-function` runs the real runtime against an event object you write by hand (the
+shape is in [AWS's event-structure reference](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/functions-event-structure.html))
+and reports compute utilization alongside the result. It is the only faithful test
+there is: `nx start` serves the export through `serve`, whose own `index.html`
+resolution exercises none of these rules
+([below](#previewing-a-production-build-locally--nx-start)).
+
+`tools/cloudfront/rewrite-url.test.mjs` pins the table above — `npm run test:cloudfront`,
+node's own runner, 200ms, deliberately outside `npm run test` (docs/testing.md, _the one
+thing outside the two runners_). It cannot judge runtime compatibility or compute
+utilization, so it comes before `test-function` rather than instead of it. What it is
+really there for is the two rules whose deletion is otherwise silent: the `/index.html`
+exemption and the absolute `Location`.
+
+**The file must stay under 10 KB, comments included** — a CloudFront quota that
+can't be raised. It sits at roughly 7.5 KB, so a long new comment is a real budget
+question rather than a theoretical one; the test asserts the ceiling, so it fails in
+node rather than at `create-function`.
+
 ### previewing a production build locally — `nx start`
 
 Both web apps are `output: 'export'`, and **`next start` refuses to run against a
@@ -222,18 +317,22 @@ tells you the tier: `bracemark-<resource>-<tier>`. The Worker auto-suffixes its
 `name` (`bracemark-api` → `bracemark-api-staging`), so the env name _is_ the
 tier, with no separate `-prod` shorthand.
 
-| resource          | staging                                                                                              | production                                                                                                    |
-| ----------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| S3 bucket (web)   | `bracemark-web-staging`                                                                              | `bracemark-web-production`                                                                                    |
-| S3 bucket (site)  | `bracemark-site-staging`                                                                             | `bracemark-site-production`                                                                                   |
-| Worker name / env | `bracemark-api-staging` / `staging`                                                                  | `bracemark-api-production` / `production`                                                                     |
-| Extractor Worker  | `bracemark-extractor-staging` / `staging`                                                            | `bracemark-extractor-production` / `production`                                                               |
-| D1 databases      | `bracemark-directory-db-staging`, `bracemark-accounts-db-1-staging`, `bracemark-sessions-db-staging` | `bracemark-directory-db-production`, `bracemark-accounts-db-1-production`, `bracemark-sessions-db-production` |
-| R2 bucket         | `bracemark-user-files-staging`                                                                       | `bracemark-user-files-production`                                                                             |
+| resource            | staging                                                                                              | production                                                                                                    |
+| ------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| S3 bucket (web)     | `bracemark-web-staging`                                                                              | `bracemark-web-production`                                                                                    |
+| S3 bucket (site)    | `bracemark-site-staging`                                                                             | `bracemark-site-production`                                                                                   |
+| Worker name / env   | `bracemark-api-staging` / `staging`                                                                  | `bracemark-api-production` / `production`                                                                     |
+| Extractor Worker    | `bracemark-extractor-staging` / `staging`                                                            | `bracemark-extractor-production` / `production`                                                               |
+| CloudFront function | `rewrite-url-staging`                                                                                | `rewrite-url-production`                                                                                      |
+| D1 databases        | `bracemark-directory-db-staging`, `bracemark-accounts-db-1-staging`, `bracemark-sessions-db-staging` | `bracemark-directory-db-production`, `bracemark-accounts-db-1-production`, `bracemark-sessions-db-production` |
+| R2 bucket           | `bracemark-user-files-staging`                                                                       | `bracemark-user-files-production`                                                                             |
 
 **The domains are the deliberate exception**: staging's hosts are
 `*.dryrunbase.com`, carrying neither the brand nor the tier suffix, for the
-reason given [above](#why-staging-is-a-separate-registrable-domain). The `*-dev`
+reason given [above](#why-staging-is-a-separate-registrable-domain). The
+CloudFront function is the smaller one: it is named for what it does rather than
+for the product, because its code says nothing about Bracemark and a second static
+site in the same account would use it unchanged. The `*-dev`
 peers (`bracemark-directory-db-dev`, `bracemark-user-files-dev`, and the rest)
 are the local `wrangler dev` bindings and are never deployed.
 
@@ -292,9 +391,9 @@ private regardless, reached only through CloudFront via an Origin Access
 Control. Public read is a distribution concern here, not an object one.
 
 The CSP and the clean-URL rewrites are **not** the script's business — they live
-in a response headers policy and a CloudFront function, per _security headers_
-[above](#security-headers--where-the-csp-has-to-live). A deploy never touches
-them.
+in a response headers policy and in `tools/cloudfront/rewrite-url.js`, per _security
+headers_ [above](#security-headers--where-the-csp-has-to-live) and _[clean
+URLs](#clean-urls--the-cloudfront-function)_. A deploy never touches them.
 
 ### cors & frontend↔backend wiring
 
