@@ -252,13 +252,37 @@ params, so a link view **deep-links identically across web and native**. Only
 the platform seams differ, and each is documented in those files' header
 comments — not re-derived here:
 
-- **The "URL" is expo-router route params** (`useLocalSearchParams`), not
-  `URLSearchParams`. Repeated keys (`?tag=a&tag=b`) arrive as a `string[]`
-  value, so an `all()` helper stands in for `getAll`; the params object is fresh
-  each render, so the `query` memo keys on the serialized bag (`JSON.stringify`)
-  and parses it back inside for an honest dep list, where web gets object
-  identity from `useSearchParams`. Navigation is `router.push`; there is **no
-  Suspense boundary** (`useLocalSearchParams` has no prerender constraint).
+- **The "URL" is expo-router route params**, not `URLSearchParams`. Repeated keys
+  (`?tag=a&tag=b`) arrive as a `string[]` value, so an `all()` helper stands in
+  for `getAll`; the params object is fresh each render, so the `query` memo keys
+  on the serialized bag (`JSON.stringify`) and parses it back inside for an
+  honest dep list, where web gets object identity from `useSearchParams`.
+  Navigation is `router.push`; there is **no Suspense boundary** (route params
+  have no prerender constraint).
+- **Which params hook is a correctness question, not a style one, and it is
+  `useGlobalSearchParams`.** The provider is rendered by the links _layout_ —
+  it has to be, the drawer content and the screen need the same context — so it
+  stands on the `links` route of the `(app)` stack, one level above the `index`
+  route the query params land on. `useLocalSearchParams` resolves against the
+  route that renders the caller, so there it returns the layout's own params,
+  which are empty and STAY empty: a drawer pick or a committed search is a
+  `push('/links?…')`, and expo-router aims it at the deepest navigator where the
+  href and the current state diverge — the Drawer, where a push demotes to a
+  navigate (the same demotion the settings sections rely on, above) that rewrites
+  only that navigator's route. So the page parsed an empty bag on every
+  navigation, which is the no-filter-keys default: every list, every tag and
+  every search resolved to My List, with nothing for the read edge to re-run. Both
+  hooks return a plausible bag and nothing lints the difference — the symptom is
+  a screen that quietly never changes. The global hook reads the focused route
+  chain off the navigation state instead, which is exactly those params. It is
+  **held while another screen is focused** (gated on the focused _pathname_, not
+  `useIsFocused`, whose event-fed state lags the params by the one render that
+  would poison the held bag): "global" follows whatever is on top, and this
+  provider stays mounted under Settings and under the modal editors, where
+  swinging onto their params would parse the same My List default and throw away
+  the view the user is coming back to — the round trip `closeSettings` exists to
+  preserve. `features/links/page-provider.spec.tsx` pins all of it through a real
+  routed tree, the only layer that can see any of it.
 - **The basic box is a toggle-summoned full-width row at every width**, where web
   falls back to a persistent topbar box from `md` up — a phone topbar has no room
   for one, and a phone has no `md`. The mechanism is otherwise the same on both,

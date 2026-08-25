@@ -18,6 +18,9 @@ module.exports = {
   moduleNameMapper: {
     '[.]svg$': '@nx/expo/plugins/jest/svg-mock',
     '[.]css$': '<rootDir>/src/testing/css-mock.js',
+    // expo-router/testing-library (renderRouter) deep-imports a jest-30 path
+    // that no longer exists — see the mock for what it stands in for.
+    '^expect/build/matchers$': '<rootDir>/src/testing/expect-matchers-mock.js',
   },
   coverageDirectory: '../../coverage/apps/bracemark-expo',
 };

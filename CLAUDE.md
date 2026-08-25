@@ -196,6 +196,20 @@ test. Check the linked doc before acting on any of these.
   NO test and can't have one: with `location.replace` in place the stray dispatch
   is absorbed, so deleting the phase breaks nothing observable — until the next
   auto-navigating effect lands. → `data-lifecycle.md`, _the sign-out teardown_.
+- **`useLocalSearchParams` in an expo `_layout` reads the LAYOUT's route, not the
+  screen's.** Both param hooks return a plausible bag, so the failure is silent —
+  no lint error, no type error, no failing test, just a screen whose query never
+  changes. `features/links/page-provider.tsx` has to live in the links layout (the
+  drawer content and the screen need ONE context), which put it a level above the
+  `index` route the `?list=`/`?tag=`/`?text=` params land on: a drawer pick is a
+  `push` demoted to a navigate against the DRAWER, rewriting only that navigator's
+  route and never the layout's, so every view parsed the empty bag — My List,
+  forever. Use `useGlobalSearchParams` in a layout, and HOLD the last bag while
+  another route is focused, gating on the focused **pathname** (`useIsFocused`'s
+  event-fed state lags the params by exactly the render that would poison the
+  hold) — otherwise a pushed Settings or modal editor swings the page onto ITS
+  params and discards the view underneath. The local hook stays correct in a leaf
+  screen and for a layout's own dynamic segment. → `search.md`, _on native_.
 - **Greenfield — no migrations.** There is no production data. Edit persisted
   schemas in place (Dexie `version(1)`, the expo-sqlite DDL); don't add a
   migration step.

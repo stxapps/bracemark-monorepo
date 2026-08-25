@@ -5,19 +5,24 @@
 // URL-override-??-setting resolution). Divergences here:
 //
 //  - The "URL" is expo-router's route params (`/links?list=…`), read with
-//    useLocalSearchParams — same params, same grammar, so a link view deep-links
-//    identically across web and native. Repeated keys (`?tag=a&tag=b`) arrive as
-//    a string[] value instead of URLSearchParams.getAll, hence `all()` below.
-//  - Navigation is expo-router's router.push (the back gesture steps through
-//    visited views, like web's history).
-//  - No Suspense boundary: useLocalSearchParams has no prerender constraint.
+//    useGlobalSearchParams, held while another screen is on top (see
+//    `useViewParams` below for why it can't be the local hook, and what the
+//    hold protects) — same params, same grammar, so a link view
+//    deep-links identically across web and native. Repeated keys
+//    (`?tag=a&tag=b`) arrive as a string[] value instead of
+//    URLSearchParams.getAll, hence `all()` below.
+//  - Navigation is expo-router's router.push — which, aimed at the links
+//    Drawer, is a navigate that REWRITES that navigator's one route (see
+//    `useViewParams`). So unlike web's history, the back gesture does not step
+//    back through the views visited on this page; it leaves the page.
+//  - No Suspense boundary: route params have no prerender constraint.
 //
 // Lives in `src/features/links/` (not under `src/app/`) per the thin-routes
 // convention — every file under the app root becomes a route.
 
-import { createContext, useCallback, useContext, useEffect, useMemo } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useIsFocused } from '@react-navigation/native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useGlobalSearchParams, usePathname, useRouter } from 'expo-router';
 
 import { useLists, useSettings, useTags } from '@stxapps/expo-react';
 import {
@@ -52,6 +57,12 @@ function all(value: string | string[] | undefined): string[] {
 function first(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
+
+// This page's route, with no query on it — what every href below is built from,
+// and what useViewParams compares the focused pathname against. `usePathname`
+// strips the `(app)` group and pops the trailing `index`, so the `links`
+// drawer's only screen reports exactly this.
+const LINKS_PATHNAME = '/links';
 
 // The canonical URL for a selection — web's hrefForSelection, verbatim (the
 // default My List is the bare `/links`).
@@ -113,6 +124,75 @@ const FILTER_KEYS = [
   'title-any',
   'title-none',
 ];
+
+// Every param this screen reads — the filter keys plus the two sort overrides.
+// The bag is narrowed to these before it's serialized (useViewParams), so a key
+// that isn't part of the grammar can't churn `query`'s identity: the global read
+// below hands back whatever the focused route carries, including expo-router's
+// own `__internal__…` params, and `query` is a live-read dep (use-links) — an
+// identity change there re-runs the whole paginated read.
+const READ_KEYS = [...FILTER_KEYS, 'sort', 'order'];
+
+// The params this view is filtered by, as a stable serialized bag. Two rules,
+// both load-bearing:
+//
+// GLOBAL, NOT LOCAL. This provider is rendered by the links _LAYOUT_ (the
+// drawer content needs the same context the screen reads), so it stands on the
+// `links` route of the `(app)` stack — one level ABOVE the `index` route the
+// query params actually land on. useLocalSearchParams resolves against the
+// route that renders the calling component, so here it returns the LAYOUT's
+// params, which are `{}` and STAY `{}`: a sidebar pick or a committed search is
+// `router.push('/links?…')`, and expo-router targets the deepest navigator where
+// the href and the current state diverge — the Drawer — where a push demotes to
+// a navigate (the same demotion settings/close.ts documents) that rewrites only
+// the drawer's `index` route. Nothing ever writes the layout's own route, so the
+// page parsed an empty bag forever: no FILTER_KEYS present is the DEFAULT_LIST_ID
+// branch, i.e. every view — every list, every tag, every search — resolved to My
+// List, with nothing for the read edge to re-run. useGlobalSearchParams reads
+// the focused route chain off the navigation state instead (params merged down
+// the chain and decoded, expo-router's nested `screen`/`params` stripped), which
+// is exactly the `index` params. NOTHING LINTS THIS — both hooks return a
+// plausible bag, and the failure is a screen that quietly never changes.
+//
+// HELD WHILE ANOTHER SCREEN IS ON TOP. "Global" means it follows whatever route
+// is focused, including ones that are not this page: pushing `/settings/general`
+// or the add-link modal swings this hook onto THAT route's params, where the
+// no-filter-keys default parses out as My List — resetting the list, the drawer
+// highlight, the FlashList offset and bulk-edit mode under a screen the user is
+// still looking past (the editors present modally) and expects to come back to.
+// That is the round trip settings/close.ts's `dismiss()` exists to preserve. So
+// a bag is only TAKEN while the focused route is this page, and the last one
+// taken holds until it is again.
+//
+// The gate is the focused PATHNAME, deliberately not `useIsFocused()`: that
+// hook's value is state fed by React Navigation's focus/blur events, so it lags
+// the params by a render, and the one render where the new route's params are
+// already visible and `isFocused` is still true is the render that poisons the
+// held bag — the reset happens anyway, one frame later. Pathname and params come
+// out of the SAME route-info snapshot, so they cannot disagree by construction.
+function useViewParams(): SearchParams {
+  const focused: SearchParams = useGlobalSearchParams();
+  const onThisPage = usePathname() === LINKS_PATHNAME;
+
+  const focusedKey = useMemo(() => {
+    const bag: SearchParams = {};
+    for (const key of READ_KEYS) {
+      if (focused[key] !== undefined) bag[key] = focused[key];
+    }
+    return JSON.stringify(bag); // READ_KEYS order → deterministic per bag
+  }, [focused]);
+
+  // State adjusted DURING render, so the parse below sees the current bag on the
+  // very render the page comes back rather than a frame later (use-links's
+  // rationale).
+  const [paramsKey, setParamsKey] = useState(focusedKey);
+  if (onThisPage && focusedKey !== paramsKey) setParamsKey(focusedKey);
+
+  // Parsed back from the string, so the memo's dep list is honest — the params
+  // object itself is fresh whenever route info is recomputed, where web gets
+  // object identity from useSearchParams.
+  return useMemo(() => JSON.parse(paramsKey) as SearchParams, [paramsKey]);
+}
 
 // Words are matched case-insensitively and trimmed; lowercase them here so the
 // data layer can compare directly.
@@ -243,9 +323,10 @@ const LinksPageContext = createContext<LinksPageContextValue | null>(null);
 
 export function LinksPageProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  // In the links layout this returns the focused links route's params — the
-  // sidebar (drawer content) and the screen read the same bag.
-  const params: SearchParams = useLocalSearchParams();
+  // The focused links route's params — the sidebar (drawer content) and the
+  // screen read the same bag. Identity-stable per view; see useViewParams for
+  // the two rules that make it so, and for why it is not the local hook.
+  const params = useViewParams();
 
   // Sort: the hand-typed `?sort`/`?order` win, else the synced setting (coerced
   // from its tolerant `string` shape) — resolved here, the one place both are
@@ -254,15 +335,12 @@ export function LinksPageProvider({ children }: { children: React.ReactNode }) {
   const sortOn = sortOnParam(params) ?? coerceLinkSortOn(settingSortOn);
   const sortOrder = sortOrderParam(params) ?? coerceLinkSortOrder(settingSortOrder);
 
-  // Identity-stable per URL + resolved sort (it's a live-read dep in useLinks).
-  // expo-router returns a NEW params object per render, so the memo keys on the
-  // serialized bag — and parses it back inside, so the dep list is honest —
-  // rather than the object identity web gets from useSearchParams.
-  const paramsKey = JSON.stringify(params);
-  const query = useMemo<LinkQuery>(() => {
-    const bag = JSON.parse(paramsKey) as SearchParams;
-    return parseLinkQuery(bag, sortOn, sortOrder);
-  }, [paramsKey, sortOn, sortOrder]);
+  // Identity-stable per view + resolved sort (it's a live-read dep in useLinks:
+  // a new reference re-runs the paginated read, an unchanged one holds it).
+  const query = useMemo<LinkQuery>(
+    () => parseLinkQuery(params, sortOn, sortOrder),
+    [params, sortOn, sortOrder],
+  );
 
   // Selection is a derived PROJECTION of the query — never a separate read of
   // the URL — so it can never disagree with what the main pane shows.
