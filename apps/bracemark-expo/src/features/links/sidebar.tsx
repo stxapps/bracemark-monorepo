@@ -19,6 +19,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import {
   Archive,
+  ChevronDown,
   ChevronRight,
   Folder,
   Hash,
@@ -200,9 +201,20 @@ function NavItem({
           aria-label={expanded ? 'Collapse' : 'Expand'}
           className="size-8 shrink-0 items-center justify-center rounded-md"
         >
+          {/* The open state SWAPS THE GLYPH; it does NOT rotate one, which is
+              what the web twin does (`rotate-90` on a ChevronRight). Uniwind
+              can't carry that class: tailwind v4 compiles `rotate-90` to the
+              standalone `rotate: 90deg` property, which uniwind maps to the
+              nested style `{ rotate: { rotateZ: '90deg' } }` and its runtime
+              then hands to RN as `transform: [{ rotate: { rotateZ: ... } }]` —
+              a transform entry whose value is an object, which RN drops. No
+              lint error, no type error, just a chevron that never turns
+              (docs/theme.md, _extending_). lucide's ChevronDown IS
+              ChevronRight at 90°, so the result is identical, and settings'
+              lists-section.tsx already collapses its list tree this way. */}
           <Icon
-            as={ChevronRight}
-            className={cn('size-4 text-muted-foreground', expanded && 'rotate-90')}
+            as={expanded ? ChevronDown : ChevronRight}
+            className="size-4 text-muted-foreground"
           />
         </Pressable>
       ) : showSlot ? (
@@ -330,9 +342,11 @@ function Section({
         aria-expanded={!isCollapsed}
         className="w-full flex-row items-center gap-1 rounded-md px-2 pt-4 pb-1"
       >
+        {/* Glyph swap, not a rotation — see the NavItem chevron above for why a
+            `rotate-90` class is silently inert here. */}
         <Icon
-          as={ChevronRight}
-          className={cn('size-3.5 text-muted-foreground/70', !isCollapsed && 'rotate-90')}
+          as={isCollapsed ? ChevronRight : ChevronDown}
+          className="size-3.5 text-muted-foreground/70"
         />
         <Text className="text-xs font-semibold tracking-wide text-muted-foreground/70 uppercase">
           {label}

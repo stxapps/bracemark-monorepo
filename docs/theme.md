@@ -520,6 +520,19 @@ muted colour exactly when they land on the wash.
   Don't take comfort from an existing usage without checking how it's paired —
   `aspect-square` was already in `ui/radio-group.tsx`, but alongside `size-4`, so
   a broken `aspectRatio` there would have been invisible.
+- **`rotate-*` is one of the classes that doesn't map** — settled by that probe,
+  so don't re-derive it. Tailwind v4 compiles `rotate-90` to the standalone
+  `rotate: 90deg` property (not `transform: rotate(90deg)`), which uniwind turns
+  into the nested style `{ rotate: { rotateZ: '90deg' } }`; its runtime
+  (`core/native/parsers/transforms.ts`) moves that value whole into RN's
+  `transform` array, so RN gets an entry whose value is an object and drops it.
+  A rotated glyph on this side is therefore a DIFFERENT GLYPH: a disclosure
+  chevron is `expanded ? ChevronDown : ChevronRight` (lucide's ChevronDown is
+  ChevronRight at 90°), as `features/links/sidebar.tsx` and
+  `features/settings/lists-section.tsx` both spell it, against a web twin that
+  says `rotate-90`. For an angle with no glyph — the dog-eared card's 45° corner
+  — write the RN `transform` array inline in `style`
+  (`features/share/share-specimen.tsx`).
 - **A quick toggle** (e.g. a menu button, not the settings picker) — write through
   `useSettingMutations` to the active source; don't reintroduce a writer on the
   provider. Read the preference from `useSettings()`, or the rendered light/dark
