@@ -660,7 +660,11 @@ export function SearchBar() {
   };
 
   return (
-    <View className="flex-row items-center gap-1 border-b border-border px-2 pb-2">
+    // `py-2`, not `pb-2`: the row is summoned BELOW the topbar's own border, so
+    // without the top half the box sits flush against that line while floating
+    // clear of this row's — matching web's `py-2` on the same summoned row
+    // (`(app)/links/_panes/topbar.tsx`).
+    <View className="flex-row items-center gap-1 border-b border-border px-2 py-2">
       <View className="relative min-w-0 flex-1">
         <View pointerEvents="none" className="absolute inset-y-0 left-2.5 z-10 justify-center">
           <Icon as={Search} className="size-4 text-muted-foreground" />
