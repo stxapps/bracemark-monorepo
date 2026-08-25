@@ -570,10 +570,15 @@ and both apps' surfaces are edge-to-edge by default (iOS always was; Android
     above it, which did nothing at all. The Save button sat inside the home
     indicator's own swipe region — the exact defect that `edges` had been added
     to fix, re-introduced by the fix itself. The sheet now mounts its **own
-    `SafeAreaProvider`** and reads `useSafeAreaInsets().bottom` into the panel's
-    `paddingBottom` (bottom only: the iOS host view is pinned to the screen
-    bottom and the Android panel is a bottom sheet, so neither ever reaches the
-    notch).
+    `SafeAreaProvider`** and reads `useSafeAreaInsets()` into the panel's
+    `paddingBottom` **and** its `marginTop`. This said "bottom only — neither
+    host ever reaches the notch" and that was wrong: the panel is bottom-anchored
+    but it is also `shrink` inside a `flex-1 justify-end` frame, so the frame is
+    a ceiling rather than a gap, and a picker's ~484pt of content against ~407pt
+    of frame (short phone, keyboard up) fills it — rounded top at `y=0`, header
+    under the status bar. The margin is `insets.top + SHEET_GAP`, which bounds
+    the panel by subtraction and leaves the same strip of backdrop on both hosts
+    ([share-sheet.md](./share-sheet.md)).
   - **That provider needs `initialMetrics`**, and the share sheet is the one
     place in this repo where the usual fallback does not exist.
     `SafeAreaProvider` renders **nothing** until its first `onInsetsChange`, and
@@ -582,6 +587,22 @@ and both apps' surfaces are edge-to-edge by default (iOS always was; Android
     process does not have ([share-sheet.md](./share-sheet.md)), so it is null
     there. Seeding zero insets keeps the first frame painting and lets the real
     measurement land a frame later, which can only move content to safety.
+  - **The keyboard cancels that inset while it is up**, on both hosts. A
+    keyboard's frame runs to the **bottom** of the screen — it _contains_ the
+    home indicator / gesture bar rather than stopping above it — and the panel
+    is parked on that frame's top edge (the iOS lift, Android's
+    `KeyboardAvoidingView`; [soft-keyboard.md](./soft-keyboard.md)). Adding
+    `insets.bottom` on top of that is not clearance but ~34pt of empty
+    background between the Save button and the keyboard, at the one moment the
+    sheet has the least height to spend — and it comes out of the pickers'
+    scroller, since everything else in the panel is fixed height, so past that
+    scroller's floor the panel stops shrinking and overflows. The panel
+    therefore pads by `SHEET_PAD + Math.max(insets.bottom - cover, 0)`, where
+    `cover` is `useShareKeyboard().cover`: the same measurement on both hosts,
+    from the native module on iOS and RN's own keyboard events on Android
+    (`features/share/share-keyboard.ts`). Nothing catches getting this wrong —
+    it reads as dead space, not as a broken layout, until the screen is small
+    enough that it is both.
 - **Screens: `SafeAreaView` from `react-native-safe-area-context`** (never the
   deprecated RN-core one), wrapped once per file as
   `const StyledSafeAreaView = withUniwind(SafeAreaView)` so it accepts

@@ -26,9 +26,19 @@
 // straight off the notification (it is posted in screen coordinates and needs no
 // window) and emits the keyboard's top edge. Everything platform-shaped about
 // that lives HERE, so share-kit.tsx stays one tree for both hosts.
+//
+// ANDROID IS IN THIS FILE TOO, and only for the second of the two numbers
+// below. Its share activity rides the app's own process, where RN's keyboard
+// events are real and share-kit.tsx's KeyboardAvoidingView already does the
+// lifting — so `lift` is zero there, as it always was. What BOTH hosts need is
+// `cover`: how much of the screen's bottom edge the keyboard hides, which is
+// what cancels the bottom safe-area inset while it is up (the hook's doc
+// comment below; docs/safe-area.md). Reading that from RN on Android keeps the
+// platform seam in this file rather than putting a `Platform.OS` back into
+// share-kit.tsx.
 
 import { useEffect, useState } from 'react';
-import { Dimensions, LayoutAnimation, Platform } from 'react-native';
+import { Dimensions, Keyboard, LayoutAnimation, Platform } from 'react-native';
 import { requireOptionalNativeModule } from 'expo-modules-core';
 
 // The native payload. `screenY` is the keyboard's top edge in screen points —
@@ -57,8 +67,25 @@ const shareKeyboard =
     : null;
 
 /**
- * The points of the sheet the keyboard currently covers — what the iOS frame
- * pads its bottom with, and 0 on every other host.
+ * What the share frame needs to know about the keyboard, as TWO numbers,
+ * because the two hosts need different things from it:
+ *
+ *   - `lift` is LAYOUT — the points the iOS frame pads its own bottom with, so
+ *     the panel comes to rest on the keyboard's top edge. It is ZERO ON
+ *     ANDROID, where share-kit.tsx's KeyboardAvoidingView applies the same
+ *     quantity itself; pad by this there as well and the panel lifts twice.
+ *   - `cover` is a MEASUREMENT, on BOTH hosts — how much of the screen's bottom
+ *     edge the keyboard hides. It exists to cancel the bottom safe-area inset,
+ *     because a keyboard's frame runs to the BOTTOM of the screen: it CONTAINS
+ *     the home indicator / gesture bar rather than stopping above it, so once
+ *     the panel is parked on that frame, padding for the inset as well is dead
+ *     space (share-kit.tsx's panel; docs/safe-area.md). NEVER pad by it.
+ *
+ * On iOS the two are the same number by construction. On Android `cover` comes
+ * from RN's own keyboard events — the same payload KAV already pads by, so if
+ * this reading were wrong the Android lift would be wrong with it — and it is
+ * only ever compared against a ~24-48pt navigation-bar inset, never used as a
+ * length, so the precision question does not arise there.
  *
  * `panelBottom` is where the sheet's own bottom edge sits on the screen. The
  * extension's RN root is placed by expo-share-extension at
@@ -67,30 +94,50 @@ const shareKeyboard =
  * keeps the arithmetic honest if that ever stops being true, rather than
  * silently lifting by a keyboard height that no longer applies.
  */
-export function useShareKeyboardLift(panelBottom = Dimensions.get('screen').height): number {
-  const [keyboardTop, setKeyboardTop] = useState<number | null>(null);
+export function useShareKeyboard(panelBottom = Dimensions.get('screen').height): {
+  lift: number;
+  cover: number;
+} {
+  const [cover, setCover] = useState(0);
 
   useEffect(() => {
-    if (!shareKeyboard) return;
+    if (shareKeyboard) {
+      const subscription = shareKeyboard.addListener('keyboardFrameChange', (event) => {
+        // On the system's own curve and duration — the same thing RN's
+        // KeyboardAvoidingView does with the same numbers, so the panel travels
+        // with the keyboard instead of snapping a frame ahead of it. Nothing here
+        // touches Reanimated: LayoutAnimation is a native view-level animation,
+        // which is what the share bundle is allowed to use (share-root.tsx).
+        if (event.durationMs > 0) {
+          LayoutAnimation.configureNext({
+            duration: event.durationMs,
+            update: { duration: event.durationMs, type: 'keyboard' },
+          });
+        }
+        setCover(Math.max(panelBottom - event.screenY, 0));
+      });
 
-    const subscription = shareKeyboard.addListener('keyboardFrameChange', (event) => {
-      // On the system's own curve and duration — the same thing RN's
-      // KeyboardAvoidingView does with the same numbers, so the panel travels
-      // with the keyboard instead of snapping a frame ahead of it. Nothing here
-      // touches Reanimated: LayoutAnimation is a native view-level animation,
-      // which is what the share bundle is allowed to use (share-root.tsx).
-      if (event.durationMs > 0) {
-        LayoutAnimation.configureNext({
-          duration: event.durationMs,
-          update: { duration: event.durationMs, type: 'keyboard' },
-        });
-      }
-      setKeyboardTop(event.screenY);
-    });
+      return () => subscription.remove();
+    }
 
-    return () => subscription.remove();
-  }, []);
+    // Not Android and no module — an iOS build where it failed to resolve, or
+    // jest. HOLD AT ZERO rather than falling through to RN's events below:
+    // those are the very thing that lies in this process, and a zero `cover`
+    // leaves the safe-area inset switched on, which is the safe way to be
+    // wrong.
+    if (Platform.OS !== 'android') return;
 
-  if (keyboardTop === null) return 0;
-  return Math.max(panelBottom - keyboardTop, 0);
+    // `Did`, not `Will`: the Will events are iOS-only.
+    const shown = Keyboard.addListener('keyboardDidShow', (event) =>
+      setCover(event.endCoordinates.height),
+    );
+    const hidden = Keyboard.addListener('keyboardDidHide', () => setCover(0));
+
+    return () => {
+      shown.remove();
+      hidden.remove();
+    };
+  }, [panelBottom]);
+
+  return { lift: shareKeyboard ? cover : 0, cover };
 }

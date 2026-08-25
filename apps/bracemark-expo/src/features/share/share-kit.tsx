@@ -37,11 +37,18 @@ import { Icon } from '../../components/ui/icon';
 import { Text } from '../../components/ui/text';
 import { cn } from '../../lib/utils';
 import { closeShareSheet } from './share-host';
-import { useShareKeyboardLift } from './share-keyboard';
+import { useShareKeyboard } from './share-keyboard';
 
 // The panel's own padding, in points, because the bottom edge is no longer a
-// class: it is `SHEET_PAD + insets.bottom` in a style prop (below).
+// class: it is `SHEET_PAD` plus whatever of the bottom inset the keyboard is
+// not already covering, in a style prop (below).
 const SHEET_PAD = 16;
+
+// The strip of backdrop kept above the panel, BEYOND the top inset — see the
+// panel's `marginTop`. A floor on what stays visible of the host app, not a
+// cushion: it is what makes the surface read as a sheet over something rather
+// than as a screen.
+const SHEET_GAP = 24;
 
 // THE SHEET NEEDS A PROVIDER, and the version this was first written against is
 // why it didn't have one. react-native-safe-area-context's `<SafeAreaView>` was
@@ -83,11 +90,12 @@ const INITIAL_METRICS = {
 //     correct lifting fits the first into what is left of the second.
 //     app.config.ts's `height` note is the other half of this.
 //   - Android — the activity is translucent and full-screen, so the panel was
-//     already ours: same rounded top and background, plus its own scrim, capped
-//     at 85% so a long list can never swallow the whole window.
+//     already ours: same rounded top and background, plus its own scrim.
 //
-// Which leaves ONE panel for both hosts, differing in two props (the scrim's
-// tint, the height cap) rather than in two return statements.
+// Neither host bounds the panel from the top, so the panel does it itself and
+// identically on both (its `marginTop`, below) — which leaves ONE panel
+// differing in a single prop, the scrim's tint, rather than in two return
+// statements.
 //
 // KEYBOARD AVOIDANCE IS THE ONE THING THE HOSTS CANNOT SHARE, and the reason is
 // not layout: inside the iOS extension process RN reports EVERY keyboard frame
@@ -102,7 +110,7 @@ const INITIAL_METRICS = {
 //     inside the extension, and that library's iOS layer is built on
 //     `UIApplication.shared.windows`, which an extension does not have
 //     (docs/soft-keyboard.md, _avoidance_).
-//   - iOS pads the frame by `useShareKeyboardLift()` — the same quantity KAV's
+//   - iOS pads the frame by `useShareKeyboard().lift` — the same quantity KAV's
 //     `behavior="padding"` would have applied, computed from our own native
 //     module's reading of the keyboard's top edge.
 //
@@ -111,6 +119,20 @@ const INITIAL_METRICS = {
 // the two hosts. That squeeze chain is `min-h-0 shrink` at each link, and it is
 // load-bearing: a panel that cannot shrink does not clip, it OVERFLOWS, and
 // what you get is a sheet whose header floats above its own background.
+//
+// THE BOTTOM SAFE-AREA INSET IS THE KEYBOARD'S TOO while it is up, on both
+// hosts, and that is why the panel's `paddingBottom` subtracts. A keyboard's
+// frame runs to the BOTTOM of the screen — it CONTAINS the home indicator /
+// gesture bar rather than stopping above it — so once the panel is parked on
+// that frame's top edge, `insets.bottom` on top of the lift is not clearance:
+// it is ~34pt (iOS) or ~24-48pt (Android) of empty background between the Save
+// button and the keyboard, spent at the one moment the sheet has the least
+// height to spend. And it is spent out of the pickers specifically — everything
+// above their scroller is fixed (the header, the input, the row group, the
+// button, the `gap-4` seams), so the squeeze chain can only take it from the
+// scroller's own rows, and past that scroller's floor the panel stops shrinking
+// and overflows as above. Nothing catches this: it is dead space, not a broken
+// layout, right up until the screen is small enough that it is both.
 //
 // DISMISSING that keyboard is this frame's job too, and it has to be, because
 // the pickers below cannot do it themselves: their inputs are
@@ -135,25 +157,56 @@ const isAndroid = Platform.OS === 'android';
 function ShareSheetFrame({ children }: { children: ReactNode }) {
   // iOS: how much of the sheet the keyboard covers, from our own native module
   // (share-keyboard.ts). Zero on Android, where the KeyboardAvoidingView at the
-  // bottom of this function is the mechanism instead.
-  const lift = useShareKeyboardLift();
+  // bottom of this function is the mechanism instead. `cover` is that same
+  // measurement on BOTH hosts and is NOT a lift — its only job is the inset
+  // subtraction below.
+  const { lift, cover } = useShareKeyboard();
   // Read in JS and applied as padding rather than handed to a `<SafeAreaView>`:
   // see INITIAL_METRICS above for why that view is gone. `pb` is the panel's own
   // padding PLUS the inset — the `additive` mode it replaces — so the Save
-  // button clears the home indicator instead of sitting inside its swipe region.
+  // button clears the home indicator instead of sitting inside its swipe region,
+  // MINUS however much of that inset the keyboard already covers, which while it
+  // is up is all of it (see the header).
+  //
+  // `Math.max` rather than a `cover > 0 ? 0 : insets.bottom` ternary, so a
+  // keyboard covering LESS than the inset keeps the difference instead of losing
+  // the whole thing — no host or keyboard mode has to be enumerated for that to
+  // stay right.
   const insets = useSafeAreaInsets();
   const panel = (
     <View
-      style={{ paddingBottom: SHEET_PAD + insets.bottom }}
+      style={{
+        // THE TOP GAP, and it is a floor on the BACKDROP rather than a cap on
+        // the panel. Android used to spell it `max-h-[85%]`, which was the
+        // wrong shape twice over: a percentage of a box the keyboard has
+        // already shrunk goes on taking its 15% out of the pickers' scroller at
+        // the moment there is least of it (~50dp on a short phone — three rows
+        // down to two), and being Android-only it left iOS unbounded. That is
+        // not theoretical on either host, because the panel is `shrink` inside a
+        // `flex-1 justify-end` frame, which makes the frame a CEILING and not a
+        // gap: once content exceeds it the panel simply fills it, rounded top at
+        // y=0. A picker runs to ~484pt of content against ~407 of frame on a
+        // short phone with the keyboard up, and that is a header sitting under
+        // the status bar.
+        //
+        // A margin bounds the panel by SUBTRACTION, so both hosts keep the same
+        // strip and neither can reach the hardware. `insets.top` and not a bare
+        // number, because none of that strip reads as backdrop until it has
+        // cleared a notch or a status bar.
+        //
+        // A MARGIN and not padding on the frame: the backdrop `Pressable` below
+        // is absolute against the frame's PADDING box (its own note), so frame
+        // padding would pull the dismiss target out from under exactly the gap
+        // this creates — the one part of the sheet that most invites a tap.
+        marginTop: insets.top + SHEET_GAP,
+        paddingBottom: SHEET_PAD + Math.max(insets.bottom - cover, 0),
+      }}
       // `min-h-0 shrink`: the first link of the squeeze chain (see the header).
       // Without it the panel keeps its content height when the keyboard takes
       // the room out from under it and overflows the frame instead of passing
       // the squeeze down to the pickers' scrollers — which does not clip, it
       // paints outside the box.
-      className={cn(
-        'min-h-0 shrink rounded-t-2xl bg-background px-4 pt-4',
-        isAndroid && 'max-h-[85%]',
-      )}
+      className="min-h-0 shrink rounded-t-2xl bg-background px-4 pt-4"
     >
       {/* Tap-anywhere-dead to drop the keyboard, and it WRAPS the children
           rather than sitting behind them as an absolute layer. The absolute
@@ -169,8 +222,8 @@ function ShareSheetFrame({ children }: { children: ReactNode }) {
           As a wrapper it is an ordinary flex column, so it covers exactly the
           panel and nothing else. It carries the `gap-4` the panel used to,
           because it is now the parent the seams belong to; `shrink min-h-0`
-          keeps the squeeze chain intact so the pickers' `max-h-72` scroller and
-          Android's `max-h-[85%]` cap still absorb the keyboard.
+          keeps the squeeze chain intact so the pickers' `max-h-72` scroller is
+          still what absorbs the keyboard.
 
           Child-first responder negotiation is what keeps this from eating taps:
           a press on a button or a picker row is claimed by that child, and this

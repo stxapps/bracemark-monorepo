@@ -231,3 +231,33 @@ test('reuses the same link id when a failed save is retried', async () => {
   const retried = saveSharedDraftMock.mock.calls[1][0] as ShareDraft;
   expect(retried.id).toBe(first.id);
 });
+
+// The compose tags row is a SUMMARY, and it is also the only thing on that
+// screen whose height has no ceiling unless it is capped (share-screen.tsx's
+// MAX_TAG_CHIPS): the chips wrap, the compose screen has no scroller — it has
+// no text field either, so the keyboard never reaches it — and a panel that
+// outgrows the frame does not clip, it paints outside its own background. None
+// of that is visible to jest, so what this pins is the arithmetic: six drawn,
+// the rest counted. Plus the half that must NOT be capped — the row still
+// announces every name, because the cap is a space constraint on a 375pt row
+// and a screen reader has none.
+test('summarises the compose tags row past six chips, but announces them all', async () => {
+  const names = ['alpha', 'bravo', 'charlie', 'delta', 'echo', 'foxtrot', 'golf', 'hotel', 'india'];
+  loadShareTaxonomyMock.mockResolvedValue({
+    ...TAXONOMY,
+    tags: names.map((name, index) => ({ id: `tag-${name}`, name, rank: `a${index}` })),
+  });
+  const { findByTestId, getByTestId, getByText, getByLabelText, queryByText } = render(
+    <ShareScreen url="https://example.com/g" />,
+  );
+
+  fireEvent.press(await findByTestId('share-tags-row'));
+  for (const name of names) fireEvent.press(getByTestId(`share-tag-tag-${name}`));
+  fireEvent.press(getByTestId('share-back'));
+
+  // Six chips in pick order, then a count of what is left.
+  expect(getByText('foxtrot')).toBeTruthy();
+  expect(queryByText('golf')).toBeNull();
+  expect(getByText('+3')).toBeTruthy();
+  expect(getByLabelText(`Tags: ${names.join(', ')}`)).toBeTruthy();
+});

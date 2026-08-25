@@ -142,8 +142,12 @@ behavior="padding"` around the centring box in `DialogOverlay` — the container
   `UIKeyboardFrameEndUserInfoKey` straight off the notification — UIKit posts it
   in screen coordinates, so no window is needed — and emits the keyboard's top
   edge plus the system's animation duration. `features/share/share-keyboard.ts`
-  turns that into `useShareKeyboardLift()` and `share-kit.tsx` applies it as
-  bottom padding on the iOS branch, leaving Android's KAV alone. The other half
+  turns that into `useShareKeyboard().lift` and `share-kit.tsx` applies it as
+  bottom padding on the iOS branch, leaving Android's KAV alone. (The hook's
+  second number, `cover`, is read on **both** hosts and never padded by: it
+  cancels the bottom safe-area inset while the keyboard is up, since a
+  keyboard's frame already contains the home indicator —
+  [safe-area.md](./safe-area.md).) The other half
   of the fix is not JS at all: the extension's `height` is now omitted from
   `app.config.ts` so the host view is full-screen, because a ~520pt container
   cannot hold a ~520pt picker above a ~340pt keyboard however correctly it
@@ -192,14 +196,27 @@ had the double-tap. `'handled'` fixes both halves at once: a tap on a control
 reaches it, a tap on padding or a `gap-*` seam still drops the keyboard.
 
 A surface with **no scroller** has no tap target at all — it needs one added.
-The share sheet is the case that proves it: its panel is a plain `SafeAreaView`,
-its inputs are `submitBehavior="submit"`, and on iOS the host owns the space
-around it, so before `ShareSheet`'s dismiss layer (`share/share-kit.tsx`) there
-was **no gesture in the process that closed the keyboard**. Note Android's
-`share-backdrop` is not that gesture — it closes the whole sheet. Spell the
-layer as an absolute `Pressable` **behind** the panel's children rather than a
-wrapper around them: a wrapper becomes a new parent for the `max-h-[85%]`
-percentage (the `ui/dialog.tsx` trap) and an ancestor of the picker's scroller.
+The share sheet is the case that proves it: its panel is a plain `View`, its
+inputs are `submitBehavior="submit"`, and on iOS the host owns the space around
+it, so before `ShareSheet`'s dismiss layer (`share/share-kit.tsx`) there was
+**no gesture in the process that closed the keyboard**. Note Android's
+`share-backdrop` is not that gesture — it closes the whole sheet.
+
+Spell that layer as a `Pressable` **wrapping** the panel's children, not as an
+absolute sibling behind them — and note this bullet prescribed the opposite
+until the absolute version was driven on the simulator with a debug tint.
+`absolute inset-0` resolves against the parent's **padding** box, and the panel
+was a native `SafeAreaView` then, which applies its insets outside Yoga: the
+layer laid out as a thin full-width band _above_ the panel instead of covering
+it. The panel is a plain `View` now, so that particular trap is gone, but the
+wrapper is also the simpler shape — an ordinary flex column covering exactly the
+panel, carrying the `gap-4` seams, keeping `shrink min-h-0` so the squeeze chain
+still reaches the picker's scroller. Child-first responder negotiation is what
+keeps it from eating taps: a press on a button or a row is claimed by that
+child, and the layer only sees what reaches the panel's own padding and seams.
+**It is unverified on device** and cannot be with the tools here — once the
+keyboard is up over the iOS extension the panel leaves the accessibility tree
+(bullet below), so Maestro can neither see nor address it.
 
 **3. Scroll — `keyboardDismissMode="on-drag"`.** Carry it alongside
 `keyboardShouldPersistTaps` on the same scrollers. `'on-drag'` rather than

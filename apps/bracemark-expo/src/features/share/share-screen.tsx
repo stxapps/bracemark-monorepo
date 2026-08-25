@@ -95,6 +95,23 @@ type View3 = 'compose' | 'lists' | 'tags';
 // commit already happened, and no sync is being waited on.
 const SAVED_DISMISS_MS = 1200;
 
+// How many tag chips the compose row draws before it summarises the rest as
+// "+N", and it is a LAYOUT BOUND, not a taste one. The chips wrap
+// (`flex-wrap`), which made this row the only thing on the compose screen whose
+// height has no ceiling: everything else here is fixed (the h-9 header, the
+// specimen's 44pt tile and its two clamped lines, the min-h-12 rows, the h-11
+// button), and a panel that outgrows the frame does not clip — it OVERFLOWS,
+// painting its header outside its own background (share-kit.tsx's squeeze
+// chain, which has nothing shrinkable on this screen to give). Six holds the
+// row to about two lines at ordinary name lengths and bounds the worst case —
+// six chips each wrapping to their own line — to something the compose screen's
+// slack absorbs at the 1.3 font cap on the shortest phone we target.
+//
+// It also happens to be what the row is FOR (the header's point 2): a row
+// showing twenty chips has stopped being a summary, and the picker behind it is
+// where the full set is seen and changed.
+const MAX_TAG_CHIPS = 6;
+
 export function ShareScreen({ url, title }: SharePayload) {
   // The link's id, minted ONCE for this sheet rather than per Save attempt.
   // "Idempotent by construction" (share-store's header) rests on the id being
@@ -427,6 +444,10 @@ export function ShareScreen({ url, title }: SharePayload) {
           label="Tags"
           // The same summary the row shows, flattened: a screen reader gets the
           // picked names in one phrase instead of a run of chip fragments.
+          // NOT capped at MAX_TAG_CHIPS: the cap is a space constraint on a
+          // 375pt row, and a screen reader has no such constraint. Announcing
+          // "and 14 more" would leave someone who cannot see the row with no
+          // way to hear what is on it short of entering the picker.
           value={tagNames.length === 0 ? 'none' : tagNames.join(', ')}
           testID="share-tags-row"
           bordered
@@ -439,7 +460,7 @@ export function ShareScreen({ url, title }: SharePayload) {
             // — `bg-muted rounded-full px-2 py-0.5`, `text-xs`), so the tags read
             // here exactly as they will on the row this share becomes.
             <View className="flex-row flex-wrap items-center gap-1">
-              {tagNames.map((name) => (
+              {tagNames.slice(0, MAX_TAG_CHIPS).map((name) => (
                 <Text
                   key={name}
                   numberOfLines={1}
@@ -448,6 +469,15 @@ export function ShareScreen({ url, title }: SharePayload) {
                   {name}
                 </Text>
               ))}
+              {/* Bare, not a chip: "+14" is a count of tags, not a tag, and in
+                  the chip's own `bg-muted` pill it would read as one more of
+                  them. The row announces the full list regardless (the
+                  `value` above), so this carries no semantics of its own. */}
+              {tagNames.length > MAX_TAG_CHIPS && (
+                <Text className="px-1 text-xs text-muted-foreground">
+                  +{tagNames.length - MAX_TAG_CHIPS}
+                </Text>
+              )}
             </View>
           )}
         </ShareRow>

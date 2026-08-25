@@ -125,11 +125,19 @@ own module: `BracemarkShareKeyboard`
 (`modules/bracemark-share/ios/BracemarkShareKeyboardModule.swift`) observes
 `keyboardWillChangeFrame` and `keyboardWillHide` and emits the keyboard's top
 edge in screen points plus the system's animation duration.
-`features/share/share-keyboard.ts` turns that into `useShareKeyboardLift()` —
+`features/share/share-keyboard.ts` turns that into `useShareKeyboard().lift` —
 `max(panelBottomOnScreen - keyboardTop, 0)`, played onto the system's own curve
 with `LayoutAnimation` — and `share-kit.tsx` applies it as bottom padding on the
 iOS branch. A hide is reported as "top edge = bottom of the screen", so the lift
 falls to zero without a special case.
+
+The same hook's `cover` is that measurement WITHOUT the layout role, and it is
+the one thing in this file Android shares: the panel subtracts it from the
+bottom safe-area inset, because a keyboard's frame reaches the bottom of the
+screen and so already covers the home indicator the inset is there to clear
+([safe-area.md](./safe-area.md)). On Android it comes from RN's own keyboard
+events — real in that process — which is why the hook is not iOS-only even
+though the lift is.
 
 **Android goes through none of that.** Its `ShareActivity` rides the app's own
 process, where RN's keyboard frames are real, so that branch keeps a plain
@@ -146,6 +154,32 @@ shrink` on the panel (`share-kit.tsx`) and on each picker's `ScrollView`
 alongside its `max-h-72` (`share-list-picker.tsx`, `share-tags-picker.tsx`). RN
 children do not shrink by default, and a panel that cannot shrink does not clip
 — it OVERFLOWS, painting its header outside its own background.
+
+**The panel is bounded from the TOP, and it is a floor on the backdrop rather
+than a cap on the panel.** `marginTop: insets.top + SHEET_GAP` on the panel
+(`share-kit.tsx`), the same on both hosts. It replaces Android's `max-h-[85%]`,
+which was the wrong shape twice over: a percentage of a box the keyboard has
+already shrunk goes on taking its 15% out of the pickers' scroller at the moment
+there is least of it (~50dp on a short phone — three rows down to two), and
+being Android-only it left iOS unbounded. Neither is theoretical, because the
+frame is a **ceiling and not a gap**: the panel is `shrink` inside `flex-1
+justify-end`, so once its content exceeds the frame it fills the frame, rounded
+top at `y=0`. A picker runs to ~484pt of content (16 + 36 header + 16 + 36 input
+
+- 16 + 288 scroller + 16 + 44 button + 16) against ~407pt of frame on an
+  SE-class phone with the keyboard up — a header under the status bar, on iOS,
+  before Android ever lost its cap. A margin bounds by subtraction instead, so
+  both hosts keep the same strip and neither reaches the hardware. It is a margin
+  rather than frame padding because the backdrop `Pressable` is absolute against
+  the frame's padding box, and padding would pull the dismiss target out from
+  under the very gap it creates.
+
+**The compose screen has no scroller and needs none** — it has no text field, so
+the keyboard never reaches it — on the condition that nothing on it can grow
+without bound. One thing could: the tags row's wrapping chips, now capped at
+`MAX_TAG_CHIPS` with a `+N` remainder (`share-screen.tsx`). The row's
+screen-reader `value` stays uncapped; the cap is a space constraint on a 375pt
+row and a screen reader has none.
 
 **The host view is full-screen, and that is what made a keyboard survivable at
 all.** `ShareExtensionViewController` sizes its root view from
