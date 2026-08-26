@@ -16,9 +16,11 @@ import { SubscriptionSection } from './subscription-section';
 // to assert it.
 //
 // The whole IAP edge is mocked — every hook this section reads, plus the two
-// app-level modules it calls. `@/components/legal-consent` is mocked for a
-// mechanical reason and not a design one: it imports `@/lib/site`, which THROWS
-// at module scope when NEXT_PUBLIC_SITE_URL is unset (as it is under jest).
+// app-level modules it calls. `@/components/legal-consent` used to be mocked
+// alongside them for a mechanical reason and not a design one: it imports
+// `@/lib/site`, which throws at module scope on a missing NEXT_PUBLIC_SITE_URL,
+// and jest saw no env at all. `.env.test` supplies it now, so the real component
+// renders here (docs/env-files.md, _the test env_).
 const FREE = {
   plan: 'free',
   status: 'none',
@@ -63,10 +65,6 @@ jest.mock('@stxapps/react', () => ({
 
 jest.mock('@/lib/paddle', () => ({
   openPaddleCheckout: (opts: { onCompleted: () => void }) => mockOpenPaddleCheckout(opts),
-}));
-
-jest.mock('@/components/legal-consent', () => ({
-  LegalConsent: () => null,
 }));
 
 jest.mock('./use-paddle-prices', () => ({

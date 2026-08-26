@@ -4,15 +4,38 @@
 // The app URL is env-configured (`.env.*`), not hard-coded, for the same reason
 // bracemark-web's API URL is: it differs per tier (`app.bracemark.com` vs
 // `app.dryrunbase.com` vs `localhost:3000`) and is baked at build time.
+// The site's OWN apex is the deliberate exception — see SITE_URL below.
 // See docs/env-files.md — _bracemark-site_.
 
 // Imported rather than re-exported blind (the way COMPANY is, below) because
 // FOOTER_LINKS needs the repo URL in scope.
 import { SOURCE } from '@stxapps/shared';
 
-export const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.bracemark.com';
+// Throws rather than falling back to production, matching bracemark-web's
+// lib/site.ts and lib/api-client.ts. A fallback here would mean a build that
+// forgot the var links every "Sign in" into production from whatever tier it is
+// — silently, since a plausible URL renders fine. `.env.test` is what makes the
+// throw affordable: without it, jest sees no NEXT_PUBLIC_* at all and this line
+// takes the suite down at import time (docs/env-files.md, _the test env_).
+const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+if (!appUrl) throw new Error('NEXT_PUBLIC_APP_URL is not set');
+export const APP_URL = appUrl;
 
-/** The apex this site is served from — used for canonical/OG absolute URLs. */
+/**
+ * The apex this site is served from, for the absolute OG URLs in `app/layout.tsx`
+ * (`metadataBase` and `og:url` — the only two readers).
+ *
+ * Hard-coded to production on purpose, unlike APP_URL above. Env-driving it would
+ * put `https://bracemark.com` in the deploy script's forbidden-origin list for
+ * staging, where the substring match hits the `https://bracemark.com/extractor`
+ * User-Agent that /extractor publishes verbatim — a tier-independent string by
+ * design — and `deploy:site:staging` would refuse every build
+ * (tools/scripts/deploy-static.sh, _the tier check_). The cost is that a staging
+ * page unfurls with production's og:url and card image; the card image is the
+ * same file in both tiers, and staging is `Disallow: /` to crawlers anyway
+ * (`app/robots.ts`). Revisit if this ever feeds a canonical tag or a sitemap,
+ * which would make it SEO-load-bearing rather than cosmetic.
+ */
 export const SITE_URL = 'https://bracemark.com';
 
 /** Deep links into bracemark-web. The site never renders auth UI itself. */

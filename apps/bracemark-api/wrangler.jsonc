@@ -42,6 +42,12 @@
   // alongside that tier's own API token:
   //   CLOUDFLARE_ACCOUNT_ID=<staging id>    wrangler deploy --env staging
   //   CLOUDFLARE_ACCOUNT_ID=<production id> wrangler deploy --env production
+  // On a dev machine that value lives in the gitignored `.env.<tier>.local`
+  // beside this file: wrangler loads `.env.<env>.local` for that `--env` and no
+  // other, which is the only thing that tier-scopes a variable whose NAME has no
+  // tier in it. An exported value still wins over the file. Not the committed
+  // `.env.<tier>` — wrangler reads those too and they are public, same problem as
+  // this file. See docs/env-files.md, _bracemark-api_.
   // That gives up a guard, so the remaining one has to hold: mint every token
   // against _Specific account_, never _All accounts_. One user owns both
   // accounts, so an all-accounts token plus the wrong CLOUDFLARE_ACCOUNT_ID

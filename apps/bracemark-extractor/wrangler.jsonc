@@ -68,6 +68,9 @@
   // account, but this file is public and an account id is inventory. The target
   // comes from CLOUDFLARE_ACCOUNT_ID in the deploy environment:
   //   CLOUDFLARE_ACCOUNT_ID=<staging id> wrangler deploy --env staging
+  // On a dev machine it comes from the gitignored `.env.<tier>.local` beside this
+  // file, which wrangler loads only for that `--env` (docs/env-files.md,
+  // _bracemark-api_ — the same pair of files lives here).
   // With nothing pinning the account in the config, the API token's scope is the
   // only thing left that stops a wrong-tier deploy — always _Specific account_.
   "env": {

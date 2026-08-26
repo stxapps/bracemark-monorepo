@@ -52,6 +52,7 @@ Files in `apps/bracemark-web/` (committed except `*.local`):
 | file               | used by                             | loaded by    |
 | ------------------ | ----------------------------------- | ------------ |
 | `.env.development` | `nx dev bracemark-web`              | Next (auto)  |
+| `.env.test`        | `nx test bracemark-web`             | `next/jest`  |
 | `.env.production`  | `nx build bracemark-web`            | Next (auto)  |
 | `.env.staging`     | `nx build bracemark-web -c staging` | Nx `envFile` |
 
@@ -59,15 +60,28 @@ Current vars:
 
 - `NEXT_PUBLIC_API_URL` → the matching bracemark-api URL.
 - `NEXT_PUBLIC_EXTRACTOR_URL` → the matching bracemark-extractor URL.
+- `NEXT_PUBLIC_APP_URL` → **this app's own** origin (the `app.` host), read by
+  `src/app/layout.tsx`. `metadataBase` and `og:url` have to be absolute — the
+  card images resolve against it and live in this app's `public/`, not on the
+  apex — and an absolute origin is per-tier like every other one here. Same var
+  name bracemark-site uses for this same host, below. It was hard-coded to
+  `https://app.bracemark.com` until the deploy script's tier check caught a
+  staging bundle advertising production's URLs.
 - `NEXT_PUBLIC_SITE_URL` → the matching **bracemark-site** origin (the apex), read
   by `src/lib/site.ts`. The app links out to pages that live on the marketing
   site — support, terms, privacy — and those are a different origin, so a
   relative `/support` would resolve against `app.*` and 404.
 - `NEXT_PUBLIC_PADDLE_*` → the checkout SDK's env + client token (see
   [iap.md](./iap.md)).
+- `ALLOW_INDEXING` → `true` or `false`, read by `src/app/robots.ts`. The one var
+  here with **no `NEXT_PUBLIC_` prefix**, because it is read at build time only
+  and never in a client component — prefixing it would bake a string into every
+  chunk for nothing. See [_robots.txt is per-tier_](#robotstxt-is-per-tier).
 
-Adding a new var = add the line to all three files (the symmetry is deliberate:
-there is no config hiding in `package.json`).
+Adding a new var = add the line to all **four** files (the symmetry is
+deliberate: there is no config hiding in `package.json`). `.env.test` is the
+newest of them and the easiest to forget — a var missing there doesn't fail the
+build, it fails the whole jest suite at import time.
 
 ### bracemark-site — Next.js, static export
 
@@ -80,6 +94,7 @@ Files in `apps/bracemark-site/` (committed except `*.local`):
 | file               | used by                              | loaded by    |
 | ------------------ | ------------------------------------ | ------------ |
 | `.env.development` | `nx dev bracemark-site`              | Next (auto)  |
+| `.env.test`        | `nx test bracemark-site`             | `next/jest`  |
 | `.env.production`  | `nx build bracemark-site`            | Next (auto)  |
 | `.env.staging`     | `nx build bracemark-site -c staging` | Nx `envFile` |
 
@@ -92,7 +107,19 @@ Two vars:
   and "Get Started" link crosses from the apex to the app, and that target is
   per-tier: `app.bracemark.com`, `app.dryrunbase.com`, or
   `localhost:3000` in dev. Hard-coding it would make a staging build of the site
-  send visitors into production's app.
+  send visitors into production's app. `src/lib/site.ts` **throws** if it is
+  unset rather than falling back — see [_the test env_](#the-test-env) for what
+  makes that affordable.
+- `ALLOW_INDEXING` → `true` or `false`, read by `src/app/robots.ts`; same
+  no-prefix rule as bracemark-web's, above. See
+  [_robots.txt is per-tier_](#robotstxt-is-per-tier).
+
+The site's own apex is **not** a var: `SITE_URL` is hard-coded to
+`https://bracemark.com` in `src/lib/site.ts`, and the block comment there is the
+argument for why. Short version: it feeds only `metadataBase` and `og:url`, and
+env-driving it would put `https://bracemark.com` into the deploy script's
+forbidden-origin list for staging, where it collides with the
+`https://bracemark.com/extractor` User-Agent that /extractor publishes verbatim.
 
 `npm run dev:site` (= `nx dev @stxapps/bracemark-site`) serves on **port 3001**,
 so it can run beside bracemark-web's 3000.
@@ -128,6 +155,75 @@ one pairing that could not run side by side.)
 The `nx start` / `serve-static` preview servers reuse 3000 and 3001, so run the
 preview or the dev server for a given app, not both — see
 [hosting.md](./hosting.md#previewing-a-production-build-locally--nx-start).
+
+### the test env
+
+Both Next apps carry a committed **`.env.test`**, loaded by `next/jest` because
+jest runs as `NODE_ENV=test`. Next only auto-loads `.env.<mode>` for the _current_
+mode, so under jest `.env.development`, `.env.staging` and `.env.production` are
+all invisible and **every `NEXT_PUBLIC_*` is undefined**.
+
+That matters because several modules read their config at **module scope and
+throw** — `bracemark-web`'s `lib/api-client.ts`, `lib/site.ts` and
+`app/layout.tsx`, and `bracemark-site`'s `lib/site.ts`. A throw at module scope
+under jest is not a failed assertion; it takes the whole suite down at _import_
+time, before a single test runs, and the stack points at whatever file happened
+to import the module first rather than at the missing var.
+
+The workaround before `.env.test` existed was to mock the importer. `bracemark-web`'s
+`subscription-section.spec.tsx` mocked `@/components/legal-consent` for exactly
+that reason — its own comment called it "a mechanical reason and not a design
+one" — and that mock is now gone, so the real component renders in the spec.
+
+Values are the development ones. Nothing under jest reaches the network (the api,
+the extractor and Paddle are mocked at the fetch/hook boundary); the vars only
+have to exist and parse.
+
+The alternative — defending every read with `?? 'https://…'` — is worse, and is
+the specific bug this repo already shipped once: a fallback to a production URL
+is indistinguishable from a correctly configured build until someone follows the
+link. Prefer the throw, and keep `.env.test` in step.
+
+### robots.txt is per-tier
+
+Both apps generate `robots.txt` from **`src/app/robots.ts`** (Next's Metadata
+API) rather than serving a static file, keyed on `ALLOW_INDEXING`:
+
+| tier          | `ALLOW_INDEXING` | emits          |
+| ------------- | ---------------- | -------------- |
+| `production`  | `true`           | `Allow: /`     |
+| `staging`     | `false`          | `Disallow: /`  |
+| `development` | `false`          | `Disallow: /`  |
+| `test`        | `false`          | (not rendered) |
+
+Staging is a real, publicly resolvable registrable domain — `dryrunbase.com`, not
+a subdomain of `bracemark.com`
+([hosting.md](./hosting.md#why-staging-is-a-separate-registrable-domain)) — so it
+is exactly as crawlable as production. Both apps served the _same_
+allow-everything static `robots.txt` in both tiers until this existed, which put
+a byte-for-byte copy of the marketing site, and of the sign-in and create-account
+pages, in the index on a second domain, competing with the real one.
+
+Three things worth keeping straight:
+
+- **`ALLOW_INDEXING` is required, not defaulted, in both directions.** Defaulting
+  to allow re-creates the bug above the first time an env file is added without
+  it; defaulting to deny would silently deindex production the first time one is
+  edited without it. `robots.ts` throws on anything but `true`/`false`.
+- **Staging is deliberately not also given a `noindex` meta tag.** The two don't
+  stack the way they look like they should — a crawler honouring `Disallow: /`
+  never fetches the page, so it never sees the meta. The residual gap is that an
+  externally linked but uncrawlable URL can still surface as a bare result; that
+  is what `noindex` _would_ close, and closing it means dropping the `Disallow`.
+  Take that trade only if a staging URL actually leaks.
+- **`export const dynamic = 'force-static'` is mandatory.** `robots.txt` compiles
+  to a route handler, and `output: 'export'` refuses one that hasn't declared
+  itself static. It fails the build loudly, so it can't regress quietly.
+
+Production behaviour is unchanged by this: both apps still allow everything.
+Whether `app.bracemark.com` — an application behind an auth gate, whose only
+public pages are `/sign-in` and `/create-account` — should be indexed at all is a
+separate product question this doc doesn't answer.
 
 ### bracemark-extension — wxt / Vite
 
@@ -271,6 +367,28 @@ the account any more, which puts the whole burden of "deploy to the right tier"
 on the API token: mint every one against a _specific_ account, never all of
 them.
 
+**Where that id comes from locally: `apps/bracemark-api/.env.<tier>.local`** (and
+the same pair in `apps/bracemark-extractor/`). Wrangler loads `.env`,
+`.env.local`, `.env.<env>` and `.env.<env>.local` from the working directory on
+**every** command, later files winning, so `--env production` reads
+`.env.production.local` and a `--env staging` run cannot see it. That tier-scoping
+is the whole point: `CLOUDFLARE_ACCOUNT_ID` carries no tier in its name, so a
+single value in any shared place — the workspace root's `.env.local`, a shell
+profile — applies to both tiers, and with `account_id` gone from the config
+nothing downstream would object. An already-exported value still wins over the
+file, so CI's env vars and a one-off `CLOUDFLARE_ACCOUNT_ID=… npx nx deploy …`
+both override it. The paths resolve against the **working directory**, which the
+`deploy` / `migrate` targets set to the app dir — a hand-run
+`npx wrangler -c apps/bracemark-api/wrangler.jsonc` from the workspace root finds
+nothing.
+
+Two spellings to avoid. The committed `.env.staging` / `.env.production`: wrangler
+reads those too, and they are public, which is the problem `account_id` was
+removed from `wrangler.jsonc` to solve. And the untiered `.env.local` in the app
+dir: it loads for every env including `development`, and because neither Worker
+has a `.dev.vars`, `wrangler dev` loads that file as local **secret bindings** —
+so the account id would arrive inside the Worker as well.
+
 - non-secret vars (e.g. `CORS_ORIGINS`) → `vars` under each `env.*`. The
   `development` env sets `CORS_ORIGINS=http://localhost:3000` so local dev needs
   no extra file.
@@ -323,8 +441,24 @@ browser frontends — bracemark-web and bracemark-site — need an allowed origi
 
 ### what's committed vs ignored
 
-- **committed:** `.env.development`, `.env.staging`, `.env.production` for the
-  frontends — every value in them is public.
+- **committed:** `.env.development`, `.env.test`, `.env.staging`, `.env.production`
+  for the frontends — every value in them is public.
 - **gitignored:** `.env*.local` (frontend personal overrides — and bracemark-expo's
   `APPLE_TEAM_ID`, above), `.dev.vars` (bracemark-api Workers local), and all real
   secrets. These never enter git.
+
+**The workspace root has its own pair, and it belongs to no app.** Root `.env` is
+committed and holds non-secret Nx task-running defaults; root `.env.local` is
+gitignored and holds the per-machine values a deploy needs —
+`CLOUDFRONT_DISTRIBUTION_ID_<APP>_<TIER>` (one per app per tier, e.g.
+`CLOUDFRONT_DISTRIBUTION_ID_WEB_PRODUCTION`) and, if you use one, `AWS_PROFILE` /
+`AWS_REGION`. Those names carry their tier, which is what makes one shared file
+safe for them; `CLOUDFLARE_ACCOUNT_ID` does not, and belongs in the per-tier
+Worker files [above](#bracemark-api--hono-on-cloudflare-workers) instead. Nx auto-loads both files for `nx run*`, but `npm run deploy:*`
+reaches `tools/scripts/deploy-static.sh` through bash, which loads nothing — so
+the script parses root `.env.local` itself during preflight, with anything
+already exported winning, since CI passes these as real env vars. A distribution
+id is not a credential, but it is infrastructure detail this repo doesn't
+publish: keep the values out of every tracked file, `.env.staging` and
+`.env.production` included. See
+[hosting.md](./hosting.md#deploying-the-static-sites--deploy-staticsh).

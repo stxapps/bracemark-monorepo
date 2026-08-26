@@ -19,12 +19,23 @@ export const viewport = {
   ],
 };
 
+// This app's own origin, for the card metadata below. It has to be absolute:
+// og:image and twitter:image resolve against `metadataBase`, and the card images
+// live in THIS app's `public/` — the apex is bracemark-site, a separate app on a
+// separate origin (docs/hosting.md), so a relative URL would resolve to the wrong
+// host.
+//
+// Env-configured for the same reason NEXT_PUBLIC_SITE_URL is (lib/site.ts), and
+// under the same var name bracemark-site uses for this same origin: it is
+// per-tier (`app.bracemark.com`, `app.dryrunbase.com`, or :3000 in dev) and baked
+// at build time, so a hard-coded value makes every staging build advertise
+// production's URLs in its OG tags. Throws rather than defaulting — a default is
+// what let the hard-coded one pass unnoticed.
+const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+if (!appUrl) throw new Error('NEXT_PUBLIC_APP_URL is not set');
+
 export const metadata: Metadata = {
-  // This app serves from the `app.` subdomain — the apex is bracemark-site, a
-  // separate app on a separate origin (docs/hosting.md) — so card images, which
-  // must be absolute, resolve against THIS origin. They live in this app's
-  // `public/`, not on the apex.
-  metadataBase: new URL('https://app.bracemark.com'),
+  metadataBase: new URL(appUrl),
   title: 'Bracemark - Save links to visit later',
   description:
     'Save links to everything and visit them later easily, anytime, on any device, with technology that empowers you to truly own your account and data.',
@@ -38,7 +49,7 @@ export const metadata: Metadata = {
       },
     ],
     siteName: 'Bracemark',
-    url: 'https://app.bracemark.com',
+    url: appUrl,
     type: 'website',
   },
   twitter: {

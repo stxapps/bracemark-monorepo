@@ -82,7 +82,8 @@ next-env.d.ts
 # .artifacts, which a `--reset` or a stray `rm -rf` is expected to clear.
 /e2e/credentials/
 
-# Local env overrides (committed env files: .env.development, .env.production)
+# Local env overrides (committed env files: .env.development, .env.test,
+# .env.staging, .env.production — see docs/env-files.md)
 .env*.local
 
 # Cloudflare Workers local vars/secrets (bracemark-api)
