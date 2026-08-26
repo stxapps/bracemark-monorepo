@@ -138,6 +138,16 @@ apex zone, so a one-label `*.dryrunbase.com` wildcard covers `app.`, `api.` and
 never references staging at all. Production keeps the clean apex hosts that end
 users actually see.
 
+**The cost of a real domain: staging is as crawlable as production.** Nothing
+about `dryrunbase.com` is private — it resolves publicly and serves the same
+pages. Both static apps therefore generate `robots.txt` per tier from
+`src/app/robots.ts` and emit `Disallow: /` on staging; they shipped an identical
+allow-everything static file in both tiers until that existed, which duplicated
+the whole marketing site on a second indexable domain. The switch is
+`ALLOW_INDEXING`, required in every env file —
+[env-files.md](./env-files.md#robotstxt-is-per-tier) has the reasoning, including
+why staging gets no `noindex` meta tag to go with it.
+
 The name had to be **obviously not the product**, and `dryrunbase.com` is: "dry
 run" is what a staging tier does, and nothing in it reads as Bracemark. It
 carries none of the brand's SEO or trademark weight, which is precisely what a
@@ -406,7 +416,11 @@ npm run deploy:site:staging      npm run deploy:site:production
 
 It builds for the tier, checks the artifact, syncs, then invalidates. The
 distribution id comes from `CLOUDFRONT_DISTRIBUTION_ID_<APP>_<TIER>` (e.g.
-`CLOUDFRONT_DISTRIBUTION_ID_WEB_PRODUCTION`); `--dry-run`, `--skip-build` and
+`CLOUDFRONT_DISTRIBUTION_ID_WEB_PRODUCTION`), read from the shell first and then
+from the gitignored root `.env.local` the script parses in its preflight
+([env-files.md](./env-files.md#whats-committed-vs-ignored)) — the ids are not
+committed. `--distribution-id` overrides it for one run; `--dry-run`,
+`--skip-build` and
 `--no-invalidate` are there for the obvious reasons, and a production run
 prompts for the bucket name unless `--yes` is passed.
 
@@ -415,15 +429,41 @@ tier.** This is the enforcement half of _built once per tier, never promoted_
 [below](#cors--frontendbackend-wiring): a bundle carries its API and app origins
 inlined, so pushing a staging `out/` to the production bucket yields a site that
 looks entirely correct until someone tries to sign in — pointing at
-`api.dryrunbase.com`, holding the Paddle sandbox token. The check works because
-the two tiers are on **different registrable domains**
-([above](#why-staging-is-a-separate-registrable-domain)): the script reads every
-`NEXT_PUBLIC_*_URL` out of both tiers' env files, reduces them to registrable
-domains, and refuses to upload a bundle that mentions the other tier's. It is
-keyed on the domain and not on a specific host because bracemark-site never
-mentions `api.*` at all — it only bakes `NEXT_PUBLIC_APP_URL` — so an api-host
-check would reject every site deploy. A domain shared by both tiers cancels out
-of the comparison, so adding a third-party origin doesn't blunt it.
+`api.dryrunbase.com`, holding the Paddle sandbox token. The script reads every
+`NEXT_PUBLIC_*_URL` out of both tiers' env files, reduces each to its **origin**
+(scheme + host), and refuses to upload a bundle that mentions the other tier's.
+An origin shared by both tiers cancels out of the comparison, so adding a
+third-party one doesn't blunt it.
+
+**Keyed on the origin, not the registrable domain** — even though the domain is
+what actually separates the tiers
+([above](#why-staging-is-a-separate-registrable-domain)). bracemark-site's own
+_content_ names `bracemark.com` in prose that is deliberately tier-independent:
+`support@`/`security@`/`abuse@bracemark.com`, the "bracemark.com and
+app.bracemark.com" scope lines in /terms and /privacy, and the
+`https://bracemark.com/extractor` User-Agent that /extractor publishes to the
+operators of sites we fetch ([link-extraction.md](./link-extraction.md#server-extraction-a-separate-bracemark-extractor-anonymous)).
+None of that moves per tier, so a domain-keyed check rejects **every**
+`deploy:site:staging` and no rebuild can fix it. An origin misses all of it and
+still catches what a mis-tiered bundle actually carries — the other tier's baked
+`https://api.*` / `https://app.*` values.
+
+**Satisfied by any one of this tier's origins, not all of them**, because
+bracemark-site declares `NEXT_PUBLIC_API_URL` but never mentions the api at all;
+an all-of check would reject every site deploy for the opposite reason.
+
+Matching is by substring, so `https://dryrunbase.com` catches
+`https://dryrunbase.com/support`. The trap that leaves is an env file naming a
+bare apex that _prefixes_ a hard-coded content URL — give bracemark-site a
+`NEXT_PUBLIC_SITE_URL=https://bracemark.com` and the /extractor User-Agent above
+starts matching again. It fails loudly at deploy rather than shipping something
+wrong, but it is the reason that one origin is still hard-coded in
+`apps/bracemark-site/src/lib/site.ts`.
+
+The check is not decoration: bracemark-web's `metadataBase` and `og:url` were
+hard-coded to `https://app.bracemark.com`, so every staging build advertised
+production's origin in its card metadata. That is now
+`NEXT_PUBLIC_APP_URL` ([env-files.md](./env-files.md#bracemark-web--nextjs-static-export)).
 
 **Three cache classes, keyed off the path rather than a list of filenames.**
 

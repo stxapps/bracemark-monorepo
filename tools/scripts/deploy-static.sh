@@ -62,7 +62,7 @@ Options:
   --yes, -y             Don't prompt before a production deploy.
   -h, --help            Show this message.
 
-Environment:
+Environment (read from the shell first, then from a gitignored root .env.local):
   CLOUDFRONT_DISTRIBUTION_ID_<APP>_<TIER>   e.g. CLOUDFRONT_DISTRIBUTION_ID_WEB_PRODUCTION
   AWS_PROFILE / AWS_REGION                  passed through to the aws cli
 USAGE
@@ -129,6 +129,36 @@ fi
 
 # --- preflight -------------------------------------------------------------
 
+# The distribution ids and AWS_PROFILE are per-machine values that don't belong
+# in a tracked file, so they live in the gitignored root `.env.local`
+# (docs/env-files.md, _what's committed vs ignored_). Nx auto-loads the root
+# `.env`/`.env.local` for `nx run*`, but the npm alias reaches this script
+# through bash, which loads nothing — so read the file here, before the aws cli
+# is asked for anything. Parsed rather than sourced: a dotenv line is not shell
+# (`FOO=a b` is a syntax error to `.`, and a stray command in there would run).
+# Anything already exported WINS — CI passes these as real env vars, and a
+# developer's `AWS_PROFILE=… npm run deploy:…` has to beat the file too.
+load_root_env_local() {
+  local file="$REPO_ROOT/.env.local" line key value
+  [ -f "$file" ] || return 0
+  while IFS= read -r line || [ -n "$line" ]; do
+    line="${line#"${line%%[![:space:]]*}"}"          # leading whitespace
+    case "$line" in ''|'#'*) continue ;; esac
+    case "$line" in *=*) ;; *) continue ;; esac      # not a KEY=value line
+    line="${line#export }"
+    key="${line%%=*}"
+    value="${line#*=}"
+    case "$key" in ''|*[!A-Za-z0-9_]*) continue ;; esac   # not a shell name
+    if [ -n "${!key:-}" ]; then continue; fi
+    case "$value" in                                 # one layer of quotes
+      \"*\") value="${value#\"}"; value="${value%\"}" ;;
+      \'*\') value="${value#\'}"; value="${value%\'}" ;;
+    esac
+    export "$key=$value"
+  done < "$file"
+}
+load_root_env_local
+
 command -v aws >/dev/null 2>&1 || die "aws cli not found — https://aws.amazon.com/cli/"
 [ -f "$ENV_FILE" ] || die "missing $ENV_FILE"
 
@@ -153,7 +183,7 @@ if [ "$INVALIDATE" = true ] && [ "$DRY_RUN" = false ]; then
     TIER_UPPER="$(printf '%s' "$TIER" | tr '[:lower:]' '[:upper:]')"
     VAR_NAME="CLOUDFRONT_DISTRIBUTION_ID_${APP_UPPER}_${TIER_UPPER}"
     eval "DISTRIBUTION_ID=\${$VAR_NAME:-}"
-    [ -n "$DISTRIBUTION_ID" ] || die "\$$VAR_NAME is not set.
+    [ -n "$DISTRIBUTION_ID" ] || die "\$$VAR_NAME is not set (shell or $REPO_ROOT/.env.local).
        Set it, pass --distribution-id, or pass --no-invalidate to skip on purpose."
   fi
   note "cloudfront: $DISTRIBUTION_ID"
@@ -194,16 +224,37 @@ fi
 # time. So the artifact carries proof of which tier it was built for, and a
 # mis-tiered deploy is catchable before it lands.
 #
-# Keyed on the domain rather than a specific host on purpose: bracemark-site
-# bakes NEXT_PUBLIC_APP_URL but never mentions api.* at all, so an api-host
-# check would reject every site deploy. The discriminating domains are computed
-# as the difference between the two env files, which means a shared third-party
-# host added to both tiers (Paddle, say) is ignored automatically.
+# Keyed on each var's ORIGIN (scheme + host), NOT on its registrable domain.
+# The domain is the tempting key — it is what actually separates the tiers — but
+# bracemark-site's own CONTENT names `bracemark.com` in prose that is
+# deliberately tier-independent: support@/security@/abuse@bracemark.com, the
+# "bracemark.com and app.bracemark.com" scope lines in /terms and /privacy, and
+# the `https://bracemark.com/extractor` User-Agent that /extractor publishes to
+# the operators of sites we fetch (docs/link-extraction.md, _server
+# extraction_). None of that moves per tier, so a domain-keyed check rejects
+# EVERY `deploy:site:staging` and no rebuild can fix it. An origin is specific
+# enough to miss all of it and still catch what a mis-tiered bundle actually
+# carries: the other tier's baked `https://api.*` / `https://app.*` values.
+#
+# Still satisfied by ANY of this tier's origins rather than all of them:
+# bracemark-site declares NEXT_PUBLIC_API_URL but never mentions the api at all,
+# so an all-of check would reject every site deploy for the opposite reason.
+#
+# The discriminating origins are computed as the difference between the two env
+# files, so a third-party origin present in both tiers (Paddle, say) cancels out
+# automatically.
+#
+# Matching is by substring, deliberately: `https://dryrunbase.com` has to catch
+# `https://dryrunbase.com/support`. The trap that leaves is an env file naming a
+# bare apex that PREFIXES a hard-coded content URL — add
+# `NEXT_PUBLIC_SITE_URL=https://bracemark.com` to bracemark-site's env files and
+# the /extractor User-Agent above starts matching again. That fails loudly here
+# rather than shipping something wrong, but it is why this is not narrowed to
+# whole-URL equality either: the bundle rewrites these into longer strings.
 
-# Registrable domain of every NEXT_PUBLIC_*_URL in an env file.
-env_domains() {
-  sed -n 's|^[[:space:]]*NEXT_PUBLIC_[A-Z0-9_]*=https\{0,1\}://\([^/[:space:]]*\).*|\1|p' "$1" \
-    | awk -F. 'NF>=2 { print $(NF-1)"."$NF }' \
+# Origin (scheme + host) of every NEXT_PUBLIC_*_URL in an env file.
+env_origins() {
+  sed -n 's|^[[:space:]]*NEXT_PUBLIC_[A-Z0-9_]*=\(https\{0,1\}://[^/"'"'"'[:space:]]*\).*|\1|p' "$1" \
     | sort -u
 }
 
@@ -211,30 +262,33 @@ env_domains() {
 GREP_IN=( --include='*.js' --include='*.html' --include='*.txt' --include='*.json' )
 
 verify_tier() {
-  local want forbid d found
-  want="$(comm -23 <(env_domains "$ENV_FILE") <(env_domains "$OTHER_ENV_FILE"))"
-  forbid="$(comm -13 <(env_domains "$ENV_FILE") <(env_domains "$OTHER_ENV_FILE"))"
+  local want forbid o found
+  want="$(comm -23 <(env_origins "$ENV_FILE") <(env_origins "$OTHER_ENV_FILE"))"
+  forbid="$(comm -13 <(env_origins "$ENV_FILE") <(env_origins "$OTHER_ENV_FILE"))"
 
   if [ -z "$want" ]; then
-    note "skipped: $ENV_FILE and $OTHER_ENV_FILE name no distinguishing domain"
+    note "skipped: $ENV_FILE and $OTHER_ENV_FILE name no distinguishing origin"
     return 0
   fi
 
   found=false
-  for d in $want; do
-    if grep -rlF "${GREP_IN[@]}" -e "$d" "$OUT_DIR" >/dev/null 2>&1; then
+  for o in $want; do
+    if grep -rlF "${GREP_IN[@]}" -e "$o" "$OUT_DIR" >/dev/null 2>&1; then
       found=true
-      note "ok: bundle references $d"
+      note "ok: bundle references $o"
     fi
   done
   [ "$found" = true ] \
     || die "the build in out/ never mentions $(echo $want) — it is not a $TIER build.
        Rebuild without --skip-build."
 
-  for d in $forbid; do
-    if grep -rlF "${GREP_IN[@]}" -e "$d" "$OUT_DIR" >/dev/null 2>&1; then
-      die "the build in out/ references '$d', which belongs to the other tier.
-       Refusing to publish it to $BUCKET. Rebuild without --skip-build."
+  for o in $forbid; do
+    if grep -rlF "${GREP_IN[@]}" -e "$o" "$OUT_DIR" >/dev/null 2>&1; then
+      die "the build in out/ references '$o', which belongs to the other tier.
+       Refusing to publish it to $BUCKET.
+       Either it is a stale build (rebuild without --skip-build), or something in
+       the source hard-codes that origin instead of reading it from $ENV_FILE:
+       grep -rl '$o' $OUT_DIR"
     fi
   done
 }
