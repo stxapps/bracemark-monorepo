@@ -1,5 +1,4 @@
-import { z } from 'zod';
-
+import { z } from '../zod';
 import type { ApiClient } from './client';
 import { ApiError, parseRetryAfterSeconds } from './client';
 import { defineEndpoint } from './endpoint';

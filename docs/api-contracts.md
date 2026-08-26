@@ -36,6 +36,42 @@ internal paths:
   `checkUsernameEndpoint`), whose request schemas reuse the validators from
   `auth/credentials.ts` so a rule like username length is defined exactly once
   and enforced identically on client and server.
+- **`zod.ts`** — the workspace's only value import of `zod`. Everything else
+  takes `z` from here, for the reason below.
+
+### `z` comes from `shared`, and it is `jitless`
+
+`packages/shared/src/zod.ts` calls `z.config({ jitless: true })` and then
+re-exports `z`. Every value import of zod in the workspace goes through it —
+`from '../zod'` inside `shared`, `from '@stxapps/shared'` everywhere else — and
+`eslint.config.mjs` restricts the bare `'zod'` specifier so it stays that way. A
+type-only `import type { z } from 'zod'` is exempt and stays as it is: it erases.
+
+**What it buys is bracemark-web's CSP.** zod 4 JIT-compiles a fast parser for
+every object schema by building the function source as a string and handing it
+to `new Function` (`zod/v4/core/doc.ts`), and before it does it probes for eval
+support with a `new Function('')` in a try/catch (`util.ts`, `allowsEval`). A
+_caught_ throw is still a reported CSP violation, so under a `script-src` with no
+`'unsafe-eval'` ([hosting.md](./hosting.md#security-headers--where-the-csp-has-to-live))
+the probe alone logs one on every page load, and under `Report-Only` it goes on
+to compile for real and log a second. `jitless` skips both; zod's own source says
+so at the probe.
+
+**It costs nothing, because no runtime we ship to could use the fastpass
+anyway** — the browser is under that CSP, Cloudflare Workers block eval outright
+(zod even sniffs the Workers user-agent), and Hermes has no eval. All three were
+already falling back to the interpreted path, via a probe that throws. This only
+stops them announcing it.
+
+**Set before any schema is BUILT, not before the first parse** — which is why it
+is a re-export rather than a call at an app entry point. The probe and the
+`jitless` read both happen in `$ZodObject`'s constructor, so they run when a
+module body evaluates `z.object(…)`; for the contract schemas here, that is
+import time. Configuring at an entry point would be a race against ESM evaluation
+order, and losing it changes no behaviour and no types — it just puts the
+violation back in the console of a browser nobody is watching, since the CSP
+carries no `report-uri`. Taking `z` from the module that configures it is what
+makes the ordering unlosable.
 
 ### url versioning
 

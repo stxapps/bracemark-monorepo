@@ -1,6 +1,5 @@
-import { z } from 'zod';
-
 import { API_V1, defineEndpoint } from '../api/endpoint';
+import { z } from '../zod';
 import { usernameSchema } from './credentials';
 
 // Auth endpoint contracts. Request schemas reuse the pure validators from

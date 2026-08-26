@@ -38,7 +38,6 @@
 
 import { Platform } from 'react-native';
 import { Directory, File } from 'expo-file-system';
-import { z } from 'zod';
 
 import {
   type ApiClient,
@@ -56,6 +55,7 @@ import {
   type Tag,
   TAGS_PREFIX,
   TRASH_ID,
+  z,
 } from '@stxapps/shared';
 
 import { appGroupDir } from './app-group';

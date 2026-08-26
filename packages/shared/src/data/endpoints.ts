@@ -1,6 +1,5 @@
-import { z } from 'zod';
-
 import { API_V1, defineEndpoint } from '../api/endpoint';
+import { z } from '../zod';
 
 // Data-lifecycle endpoint contracts — the destructive, whole-namespace actions
 // that sit BESIDE the four-endpoint sync control plane (sync/endpoints.ts), not

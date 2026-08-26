@@ -1,6 +1,5 @@
-import { z } from 'zod';
-
 import { API_V1, defineEndpoint } from '../api/endpoint';
+import { z } from '../zod';
 import { ENC_SUFFIX, ID_KEYED_PREFIXES, SETTINGS_PREFIX } from './paths';
 
 // Local-first sync endpoint contracts — the four-endpoint control plane the

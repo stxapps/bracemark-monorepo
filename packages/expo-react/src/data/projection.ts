@@ -15,8 +15,6 @@
 // which share the same `parseBlob` so a record is decoded by identical rules
 // wherever it's read.
 
-import { z } from 'zod';
-
 import {
   bytesToUtf8,
   canonicalUrlKey,
@@ -29,6 +27,7 @@ import {
   PINS_PREFIX,
   SETTINGS_PREFIX,
   TAGS_PREFIX,
+  z,
 } from '@stxapps/shared';
 
 import type { ItemType } from './db';

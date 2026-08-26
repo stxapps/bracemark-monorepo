@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from '@stxapps/shared';
 
 import type { PurchaseStatus } from '../db/repositories/purchases';
 import type { Bindings } from './env';

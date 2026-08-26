@@ -1,7 +1,6 @@
-import { z } from 'zod';
-
 import { canonicalizeUsername } from '../crypto/params';
 import { normalizeRecoveryCode } from '../crypto/recovery-code';
+import { z } from '../zod';
 
 // Credential validation shared by every consumer: the web/extension forms
 // (client-side UX) and bracemark-api (server-side gate). Keep this schema PURE and

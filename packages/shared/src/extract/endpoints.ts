@@ -1,7 +1,6 @@
-import { z } from 'zod';
-
 import { API_V1, defineEndpoint } from '../api/endpoint';
 import { LINK_TITLE_MAX } from '../sync/entities';
+import { z } from '../zod';
 
 // bracemark-extractor contract — the title/image metadata fetch + the image proxy.
 //

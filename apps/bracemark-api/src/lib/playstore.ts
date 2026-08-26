@@ -1,6 +1,4 @@
-import { z } from 'zod';
-
-import { bytesToBase64Url } from '@stxapps/shared';
+import { bytesToBase64Url, z } from '@stxapps/shared';
 
 import type { PurchaseStatus } from '../db/repositories/purchases';
 import type { Bindings } from './env';

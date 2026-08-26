@@ -169,6 +169,16 @@ as `Content-Security-Policy-Report-Only` before enforcing. The constraints to
 bake in:
 
 - `script-src` needs `'wasm-unsafe-eval'` — hash-wasm's Argon2.
+- **`'unsafe-eval'` is deliberately absent, and one thing in the source keeps it
+  that way.** zod 4 JIT-compiles a parser for every object schema through
+  `new Function`, and probes for eval support with a `new Function('')` whose
+  _caught_ throw is still a reported violation — so a bare `import { z } from 'zod'`
+  anywhere puts an `eval` violation in the console on every page load, with the app
+  working perfectly either way. `packages/shared/src/zod.ts` sets zod's `jitless`
+  and re-exports `z`; lint restricts the bare specifier. That costs nothing (no
+  runtime we ship to can eval), but it has to be set before a schema is
+  constructed, not before it is parsed. →
+  [api-contracts.md](./api-contracts.md#z-comes-from-shared-and-it-is-jitless).
 - A static export cannot mint per-request nonces, so Next's inline bootstrap
   scripts need either a build-time hash union (regenerated every deploy) or
   `'unsafe-inline'`, with `connect-src` as the load-bearing exfiltration block.

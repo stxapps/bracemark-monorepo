@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from '../zod';
 
 // Plaintext entity shapes — what's INSIDE the ciphertext of each synced file
 // (see docs/local-first-sync.md "data model" + "plaintext typing"). These are a

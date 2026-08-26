@@ -185,6 +185,58 @@ export default [
     },
   },
   {
+    // `z` comes from `@stxapps/shared` (or, inside that package, `../zod`) —
+    // never from the bare 'zod' specifier. That module calls
+    // `z.config({ jitless: true })` before it re-exports the binding, which is
+    // the only reason bracemark-web's CSP can withhold 'unsafe-eval': zod 4
+    // JIT-compiles each object schema through `new Function`, and probes for
+    // eval support with a `new Function('')` whose caught throw is STILL a
+    // reported violation. See packages/shared/src/zod.ts for the whole of it,
+    // and docs/hosting.md, _security headers_, for the policy it serves.
+    //
+    // The rule exists because the failure is silent everywhere it matters. A
+    // fresh `import { z } from 'zod'` builds its schemas against whatever
+    // config is set when its MODULE BODY runs, and losing that race changes no
+    // behaviour and no types — it just puts a violation back in the console of
+    // a browser nobody is watching, which is the one place these are reported
+    // (there is no report-uri).
+    //
+    // `import type { z } from 'zod'` is exempt and correct: it erases, so it
+    // constructs nothing and cannot race anything.
+    //
+    // The exemption for the shim itself is the override block below rather than
+    // an `ignores` here, and its glob is depth-relative for the reason the
+    // `**/modules/**/package.json` block gives: Nx runs `eslint .` from the
+    // PROJECT dir, so this file is `src/zod.ts` there and
+    // `packages/shared/src/zod.ts` from the workspace root. Only a pattern that
+    // matches both is safe.
+    files: ['**/*.ts', '**/*.tsx'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: 'zod',
+              message:
+                "Import { z } from '@stxapps/shared' (or '../zod' inside that package) — it sets `jitless` before any schema is built, which is what keeps 'unsafe-eval' out of the CSP. A type-only import may stay.",
+              allowTypeImports: true,
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    // The one file allowed to import 'zod' — it is what the rule above points
+    // everyone else at. Must sit AFTER that block so it wins in flat-config
+    // order.
+    files: ['**/src/zod.ts'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': 'off',
+    },
+  },
+  {
     files: ['**/*.json'],
     languageOptions: {
       parser: jsoncParser,

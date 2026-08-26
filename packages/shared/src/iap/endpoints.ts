@@ -1,6 +1,5 @@
-import { z } from 'zod';
-
 import { API_V1, defineEndpoint } from '../api/endpoint';
+import { z } from '../zod';
 import { AVAILABLE_PAID_PLANS, PLANS } from './plans';
 
 // IAP endpoint contracts. Subscription state is a SERVER-DERIVED fact (its
