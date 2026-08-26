@@ -233,19 +233,19 @@
         {
           "binding": "DIRECTORY_DB",
           "database_name": "bracemark-directory-db-staging",
-          "database_id": "TODO: `wrangler d1 create bracemark-directory-db-staging` → paste id",
+          "database_id": "33afb367-6556-4f00-9cac-6254c19ab7f4",
           "migrations_dir": "src/db/migrations/directory",
         },
         {
           "binding": "ACCOUNTS_DB_1",
           "database_name": "bracemark-accounts-db-1-staging",
-          "database_id": "TODO: `wrangler d1 create bracemark-accounts-db-1-staging` → paste id",
+          "database_id": "d1dfe23f-9a64-445f-b7d7-3584b0dafa73",
           "migrations_dir": "src/db/migrations/accounts",
         },
         {
           "binding": "SESSIONS_DB",
           "database_name": "bracemark-sessions-db-staging",
-          "database_id": "TODO: `wrangler d1 create bracemark-sessions-db-staging` → paste id",
+          "database_id": "07ffd86d-3e51-4679-959e-9025314d514d",
           "migrations_dir": "src/db/migrations/sessions",
         },
       ],
@@ -283,7 +283,7 @@
           "simple": { "limit": 100, "period": 10 },
         },
       ],
-      "routes": [{ "pattern": "api.dryrunbase.com", "custom_domain": true }]
+      "routes": [{ "pattern": "api.dryrunbase.com", "custom_domain": true }],
     },
     "production": {
       "vars": {
@@ -337,19 +337,19 @@
         {
           "binding": "DIRECTORY_DB",
           "database_name": "bracemark-directory-db-production",
-          "database_id": "TODO: `wrangler d1 create bracemark-directory-db-production` → paste id",
+          "database_id": "4d8c5967-be48-4b54-991c-0cf5f830943d",
           "migrations_dir": "src/db/migrations/directory",
         },
         {
           "binding": "ACCOUNTS_DB_1",
           "database_name": "bracemark-accounts-db-1-production",
-          "database_id": "TODO: `wrangler d1 create bracemark-accounts-db-1-production` → paste id",
+          "database_id": "9b319b3c-0d44-4c81-8a16-83d14a5f35a7",
           "migrations_dir": "src/db/migrations/accounts",
         },
         {
           "binding": "SESSIONS_DB",
           "database_name": "bracemark-sessions-db-production",
-          "database_id": "TODO: `wrangler d1 create bracemark-sessions-db-production` → paste id",
+          "database_id": "57e69d99-2226-4f4d-86ed-f512ecfa90bb",
           "migrations_dir": "src/db/migrations/sessions",
         },
       ],
@@ -387,7 +387,7 @@
           "simple": { "limit": 100, "period": 10 },
         },
       ],
-      "routes": [{ "pattern": "api.bracemark.com", "custom_domain": true }]
+      "routes": [{ "pattern": "api.bracemark.com", "custom_domain": true }],
     },
   },
 }
