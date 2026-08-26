@@ -136,10 +136,7 @@
           "simple": { "limit": 30, "period": 10 },
         },
       ],
-      // The extractor's own origin — its whole point is to be SEPARATE from
-      // api.dryrunbase.com. dryrunbase.com is registered; uncomment once that zone
-      // exists in the staging account (docs/hosting.md — _why staging is a separate registrable domain_):
-      // "routes": [{ "pattern": "extractor.dryrunbase.com", "custom_domain": true }]
+      "routes": [{ "pattern": "extractor.dryrunbase.com", "custom_domain": true }]
       //
       // IMPORTANT — never log the URL. The proxy's ?url= lands in the request line,
       // so default Cloudflare request logs / Logpush would PERSIST exactly the URLs
@@ -169,7 +166,7 @@
           "simple": { "limit": 30, "period": 10 },
         },
       ],
-      // "routes": [{ "pattern": "extractor.bracemark.com", "custom_domain": true }]
+      "routes": [{ "pattern": "extractor.bracemark.com", "custom_domain": true }]
       // See the staging note on stripping ?url= from request logs.
     },
   },

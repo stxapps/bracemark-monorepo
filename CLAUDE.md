@@ -210,6 +210,21 @@ test. Check the linked doc before acting on any of these.
   hold) — otherwise a pushed Settings or modal editor swings the page onto ITS
   params and discards the view underneath. The local hook stays correct in a leaf
   screen and for a layout's own dynamic segment. → `search.md`, _on native_.
+- **`wrangler d1 migrations apply` defaults to LOCAL, and says so only in
+  prose.** With neither `--local` nor `--remote`, it applies to the miniflare
+  SQLite file under `.wrangler/`, prints `Resource location: local` in the middle
+  of otherwise-normal output, prints ✅ and exits 0. Drop the flag from a
+  production run and the real database is untouched while the Worker serves
+  against tables that do not exist — no error, no lint rule, no type error, and
+  no test in either runner can reach a remote D1 to catch it. The three
+  `d1-migrate` configurations in `apps/bracemark-api/package.json` carry the flag
+  explicitly on every command, `--local` included, so an absent one reads as
+  wrong rather than as unspecified; `tools/scripts/deploy-worker.sh` is the safe
+  path for a real tier. Relatedly, that target is `d1-migrate` and not `migrate`
+  because **`nx migrate` is a built-in Nx command** — `nx migrate <project>`
+  parses the project as a package to upgrade the workspace to, rather than
+  running the target. → `hosting.md`, _deploying the workers_;
+  `apps/bracemark-api/src/db/migrations/README.md`.
 - **Greenfield — no migrations.** There is no production data. Edit persisted
   schemas in place (Dexie `version(1)`, the expo-sqlite DDL); don't add a
   migration step.

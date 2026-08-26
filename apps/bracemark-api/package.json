@@ -38,13 +38,13 @@
           }
         }
       },
-      "migrate": {
+      "d1-migrate": {
         "executor": "nx:run-commands",
         "options": {
           "commands": [
-            "wrangler d1 migrations apply DIRECTORY_DB --env development",
-            "wrangler d1 migrations apply ACCOUNTS_DB_1 --env development",
-            "wrangler d1 migrations apply SESSIONS_DB --env development"
+            "wrangler d1 migrations apply DIRECTORY_DB --env development --local",
+            "wrangler d1 migrations apply ACCOUNTS_DB_1 --env development --local",
+            "wrangler d1 migrations apply SESSIONS_DB --env development --local"
           ],
           "parallel": false,
           "cwd": "apps/bracemark-api"
@@ -52,16 +52,16 @@
         "configurations": {
           "staging": {
             "commands": [
-              "wrangler d1 migrations apply DIRECTORY_DB --env staging",
-              "wrangler d1 migrations apply ACCOUNTS_DB_1 --env staging",
-              "wrangler d1 migrations apply SESSIONS_DB --env staging"
+              "wrangler d1 migrations apply DIRECTORY_DB --env staging --remote",
+              "wrangler d1 migrations apply ACCOUNTS_DB_1 --env staging --remote",
+              "wrangler d1 migrations apply SESSIONS_DB --env staging --remote"
             ]
           },
           "production": {
             "commands": [
-              "wrangler d1 migrations apply DIRECTORY_DB --env production",
-              "wrangler d1 migrations apply ACCOUNTS_DB_1 --env production",
-              "wrangler d1 migrations apply SESSIONS_DB --env production"
+              "wrangler d1 migrations apply DIRECTORY_DB --env production --remote",
+              "wrangler d1 migrations apply ACCOUNTS_DB_1 --env production --remote",
+              "wrangler d1 migrations apply SESSIONS_DB --env production --remote"
             ]
           }
         }

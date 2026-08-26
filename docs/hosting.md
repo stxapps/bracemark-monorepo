@@ -502,6 +502,100 @@ in a response headers policy and in `tools/cloudfront/rewrite-url.js`, per _secu
 headers_ [above](#security-headers--where-the-csp-has-to-live) and _[clean
 URLs](#clean-urls--the-cloudfront-function)_. A deploy never touches them.
 
+### deploying the workers — `deploy-worker.sh`
+
+The two Cloudflare Workers deploy the other way round from the static apps:
+there is no artifact to upload and nothing to invalidate, because `wrangler`
+bundles and ships in one step and a Worker deploy is live the moment it returns.
+`tools/scripts/deploy-worker.sh` is the sibling of `deploy-static.sh` and takes
+the same shape, and the root `package.json` wraps it:
+
+```bash
+npm run deploy:api:staging        npm run deploy:api:production
+npm run deploy:extractor:staging  npm run deploy:extractor:production
+```
+
+It resolves the tier's credential, proves that credential points at the tier it
+claims to, compiles, applies the D1 migrations remotely, deploys, and then
+health-checks the custom domain. `--dry-run`, `--skip-migrate`, `--no-deploy`,
+`--no-smoke`, `--allow-todo` and `--yes` are there for the obvious reasons, and a
+production run prompts for the Worker name unless `--yes` is passed.
+
+**There is no per-tier artifact here, and that is the one way it differs from
+the static deploy.** A Worker bundle bakes nothing: config is read at runtime
+from `c.env` ([env-files.md](./env-files.md#bracemark-api--hono-on-cloudflare-workers)),
+so the same bytes are correct for either tier and there is no equivalent of
+`deploy-static.sh`'s `verify_tier`. What the script guards instead is the
+_destination_.
+
+**The credential is the whole guard, so the script will not run without the
+right one.** Each tier is its own Cloudflare account
+([above](#why-staging-is-a-separate-registrable-domain)), and neither
+`wrangler.jsonc` names an account — so nothing in this repo pins where a deploy
+lands. Three consequences the script is built around:
+
+- **A per-tier API token, out of the login keychain, never from a file in the
+  worktree.** The tier's account id lives in a gitignored `.env.<tier>.local`
+  beside `wrangler.jsonc` and that is fine — it is an identifier, and leaking it
+  grants nothing. A token is a credential and is the only thing scoping a deploy
+  to one tier, so it is kept where the AWS half of this deploy keeps its own
+  (outside the tree) and put into the environment for the length of one command.
+- **No fallback when the keychain misses.** Bare `wrangler` would quietly use an
+  OAuth session from `wrangler login`, which authenticates the **user** rather
+  than an account — and one user owns both tiers, so that session reaches
+  production. The script dies instead.
+- **The account check mirrors `verify_tier`**: it reads this tier's expected id
+  and the other tier's out of the two gitignored files, and refuses to deploy
+  with a credential that can see the wrong one. It is a second opinion rather
+  than the guard — a token minted against a single account cannot reach the other
+  one at all, which is what actually makes this safe — so a token without the
+  permission to answer gets a warning, not a failure.
+
+**Migrations run before the deploy, and always `--remote`.** Every D1 migration
+is additive by rule (`apps/bracemark-api/src/db/migrations/README.md`), so old
+code runs fine against a new schema and new code may not run against an old one;
+migrate-then-deploy is the only ordering safe in both directions.
+`wrangler d1 migrations apply` **defaults to the local miniflare database** when
+given neither `--local` nor `--remote`, and reports success — so the flag is not
+a preference, it is the difference between migrating production and writing to a
+file under `.wrangler/`. The script lists each binding's pending migrations
+first, which doubles as the check that its `database_id` is real and reachable by
+the token in hand. bracemark-extractor has no storage bindings at all and skips
+this entire phase.
+
+**Unfilled `TODO:` values are fatal on production and a warning on staging.**
+`wrangler` prints every `vars` value in its dry-run summary, which is the only
+place a placeholder that was never filled in is visible: a `TODO:` string is a
+perfectly valid string, so it deploys, and the symptom is a runtime one — a
+checkout selling a price id that does not exist. Staging is where those get
+filled in one at a time as the accounts behind them come into existence, so a
+hard stop there would block the deploys you need to make progress; on production
+every one of them is a live billing path. `--allow-todo` overrides.
+
+**The first deploy of a tier is also what provisions its custom domain.** With
+that environment's `routes` entry uncommented, `wrangler deploy` writes the
+hostname's DNS record and certificate into the zone — which is why the zone has
+to be in the same account as the Worker, and why the health check at the end can
+legitimately fail for a few minutes on a first run while the certificate issues.
+
+**What a deploy does not touch: secrets.** They are set out of band, per Worker
+per environment — `bracemark-api-staging` and `bracemark-api-production` are
+different Workers, so each needs its own complete set, with no inheritance from
+the top level (the same rule that applies to `vars` and every binding). Use
+`wrangler secret bulk --env <tier>` rather than one interactive `secret put` per
+value; two of the api's secrets are multiline PEMs. A deploy never deletes a
+secret. It **does** replace `vars` from `wrangler.jsonc`, which is intended —
+that file is their source of truth, so `--keep-vars` is deliberately absent.
+
+**Per-Worker secrets, not Secrets Store.** `wrangler secret` sets an encrypted
+variable on one Worker, arriving as `c.env.NAME`; Cloudflare's Secrets Store is a
+separate account-level product bound through `secrets_store_secrets`, for a
+secret shared across many Workers. Nothing here is shared — every secret belongs
+to bracemark-api alone (the extractor has none: v1 is anonymous, with no session
+and no key), and the tiers are already separated by account — so it would buy no
+reuse while adding a `store_id` to this public config and a dependency on a
+product still in open beta.
+
 ### cors & frontend↔backend wiring
 
 Each frontend tier points at the matching api tier, and each api tier allows only

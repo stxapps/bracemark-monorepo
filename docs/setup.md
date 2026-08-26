@@ -133,4 +133,5 @@ now, not their own host (architecture.md — _apps_).
 #### wrangler
 
 - rm -rf apps/bracemark-api/.wrangler/state/v3/d1 or rm -rf apps/bracemark-api/.wrangler/state
-- npx nx run bracemark-api:migrate
+- npm run d1:migrate (was `nx run bracemark-api:migrate`; the target is now `d1-migrate`
+  on `@stxapps/bracemark-api`, because `nx migrate` is a built-in Nx command)

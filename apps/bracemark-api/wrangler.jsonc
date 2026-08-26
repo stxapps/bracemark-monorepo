@@ -283,11 +283,7 @@
           "simple": { "limit": 100, "period": 10 },
         },
       ],
-      // Custom domain. dryrunbase.com is registered; uncomment once that zone
-      // exists in the staging account — a Workers custom domain needs its zone in
-      // THIS account, which is why staging is its own registrable domain rather
-      // than a subdomain of bracemark.com (docs/hosting.md — _why staging is a separate registrable domain_):
-      // "routes": [{ "pattern": "api.dryrunbase.com", "custom_domain": true }]
+      "routes": [{ "pattern": "api.dryrunbase.com", "custom_domain": true }]
     },
     "production": {
       "vars": {
@@ -391,7 +387,7 @@
           "simple": { "limit": 100, "period": 10 },
         },
       ],
-      // "routes": [{ "pattern": "api.bracemark.com", "custom_domain": true }]
+      "routes": [{ "pattern": "api.bracemark.com", "custom_domain": true }]
     },
   },
 }

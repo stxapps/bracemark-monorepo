@@ -32,7 +32,14 @@
     "deploy:web:staging": "bash tools/scripts/deploy-static.sh web staging",
     "deploy:web:production": "bash tools/scripts/deploy-static.sh web production",
     "deploy:site:staging": "bash tools/scripts/deploy-static.sh site staging",
-    "deploy:site:production": "bash tools/scripts/deploy-static.sh site production"
+    "deploy:site:production": "bash tools/scripts/deploy-static.sh site production",
+    "deploy:api:staging": "bash tools/scripts/deploy-worker.sh api staging",
+    "deploy:api:production": "bash tools/scripts/deploy-worker.sh api production",
+    "deploy:extractor:staging": "bash tools/scripts/deploy-worker.sh extractor staging",
+    "deploy:extractor:production": "bash tools/scripts/deploy-worker.sh extractor production",
+    "d1:migrate": "nx run @stxapps/bracemark-api:d1-migrate",
+    "d1:migrate:staging": "nx run @stxapps/bracemark-api:d1-migrate --configuration=staging",
+    "d1:migrate:production": "nx run @stxapps/bracemark-api:d1-migrate --configuration=production"
   },
   "private": true,
   "engines": {

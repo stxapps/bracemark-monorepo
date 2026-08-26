@@ -378,7 +378,7 @@ profile — applies to both tiers, and with `account_id` gone from the config
 nothing downstream would object. An already-exported value still wins over the
 file, so CI's env vars and a one-off `CLOUDFLARE_ACCOUNT_ID=… npx nx deploy …`
 both override it. The paths resolve against the **working directory**, which the
-`deploy` / `migrate` targets set to the app dir — a hand-run
+`deploy` / `d1-migrate` targets set to the app dir — a hand-run
 `npx wrangler -c apps/bracemark-api/wrangler.jsonc` from the workspace root finds
 nothing.
 
@@ -446,6 +446,17 @@ browser frontends — bracemark-web and bracemark-site — need an allowed origi
 - **gitignored:** `.env*.local` (frontend personal overrides — and bracemark-expo's
   `APPLE_TEAM_ID`, above), `.dev.vars` (bracemark-api Workers local), and all real
   secrets. These never enter git.
+- **in no env file at all:** the per-tier **Cloudflare API token**. Wrangler
+  would happily read `CLOUDFLARE_API_TOKEN` out of the same `.env.<tier>.local`
+  that carries the account id, which is exactly what makes it tempting — but the
+  two are different in kind. An account id is an identifier and leaking it grants
+  nothing; a token is the only thing scoping a deploy to one tier, so a plaintext
+  copy of it in the worktree is one backup or one over-broad file read away from
+  being a production write. It lives in the login keychain, and
+  `tools/scripts/deploy-worker.sh` puts it in the environment for the length of
+  one command. Same rule for the R2 S3-API key pair and every other real secret:
+  `wrangler secret`, never a file here. See
+  [hosting.md](./hosting.md#deploying-the-workers--deploy-workersh).
 
 **The workspace root has its own pair, and it belongs to no app.** Root `.env` is
 committed and holds non-secret Nx task-running defaults; root `.env.local` is
