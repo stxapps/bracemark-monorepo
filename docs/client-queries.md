@@ -61,15 +61,17 @@ anything else (multi-list, `none`, text words) walks the all-links ordered index
 and filters/decodes lazily, stopping at the page. **Text predicates live inside the
 blobs, so they can never be index-served** — they're always a JS post-filter, and
 the total is non-exact under search. Note the one cross-record wrinkle from the
-writer-split: a `url` word matches on the decoded **link**, a `title` word matches on
-the decoded **extraction**, and a basic `text` word matches the **combined url⊕title**
-haystack (so it reads both). Any clause that touches the resolved title — a `title`
+writer-split: a `url` or `note` word matches on the decoded **link**, a `title` word
+matches on the decoded **extraction**, and a basic `text` word matches the **combined
+url⊕title** haystack (so it reads both). Any clause that touches the resolved title — a `title`
 **or** a `text` clause, gated by `needsExtractionJoin` — **joins the co-keyed
 `extractions/` record** (same `{id}`) and decodes it too. That join is the deliberate
 cost of keeping `links/` user-only; it falls only on text search (and on row display,
 for the title/image), never on the index-served browse path. (`text` is the basic
-"words, all links" clause; `url`/`title` are the field-scoped advanced clauses — the
-grammar that names them is [search.md](./search.md).)
+"words, all links" clause; `url`/`title`/`note` are the field-scoped advanced clauses
+— the grammar that names them is [search.md](./search.md). `note` is the cheap one:
+it reads the link blob the walk already decodes for `url`, so it never triggers the
+join, and both ports call the pair through one `linkFieldsMatch`.)
 
 **Why not project a `displayTitle` column onto the link record instead?** It would
 make `title` index-/scan-served again, but it would have to be derived from a

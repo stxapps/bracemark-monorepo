@@ -27,16 +27,24 @@
 // bulkGet+decode join here, a LEFT JOIN on the token junction there), so agreeing on
 // these cases is the point.
 
-import { LINKS_PREFIX, MY_LIST_ID, newFacet, pathFromId, TRASH_ID } from '@stxapps/shared';
+import {
+  emptyQuery,
+  type LinkQuery,
+  LINKS_PREFIX,
+  MY_LIST_ID,
+  newFacet,
+  pathFromId,
+  TRASH_ID,
+} from '@stxapps/shared';
 
 import { db } from './db';
 import { writeExtraction, writeLink } from './mutations';
-import { readExtractionFacetCounts, readRawPendingTitleImageCount } from './queries';
+import { readExtractionFacetCounts, readLinks, readRawPendingTitleImageCount } from './queries';
 
 const USER = 'alice';
 
 // A link in `listId`, written through the real write edge (createdAt 0 → stamped now).
-function seedLink(id: string, listId: string = MY_LIST_ID): Promise<void> {
+function seedLink(id: string, listId: string = MY_LIST_ID, note?: string): Promise<void> {
   return writeLink(
     USER,
     {
@@ -44,11 +52,20 @@ function seedLink(id: string, listId: string = MY_LIST_ID): Promise<void> {
       url: `https://example.com/${id}`,
       listId,
       tagIds: [],
+      note,
       createdAt: 0,
       updatedAt: 0,
     },
     {},
   );
+}
+
+// A query carrying only a `note` clause — the shape the search editor's "Note
+// contains" box commits (bare words → `all`).
+function noteQuery(words: string[]): LinkQuery {
+  const query = emptyQuery();
+  query.note.all = words;
+  return query;
 }
 
 // Settle a link's `titleImage` facet. No display fields: a `done` facet with neither a
@@ -150,5 +167,48 @@ describe('readRawPendingTitleImageCount', () => {
     await seedFacet('b', 'permanent');
 
     expect(await readRawPendingTitleImageCount()).toBe(0);
+  });
+});
+
+// The `note` clause is the one text rung that reads the LINK blob and nothing else —
+// no extraction join, and (unlike every other clause here) no index behind it. These
+// pin the two things that would fail silently: that an absent note is an empty
+// haystack rather than a match, and that a note clause disqualifies the exact-count
+// fast path the way the url/title/text clauses do. A wrong answer to either is a
+// plausible list of links, not an error.
+describe('readLinks with a note clause', () => {
+  it('keeps only the links whose note contains every word, matching case-insensitively', async () => {
+    await seedLink('a', MY_LIST_ID, 'Read before the CRDT talk');
+    await seedLink('b', MY_LIST_ID, 'crdt reading, later');
+    await seedLink('c', MY_LIST_ID, 'nothing to do with it');
+    await seedLink('d'); // no note at all
+
+    const result = await readLinks(noteQuery(['crdt']), 20);
+
+    expect(result.links.map((l) => l.path).sort()).toEqual([
+      pathFromId('a', LINKS_PREFIX),
+      pathFromId('b', LINKS_PREFIX),
+    ]);
+  });
+
+  it('does not match a link with no note, even on a word the url carries', async () => {
+    // The haystack is the note ALONE — a note clause must never fall back to the url,
+    // or "Note contains" would quietly answer with url hits and the field would look
+    // like it works while filtering nothing.
+    await seedLink('example');
+
+    expect((await readLinks(noteQuery(['example']), 20)).links).toEqual([]);
+  });
+
+  it('drops the exact total, because the count cannot come from an index', async () => {
+    // `hasTextClause` gates the count: the note lives in the blob, so the survivors are
+    // only known after decoding. An exact `total` here would be the pre-filter count —
+    // a "247 links" header over a page of three.
+    await seedLink('a', MY_LIST_ID, 'kept');
+    await seedLink('b', MY_LIST_ID, 'dropped');
+
+    expect((await readLinks(noteQuery(['kept']), 20)).total).toBeUndefined();
+    // The same view with no note clause still counts off the index.
+    expect((await readLinks(emptyQuery(), 20)).total).toBe(2);
   });
 });

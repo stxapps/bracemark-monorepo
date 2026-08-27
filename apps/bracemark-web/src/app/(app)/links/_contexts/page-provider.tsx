@@ -81,8 +81,9 @@ function hrefForQuery(query: LinkQuery): string {
     ['text', query.text],
     ['url', query.url],
     ['title', query.title],
+    ['note', query.note],
   ] as const) {
-    append(field, clause.all); // bare `text`/`url`/`title` = *-all
+    append(field, clause.all); // bare `text`/`url`/`title`/`note` = *-all
     append(`${field}-any`, clause.any);
     append(`${field}-none`, clause.none);
   }
@@ -103,6 +104,7 @@ function hrefForQuery(query: LinkQuery): string {
 //   text / text-all / text-any / text-none (words over the combined url⊕title)
 //   url  / url-all  / url-any  / url-none  (substring words, url only)
 //   title/ title-all/ title-any/ title-none
+//   note / note-all / note-any / note-none (substring words, the link's own note)
 //   sort  = updatedAt | createdAt          (ordering field — READ-ONLY override)
 //   order = asc | desc                      (ordering direction — READ-ONLY override)
 // `sort`/`order` are an OPTIONAL override of the global synced sort setting: present
@@ -110,7 +112,7 @@ function hrefForQuery(query: LinkQuery): string {
 // provider passes in). They're NOT filters (not in FILTER_KEYS), so `?sort=…` alone
 // still resolves to the default inbox, and the setters don't serialize them back.
 // The bare name is sugar for the common relation: `list`/`tag` → `any` (include),
-// `text`/`url`/`title` → `all` (must contain every word). Clauses AND across fields.
+// `text`/`url`/`title`/`note` → `all` (must contain every word). Clauses AND across fields.
 // Values are REPEATED keys (`?tag=a&tag=b` / `?text=foo&text=bar`), never `+`
 // (decodes to space) or comma (breaks on ids containing one). `setSimpleQuery`
 // emits only the bare `list`/`tag` forms; `setQuery` (the search editor) emits the
@@ -135,6 +137,10 @@ const FILTER_KEYS = [
   'title-all',
   'title-any',
   'title-none',
+  'note',
+  'note-all',
+  'note-any',
+  'note-none',
 ];
 
 // Words are matched case-insensitively and trimmed; lowercase them here so the
@@ -192,6 +198,11 @@ function parseLinkQuery(
       any: words(searchParams.getAll('title-any')),
       none: words(searchParams.getAll('title-none')),
     },
+    note: {
+      all: words([...searchParams.getAll('note'), ...searchParams.getAll('note-all')]),
+      any: words(searchParams.getAll('note-any')),
+      none: words(searchParams.getAll('note-none')),
+    },
     // Ordering: the already-resolved URL-override-or-setting sort (see the header).
     sortOn,
     sortOrder,
@@ -214,7 +225,7 @@ function parseLinkQuery(
 // the default view highlights My List, while a global search — which has a text
 // clause — resolves to `none` instead of a stale list highlight.
 function selectionFromQuery(q: LinkQuery): Selection {
-  // Any substring-text predicate (basic `text`, or field-scoped url/title) → search.
+  // Any substring-text predicate (basic `text`, or field-scoped url/title/note) → search.
   const textTerms =
     q.text.all.length +
     q.text.any.length +
@@ -224,7 +235,10 @@ function selectionFromQuery(q: LinkQuery): Selection {
     q.url.none.length +
     q.title.all.length +
     q.title.any.length +
-    q.title.none.length;
+    q.title.none.length +
+    q.note.all.length +
+    q.note.any.length +
+    q.note.none.length;
   if (textTerms > 0) return { kind: 'none' };
 
   // Exclusions or tag-`all` are compound filters with no single highlight.

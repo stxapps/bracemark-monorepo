@@ -64,7 +64,10 @@ function hasAdvancedFilters(q: LinkQuery): boolean {
     q.url.none.length +
     q.title.all.length +
     q.title.any.length +
-    q.title.none.length;
+    q.title.none.length +
+    q.note.all.length +
+    q.note.any.length +
+    q.note.none.length;
   if (hidden > 0) return true;
   if (q.lists.none.length > 0 || q.tags.all.length > 0 || q.tags.none.length > 0) return true;
 
@@ -83,9 +86,9 @@ function hasAdvancedFilters(q: LinkQuery): boolean {
 // The advanced popover's editable snapshot — raw strings for the word fields (so
 // spaces survive mid-typing; split to words only on submit) and id lists for the
 // tri-state checklists. Covers the whole grammar EXCEPT the field-scoped
-// url/title any/none forms, which stay deep-link-only on purpose: `text`'s
-// combined url⊕title haystack subsumes them in practice, and they'd cost four
-// more inputs for the tail of the tail. So open → Search round-trips everything
+// url/title/note any/none forms, which stay deep-link-only on purpose: `text`'s
+// combined url⊕title haystack subsumes the first two in practice, `note` follows
+// its siblings, and they'd cost six more inputs for the tail of the tail. So open → Search round-trips everything
 // else. Tags carry ONE include set + a match mode (any|all) rather than both
 // positive relations at once — a hand-built deep link with both `tag-any` and
 // `tag-all` collapses to `all` mode over their union (WYSIWYG: the checkboxes
@@ -96,6 +99,7 @@ interface Draft {
   textNone: string;
   url: string;
   title: string;
+  note: string;
   listsAny: string[];
   listsNone: string[];
   tagsInclude: string[];
@@ -111,6 +115,7 @@ function initDraft(q: LinkQuery): Draft {
     textNone: q.text.none.join(' '),
     url: q.url.all.join(' '),
     title: q.title.all.join(' '),
+    note: q.note.all.join(' '),
     listsAny: q.lists.any,
     listsNone: q.lists.none,
     tagsInclude: tagsMode === 'all' ? [...new Set([...q.tags.all, ...q.tags.any])] : q.tags.any,
@@ -319,6 +324,7 @@ function AdvancedSearch() {
     q.text.none = words(draft.textNone);
     q.url.all = words(draft.url);
     q.title.all = words(draft.title);
+    q.note.all = words(draft.note);
     q.lists.any = draft.listsAny;
     q.lists.none = draft.listsNone;
     // A single included tag commits as `any` regardless of mode (the two are the
@@ -389,7 +395,7 @@ function AdvancedSearch() {
             is what dissolves the grouping when the labels are only 12px to begin
             with. 14px against `Field`'s internal `gap-1` gives a 1:3.5 ratio, and
             being a half-step down from the form still pays for itself in a panel
-            that's `max-h-[70vh]` with nine children stacked in it. */}
+            that's `max-h-[70vh]` with ten children stacked in it. */}
         <div className="flex flex-col gap-3.5">
           {/* The app's ONE panel-title style, the same string SheetTitle and
               DialogTitle carry (sheet.tsx, dialog.tsx). This popover is a titled
@@ -407,7 +413,7 @@ function AdvancedSearch() {
               practical exclude-a-domain case.
 
               `density="dense"` (label.tsx) over `h-8` controls, matching the
-              checklist labels and hint block below. Don't promote these five to
+              checklist labels and hint block below. Don't promote these six to
               standard — they'd out-weigh the checklists they sit above. */}
           <Field className="gap-1">
             <FieldLabel htmlFor="adv-text-all" density="dense">
@@ -464,6 +470,21 @@ function AdvancedSearch() {
               id="adv-title"
               value={draft.title}
               onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
+              className="h-8"
+            />
+          </Field>
+          {/* The note is the one searchable field with NO basic counterpart: the
+              word trio above runs over url⊕title only, so this box is the only way
+              to reach what you wrote about a link. Placed last of the field-scoped
+              three, after the two the trio already covers. */}
+          <Field className="gap-1">
+            <FieldLabel htmlFor="adv-note" density="dense">
+              Note contains
+            </FieldLabel>
+            <Input
+              id="adv-note"
+              value={draft.note}
+              onChange={(e) => setDraft((d) => ({ ...d, note: e.target.value }))}
               className="h-8"
             />
           </Field>

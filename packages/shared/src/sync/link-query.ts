@@ -14,8 +14,8 @@ import type { LinkSortOn, LinkSortOrder } from './entities';
 //   any  — match if the field has/contains ANY of these (OR / include-any)
 //   all  — match if it has/contains ALL of these (AND / include-all)
 //   none — match if it has/contains NONE of these (NOT / exclude)
-// For tags `any/all/none` apply to the link's tag-id set; for `url`/`title` they
-// apply to lowercased substring word matches.
+// For tags `any/all/none` apply to the link's tag-id set; for `url`/`title`/`note`
+// they apply to lowercased substring word matches.
 export interface Clause {
   any: string[];
   all: string[];
@@ -50,6 +50,16 @@ export interface LinkQuery {
   text: Clause;
   url: Clause;
   title: Clause;
+  // The link's own note (`link.note`, LINK_NOTE_MAX in entities.ts) — an advanced
+  // rung with no basic counterpart, and deliberately NOT folded into `text`'s
+  // haystack. Two reasons, both about the free rung: `text` is what a free user
+  // gets, and widening it would change free search rather than add a Plus lever;
+  // and a note has no read-only surface (a badge on the row, docs/editors.md), so
+  // a hit from the combined haystack would surface a link with no visible reason.
+  // Asking for the field is what makes the match legible. It reads off the LINK
+  // blob like `url`, so unlike `title`/`text` it needs no extraction join — the
+  // cheapest text clause in the grammar.
+  note: Clause;
   // Ordering, not a filter. Resolved by the app's read edge (bracemark-web
   // page-provider): a global synced setting (settings/general.enc) with an
   // optional READ-ONLY URL override (`?sort`/`?order`, hand-typed) — the URL wins
@@ -70,6 +80,7 @@ export function emptyQuery(): LinkQuery {
     text: { any: [], all: [], none: [] },
     url: { any: [], all: [], none: [] },
     title: { any: [], all: [], none: [] },
+    note: { any: [], all: [], none: [] },
     sortOn: 'updatedAt',
     sortOrder: 'desc',
   };

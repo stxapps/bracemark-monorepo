@@ -629,7 +629,9 @@ function clauseEmpty(c: Clause): boolean {
 }
 
 function hasTextClause(q: LinkQuery): boolean {
-  return !clauseEmpty(q.url) || !clauseEmpty(q.title) || !clauseEmpty(q.text);
+  return (
+    !clauseEmpty(q.url) || !clauseEmpty(q.title) || !clauseEmpty(q.text) || !clauseEmpty(q.note)
+  );
 }
 
 // The tag-id sets for a set of link paths, from the junction table — the
@@ -690,6 +692,16 @@ function needsExtractionJoin(q: LinkQuery): boolean {
 
 function urlMatches(link: LinkItem, q: LinkQuery): boolean {
   return wordsMatch(link.url, q.url);
+}
+
+// `link.note` lives in the link blob like the url, so this needs no join either —
+// web queries.ts `noteMatches`/`linkFieldsMatch`, verbatim.
+function noteMatches(link: LinkItem, q: LinkQuery): boolean {
+  return wordsMatch(link.note ?? '', q.note);
+}
+
+function linkFieldsMatch(link: LinkItem, q: LinkQuery): boolean {
+  return urlMatches(link, q) && noteMatches(link, q);
 }
 
 function titleMatches(link: LinkItem, extraction: Extraction | undefined, q: LinkQuery): boolean {
@@ -777,11 +789,11 @@ async function finishFromCandidates(
 
   if (needsExtractionJoin(q)) return finishWithExtractionSearch(survivors, q, limit);
 
-  // url-only text: filter on the decoded link, no extraction join needed.
+  // url/note-only text: filter on the decoded link, no extraction join needed.
   const links: LinkItem[] = [];
   for (const row of survivors) {
     const link = decodeCachedLink(row);
-    if (link && urlMatches(link, q)) {
+    if (link && linkFieldsMatch(link, q)) {
       links.push(link);
       if (links.length > limit) break; // one past the page → hasMore
     }
@@ -800,7 +812,7 @@ async function finishWithExtractionSearch(
   const urlPassed: LinkItem[] = [];
   for (const row of survivors) {
     const link = decodeCachedLink(row);
-    if (link && urlMatches(link, q)) urlPassed.push(link);
+    if (link && linkFieldsMatch(link, q)) urlPassed.push(link);
   }
   const exRows = await bulkGetItems(urlPassed.map((l) => extractionPathForLink(l.path)));
   const links: LinkItem[] = [];
@@ -862,7 +874,8 @@ async function readRest(
     clauseEmpty(query.tags) &&
     clauseEmpty(query.url) &&
     clauseEmpty(query.title) &&
-    clauseEmpty(query.text);
+    clauseEmpty(query.text) &&
+    clauseEmpty(query.note);
 
   if (onlyLists && query.lists.none.length === 0) {
     if (query.lists.any.length === 1) {
@@ -914,7 +927,7 @@ async function readRest(
   }
 
   // No positive tag clause and no title/text clause: walk all links in sort
-  // order, filtering as we go on columns + url (decoded link), stopping once
+  // order, filtering as we go on columns + url/note (decoded link), stopping once
   // `limit + 1` pass — a bounded slice, not the library.
   const passed: ItemRow[] = [];
   let after: { value: number; path: string } | undefined;
@@ -928,7 +941,7 @@ async function readRest(
       if (exclude.has(row.path)) continue;
       if (!columnMatches(row, tagIdsByPath?.get(row.path) ?? [], query)) continue;
       const link = decodeCachedLink(row);
-      if (link === undefined || !urlMatches(link, query)) continue;
+      if (link === undefined || !linkFieldsMatch(link, query)) continue;
       passed.push(row);
       if (passed.length > limit) break outer; // one past the page → hasMore
     }
@@ -963,12 +976,12 @@ async function readPinnedOverlay(
   const tagIdsByPath = hasTagClause(query)
     ? loadTagIdsByPath(present.map((r) => r.path))
     : undefined;
-  const hasUrl = !clauseEmpty(query.url);
+  const hasLinkFields = !clauseEmpty(query.url) || !clauseEmpty(query.note);
   const passed: LinkItem[] = [];
   for (const row of rows) {
     if (!row || !columnMatches(row, tagIdsByPath?.get(row.path) ?? [], query)) continue;
     const link = decodeCachedLink(row);
-    if (!link || (hasUrl && !urlMatches(link, query))) continue;
+    if (!link || (hasLinkFields && !linkFieldsMatch(link, query))) continue;
     passed.push(link);
   }
 

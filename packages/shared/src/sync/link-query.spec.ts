@@ -7,6 +7,7 @@ const q = (any: string[], none: string[] = []): LinkQuery => ({
   text: { any: [], all: [], none: [] },
   url: { any: [], all: [], none: [] },
   title: { any: [], all: [], none: [] },
+  note: { any: [], all: [], none: [] },
   sortOn: 'updatedAt',
   sortOrder: 'desc',
 });

@@ -6,6 +6,7 @@ import {
   LIFETIME_PLAN,
   LIFETIME_SEATS,
   LIFETIME_USD,
+  LINK_NOTE_MAX,
   PLAN_LABELS,
   PLAN_USD_PER_YEAR,
   TRIAL_DAYS,
@@ -580,6 +581,19 @@ export const FAQ_GROUPS: FaqGroup[] = [
             Yes, on {PLAN_LABELS.plus}. The free plan gives you flat lists, tags and pins, which is
             enough structure for a library of {FREE_LINKS} links; nesting starts to matter at the
             size the paid plan is for.
+          </>
+        ),
+      },
+      {
+        id: 'link-note',
+        q: 'Can I add a note to a link?',
+        a: (
+          <>
+            Yes, on every plan — one short note per link, up to {LINK_NOTE_MAX} characters, added
+            when you save it or from “Edit note” in the link’s menu. It is encrypted on your device
+            with the link itself, so it is as unreadable to us as the address is. The search box
+            matches titles and addresses; to search your notes, use the “Note contains” field in the{' '}
+            {PLAN_LABELS.plus} search editor.
           </>
         ),
       },

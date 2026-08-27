@@ -104,6 +104,13 @@ const FREE_FEATURES = [
   'Sync across all your devices',
   'Browser extension and mobile share sheet',
   'Lists, tags, pins and search',
+  // Its own bullet, never folded into the search line above it: the FREE search
+  // haystack is url ⊕ title, and "search your notes" is exactly the promise a
+  // merged bullet would make. Searching a note is the Plus editor's "Note contains"
+  // field (docs/search.md), which is covered by the search-editor row below. Free on every plan — `note` is not an
+  // entitlement in plans.ts, so there is nothing to derive it from and nothing
+  // that could gate it later without this line noticing.
+  'A short note on any link',
   'Link previews from the browser extension & mobile app',
   'Full data export, any time',
 ];
@@ -180,7 +187,7 @@ const COMPARISON: { label: string; cell: (plan: Plan) => Cell }[] = [
   // gate (every plan stores `files/` blobs), which is exactly why the copy has
   // to carry the distinction the data can't.
   { label: 'Link previews when you save from the extension or app', cell: () => true },
-  { label: 'Lists, tags, pins & layouts', cell: () => true },
+  { label: 'Lists, tags, pins, notes & layouts', cell: () => true },
   { label: 'Search across your whole library', cell: () => true },
   { label: 'Full data export', cell: () => true },
   { label: 'Nested lists', cell: (p) => entitlementsOf(p).nestedLists },

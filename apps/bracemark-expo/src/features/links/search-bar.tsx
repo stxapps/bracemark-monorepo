@@ -83,7 +83,10 @@ function hasAdvancedFilters(q: LinkQuery): boolean {
     q.url.none.length +
     q.title.all.length +
     q.title.any.length +
-    q.title.none.length;
+    q.title.none.length +
+    q.note.all.length +
+    q.note.any.length +
+    q.note.none.length;
   if (hidden > 0) return true;
   if (q.lists.none.length > 0 || q.tags.all.length > 0 || q.tags.none.length > 0) return true;
 
@@ -95,15 +98,16 @@ function hasAdvancedFilters(q: LinkQuery): boolean {
 }
 
 // The advanced editor's editable snapshot — web's Draft, verbatim (raw strings
-// for the word fields so spaces survive mid-typing; the field-scoped url/title
-// any/none forms stay deep-link-only; tags carry ONE include set + a match
-// mode).
+// for the word fields so spaces survive mid-typing; the field-scoped
+// url/title/note any/none forms stay deep-link-only; tags carry ONE include set +
+// a match mode).
 interface Draft {
   textAll: string;
   textAny: string;
   textNone: string;
   url: string;
   title: string;
+  note: string;
   listsAny: string[];
   listsNone: string[];
   tagsInclude: string[];
@@ -119,6 +123,7 @@ function initDraft(q: LinkQuery): Draft {
     textNone: q.text.none.join(' '),
     url: q.url.all.join(' '),
     title: q.title.all.join(' '),
+    note: q.note.all.join(' '),
     listsAny: q.lists.any,
     listsNone: q.lists.none,
     tagsInclude: tagsMode === 'all' ? [...new Set([...q.tags.all, ...q.tags.any])] : q.tags.any,
@@ -388,6 +393,7 @@ function AdvancedSearch() {
     q.text.none = words(draft.textNone);
     q.url.all = words(draft.url);
     q.title.all = words(draft.title);
+    q.note.all = words(draft.note);
     q.lists.any = draft.listsAny;
     q.lists.none = draft.listsNone;
     // A single included tag commits as `any` regardless of mode (the two are the
@@ -546,6 +552,14 @@ function AdvancedSearch() {
                 label="Title contains"
                 value={draft.title}
                 onChangeText={(v) => setDraft((d) => ({ ...d, title: v }))}
+              />
+              {/* The one searchable field with no basic counterpart — the word
+                  trio above runs over url⊕title only, so this is the only way to
+                  reach what you wrote about a link. */}
+              <WordField
+                label="Note contains"
+                value={draft.note}
+                onChangeText={(v) => setDraft((d) => ({ ...d, note: v }))}
               />
               <TriCheckList
                 label="Lists"

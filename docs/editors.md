@@ -470,7 +470,11 @@ editors:
   card layout is where the line fits — it has the most room per link and it grows
   to whatever it renders. Either way the field must stay inline on the link: were
   it to move to a `files/` blob (the deferred `noteId`), the layouts would lose
-  the cheap read that makes even the badge possible.
+  the cheap read that makes even the badge possible — and so would the search
+  grammar's `note` clause ("Note contains" in the Plus editor,
+  [search.md](./search.md)), which filters on the same inline field with no join.
+  That clause is also the answer to what the badge costs: a note you cannot read at
+  a glance is at least one you can find.
 - **The sidebar** (`_panes/sidebar.tsx`) does **not** use the shared picker
   components — it renders its own `NavTree`. But it renders it over the **same
   `useLists`/`useTags` trees** and the same `@stxapps/shared` tree helpers

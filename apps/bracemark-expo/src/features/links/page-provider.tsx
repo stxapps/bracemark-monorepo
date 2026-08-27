@@ -91,8 +91,9 @@ function hrefForQuery(query: LinkQuery): string {
     ['text', query.text],
     ['url', query.url],
     ['title', query.title],
+    ['note', query.note],
   ] as const) {
-    append(field, clause.all); // bare `text`/`url`/`title` = *-all
+    append(field, clause.all); // bare `text`/`url`/`title`/`note` = *-all
     append(`${field}-any`, clause.any);
     append(`${field}-none`, clause.none);
   }
@@ -123,6 +124,10 @@ const FILTER_KEYS = [
   'title-all',
   'title-any',
   'title-none',
+  'note',
+  'note-all',
+  'note-any',
+  'note-none',
 ];
 
 // Every param this screen reads — the filter keys plus the two sort overrides.
@@ -245,6 +250,11 @@ function parseLinkQuery(
       any: words(all(params['title-any'])),
       none: words(all(params['title-none'])),
     },
+    note: {
+      all: words([...all(params['note']), ...all(params['note-all'])]),
+      any: words(all(params['note-any'])),
+      none: words(all(params['note-none'])),
+    },
     sortOn,
     sortOrder,
   };
@@ -270,7 +280,10 @@ function selectionFromQuery(q: LinkQuery): Selection {
     q.url.none.length +
     q.title.all.length +
     q.title.any.length +
-    q.title.none.length;
+    q.title.none.length +
+    q.note.all.length +
+    q.note.any.length +
+    q.note.none.length;
   if (textTerms > 0) return { kind: 'none' };
 
   if (q.lists.none.length > 0 || q.tags.all.length > 0 || q.tags.none.length > 0) {

@@ -262,8 +262,19 @@ const CAPTURE = [
 // What the library does once things are in it. Deliberately unglamorous — these
 // are the daily-loop basics, and every one is free.
 // The Plus levers get one honest footnote instead of four asterisks.
+//
+// The note sits next to lists and tags, two rows clear of Search, because it is
+// the one entry the Search line does not cover: BASIC search matches the URL and
+// the title only (`textMatches`, web-react data/queries.ts). Reaching a note takes
+// the Plus editor's "Note contains" field (docs/search.md), which is a paid rung
+// and so has no business widening this free-tier list. Keep the two apart, and
+// keep Search's wording as literal as it is — "across titles, addresses and hosts"
+// is the sentence that stops a reader assuming their notes are in there.
+// Seven entries leave an orphan on the third row at lg; accepted, since each item
+// is a top-rule rather than a card and the column reads as a list either way.
 const LIBRARY: [string, string][] = [
   ['Lists and tags', 'File a link where you will look for it, or tag it and find it later.'],
+  ['Notes', 'A line to yourself about why you saved it — encrypted with the link, like the rest.'],
   ['Pins', 'The handful you are working from right now, held at the top.'],
   ['Search', 'Across titles, addresses and hosts — every link, on every plan.'],
   ['Card and list layouts', 'A wall of previews, or a dense list. Per device, if you like.'],
@@ -619,10 +630,8 @@ export default function Page() {
             from the saving device is the one thing a grid of covers cannot show
             and the thing that decides whether a free web-only visitor sees any. */}
         <figure className={cn('mb-16')}>
-          <div
-            className={cn('border-border bg-card overflow-hidden rounded-2xl border shadow-sm')}
-          >
-            { }
+          <div className={cn('border-border bg-card overflow-hidden rounded-2xl border shadow-sm')}>
+            {}
             <img
               src={SCREENSHOT.src}
               alt={SCREENSHOT.alt}

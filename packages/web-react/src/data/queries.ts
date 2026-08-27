@@ -645,7 +645,9 @@ function clauseEmpty(c: Clause): boolean {
 }
 
 function hasTextClause(q: LinkQuery): boolean {
-  return !clauseEmpty(q.url) || !clauseEmpty(q.title) || !clauseEmpty(q.text);
+  return (
+    !clauseEmpty(q.url) || !clauseEmpty(q.title) || !clauseEmpty(q.text) || !clauseEmpty(q.note)
+  );
 }
 
 // Predicates the indexed COLUMNS can answer without decoding the blob — list id
@@ -690,6 +692,21 @@ function needsExtractionJoin(q: LinkQuery): boolean {
 // token index).
 function urlMatches(link: LinkItem, q: LinkQuery): boolean {
   return wordsMatch(link.url, q.url);
+}
+
+// The note predicate — like `url`, it reads the decoded LINK (`link.note` lives in
+// `links/{id}.enc`), so it runs in the sync filter walk and never forces the
+// extraction join. An absent note is an empty haystack: an `any`/`all` term fails,
+// a `none`-only term passes — the same rule `titleMatches` follows.
+function noteMatches(link: LinkItem, q: LinkQuery): boolean {
+  return wordsMatch(link.note ?? '', q.note);
+}
+
+// Both link-blob predicates in one call — the half of a text filter that needs
+// nothing but the link. Every site that used to call `urlMatches` alone calls
+// this, so adding a link-scoped field never means auditing the call sites again.
+function linkFieldsMatch(link: LinkItem, q: LinkQuery): boolean {
+  return urlMatches(link, q) && noteMatches(link, q);
 }
 
 // The title text predicate — on the RESOLVED display title (`customTitle ?? extraction.title`).
@@ -785,11 +802,11 @@ async function finishFromCandidates(
 
   if (needsExtractionJoin(q)) return finishWithExtractionSearch(survivors, q, limit);
 
-  // url-only text: filter on the decoded link, no extraction join needed.
+  // url/note-only text: filter on the decoded link, no extraction join needed.
   const links: LinkItem[] = [];
   for (const record of survivors) {
     const link = decodeCachedLink(record);
-    if (link && urlMatches(link, q)) {
+    if (link && linkFieldsMatch(link, q)) {
       links.push(link);
       if (links.length > limit) break; // one past the page → hasMore
     }
@@ -799,9 +816,9 @@ async function finishFromCandidates(
 
 // Finish an EXTRACTION-dependent search page (a `title` and/or `text` clause). The
 // resolved title lives in `extractions/`, so it can't be filtered in the sync walk:
-// take the column-filtered survivor records (already in sort order), apply the url
-// clause on the decoded link, bulk-join their extractions, then apply the title + text
-// clauses and page. Materializes the survivor set — this search is already non-exact /
+// take the column-filtered survivor records (already in sort order), apply the link-blob
+// clauses (url, note) on the decoded link, bulk-join their extractions, then apply the
+// title + text clauses and page. Materializes the survivor set — this search is already non-exact /
 // a scan — so the cost is bounded by the column+url survivors (the whole library only
 // for a bare title/text search, plus the extraction reads).
 async function finishWithExtractionSearch(
@@ -812,7 +829,7 @@ async function finishWithExtractionSearch(
   const urlPassed: LinkItem[] = [];
   for (const record of survivors) {
     const link = decodeCachedLink(record);
-    if (link && urlMatches(link, q)) urlPassed.push(link);
+    if (link && linkFieldsMatch(link, q)) urlPassed.push(link);
   }
   const exRecords = await db.items.bulkGet(urlPassed.map((l) => extractionPathForLink(l.path)));
   const links: LinkItem[] = [];
@@ -866,7 +883,8 @@ async function readRest(
     clauseEmpty(query.tags) &&
     clauseEmpty(query.url) &&
     clauseEmpty(query.title) &&
-    clauseEmpty(query.text);
+    clauseEmpty(query.text) &&
+    clauseEmpty(query.note);
 
   if (onlyLists && query.lists.none.length === 0) {
     if (query.lists.any.length === 1) {
@@ -897,13 +915,13 @@ async function readRest(
   }
 
   // No positive tag clause and no title/text clause: walk all links in sort order, filtering
-  // as we go on columns + url (decoded link). The `filter` stops once `limit + 1` pass
+  // as we go on columns + url/note (decoded link). The `filter` stops once `limit + 1` pass
   // (one past the page detects `hasMore`), so it touches a bounded slice, not the library.
   const records = await linkRange()
     .filter((record) => {
       if (exclude.has(record.path) || !columnMatches(record, query)) return false;
       const link = decodeCachedLink(record);
-      return link !== undefined && urlMatches(link, query);
+      return link !== undefined && linkFieldsMatch(link, query);
     })
     .limit(limit + 1)
     .toArray();
@@ -930,12 +948,12 @@ async function readPinnedOverlay(
   if (pins.length === 0) return { links: [], paths: new Set() };
 
   const records = await db.items.bulkGet(pins.map((pin) => pathFromId(pin.id, LINKS_PREFIX)));
-  const hasUrl = !clauseEmpty(query.url);
+  const hasLinkFields = !clauseEmpty(query.url) || !clauseEmpty(query.note);
   const passed: LinkItem[] = [];
   for (const record of records) {
     if (!record || !columnMatches(record, query)) continue;
     const link = decodeCachedLink(record);
-    if (!link || (hasUrl && !urlMatches(link, query))) continue;
+    if (!link || (hasLinkFields && !linkFieldsMatch(link, query))) continue;
     passed.push(link);
   }
 

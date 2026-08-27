@@ -36,12 +36,13 @@ tag  / tag-any  / tag-all  / tag-none
 text / text-all / text-any / text-none (words over the COMBINED url⊕title)
 url  / url-all  / url-any  / url-none   (substring words, url only)
 title/ title-all/ title-any/ title-none
+note / note-all / note-any / note-none  (substring words, the link's own note)
 sort  = updatedAt | createdAt          (ordering field  — READ-ONLY override)
 order = asc | desc                      (ordering dir    — READ-ONLY override)
 ```
 
 - The **bare name is sugar** for the common relation: `list`/`tag` → `any` (include
-  any of), `text`/`url`/`title` → `all` (must contain every word). Clauses **AND
+  any of), `text`/`url`/`title`/`note` → `all` (must contain every word). Clauses **AND
   across fields** (a link must satisfy every non-empty one); cross-field OR is
   intentionally not expressible — see _deferred_ below.
 - Values are **repeated keys** (`?tag=a&tag=b`, `?text=foo&text=bar`), never `+`
@@ -64,14 +65,35 @@ order = asc | desc                      (ordering dir    — READ-ONLY override)
   the setting are both in scope; the read layer (`readLinks`) receives a concrete
   field+direction.
 
-**`text` is the basic rung; `url`/`title` are the advanced rungs.** `text` matches
-its words against the **combined `url ⊕ title` haystack** (host lives inside url), so
-a word may land in either field — one clause, one box, "search words, all links".
-`url`/`title` are the field-scoped counterparts. All three AND together and with
-lists/tags like any other clause. How `text` is actually evaluated (it carries the
+**`text` is the basic rung; `url`/`title`/`note` are the advanced rungs.** `text`
+matches its words against the **combined `url ⊕ title` haystack** (host lives inside
+url), so a word may land in either field — one clause, one box, "search words, all
+links". `url`/`title` are the field-scoped counterparts. All of them AND together and
+with lists/tags like any other clause. How `text` is actually evaluated (it carries the
 title half, so — like a `title` clause — it forces the link↔extraction join and drops
 the exact count) is a read-engine concern: see
 [client-queries.md](./client-queries.md) and `needsExtractionJoin` in `queries.ts`.
+
+**`note` is the one advanced rung with no basic counterpart, and that is the
+decision, not an omission.** The combined haystack is `url ⊕ title` and stays that
+way: `text` is what the FREE tier gets, so widening it would change free search
+rather than add a paid lever, and a note has **no read-only surface** — the layouts
+render a `NoteBadge`, never the text ([editors.md](./editors.md)) — so a hit out of
+the combined haystack would surface a row with no visible reason for being there.
+Asking for the field is what makes the match legible. Mechanically it is the
+CHEAPEST text clause in the grammar: `link.note` lives in `links/{id}.enc` beside the
+url, so `noteMatches` runs on the decoded link inside the sync filter walk and never
+triggers `needsExtractionJoin` — it costs a scan, not a join. It does count as a text
+clause for `hasTextClause`, so like every other one it drops the exact total (the
+survivors are only known after the decode). Both read layers spell the pair as
+`linkFieldsMatch` = url ∧ note, so the link-blob half of a filter has ONE call site
+per walk.
+
+⚠ The note carries a **public promise**: `/faq`'s `link-note` answer on the marketing
+site tells readers what search does and does not reach. It is written to match this
+split (free text search over titles and addresses; the note reachable from the Plus
+editor), so folding `note` into `text` — or gating it differently — has to move that
+answer in the same change.
 
 ### two writers, not a mirror
 
@@ -178,8 +200,8 @@ mid-edit.
 
 Search splits by **structure, not by whether you can search at all** — the same
 Free → Plus → Pro spine as the rest of the app. Free gets real word search across the
-whole library (`text`); Plus gets the **structured editor** (field-scoped url/title,
-multi-list/multi-tag), gated by the `searchEditor` entitlement; Pro persists queries as
+whole library (`text`); Plus gets the **structured editor** (field-scoped
+url/title/note, multi-list/multi-tag), gated by the `searchEditor` entitlement; Pro persists queries as
 saved searches. The gate is **value-capture, client-enforced** — the editor costs
 ~nothing to serve, so a bypass only unlocks a convenience. The entitlement table:
 `packages/shared/src/iap/plans.ts` (`searchEditor`).
@@ -211,7 +233,9 @@ saved searches. The gate is **value-capture, client-enforced** — the editor co
     these words_ → `text.all` / `text.any` / `text.none` (the familiar
     Google-advanced-search shape; since the haystack contains the url, "None"
     also covers the practical exclude-a-domain case);
-  - field-scoped **URL contains** / **Title contains** → `url.all` / `title.all`;
+  - field-scoped **URL contains** / **Title contains** / **Note contains** →
+    `url.all` / `title.all` / `note.all` — the note last of the three, since the trio
+    above already reaches the first two and cannot reach it at all;
   - **tri-state list/tag checklists** — each row cycles include → exclude → off
     (`lists.any`/`lists.none`, tags likewise), with a **Match any/all** toggle on
     the included tags (`tags.any` vs `tags.all`, shown once ≥2 are included). A
@@ -222,10 +246,11 @@ saved searches. The gate is **value-capture, client-enforced** — the editor co
   It submits the full query through the same `setQuery` and snapshots the
   committed query on open, so it edits the current query in place and
   **round-trips every clause it renders**. The only grammar forms it does _not_
-  render are the field-scoped `url`/`title` `any`/`none` — deep-link-only on
-  purpose: `text.any`/`text.none` subsume them in practice, and covering them
-  would cost four more inputs for the tail of the tail. Committing from the
-  editor drops those four if a hand-built deep link carried them (WYSIWYG: what
+  render are the field-scoped `url`/`title`/`note` `any`/`none` — deep-link-only on
+  purpose: `text.any`/`text.none` subsume the first two in practice, `note` follows
+  its siblings rather than earning a special case, and covering them would cost six
+  more inputs for the tail of the tail. Committing from the
+  editor drops those six if a hand-built deep link carried them (WYSIWYG: what
   the form shows is exactly what runs); likewise a deep link carrying _both_
   `tag-any` and `tag-all` collapses to `all` mode over their union on open. A dot
   on the trigger marks a committed query carrying filters beyond a single-axis
@@ -233,7 +258,8 @@ saved searches. The gate is **value-capture, client-enforced** — the editor co
 
   The additions land on the read engine's cheap paths: `tags.all` is index-driven
   like `tags.any` (the tag driver), list/tag excludes are column predicates (no
-  blob decode), and `text.any`/`text.none` cost the same as `text.all` (any text
+  blob decode), `note` filters on the link blob the walk already decodes for `url`
+  (no join), and `text.any`/`text.none` cost the same as `text.all` (any text
   clause already forces the extraction join) — see
   [client-queries.md](./client-queries.md).
 
