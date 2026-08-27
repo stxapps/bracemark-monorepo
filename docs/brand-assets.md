@@ -1,11 +1,11 @@
-## brand assets — the mark, the lockup, the lines, the licence
+## brand assets — the mark, the lockup, the lines, the licence, the account
 
 The **invariants** that keep the brand consistent across seven surfaces and the
 four apps that carry the mark: what the mark is, where its copies live and why
 they must not drift, the one set of lockup measurements, the two meanings the 45°
 fold is allowed to carry, the three brand lines, the voice everything else is
-written in, the two nouns the product uses for what it stores, and what the
-public repo entitles us to claim.
+written in, the two nouns the product uses for what it stores, what the public
+repo entitles us to claim, and the one social account we hold.
 
 Every rule here is enforced by nothing but this file. There is no test that
 compares two SVG paths, no lint rule that catches a hand-typed lockup, and no
@@ -597,16 +597,16 @@ the other two are on you.
 **Where it is published, and why each.** The URL and licence come from `SOURCE`
 in `brand/brand.ts`, beside `COMPANY`, for the same reason `COMPANY` is there.
 
-| surface                            | what it says                                                 |
-| ---------------------------------- | ------------------------------------------------------------ |
-| marketing site footer, _Company_   | "Source code" — where a developer looks first, on every page |
-| the landing page, _If we disappear_ | the repo linked inside the durability argument (below)        |
-| /about, _See for yourself_         | the argument and the caveat, in prose, after "Who makes it"  |
-| /about, the _Built with_ colophon  | `AGPL-3.0 · github.com/…` as a specimen line                 |
-| /faq, privacy group, `source`      | the question as actually asked, before `security-report`     |
-| /privacy, _Security_               | so the policy's claims can be read against the software      |
-| Settings → About, both apps        | one row; the only one not pointing at the marketing site     |
-| the repo's `README` and `SECURITY` | the landing surface, and where to send a vulnerability       |
+| surface                             | what it says                                                 |
+| ----------------------------------- | ------------------------------------------------------------ |
+| marketing site footer, _Company_    | "Source code" — where a developer looks first, on every page |
+| the landing page, _If we disappear_ | the repo linked inside the durability argument (below)       |
+| /about, _See for yourself_          | the argument and the caveat, in prose, after "Who makes it"  |
+| /about, the _Built with_ colophon   | `AGPL-3.0 · github.com/…` as a specimen line                 |
+| /faq, privacy group, `source`       | the question as actually asked, before `security-report`     |
+| /privacy, _Security_                | so the policy's claims can be read against the software      |
+| Settings → About, both apps         | one row; the only one not pointing at the marketing site     |
+| the repo's `README` and `SECURITY`  | the landing surface, and where to send a vulnerability       |
 
 Deliberately **not** on the home page **hero**, and not in the store listings. In
 a hero it reads as a developer-audience signal competing with the actual pitch; in
@@ -625,3 +625,47 @@ the apps we ship have our server's address compiled into them" is a position, an
 the silence it replaced read as an oversight. Note what the band does **not** do:
 it makes no claim about verifying a served bundle, so the boundary above is
 untouched.
+
+### the X account — @bracemarkapp
+
+**The handle is `@bracemarkapp`, and it is not the product name.** `@bracemark`
+was already held by someone else when the account was registered, so the name
+"Bracemark" appears only in the **display** name, which X owns and this repo
+cannot pin. Everything below follows from that gap: no surface retypes the
+handle, because a surface that retypes it is a surface that can be wrong about
+which account belongs to us.
+
+`SOCIAL` in [`packages/shared/src/brand/brand.ts`](../packages/shared/src/brand/brand.ts)
+is the one definition — `handle` (the `@` form) and `url` — beside `COMPANY` and
+`SOURCE`, for the reason those are there: more than one origin names it, and
+bracemark-web cannot read the marketing site's config.
+
+| surface                           | what it does                                                       |
+| --------------------------------- | ------------------------------------------------------------------ |
+| `twitter.site`, both root layouts | publishes the handle on every card that unfurls from either origin |
+| marketing site footer, _Company_  | the handle as its own label, beside "Source code"                  |
+
+⚠ **The failure is a handle that is WRONG, not one that is missing.** Both
+layouts left `twitter.site` deliberately unset for the repo's whole first public
+stretch, and the comment explaining why named the reason: the value it used to
+hold was `@bracedotto`, **Brace.to's** handle, carried over from the predecessor.
+A card carrying a stale `@` renders exactly as well as a correct one — no error,
+no lint rule, no failing test — while crediting someone else's account to every
+person who shares a page. `brand.spec.ts` pins the two halves against each other
+(the URL must be the handle, and the handle must keep its `@`, which is what the
+meta tag is specified to carry); it cannot pin that either one names an account
+we still control.
+
+**Why the footer link is labelled `@bracemarkapp` and not "X".** The letter alone
+names nothing when read cold, and — per the paragraph above — the handle is not
+derivable from the product name, so a visitor who intends to search for us rather
+than click has to be able to read the string we actually hold. It is also the
+only link on the marketing site pointing at a property we do not control, which
+is why it sits under _Company_ with "Source code" (a fact about who builds this)
+rather than under _Product_.
+
+**Not on `/support`.** That page opens _"One address, and a person on the other
+end. No ticket queue, no chatbot, no phone tree."_ — a second channel on it makes
+that line false, and a public reply is the wrong shape for a product whose
+support questions carry usernames. Support is email; the account is for
+announcements.

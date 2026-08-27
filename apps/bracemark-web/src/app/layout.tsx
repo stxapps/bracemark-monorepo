@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 
-import { themeInitScript } from '@stxapps/shared';
+import { SOCIAL, themeInitScript } from '@stxapps/shared';
 
 import { InnerLayout } from './inner-layout';
 
@@ -58,9 +58,8 @@ export const metadata: Metadata = {
       'Save links to everything and visit them later easily, anytime, on any device, with technology that empowers you to truly own your account and data.',
     images: ['/twitter-card-image-pattern5.png'],
     card: 'summary_large_image',
-    // `site:` deliberately omitted: it held @bracedotto, the legacy Brace.to handle.
-    // Set it once a Bracemark handle actually exists — a wrong handle credits
-    // someone else's account on every share.
+    // The @-form, from `SOCIAL` in @stxapps/shared — never retyped here.
+    site: SOCIAL.handle,
   },
 };
 

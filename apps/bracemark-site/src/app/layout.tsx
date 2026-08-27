@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { Bricolage_Grotesque, IBM_Plex_Mono, Inter } from 'next/font/google';
 
-import { BRAND } from '@stxapps/shared';
+import { BRAND, SOCIAL } from '@stxapps/shared';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { SiteFooter } from '../components/site-footer';
@@ -103,9 +103,8 @@ export const metadata: Metadata = {
     description: DESCRIPTION,
     images: ['/twitter-card-image-pattern5.png'],
     card: 'summary_large_image',
-    // `site:` deliberately omitted: it held @bracedotto, the legacy Brace.to handle.
-    // Set it once a Bracemark handle actually exists — a wrong handle credits
-    // someone else's account on every share.
+    // The @-form, from `SOCIAL` in @stxapps/shared — never retyped here.
+    site: SOCIAL.handle,
   },
 };
 

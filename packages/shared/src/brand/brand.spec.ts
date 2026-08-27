@@ -1,5 +1,5 @@
 import * as BRAND_MODULE from './brand';
-import { SOURCE } from './brand';
+import { SOCIAL, SOURCE } from './brand';
 
 // The facts in brand.ts are repeated on more surfaces than anything else in the
 // workspace, and every one of them is a claim a reader is entitled to rely on.
@@ -21,6 +21,21 @@ describe('the source repository', () => {
   // fact; they cannot be read from here, so this pins the third.
   it('names an SPDX licence id', () => {
     expect(SOURCE.license).toBe('AGPL-3.0');
+  });
+});
+
+describe('the X account', () => {
+  // Same drift as SOURCE.label/url next door, and a worse one to get wrong: the
+  // `@` form is what `twitter:site` publishes on every card, so a handle that has
+  // stopped matching the URL credits an account that is not ours (brand.ts).
+  it('links the same account it prints', () => {
+    expect(SOCIAL.url).toBe(`https://x.com/${SOCIAL.handle.slice(1)}`);
+  });
+
+  // `twitter:site` is specified as the @-prefixed handle. Next passes the string
+  // through untouched, so a bare one ships a meta tag no unfurler resolves.
+  it('is the @-prefixed form the card metadata needs', () => {
+    expect(SOCIAL.handle).toMatch(/^@[A-Za-z0-9_]{1,15}$/);
   });
 });
 

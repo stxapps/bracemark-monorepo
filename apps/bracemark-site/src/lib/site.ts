@@ -9,7 +9,7 @@
 
 // Imported rather than re-exported blind (the way COMPANY is, below) because
 // FOOTER_LINKS needs the repo URL in scope.
-import { SOURCE } from '@stxapps/shared';
+import { SOCIAL, SOURCE } from '@stxapps/shared';
 
 // Throws rather than falling back to production, matching bracemark-web's
 // lib/site.ts and lib/api-client.ts. A fallback here would mean a build that
@@ -76,6 +76,11 @@ export { COMPANY } from '@stxapps/shared';
 // Settings → About in both apps names it too.
 export { SOURCE };
 
+// The X account — same file, same argument, and the sharper version of it: both
+// apps' card metadata publishes the handle as `twitter:site`, so a copy of it
+// living here would be a second definition of a string that names an account.
+export { SOCIAL };
+
 // The "last updated" line each policy carries. Dates live here rather than inline
 // so the two documents can never claim different vintages of the same rewrite —
 // and so bumping one after an edit is a deliberate act, not a forgotten one.
@@ -127,6 +132,11 @@ export const FOOTER_LINKS: { heading: string; links: FooterLink[] }[] = [
       // how, not a thing you can buy. Developers look in the footer for it, which
       // is the whole reason it is here as well as on /about.
       { href: SOURCE.url, label: 'Source code', external: true },
+      // Labelled with the handle rather than "X": the letter alone names nothing,
+      // and the handle is not the product name — `@bracemark` was taken — so a
+      // visitor who is going to search for us needs to read the string we actually
+      // hold. The only link on this site to a property we do not control.
+      { href: SOCIAL.url, label: SOCIAL.handle, external: true },
     ],
   },
   {

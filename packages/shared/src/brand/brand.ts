@@ -74,3 +74,28 @@ export const SOURCE = {
   label: 'github.com/stxapps/bracemark-monorepo',
   license: 'AGPL-3.0',
 } as const;
+
+// The X account, in the two spellings its surfaces need.
+//
+// Here rather than in bracemark-site's `lib/site.ts` for the same reason COMPANY
+// and SOURCE are: more than one origin names it. Both apps' card metadata sets
+// `twitter:site` — and bracemark-web is a separate app on a separate host, which
+// cannot read the site's config — while the marketing footer links it.
+//
+// ⚠ THE FAILURE MODE IS A HANDLE THAT IS WRONG RATHER THAN MISSING. `twitter.site`
+// in both layouts sat deliberately EMPTY until this existed, because the value it
+// used to hold was `@bracedotto` — Brace.to's handle, from the predecessor — and a
+// stale one there credits someone else's account on every card that unfurls, with
+// no error anywhere: a card carrying the wrong @ renders exactly as well as a
+// right one. That is what makes this worth a constant rather than two literals.
+//
+// The account is `@bracemarkapp` and not `@bracemark`, which was already taken.
+// So the product name is only ever right in the DISPLAY name, which X owns and
+// this file cannot pin — one more reason no surface should retype the handle.
+//
+// `handle` is the `@` form Next's `twitter.site` takes; `url` is for links. The
+// two have to agree, and brand.spec.ts asserts that they do.
+export const SOCIAL = {
+  handle: '@bracemarkapp',
+  url: 'https://x.com/bracemarkapp',
+} as const;
