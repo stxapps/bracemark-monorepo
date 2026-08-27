@@ -144,8 +144,9 @@ export const FAQ_GROUPS: FaqGroup[] = [
           <>
             No. On a laptop it is the best way to save: the extension reads the page you are already
             looking at, so the title and preview image come from your own browser and nothing has to
-            fetch that page on your behalf. On a phone or tablet, sharing into the iOS or Android
-            app does the same job from whatever app you are in. Saving from the web app works
+            fetch that page on your behalf. On a phone or tablet, share into the iOS or Android app
+            from whatever app you are in — the link is saved on the spot, and the app fetches the
+            page itself, on the device, the next time you open it. Saving from the web app works
             without either — see the previews question below for what changes.
           </>
         ),
@@ -235,6 +236,15 @@ export const FAQ_GROUPS: FaqGroup[] = [
         ),
       },
       {
+        // The last clause is a THREE-WAY agreement and the flat version of it was
+        // wrong on two of the three surfaces. "Stores nothing" is not true of a
+        // service whose rate limiter is keyed on `cf-connecting-ip`
+        // (apps/bracemark-extractor/src/middleware/rate-limit.ts) — /privacy and
+        // /extractor both said so already, and this answer and SECURITY.md both
+        // said the flat one. The honest version is not weaker: an IP address that
+        // buys a rate limit, named by us, reads better than a "nothing" a reader
+        // can disprove by thinking about how rate limiting works. If the limiter's
+        // key ever changes, all four surfaces move together.
         id: 'previews',
         q: 'If everything is encrypted, how do link previews work?',
         a: (
@@ -244,7 +254,8 @@ export const FAQ_GROUPS: FaqGroup[] = [
             free. The exception is a link saved in the web app, where the browser blocks a page from
             fetching another site — that one needs a server to fetch on your behalf, so it is an
             opt-in {PLAN_LABELS.plus} feature, off until you turn it on. The service that does it
-            holds no key, stores nothing, and never sees your account.
+            holds no key, never sees your account, and stores nothing it read — only the IP
+            addresses its rate limiter needs to stop one source abusing it.
           </>
         ),
       },
@@ -264,11 +275,12 @@ export const FAQ_GROUPS: FaqGroup[] = [
           <>
             Yes — the whole thing is public at{' '}
             <ExternalLink href={SOURCE.url}>{SOURCE.label}</ExternalLink>, under the{' '}
-            {SOURCE.license}: the apps, the sync server and the key derivation, in one repository.
-            You can read where the key comes from, where encryption happens, and what the server is
-            given. One caveat we would rather state than have you assume: reading the source proves
-            what the code does, not that the bundle your browser downloaded was built from it. That
-            needs reproducible builds, and we do not publish them yet.
+            {SOURCE.license}: the apps, the browser extension, the two servers behind them and the
+            key derivation, in one repository. You can read where the key comes from, where
+            encryption happens, and what each of those servers is given. One caveat we would rather
+            state than have you assume: reading the source proves what the code does, not that the
+            bundle your browser downloaded was built from it. That needs reproducible builds, and we
+            do not publish them yet.
           </>
         ),
       },

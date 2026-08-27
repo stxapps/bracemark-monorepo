@@ -25,6 +25,18 @@
 // what ships. Read mode, screenshots, page copies and AI are planned, not shipped,
 // so none of them appears here.
 //
+// ITS SIBLING, AND THE ONE THAT BIT: no claim about the server may read as
+// EXHAUSTIVE unless it is. "Our servers hold a path, a size, and bytes we have no
+// key for" was true of the LIBRARY and false as a sentence about the servers,
+// which is how it was written — the same host holds a username, a public key,
+// sessions and a subscription row in the clear (apps/bracemark-api/wrangler.jsonc),
+// and `bracemark-extractor` is handed a plaintext URL by construction when the
+// opt-in setting is on. Both strings below now scope the claim ("of your library")
+// and name what is readable, which is the phrasing /privacy and the landing page
+// already use. The failure mode is worth restating because it is invisible here in
+// a way it is nowhere else: this copy is pasted into a console, so a store
+// description cannot be corrected without shipping a build through review.
+//
 // NO NUMBERS, deliberately — no free-plan cap, no price, no trial length. The site
 // reads those from `iap/plans` so they cannot go stale, but a store description
 // can only be changed by shipping a build through review, so an interpolated
@@ -126,7 +138,7 @@ export const FULL_DESCRIPTION = `Bracemark is a bookmark manager that cannot rea
 
 Save anything worth coming back to — articles, docs, threads, products, videos — and read it later on any device.
 
-Every link you save is encrypted on your device before it syncs: the address, the title, the tags, the list you filed it in. Your key is derived from your password, on your device, and never leaves it. Our servers hold a path, a size, and bytes we have no key for.
+Every link you save is encrypted on your device before it syncs: the address, the title, the tags, the list you filed it in. Your key is derived from your password, on your device, and never leaves it. Of your library, our servers hold a path, a size, and bytes we have no key for; the account around it — your username, your plan — is what we can read.
 
 That is not a privacy policy. It is the architecture. We cannot look, so we cannot be asked to.
 
@@ -146,7 +158,7 @@ FINDING IT AGAIN
 
 YOURS TO LEAVE WITH
 • Full export in open formats, on every plan, forever
-• No ads, no trackers, no analytics
+• No ads, no trackers, no analytics — the only outside code we load runs the checkout
 • No email address required — sign up with a username
 
 WHAT IT COSTS TO BUILD IT THIS WAY
@@ -174,4 +186,4 @@ export const BROWSER_EXTENSION_LISTING = {
  * it be set on the listing rather than in the manifest — so this is a paste field,
  * and the manifest keeps the shorter string above for both browsers.
  */
-export const FIREFOX_ADDONS_SUMMARY = `${BRAND.tagline}. Save the tab you’re reading in one click; it is encrypted in your browser, with a key derived from your password, before it syncs. Our servers hold a path, a size, and bytes we have no key for.`;
+export const FIREFOX_ADDONS_SUMMARY = `${BRAND.tagline}. Save the tab you’re reading in one click, encrypted in your browser with a key derived from your password before it syncs. Of your library we hold a path, a size, and bytes we have no key for.`;

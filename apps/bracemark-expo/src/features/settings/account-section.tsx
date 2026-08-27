@@ -552,7 +552,7 @@ export function AccountSection() {
         <>
           <SettingsHeader
             title="Account"
-            description="Your account is your username and password — no email, nothing else on file."
+            description="Your account is your username and password. There is no email address on it."
           />
 
           <SettingsRow

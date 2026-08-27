@@ -133,7 +133,28 @@ const CARDS: PricingCard[] = [
     plan: 'free',
     price: '$0',
     cadence: null,
-    priceNote: 'Free forever, no card required',
+    // "No time limit", NOT "Free forever", and the reason is two clicks away on
+    // this same site. /terms reserves the right to change what a plan includes,
+    // and the only protection it gives is for "what you have ALREADY PAID FOR" —
+    // which by construction excludes a free user. So the card promised something
+    // the contract beside it permits us to take back, from the one group the
+    // contract does not cover. That is the AGPL/MIT shape (docs/brand-assets.md —
+    // _the source_): two surfaces disagreeing, with the reader entitled to rely on
+    // the more generous one.
+    //
+    // Nothing is lost. "Forever" was selling one fact — free is not a trial, there
+    // is no clock — and "no time limit" says exactly that, about the plan as it
+    // exists rather than about our pricing in 2031. /about already hedged this
+    // correctly ("We intend to keep TODAY'S free features free"); the storefront
+    // now agrees with it. The landing page's pricing teaser carries the twin.
+    //
+    // This does NOT generalise to the other forever-class promises on the site —
+    // "No ads, ever", and export being free on every plan forever. Those are
+    // commitments about OUR conduct, each stated beside the mechanism that makes
+    // it cheap to keep, and export in particular runs on the device over data the
+    // user already holds, so it is not a promise we could be tempted to break. A
+    // promise about a PRICE is the one that had a contract contradicting it.
+    priceNote: 'No time limit, no card required',
     trialNote: null,
     blurb: 'A private library, from your very first link',
     features: FREE_FEATURES,
@@ -188,7 +209,25 @@ const COMPARISON: { label: string; cell: (plan: Plan) => Cell }[] = [
   // to carry the distinction the data can't.
   { label: 'Link previews when you save from the extension or app', cell: () => true },
   { label: 'Lists, tags, pins, notes & layouts', cell: () => true },
-  { label: 'Search across your whole library', cell: () => true },
+  // The haystack is NAMED, and that is the whole of the change. "Search across
+  // your whole library" was true about the SCOPE and silent about the FIELDS, and
+  // everyone arriving from a paid tier elsewhere fills that silence with full-text
+  // search inside saved pages — the same misread `PLAN_CARD_COPY` retired
+  // "Advanced search" for, one storefront over (iap/plans.ts). The basic haystack
+  // is url ⊕ title (`textMatches`, web-react data/queries.ts); a host is inside the
+  // address, so nothing is left out by not listing it.
+  //
+  // The scope half STAYS. There is no cap on what is searched, on either plan, and
+  // that is what a buyer comparing plans is weighing — naming the fields is not a
+  // reason to give it up. "Address", not "URL": this page is read in the same
+  // sitting as the landing bullet ("Across titles, addresses and hosts") and the
+  // FAQ ("matches titles and addresses"), and URL is the IN-APP register, where the
+  // search editor has a field by that name.
+  //
+  // It does not understate Plus. A comparison table reads cumulatively, and the
+  // search-editor row below adds the fields this one does not reach — the note
+  // among them, which is the one a merged bullet would have promised for free.
+  { label: 'Search your whole library by title and address', cell: () => true },
   { label: 'Full data export', cell: () => true },
   { label: 'Nested lists', cell: (p) => entitlementsOf(p).nestedLists },
   { label: 'App lock & hidden lists', cell: (p) => entitlementsOf(p).locks },

@@ -25,6 +25,18 @@ export const metadata: Metadata = {
 // remembers making at 2am on a Sunday. What is promised is that a person reads
 // every message, which is true and is the part people actually want.
 //
+// "Every message gets one" was the same SLA in a different coat, and it went the
+// same way. A reply to EVERY message is not a thing a team can hold: spam, abuse,
+// a thank-you that needs nothing back, a report we cannot act on. The promise is
+// now split at the line that is actually keepable — a person READS every message
+// (true, checkable, and the whole reason to write to a small team) and anything
+// that NEEDS an answer gets one. Note which two survive unhedged and why: a
+// security report (below) and a network-abuse report on /extractor are narrow
+// enough categories that we can commit to answering every one, and both are
+// addressed to people who took the trouble to tell us something first. A
+// commitment that names its own scope is worth more than one that covers
+// everything and quietly does not.
+//
 // The "what we can't do" block is the most useful thing on the page. Password
 // recovery is the single most common support request an E2E app receives,
 // and the answer is always no — so it is stated before someone writes in hoping
@@ -75,7 +87,8 @@ export default function Page() {
           </a>
           <p className={cn('text-muted-foreground mt-5 text-[0.9375rem] leading-7')}>
             Bugs, billing, imports, exports, anything at all. We are a small team in one timezone,
-            so a reply can take a day or two — but every message gets one.
+            so a reply can take a day or two. A person reads every message, and anything that needs
+            an answer gets one.
           </p>
 
           <h2 className={cn('mt-8 text-sm font-semibold')}>Worth including</h2>

@@ -313,7 +313,18 @@ test. Check the linked doc before acting on any of these.
   sees your library in plaintext"; never "only ever sees ciphertext", "the server
   sees nothing", "ciphertext and nothing else", or a narrowing to "the sync
   server" — there is no separate sync server to name, and inventing one to carry
-  a smaller claim is the same error one step quieter. Nothing catches any of it:
+  a smaller claim is the same error one step quieter. Two further spellings, both
+  found in shipped copy AFTER those were retired: an **enumeration that closes**
+  ("that is the end of the list", "nothing else on file") names a true subset and
+  then asserts completeness, omitting the public key and the sessions row — name
+  the residual or point at /privacy, never close the list from a surface that is
+  not the inventory; and a claim about what we **see** rather than what we
+  **hold** ("never a link") is false the moment `bracemark-extractor` is on, since
+  a server fetching a page has to be told which page. Relatedly, the extractor
+  **stores nothing it read** but its rate limiter is keyed on `cf-connecting-ip`,
+  so a bare "stores nothing" is falsifiable by anyone who thinks about how a cap
+  on an anonymous service works — /privacy and /extractor name the IP; every other
+  surface must too. Nothing catches any of it:
   the schema lives in a different app from every surface that describes it, so
   there is no lint error, type error or failing test, and the phrasing sounds
   MORE rigorous the more wrong it gets. It had been quoted as settled across four

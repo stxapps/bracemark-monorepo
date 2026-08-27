@@ -242,7 +242,15 @@ const CAPTURE = [
   {
     name: 'Phone and tablet',
     where: 'iOS · Android',
-    body: 'Share into Bracemark from any app — a browser, a podcast player, a group chat. Same capture, same encryption, finished before it leaves the handset.',
+    // NOT "same capture" as the extension card above it. The share sheet gets what
+    // the SHARING APP hands over — a URL and whatever title it chose to attach —
+    // and nothing else: it cannot read the page, because it is not the browser
+    // showing it (docs/link-extraction.md, _capability tiers_: title+image is
+    // ⚠ host-provided there, and read mode, screenshot and page copy are all ❌).
+    // The real fetch happens later, in the app's own foreground drain. The
+    // encryption half WAS accurate and stays: the save is written and sealed on
+    // the handset at the moment you share.
+    body: 'Share into Bracemark from any app — a browser, a podcast player, a group chat. It saves what that app hands over, sealed on the handset before it syncs; the app fills in the title and preview image itself the next time you open it.',
   },
   {
     name: 'The web app',
@@ -396,9 +404,21 @@ const GUARANTEES: [string, string][] = [
   // "The sync server" is deliberately gone with it: there is no separate sync
   // server to name, and inventing one to carry a narrower claim is the move this
   // section exists to refuse.
+  //
+  // Third pass, and the one that retires "that is the end of the list". The entry
+  // had conceded the residual about the LIBRARY and then named TWO of the account
+  // fields — username and subscription — under a sentence claiming the enumeration
+  // was complete. It is not: `bracemark-api` also holds the PUBLIC KEY a sign-in
+  // signature is checked against and a SESSIONS row per signed-in device
+  // (apps/bracemark-api/wrangler.jsonc; /privacy has always inventoried both). A
+  // reader who opens the policy this page sends them to finds two fields the
+  // loudest claim on the property said were not there, which costs more than
+  // either field does. The closing sentence now points AT that inventory instead
+  // of standing in for it — a list we can be wrong about is replaced by an address
+  // where the whole list lives.
   [
     'Our blindness',
-    'For each thing you save we hold a path, a size, a timestamp and an encrypted blob — we cannot index your library, search it, or hand it to anyone in a readable form. What we can read is the account around it: your username, and your subscription if you buy one. That is the end of the list.',
+    'For each thing you save we hold a path, a size, a timestamp and an encrypted blob — we cannot index your library, search it, or hand it to anyone in a readable form. What we can read is the account around it: your username, the public key your sign-ins are checked against, the sessions that keep your devices signed in, and your subscription if you buy one. The privacy policy inventories every field of it.',
   ],
   [
     'Your exit',
@@ -455,8 +475,8 @@ const DURABILITY: [string, React.ReactNode][] = [
     // — see the note above DURABILITY for why the band, and not the hero, is
     // where it belongs.
     <>
-      Both apps, the browser extension and the sync server are one repository under the{' '}
-      {SOURCE.license}:{' '}
+      Both apps, the browser extension, the server they sync to and the one that fetches link
+      previews are a single repository under the {SOURCE.license}:{' '}
       <a
         className={cn(
           'text-signal decoration-signal-line hover:decoration-signal underline underline-offset-2',
@@ -625,7 +645,17 @@ export default function Page() {
                 'No ads, ever',
                 'The subscription is the entire business model, and no investor is expecting a second one to appear later.',
               ],
-              ['No trackers', 'No analytics, no fingerprinting, no ad networks.'],
+              // The carve-out is not a weakening, it is the difference between a
+              // claim and a slogan. /privacy and the FAQ's `trackers` answer both
+              // name the one third-party script we load — Paddle's, on Settings →
+              // Subscription — and this cell, the loudest and shortest version of
+              // the same claim, was the only one that did not. A reader who meets
+              // that script after reading an absolute here has caught us, over a
+              // checkout nobody would have objected to.
+              [
+                'No trackers',
+                'No analytics, no fingerprinting, no ad networks. The only outside script we load is our payment provider’s, on the one screen where you subscribe.',
+              ],
               ['No lock-in', 'Full export on every plan, including the free one.'],
             ].map(([term, detail]) => (
               <div key={term} className={cn('py-8 sm:px-8 sm:first:pl-0 sm:last:pr-0')}>
@@ -869,7 +899,16 @@ export default function Page() {
           <div>
             <p className={cn('eyebrow')}>{PLAN_LABELS.free}</p>
             <p className={cn('font-display mt-2 text-4xl font-semibold tracking-tight')}>$0</p>
-            <p className={cn('text-muted-foreground mt-1 text-sm')}>{FREE_LINKS} links, forever</p>
+            {/* "No time limit", not "forever" — the twin of /pricing's Free card,
+                where the reasoning lives. The sharper half of it is here: FREE_LINKS
+                is interpolated precisely so this page can never quote a cap the app
+                does not enforce, and "forever" put the promise back. Drop the cap to
+                100 one day and this line renders "100 links, forever" — truthful
+                about the number, and false to everyone who signed up under the old
+                one. */}
+            <p className={cn('text-muted-foreground mt-1 text-sm')}>
+              {FREE_LINKS} links, no time limit
+            </p>
           </div>
           <div>
             <p className={cn('eyebrow text-signal')}>{PLAN_LABELS.plus}</p>

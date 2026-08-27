@@ -19,6 +19,15 @@ export const metadata: Metadata = {
 //
 // The company name and postal address come from `COMPANY` in lib/site.ts.
 //
+// THE NOTICE CHANNEL IS THIS WEBSITE, and only this website. Three sentences here
+// used to name the app as a place we give notice — a change to the Service, a
+// material revision to these Terms, and the general clause that stands in for the
+// email address we do not hold. Neither client has an announcement surface, a
+// what's-new pane or a banner slot, so the one clause a reader is asked to AGREE to
+// ("you agree that notice given that way reaches you") named a way we cannot give
+// it. /privacy dropped the same promise in the same change. If an in-app notice
+// ever ships, these are the sentences that may widen again — not before.
+//
 // The markup is plain h2/h3/p/ol under `.legal-prose` (globals.css) on purpose:
 // this document gets edited under time pressure while answering a reviewer, and
 // it has to stay readable as prose rather than as a wall of class names.
@@ -246,8 +255,7 @@ export default function Page() {
         <h2>Changes to the Service</h2>
         <p>
           We may modify, suspend or discontinue any part of the Service. Where a change is
-          significant and affects a paid plan, we will give reasonable notice through the app or
-          this website.
+          significant and affects a paid plan, we will give reasonable notice on this website.
         </p>
 
         <h2>Changes to these Terms</h2>
@@ -255,7 +263,7 @@ export default function Page() {
           We may revise these Terms from time to time. The date at the top of this page shows when
           they last changed, and continuing to use the Service after a revision means you accept the
           revised Terms. Where a change is material we will make reasonable efforts to highlight it
-          in the app.
+          on this website.
         </p>
 
         <h2>Our content, the source code and trademarks</h2>
@@ -434,8 +442,8 @@ export default function Page() {
           third-party beneficiaries of these Terms and may enforce them against you.
         </p>
         <p>
-          Because we hold no email address for you, we give notice through the applications or on
-          this website, and you agree that notice given that way reaches you. Give us notice at{' '}
+          Because we hold no email address for you, we give notice on this website, and you agree
+          that notice given that way reaches you. Give us notice at{' '}
           <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a> or at the postal address below.
         </p>
         <p>

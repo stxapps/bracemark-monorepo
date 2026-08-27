@@ -89,6 +89,19 @@ export const metadata: Metadata = {
 //       host what a crawler costs it, which is the one thing that section's
 //       argument cannot absorb.
 //
+//     TWO ABSOLUTES CAME OUT OF THE PROSE IN THE SAME PASS, both of them NEVERS
+//     that had never been agreed to. "It is the only part of Bracemark that ever
+//     visits another site" was false as written and in the reader's own terms: the
+//     browser extension reads the tab it is on, and the mobile apps fetch the page
+//     themselves, so Bracemark visits other sites constantly — just from the
+//     person's device and their address, which is exactly the distinction an
+//     operator cares about and the sentence was throwing away. It now says the only
+//     SERVER of ours, which is the true claim and the more useful one. And "the
+//     mobile apps … never involve us at all" was an eternal where a present tense
+//     does the same work: `bracemark-expo` calls no server of ours TODAY, which is
+//     a fact about the build this page reports on, not a promise about every build
+//     after it (docs/link-extraction.md, _expo drains in the foreground_).
+//
 //     The robots.txt section is deliberately written to the axis that survives
 //     all of this: WHO CHOSE (one person, one address, one request), never HOW
 //     MUCH IS READ. Read-mode therefore needs it re-checked, not rewritten. What
@@ -166,8 +179,9 @@ export default function Page() {
             Bracemark is an end-to-end encrypted bookmark manager. When someone saves a link in the
             web app, the browser will not let that page fetch yours, so this service fetches it
             instead — reads the title and the preview image, hands both back to the person’s own
-            device, and forgets the address. It is the only part of Bracemark that ever visits
-            another site.
+            device, and forgets the address. It is the only server of ours that fetches a page at
+            all: every other way of saving a link reads it on the person’s own device, from their
+            own address.
           </p>
         </section>
 
@@ -203,7 +217,7 @@ export default function Page() {
               It also only runs for people who turned it on. Fetching on someone’s behalf means
               seeing an address they chose to save, so it is an opt-in setting that is off until
               they enable it — the browser extension and the mobile apps read the page on the device
-              instead and never involve us at all. The full account of that is in the{' '}
+              instead, with no server of ours in it. The full account of that is in the{' '}
               <Link
                 className={cn(
                   'text-signal decoration-signal-line hover:decoration-signal underline underline-offset-2',

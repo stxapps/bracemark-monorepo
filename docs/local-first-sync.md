@@ -45,6 +45,26 @@ ground.
 > store with nothing else in it. For the full inventory of what the server does
 > learn, see _crypto boundary & what the server still learns_; for the planes
 > this file does not cover, [account.md](./account.md) and [iap.md](./iap.md).
+>
+> **Two later spellings of the same error, both found in public copy after the
+> shorthand above was retired, because neither one repeats its words.**
+>
+> - **An ENUMERATION that closes.** "…your username, and your subscription if you
+>   buy one. That is the end of the list." (the landing page's `GUARANTEES`) and
+>   "no email, nothing else on file" (Settings → Account, both apps). Each named a
+>   true subset and then asserted completeness, and each omitted the public key and
+>   the sessions row that /privacy has always inventoried — so the surfaces that
+>   sound the most rigorous were the ones a reader could disprove by opening the
+>   policy they link to. Name the residual **or** point at the inventory; never
+>   close the list from a surface that is not the inventory.
+> - **A claim about what we SEE rather than what we HOLD.** The site-wide meta
+>   description read "we see your username and your plan, never a link" — true of
+>   `bracemark-api` and false of us, because `bracemark-extractor` is handed a
+>   plaintext URL by construction whenever the opt-in setting is on
+>   ([link-extraction.md](./link-extraction.md), _server extraction_). Scoping a
+>   claim to a component we do not name is the same move as inventing a "sync
+>   server", one verb further in. What survives every extraction setting is what we
+>   **store** of the library, which is ciphertext.
 
 So the data path splits into **two layers**: we use a library for the local
 store and hand-roll the file-sync engine. Don't conflate "don't use a sync

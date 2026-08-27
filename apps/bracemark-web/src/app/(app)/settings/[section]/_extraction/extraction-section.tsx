@@ -193,7 +193,15 @@ export function ExtractionSection() {
             Server-side previews
           </Label>
         }
-        description="Fetch each link on the server to fill in its title and preview image — for links that weren’t previewed on the device that saved them. Only the link’s URL is sent, never your account or anything else, and only while this is on."
+        // "Never your account" is the claim that holds; "or anything else" was the
+        // one that did not. A request carries the IP address it came from whether
+        // we want it or not, and the extractor's rate limiter is keyed on exactly
+        // that (apps/bracemark-extractor/src/middleware/rate-limit.ts) — so the
+        // absolute was falsifiable by anyone who thought about how the cap in
+        // front of an anonymous service could possibly work. /privacy and
+        // /extractor already named the IP; the toggle that turns the thing ON is
+        // the last place that should be quieter than the policy page.
+        description="Fetch each link on the server to fill in its title and preview image — for links that weren’t previewed on the device that saved them. Only the link’s URL is sent, never your account, and only while this is on. The request carries your IP address, as any web request does, and the service uses it to rate-limit and nothing else."
         action={
           <Switch id="server-extraction" checked={serverExtraction} onCheckedChange={setEnabled} />
         }

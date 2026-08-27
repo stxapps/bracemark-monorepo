@@ -63,9 +63,20 @@ const TRADEOFFS: [string, string][] = [
   // The landing hero, /terms and the FAQ's offline answer dropped the same
   // negative in the same change.
   // → docs/link-extraction.md for what a save does capture.
+  //
+  // Second pass, on the half the first one left exposed. The FRAMING was made
+  // future-proof — rot is a property of the web and survives whatever ships — and
+  // then the sentence under it closed a LIST: "the address, the title, the preview
+  // image and whatever you write about it" is what a save captures TODAY, and it
+  // stops being the whole answer the day read mode, a screenshot or a page copy
+  // lands. An entry whose standing rests on volunteering things cannot be the one
+  // that quietly understates the product a year from now. "Whatever Bracemark could
+  // read of the page at the time" is open at the right end and closed at the one
+  // that matters: however much a save captures, it is a capture, and the page it
+  // came from is still somebody else's to change.
   [
     'A saved link can rot',
-    'A save captures the address, the title, the preview image and whatever you write about it. If the page behind it changes or goes away, so does what it showed — what the library keeps is your record of the web, not the web.',
+    'A save keeps the address and whatever Bracemark could read of the page at the time — its title, its preview image, and anything you write about it. The page itself is on someone else’s server: if it changes or goes away, what the library keeps is your record of the web, not the web.',
   ],
 ];
 
@@ -102,12 +113,21 @@ export default function Page() {
                 their servers, and most of them mean well. But meaning well is a policy, and
                 policies change with funding rounds, acquisitions, subpoenas and breaches.
               </p>
+              {/* "What the server keeps OF IT" — the scoping clause is the whole
+                  repair. The sentence used to end "the server keeps a path, a size
+                  and some bytes", which reads as the total and is not: the same
+                  Worker holds the account in the clear — username, public key,
+                  sessions, and a subscription row if you pay. /privacy has always
+                  inventoried those, so the page that sends people there was the one
+                  contradicting it. Naming them in the same breath costs a clause
+                  and makes the claim checkable rather than merely confident. */}
               <p>
                 So Bracemark is built the other way round. Your password derives a key on your own
                 device; every link, list and tag becomes its own encrypted file before it is
-                uploaded; the server keeps a path, a size and some bytes. There is no “we promise
-                not to look” in that sentence, because there is no looking available to promise
-                against.
+                uploaded; what the server keeps of it is a path, a size and some bytes. Around that
+                sits the account — your username, your sessions, your plan if you buy one — and
+                nothing readable from a single link. There is no “we promise not to look” in that
+                sentence, because there is no looking available to promise against.
               </p>
             </div>
           </section>
@@ -201,6 +221,18 @@ export default function Page() {
             </div>
           </section>
 
+          {/* "The two servers behind them", never "the sync server" — the phrase this
+              list used to carry, and the one CLAUDE.md's tripwire bars. There is no
+              separate sync server to name: `bracemark-api` is ONE Worker serving
+              auth, sync AND billing, so the name invents a component a reader
+              cannot find and quietly narrows what is in the repository. Two is the
+              true count (`bracemark-api` and `bracemark-extractor`) and both are
+              here, which is also the honest answer to the reader this section is
+              written for — the one checking whether the thing that fetches pages is
+              published too. The browser extension joined the list in the same pass;
+              it was always in the repo and was the one artefact the sentence left
+              out. The landing page's _If we disappear_ band and the FAQ's `source`
+              answer carry the same list and moved with it. */}
           {/* Placed after "Who makes it" and before the colophon on purpose: the
               page has just asked you to trust a small team in Bangkok, and this is
               the paragraph that says you don't have to. The colophon under it then
@@ -223,8 +255,8 @@ export default function Page() {
                 >
                   {SOURCE.label}
                 </a>
-                , under the {SOURCE.license}. The apps, the sync server, the key derivation, this
-                page — one repository, all of it.
+                , under the {SOURCE.license}. The apps, the browser extension, the two servers
+                behind them, the key derivation, this page — one repository, all of it.
               </p>
               <p>
                 Being precise about what that buys you: you can read exactly what we do, and you can

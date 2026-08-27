@@ -40,7 +40,8 @@ These aren't vulnerabilities, and the reasoning for each is in `docs/`:
 - **The server sees file paths, sizes and modification times.** That metadata is
   what makes sync work; the inventory is in the privacy policy.
 - **Link previews saved from the web app pass through our extractor**, opt-in and
-  off by default. It holds no key, stores nothing, and never sees your account.
+  off by default. It holds no key, never sees your account, and stores nothing it
+  read — only the IP addresses its rate limiter needs.
 - **Subscribing identifies you to the payment provider.** It costs anonymity, not
   confidentiality.
 

@@ -50,6 +50,15 @@ export const metadata: Metadata = {
 //     arrives with the screen rather than with the checkout. Narrowing that back
 //     — or widening it to another screen — falsifies the paragraph below.
 //
+//   - THE NOTICE CHANNEL IS THIS WEBSITE, and only this website. The paragraph
+//     under _Changes to this policy_ used to promise we would highlight a material
+//     change "in the app" — a delivery mechanism neither client has: there is no
+//     announcement surface, no what's-new pane and no banner slot in bracemark-web
+//     or bracemark-expo, so the promise had nothing behind it and nothing would
+//     have failed if it stayed. /terms carried the same promise in three places
+//     and lost it in the same change. If an in-app notice ever ships, these are
+//     the sentences that may widen again — not before.
+//
 // The rule this page follows: describe what the system does, not what we intend.
 // If a claim here is ever falsified by a change to the code, the change is wrong
 // or this page is — either way it is a release blocker, which is why each claim
@@ -471,7 +480,7 @@ export default function Page() {
         <h2>Changes to this policy</h2>
         <p>
           We may update this policy. The date at the top of the page shows when it last changed, and
-          we will highlight any material change in the app. Continuing to use Bracemark after a
+          we will highlight any material change on this website. Continuing to use Bracemark after a
           change means you accept the updated policy.
         </p>
 

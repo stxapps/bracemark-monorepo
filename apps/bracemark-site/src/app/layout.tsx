@@ -85,12 +85,25 @@ export const viewport = {
 //     ciphertext holds the username in the clear, so scoping the claim to "sync"
 //     bought nothing except a component a reader cannot find.
 //
+//   - "…never a link" — which is what this sentence used to end on, and which is
+//     the same error one step subtler: it is a claim about what we SEE, and
+//     `bracemark-extractor` sees a plaintext URL by construction. A server that
+//     fetches a page on your behalf has to be told which page, so the opt-in Plus
+//     path hands ours the address in the clear (docs/link-extraction.md, _server
+//     extraction_). The clause was true of `bracemark-api` and false of us.
+//
 // So: the plaintext we DO hold is named, in the same breath, in the order
-// /privacy and the FAQ already name it. A claim about a boundary we can point at
-// survives any amount of re-architecting behind it. 157 characters, inside the
-// ~160 Google shows.
+// /privacy and the FAQ already name it — and the third item is what we STORE of
+// the library, which is ciphertext whatever the extraction setting says. A claim
+// about a boundary we can point at survives any amount of re-architecting behind
+// it. 157 characters, inside the ~160 Google shows.
+//
+// ⚠ THE SAME SENTENCE IS IN bracemark-web's `app/layout.tsx`, and the two must
+// move together. That app is a separate origin and cannot import this config, so
+// a comment in each naming the other is the whole of what holds them — the
+// pattern the lockup measurements already use.
 const DESCRIPTION =
-  'Bracemark is an end-to-end encrypted bookmark manager. Links are encrypted on your device before they sync: we see your username and your plan, never a link.';
+  'Bracemark is an end-to-end encrypted bookmark manager. Links are encrypted on your device before they sync: we hold your username, your plan, and ciphertext.';
 
 // The tagline itself, verbatim from shared's brand/brand.ts, so the OG
 // title, the hero, and every store listing say one sentence rather than four

@@ -66,7 +66,7 @@ const MODE_OPTIONS: Record<
   },
   saves: {
     label: 'Links you save on this device',
-    hint: 'When you save a link here, the app fetches that one page itself to fill in its title and picture. No server of ours ever sees it.',
+    hint: 'When you save a link here, the app fetches that one page itself to fill in its title and picture. No server of ours is involved.',
     icon: Smartphone,
   },
   all: {

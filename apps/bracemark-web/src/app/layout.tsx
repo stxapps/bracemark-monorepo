@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 
-import { SOCIAL, themeInitScript } from '@stxapps/shared';
+import { BRAND, SOCIAL, themeInitScript } from '@stxapps/shared';
 
 import { InnerLayout } from './inner-layout';
 
@@ -34,15 +34,74 @@ export const viewport = {
 const appUrl = process.env.NEXT_PUBLIC_APP_URL;
 if (!appUrl) throw new Error('NEXT_PUBLIC_APP_URL is not set');
 
+// ⚠ THIS BLOCK CARRIED BRACE.TO v1's COPY THROUGH THE ENTIRE RENAME, in all three
+// description slots at once. The string was "…with technology that empowers you to
+// truly own your account and data" — the Stacks-era pitch, and false of this
+// product: the account is a row in our own D1, not a wallet the user holds.
+// Nothing catches a stale string here — no lint rule, no type error, no test that
+// reads a meta tag — and a card carrying the wrong product renders exactly as well
+// as a right one, which is the failure mode `SOCIAL` exists to prevent for the
+// @-handle one level up. The browser-extension manifest carried the SAME sentence for the same
+// reason (stores/listing-copy.ts, the header): nobody had a reason to open the
+// file.
+//
+// TITLE is the tagline, verbatim from `BRAND`, so this origin and the apex say one
+// sentence rather than two versions of it (docs/brand-assets.md — _the brand
+// lines_: the tagline is the line for an OG title). Never retyped here.
+//
+// It is the CARD title only, and that is the one place this file departs from
+// bracemark-site's otherwise-identical block. On the apex the same string is also
+// the document `default`, which is right there: the page it names is the pitch,
+// and a visitor arriving from a search result is being sold to. Here the default
+// covers /links and /settings — screens someone signed in to and works in, often
+// with the tab pinned or one of twenty — and a 63-character tagline in that slot
+// truncates to "Bracemark — The boo…" in every one of them, which names the
+// product and then wastes the rest of the width saying nothing legible. So the
+// document default is the bare word and the card keeps the pitch: a tab is
+// wayfinding, a card is an introduction, and they are not the same job.
+const TITLE = `${BRAND.name} — ${BRAND.tagline}`;
+
+// DESCRIPTION is written to the same rule as bracemark-site's twin in ITS
+// `app/layout.tsx`, and the two are the SAME SENTENCE — keep them that way, and
+// edit them together. bracemark-web cannot import the apex's config (separate app,
+// separate origin), so a comment naming the other copy is the only thing holding
+// them, which is the pattern the lockup already uses.
+//
+// The rule it is written to: name the plaintext we DO hold, in the same breath as
+// the encryption, so the claim is one a reader can check rather than one they have
+// to take. Two spellings are barred and both read as MORE rigorous than the honest
+// one:
+//   - "the server sees nothing" / "ciphertext and nothing else" — flatly false of
+//     a Worker that also serves auth and billing (docs/local-first-sync.md).
+//   - "never a link" — which this sentence used to end on, and which
+//     `bracemark-extractor` falsifies by construction: a server that fetches a page
+//     for you has to be told which page, so the opt-in Plus path hands it a
+//     PLAINTEXT URL (docs/link-extraction.md, _server extraction_). What is true
+//     whatever that setting says is that what we STORE of the library is
+//     ciphertext.
+// 157 characters, inside the ~160 Google shows.
+const DESCRIPTION =
+  'Bracemark is an end-to-end encrypted bookmark manager. Links are encrypted on your device before they sync: we hold your username, your plan, and ciphertext.';
+
 export const metadata: Metadata = {
   metadataBase: new URL(appUrl),
-  title: 'Bracemark - Save links to visit later',
-  description:
-    'Save links to everything and visit them later easily, anytime, on any device, with technology that empowers you to truly own your account and data.',
+  // `template` is the apex's, spelled the same way (its `app/layout.tsx`) so a grep
+  // for the literal finds both — it is what makes the three routes that set a bare
+  // title render as "Sign in · Bracemark" rather than as "Sign in", which is what a
+  // tab strip full of them said before. Next applies it to CHILD segments only, so
+  // `default` is what the untitled screens (/links, /settings/*) still get, and the
+  // `openGraph`/`twitter` titles below are set explicitly and are untouched by it.
+  //
+  // A page adding its own `title` from here on gets the suffix for free. Setting a
+  // full "… · Bracemark" string in a page is now the bug — it renders twice.
+  title: {
+    default: BRAND.name,
+    template: '%s · Bracemark',
+  },
+  description: DESCRIPTION,
   openGraph: {
-    title: 'Bracemark - Save links to visit later',
-    description:
-      'Save links to everything and visit them later easily, anytime, on any device, with technology that empowers you to truly own your account and data.',
+    title: TITLE,
+    description: DESCRIPTION,
     images: [
       {
         url: '/twitter-card-image-pattern5.png',
@@ -53,9 +112,8 @@ export const metadata: Metadata = {
     type: 'website',
   },
   twitter: {
-    title: 'Bracemark - Save links to visit later',
-    description:
-      'Save links to everything and visit them later easily, anytime, on any device, with technology that empowers you to truly own your account and data.',
+    title: TITLE,
+    description: DESCRIPTION,
     images: ['/twitter-card-image-pattern5.png'],
     card: 'summary_large_image',
     // The @-form, from `SOCIAL` in @stxapps/shared — never retyped here.
