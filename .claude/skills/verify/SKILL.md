@@ -131,6 +131,25 @@ actually settles the question:
   plain JSON that can't hold a comment saying so. Unrelated but adjacent:
   `wrangler.jsonc` pins `dev.port: 8787`, so a port conflict fails loudly instead
   of silently drifting to 8788.
+- **`Error evaluating Node.js code` from a Next dev server: clear the turbopack
+  cache before you touch `node_modules`.** `.next/dev/cache/turbopack` (hundreds
+  of MB, per Next app) caches the **result of evaluating `postcss.config.js` in
+  Node**, including the _failure_, and its invalidation keys are source files
+  (`globals.css`, `postcss.config.js`) — **not** `node_modules`. So a package
+  that was missing when the config was first evaluated stays missing to the cache
+  after you install it: `next dev` replays the old error forever, across
+  restarts. Seen as `http://localhost:3000/` → HTTP 500 with
+  `Error: Cannot find module 'enhanced-resolve'`, require stack
+  `@tailwindcss/node/dist/index.js` ← `@tailwindcss/postcss` ← a
+  `.next/dev/build/chunks/*` file. Tell it apart from a real dependency problem:
+  with a stale cache `ls node_modules/<pkg>`,
+  `npm ls <pkg>`, `npm install --dry-run` ("up to date") and
+  `node -e "require('<the requiring file>')"` **all pass** while the server still
+  500s; the 500 also arrives instantly, with no compile pause, and names a chunk
+  hash `.next/dev/build/postcss.js` no longer references. Fix is
+  `rm -rf apps/<app>/.next/dev/cache/turbopack` — that directory alone, no need
+  to nuke `.next`, and `nx reset` does not touch it. Both `bracemark-web` and
+  `bracemark-site` are Next 16 + Turbopack and can both hit it.
 - **A hydration error on `localhost:3001` is your browser, not the site.** Under
   `npm run dev:site`, visiting the marketing site can log "Hydration failed…" with
   `+ <main className="flex-1">` / `- <div className="px-safe">`. It is not an app

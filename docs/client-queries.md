@@ -125,6 +125,53 @@ fix this — its liveQuery fix concerns in-place result mutation. The constraint
 does not exist in the expo port ([below](#the-expo-sqlitedrizzle-port)), whose
 reactivity is table-coarse rather than range-tracked.
 
+**The other silent reactivity failure — deps that aren't identity-stable.**
+`useLiveQuery` re-runs when its dep array changes **by identity**, and so does
+every `useEffect` a consumer keys on the same value. So a context value or a
+shared hook's return that allocates a fresh object or function each render leaks
+instability into every consumer downstream — and the providers here re-render for
+reasons unrelated to the member being depended on (a sibling field, a parent
+render, a liveQuery emission), so "it only re-renders when something changed" is
+not a defence. **`react-hooks/exhaustive-deps` does not catch it**, and the rule
+is on in every React project here. The rule only reasons about values declared in the
+SAME component: a local object literal in a dep array is flagged ("makes the
+dependencies of useEffect Hook change on every render"), while a value arriving
+from a hook call, a context or a prop is opaque to it — which is what every case
+below is. `use-settings.ts` sits in `web-react`, where the rule IS enabled, and
+it stayed silent for exactly that reason. It is not a type error either, and no
+test renders deeply enough to see it. Two that were live:
+
+- **Invisible churn — `useSettings().theme`**
+  (`packages/web-react/src/hooks/use-settings.ts`). `coerceThemeState()`
+  (`packages/shared/src/theme/theme.ts`) allocates a fresh object per call, so
+  `theme`/`syncTheme`/`localTheme` carried a new identity every render and
+  `ThemeProvider`'s apply effect — keyed `[theme]`,
+  `packages/web-ui/src/contexts/theme-provider.tsx` — re-ran every render: a
+  `localStorage` write plus a `matchMedia` listener torn down and rebuilt, every
+  time. It was not a loop only because `setEffectiveTheme` bails on an unchanged
+  value. Fixed by memoizing on the raw source
+  (`useMemo(() => coerceThemeState(general?.theme ?? DEFAULT_THEME), [general?.theme])`).
+- **An actual loop — `ExternalSyncProvider`'s `requestSync`**
+  (`packages/web-react/src/contexts/sync-provider.tsx`). The **browser
+  extension**'s popup passed it as an inline arrow from
+  `apps/bracemark-extension/contexts/providers.tsx`. `Providers` re-renders on
+  every mirrored sync-state update, so the arrow was fresh per cycle →
+  `requestSyncWithNonce`'s `useCallback` changed → a mount effect keyed on
+  `[requestSync]` re-fired → `KICK_SYNC` → another mirror update → repeat, an
+  endless syncing⇄synced cycle. Fixed with `useCallback(…, [])` (`sendMessage`
+  is a module import). The real `SyncProvider` was already right, via a
+  `backgroundSyncRef` + `useCallback([])` — that's the reference shape.
+
+**The rule:** every function in a context value gets a `useCallback`, every
+object or derived value a `useMemo` (or a module constant, or a ref). Check the
+MEMBERS of a whole-value `useMemo` too — memoizing the wrapper buys nothing if
+something inside it is freshly allocated. The two shapes that keep reappearing
+are normalization helpers that return a new object (`coerceThemeState`) and
+inline arrows passed as provider props. Audited July 2026: page-provider,
+view-state-provider, auth-provider, extraction-provider, the api/extract client
+providers and the real `SyncProvider` were all already correct (the api and
+extract clients are module singletons).
+
 **Estimated vs. measured row heights.** Both web layouts MEASURE. A title is
 `line-clamp-2`, so an item's height turns on whether that title wraps — a fact
 about the browser's line breaker at the current pane width, font and root font

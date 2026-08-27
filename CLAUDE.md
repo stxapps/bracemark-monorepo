@@ -60,6 +60,7 @@ self-contained and cross-links its neighbours.
 | ------------------------------------------------------------------ | ------------------------------- |
 | workspace layout, package boundaries, module resolution            | `architecture.md`               |
 | **any dependency version / `package.json` / Expo SDK bump**        | `architecture.md` ⚠             |
+| **running `nx migrate`; when the Expo SDK ceiling lifts**          | `upgrades.md` ⚠                 |
 | local store + encrypted file sync (the data path)                  | `local-first-sync.md`           |
 | the read edge — indexes, liveQuery, virtual scrolling, paging      | `client-queries.md`             |
 | links-page search (the URL⇄`LinkQuery` grammar, the UI)            | `search.md`                     |
@@ -114,6 +115,18 @@ test. Check the linked doc before acting on any of these.
   is an opaque native crash, not a version error. → `architecture.md`,
   _dependency versions_. Related: `nx lint --fix` will re-add an
   imported-but-undeclared dep to a `package.json`, so read its diff.
+- **`nx migrate` runs migrations whose `requires` gate does NOT hold, and
+  proposes an SDK bump you didn't ask for.** `npx nx migrate latest` rewrites root
+  `package.json` to `@nx/expo`'s default SDK lane (56, on Nx 23) — expo,
+  react-native, react, `typescript`, and a dozen more, plus deliberate `~`/`^`
+  ranges flattened to exact pins on unrelated packages — so restore the manifest
+  (`git checkout package.json`) and re-apply only the `@nx/*` + `nx` lines. Then
+  the silent half: `@nx/js`'s two `23-1-0-*-for-ts6` migrations declare a
+  `requires` of `{ typescript: ">=6.0.0" }` and **ran anyway** on a TypeScript
+  5.9 workspace, writing TS 6 semantics (`ignoreDeprecations: "6.0"`,
+  `esModuleInterop: false`, `types: ["*"]`) into ~26 tsconfigs. The run prints its
+  successes and exits 0, and the values look deliberate in a diff — read the
+  tsconfig diff after every `--run-migrations`. → `upgrades.md`
 - **`apps/bracemark-expo/ios/` and `android/` are generated and gitignored.** Every
   native change belongs in `app.config.ts` or a config plugin. A hand-edit in
   Xcode leaves a _clean_ working tree and is destroyed by the next
@@ -225,9 +238,25 @@ test. Check the linked doc before acting on any of these.
   parses the project as a package to upgrade the workspace to, rather than
   running the target. → `hosting.md`, _deploying the workers_;
   `apps/bracemark-api/src/db/migrations/README.md`.
-- **Greenfield — no migrations.** There is no production data. Edit persisted
-  schemas in place (Dexie `version(1)`, the expo-sqlite DDL); don't add a
-  migration step.
+- **The client stores are still greenfield; the DEPLOYED schemas are not.** On a
+  device nothing has shipped, so Dexie `version(1)`
+  (`packages/web-react/src/data/db.ts`), the expo-sqlite DDL
+  (`packages/expo-react/src/data/db.ts`) and the R2 payload shapes the clients
+  write (`packages/shared/src/sync/`) are still edited **in place** — change the
+  shape, recreate the dev database (delete the app / clear its data), don't add a
+  migration step. `bracemark-api` is deployed, so its two SERVER schemas have
+  left that regime and nothing about them says so at the call site:
+  `src/db/migrations/<role>/0001_init.sql` is recorded as applied in every live
+  D1 and `wrangler` will never re-run it, and a DO past `schema_version` 1 never
+  re-runs `MIGRATIONS[0]` in `src/do/user-data.ts`. Editing either in place is
+  silent in the worst way — a fresh/local database gets the new shape, every
+  deployed one keeps the old, and the apply still prints ✅. **Append**
+  (`0002_*.sql`, folded into `db/schemas/<role>.sql` so a fresh DB matches a
+  migrated one; or a new `MIGRATIONS` entry, never an edit to a shipped one);
+  folding a change back into the init is only correct if you also drop and
+  re-provision every deployed database, deliberately. →
+  `apps/bracemark-api/src/db/migrations/README.md`,
+  `apps/bracemark-api/src/do/README.md`.
 - **Extensionless imports inside packages.** `from './lib/theme'`, never
   `'./lib/theme.js'` — packages are `bundler=none` and consumed as raw source, so
   the NodeNext spelling resolves literally and 404s in Turbopack/Metro.

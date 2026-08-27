@@ -266,7 +266,10 @@ version split is gone. Wiring (already done):
   `tsconfig.json` `include`; `tsconfig.app.json` needs **no** `jsxImportSource`.
   Composite components that aren't core RN hosts (e.g. `SafeAreaView` from
   `react-native-safe-area-context`) need `withUniwind(Component)` to accept
-  `className`; `View`/`Text` and reanimated components accept it directly.
+  `className`; `View`/`Text` and reanimated components accept it directly, and
+  uniwind ships wrappers for the core RN components that need one — `TextInput`,
+  `ScrollView` (including `contentContainerClassName`), `KeyboardAvoidingView` —
+  so only third-party composites need wrapping by hand.
 - components come from **react-native-reusables** (the shadcn analogue —
   same copy-into-the-app model), landing in `src/components/ui/` (the mirror of
   `packages/web-ui/src/components/ui/` — in the app, not a package: there is
@@ -288,7 +291,16 @@ version split is gone. Wiring (already done):
   `@rn-primitives/slot`, `class-variance-authority`, `clsx`, `tailwind-merge`).
   Keep the copy otherwise verbatim so future upstream diffs stay legible; local
   changes are flagged in a header comment per file (`text.tsx` carries
-  `font-sans` in its base variant — see the font section). One jest catch:
+  `font-sans` in its base variant — see the font section).
+  **Watch for NativeWind-isms the port left behind:** the registry's uniwind
+  variant was ported from its NativeWind one, and stray props survive. `input`
+  arrived destructuring `placeholderClassName`, which is NativeWind's name —
+  Uniwind neither declares it in its type augmentation nor reads it at runtime
+  (its own is `placeholderTextColorClassName`, and the `placeholder:` class
+  variant covers the same ground). That surfaces as a TS2339 under
+  `npx nx typecheck @stxapps/bracemark-expo`, **not** at lint, so it's caught but
+  only if you typecheck the app after copying. Drop the dead prop and record the
+  removal in the header comment like any other local change. One jest catch:
   `@rn-primitives/*` ships raw JSX in its dist (expects the consumer's
   Metro/babel to transform, like RN packages), so `@rn-primitives` is in
   `jest.config.cts`'s `transformIgnorePatterns` allowlist. Components that

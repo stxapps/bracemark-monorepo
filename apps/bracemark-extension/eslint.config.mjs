@@ -4,6 +4,11 @@ import baseConfig from '../../eslint.config.mjs';
 
 export default [
   ...nx.configs['flat/react-typescript'],
+  // react-hooks, jsx-a11y and react/* — see bracemark-web's config for why this
+  // is `flat/react-jsx` and not `flat/react`. The `flat/react-base` half matters
+  // here specifically: its `no-restricted-globals` bans `location`, which
+  // `utils/capture.ts` reads legitimately in a content script.
+  ...nx.configs['flat/react-jsx'],
   ...baseConfig,
   {
     // Generated / build output — not authored source, don't lint it.

@@ -252,6 +252,14 @@ and rejects a role/state mismatch — it caught `aria-selected` on a `role="butt
 in the search bar's match toggle, which was really a `radio`. Nothing catches a
 role that is simply **absent**, which is how all 56 got there.
 
+The same 18 `jsx-a11y` rules now run on `bracemark-web`, `bracemark-site` and the
+**browser extension** too. They had not: those three took nx's
+`flat/react-typescript` preset, which carries no plugins at all, while the
+packages and `bracemark-expo` take `flat/react` — so `jsx-a11y` (and
+`react-hooks`) were silently off across the whole web app for as long as it has
+existed. Switching them on cost nothing, which is its own finding: the web
+surfaces were already clean against every rule the packages had been held to.
+
 ### naming things that have no visible label
 
 A control with no accessible name is announced as its type and nothing else
