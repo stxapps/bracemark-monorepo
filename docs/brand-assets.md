@@ -389,13 +389,19 @@ here:
 - **The copy that exists twice lives in one file.** `packages/react/src/lib/`
   holds it: `recovery-code-copy.ts` (create-account and Settings → Account),
   `lock-copy.ts` (the unlock pane and its two gates), `misc-settings-copy.ts`
-  (every radio row in Settings → Misc.), beside the `new-password-copy.ts` that
-  set the pattern. Each covers a surface that exists once per platform, where the
-  native half is a hand port of the web one and nothing but the shared file keeps
-  the two saying the same words. The rule for what goes in: only the WORDS, and
-  only when there are two of them — a string that exists on one platform only
-  (the biometric button) stays at its call site rather than moving somewhere that
-  implies a twin.
+  (every radio row in Settings → Misc.), `paywall-copy.ts` (the action-interrupt
+  upgrade dialog, both apps' `contexts/paywall-provider.tsx`), beside the
+  `new-password-copy.ts` that set the pattern. Each covers a surface that exists
+  once per platform, where the native half is a hand port of the web one and
+  nothing but the shared file keeps the two saying the same words. The rule for
+  what goes in: only the WORDS, and only when there are two of them — a string
+  that exists on one platform only (the biometric button) stays at its call site
+  rather than moving somewhere that implies a twin. `PAYWALL_COPY` marks the edge
+  of "only the WORDS": each entry carries the `plan` that unlocks it, which is not
+  a word at rest but is one by the time it is read — the CTA renders
+  `Upgrade to {PLAN_LABELS[plan]}` and the description names the same plan in
+  prose, so the two travel together or the sentence can promise Plus while the
+  button sells Pro.
 
 The sweep **is** done — every string a user reads carries `’`, across both apps,
 the packages and the marketing site — and **`no-restricted-syntax` in the root

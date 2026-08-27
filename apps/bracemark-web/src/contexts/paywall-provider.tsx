@@ -16,15 +16,18 @@
 // since the gate fires from many places and only one dialog is ever open. The
 // optional `onDismiss` lets a caller that kept its own UI open underneath (the
 // advanced-search popover) restore itself when the user backs out with "Not now".
-// The dialog + feature copy live here with the provider — one cohesive unit with a
-// single render path, so there's nothing to gain by splitting the dialog into its
-// own file.
+// The dialog lives here with the provider — one cohesive unit with a single render
+// path, so there's nothing to gain by splitting it into its own file. Its WORDS do
+// not: `PAYWALL_COPY` is in @stxapps/react (lib/paywall-copy.ts), because this file
+// has a hand port in bracemark-expo and the strings were the half that had to stay
+// identical across the two.
 
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
 import { Lock } from 'lucide-react';
 import Link from 'next/link';
 
-import { type AvailablePaidPlan, PLAN_LABELS } from '@stxapps/shared';
+import { PAYWALL_COPY, type PaywallFeature } from '@stxapps/react';
+import { PLAN_LABELS } from '@stxapps/shared';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import {
   Dialog,
@@ -34,37 +37,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@stxapps/web-ui/components/ui/dialog';
-
-export type PaywallFeature = 'searchEditor' | 'locks' | 'nestedLists';
-
-// title/description per gated feature + the plan that unlocks it. Keep in sync
-// with the entitlement table in @stxapps/shared (iap/plans.ts): the plan named
-// here must actually grant the feature, and the copy only promises what's live.
-const FEATURE_COPY: Record<
-  PaywallFeature,
-  { plan: AvailablePaidPlan; title: string; description: string }
-> = {
-  searchEditor: {
-    plan: 'plus',
-    title: 'Advanced search',
-    description:
-      'Field-scoped search across URL and title, with multi-list and multi-tag filters, is a Plus feature. Basic word search stays free.',
-  },
-  // Covers both app lock (Misc) and per-list locks (Lists) — one `locks`
-  // entitlement gates them together.
-  locks: {
-    plan: 'plus',
-    title: 'Locks',
-    description:
-      'Locking the app, or a single list, on this device is a Plus feature. Your links stay end-to-end encrypted on every plan — this is the convenience layer on top.',
-  },
-  nestedLists: {
-    plan: 'plus',
-    title: 'Nested lists',
-    description:
-      'Nesting a list inside another is a Plus feature. Flat lists and tags stay free and fully usable.',
-  },
-};
 
 type PaywallApi = {
   // Show the paywall for a feature. `onDismiss` (optional) fires when the dialog
@@ -122,7 +94,7 @@ export function PaywallProvider({ children }: { children: React.ReactNode }) {
     invokerRef.current = null;
   }, []);
 
-  const copy = feature ? FEATURE_COPY[feature] : null;
+  const copy = feature ? PAYWALL_COPY[feature] : null;
 
   return (
     <PaywallContext.Provider value={api}>

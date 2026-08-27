@@ -19,7 +19,8 @@ import {
 import { useRouter } from 'expo-router';
 import { Lock } from 'lucide-react-native';
 
-import { type AvailablePaidPlan, PLAN_LABELS } from '@stxapps/shared';
+import { PAYWALL_COPY, type PaywallFeature } from '@stxapps/react';
+import { PLAN_LABELS } from '@stxapps/shared';
 
 import { Button } from '../components/ui/button';
 import {
@@ -32,37 +33,6 @@ import {
 } from '../components/ui/dialog';
 import { Icon } from '../components/ui/icon';
 import { Text } from '../components/ui/text';
-
-export type PaywallFeature = 'searchEditor' | 'locks' | 'nestedLists';
-
-// title/description per gated feature + the plan that unlocks it — bracemark-web's
-// FEATURE_COPY, verbatim. Keep in sync with the entitlement table in
-// @stxapps/shared (iap/plans.ts).
-const FEATURE_COPY: Record<
-  PaywallFeature,
-  { plan: AvailablePaidPlan; title: string; description: string }
-> = {
-  searchEditor: {
-    plan: 'plus',
-    title: 'Advanced search',
-    description:
-      'Field-scoped search across URL and title, with multi-list and multi-tag filters, is a Plus feature. Basic word search stays free.',
-  },
-  // Covers both app lock (Misc) and per-list locks (Lists) — one `locks`
-  // entitlement gates them together.
-  locks: {
-    plan: 'plus',
-    title: 'Locks',
-    description:
-      'Locking the app, or a single list, on this device is a Plus feature. Your links stay end-to-end encrypted on every plan — this is the convenience layer on top.',
-  },
-  nestedLists: {
-    plan: 'plus',
-    title: 'Nested lists',
-    description:
-      'Nesting a list inside another is a Plus feature. Flat lists and tags stay free and fully usable.',
-  },
-};
 
 type PaywallApi = {
   // Show the paywall for a feature. `onDismiss` (optional) fires when the dialog
@@ -116,7 +86,7 @@ export function PaywallProvider({ children }: { children: ReactNode }) {
     router.push('/settings/subscription');
   }, [router]);
 
-  const copy = feature ? FEATURE_COPY[feature] : null;
+  const copy = feature ? PAYWALL_COPY[feature] : null;
 
   return (
     <PaywallContext.Provider value={api}>
