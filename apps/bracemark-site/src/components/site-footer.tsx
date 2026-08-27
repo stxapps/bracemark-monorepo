@@ -29,7 +29,7 @@ export function SiteFooter() {
             </div>
             <p className={cn('text-muted-foreground mt-4 max-w-xs text-sm leading-6')}>
               An end-to-end encrypted bookmark manager. Your links are encrypted on your device
-              before they sync — we hold the ciphertext and nothing else.
+              before they sync — we hold the ciphertext, and no key that opens it.
             </p>
             <a
               className={cn(

@@ -26,7 +26,7 @@ import { PopupBody, PopupShell } from './Shell';
 //
 // Both apps are achromatic by design — every token in web-ui's sheet is
 // `oklch(L 0 0)`, literally zero chroma, which suits a product whose claim is that
-// the server sees nothing. The temptation in a status dot is a green "all good",
+// the server can't read your library. The temptation in a status dot is a green "all good",
 // and it is the wrong move twice over: it spends the surface's only colour on the
 // state that needs no attention, and it trains the eye to expect colour, so the
 // red has to shout to be heard over it. So the healthy states are drawn in the

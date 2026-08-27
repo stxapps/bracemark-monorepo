@@ -129,10 +129,9 @@ export default function Page() {
           as encrypted files that we have no means of reading.
         </p>
         <p>
-          You are responsible for what you save and for having the right to save it. Because the
-          Service stores addresses and your own notes rather than copies of third-party pages, you
-          should assume that a saved link is a pointer, not an archive, and that the page it points
-          to may change or disappear.
+          You are responsible for what you save and for having the right to save it, including
+          anything a save captures from the page it points to. You should assume that a saved link
+          is a pointer, and that the page behind it may change or disappear at any time.
         </p>
         <p>
           Export your data at any time, on any plan, using the export feature in the app. We

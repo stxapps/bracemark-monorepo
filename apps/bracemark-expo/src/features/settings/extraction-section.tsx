@@ -153,9 +153,35 @@ export function ExtractionSection() {
 
   return (
     <SettingsPane>
+      {/* Describes what this setting DOES; it does not promise what Bracemark
+          will never do. The difference is one word — it read "so no server of
+          ours EVER sees it" — and the word was carrying a load nothing in this
+          app holds up. docs/link-extraction.md is emphatic (_expo drains in the
+          foreground_: "It never calls `bracemark-extractor`. Not 'not yet' —
+          permanently"), and the case for it is strong for a SAVE: native HTTP has
+          no CORS, so routing through the server is a downgrade on every axis at
+          once — `extractedBy: 'server'` (the tier floor) written by a client that
+          can produce `expo:fg` (the ceiling), a paid rate-limited request spent
+          on work the phone does free, a URL disclosed to a party that would never
+          have seen it, behind a plan gate where on-device serves everyone.
+          Nothing here argues with that.
+
+          Where it is soft is BULK IMPORT on a phone, and the same doc says so
+          from the other side (_imported links_: "Imports are where
+          `bracemark-extractor` stops being avoidable ... That leaves mobile
+          background — also throttled and unreliable — or `bracemark-extractor`").
+          The foreground drain needs the app open and active; iOS suspends a
+          backgrounded one. So a mobile-only user importing thousands of links is
+          told they forgo "throughput ... a speed difference on a back-fill
+          nothing waits on", and would call it something less forgiving. If that
+          gap is ever closed here, `serverExtraction` — which expo currently
+          round-trips without reading or rendering — becomes an expo setting, and
+          bracemark-web's sibling screen is the shape to copy: it names the opt-in
+          and the server out loud. The copy above survives that change; "ever"
+          would not have. */}
       <SettingsHeader
         title="Link previews"
-        description="Bracemark fills in each saved link’s title and preview image automatically — you don’t need to do it by hand. The work happens on this phone: the app fetches the page itself, so no server of ours ever sees it. Choose how far that should go."
+        description="Bracemark fills in each saved link’s title and preview image automatically — you don’t need to do it by hand. The work happens on this phone: the app fetches the page itself, rather than any server of ours. Choose how far that should go."
       />
 
       <RadioGroup

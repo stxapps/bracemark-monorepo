@@ -6,7 +6,7 @@ sync plane ([local-first-sync.md](./local-first-sync.md) — individual paths)
 and the account plane ([account.md](./account.md) — keys and credentials).
 
 **Where each runs is forced by E2E encryption, not preference.** Import and
-export are **client-only** — the server holds only ciphertext, so it _can't_
+export are **client-only** — the server holds your library only as ciphertext, so it _can't_
 serialize a bookmarks file or parse one; the plaintext work has to happen where
 the key is, and no plaintext ever leaves the device (export writes a local
 file, import reads one — the only server traffic is the ordinary sync plane).

@@ -1,10 +1,11 @@
 {
   // Cloudflare Workers config for bracemark-extractor — the opt-in, anonymous link-
   // metadata fetcher on its OWN origin (extractor.bracemark.com), deliberately SEPARATE
-  // from the blind sync broker on api.bracemark.com so that "api.bracemark.com only ever sees
-  // ciphertext" stays code-provable: the extractor is the one component that
-  // `fetch`es arbitrary, user-supplied URLs. See docs/link-extraction.md ("server
-  // extraction") and docs/architecture.md.
+  // from the sync broker on api.bracemark.com so that "api.bracemark.com never sees your
+  // library in plaintext" stays code-provable: the extractor is the one component that
+  // `fetch`es arbitrary, user-supplied URLs. NOT "only ever sees ciphertext" — that api
+  // also serves auth and billing and holds a username, sessions and a purchases row in the
+  // clear. See docs/link-extraction.md ("server extraction") and docs/architecture.md.
   //
   // Note the deliberately MINIMAL binding set vs. bracemark-api: NO D1, NO R2, NO
   // Durable Objects. The extractor is a PURE FUNCTION — it holds no key, persists

@@ -304,6 +304,32 @@ test. Check the linked doc before acting on any of these.
   permissive one. Only the third copy is pinned by a spec. Relatedly, no surface may
   claim a visitor can **verify** what they are running — public source proves what
   the code does, not which build was served. → `brand-assets.md`, _the source_.
+- **"The server sees nothing" is false, and it reads like precision.**
+  `bracemark-api` is ONE Worker serving auth, sync AND billing, over a username
+  directory, an accounts shard, a sessions DB, a purchases table and R2
+  (`apps/bracemark-api/wrangler.jsonc`) — so the same host that cannot read a
+  link holds your **username, public key, sessions and subscription row in the
+  clear**. Only the LIBRARY is ciphertext-only. Say "`api.bracemark.com` never
+  sees your library in plaintext"; never "only ever sees ciphertext", "the server
+  sees nothing", "ciphertext and nothing else", or a narrowing to "the sync
+  server" — there is no separate sync server to name, and inventing one to carry
+  a smaller claim is the same error one step quieter. Nothing catches any of it:
+  the schema lives in a different app from every surface that describes it, so
+  there is no lint error, type error or failing test, and the phrasing sounds
+  MORE rigorous the more wrong it gets. It had been quoted as settled across four
+  docs and four call sites, and had reached the site-wide meta description, the
+  footer on every page, and the landing page's loudest claim (`GUARANTEES`, _Our
+  blindness_) before anyone read it against the tables. A privacy claim a reader
+  can falsify costs more than the residual it was hiding, which is why the public
+  surfaces now name the residual themselves. Two things that ARE true and should
+  keep their wording: **`R2` only ever sees ciphertext**
+  (`packages/web-react/src/sync/r2.ts` — a blob store with nothing else in it),
+  and **"blind sync broker"** as a nickname for `bracemark-api`, which is blind to
+  your library and to nothing else. Relatedly, `bracemark-extractor` is a second
+  server of ours and is handed a **plaintext URL** by construction, so no surface
+  may claim encryption happens before anything leaves the device. →
+  `local-first-sync.md`, _the shape of the problem_ (the callout under the
+  decisive constraint), and _crypto boundary & what the server still learns_.
 - **`/extractor` publishes the extractor's caps as prose, and nothing links the
   two.** `bracemark-extractor` names `https://bracemark.com/extractor` in the
   `User-Agent` of every outbound fetch, so that page is read by operators of the

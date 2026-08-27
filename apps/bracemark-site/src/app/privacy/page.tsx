@@ -17,11 +17,20 @@ export const metadata: Metadata = {
 //
 // The substance was already decided and written down, and this page is a faithful
 // reading of it rather than a template:
-//   - the sync server is a blind broker that only ever sees ciphertext, plus the
-//     account row and the wrapped keys (docs/local-first-sync.md, docs/account.md);
+//   - the api never sees your library in plaintext — it holds the ciphertext, the
+//     account row and the wrapped keys, and nothing readable from a link
+//     (docs/local-first-sync.md, docs/account.md). Deliberately not "only ever sees
+//     ciphertext": that shorthand is false of a Worker that also serves auth and
+//     billing, and the paragraphs below are the surface where the difference shows;
 //   - bracemark-extractor is the ONE component that fetches user URLs. It holds no
 //     key, persists nothing, and its rate limiter logs IP addresses but never URLs
-//     (docs/link-extraction.md);
+//     (docs/link-extraction.md). What that service RETURNS is a fact that moves and
+//     the promise beside it is not: server-tier extraction is `titleImage` today
+//     and `readMode` is already in the planned response shape, so the em-dash
+//     clause in that paragraph ("the title and the preview image") is an
+//     enumeration to extend when read-mode ships, while "keeps nothing" and the
+//     three clauses after it are invariants that must not move. /extractor's
+//     header comment keeps the same split and the same change-list;
 //   - subscription rows come from the payment providers, never from card data we
 //     hold, because we never hold any (docs/iap.md). The paragraph admitting that
 //     paying deanonymizes is traceable the same way, to that doc's _privacy note_:
@@ -174,12 +183,13 @@ export default function Page() {
           For links saved in the web app, browsers do not allow a page to fetch another site, so
           there is an <strong>opt-in {PLAN_LABELS.plus} setting</strong> that lets our extraction
           service fetch the page on your behalf. It is off unless you turn it on. When it is on,
-          that service receives the address you saved, fetches the page, returns the title and
-          image, and keeps nothing: it stores no URLs, writes none to its logs, holds no key, and is
-          not told which account asked. Its rate limiter does record IP addresses, so that a single
-          source cannot abuse it. The same service is described from the other side — for the people
-          who run the sites it fetches — on <Link href="/extractor">its own page</Link>, including
-          the caps it holds itself to and how to turn it away.
+          that service receives the address you saved, fetches the page, returns what it read there
+          — the title and the preview image — and keeps nothing: it stores no URLs, writes none to
+          its logs, holds no key, and is not told which account asked. Its rate limiter does record
+          IP addresses, so that a single source cannot abuse it. The same service is described from
+          the other side — for the people who run the sites it fetches — on{' '}
+          <Link href="/extractor">its own page</Link>, including the caps it holds itself to and how
+          to turn it away.
         </p>
 
         <h3>If you contact us</h3>

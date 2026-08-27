@@ -65,7 +65,8 @@ convention: the site has no auth stack, no data layer, and its own origin (see
   link metadata (title/image; read-mode deferred) for clients that can't reach the
   URL themselves (`bracemark-web` without the browser extension, bulk imports). Its **own app on
   its own origin** `extractor.bracemark.com`, **separate from `bracemark-api`** (the blind sync
-  broker) so that "`api.bracemark.com` only ever sees ciphertext" stays code-provable —
+  broker) so that "`api.bracemark.com` never sees your library in plaintext" stays
+  code-provable —
   the extractor is the one component that fetches arbitrary user URLs. A pure
   function (returns plaintext, holds no key, persists nothing — no D1/R2/DO
   bindings, only CORS config + rate limiters), anonymous, off-by-default and opt-in.

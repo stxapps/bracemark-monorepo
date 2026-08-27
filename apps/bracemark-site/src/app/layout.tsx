@@ -70,8 +70,27 @@ export const viewport = {
 // its own form (~155 characters, mechanism first, no call to action), and this one
 // is the only place the whole argument gets to be prose. Google truncates past
 // roughly 160, so the room is already spent.
+// Says WHAT WE STORE, and does not name a component. Two rewrites got this wrong
+// before landing here, and both failures are worth keeping:
+//
+//   - "the server holds ciphertext and nothing else" — flatly false, and
+//     contradicted by our own /privacy, which inventories a username, a public
+//     key, wrapped key blobs, sessions and a subscription row, none of it
+//     ciphertext.
+//   - "the SYNC server holds only ciphertext" — narrowing to a component reads as
+//     precision and is a fiction: there is no separate sync server.
+//     `bracemark-api` is ONE Worker serving auth, sync AND billing, over a
+//     username directory, an accounts shard, a sessions DB, a purchases table and
+//     R2 (apps/bracemark-api/wrangler.jsonc). The same host that holds the
+//     ciphertext holds the username in the clear, so scoping the claim to "sync"
+//     bought nothing except a component a reader cannot find.
+//
+// So: the plaintext we DO hold is named, in the same breath, in the order
+// /privacy and the FAQ already name it. A claim about a boundary we can point at
+// survives any amount of re-architecting behind it. 157 characters, inside the
+// ~160 Google shows.
 const DESCRIPTION =
-  'Bracemark is an end-to-end encrypted bookmark manager. Every link is encrypted on your device before it syncs, so the server holds ciphertext and nothing else.';
+  'Bracemark is an end-to-end encrypted bookmark manager. Links are encrypted on your device before they sync: we see your username and your plan, never a link.';
 
 // The tagline itself, verbatim from shared's brand/brand.ts, so the OG
 // title, the hero, and every store listing say one sentence rather than four

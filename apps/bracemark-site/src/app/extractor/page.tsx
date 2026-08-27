@@ -71,6 +71,15 @@ export const metadata: Metadata = {
 //       are the whole edit, and no promise on this page moves. Do NOT re-describe
 //       the payload inside NEVER, however true it is today.
 //
+//       The REQUEST COUNT moves with it, and is the half this list used to miss.
+//       "It is a fetcher, not a crawler" prices a save at one document fetch plus
+//       an image fetch plus the relay; a second facet asked for later is another
+//       fetch of a page you already answered for. The three nevers in that
+//       paragraph survive — no link-following, no self-initiated second page, no
+//       revisiting to see what changed, all still true, because the second fetch
+//       is still one person's one save. The arithmetic beside them does not, so
+//       re-read BOTH paragraphs of that section in the same change.
+//
 //       "IT RUNS NO JAVASCRIPT" IS ALSO ONLY A FACT. Eventual Browser-Rendering
 //       JS execution is an open scope call in that same doc, and a headless page
 //       capturer is deferred rather than ruled out — so the row below says "not
@@ -175,10 +184,20 @@ export default function Page() {
               relay that image to their browser, which cannot read it cross-origin any more than it
               could read your page.
             </p>
+            {/* Deliberately NOT "once a title has come back it is never fetched
+                again". That was a never about BEHAVIOUR on the one page whose
+                own rule (above) is that a behaviour promoted to a never is a
+                promise nobody agreed to make — and read-mode falsifies it: a
+                link whose title already came back from a device tier, then
+                queued for server read-mode, is a second fetch of a page you
+                have already answered for. What survives read-mode is the
+                property this page is actually built on — an answer is KEPT, so
+                the same person saving the same address again costs you
+                nothing. Stated that way it is about the save, not the
+                request count. */}
             <p>
-              Once a title has come back successfully it is never fetched again: the answer lives on
-              that person’s devices from then on, encrypted, and no later save of the same address
-              by the same person re-asks you for it.
+              An answer that comes back successfully is kept: it lives on that person’s devices from
+              then on, encrypted, so saving the same address again does not re-ask you for it.
             </p>
             <p>
               It also only runs for people who turned it on. Fetching on someone’s behalf means

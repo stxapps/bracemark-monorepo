@@ -51,7 +51,7 @@
   /*
    * The one colour on an otherwise achromatic site. Every token in web-ui's sheet
    * is `oklch(L 0 0)` — literally zero chroma — and that suits a product whose
-   * whole claim is that the server sees nothing. So the accent is rationed to the
+   * whole claim is that the server can't read your library. So the accent is rationed to the
    * places where something is genuinely YOURS or genuinely ON: prose links, the
    * included-feature marks, the featured plan, the plaintext half of the hero.
    *

@@ -48,9 +48,9 @@ whoever fetches the URL learns the URL.
 
 ### the stance: privacy-first, off by default, clients do the work
 
-bracemark is a **privacy-focused** bookmark manager: the sync server only ever sees
-ciphertext (see [local-first-sync.md](./local-first-sync.md) — _the server only
-ever sees ciphertext_). Extraction is the one feature that wants to break that,
+bracemark is a **privacy-focused** bookmark manager: the api never sees your
+library in plaintext (see [local-first-sync.md](./local-first-sync.md) — _crypto
+boundary & what the server still learns_). Extraction is the one feature that wants to break that,
 so the posture is deliberately conservative:
 
 - **Everything un-gestured is OFF by default.** The axis is **gestured vs.
@@ -1262,7 +1262,7 @@ browser that can't fetch for itself. It is a **separate app**, not a route in
   `api.bracemark.com`. The two have **opposite trust and egress postures**: the broker
   only ever touches D1/R2 and ideally reaches nothing outbound; the extractor must
   `fetch` arbitrary, user-supplied URLs. Separate apps let each hold only the
-  bindings it needs, keep "`api.bracemark.com` only ever sees ciphertext" a clean,
+  bindings it needs, keep "`api.bracemark.com` never sees your library in plaintext" a clean,
   code-provable claim, and give server extraction an independent kill switch /
   opt-in / jurisdiction. Workers is a _good_ fit precisely because its sandbox
   can't reach your private network or cloud IMDS (`169.254.169.254`), which

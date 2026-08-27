@@ -62,7 +62,7 @@ trips off the app — and it is exactly why sign-out is **not** one of them. See
 
 **The extractor is a separate Worker on its own origin**, never a route on the
 api. It `fetch`es arbitrary user-supplied URLs, and keeping it off `api.*` is
-what makes "`api.bracemark.com` only ever sees ciphertext" provable from the
+what makes "`api.bracemark.com` never sees your library in plaintext" provable from the
 code rather than asserted in prose. It has no storage bindings at all — no D1, no
 R2, no Durable Objects. See [link-extraction.md](./link-extraction.md), _server
 extraction_.

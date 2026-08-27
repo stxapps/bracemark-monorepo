@@ -20,8 +20,8 @@ import { BrandLockup } from './brand-lockup';
 // bracemark-web's `/`, which is a bare redirect (docs/hosting.md). A native app
 // can't hand off to a website for its first screen, so this landing ships in the
 // binary — and it inherits that page's design rule verbatim: ACHROMATIC, AND IT
-// SHOWS ALMOST NOTHING, because "the server sees nothing" is easier to feel on a
-// screen that does the same. What was here before — a wordmark over "Save links
+// SHOWS ALMOST NOTHING, because "the server can't read your library" is easier to
+// feel on a screen that does the same. What was here before — a wordmark over "Save links
 // to visit later." — said what a hundred bookmark apps say, in raw
 // `gray-900`/`gray-950` palette values that ignored the token set the rest of the
 // app is built on (and, being blue-tinted, disagreed with the neutral card the

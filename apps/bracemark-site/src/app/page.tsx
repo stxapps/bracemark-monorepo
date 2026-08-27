@@ -33,8 +33,10 @@ import { CREATE_ACCOUNT_URL, SOURCE } from '../lib/site';
 // doesn't enforce.
 //
 // THE DESIGN, in one line: achromatic except for a single petrol accent
-// (`text-signal`, defined in globals.css), because "the server sees nothing" is
-// easier to feel on a page that shows almost nothing. The one thing it does show
+// (`text-signal`, defined in globals.css), because "the server can't read your
+// library" is easier to feel on a page that shows almost nothing. (Not "the server
+// sees nothing" — it sees your username and your plan; the copy on this page says
+// so now, and the rationale should not keep the version the copy dropped.) The one thing it does show
 // is the hero panel below.
 
 const FREE_LINKS = entitlementsOf('free').maxLinks;
@@ -380,9 +382,23 @@ const GUARANTEES: [string, string][] = [
   // the residual ourselves converts the section's only soft spot into its
   // strongest move, in front of the people most likely to check and most likely
   // to tell others what they found.
+  // Second pass, same argument one step further out. The entry already conceded
+  // the residual it leaks about the LIBRARY (file count, change times). What it
+  // still implied by omission was that the library is all we hold — "that is the
+  // end of the list" under a heading reading `Our blindness` invites exactly that
+  // total reading, and it is wrong: `bracemark-api` is one Worker over a username
+  // directory, an accounts shard, a sessions DB and a purchases table, so the
+  // same host that cannot read a link can read your name and whether you pay.
+  // /privacy and the FAQ have always said so; this section, which is the loudest
+  // claim on the property, did not. Naming it here costs a clause and closes the
+  // gap between our proudest surface and our most careful one.
+  //
+  // "The sync server" is deliberately gone with it: there is no separate sync
+  // server to name, and inventing one to carry a narrower claim is the move this
+  // section exists to refuse.
   [
     'Our blindness',
-    'The sync server stores a path, a size, a timestamp and an encrypted blob. It cannot index your library, search it, or hand it to anyone in a readable form. It can count your files and see when they change, and that is the end of the list.',
+    'For each thing you save we hold a path, a size, a timestamp and an encrypted blob — we cannot index your library, search it, or hand it to anyone in a readable form. What we can read is the account around it: your username, and your subscription if you buy one. That is the end of the list.',
   ],
   [
     'Your exit',
@@ -494,24 +510,34 @@ export default function Page() {
                     the nav. The hero explained beautifully HOW we can't read
                     your links and never said why a list of them is worth
                     protecting.
-                  - It states the retrieval boundary above the fold. "The
-                    addresses, not copies of the pages" was correct only in
-                    clause 30 of /terms, while "articles" led the old noun list
-                    and the panel's mock carried a `Reading list` tag — three
-                    soft signals pointing at a read-it-later app we are not.
-                    Disqualifying the wrong reader in ten seconds is a
-                    kindness; letting them hold the wrong category for three
-                    minutes on a site whose pitch is that it does not steer is
-                    not.
+                  - It no longer states a RETRIEVAL BOUNDARY, and that removal is
+                    the deliberate part. "Keeps the addresses, not copies of the
+                    pages" was true when it was written, but it is a PROMISE
+                    rather than a description: read mode, screenshot and page
+                    copy are all planned (docs/link-extraction.md, _capability
+                    tiers_; /pricing's note on the unpublished byte quota says
+                    the same), and the day the first of them ships this sentence
+                    is false above the fold. Withdrawing a negative promise costs
+                    more than never having made it, so the same clause came out
+                    of /about, /terms and the FAQ's offline answer in this change
+                    — it was standing in four places at once. What replaces it is
+                    the ENCRYPTION inventory, which is true now and stays true
+                    when page copy lands: a `files/{id}.enc` blob is encrypted
+                    exactly like the address beside it.
+                    The cost, stated because it is real: the hero no longer
+                    disqualifies a read-it-later reader in ten seconds. That job
+                    falls to the capture and trade bands, which describe what a
+                    save actually captures — a weaker signal, and the right trade
+                    against publishing a boundary we intend to move.
                   - "A key derived from your password", not "a key only you can
                     derive". The old phrasing is false as written — anyone
                     holding the password derives it, which is the entire point
                     of the recovery-code paragraphs further down. */}
               <p className={cn('text-muted-foreground mt-6 max-w-xl text-lg leading-8')}>
                 What you save is a fairly complete picture of what you are reading, buying, worrying
-                about and working on. Bracemark keeps the addresses, not copies of the pages, and
-                encrypts every one on your device before it syncs — with a key derived from your
-                password. Not a promise we make. A thing we can’t undo.
+                about and working on. Bracemark encrypts every part of it on your device before it
+                syncs — the address, the title, the tags, whatever you write about it — with a key
+                derived from your password. Not a promise we make. A thing we can’t undo.
               </p>
 
               <div className={cn('mt-9 flex flex-wrap items-center gap-3')}>
@@ -612,10 +638,21 @@ export default function Page() {
       </section>
 
       {/* --- capture ------------------------------------------------------ */}
+      {/* The lede says "before it syncs", NOT "before anything leaves the
+          device", and the difference is the difference between true and false.
+          Two of the four cards below — the web app and Import — reach
+          `bracemark-extractor` when the opt-in Plus setting is on, and that
+          request carries the URL in PLAINTEXT by construction: a server that
+          fetches a page for you has to be told which page (docs/link-extraction.md,
+          _server extraction_). The old universal ("whichever surface you use …
+          anything") was contradicted by the card sitting directly under it.
+          Encryption-before-sync is the claim the architecture actually supports,
+          and it is the same scoping the hero, the footer and every store listing
+          use. */}
       <Band
         label="Getting links in"
         title="Four ways in, all of them one gesture."
-        lede="Saving has to be faster than not saving, or the library never happens. Whichever surface you use, the encryption is done before anything leaves the device."
+        lede="Saving has to be faster than not saving, or the library never happens. Whichever surface you use, the link is encrypted on the device before it syncs."
       >
         <ul className={cn('bg-border grid gap-px overflow-hidden rounded-xl sm:grid-cols-2')}>
           {CAPTURE.map(({ name, where, body }) => (

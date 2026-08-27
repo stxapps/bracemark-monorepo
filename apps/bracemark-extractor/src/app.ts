@@ -10,9 +10,14 @@ import { extractRoutes } from './routes/extract';
 import { imageRoutes } from './routes/image';
 
 // bracemark-extractor — the opt-in, anonymous link-metadata fetcher on its OWN origin
-// (extractor.bracemark.com), kept SEPARATE from the blind sync broker (api.bracemark.com) so
-// that "api.bracemark.com only ever sees ciphertext" stays code-provable. This is the one
-// component that `fetch`es arbitrary user-supplied URLs. See docs/link-extraction.md.
+// (extractor.bracemark.com), kept SEPARATE from the sync broker (api.bracemark.com) so
+// that "api.bracemark.com never sees your library in plaintext" stays code-provable. This
+// is the one component that `fetch`es arbitrary user-supplied URLs. Say it that way and
+// not "only ever sees ciphertext" — bracemark-api is one Worker over a username directory,
+// an accounts shard, a sessions DB and a purchases table, so it holds plenty of plaintext;
+// what it never holds is a readable link. See docs/link-extraction.md and
+// docs/local-first-sync.md (_the shape of the problem_ — the callout under the
+// decisive constraint).
 
 // Comma-separated allow-list from the Workers binding. `env` is only undefined
 // off-Workers (e.g. app.request() in a test that passes no env); a missing binding

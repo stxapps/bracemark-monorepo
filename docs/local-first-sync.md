@@ -19,14 +19,32 @@ bracemark is **local-first**, with **one entity per encrypted file** and
   (IndexedDB via Dexie);
 - the UI reads from the local store, never from the network.
 
-The decisive constraint is that **the server only ever sees ciphertext.** The
-Hono/Workers API and R2 cannot read, index, query, diff, or conflict-resolve on
-content. That rules out the server-intelligent local-first frameworks
-(ElectricSQL, PowerSync, TanStack DB) — their value is server-side knowledge of
-your data, which E2E encryption forbids — and makes the key-value / document
-sync engines (Replicache, RxDB replication) an awkward fit, since our transport
-is "encrypted blob per file via signed URL," not row/document sync. This is the
-Gaia/Blockstack per-file encrypted-storage model — well-trodden ground.
+The decisive constraint is that **the server never sees your library in
+plaintext.** The Hono/Workers API and R2 cannot read, index, query, diff, or
+conflict-resolve on content. That rules out the server-intelligent local-first
+frameworks (ElectricSQL, PowerSync, TanStack DB) — their value is server-side
+knowledge of your data, which E2E encryption forbids — and makes the key-value /
+document sync engines (Replicache, RxDB replication) an awkward fit, since our
+transport is "encrypted blob per file via signed URL," not row/document sync.
+This is the Gaia/Blockstack per-file encrypted-storage model — well-trodden
+ground.
+
+> **Say it that way, and not "`api.bracemark.com` only ever sees ciphertext."**
+> That shorthand was quoted across four docs and four call sites as though it
+> were settled, and it is false: `bracemark-api` is ONE Worker serving auth, sync
+> AND billing, over a username directory, an accounts shard, a sessions DB, a
+> purchases table and R2 (`apps/bracemark-api/wrangler.jsonc`) — so the same host
+> that cannot read a link holds your username, your public key, your sessions and
+> your subscription row in the clear. What is genuinely ciphertext-only is **the
+> library**, and that is the whole of what this constraint buys. The distinction
+> is not pedantry: the shorthand leaked into public marketing copy — a site-wide
+> meta description and the landing page's loudest claim — before anyone checked
+> it against the schema, and a privacy claim a reader can falsify costs more than
+> the fact it was hiding. `R2 only ever sees ciphertext` IS true and is the one
+> place to keep saying it (`packages/web-react/src/sync/r2.ts`): R2 is a blob
+> store with nothing else in it. For the full inventory of what the server does
+> learn, see _crypto boundary & what the server still learns_; for the planes
+> this file does not cover, [account.md](./account.md) and [iap.md](./iap.md).
 
 So the data path splits into **two layers**: we use a library for the local
 store and hand-roll the file-sync engine. Don't conflate "don't use a sync

@@ -115,10 +115,16 @@ export const FAQ_GROUPS: FaqGroup[] = [
         // The last sentence is the one that matters, and it is here because
         // "opens, browses and searches" was read as offline READING by everyone
         // arriving from a read-it-later app — the answer was accurate and the
-        // inference it invited was wrong, which is the worst kind of copy. The
-        // boundary is now stated on the landing page and in the /about
-        // trade-offs too; this is the surface where the wrong reading actually
-        // formed, so it gets the plainest version.
+        // inference it invited was wrong, which is the worst kind of copy.
+        //
+        // It now states what IS on the device, and what following a link out
+        // costs, rather than "and not the pages themselves". That negative was a
+        // promise about features that are PLANNED rather than declined — read
+        // mode, screenshot and page copy (docs/link-extraction.md, _capability
+        // tiers_) — and it was standing in four places at once; the landing
+        // hero, the /about trade-offs and /terms shed it in the same change. The
+        // inventory is the half that was doing the work anyway: a reader who
+        // wants the article itself offline can see it is not in the list.
         id: 'offline',
         q: 'Does it work offline?',
         a: (
@@ -126,8 +132,8 @@ export const FAQ_GROUPS: FaqGroup[] = [
             Yes. Bracemark is local-first: the app reads from a copy of your library held on the
             device, so it opens, browses and searches with no connection at all. Anything you change
             while offline is queued and syncs the next time you have a network. What is on the
-            device is your library — addresses, titles, tags, notes and preview images — and not the
-            pages themselves, so opening a saved link still needs a connection.
+            device is your library — addresses, titles, tags, notes and preview images. Following a
+            link out to the live page is the one thing that still needs a connection.
           </>
         ),
       },

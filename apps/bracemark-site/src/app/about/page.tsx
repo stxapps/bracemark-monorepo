@@ -48,13 +48,24 @@ const TRADEOFFS: [string, string][] = [
   // The fourth, and the only one that is not a consequence of the encryption —
   // which is exactly why it was missing. This section's three costs were all
   // architectural, so the boundary that actually decides fit for a read-it-later
-  // reader was left to /terms, clause 30, where the people it disqualifies never
-  // reach it. A section whose stated purpose is "we would rather you knew now"
-  // does not get to leave out the one a whole category of visitor needs.
+  // reader was left to /terms, where the people it disqualifies never reach it.
+  // A section whose stated purpose is "we would rather you knew now" does not
+  // get to leave out the one a whole category of visitor needs.
+  //
+  // Phrased as LINK ROT, not as "no copy of the page", and the difference is
+  // load-bearing. The second is a promise about something we will never build,
+  // and read mode, screenshot and page copy are all planned rather than declined
+  // (docs/link-extraction.md, _capability tiers_) — a cost we withdraw a year
+  // later reads worse than one we never claimed, and this list's whole standing
+  // rests on being the place we volunteer things. Rot is a property of the web
+  // and stays true whatever ships: a page copy, when it exists, is a per-link
+  // mitigation on a meter, not a guarantee the library outlives the pages in it.
+  // The landing hero, /terms and the FAQ's offline answer dropped the same
+  // negative in the same change.
   // → docs/link-extraction.md for what a save does capture.
   [
-    'No copy of the page',
-    'We keep the address, the title, the preview image and whatever you write about it — not the article itself. A saved link is a pointer, so if the page changes or goes away, so does what it showed.',
+    'A saved link can rot',
+    'A save captures the address, the title, the preview image and whatever you write about it. If the page behind it changes or goes away, so does what it showed — what the library keeps is your record of the web, not the web.',
   ],
 ];
 
