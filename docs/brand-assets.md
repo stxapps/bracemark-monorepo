@@ -600,6 +600,7 @@ in `brand/brand.ts`, beside `COMPANY`, for the same reason `COMPANY` is there.
 | surface                            | what it says                                                 |
 | ---------------------------------- | ------------------------------------------------------------ |
 | marketing site footer, _Company_   | "Source code" — where a developer looks first, on every page |
+| the landing page, _If we disappear_ | the repo linked inside the durability argument (below)        |
 | /about, _See for yourself_         | the argument and the caveat, in prose, after "Who makes it"  |
 | /about, the _Built with_ colophon  | `AGPL-3.0 · github.com/…` as a specimen line                 |
 | /faq, privacy group, `source`      | the question as actually asked, before `security-report`     |
@@ -607,6 +608,20 @@ in `brand/brand.ts`, beside `COMPANY`, for the same reason `COMPANY` is there.
 | Settings → About, both apps        | one row; the only one not pointing at the marketing site     |
 | the repo's `README` and `SECURITY` | the landing surface, and where to send a vulnerability       |
 
-Deliberately **not** on the home page hero or in the store listings. In a hero it
-reads as a developer-audience signal competing with the actual pitch; in store
-copy it is a claim that can only be corrected by shipping a build through review.
+Deliberately **not** on the home page **hero**, and not in the store listings. In
+a hero it reads as a developer-audience signal competing with the actual pitch; in
+store copy it is a claim that can only be corrected by shipping a build through
+review.
+
+The landing page's _If we disappear_ band is the one place on that page it does
+belong, and the distinction is the argument around it rather than the page it is
+on. The band answers "why should I believe you will still be here", which the
+repo is a real part of the answer to — the code outliving the company is a
+property, not a promise — and it sits two thirds down, in the argued register,
+where a reader has already been given the pitch. The same paragraph is what
+finally answers the **self-hoster**, the only audience that reads an AGPL notice
+and asks the obvious next question: "we do not support self-hosting today, and
+the apps we ship have our server's address compiled into them" is a position, and
+the silence it replaced read as an oversight. Note what the band does **not** do:
+it makes no claim about verifying a served bundle, so the boundary above is
+untouched.

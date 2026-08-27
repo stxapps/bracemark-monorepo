@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" width="1600" height="1000" role="img" aria-label="Screenshot placeholder">
+  <!--
+    PLACEHOLDER, not artwork. It exists so the "A private library is still a
+    library" band has a real box with real proportions while the actual capture
+    is being made, and it is drawn to be UNMISTAKABLE in production: a dashed
+    inset, a mono label, and card skeletons with no invented covers or titles.
+
+    Deliberately NOT a convincing fake grid. The one element on this site pitched
+    at a technical reader that turned out to be hand-typed (the hero ciphertext)
+    is exactly the trap a plausible mock screenshot would repeat, on a page whose
+    argument is that we do not oversell.
+
+    To replace: drop a real 16:10 capture of the card grid in beside this file
+    and point SCREENSHOT.src in app/page.tsx at it (a .png is expected; the frame
+    crops with object-cover, so any 16:10-ish size works). Then delete this file.
+
+    Colours are the site's own light tokens written as hex, since an SVG served
+    from /public cannot read a CSS custom property. In order of first use:
+    muted #f7f7f7, background #ffffff, border #e5e5e5, signal #22525f,
+    muted-foreground #787878.
+
+    NOTE for anyone editing this file: an XML comment may not contain two
+    consecutive hyphens, so token names are written bare here rather than with
+    their CSS prefix. A stray pair makes the whole file unparseable, and the
+    only symptom is an image that silently fails to load.
+  -->
+  <rect width="1600" height="1000" fill="#f7f7f7"/>
+
+  <!-- toolbar rail -->
+  <rect x="0" y="0" width="1600" height="76" fill="#ffffff"/>
+  <line x1="0" y1="76" x2="1600" y2="76" stroke="#e5e5e5" stroke-width="2"/>
+  <rect x="48" y="30" width="132" height="16" rx="8" fill="#e5e5e5"/>
+  <rect x="1240" y="26" width="312" height="24" rx="12" fill="#f2f2f2"/>
+
+  <!-- list rail -->
+  <line x1="288" y1="76" x2="288" y2="1000" stroke="#e5e5e5" stroke-width="2"/>
+  <g fill="#e5e5e5">
+    <rect x="48" y="128" width="150" height="14" rx="7"/>
+    <rect x="48" y="180" width="112" height="14" rx="7"/>
+    <rect x="48" y="232" width="168" height="14" rx="7"/>
+    <rect x="48" y="284" width="96" height="14" rx="7"/>
+  </g>
+  <rect x="48" y="126" width="4" height="18" rx="2" fill="#22525f"/>
+
+  <!-- card skeletons: cover block, title line, host line -->
+  <g>
+    <g id="row">
+      <g transform="translate(336,132)">
+        <rect width="368" height="252" rx="16" fill="#ffffff" stroke="#e5e5e5" stroke-width="2"/>
+        <rect x="1" y="1" width="366" height="146" rx="15" fill="#f2f2f2"/>
+        <rect x="24" y="178" width="248" height="13" rx="6.5" fill="#e5e5e5"/>
+        <rect x="24" y="206" width="140" height="11" rx="5.5" fill="#ececec"/>
+      </g>
+      <g transform="translate(736,132)">
+        <rect width="368" height="252" rx="16" fill="#ffffff" stroke="#e5e5e5" stroke-width="2"/>
+        <rect x="1" y="1" width="366" height="146" rx="15" fill="#f2f2f2"/>
+        <rect x="24" y="178" width="284" height="13" rx="6.5" fill="#e5e5e5"/>
+        <rect x="24" y="206" width="116" height="11" rx="5.5" fill="#ececec"/>
+      </g>
+      <g transform="translate(1136,132)">
+        <rect width="368" height="252" rx="16" fill="#ffffff" stroke="#e5e5e5" stroke-width="2"/>
+        <rect x="1" y="1" width="366" height="146" rx="15" fill="#f2f2f2"/>
+        <rect x="24" y="178" width="212" height="13" rx="6.5" fill="#e5e5e5"/>
+        <rect x="24" y="206" width="160" height="11" rx="5.5" fill="#ececec"/>
+      </g>
+    </g>
+    <use href="#row" y="288"/>
+    <use href="#row" y="576"/>
+  </g>
+
+  <!-- the label that keeps this from ever passing as the real thing -->
+  <g>
+    <rect x="336" y="404" width="1168" height="192" rx="16" fill="#ffffff" fill-opacity="0.94"/>
+    <rect x="336" y="404" width="1168" height="192" rx="16" fill="none" stroke="#22525f" stroke-width="2" stroke-dasharray="10 8"/>
+    <text x="920" y="478" text-anchor="middle" font-family="IBM Plex Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="27" letter-spacing="4" fill="#22525f">SCREENSHOT PLACEHOLDER</text>
+    <text x="920" y="524" text-anchor="middle" font-family="Inter, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="23" fill="#787878">Replace with a real capture of the card grid, covers and all.</text>
+    <text x="920" y="558" text-anchor="middle" font-family="IBM Plex Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="19" fill="#a3a3a3">apps/bracemark-site/public/screenshots/</text>
+  </g>
+</svg>

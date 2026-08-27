@@ -111,13 +111,22 @@ export const FAQ_GROUPS: FaqGroup[] = [
         ),
       },
       {
+        // The last sentence is the one that matters, and it is here because
+        // "opens, browses and searches" was read as offline READING by everyone
+        // arriving from a read-it-later app — the answer was accurate and the
+        // inference it invited was wrong, which is the worst kind of copy. The
+        // boundary is now stated on the landing page and in the /about
+        // trade-offs too; this is the surface where the wrong reading actually
+        // formed, so it gets the plainest version.
         id: 'offline',
         q: 'Does it work offline?',
         a: (
           <>
             Yes. Bracemark is local-first: the app reads from a copy of your library held on the
             device, so it opens, browses and searches with no connection at all. Anything you change
-            while offline is queued and syncs the next time you have a network.
+            while offline is queued and syncs the next time you have a network. What is on the
+            device is your library — addresses, titles, tags, notes and preview images — and not the
+            pages themselves, so opening a saved link still needs a connection.
           </>
         ),
       },

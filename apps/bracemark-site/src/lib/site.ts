@@ -82,7 +82,22 @@ export { SOURCE };
 export const TERMS_UPDATED = '21 August 2026';
 export const PRIVACY_UPDATED = '21 August 2026';
 
+// `/about` earns a slot despite the header being the scarcest space on the site:
+// it was footer-only, and it is where the writing that actually moves a sceptic
+// ended up — the stakes paragraph, the reproducible-builds caveat, the Brace.to
+// lineage. Readers who found it named a sentence from it as the best thing on
+// the property; the ones who didn't were the ones still asking who we are.
+// The landing page has since pulled three of those lines forward, which lowers
+// the cost of NOT finding this page but doesn't remove it: /about is still the
+// only surface that answers "who is this and what do they concede".
+//
+// Placed first because it is the least transactional of the four, and last-place
+// "Support" stays adjacent to the "Sign in" button, where a returning visitor
+// looks. Four items plus a button is the ceiling for the narrow layout — the nav
+// does not collapse to a menu, so a fifth would have to earn its way in by
+// replacing one of these.
 export const HEADER_LINKS = [
+  { href: '/about', label: 'About' },
   { href: '/pricing', label: 'Pricing' },
   { href: '/faq', label: 'FAQ' },
   { href: '/support', label: 'Support' },

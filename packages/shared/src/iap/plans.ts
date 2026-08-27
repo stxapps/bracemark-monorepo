@@ -396,11 +396,29 @@ export const LIFETIME_ON_SALE = false;
 export const PLAN_CARD_COPY: Record<PaidPlan, { blurb: string; features: string[] }> = {
   plus: {
     blurb: 'The full visual library',
+    // Two fixes, both about a stranger reading this list with a card in hand:
+    //
+    //   - "Advanced search" is the RIGHT name in the app — it labels the
+    //     disclosure that opens the query grammar, one screen over from a plain
+    //     text box, and `PaywallFeature.searchEditor` keeps it for exactly that
+    //     reason (docs/brand-assets.md — a disclosure is named for what is
+    //     behind it). It is the WRONG name here. This list is read by someone
+    //     who has never seen the app, next to a price, and everyone arriving
+    //     from a paid tier elsewhere decodes "advanced search" as full-text
+    //     search inside saved pages. It is not that — the haystack is url ⊕
+    //     title (docs/search.md) — and discovering it after paying is the one
+    //     failure mode the storefront copy exists to prevent. The comparison
+    //     table on /pricing already spelled it accurately; now the card agrees.
+    //   - "Nested lists" was missing outright, though `nestedLists` is a plus
+    //     entitlement and the paywall has a whole dialog for it. It is also the
+    //     one Plus feature a switcher with folders actually needs, so omitting
+    //     it understated the card to precisely the buyer it was written for.
     features: [
       'Unlimited saved links',
       'Link previews for web saves & imports',
+      'Nested lists',
       'App lock & hidden lists',
-      'Advanced search',
+      'Search editor — fields, lists and tags',
     ],
   },
   pro: {

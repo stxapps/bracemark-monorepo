@@ -45,6 +45,17 @@ const TRADEOFFS: [string, string][] = [
     'No shared or public lists',
     'Sharing means handing someone the means to decrypt part of your library. It is real work rather than a button, and we would rather not fake it.',
   ],
+  // The fourth, and the only one that is not a consequence of the encryption —
+  // which is exactly why it was missing. This section's three costs were all
+  // architectural, so the boundary that actually decides fit for a read-it-later
+  // reader was left to /terms, clause 30, where the people it disqualifies never
+  // reach it. A section whose stated purpose is "we would rather you knew now"
+  // does not get to leave out the one a whole category of visitor needs.
+  // → docs/link-extraction.md for what a save does capture.
+  [
+    'No copy of the page',
+    'We keep the address, the title, the preview image and whatever you write about it — not the article itself. A saved link is a pointer, so if the page changes or goes away, so does what it showed.',
+  ],
 ];
 
 // The colophon. Named because credit is due and because it tells a technical
@@ -95,10 +106,14 @@ export default function Page() {
               What it costs to build it this way
             </h2>
             <p className={cn('text-muted-foreground mt-4 text-base leading-7')}>
-              Three things you can do in an ordinary bookmark manager, you cannot do here. We would
+              Four things you can do in an ordinary bookmark manager, you cannot do here. We would
               rather you knew now.
             </p>
-            <dl className={cn('mt-8 grid gap-8 sm:grid-cols-3')}>
+            {/* Two columns, not four: this shell is a max-w-3xl prose measure, so
+                a fourth column would leave each entry about 180px wide and break
+                every term across two lines. 2×2 keeps the entries at a readable
+                measure and reads as a list of costs rather than a feature grid. */}
+            <dl className={cn('mt-8 grid gap-8 sm:grid-cols-2')}>
               {TRADEOFFS.map(([term, detail]) => (
                 <div key={term} className={cn('border-border border-t pt-5')}>
                   <dt className={cn('text-base font-semibold text-balance')}>{term}</dt>
@@ -207,6 +222,24 @@ export default function Page() {
                 reproducible builds, which we do not yet publish. Anyone who tells you otherwise
                 about their own app is overselling it. What open source removes here is our ability
                 to describe the design as one thing while shipping another.
+              </p>
+              {/* The same move as the paragraph above it, applied to the other
+                  thing a careful reader goes looking for and does not find.
+                  Everyone who cared about the encryption claims searched for an
+                  outside check — an audit, a transparency report, a named
+                  reviewer — and the site's silence read as something being
+                  managed. It isn't; there simply hasn't been one. Saying so
+                  costs a sentence and is worth more than the silence, and this
+                  is the paragraph that has already proved the move works.
+                  What this must NOT become is a roadmap promise: no date, no
+                  "coming soon". If an audit is ever commissioned, this is where
+                  it gets named, and only once it exists. */}
+              <p>
+                One more absence, since you would find it anyway: no third party has audited this
+                code. There is no report to link, no security firm on retainer and no transparency
+                report, because none of those exist yet rather than because they say something we
+                would rather you missed. What is here instead is the repository, this page, and a
+                policy that inventories every field we hold.
               </p>
             </div>
           </section>
