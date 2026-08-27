@@ -38,9 +38,22 @@
   // Rate limiting is UNAFFECTED — it runs on the native binding keyed by
   // `cf-connecting-ip` (middleware/rate-limit.ts), and never reads a log.
   //
-  // Not covered here: zone-level Logpush / HTTP request logging is a SEPARATE
-  // Cloudflare setting on extractor.bracemark.com. It must stay off for the same
-  // reason, and nothing in this repo can assert that it is.
+  // NEVER add `"logpush": true` here. It reads like a sibling of the settings in
+  // this block and is a different CHANNEL: `observability` governs Cloudflare's
+  // own log (what `wrangler tail` and the dashboard show), while `logpush` ships
+  // this Worker's TRACE EVENTS off Cloudflare to a destination you configure —
+  // and a trace event carries the request line, so `invocation_logs: false` does
+  // NOT cover it. The key would persist exactly the `?url=` values the paragraph
+  // above exists to keep transient, except now in third-party storage, and it is
+  // silent in the usual way: no lint error, no type error, nothing either runner
+  // can observe. It needs a Workers Paid plan to take effect, so a repo that
+  // upgrades its plan later is the case to watch.
+  //
+  // Not covered here: zone-level Logpush / HTTP request logging is a THIRD
+  // channel — a Cloudflare setting on the extractor.bracemark.com zone rather than
+  // anything in this file. It must stay off for the same reason, and nothing in
+  // this repo can assert that it is. (Zone datasets are Enterprise-only, which is
+  // what keeps it off by default rather than any choice made here.)
   "observability": {
     "enabled": true,
     "logs": {

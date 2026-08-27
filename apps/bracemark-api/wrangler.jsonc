@@ -11,6 +11,19 @@
   "compatibility_date": "2026-06-01",
   // Add only if a dependency needs Node built-ins (Hono + zod don't):
   // "compatibility_flags": ["nodejs_compat"],
+  // Cloudflare's own log — what `wrangler tail` and the dashboard show. The
+  // invocation log stays ON here, unlike bracemark-extractor, which turns it off
+  // because its request line carries a user-supplied URL; this Worker's paths
+  // carry opaque ids and its bodies are ciphertext.
+  //
+  // NEVER add `"logpush": true`. It reads like a sibling of `observability` and
+  // is a different CHANNEL: it ships this Worker's TRACE EVENTS — request line,
+  // headers, console output — off Cloudflare to a destination you configure, so
+  // nothing in this block governs it. That is an off-box copy of the request
+  // stream of the component whose whole claim is that it holds no key and sees
+  // no plaintext, kept under someone else's retention policy. Nothing catches
+  // the key: no lint error, no type error, no test in either runner.
+  // bracemark-extractor's wrangler.jsonc has the sharper version of this.
   "observability": {
     "enabled": true,
   },
