@@ -136,10 +136,11 @@ export const FAQ_GROUPS: FaqGroup[] = [
         q: 'Do I have to install the browser extension?',
         a: (
           <>
-            No, but it is the best way to save. The extension reads the page you are already looking
-            at, so the title and preview image come from your own browser and nothing has to fetch
-            that page on your behalf. Saving from the web app works without it — see the previews
-            question below for what changes.
+            No. On a laptop it is the best way to save: the extension reads the page you are already
+            looking at, so the title and preview image come from your own browser and nothing has to
+            fetch that page on your behalf. On a phone or tablet, sharing into the iOS or Android
+            app does the same job from whatever app you are in. Saving from the web app works
+            without either — see the previews question below for what changes.
           </>
         ),
       },

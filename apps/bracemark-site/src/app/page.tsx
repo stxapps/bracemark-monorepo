@@ -263,21 +263,36 @@ const CAPTURE = [
 // are the daily-loop basics, and every one is free.
 // The Plus levers get one honest footnote instead of four asterisks.
 //
-// The note sits next to lists and tags, two rows clear of Search, because it is
-// the one entry the Search line does not cover: BASIC search matches the URL and
-// the title only (`textMatches`, web-react data/queries.ts). Reaching a note takes
-// the Plus editor's "Note contains" field (docs/search.md), which is a paid rung
-// and so has no business widening this free-tier list. Keep the two apart, and
-// keep Search's wording as literal as it is — "across titles, addresses and hosts"
-// is the sentence that stops a reader assuming their notes are in there.
-// Seven entries leave an orphan on the third row at lg; accepted, since each item
-// is a top-rule rather than a card and the column reads as a list either way.
+// Lists, tags and pins are ONE entry because they are one idea — where a link
+// sits: which list it is filed in, what it is labelled, and what is held at the
+// top. That is the grouping /pricing's comparison row already ships ("Lists,
+// tags, pins, notes & layouts"), so the two surfaces now cut the concept the same
+// way. It is a merge rather than a trim for a second reason: seven entries
+// orphaned a card on the last row at BOTH breakpoints — 2+2+2+1 at sm, 3+3+1 at
+// lg — and six is the only count near it that fills each grid exactly.
+//
+// Notes stays its own entry and must not be folded into either neighbour: it is
+// the one line in this band that makes a per-feature encryption claim, and it is
+// content the user writes rather than a place they file into.
+//
+// What the merge cost, stated because the next person to reorder this needs it.
+// The old comment justified the order by keeping Notes two rows clear of Search,
+// since BASIC search matches the URL and the title only (`textMatches`, web-react
+// data/queries.ts) — reaching a note takes the Plus editor's "Note contains" field
+// (docs/search.md), a paid rung with no business widening a free-tier list. At six
+// cells that separation no longer exists: nothing is more than one cell from
+// anything, and the order below buys only that the two never share a row. So
+// Search's own wording is now the whole of the guard — "Across titles, addresses
+// and hosts" is the sentence that stops a reader assuming their notes are in
+// there, and it has to stay exactly that literal.
 const LIBRARY: [string, string][] = [
-  ['Lists and tags', 'File a link where you will look for it, or tag it and find it later.'],
+  [
+    'Lists, tags and pins',
+    'File a link where you will look for it, or tag it and find it later. The handful you are working from stays pinned at the top.',
+  ],
   ['Notes', 'A line to yourself about why you saved it — encrypted with the link, like the rest.'],
-  ['Pins', 'The handful you are working from right now, held at the top.'],
-  ['Search', 'Across titles, addresses and hosts — every link, on every plan.'],
   ['Card and list layouts', 'A wall of previews, or a dense list. Per device, if you like.'],
+  ['Search', 'Across titles, addresses and hosts — every link, on every plan.'],
   // The old line was true and quietly left out the half a switcher cares about:
   // a link no device fetched gets nothing. Until now that fact existed on one
   // surface, as the word "Opt-in" in a /pricing table cell — and for anyone
