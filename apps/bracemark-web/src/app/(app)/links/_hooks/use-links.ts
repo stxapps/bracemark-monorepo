@@ -26,8 +26,13 @@
 //   - while idle (not engaged — see view-state-provider).
 // Otherwise we stage: `displayed` stays put and `hasPending` lights the refresh
 // pill, which calls `applyPending` to swap the latest results in on demand.
+//
+// That decision is made DURING RENDER, not in an effect — see `promoteNow`
+// below. `hasPending` is derived from `displayed`, so promoting in an effect
+// necessarily COMMITS one render that still holds the old snapshot and therefore
+// reports `hasPending` true, and the pill flashes on every local edit.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 
 import { TRASH_ID } from '@stxapps/shared';
@@ -162,16 +167,31 @@ export function useLinks(): UseLinksResult {
   // What's actually rendered — a snapshot promoted from `live`.
   const [displayed, setDisplayed] = useState<LinksResult>();
 
-  // Local-edit grace: a bump moves the window forward and promotes immediately so
-  // the optimistic write shows at once; the sync cycle it kicks lands within the
-  // window and promotes too (see LOCAL_WRITE_GRACE_MS).
-  const graceUntilRef = useRef(0);
-  useEffect(() => {
-    if (localWriteNonce === 0) return; // initial mount, not an edit
-    graceUntilRef.current = Date.now() + LOCAL_WRITE_GRACE_MS;
-    if (liveRef.current !== undefined) setDisplayed(liveRef.current);
-  }, [localWriteNonce]);
+  // Local-edit grace: while the window is open, incoming results apply eagerly —
+  // the optimistic write AND the sync cycle it kicks both land inside it (see
+  // LOCAL_WRITE_GRACE_MS). Opened DURING RENDER off the nonce, the same
+  // adjust-state-during-render pattern as `limit` above, because a mutation can
+  // reach us in EITHER order: `requestSync` bumps the nonce synchronously after
+  // its write, but the live re-run is async, and a multi-write op (destroy sweeps
+  // the link's file/extraction/pin before the link itself) can put a re-run
+  // BEFORE the bump. Armed in an effect, the window opens one render too late for
+  // the first case and the results it should have applied stage instead.
+  const [writeGrace, setWriteGrace] = useState({ nonce: localWriteNonce, until: 0 });
+  let graceUntil = writeGrace.until;
+  if (writeGrace.nonce !== localWriteNonce) {
+    graceUntil = Date.now() + LOCAL_WRITE_GRACE_MS;
+    setWriteGrace({ nonce: localWriteNonce, until: graceUntil });
+  }
 
+  // Promote or hold — DURING RENDER, for the reason in the header: `hasPending`
+  // below is derived from `displayed`, so a promotion made in an effect commits a
+  // render that still reports `hasPending` true, and the browser paints the pill
+  // before the effect swaps the snapshot in. (Passive effects flush after paint
+  // for an update that originates outside React, which is every update here —
+  // Dexie's observer.) Deciding here, React re-renders this component with the new
+  // `displayed` before committing, so the intermediate state never reaches the
+  // DOM. It terminates because the guard is `live !== displayed`.
+  //
   // A query/limit change is the user's own action (navigation or "show more"), so
   // the new page replaces the snapshot rather than staging behind it. We read page
   // identity off the result itself — `readLinks` echoes the `query`/`limit` it ran
@@ -182,8 +202,7 @@ export function useLinks(): UseLinksResult {
   // signal early. (`live.query === query` is a reference check — the result stores
   // the exact object the querier was given, and page-provider keeps that reference
   // stable, the same contract the `[query, limit]` deps above already rely on.)
-  useEffect(() => {
-    if (live === undefined) return;
+  if (live !== undefined && live !== displayed) {
     const liveReflectsCurrentPage = live.query === query && live.limit === limit;
     const pageChanged =
       displayed === undefined || displayed.query !== live.query || displayed.limit !== live.limit;
@@ -191,12 +210,12 @@ export function useLinks(): UseLinksResult {
     const promoteNow =
       displayed === undefined || // first paint
       (liveReflectsCurrentPage && pageChanged) || // navigation / show more — once the new page arrives
-      Date.now() < graceUntilRef.current || // this device just edited
+      graceUntil > Date.now() || // this device just edited
       !engaged; // idle: nothing to disturb
 
     if (promoteNow) setDisplayed(live);
     // else: hold — `displayed` stays put and `hasPending` lights the pill.
-  }, [live, query, limit, engaged, displayed]);
+  }
 
   const liveSig = useMemo(() => (live ? signatureOf(live) : undefined), [live]);
   const displayedSig = useMemo(() => (displayed ? signatureOf(displayed) : undefined), [displayed]);

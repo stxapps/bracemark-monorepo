@@ -219,6 +219,40 @@ tallest as a `minHeight`, which `link-card.tsx`'s WRAPPER fills with `grow` — 
 card inside it does not grow, which is how expo lands on web's `items-start`: the
 cell keeps the row's height, the bordered card keeps its own.
 
+### the staged snapshot rule
+
+`useLiveQuery` keeps flowing, but the layouts render a **held snapshot**. The list
+is index-virtualized and sorted newest-first, so applying every live result would
+shift the rows under a user who is scrolled down, mid-selection, or has a row menu
+open — a touched link floats to the top, and the row an open menu is anchored to
+moves or unmounts. So `useLinks` keeps `displayed` and promotes `live` into it
+only when a repaint can't disrupt: first paint; a `query`/`limit` change
+(navigation, "show more" — the user's own action); inside the `localWriteNonce`
+grace window (this device just edited, so it is the user's own change); or while
+idle (`engaged` false — [editors.md](./editors.md) for what engagement is). Held
+otherwise, and `hasPending` lights the refresh pill, which promotes on demand.
+
+**That decision has to be made during RENDER, not in an effect.** `hasPending` is
+derived from `displayed`, so a promotion made in an effect necessarily commits one
+render whose `displayed` is still the old snapshot — and every update here
+originates OUTSIDE React (Dexie's observer, expo-sqlite's change listener), where
+passive effects flush after the browser has already painted. The symptom is the
+refresh pill flashing on every local edit, including the moves and deletes the
+grace window exists to apply immediately, since the pill is exactly what a
+"pending" render paints. Nothing catches it: the promotion is correct, the final
+frame is correct, and no test renders a real paint boundary. Both platforms
+therefore adjust the state during render (React re-renders the component with the
+new `displayed` before committing, so the intermediate state never reaches the
+DOM), guarded on `live !== displayed` so it terminates. The grace window is armed
+the same way and for a second reason: a mutation reaches the read edge in either
+order — `requestSync` bumps the nonce synchronously after its write, but the live
+re-run is async, and a multi-write op (`destroy` sweeps a link's file, extraction
+and pin before the link itself) can land a re-run first.
+
+The general form: **anything a layout derives from `displayed` during render must
+be settled during that same render.** Deferring it to an effect is a painted
+frame, not a logical error, so it survives typecheck, lint and both test runners.
+
 ### pagination: growing `limit` + a decode cache
 
 The current model is deliberately the **simplest thing that works for every

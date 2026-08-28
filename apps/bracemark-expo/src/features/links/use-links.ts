@@ -7,8 +7,11 @@
 //  - The live read is expo-react's useLiveRead over expo-sqlite's change
 //    listener (readLinks touches `items` + the tag junction) instead of Dexie's
 //    useLiveQuery.
+//
+// The promotion decision runs during RENDER on both platforms — see web for why
+// an effect cannot make it without flashing the refresh pill.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 
 import {
   excludeLists,
@@ -100,19 +103,23 @@ export function useLinks(): UseLinksResult {
   // What's actually rendered — a snapshot promoted from `live`.
   const [displayed, setDisplayed] = useState<LinksResult>();
 
-  // Local-edit grace: a bump moves the window forward and promotes immediately.
-  const graceUntilRef = useRef(0);
-  useEffect(() => {
-    if (localWriteNonce === 0) return; // initial mount, not an edit
-    graceUntilRef.current = Date.now() + LOCAL_WRITE_GRACE_MS;
-    if (liveRef.current !== undefined) setDisplayed(liveRef.current);
-  }, [localWriteNonce]);
+  // Local-edit grace, opened DURING RENDER off the nonce — web's rationale
+  // (either order is possible: the nonce bump is synchronous after the write, the
+  // live re-run is not, and a multi-write op can put a re-run first).
+  const [writeGrace, setWriteGrace] = useState({ nonce: localWriteNonce, until: 0 });
+  let graceUntil = writeGrace.until;
+  if (writeGrace.nonce !== localWriteNonce) {
+    graceUntil = Date.now() + LOCAL_WRITE_GRACE_MS;
+    setWriteGrace({ nonce: localWriteNonce, until: graceUntil });
+  }
 
   // Promotion — web's rules, verbatim: first paint, the user's own
   // query/limit change (page identity read off the result's echoed
-  // `query`/`limit`), the local-edit grace window, or idle.
-  useEffect(() => {
-    if (live === undefined) return;
+  // `query`/`limit`), the local-edit grace window, or idle. Decided DURING RENDER
+  // for web's reason too: `hasPending` is derived from `displayed`, so promoting
+  // in an effect commits a frame that still reports it true and the refresh pill
+  // flashes on every local edit.
+  if (live !== undefined && live !== displayed) {
     const liveReflectsCurrentPage = live.query === query && live.limit === limit;
     const pageChanged =
       displayed === undefined || displayed.query !== live.query || displayed.limit !== live.limit;
@@ -120,12 +127,12 @@ export function useLinks(): UseLinksResult {
     const promoteNow =
       displayed === undefined || // first paint
       (liveReflectsCurrentPage && pageChanged) || // navigation / show more — once the new page arrives
-      Date.now() < graceUntilRef.current || // this device just edited
+      graceUntil > Date.now() || // this device just edited
       !engaged; // idle: nothing to disturb
 
     if (promoteNow) setDisplayed(live);
     // else: hold — `displayed` stays put and `hasPending` lights the pill.
-  }, [live, query, limit, engaged, displayed]);
+  }
 
   const liveSig = useMemo(() => (live ? signatureOf(live) : undefined), [live]);
   const displayedSig = useMemo(() => (displayed ? signatureOf(displayed) : undefined), [displayed]);
