@@ -16,7 +16,9 @@ export default [
   {
     rules: {
       // `output: 'export'` + `images: { unoptimized: true }` (next.config.js) —
-      // next/image has nothing to optimize on a statically exported apex.
+      // next/image has nothing to optimize on a statically exported apex, so a
+      // plain <img> is the honest spelling. Responsive variants are generated
+      // by hand instead: tools/scripts/make-image-variants.sh.
       '@next/next/no-img-element': 'off',
     },
   },

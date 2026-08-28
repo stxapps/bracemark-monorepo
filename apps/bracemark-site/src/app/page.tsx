@@ -74,16 +74,52 @@ const CIPHERTEXT =
 // and the frame crops with object-cover, so the real capture only has to be
 // roughly 16:10.
 //
-// TO REPLACE: put the real capture in `public/screenshots/`, point `src` here at
-// it, and delete `library-cards.svg` — which is a labelled placeholder and is
-// drawn to be obvious in production rather than to pass as the real thing.
+// Not `next-image-export-optimizer` either, which is the usual answer to that
+// first sentence and was declined deliberately — the trade is argued in
+// `tools/scripts/make-image-variants.sh`, which is what we do instead: generate
+// `<stem>-<width>.webp` once per asset, by hand, and commit the files. Three of
+// them and a `srcSet` is less machinery than a custom loader, a build step that
+// writes into `public/`, and two more runtime dependencies, for a site with one
+// screenshot on it.
+//
+// TO REPLACE: capture at 2200px wide or more, then
+//
+//   tools/scripts/make-image-variants.sh <capture> \
+//     apps/bracemark-site/public/screenshots/library-cards
+//
+// point `src` at `/screenshots/library-cards-1600.webp`, paste the `widths` the
+// script prints, and delete `library-cards.svg` — a labelled placeholder, drawn
+// to be obvious in production rather than to pass as the real thing.
 const SCREENSHOT = {
+  // What a browser loads if it ignores `srcSet` — and, while this is still the
+  // vector placeholder, the whole of it.
   src: '/screenshots/library-cards.svg',
+  // The variant path without its `-<width>.webp` suffix, and the widths that
+  // exist on disk. Empty here because an SVG is resolution-independent: a
+  // srcSet over one would be three descriptors pointing at the same file.
+  stem: '/screenshots/library-cards',
+  widths: [] as number[],
+  // Width descriptors are only half the instruction. Without `sizes` the
+  // browser assumes the image fills the viewport and over-fetches on every
+  // phone; with it, the choice folds in layout width as well as pixel ratio,
+  // which is the whole reason these are `w` descriptors and not `@1x`/`@2x`.
+  // The values trace the figure's real box: the band's inner div is
+  // `max-w-6xl` (1152px) inside `lg:px-8`, so 1088px is the cap, and below that
+  // it is the viewport less that band's own gutter (`md:px-6` → 3rem total,
+  // `px-4` → 2rem). Approximate is fine — the browser rounds up to the next
+  // variant — which is why the `px-safe` insets are not modelled here.
+  sizes: '(min-width: 1024px) 1088px, (min-width: 768px) calc(100vw - 3rem), calc(100vw - 2rem)',
   // Written for the capture this becomes, not for the placeholder: a screen
   // reader gets the same account of the product a sighted visitor does.
   alt: 'The card layout in Bracemark: a grid of saved links, each with its preview image, title and host, beside a sidebar of lists.',
   caption: 'The card layout. Previews come from the device that saved the link.',
 };
+
+// Undefined rather than an empty string while `widths` is empty, so the
+// placeholder ships a plain <img> instead of an `srcSet=""` the browser has to
+// parse and discard.
+const SCREENSHOT_SRCSET =
+  SCREENSHOT.widths.map((w) => `${SCREENSHOT.stem}-${w}.webp ${w}w`).join(', ') || undefined;
 
 function HeroPanel() {
   return (
@@ -713,12 +749,20 @@ export default function Page() {
             and the thing that decides whether a free web-only visitor sees any. */}
         <figure className={cn('mb-16')}>
           <div className={cn('border-border bg-card overflow-hidden rounded-2xl border shadow-sm')}>
-            {}
+            {/* `loading="lazy"`: this figure sits several screens down and
+                there is no image in the hero, so nothing here is the LCP
+                element — the bytes are better spent after first paint.
+                `width`/`height` stay as the ratio hint beside `aspect-16/10`
+                and describe the shape, not any one variant. */}
             <img
               src={SCREENSHOT.src}
+              srcSet={SCREENSHOT_SRCSET}
+              sizes={SCREENSHOT_SRCSET ? SCREENSHOT.sizes : undefined}
               alt={SCREENSHOT.alt}
               width={1600}
               height={1000}
+              loading="lazy"
+              decoding="async"
               className={cn('block aspect-16/10 w-full object-cover object-top')}
             />
           </div>
