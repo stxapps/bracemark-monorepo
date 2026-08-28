@@ -109,12 +109,13 @@ export { emptyQuery, excludeLists, linkIdOf } from '@stxapps/shared';
 
 // A link row resolved for DISPLAY — the override-wins link↔extraction join.
 // Field semantics: web-react queries.ts `LinkView`.
-export type LinkView = LinkItem & {
+export interface LinkViewFields {
   title?: string;
   imageId?: string;
   pageCopyId?: string;
   screenshotId?: string;
-};
+}
+export type LinkView = LinkItem & LinkViewFields;
 
 // One page of results — web-react queries.ts `LinksResult`, verbatim: `total`
 // exact only for plain browse views, `query`/`limit` echo the page identity for
@@ -204,6 +205,41 @@ function toView(link: LinkItem, extraction: Extraction | undefined): LinkView {
     pageCopyId: extraction?.pageCopyId,
     screenshotId: extraction?.screenshotId,
   };
+}
+
+// The keys the display join ADDS, as a value — the one list `toItem` strips by,
+// and the reason `LinkViewFields` is a named type rather than an inline literal.
+// Proximity to `toView` would only be a convention; this is a rule the compiler
+// keeps: `satisfies` rejects a typo or a key the join doesn't add, and `Record`
+// over `keyof LinkViewFields` rejects a MISSING one — so a fifth joined field
+// cannot be introduced without the strip learning about it.
+const VIEW_FIELDS = {
+  title: true,
+  imageId: true,
+  pageCopyId: true,
+  screenshotId: true,
+} satisfies Record<keyof LinkViewFields, true>;
+
+// The inverse of toView: drop the four fields the JOIN adds, so a row snapshot can
+// go back to the write edge as a stored link. Every UI call site hands a
+// `LinkView` to a mutation whose signature says `LinkItem` — the two are
+// assignable, so TypeScript cannot catch it — and `links/{id}.enc` must never
+// carry an extraction-owned key. Nothing would report it if one did:
+// `linkSchema` is a `looseObject`, so an unknown field is PRESERVED (that is what
+// lets a newer client's field round-trip through an older one), the projector
+// indexes none of these names, and the read edge overwrites all four in `toView`
+// — so the junk is invisible locally while being encrypted and pushed to every
+// device, and re-spread by every later write of that link. It would also squat on
+// names a future `linkSchema` could claim; `title` in particular lived in this
+// namespace before the writer-split (docs/link-extraction.md).
+//
+// Lives HERE, beside `toView`, so the two lists of names cannot drift, and is
+// applied at the write edge (mutations.ts writeLink / bulkWriteLinks) rather than
+// per caller, so the rule holds for every writer including share-store's.
+export function toItem(link: LinkItem): LinkItem {
+  const item = { ...link } as Record<string, unknown>;
+  for (const field of Object.keys(VIEW_FIELDS)) delete item[field];
+  return item as LinkItem;
 }
 
 // Batch-join a page of links with their co-keyed extractions and resolve each

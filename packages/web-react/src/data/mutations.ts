@@ -44,7 +44,7 @@ import {
 import { db, type ItemRecord, type PendingOpRecord } from './db';
 import { enqueueDelete, enqueuePut, pendingDeleteRecord, pendingPutRecord } from './pending-store';
 import { parseBlob, toItemRecord } from './projection';
-import type { WithPath } from './queries';
+import { type LinkItem, toItem, type WithPath } from './queries';
 
 // Persist one path's bytes locally and queue the upload, producing the bytes INSIDE
 // the transaction from the path's current record — the base primitive the JSON-entity
@@ -251,7 +251,10 @@ export async function writeLink(
 ): Promise<void> {
   const now = Date.now();
   const next: WithPath<Link> = {
-    ...link,
+    // `toItem` first: callers hand us a ROW SNAPSHOT, which is a `LinkView` at
+    // every UI call site, and its four joined display fields must not be spread
+    // into the blob (see toItem — nothing downstream would report it).
+    ...toItem(link),
     ...patch,
     createdAt: link.createdAt === 0 ? now : link.createdAt,
     updatedAt: now,
@@ -288,7 +291,9 @@ export async function bulkWriteLinks(username: string, edits: LinkEdit[]): Promi
       const { path, ...snapshot } = link;
       const record = existing[i];
       const stored = record ? parseBlob(record.data, linkSchema) : undefined;
-      const current: Link = stored ?? snapshot;
+      // The stored blob is clean by construction; the snapshot fallback is a row
+      // the UI is holding, so it goes through the same strip writeLink applies.
+      const current: Link = stored ?? toItem(snapshot as LinkItem);
       const next: Link = {
         ...current,
         ...patch,

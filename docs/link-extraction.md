@@ -378,6 +378,23 @@ The one real edge is **title search**, which now spans two stores — see
 > `customTitle ?? extraction.title`; each value lives in exactly one file
 > (`customTitle` in `links/`, `title` in `extractions/`), never copied across.
 
+**The write edge enforces that split, because nothing downstream would report a
+breach of it.** The join produces a `LinkView` — `title`, `imageId`, `pageCopyId`,
+`screenshotId` on top of the stored link — and that view is what every UI call
+site hands to a mutation whose signature says `LinkItem`. The two are assignable,
+so there is no type error; `linkSchema` is a `looseObject`, so the extra keys pass
+validation and are PRESERVED (that is what lets a newer client's field round-trip
+through an older one); the projector indexes none of those names; and `toView`
+overwrites all four on read. So a view written into `links/{id}.enc` is invisible
+on the device that wrote it while being encrypted and pushed to every other one,
+re-spread by each later write of that link — and it squats on names a future
+`linkSchema` could claim, `title` above all, since that name lived in this
+namespace before the split. `writeLink` and `bulkWriteLinks` therefore strip the
+join first (`toItem`, kept beside `toView` so the two lists of names cannot
+drift). Only one path could reach it — the recreate fallback, where a link deleted
+on another device is rewritten from the caller's snapshot because there is no
+stored blob to merge onto — which is exactly why it went unnoticed.
+
 ### the preview image is a downloaded blob, never the remote URL
 
 Extraction discovers the preview image as a **URL** (og:image / lead image). The

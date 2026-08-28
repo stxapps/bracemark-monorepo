@@ -267,6 +267,53 @@ describe('bulkWriteLinks', () => {
     await bulkWriteLinks(USER, []);
     expect(await db.pendingOps.where('username').equals(USER).count()).toBe(0);
   });
+
+  it("never lets a row snapshot's joined display fields into the blob", async () => {
+    // The recreate path: the link was deleted on another device and that delete
+    // synced, but the user still holds its row (a bulk selection, a staged
+    // snapshot) and edits it — so the write falls back to the caller's object,
+    // which is a `LinkView`. `linkSchema` is a `looseObject`, the projector
+    // indexes none of these names and `toView` overwrites all four on read, so
+    // nothing downstream would ever report them; they would just ride the blob to
+    // every device. Stripped at the write edge instead (queries.ts `toItem`).
+    const view = {
+      url: 'https://a.example',
+      tagIds: [],
+      listId: LIST_A,
+      createdAt: 1,
+      updatedAt: 1,
+      path: linkPath('l_b13'),
+      title: 'from the extraction join',
+      imageId: 'f_1',
+      pageCopyId: 'f_2',
+      screenshotId: 'f_3',
+    };
+
+    await bulkWriteLinks(USER, [{ link: view, patch: { listId: ARCHIVE_ID } }]);
+
+    const stored = await readLinkById('l_b13');
+    expect(stored?.listId).toBe(ARCHIVE_ID);
+    expect(stored).not.toHaveProperty('title');
+    expect(stored).not.toHaveProperty('imageId');
+    expect(stored).not.toHaveProperty('pageCopyId');
+    expect(stored).not.toHaveProperty('screenshotId');
+  });
+
+  it('preserves an unknown field a newer client wrote', async () => {
+    // The other half of the rule above: `looseObject` keeps what it doesn't know,
+    // and a batched edit must not be the thing that drops it.
+    const path = linkPath('l_b14');
+    const seeded = await seedLink('l_b14', 'https://a.example');
+    const record = await db.items.get(path);
+    if (!record?.data) throw new Error('seedLink: no bytes');
+    const blob = { ...JSON.parse(new TextDecoder().decode(record.data)), futureField: 'keep me' };
+    await db.items.put({ ...record, data: new TextEncoder().encode(JSON.stringify(blob)) });
+
+    await bulkWriteLinks(USER, [{ link: seeded, patch: { listId: ARCHIVE_ID } }]);
+
+    const stored = await readLinkById('l_b14');
+    expect((stored as unknown as { futureField?: string }).futureField).toBe('keep me');
+  });
 });
 
 describe('bulkDeleteEntities', () => {

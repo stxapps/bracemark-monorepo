@@ -64,6 +64,7 @@ import { dataFileFor, deleteDataFile, deleteDataFiles, ensureDataFilesDir } from
 import { deleteItemsTx, type ItemRow, markItemDataFile, putItemsTx } from './item-store';
 import { enqueueDeleteTx, enqueuePutTx } from './pending-store';
 import { parseBlob, toItemRecord } from './projection';
+import { type LinkItem, toItem } from './queries';
 
 // Persist one path's bytes locally and queue the upload, producing the bytes
 // INSIDE the transaction from the path's current row — the base primitive every
@@ -228,7 +229,9 @@ export async function bulkWriteLinks(username: string, edits: LinkEdit[]): Promi
       const { path, ...snapshot } = link;
       const existing = tx.select().from(items).where(eq(items.path, path)).get();
       const stored = existing?.data ? parseBlob(existing.data, linkSchema) : undefined;
-      const current: Link = stored ?? snapshot;
+      // The stored blob is clean by construction; the snapshot fallback is a row
+      // the UI is holding, so it goes through the same strip writeLink applies.
+      const current: Link = stored ?? toItem(snapshot as LinkItem);
       const next: Link = {
         ...current,
         ...patch,
@@ -256,7 +259,9 @@ export async function writeLink(
 ): Promise<void> {
   const now = Date.now();
   const next: WithPath<Link> = {
-    ...link,
+    // `toItem` first — web mutations.ts's rule, verbatim: a caller's row snapshot
+    // is a `LinkView`, and its joined display fields must not enter the blob.
+    ...toItem(link),
     ...patch,
     createdAt: link.createdAt === 0 ? now : link.createdAt,
     updatedAt: now,
