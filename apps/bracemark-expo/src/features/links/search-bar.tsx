@@ -241,7 +241,9 @@ function TriCheckList({
           keyboardDismissMode="on-drag"
         >
           {visible.length === 0 && (
-            <Text className="px-1.5 py-1 text-sm text-muted-foreground">No matches</Text>
+            <Text className="px-1.5 py-1 text-sm text-muted-foreground">
+              No matching {label.toLowerCase()}
+            </Text>
           )}
           {visible.map((o) => {
             const state = include.includes(o.id)

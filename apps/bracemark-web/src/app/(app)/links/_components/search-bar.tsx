@@ -200,7 +200,9 @@ function TriCheckList({
           so the reserved strip also keeps the border's inset even. */}
       <div className="max-h-32 scrollbar-gutter-stable overflow-y-auto rounded-md border border-border p-1">
         {visible.length === 0 && (
-          <p className="px-1.5 py-1 text-sm text-muted-foreground">No matches</p>
+          <p className="px-1.5 py-1 text-sm text-muted-foreground">
+            No matching {label.toLowerCase()}
+          </p>
         )}
         {visible.map((o) => {
           const state = include.includes(o.id)
