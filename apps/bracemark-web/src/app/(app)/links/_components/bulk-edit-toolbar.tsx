@@ -17,8 +17,9 @@
 //               leaving the mode.
 //   Copy links — both views (it's the row menu's Copy link over the selection):
 //               the selected URLs, newline-separated, in display order. Reads
-//               only, so trashed links are included, and the label flips to
-//               "Copied" for a beat as the only feedback a clipboard write gets.
+//               only, so trashed links are included, it does NOT exit the mode
+//               (see below), and the button flips to a check + "Copied" for a
+//               beat as the only feedback a clipboard write gets.
 //
 // The rest follows the same view split as the row menu:
 //
@@ -66,20 +67,27 @@
 //                       irreversible-looking action in a menu the user opens by
 //                       reflex.
 //
-// One bulk action runs at a time (`busy`), and every completed action exits
-// bulk-edit mode. The three that open a page-level modal instead of writing
-// straight away — Move to, Edit tags, Delete permanently — hand the selection to
-// view-state-provider and let that surface do both (it also exits the mode), so
-// they carry no `busy` state here. Move to used to be a `w-64` dropdown holding
-// its own ListCommand, i.e. a third copy of a picker the row menu and the Lists
-// settings already embed; it became a request for the same reason its two
-// neighbours are ones.
+// One bulk action runs at a time (`busy`), and every completed WRITE exits
+// bulk-edit mode — the selection has been consumed, and after a Move/Archive/
+// Remove the rows it named have left the view. Copy is the deliberate exception:
+// it changes nothing, so the selection still describes exactly the rows on
+// screen, and it's the one action worth chaining (copy the URLs, then file
+// them). It's also the one action with no visible result of its own — a
+// clipboard write is invisible, so a toolbar that vanished would read as "did
+// that copy, or did I hit ✕?" rather than as confirmation. The three that open
+// a page-level modal instead of writing straight away — Move to, Edit tags,
+// Delete permanently — hand the selection to view-state-provider and let that
+// surface do both (it also exits the mode), so they carry no `busy` state here.
+// Move to used to be a `w-64` dropdown holding its own ListCommand, i.e. a
+// third copy of a picker the row menu and the Lists settings already embed; it
+// became a request for the same reason its two neighbours are ones.
 
 import { type ComponentProps, type ReactNode, useEffect, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
   Archive,
   ArchiveRestore,
+  Check,
   Copy,
   FolderInput,
   MoreHorizontal,
@@ -234,7 +242,20 @@ export function BulkEditToolbar({ links }: { links: LinkView[] }) {
   const onCopy = async () => {
     // Display order, not click order — `links` is the layout's row order.
     const urls = links.filter((l) => selectedLinks.has(l.path)).map((l) => l.url);
-    await navigator.clipboard.writeText(urls.join('\n'));
+    try {
+      await navigator.clipboard.writeText(urls.join('\n'));
+    } catch {
+      // Clipboard blocked (insecure context / denied permission) — both
+      // page-wide conditions, not something about this selection. Leave the
+      // button unflipped and say nothing: the flash is a claim that the
+      // clipboard now holds these URLs, and showing it on a write that failed
+      // is worse than showing nothing, since the user's next paste is what
+      // would tell them otherwise. Deliberately no error text — this toolbar
+      // has no error surface (a failed bulk write in `runBulk` is silent the
+      // same way), and one row 3rem tall is not where to introduce the app's
+      // only self-announcing one for its least consequential action.
+      return;
+    }
     setCopied(true);
     window.clearTimeout(copiedTimer.current);
     copiedTimer.current = window.setTimeout(() => setCopied(false), 1500);
@@ -320,8 +341,23 @@ export function BulkEditToolbar({ links }: { links: LinkView[] }) {
         <span className="text-sm whitespace-nowrap text-muted-foreground">{count} selected</span>
       </div>
       <div className="flex items-center gap-2">
+        {/* The GLYPH flips too, not just the label: below ICON_WIDTH the label
+            isn't rendered, so a label-only flash would leave the one action
+            whose result is invisible with no feedback at all on exactly the
+            width where it's hardest to tell anything happened. Check +
+            `text-primary` is the same confirmation ShowOnceSecret uses. The
+            accessible name and the tooltip flip with `label` already
+            (ActionButton feeds both from it when icon-only), and the change is
+            user-initiated on a focused control, so it needs no live region —
+            see accessibility.md, "who caused the change". */}
         <ActionButton
-          icon={<Copy data-icon="inline-start" className="size-4" />}
+          icon={
+            copied ? (
+              <Check data-icon="inline-start" className="size-4 text-primary" />
+            ) : (
+              <Copy data-icon="inline-start" className="size-4" />
+            )
+          }
           label={copied ? 'Copied' : count === 1 ? 'Copy link' : 'Copy links'}
           iconOnly={iconOnly}
           disabled={disabled}

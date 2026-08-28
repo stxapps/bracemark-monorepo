@@ -3,10 +3,10 @@
 // bulk-edit-toolbar.tsx`, the canonical doc for the action semantics: the
 // view-keyed button set, the `actionable` trashed-links filter, why each action
 // drops links already in its target state, one bulk action at a time, every
-// completed action exits the mode). It acts on the hoisted `selectedLinks`
-// snapshot map; the one thing it takes from outside is `links` — the rows Main
-// is showing — which feeds Select all and puts the copied URLs in display
-// order. Divergences here:
+// completed WRITE exits the mode and why Copy is the exception that doesn't).
+// It acts on the hoisted `selectedLinks` snapshot map; the one thing it takes
+// from outside is `links` — the rows Main is showing — which feeds Select all
+// and puts the copied URLs in display order. Divergences here:
 //
 //  - Bottom-anchored (thumb reach), not a row under the topbar; the dismiss ✕ /
 //    count / Select all live in its top row, the actions below — web's
@@ -19,7 +19,12 @@
 //    indeterminate (same note as the search editor's tri-state rows), so a
 //    partial selection just shows unchecked; pressing it then selects all.
 //  - Copy links writes through expo-clipboard (web's navigator.clipboard), with
-//    the same transient "Copied" label flip as the only feedback.
+//    the same transient flip to a check + "Copied" as the only feedback. Web
+//    flips the GLYPH as well as the label because its icon-only tier renders no
+//    label; this bar always renders both, so the glyph flip here is for its own
+//    reason — it's the confirmation ShowOnceSecret already uses on this
+//    platform (features/auth/show-once-secret.tsx), and the same button
+//    shouldn't confirm two ways in one app.
 //  - Move to opens a Dialog listing the list tree (the anchored ListCommand
 //    popover doesn't fit a phone; no search box — the tree is small, and the
 //    picker excludes Trash like web: trashing is Remove, never a "move").
@@ -36,6 +41,7 @@ import * as Clipboard from 'expo-clipboard';
 import {
   Archive,
   ArchiveRestore,
+  Check,
   Copy,
   FolderInput,
   MoreHorizontal,
@@ -67,6 +73,7 @@ import {
 } from '../../components/ui/dropdown-menu';
 import { Icon } from '../../components/ui/icon';
 import { Text } from '../../components/ui/text';
+import { cn } from '../../lib/utils';
 import { MoveToDialog } from './move-to-dialog';
 import { useLinksPage } from './page-provider';
 import { useLinksViewState } from './view-state-provider';
@@ -159,7 +166,21 @@ export function BulkEditBar({ links }: { links: LinkView[] }) {
   const onCopy = async () => {
     // Display order, not tap order — `links` is Main's row order.
     const urls = links.filter((l) => selectedLinks.has(l.path)).map((l) => l.url);
-    await Clipboard.setStringAsync(urls.join('\n'));
+    try {
+      await Clipboard.setStringAsync(urls.join('\n'));
+    } catch {
+      // Neither of web's two causes exists here — no secure-context rule, and
+      // writing the clipboard needs no permission on either platform — so this
+      // guards a failing native call, and stops `void onCopy()` turning it into
+      // an unhandled rejection. The reason to swallow it is web's: the flash is
+      // a claim that the clipboard now holds these URLs, and making it on a
+      // write that failed is worse than making none, since the user's next
+      // paste is what would tell them otherwise. Deliberately no error text —
+      // this bar has no error surface (a failed bulk write in `runBulk` is
+      // silent the same way), and its least consequential action is not where
+      // to introduce one. ShowOnceSecret swallows the same way.
+      return;
+    }
     setCopied(true);
     clearTimeout(copiedTimer.current);
     copiedTimer.current = setTimeout(() => setCopied(false), 1500);
@@ -199,7 +220,7 @@ export function BulkEditBar({ links }: { links: LinkView[] }) {
       </View>
       <View className="flex-row items-center justify-between gap-2 py-2">
         <Button variant="outline" size="sm" disabled={disabled} onPress={() => void onCopy()}>
-          <Icon as={Copy} className="size-4" />
+          <Icon as={copied ? Check : Copy} className={cn('size-4', copied && 'text-primary')} />
           <Text>{copied ? 'Copied' : 'Copy'}</Text>
         </Button>
         {inTrash ? (

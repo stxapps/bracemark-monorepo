@@ -682,7 +682,11 @@ in `view-state-provider`, items grow a `LinkRowSelect` checkbox
 - **The toolbar mirrors the row menu over the whole selection**, with the same
   view split. **Copy links** is common to both views (the row menu's Copy link
   over the selection: URLs newline-separated, in display order; reads only, so
-  trashed links are included). In Trash: **Restore** (→ My List — the schema records no previous
+  trashed links are included, and the only action that does NOT exit the mode —
+  it consumes nothing, so the selection still describes the rows on screen, and
+  a toolbar vanishing is not confirmation that an invisible clipboard write
+  landed. Its button flips to a check + "Copied" for a beat; the glyph flips,
+  not just the label, because the icon-only tier renders no label). In Trash: **Restore** (→ My List — the schema records no previous
   list, same as the row menu) and **Delete permanently** (irreversible →
   `requestDestroy` → `LinkDestroyConfirm`). Elsewhere: **Move to**
   (`requestMove` → `LinkMoveSurface` — no Trash target, no `onCreate`/`root`, per
@@ -724,7 +728,10 @@ in `view-state-provider`, items grow a `LinkRowSelect` checkbox
 `BulkEditBar` rendered by Main (✕ / count / Select all in its top row, actions
 below; Android back exits the mode), the secondary actions sit behind a ⋯ menu
 at every width (web's `COLLAPSE_WIDTH` split, fixed — a phone is always below
-it, as it is below web's icon-only `ICON_WIDTH` tier), Move to is a dialog embedding the native `ListCommand` cousin instead of
+it, as it is below web's icon-only `ICON_WIDTH` tier), Copy keeps both its web
+semantics (no mode exit, a check + "Copied" flash) but flips its glyph for its
+own reason — the bar always renders the label, so the flip is there to match the
+confirmation native's `ShowOnceSecret` already uses, Move to is a dialog embedding the native `ListCommand` cousin instead of
 the anchored submenu (`features/links/move-to-dialog.tsx`, shared with the row
 menu — same `excludeIds`/`disabledIds` wiring, no `onCreate`/`root`; the Lists
 settings reparent dialog embeds the same body with `root`, like web). **Web
