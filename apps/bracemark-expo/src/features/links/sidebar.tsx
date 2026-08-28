@@ -340,6 +340,15 @@ function Section({
         role="button"
         onPress={() => onToggle(id)}
         aria-expanded={!isCollapsed}
+        // `pt-4 pb-1` — asymmetric on purpose, and NOT the split the web twin
+        // takes. There the section's top space had to move out onto the wrapper,
+        // because the button's box is what the focus ring outlines and the label
+        // sat jammed against the bottom of it. Nothing outlines this box: no
+        // focus ring, and this Pressable paints no pressed state. What the
+        // padding buys here instead is the TARGET — 16 + a 16px line + 4 = the
+        // 36px rung expo's pointer targets sit on (docs/accessibility.md). Move
+        // the 16 onto the wrapper for web parity and the row becomes 24px tall,
+        // thumb-sized for nothing.
         className="w-full flex-row items-center gap-1 rounded-md px-2 pt-4 pb-1"
       >
         {/* Glyph swap, not a rotation — see the NavItem chevron above for why a

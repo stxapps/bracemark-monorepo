@@ -368,7 +368,15 @@ function Section({
 }) {
   const isCollapsed = !forceOpen && collapsed.has(id);
   return (
-    <div className="flex flex-col gap-0.5">
+    // The space that sets this section off from the one above is `pt-2` HERE,
+    // on the wrapper, not on the button — the button's own padding is all the
+    // focus ring can outline, and a header that carried the separation itself
+    // (`pt-3 pb-1`) drew a 32px ring with its label jammed against the bottom
+    // of it. Split 8px outside + `py-1` inside and the rendered gap is
+    // unchanged (8 + 4 = the old 12) while the ring becomes a symmetric 24px
+    // band around the label. Keep any future change to the section's spacing on
+    // this div for the same reason.
+    <div className="flex flex-col gap-0.5 pt-2">
       <button
         type="button"
         onClick={() => onToggle(id)}
@@ -380,7 +388,7 @@ function Section({
           // x=0, the row div carries no padding). At `px-2` it sat 2px right of
           // every chevron under it. Both are children of the same `nav.px-2`,
           // so that one origin is what makes the two numbers comparable.
-          'flex w-full items-center gap-1 rounded-md px-1.5 pt-3 pb-1 text-muted-foreground/70 transition-colors hover:text-foreground',
+          'flex w-full items-center gap-1 rounded-md px-1.5 py-1 text-muted-foreground/70 transition-colors hover:text-foreground',
           FOCUS_RING,
         )}
       >
