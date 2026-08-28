@@ -330,6 +330,15 @@ export async function readLinkById(linkId: string): Promise<LinkItem | undefined
   return decodeCachedLink(row);
 }
 
+// N links by path in one `bulkGetItems`, aligned with the input — web's
+// readLinksByPaths, for a bulk action that re-reads its selection before writing
+// it (useLinkMutations.destroyMany). Same memoized decode.
+export async function readLinksByPaths(paths: string[]): Promise<(LinkItem | undefined)[]> {
+  if (paths.length === 0) return [];
+  const rows = await bulkGetItems(paths);
+  return rows.map((row) => (row ? decodeCachedLink(row) : undefined));
+}
+
 // The extraction bookkeeping entity for one link id, or undefined if none has
 // synced/been written yet — web's readExtraction, verbatim: a direct
 // exact-path read + cached decode (the path is derived from the id, no scan).
@@ -337,6 +346,17 @@ export async function readExtraction(linkId: string): Promise<ExtractionItem | u
   const row = await getItem(pathFromId(linkId, EXTRACTIONS_PREFIX));
   if (!row) return undefined;
   return decodeCachedExtraction(row);
+}
+
+// The batched twin of readExtraction — web's readExtractionsByLinkIds: N link
+// ids in one `bulkGetItems`, aligned with the input, same co-keyed path
+// derivation and memoized decode.
+export async function readExtractionsByLinkIds(
+  linkIds: string[],
+): Promise<(ExtractionItem | undefined)[]> {
+  if (linkIds.length === 0) return [];
+  const rows = await bulkGetItems(linkIds.map((linkId) => pathFromId(linkId, EXTRACTIONS_PREFIX)));
+  return rows.map((row) => (row ? decodeCachedExtraction(row) : undefined));
 }
 
 // The local plaintext `file://` uri for a `files/{id}` content blob, or

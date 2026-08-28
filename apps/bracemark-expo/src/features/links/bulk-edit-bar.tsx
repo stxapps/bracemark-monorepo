@@ -91,7 +91,7 @@ export function BulkEditBar({ links }: { links: LinkView[] }) {
     requestDestroy,
     requestRetag,
   } = useLinksViewState();
-  const { update } = useLinkMutations();
+  const { updateMany } = useLinkMutations();
   const { pin, unpin } = usePinMutations();
   const [busy, setBusy] = useState<BulkAction | null>(null);
   const [moveOpen, setMoveOpen] = useState(false);
@@ -138,27 +138,40 @@ export function BulkEditBar({ links }: { links: LinkView[] }) {
   const sharedListId =
     new Set(actionable.map((l) => l.listId)).size === 1 ? actionable[0].listId : undefined;
 
-  const runBulk = async (
-    action: BulkAction,
-    targets: LinkView[],
-    op: (link: LinkView) => Promise<void>,
-  ) => {
+  // The busy/exit wrapper every bulk action shares — web's bulk-edit-toolbar,
+  // same shape and same reason: `run` performs the WHOLE action in one call,
+  // because the list moves below are a single batched write (runMove) and a loop
+  // of `update` costs a transaction, a sync kick and a full re-read + repaint of
+  // the list PER LINK (useLinkMutations). Pin/unpin stay loops: `pin()` inserts
+  // each link at the TOP of the pinned section, so the sequence IS the resulting
+  // order (hence the reversed list at its call site).
+  const runBulk = async (action: BulkAction, run: () => Promise<void>) => {
     if (busy) return;
     setBusy(action);
     try {
-      for (const link of targets) {
-        await op(link);
-      }
+      await run();
       exitBulkEdit();
     } finally {
       setBusy(null);
     }
   };
 
+  // The list moves (move, archive, unarchive, restore, remove) — one patch across
+  // a selection, in one write. Links already in the target list are filtered out
+  // rather than patched: a no-op `updatedAt` bump would reorder the date-modified
+  // sort, and an empty batch is a no-op all the way down.
+  const runMove = (action: BulkAction, targets: LinkView[], listId: string) =>
+    runBulk(action, () =>
+      updateMany(
+        targets
+          .filter((link) => link.listId !== listId)
+          .map((link) => ({ link, patch: { listId } })),
+      ),
+    );
+
   const onMoveTo = (listId: string) => {
     setMoveOpen(false);
-    const targets = actionable.filter((l) => l.listId !== listId);
-    void runBulk('move', targets, (link) => update(link, { listId }));
+    void runMove('move', actionable, listId);
   };
 
   const allSelected = links.length > 0 && links.every((l) => selectedLinks.has(l.path));
@@ -229,11 +242,7 @@ export function BulkEditBar({ links }: { links: LinkView[] }) {
               variant="outline"
               size="sm"
               disabled={disabled}
-              onPress={() =>
-                void runBulk('restore', selected, (link) =>
-                  update(link, { listId: DEFAULT_LIST_ID }),
-                )
-              }
+              onPress={() => void runMove('restore', selected, DEFAULT_LIST_ID)}
             >
               <Icon as={Undo2} className="size-4" />
               <Text>{busy === 'restore' ? 'Restoring…' : 'Restore'}</Text>
@@ -288,25 +297,29 @@ export function BulkEditBar({ links }: { links: LinkView[] }) {
                   // inserts each at the top of the pinned section.
                   // Already-pinned links are skipped, so their manual order
                   // isn't churned.
-                  onPress={() => void runBulk('pin', [...toPin].reverse(), (link) => pin(link))}
+                  onPress={() =>
+                    void runBulk('pin', async () => {
+                      for (const link of [...toPin].reverse()) await pin(link);
+                    })
+                  }
                 >
                   <Icon as={Pin} className="size-4" />
                   <Text>Pin</Text>
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   disabled={toUnpin.length === 0}
-                  onPress={() => void runBulk('unpin', toUnpin, (link) => unpin(link))}
+                  onPress={() =>
+                    void runBulk('unpin', async () => {
+                      for (const link of toUnpin) await unpin(link);
+                    })
+                  }
                 >
                   <Icon as={PinOff} className="size-4" />
                   <Text>Unpin</Text>
                 </DropdownMenuItem>
                 {inArchive ? (
                   <DropdownMenuItem
-                    onPress={() =>
-                      void runBulk('archive', actionable, (link) =>
-                        update(link, { listId: DEFAULT_LIST_ID }),
-                      )
-                    }
+                    onPress={() => void runMove('archive', actionable, DEFAULT_LIST_ID)}
                   >
                     <Icon as={ArchiveRestore} className="size-4" />
                     <Text>Unarchive</Text>
@@ -314,11 +327,7 @@ export function BulkEditBar({ links }: { links: LinkView[] }) {
                 ) : (
                   <DropdownMenuItem
                     disabled={toArchive.length === 0}
-                    onPress={() =>
-                      void runBulk('archive', toArchive, (link) =>
-                        update(link, { listId: ARCHIVE_ID }),
-                      )
-                    }
+                    onPress={() => void runMove('archive', toArchive, ARCHIVE_ID)}
                   >
                     <Icon as={Archive} className="size-4" />
                     <Text>Archive</Text>
@@ -330,9 +339,7 @@ export function BulkEditBar({ links }: { links: LinkView[] }) {
               variant="destructive"
               size="sm"
               disabled={disabled || actionable.length === 0}
-              onPress={() =>
-                void runBulk('remove', actionable, (link) => update(link, { listId: TRASH_ID }))
-              }
+              onPress={() => void runMove('remove', actionable, TRASH_ID)}
             >
               <Icon as={Trash2} className="size-4 text-white" />
               <Text>{busy === 'remove' ? 'Removing…' : 'Remove'}</Text>

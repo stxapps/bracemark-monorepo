@@ -35,7 +35,7 @@ import { useLinksViewState } from './view-state-provider';
 
 export function LinkDestroyConfirm() {
   const { destroying, closeDestroy, exitBulkEdit } = useLinksViewState();
-  const { destroy } = useLinkMutations();
+  const { destroyMany } = useLinkMutations();
   const [deleting, setDeleting] = useState(false);
 
   if (!destroying) return null;
@@ -44,9 +44,9 @@ export function LinkDestroyConfirm() {
     if (deleting) return;
     setDeleting(true);
     try {
-      for (const link of destroying) {
-        await destroy(link);
-      }
+      // One batched sweep for the whole selection, not a loop of `destroy` — see
+      // useLinkMutations for why a loop is a repaint per link.
+      await destroyMany(destroying);
       closeDestroy();
       exitBulkEdit();
     } finally {

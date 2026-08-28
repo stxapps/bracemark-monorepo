@@ -186,7 +186,7 @@ export function BulkEditToolbar({ links }: { links: LinkView[] }) {
     requestRetag,
     requestMove,
   } = useLinksViewState();
-  const { update } = useLinkMutations();
+  const { updateMany } = useLinkMutations();
   const { pin, unpin } = usePinMutations();
   const [busy, setBusy] = useState<BulkAction | null>(null);
   // The "Copied" flash on Copy links; the timer is cleared on unmount so a
@@ -220,22 +220,34 @@ export function BulkEditToolbar({ links }: { links: LinkView[] }) {
   const toUnpin = actionable.filter((l) => pinnedIds.has(linkIdOf(l)));
   const toArchive = actionable.filter((l) => l.listId !== ARCHIVE_ID);
 
-  const runBulk = async (
-    action: BulkAction,
-    links: LinkView[],
-    op: (link: LinkView) => Promise<void>,
-  ) => {
+  // The busy/exit wrapper every bulk action shares. `run` performs the WHOLE
+  // action in one call rather than being applied per link, because the list moves
+  // below are a single batched write (runMove) — a loop of `update` costs a
+  // transaction, a sync kick and a full re-read + repaint of the list PER LINK
+  // (useLinkMutations). Pin/unpin stay loops: `pin()` inserts each link at the TOP
+  // of the pinned section, so the sequence IS the resulting order, and there is no
+  // batched spelling of that (hence the reversed list at its call site).
+  const runBulk = async (action: BulkAction, run: () => Promise<void>) => {
     if (busy) return;
     setBusy(action);
     try {
-      for (const link of links) {
-        await op(link);
-      }
+      await run();
       exitBulkEdit();
     } finally {
       setBusy(null);
     }
   };
+
+  // The four list moves (archive, unarchive, restore, remove) — one patch across
+  // a selection, in one write. Links already in the target list are filtered out
+  // rather than patched: an `updatedAt` bump for no change would reorder the
+  // date-modified sort, and an empty batch is a no-op all the way down.
+  const runMove = (action: BulkAction, links: LinkView[], listId: string) =>
+    runBulk(action, () =>
+      updateMany(
+        links.filter((link) => link.listId !== listId).map((link) => ({ link, patch: { listId } })),
+      ),
+    );
 
   const allSelected = links.length > 0 && links.every((l) => selectedLinks.has(l.path));
 
@@ -287,14 +299,20 @@ export function BulkEditToolbar({ links }: { links: LinkView[] }) {
       // Reversed so the first-selected link ends up topmost: pin() inserts each
       // at the top of the pinned section. Already-pinned links are skipped, so
       // their manual order isn't churned.
-      run: () => void runBulk('pin', [...toPin].reverse(), (link) => pin(link)),
+      run: () =>
+        void runBulk('pin', async () => {
+          for (const link of [...toPin].reverse()) await pin(link);
+        }),
     },
     {
       key: 'unpin',
       icon: <PinOff data-icon="inline-start" className="size-4" />,
       label: busy === 'unpin' ? 'Unpinning…' : 'Unpin',
       disabled: disabled || toUnpin.length === 0,
-      run: () => void runBulk('unpin', toUnpin, (link) => unpin(link)),
+      run: () =>
+        void runBulk('unpin', async () => {
+          for (const link of toUnpin) await unpin(link);
+        }),
     },
     inArchive
       ? {
@@ -302,18 +320,14 @@ export function BulkEditToolbar({ links }: { links: LinkView[] }) {
           icon: <ArchiveRestore data-icon="inline-start" className="size-4" />,
           label: busy === 'archive' ? 'Unarchiving…' : 'Unarchive',
           disabled,
-          run: () =>
-            void runBulk('archive', actionable, (link) =>
-              update(link, { listId: DEFAULT_LIST_ID }),
-            ),
+          run: () => void runMove('archive', actionable, DEFAULT_LIST_ID),
         }
       : {
           key: 'archive',
           icon: <Archive data-icon="inline-start" className="size-4" />,
           label: busy === 'archive' ? 'Archiving…' : 'Archive',
           disabled: disabled || toArchive.length === 0,
-          run: () =>
-            void runBulk('archive', toArchive, (link) => update(link, { listId: ARCHIVE_ID })),
+          run: () => void runMove('archive', toArchive, ARCHIVE_ID),
         },
   ];
 
@@ -370,11 +384,7 @@ export function BulkEditToolbar({ links }: { links: LinkView[] }) {
               label={busy === 'restore' ? 'Restoring…' : 'Restore'}
               iconOnly={iconOnly}
               disabled={disabled}
-              onClick={() =>
-                void runBulk('restore', selected, (link) =>
-                  update(link, { listId: DEFAULT_LIST_ID }),
-                )
-              }
+              onClick={() => void runMove('restore', selected, DEFAULT_LIST_ID)}
             />
             <ActionButton
               variant="destructive"
@@ -444,9 +454,7 @@ export function BulkEditToolbar({ links }: { links: LinkView[] }) {
               label={busy === 'remove' ? 'Removing…' : 'Remove'}
               iconOnly={iconOnly}
               disabled={disabled || actionable.length === 0}
-              onClick={() =>
-                void runBulk('remove', actionable, (link) => update(link, { listId: TRASH_ID }))
-              }
+              onClick={() => void runMove('remove', actionable, TRASH_ID)}
             />
           </>
         )}

@@ -327,6 +327,16 @@ export async function readLinkById(linkId: string): Promise<LinkItem | undefined
   return decodeCachedLink(record);
 }
 
+// N links by path in ONE `bulkGet`, aligned with the input (undefined where the
+// path has no local record) — the batched twin of readLinkById, for a bulk action
+// that must re-read its selection before writing it (useLinkMutations.destroyMany).
+// Same memoized decode, so re-reading rows the view already decoded is free.
+export async function readLinksByPaths(paths: string[]): Promise<(LinkItem | undefined)[]> {
+  if (paths.length === 0) return [];
+  const records = await db.items.bulkGet(paths);
+  return records.map((record) => (record ? decodeCachedLink(record) : undefined));
+}
+
 // How many links currently belong to `listId`, counted straight off the
 // `[itemListId+itemUpdatedAt]` index — an index range count, no blob decode (the
 // same column the list views range over). The "is this list empty?" gate for
@@ -359,6 +369,19 @@ export async function readExtraction(linkId: string): Promise<ExtractionItem | u
   const record = await db.items.get(pathFromId(linkId, EXTRACTIONS_PREFIX));
   if (!record) return undefined;
   return decodeCachedExtraction(record);
+}
+
+// The batched twin of readExtraction — N link ids in one `bulkGet`, aligned with
+// the input. Same co-keyed path derivation (`extractions/{id}.enc` shadows
+// `links/{id}.enc`), same memoized decode.
+export async function readExtractionsByLinkIds(
+  linkIds: string[],
+): Promise<(ExtractionItem | undefined)[]> {
+  if (linkIds.length === 0) return [];
+  const records = await db.items.bulkGet(
+    linkIds.map((linkId) => pathFromId(linkId, EXTRACTIONS_PREFIX)),
+  );
+  return records.map((record) => (record ? decodeCachedExtraction(record) : undefined));
 }
 
 // The four `titleImage` tallies both counts below are assembled from: the link total

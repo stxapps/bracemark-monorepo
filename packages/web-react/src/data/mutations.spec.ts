@@ -8,12 +8,26 @@
 // The read-merge writers (writeExtraction, writeSettingsGeneral) get the rest of the
 // attention: they validate INSIDE the transaction, which is only safe if a rejected
 // entity takes its pending op down with it.
+//
+// The BULK writers (bulkWriteLinks, bulkDeleteEntities) owe the same property over N
+// paths at once, plus one the single-path spelling gets for free: they re-read each
+// current blob inside their own transaction, so a caller's stale row snapshot can't
+// resurrect a field a sync overwrote. Every bulk action in both apps rides them, so a
+// regression here is a whole selection's worth of edits, not one.
 
-import { EXTRACTIONS_PREFIX, LINK_TITLE_MAX, newFacet, pathFromId } from '@stxapps/shared';
+import {
+  ARCHIVE_ID,
+  DEFAULT_LIST_ID,
+  EXTRACTIONS_PREFIX,
+  LINK_TITLE_MAX,
+  LINKS_PREFIX,
+  newFacet,
+  pathFromId,
+} from '@stxapps/shared';
 
 import { db } from './db';
-import { writeExtraction } from './mutations';
-import { readExtraction } from './queries';
+import { bulkDeleteEntities, bulkWriteLinks, writeExtraction, writeLink } from './mutations';
+import { type LinkItem, readExtraction, readLinkById } from './queries';
 
 const USER = 'alice';
 const LINK_ID = 'l_a';
@@ -144,5 +158,156 @@ describe('writeExtraction', () => {
       'done:titleImage',
       'permanent:screenshot',
     ]);
+  });
+});
+
+// --- the bulk writers --------------------------------------------------------
+
+const LIST_A = DEFAULT_LIST_ID;
+
+function linkPath(id: string): string {
+  return pathFromId(id, LINKS_PREFIX);
+}
+
+// A stored link, written through the ordinary single-path writer so the batch is
+// always compared against what the app actually has on disk.
+async function seedLink(id: string, url: string, listId = LIST_A): Promise<LinkItem> {
+  const link: LinkItem = {
+    url,
+    tagIds: [],
+    listId,
+    createdAt: 0,
+    updatedAt: 0,
+    path: linkPath(id),
+  };
+  await writeLink(USER, link, {});
+  const stored = await readLinkById(id);
+  if (!stored) throw new Error(`seedLink: ${id} was not written`);
+  return stored;
+}
+
+describe('bulkWriteLinks', () => {
+  it('writes every link and its pending op in one go', async () => {
+    const a = await seedLink('l_b1', 'https://a.example');
+    const b = await seedLink('l_b2', 'https://b.example');
+    await db.pendingOps.clear(); // ignore the seeds' own ops
+
+    await bulkWriteLinks(USER, [
+      { link: a, patch: { listId: ARCHIVE_ID } },
+      { link: b, patch: { listId: ARCHIVE_ID } },
+    ]);
+
+    expect((await readLinkById('l_b1'))?.listId).toBe(ARCHIVE_ID);
+    expect((await readLinkById('l_b2'))?.listId).toBe(ARCHIVE_ID);
+    expect(await pendingFor(linkPath('l_b1'))).toMatchObject({ op: 'put', baseUpdatedAt: 0 });
+    expect(await pendingFor(linkPath('l_b2'))).toMatchObject({ op: 'put', baseUpdatedAt: 0 });
+  });
+
+  it('takes a per-link patch, not one patch for the batch', async () => {
+    // What the retag dialog needs: "add these, remove those" resolves against each
+    // link's own tagIds, so the two links below get different bytes from one call.
+    const a = await seedLink('l_b3', 'https://a.example');
+    const b = await seedLink('l_b4', 'https://b.example');
+
+    await bulkWriteLinks(USER, [
+      { link: a, patch: { tagIds: ['t_1'] } },
+      { link: b, patch: { tagIds: ['t_1', 't_2'] } },
+    ]);
+
+    expect((await readLinkById('l_b3'))?.tagIds).toEqual(['t_1']);
+    expect((await readLinkById('l_b4'))?.tagIds).toEqual(['t_1', 't_2']);
+  });
+
+  it("merges onto the CURRENT blob, not the caller's snapshot", async () => {
+    // The staleness rule `update` spells out as a re-read before the write: a row
+    // snapshot can be older than the store (a sync landed while the selection sat
+    // in bulk-edit mode), and merging onto it would silently revert the field the
+    // sync brought. Here the note arrives after the snapshot was taken.
+    const stale = await seedLink('l_b5', 'https://a.example');
+    await writeLink(USER, stale, { note: 'from another device' });
+
+    await bulkWriteLinks(USER, [{ link: stale, patch: { listId: ARCHIVE_ID } }]);
+
+    const link = await readLinkById('l_b5');
+    expect(link?.listId).toBe(ARCHIVE_ID);
+    expect(link?.note).toBe('from another device');
+  });
+
+  it('keeps createdAt and advances updatedAt, exactly like writeLink', async () => {
+    const seeded = await seedLink('l_b6', 'https://a.example');
+
+    await bulkWriteLinks(USER, [{ link: seeded, patch: { listId: ARCHIVE_ID } }]);
+
+    const link = await readLinkById('l_b6');
+    expect(link?.createdAt).toBe(seeded.createdAt);
+    expect(link?.updatedAt).toBeGreaterThanOrEqual(seeded.updatedAt);
+  });
+
+  it('rolls the WHOLE batch back when one link fails validation', async () => {
+    // The batch is one transaction, so a rejected link can't leave the others
+    // half-written — nor an op for bytes that were never stored (the engine treats a
+    // queued op as proof they exist).
+    const a = await seedLink('l_b7', 'https://a.example');
+    const b = await seedLink('l_b8', 'https://b.example');
+    await db.pendingOps.clear();
+
+    await expect(
+      bulkWriteLinks(USER, [
+        { link: a, patch: { listId: ARCHIVE_ID } },
+        { link: b, patch: { customTitle: 'x'.repeat(LINK_TITLE_MAX + 1) } },
+      ]),
+    ).rejects.toThrow(/invalid link/);
+
+    expect((await readLinkById('l_b7'))?.listId).toBe(LIST_A);
+    expect(await pendingFor(linkPath('l_b7'))).toBeUndefined();
+    expect(await pendingFor(linkPath('l_b8'))).toBeUndefined();
+  });
+
+  it('is a no-op for an empty batch', async () => {
+    await bulkWriteLinks(USER, []);
+    expect(await db.pendingOps.where('username').equals(USER).count()).toBe(0);
+  });
+});
+
+describe('bulkDeleteEntities', () => {
+  it('drops every path and queues one delete per path', async () => {
+    await seedLink('l_b9', 'https://a.example');
+    await seedLink('l_b10', 'https://b.example');
+
+    await bulkDeleteEntities(USER, [linkPath('l_b9'), linkPath('l_b10')]);
+
+    expect(await readLinkById('l_b9')).toBeUndefined();
+    expect(await readLinkById('l_b10')).toBeUndefined();
+    expect(await pendingFor(linkPath('l_b9'))).toMatchObject({ op: 'delete' });
+    expect(await pendingFor(linkPath('l_b10'))).toMatchObject({ op: 'delete' });
+  });
+
+  it('queues the stored server stamp as the reconcile base', async () => {
+    await seedLink('l_b11', 'https://a.example');
+    // What a synced record looks like: the engine restamped `updatedAt` with R2's
+    // time on commit. That value is the base the next reconcile diffs against.
+    await db.items.update(linkPath('l_b11'), { updatedAt: 1_700_000_000_000 });
+
+    await bulkDeleteEntities(USER, [linkPath('l_b11')]);
+
+    expect(await pendingFor(linkPath('l_b11'))).toMatchObject({
+      op: 'delete',
+      baseUpdatedAt: 1_700_000_000_000,
+    });
+  });
+
+  it('tombstones a path with no local record', async () => {
+    // destroyMany sweeps a link's pin and extraction whether or not it ever had
+    // either — locally a no-op, upstream a harmless tombstone.
+    const absent = pathFromId('l_b12', EXTRACTIONS_PREFIX);
+
+    await bulkDeleteEntities(USER, [absent]);
+
+    expect(await pendingFor(absent)).toMatchObject({ op: 'delete', baseUpdatedAt: 0 });
+  });
+
+  it('is a no-op for an empty batch', async () => {
+    await bulkDeleteEntities(USER, []);
+    expect(await db.pendingOps.where('username').equals(USER).count()).toBe(0);
   });
 });

@@ -60,7 +60,7 @@ import {
 } from '@stxapps/shared';
 
 import { type DbTx, getDb, items } from './db';
-import { dataFileFor, deleteDataFile, ensureDataFilesDir } from './file-store';
+import { dataFileFor, deleteDataFile, deleteDataFiles, ensureDataFilesDir } from './file-store';
 import { deleteItemsTx, type ItemRow, markItemDataFile, putItemsTx } from './item-store';
 import { enqueueDeleteTx, enqueuePutTx } from './pending-store';
 import { parseBlob, toItemRecord } from './projection';
@@ -185,6 +185,66 @@ export async function bulkWriteEntities(
 export type LinkPatch = Partial<
   Pick<Link, 'url' | 'tagIds' | 'listId' | 'note' | 'customTitle' | 'customImageId'>
 >;
+
+// One link's share of a batched write — web mutations.ts's LinkEdit, verbatim
+// (per-link, because the retag dialog's patch resolves against each link's own
+// `tagIds`).
+export interface LinkEdit {
+  link: WithPath<Link>;
+  patch: LinkPatch;
+}
+
+// Batched delete by path — web's bulkDeleteEntities in contract (N rows leave
+// `items` and N tombstones enter the queue in ONE transaction, so a bulk action
+// is one live-read re-run and one repaint instead of one per path), plus the
+// platform half deleteFile carries: the decrypted bytes of a `files/` path live
+// ON DISK here, so rows go first and the plaintext files after — a crash in
+// between leaves only an invisible orphan file (clear-data's order). Paths in
+// other namespaces have no data file, so that pass is a no-op for them.
+export async function bulkDeleteEntities(username: string, paths: string[]): Promise<void> {
+  if (paths.length === 0) return;
+  getDb().transaction((tx: DbTx) => {
+    for (const path of paths) {
+      const existing = tx.select().from(items).where(eq(items.path, path)).get();
+      const baseUpdatedAt = existing?.updatedAt ?? 0;
+      deleteItemsTx(tx, [path]);
+      enqueueDeleteTx(tx, username, path, baseUpdatedAt);
+    }
+  });
+  for (const path of paths) dropCachedPath(path);
+  deleteDataFiles(paths);
+}
+
+// Apply N patched links in ONE transaction — web's bulkWriteLinks in contract:
+// same per-link semantics as writeLink (stamps `updatedAt`, stamps `createdAt` on
+// a first write, validates against `linkSchema`), the current blob re-read inside
+// the transaction so there is no window between the read and the put, and a link
+// gone entirely falls back to the caller's snapshot (LWW for edit-vs-delete).
+export async function bulkWriteLinks(username: string, edits: LinkEdit[]): Promise<void> {
+  if (edits.length === 0) return;
+  const now = Date.now();
+  getDb().transaction((tx: DbTx) => {
+    for (const { link, patch } of edits) {
+      const { path, ...snapshot } = link;
+      const existing = tx.select().from(items).where(eq(items.path, path)).get();
+      const stored = existing?.data ? parseBlob(existing.data, linkSchema) : undefined;
+      const current: Link = stored ?? snapshot;
+      const next: Link = {
+        ...current,
+        ...patch,
+        createdAt: current.createdAt === 0 ? now : current.createdAt,
+        updatedAt: now,
+      };
+      if (!linkSchema.safeParse(next).success) {
+        throw new Error(`bulkWriteLinks: invalid link ${path}`);
+      }
+      const baseUpdatedAt = existing?.updatedAt ?? 0;
+      putItemsTx(tx, [toItemRecord(path, baseUpdatedAt, utf8(JSON.stringify(next)))]);
+      enqueuePutTx(tx, username, path, baseUpdatedAt);
+    }
+  });
+  for (const { link } of edits) dropCachedPath(link.path);
+}
 
 // Apply a patch to a link and write it — create (new `links/{id}.enc`) or edit.
 // Same body as web's writeLink: stamps `updatedAt` now (and `createdAt` on

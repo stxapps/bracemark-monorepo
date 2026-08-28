@@ -9,24 +9,47 @@
 // model the lists/tags/pins use; destroy additionally sweeps the link's satellite
 // files (its pin, its extraction, its `files/` content) — the "caller's concern"
 // cleanup deleteLink's header points at.
+//
+// `updateMany`/`destroyMany` are the same two ops over a SELECTION, and they are
+// not loops over their single-link siblings: a loop is one transaction, one
+// pending-op write, one sync kick and one full re-read + repaint of the list PER
+// LINK, which is what made a bulk move of twenty links trickle down the pane over
+// about a second. Batched, a bulk action is one write and one repaint, and every
+// bulk caller must ride them (docs/editors.md, bulk edit).
 
 import { useCallback, useMemo } from 'react';
 
-import { LINKS_PREFIX, pathFromId } from '@stxapps/shared';
+import {
+  EXTRACTIONS_PREFIX,
+  FILES_PREFIX,
+  LINKS_PREFIX,
+  pathFromId,
+  PINS_PREFIX,
+} from '@stxapps/shared';
 import { newId } from '@stxapps/web-crypto';
 
 import { useAuth } from '../contexts/auth-provider';
 import { useSync } from '../contexts/sync-provider';
 import {
+  bulkDeleteEntities,
+  bulkWriteLinks,
   deleteExtraction,
   deleteFile,
   deleteLink,
   deletePin,
+  type LinkEdit,
   type LinkPatch,
   writeFile,
   writeLink,
 } from '../data/mutations';
-import { linkIdOf, type LinkItem, readExtraction, readLinkById } from '../data/queries';
+import {
+  linkIdOf,
+  type LinkItem,
+  readExtraction,
+  readExtractionsByLinkIds,
+  readLinkById,
+  readLinksByPaths,
+} from '../data/queries';
 import { resizeImage } from '../lib/resize-image';
 
 // What the add form collects. `title` is intentionally absent: a link is saved
@@ -51,10 +74,22 @@ export interface LinkMutations {
   // field clears it). Every caller rides this one op: move-to-list, archive,
   // restore, trash are all `{ listId }`; the edit dialog passes the full patch.
   update: (link: LinkItem, patch: LinkPatch) => Promise<void>;
+  // Apply N per-link patches — what every BULK action rides (the toolbar's
+  // move/archive/restore/remove, the Move-to picker, the retag dialog). Not a
+  // loop over `update`: the whole selection lands in one transaction, one
+  // pending-op batch and one sync kick, so the list re-reads and repaints ONCE
+  // instead of once per link. Callers pass only the links that actually change —
+  // a link already in the target state must get no write, or its `updatedAt` bump
+  // reorders the date-modified sort for nothing — and an empty batch is a no-op
+  // (no write, no sync kick), which is what makes that filtering free to express.
+  updateMany: (edits: LinkEdit[]) => Promise<void>;
   // Permanently delete a link AND its satellites: the `files/` blobs it (or its
   // extraction) references, its `extractions/{id}.enc`, its pin, then the link
   // itself. Irreversible — callers confirm first; "move to Trash" is `update`.
   destroy: (link: LinkItem) => Promise<void>;
+  // `destroy` for N links, batched the same way `updateMany` batches `update`:
+  // every satellite of every link in ONE transaction, then one sync kick.
+  destroyMany: (links: LinkItem[]) => Promise<void>;
   // Persist user-picked image bytes as a new `files/{id}.enc` (dimension-capped
   // via resizeImage — the client-side thumbnailing step) and return the file id
   // to store as `customImageId`. Content-before-metadata: call this FIRST, then
@@ -120,6 +155,20 @@ export function useLinkMutations(): LinkMutations {
     [username, requestSync],
   );
 
+  const updateMany = useCallback(
+    async (edits: LinkEdit[]) => {
+      if (!username) throw new Error('useLinkMutations: no active account');
+      if (edits.length === 0) return;
+
+      // No re-read here, unlike `update`: bulkWriteLinks re-reads each current blob
+      // INSIDE its transaction, which is strictly the stronger version of the same
+      // staleness rule (there's no window between the read and the put).
+      await bulkWriteLinks(username, edits);
+      requestSync();
+    },
+    [username, requestSync],
+  );
+
   const destroy = useCallback(
     async (link: LinkItem) => {
       if (!username) throw new Error('useLinkMutations: no active account');
@@ -147,6 +196,49 @@ export function useLinkMutations(): LinkMutations {
       await deleteExtraction(username, id);
       await deletePin(username, id);
       await deleteLink(username, current);
+      requestSync();
+    },
+    [username, requestSync],
+  );
+
+  const destroyMany = useCallback(
+    async (links: LinkItem[]) => {
+      if (!username) throw new Error('useLinkMutations: no active account');
+      if (links.length === 0) return;
+
+      const ids = links.map((link) => linkIdOf(link));
+      // Two batched reads for the whole selection where `destroy` does two per
+      // link — the freshest blobs (the custom-image ref may have changed since the
+      // rows rendered) and their extractions, which together name the `files/`
+      // content to sweep.
+      const [current, extractions] = await Promise.all([
+        readLinksByPaths(links.map((link) => link.path)),
+        readExtractionsByLinkIds(ids),
+      ]);
+
+      // Every path this delete touches, gathered flat: each link's `files/` blobs
+      // (its custom image plus everything its extraction references), its
+      // `extractions/{id}.enc`, its pin, and the link itself. `destroy` has to
+      // order content before entities so an interruption leaves a dangling ref
+      // rather than orphaned blobs; one transaction has no interruption to order
+      // around (bulkDeleteEntities), so this is a flat set.
+      const paths: string[] = [];
+      for (let i = 0; i < links.length; i++) {
+        const link = current[i] ?? links[i];
+        const extraction = extractions[i];
+        const fileIds = [
+          link.customImageId,
+          extraction?.imageId,
+          extraction?.screenshotId,
+          extraction?.pageCopyId,
+        ].filter((fileId): fileId is string => typeof fileId === 'string');
+        for (const fileId of fileIds) paths.push(pathFromId(fileId, FILES_PREFIX));
+        paths.push(pathFromId(ids[i], EXTRACTIONS_PREFIX));
+        paths.push(pathFromId(ids[i], PINS_PREFIX));
+        paths.push(link.path);
+      }
+
+      await bulkDeleteEntities(username, paths);
       requestSync();
     },
     [username, requestSync],
@@ -180,7 +272,15 @@ export function useLinkMutations(): LinkMutations {
   );
 
   return useMemo<LinkMutations>(
-    () => ({ create, update, destroy, saveCustomImage, deleteCustomImage }),
-    [create, update, destroy, saveCustomImage, deleteCustomImage],
+    () => ({
+      create,
+      update,
+      updateMany,
+      destroy,
+      destroyMany,
+      saveCustomImage,
+      deleteCustomImage,
+    }),
+    [create, update, updateMany, destroy, destroyMany, saveCustomImage, deleteCustomImage],
   );
 }

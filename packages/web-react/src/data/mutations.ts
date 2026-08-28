@@ -42,7 +42,7 @@ import {
 } from '@stxapps/shared';
 
 import { db, type ItemRecord, type PendingOpRecord } from './db';
-import { enqueueDelete, enqueuePut, pendingPutRecord } from './pending-store';
+import { enqueueDelete, enqueuePut, pendingDeleteRecord, pendingPutRecord } from './pending-store';
 import { parseBlob, toItemRecord } from './projection';
 import type { WithPath } from './queries';
 
@@ -167,6 +167,33 @@ export async function bulkWriteEntities(
   for (const entry of entries) dropCachedPath(entry.path);
 }
 
+// Batched delete by path — the delete-side twin of bulkWriteEntities, and what a
+// bulk action's sweep lands as: N paths leave `items` and N tombstones enter the
+// queue in ONE rw transaction, instead of a transaction (and a liveQuery re-run,
+// and a repaint) per path. `baseUpdatedAt` per path from its existing record, 0
+// for one with none — a never-stored default, an already-gone pin — exactly like
+// deleteEntity, which stays the single-path spelling.
+//
+// One transaction also RETIRES the ordering rule the per-path callers had to
+// follow. `destroy` deletes a link's `files/` content before its entities so an
+// interruption leaves a dangling ref (reads as "no bytes") rather than orphaned
+// blobs; batched, there is no interruption to order around — the whole sweep
+// commits or none of it does.
+export async function bulkDeleteEntities(username: string, paths: string[]): Promise<void> {
+  if (paths.length === 0) return;
+  await db.transaction('rw', db.items, db.pendingOps, async () => {
+    const existing = await db.items.bulkGet(paths);
+    // Through the shared factory, never an inline row literal — see
+    // bulkWriteEntities, and db.ts on `writeId`.
+    const ops = paths.map((path, i) =>
+      pendingDeleteRecord(username, path, existing[i]?.updatedAt ?? 0),
+    );
+    await db.items.bulkDelete(paths);
+    await db.pendingOps.bulkPut(ops);
+  });
+  for (const path of paths) dropCachedPath(path);
+}
+
 // Delete one entity by path: drop the local record and queue the server delete in
 // the SAME transaction, mirroring writeEntity's atomicity (the store and the
 // durable queue can never disagree about whether the delete happened).
@@ -199,6 +226,16 @@ export type LinkPatch = Partial<
   Pick<Link, 'url' | 'tagIds' | 'listId' | 'note' | 'customTitle' | 'customImageId'>
 >;
 
+// One link's share of a batched write (bulkWriteLinks). PER-LINK rather than one
+// patch for the whole batch, because the retag dialog's patch genuinely differs
+// row by row: "add these tags, remove those" resolves against each link's own
+// `tagIds`. The uniform actions (move, archive, restore, remove) just map the
+// same patch across their selection.
+export interface LinkEdit {
+  link: WithPath<Link>;
+  patch: LinkPatch;
+}
+
 // Apply a patch to a link and write it — create (new `links/{id}.enc`) or edit.
 // Stamps `updatedAt` now so the in-blob "date modified" advances on EVERY edit;
 // that's what keeps the `[itemType+itemUpdatedAt]` sort indexes (db.ts) and the
@@ -224,6 +261,52 @@ export async function writeLink(
     throw new Error(`writeLink: invalid link ${link.path}`);
   }
   await writeEntity(username, next);
+}
+
+// Apply N patched links in ONE transaction — what a bulk action (move to list,
+// archive, restore, remove, retag) writes instead of N writeLink calls. Same
+// per-link semantics as writeLink (stamps `updatedAt`, stamps `createdAt` on a
+// first write, validates against `linkSchema` before the write), so a batched move
+// and a single-row move produce byte-identical blobs.
+//
+// It also does what `useLinkMutations.update` has to do OUTSIDE its write — re-read
+// the current blob, since the caller's `links` are row/dialog snapshots and a sync
+// may have landed a fresher one since they rendered. Here that read is INSIDE the rw
+// lock, so unlike the single-path spelling there is no window between the read and
+// the put at all. A link that's gone entirely (deleted on another device) falls back
+// to the snapshot and is recreated — the same honest LWW outcome for edit-vs-delete
+// that `update` takes.
+export async function bulkWriteLinks(username: string, edits: LinkEdit[]): Promise<void> {
+  if (edits.length === 0) return;
+  const now = Date.now();
+  await db.transaction('rw', db.items, db.pendingOps, async () => {
+    const existing = await db.items.bulkGet(edits.map((edit) => edit.link.path));
+    const records: ItemRecord[] = [];
+    const ops: PendingOpRecord[] = [];
+    for (let i = 0; i < edits.length; i++) {
+      const { link, patch } = edits[i];
+      const { path, ...snapshot } = link;
+      const record = existing[i];
+      const stored = record ? parseBlob(record.data, linkSchema) : undefined;
+      const current: Link = stored ?? snapshot;
+      const next: Link = {
+        ...current,
+        ...patch,
+        createdAt: current.createdAt === 0 ? now : current.createdAt,
+        updatedAt: now,
+      };
+      if (!linkSchema.safeParse(next).success) {
+        throw new Error(`bulkWriteLinks: invalid link ${path}`);
+      }
+      const baseUpdatedAt = record?.updatedAt ?? 0;
+      records.push(toItemRecord(path, baseUpdatedAt, utf8(JSON.stringify(next))));
+      ops.push(pendingPutRecord(username, path, baseUpdatedAt));
+    }
+    await db.items.bulkPut(records);
+    await db.pendingOps.bulkPut(ops);
+  });
+  // Same invalidation every local write owes the read layer's memo (writeBytesWith).
+  for (const edit of edits) dropCachedPath(edit.link.path);
 }
 
 // Delete one link: drop its `links/{id}.enc`. Thin like deleteList/deletePin —

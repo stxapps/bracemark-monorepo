@@ -711,6 +711,23 @@ in `view-state-provider`, items grow a `LinkRowSelect` checkbox
   buttons. Every action also drops links already in its target state, so it
   never writes a no-op patch (no `updatedAt` bump reordering the date-modified
   sort).
+- **A bulk action is ONE write, never a loop.** Every action rides
+  `useLinkMutations`'s batched `updateMany(edits)` / `destroyMany(links)` — one
+  Dexie/SQLite transaction, one pending-op batch, one `requestSync()`. Looping the
+  single-link `update`/`destroy` is the shape this replaced, and it is quadratic in
+  the wrong place: each iteration is its own transaction AND its own re-run of
+  `readLinks` plus a full repaint of the virtualized list, so a twenty-link move
+  trickled down the pane over about a second. The patch is **per link**
+  (`LinkEdit`) rather than one patch for the batch, because the retag diff resolves
+  against each link's own `tagIds`; the uniform actions just map one patch across
+  their targets, and callers pass only the links that actually change (an
+  `updatedAt` bump for no change reorders the date-modified sort). Batching also
+  retires `destroy`'s content-before-entities ordering — one transaction can't be
+  interrupted halfway, so the sweep is a flat set of paths. **Pin/unpin are the
+  deliberate exception**: `pin()` inserts each link at the TOP of the pinned
+  section, so the sequence IS the resulting order (hence the reversed list), and
+  there is no batched spelling of that. Same rule and same code shape on
+  bracemark-expo.
 - **Bulk Edit tags** (`BulkTagsDialog` — hoisted at the page level like the edit
   dialog, driven by `retagging` in `view-state-provider`) seeds one `TagsField`
   with the **intersection** of the selection's tags and saves the **diff**:

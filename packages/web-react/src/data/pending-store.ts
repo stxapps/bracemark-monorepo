@@ -45,7 +45,19 @@ export function enqueueDelete(
   path: string,
   baseUpdatedAt: number,
 ): Promise<[string, string]> {
-  return db.pendingOps.put({ username, path, op: 'delete', baseUpdatedAt, writeId: newId() });
+  return db.pendingOps.put(pendingDeleteRecord(username, path, baseUpdatedAt));
+}
+
+// The queue row a delete enqueues, without writing it — the delete-side twin of
+// pendingPutRecord, for the BULK deleter (mutations.ts's bulkDeleteEntities). Same
+// reason it exists: one `writeId` minting point, so a batched op can't quietly ship
+// without one and re-acquire the blind-delete-by-path bug (db.ts).
+export function pendingDeleteRecord(
+  username: string,
+  path: string,
+  baseUpdatedAt: number,
+): PendingOpRecord {
+  return { username, path, op: 'delete', baseUpdatedAt, writeId: newId() };
 }
 
 // The full queue for an account, in no particular order — the engine imposes its

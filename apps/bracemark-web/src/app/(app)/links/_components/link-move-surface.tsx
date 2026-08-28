@@ -50,7 +50,7 @@ export function LinkMoveSurface() {
 
 function LinkMove({ links, onClose }: { links: LinkView[]; onClose: () => void }) {
   const { wide, exitBulkEdit } = useLinksViewState();
-  const { update } = useLinkMutations();
+  const { updateMany } = useLinkMutations();
   const [busy, setBusy] = useState(false);
 
   // If every link sits in one list (always true in a plain list view, and for
@@ -64,9 +64,14 @@ function LinkMove({ links, onClose }: { links: LinkView[]; onClose: () => void }
     if (busy) return;
     setBusy(true);
     try {
-      for (const link of links) {
-        if (link.listId !== listId) await update(link, { listId });
-      }
+      // One batched write for the whole selection, not a loop of `update` —
+      // a loop costs a transaction, a sync kick and a full re-read + repaint of
+      // the list PER LINK (useLinkMutations). Links already in the target list are
+      // filtered out rather than patched: an `updatedAt` bump for no change would
+      // reorder the date-modified sort.
+      await updateMany(
+        links.filter((link) => link.listId !== listId).map((link) => ({ link, patch: { listId } })),
+      );
       onClose();
       exitBulkEdit();
     } finally {

@@ -7,25 +7,45 @@
 // than bytes — content stays out of the JS heap here (file-store.ts), so the
 // resize (lib/image.ts) and the store write (mutations.ts writeFile)
 // are both uri/path-to-path.
+//
+// `updateMany`/`destroyMany` are the batched forms every bulk action must ride
+// rather than looping their single-link siblings — web's header carries the
+// reasoning (a loop is a transaction, a sync kick and a full repaint per link).
 
 import { useCallback, useMemo } from 'react';
 import { File } from 'expo-file-system';
 
 import { newId } from '@stxapps/expo-crypto';
-import { LINKS_PREFIX, pathFromId } from '@stxapps/shared';
+import {
+  EXTRACTIONS_PREFIX,
+  FILES_PREFIX,
+  LINKS_PREFIX,
+  pathFromId,
+  PINS_PREFIX,
+} from '@stxapps/shared';
 
 import { useAuth } from '../contexts/auth-provider';
 import { useSync } from '../contexts/sync-provider';
 import {
+  bulkDeleteEntities,
+  bulkWriteLinks,
   deleteExtraction,
   deleteFile,
   deleteLink,
   deletePin,
+  type LinkEdit,
   type LinkPatch,
   writeFile,
   writeLink,
 } from '../data/mutations';
-import { linkIdOf, type LinkItem, readExtraction, readLinkById } from '../data/queries';
+import {
+  linkIdOf,
+  type LinkItem,
+  readExtraction,
+  readExtractionsByLinkIds,
+  readLinkById,
+  readLinksByPaths,
+} from '../data/queries';
 import { resizeImage, type ResizeImageSource } from '../lib/image';
 
 // What the add form collects — web-react's LinkDraft, verbatim. `title` is
@@ -51,10 +71,19 @@ export interface LinkMutations {
   // field clears it). Every caller rides this one op: move-to-list, archive,
   // restore, trash are all `{ listId }`; the edit dialog passes the full patch.
   update: (link: LinkItem, patch: LinkPatch) => Promise<void>;
+  // Apply N per-link patches in ONE write — what every BULK action rides (the
+  // bulk bar's move/archive/restore/remove, the retag sheet). Not a loop over
+  // `update`: a loop costs a transaction, a sync kick and a full re-read +
+  // repaint of the list PER LINK. Callers pass only the links that actually
+  // change (a no-op patch would bump `updatedAt` and reorder the date-modified
+  // sort); an empty batch is a no-op.
+  updateMany: (edits: LinkEdit[]) => Promise<void>;
   // Permanently delete a link AND its satellites: the `files/` blobs it (or its
   // extraction) references, its `extractions/{id}.enc`, its pin, then the link
   // itself. Irreversible — callers confirm first; "move to Trash" is `update`.
   destroy: (link: LinkItem) => Promise<void>;
+  // `destroy` for N links, batched the same way `updateMany` batches `update`.
+  destroyMany: (links: LinkItem[]) => Promise<void>;
   // Persist a user-picked image as a new `files/{id}.enc` (dimension-capped via
   // resizeImage — the client-side thumbnailing step) and return the file id to
   // store as `customImageId`. Content-before-metadata: call this FIRST, then
@@ -121,6 +150,20 @@ export function useLinkMutations(): LinkMutations {
     [username, requestSync],
   );
 
+  const updateMany = useCallback(
+    async (edits: LinkEdit[]) => {
+      if (!username) throw new Error('useLinkMutations: no active account');
+      if (edits.length === 0) return;
+
+      // No re-read here, unlike `update`: bulkWriteLinks re-reads each current
+      // blob INSIDE its transaction — the stronger form of the same staleness
+      // rule (no window between the read and the put).
+      await bulkWriteLinks(username, edits);
+      requestSync();
+    },
+    [username, requestSync],
+  );
+
   const destroy = useCallback(
     async (link: LinkItem) => {
       if (!username) throw new Error('useLinkMutations: no active account');
@@ -148,6 +191,50 @@ export function useLinkMutations(): LinkMutations {
       await deleteExtraction(username, id);
       await deletePin(username, id);
       await deleteLink(username, current);
+      requestSync();
+    },
+    [username, requestSync],
+  );
+
+  const destroyMany = useCallback(
+    async (links: LinkItem[]) => {
+      if (!username) throw new Error('useLinkMutations: no active account');
+      if (links.length === 0) return;
+
+      const ids = links.map((link) => linkIdOf(link));
+      // Two batched reads for the whole selection where `destroy` does two per
+      // link — the freshest blobs (the custom-image ref may have changed since
+      // the rows rendered) and their extractions, which name the `files/`
+      // content to sweep.
+      const [current, extractions] = await Promise.all([
+        readLinksByPaths(links.map((link) => link.path)),
+        readExtractionsByLinkIds(ids),
+      ]);
+
+      // Every path this delete touches, flat: each link's `files/` blobs (its
+      // custom image plus everything its extraction references), its
+      // `extractions/{id}.enc`, its pin, and the link itself. `destroy` orders
+      // content before entities so an interruption leaves a dangling ref rather
+      // than orphaned blobs; one transaction has no interruption to order around
+      // (bulkDeleteEntities, which also sweeps the plaintext files after the
+      // rows).
+      const paths: string[] = [];
+      for (let i = 0; i < links.length; i++) {
+        const link = current[i] ?? links[i];
+        const extraction = extractions[i];
+        const fileIds = [
+          link.customImageId,
+          extraction?.imageId,
+          extraction?.screenshotId,
+          extraction?.pageCopyId,
+        ].filter((fileId): fileId is string => typeof fileId === 'string');
+        for (const fileId of fileIds) paths.push(pathFromId(fileId, FILES_PREFIX));
+        paths.push(pathFromId(ids[i], EXTRACTIONS_PREFIX));
+        paths.push(pathFromId(ids[i], PINS_PREFIX));
+        paths.push(link.path);
+      }
+
+      await bulkDeleteEntities(username, paths);
       requestSync();
     },
     [username, requestSync],
@@ -183,7 +270,15 @@ export function useLinkMutations(): LinkMutations {
   );
 
   return useMemo<LinkMutations>(
-    () => ({ create, update, destroy, saveCustomImage, deleteCustomImage }),
-    [create, update, destroy, saveCustomImage, deleteCustomImage],
+    () => ({
+      create,
+      update,
+      updateMany,
+      destroy,
+      destroyMany,
+      saveCustomImage,
+      deleteCustomImage,
+    }),
+    [create, update, updateMany, destroy, destroyMany, saveCustomImage, deleteCustomImage],
   );
 }

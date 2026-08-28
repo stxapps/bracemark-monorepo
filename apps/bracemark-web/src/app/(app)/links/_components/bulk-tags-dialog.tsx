@@ -51,7 +51,7 @@ function sameIds(a: string[], b: string[]): boolean {
 
 function BulkTagsForm({ links, onClose }: { links: LinkView[]; onClose: () => void }) {
   const { exitBulkEdit } = useLinksViewState();
-  const { update } = useLinkMutations();
+  const { updateMany } = useLinkMutations();
 
   // The seed: tags EVERY selected link carries, in the first link's order (a
   // stable, user-recognizable chip order). Snapshotted once at mount — draft
@@ -71,13 +71,17 @@ function BulkTagsForm({ links, onClose }: { links: LinkView[]; onClose: () => vo
     try {
       const added = tagIds.filter((id) => !seed.includes(id));
       const removed = new Set(seed.filter((id) => !tagIds.includes(id)));
-      for (const link of links) {
+      // Minimal per-link patch: a link already in the target state gets no write
+      // (no updatedAt bump reordering the date-modified sort). This is the batch
+      // whose patch genuinely differs row by row — "add these, remove those"
+      // resolves against each link's own tagIds — which is why updateMany takes
+      // per-link edits rather than one shared patch (mutations.ts, LinkEdit).
+      const edits = links.flatMap((link) => {
         const kept = link.tagIds.filter((id) => !removed.has(id));
         const next = [...kept, ...added.filter((id) => !kept.includes(id))];
-        // Minimal per-link patch: a link already in the target state gets no
-        // write (no updatedAt bump reordering the date-modified sort).
-        if (!sameIds(next, link.tagIds)) await update(link, { tagIds: next });
-      }
+        return sameIds(next, link.tagIds) ? [] : [{ link, patch: { tagIds: next } }];
+      });
+      await updateMany(edits);
       onClose();
       exitBulkEdit();
     } finally {
