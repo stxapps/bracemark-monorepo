@@ -474,7 +474,11 @@ editors:
   grammar's `note` clause ("Note contains" in the Plus editor,
   [search.md](./search.md)), which filters on the same inline field with no join.
   That clause is also the answer to what the badge costs: a note you cannot read at
-  a glance is at least one you can find.
+  a glance is at least one you can find. The badge **lights** while such a search is
+  running (`hasPositiveNoteClause`, `@stxapps/shared` — muted → full ink, with the
+  `aria-label` moving too), which is the other half of that answer: a `note` hit is
+  the only match the row can't otherwise explain, since the title and host are both
+  on it. See [search.md](./search.md).
 - **The sidebar** (`_panes/sidebar.tsx`) does **not** use the shared picker
   components — it renders its own `NavTree`. But it renders it over the **same
   `useLists`/`useTags` trees** and the same `@stxapps/shared` tree helpers

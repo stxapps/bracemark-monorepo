@@ -6,9 +6,12 @@
 
 import { Pin, StickyNote } from 'lucide-react';
 
+import { hasPositiveNoteClause } from '@stxapps/shared';
 import { type LinkView } from '@stxapps/web-react';
 import { Checkbox } from '@stxapps/web-ui/components/ui/checkbox';
+import { cn } from '@stxapps/web-ui/lib/utils';
 
+import { useLinksPage } from '../../_contexts/page-provider';
 import { useLinksViewState } from '../../_contexts/view-state-provider';
 
 // The bulk-edit selection checkbox, shown while `bulkEditing` is on. Each layout
@@ -85,10 +88,34 @@ export function PinnedBadge() {
 // sits inside the row's <a>, and on a card it sits under the title anchor's
 // full-card overlay, lifted just far enough (`relative z-10` on its wrapper
 // there) for the tooltip to be reachable.
+//
+// It carries a MATCHED state, because that "no read-only surface" is exactly what
+// an advanced `note` search runs into: every other field a query can name is
+// legible on the row (the title verbatim, the host under it), so only a note hit
+// lands on a row with no visible reason for being in the result. Lit, the badge
+// IS that reason — and the note text is already one hover away.
+//
+// It reads the query itself rather than taking a prop, for the same reason
+// LinkRowSelect reads the selection: one call site, so the two layouts can't
+// drift, and the derivation stays in `shared` (hasPositiveNoteClause, which is
+// also where the "positive terms only" rule is argued — a `none`-only clause
+// matches by ABSENCE and must not light this).
+//
+// Ink, not a hue. `--primary` is a hair off `--foreground` in this theme (there
+// is no brand hue), so the step that reads as "this one is answering your search"
+// is muted → full ink — the same lever the topbar's filter dot picked, and one
+// that holds in light and dark alike. The `aria-label` moves with it: a colour
+// change alone is not a state for a screen reader (docs/accessibility.md).
 export function NoteBadge({ note }: { note: string }) {
+  const { query } = useLinksPage();
+  const matched = hasPositiveNoteClause(query);
+
   return (
     <span className="flex shrink-0 items-center" title={note}>
-      <StickyNote className="size-3.5 text-muted-foreground" aria-label="Has note" />
+      <StickyNote
+        className={cn('size-3.5', matched ? 'text-foreground' : 'text-muted-foreground')}
+        aria-label={matched ? 'Note matches search' : 'Has note'}
+      />
     </span>
   );
 }

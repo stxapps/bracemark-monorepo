@@ -80,14 +80,48 @@ way: `text` is what the FREE tier gets, so widening it would change free search
 rather than add a paid lever, and a note has **no read-only surface** — the layouts
 render a `NoteBadge`, never the text ([editors.md](./editors.md)) — so a hit out of
 the combined haystack would surface a row with no visible reason for being there.
-Asking for the field is what makes the match legible. Mechanically it is the
-CHEAPEST text clause in the grammar: `link.note` lives in `links/{id}.enc` beside the
-url, so `noteMatches` runs on the decoded link inside the sync filter walk and never
-triggers `needsExtractionJoin` — it costs a scan, not a join. It does count as a text
-clause for `hasTextClause`, so like every other one it drops the exact total (the
-survivors are only known after the decode). Both read layers spell the pair as
+Asking for the field is what keeps the match attributable: the searcher named `note`,
+so the badge only has to confirm which rows answered (below), where a `text` hit that
+could have landed in any of three fields would leave the badge saying nothing.
+Mechanically it is the CHEAPEST text clause in the grammar: `link.note` lives in
+`links/{id}.enc` beside the url, so `noteMatches` runs on the decoded link inside the
+sync filter walk and never triggers `needsExtractionJoin` — it costs a scan, not a
+join. It does count as a text clause for `hasTextClause`, so like every other one it
+drops the exact total (the survivors are only known after the decode). Both read layers spell the pair as
 `linkFieldsMatch` = url ∧ note, so the link-blob half of a filter has ONE call site
 per walk.
+
+**The badge LIGHTS for a positive `note` clause — the one place a match is
+otherwise invisible.** Every other field a query can name is legible on the row (the
+title verbatim, the host under it); the note is rendered as `NoteBadge` and nothing
+else, so before this a note search returned rows whose reason for being there was
+one hover away on web and unreachable on native. Lit, the badge is that reason, and
+the note text stays where it was (hover `title`, "Edit note").
+
+The predicate is `hasPositiveNoteClause` in `sync/link-query.ts`, read by both apps'
+`NoteBadge` off `useLinksPage().query` — one call site per app, so the two layouts
+(and the two platforms) cannot drift. Two properties make it that cheap. It is a
+fact about the QUERY, not the row: `note` ANDs into every walk, so if a positive term
+ran then every link in the result contains those words, and a link with no note can't
+satisfy one — which is exactly the set that renders no badge. And it is **positive
+terms only**: a `none`-only clause is satisfied by every link that does NOT contain
+the words (an absent note included), so a row that passed it matched by absence and
+has nothing to point at. Lighting there would be a plain lie, and it is the one case
+a naive `clauseEmpty` check gets wrong.
+
+The state is muted → full ink rather than a hue, in both apps: this theme has no
+brand colour and `--primary` sits a hair off `--foreground` (the topbar's filter dot
+makes the same argument), so ink is the step that reads. The `aria-label` moves with
+it — `"Has note"` → `"Note matches search"` — because a colour change alone is not a
+state for a screen reader ([accessibility.md](./accessibility.md)).
+
+Neither `url` nor `title` gets an equivalent, deliberately. A `title` hit needs none
+— the title is on the row. A `url` hit is genuinely half-hidden (the layouts print
+`hostFromText`, so a match in a path or query string shows nothing), but the honest
+fix there is to render the matched text, not to badge its absence: swap the host for
+`displayUrl` while a `url` clause is active. Untaken for now; the gap is smaller,
+since someone who typed "URL contains" is holding the reason in their head, and the
+note is the only field with no read-only surface at all.
 
 ⚠ The note carries a **public promise**: `/faq`'s `link-note` answer on the marketing
 site tells readers what search does and does not reach. It is written to match this

@@ -55,8 +55,10 @@ export interface LinkQuery {
   // haystack. Two reasons, both about the free rung: `text` is what a free user
   // gets, and widening it would change free search rather than add a Plus lever;
   // and a note has no read-only surface (a badge on the row, docs/editors.md), so
-  // a hit from the combined haystack would surface a link with no visible reason.
-  // Asking for the field is what makes the match legible. It reads off the LINK
+  // a hit from the combined haystack would surface a link with no visible reason —
+  // and the badge could not fix that, since a `text` hit may have landed in the url
+  // or title instead. Asking for the FIELD is what makes the badge's matched state
+  // (hasPositiveNoteClause, below) able to say anything. It reads off the LINK
   // blob like `url`, so unlike `title`/`text` it needs no extraction join — the
   // cheapest text clause in the grammar.
   note: Clause;
@@ -84,6 +86,26 @@ export function emptyQuery(): LinkQuery {
     sortOn: 'updatedAt',
     sortOrder: 'desc',
   };
+}
+
+// Does the query ASK for words in the note — i.e. did a surviving link have to
+// CONTAIN something in `link.note` to be here? Positive terms only: a `none`-only
+// clause is satisfied by every link that doesn't contain the words (an absent note
+// included), so a row that passed it matched by ABSENCE and has nothing to point at.
+//
+// Both apps' NoteBadge lights its matched state on this, and it is a property of
+// the QUERY, not of the row — no per-row re-matching, and nothing to keep in step
+// with either read layer's `noteMatches`. `note` ANDs into every walk like any
+// other clause, so if a positive note term ran then EVERY link in the result
+// contains those words; and a link with no note can't satisfy one (the haystack is
+// empty), which is exactly the set that renders no badge. So "the badge is shown"
+// ∧ "this returns true" ⇒ "this row's note matched", with no third case.
+//
+// Why the badge needs it: the note is the one field with NO read-only surface in
+// the layouts (docs/editors.md), so an advanced note search otherwise returns rows
+// whose reason for being there is invisible. See docs/search.md.
+export function hasPositiveNoteClause(q: LinkQuery): boolean {
+  return q.note.all.length > 0 || q.note.any.length > 0;
 }
 
 // Rewrite a query to EXCLUDE a set of list ids, preserving the cheapest driver

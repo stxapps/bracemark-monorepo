@@ -24,6 +24,7 @@ import { type LinkView, useTags } from '@stxapps/expo-react';
 import {
   ARCHIVE_ID,
   DEFAULT_LIST_ID,
+  hasPositiveNoteClause,
   type LinkSortOn,
   TRASH_ID,
   treeNameMap,
@@ -71,12 +72,28 @@ export function PinnedBadge() {
 // Badge only — the note text stays behind the (future) edit dialog (web's "View
 // note" menu item, which needs it), web's rationale: an inline note would cost
 // its line on every item, and most links have none.
+//
+// The MATCHED state is web's port, argument included (link-row-widgets.tsx): a
+// note is the one field a query can name that has no read-only surface here, so
+// without it an advanced `note` search shows items with no visible reason for
+// being in the result. `hasPositiveNoteClause` is the shared derivation — a
+// property of the query, not of the item, and false for a `none`-only clause
+// (which matches by absence). Muted → full ink rather than a hue, since this
+// theme's `--primary` sits next to `--foreground`; the `aria-label` moves with the
+// colour, since a colour alone is not a state for a screen reader
+// (docs/accessibility.md).
+//
+// Unlike web there is no hover tooltip on the item — a touch surface has none —
+// so the lit badge is the whole disclosure until the note editor lands.
 export function NoteBadge() {
+  const { query } = useLinksPage();
+  const matched = hasPositiveNoteClause(query);
+
   return (
     <Icon
       as={StickyNote}
-      className="size-3.5 shrink-0 text-muted-foreground"
-      aria-label="Has note"
+      className={cn('size-3.5 shrink-0', matched ? 'text-foreground' : 'text-muted-foreground')}
+      aria-label={matched ? 'Note matches search' : 'Has note'}
     />
   );
 }

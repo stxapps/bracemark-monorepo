@@ -1,4 +1,4 @@
-import { excludeLists, type LinkQuery } from './link-query';
+import { excludeLists, hasPositiveNoteClause, type LinkQuery } from './link-query';
 
 // A base query with the given list clause; other clauses empty, sort fixed.
 const q = (any: string[], none: string[] = []): LinkQuery => ({
@@ -56,5 +56,35 @@ describe('excludeLists', () => {
     const snapshot = JSON.stringify(query);
     excludeLists(query, new Set(['a']));
     expect(JSON.stringify(query)).toBe(snapshot);
+  });
+});
+
+describe('hasPositiveNoteClause', () => {
+  const withNote = (note: Partial<LinkQuery['note']>): LinkQuery => ({
+    ...q([]),
+    note: { any: [], all: [], none: [], ...note },
+  });
+
+  it('is false for a query with no note clause', () => {
+    expect(hasPositiveNoteClause(q([]))).toBe(false);
+  });
+
+  it('is true for an `all` term', () => {
+    expect(hasPositiveNoteClause(withNote({ all: ['recipe'] }))).toBe(true);
+  });
+
+  it('is true for an `any` term', () => {
+    expect(hasPositiveNoteClause(withNote({ any: ['recipe', 'dinner'] }))).toBe(true);
+  });
+
+  // The badge must NOT light here: a `none`-only clause is satisfied by links that
+  // do NOT contain the words — including every link with no note at all — so a
+  // surviving row matched by absence and its note has nothing to show.
+  it('is false for a `none`-only clause', () => {
+    expect(hasPositiveNoteClause(withNote({ none: ['draft'] }))).toBe(false);
+  });
+
+  it('is true when a positive term sits alongside a `none` term', () => {
+    expect(hasPositiveNoteClause(withNote({ all: ['recipe'], none: ['draft'] }))).toBe(true);
   });
 });
