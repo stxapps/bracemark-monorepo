@@ -16,6 +16,12 @@ import { cn } from '../../lib/utils';
 //     chokepoints where the app-wide font-scale cap lives (lib/font-scale.ts
 //     carries the rationale). Set BEFORE the `{...props}` spread so a call site
 //     can still opt out or choose its own ceiling.
+//   • the ref type corrected from `RefAttributes<typeof RNText>` (upstream) to
+//     `RefAttributes<RNText>`. The upstream spelling asks for a ref to the Text
+//     *component* rather than to a rendered instance, which is not a thing React
+//     hands anyone; it went unnoticed while nothing passed a ref, and it blocks
+//     the `asChild` + `<Text>` composition the dialog primitives now use (their
+//     props carry the correct `Ref<Text>`, which the wrong one rejects).
 //   • `allowFontScaling` asked rather than left to RN's `true` — scaling is
 //     BROKEN in the iOS share-extension process (multiplier 0 → every font size
 //     resolves to zero point → nothing paints, with a correct accessibility
@@ -87,7 +93,7 @@ function Text({
   variant = 'default',
   ...props
 }: React.ComponentProps<typeof RNText> &
-  React.RefAttributes<typeof RNText> &
+  React.RefAttributes<RNText> &
   TextVariantProps & {
     asChild?: boolean;
   }) {

@@ -20,7 +20,10 @@ import { useWindowDimensions } from 'react-native';
 // TextInput in the app. Nothing renders a bare `react-native` Text or TextInput,
 // and nothing should: the cap is only one of four things these wrappers add (the
 // others are `font-sans`, TextClassContext, and the heading roles — see
-// docs/accessibility.md).
+// docs/accessibility.md). That includes the ones rendered on our BEHALF: an
+// @rn-primitives `Title`/`Description`/`Label` falls back to react-native's Text
+// unless it is handed a child with `asChild`, which is invisible to a search of
+// this repo and is how every dialog title in the app once escaped the cap.
 //
 // The share tree is covered like everything else. It differs only in HOW it
 // imports them — by direct path rather than through a barrel, because its bundle

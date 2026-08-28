@@ -1,5 +1,12 @@
 import * as React from 'react';
-import { Platform, type StyleProp, StyleSheet, Text, View, type ViewStyle } from 'react-native';
+import {
+  Platform,
+  type StyleProp,
+  StyleSheet,
+  Text as RNText,
+  View,
+  type ViewStyle,
+} from 'react-native';
 import { FadeIn, ReduceMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FullWindowOverlay as RNFullWindowOverlay } from 'react-native-screens';
@@ -9,7 +16,7 @@ import { Check, ChevronDown, ChevronRight, ChevronUp } from 'lucide-react-native
 import { cn } from '../../lib/utils';
 import { Icon } from './icon';
 import { NativeOnlyAnimatedView } from './native-only-animated-view';
-import { TextClassContext } from './text';
+import { Text, TextClassContext } from './text';
 
 // react-native-reusables `dropdown-menu` (uniwind variant), copied from the
 // registry — see docs/setup.md for why the copy is manual (the CLI needs
@@ -282,23 +289,31 @@ function DropdownMenuRadioItem({
   );
 }
 
+// `asChild` + ui/text's Text, diverging from the registry copy: without it
+// rn-primitives renders **react-native's own Text** here (`Component = asChild ?
+// Slot : Text`), which takes neither `font-sans` nor the font-scale cap.
+// alert-dialog.tsx's AlertDialogTitle carries the full note. Nothing imports
+// this component today — it is fixed anyway, because the next thing that does
+// would inherit the bug silently.
 function DropdownMenuLabel({
   className,
   inset,
   ...props
-}: React.ComponentProps<typeof DropdownMenuPrimitive.Label> & {
+}: Omit<React.ComponentProps<typeof DropdownMenuPrimitive.Label>, 'asChild'> & {
   className?: string;
   inset?: boolean;
 }) {
   return (
-    <DropdownMenuPrimitive.Label
-      className={cn(
-        'px-2 py-2 text-sm font-medium text-foreground sm:py-1.5',
-        inset && 'pl-8',
-        className,
-      )}
-      {...props}
-    />
+    <DropdownMenuPrimitive.Label asChild>
+      <Text
+        className={cn(
+          'px-2 py-2 text-sm font-medium text-foreground sm:py-1.5',
+          inset && 'pl-8',
+          className,
+        )}
+        {...props}
+      />
+    </DropdownMenuPrimitive.Label>
   );
 }
 
@@ -314,9 +329,13 @@ function DropdownMenuSeparator({
   );
 }
 
-function DropdownMenuShortcut({ className, ...props }: React.ComponentProps<typeof Text>) {
+// Left on a bare RN Text, and it is the last one in this file: nothing imports
+// DropdownMenuShortcut, and a keyboard-shortcut hint has no place on a phone —
+// deleting it would diverge further from the registry copy than leaving it.
+// Anything that DOES start using it should switch to ui/text's Text first.
+function DropdownMenuShortcut({ className, ...props }: React.ComponentProps<typeof RNText>) {
   return (
-    <Text
+    <RNText
       className={cn('ml-auto text-xs tracking-widest text-muted-foreground', className)}
       {...props}
     />

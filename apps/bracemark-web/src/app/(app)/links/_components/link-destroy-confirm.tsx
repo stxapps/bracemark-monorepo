@@ -86,9 +86,24 @@ export function LinkDestroyConfirm() {
             splitting the two across the scroller boundary would re-space them at
             the content's `gap-6`. */}
         <div className="min-h-0 shrink overflow-y-auto">
-          <AlertDialogHeader>
+          {/* Left-aligned, against AlertDialogHeader's centred default and the
+              `text-balance` its description pairs with that default — centring
+              is a ≤ 2-line device, and this is the one alert whose message
+              cannot be short: `what` interpolates an unbounded link TITLE, which
+              is the same fact that makes the scroller above necessary. Below
+              `sm` the box is `max-w-xs`, ~37 characters a line at `text-sm`, so
+              even the shortest possible message runs three lines and an ordinary
+              article title four to six — with the quoted title, the part that
+              says WHICH link is about to go, starting at a different x on every
+              line. The header's own `sm:` rules already say left for the wider
+              box; these two classes bring the narrow one into line (tailwind-
+              merge drops the base `place-items-center`/`text-center`/
+              `text-balance`, and the surviving `sm:` variants now agree rather
+              than override). The expo port says the same thing through its
+              header's TextClassContext, which is `text-left` there. */}
+          <AlertDialogHeader className="place-items-start text-left">
             <AlertDialogTitle>Delete permanently?</AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogDescription className="text-pretty">
               {what} will be removed from all your devices. This can’t be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>

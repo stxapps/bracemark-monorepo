@@ -1,5 +1,11 @@
 import * as React from 'react';
-import { type GestureResponderEvent, Platform, Text, View, type ViewProps } from 'react-native';
+import {
+  type GestureResponderEvent,
+  Platform,
+  Text as RNText,
+  View,
+  type ViewProps,
+} from 'react-native';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { FadeIn, FadeOut, ReduceMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,6 +17,7 @@ import { withUniwind } from 'uniwind';
 import { cn } from '../../lib/utils';
 import { Icon } from './icon';
 import { NativeOnlyAnimatedView } from './native-only-animated-view';
+import { Text } from './text';
 
 // react-native-reusables `dialog` (uniwind variant), copied from the registry —
 // see docs/setup.md for why the copy is manual (the CLI needs tsconfig path
@@ -189,7 +196,11 @@ function DialogContent({
               as={X}
               className={cn('size-4 shrink-0 text-accent-foreground web:pointer-events-none')}
             />
-            <Text className="sr-only">Close</Text>
+            {/* The one deliberate bare RN Text in this file — `sr-only`
+                text paints nothing, so it needs neither Inter nor the font-
+                scale cap. Everything else here goes through ui/text's Text;
+                see DialogTitle. */}
+            <RNText className="sr-only">Close</RNText>
           </DialogPrimitive.Close>
         </DialogPrimitive.Content>
       </DialogOverlay>
@@ -212,24 +223,35 @@ function DialogFooter({ className, ...props }: ViewProps) {
   );
 }
 
-function DialogTitle({ className, ...props }: React.ComponentProps<typeof DialogPrimitive.Title>) {
+// `asChild` + ui/text's Text, diverging from the registry copy: without it
+// rn-primitives renders **react-native's own Text** here (`Component = asChild ?
+// Slot : Text`), a bare one, one delegation away — no `font-sans` (Inter
+// degrades to the system face), no `maxFontSizeMultiplier` (these strings scale
+// past the app-wide 1.3 cap while their chrome does not), no TextClassContext,
+// no heading role. alert-dialog.tsx's AlertDialogTitle carries the full note,
+// including why nothing catches it.
+function DialogTitle({
+  className,
+  ...props
+}: Omit<React.ComponentProps<typeof DialogPrimitive.Title>, 'asChild'>) {
   return (
-    <DialogPrimitive.Title
-      className={cn('text-lg leading-none font-semibold text-foreground', className)}
-      {...props}
-    />
+    <DialogPrimitive.Title asChild>
+      <Text
+        className={cn('text-lg leading-none font-semibold text-foreground', className)}
+        {...props}
+      />
+    </DialogPrimitive.Title>
   );
 }
 
 function DialogDescription({
   className,
   ...props
-}: React.ComponentProps<typeof DialogPrimitive.Description>) {
+}: Omit<React.ComponentProps<typeof DialogPrimitive.Description>, 'asChild'>) {
   return (
-    <DialogPrimitive.Description
-      className={cn('text-sm text-muted-foreground', className)}
-      {...props}
-    />
+    <DialogPrimitive.Description asChild>
+      <Text className={cn('text-sm text-muted-foreground', className)} {...props} />
+    </DialogPrimitive.Description>
   );
 }
 

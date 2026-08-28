@@ -338,7 +338,9 @@ when the failure arrives from a submit.
 
 `lib/font-scale.ts` caps the OS font-scale multiplier at **1.3**, applied at two
 chokepoints — `components/ui/text.tsx` and `components/ui/input.tsx` — which
-between them cover every rendered `Text` and `TextInput` in the app. The share
+between them cover every rendered `Text` and `TextInput` in the app, including
+the ones a third-party primitive would otherwise render for us (the paragraph
+below). The share
 tree is included: it reaches for those two components by direct path rather than
 through a barrel (its bundle budget, [share-sheet.md](./share-sheet.md)), which is
 an import-style difference, not an exemption from the cap.
@@ -354,10 +356,27 @@ only one of four things the wrapper adds, and the other three break louder:
 - the heading `role` / `aria-level` map described above.
 
 Nothing lints this: expo's only `no-restricted-imports` block guards the share
-bundle. Two bare `Text` renders survive in vendored registry copies, both benign —
-`ui/dialog.tsx`'s `sr-only` close label (invisible text can neither overflow a box
-nor need a font) and `ui/dropdown-menu.tsx`'s `DropdownMenuShortcut`, which nothing
-imports.
+bundle. One bare `Text` render survives in a vendored registry copy and is
+benign — `ui/dialog.tsx`'s `sr-only` close label, since invisible text can
+neither overflow a box nor need a font. (`ui/dropdown-menu.tsx`'s
+`DropdownMenuShortcut` is the second, kept bare only because nothing imports it
+and a keyboard-shortcut hint has no place on a phone; anything that starts using
+it should switch it first.)
+
+**And the rule reaches one step further than a grep does: a component can render
+a bare `Text` on your behalf.** `@rn-primitives`' `Title`, `Description` and
+`Label` are each `Component = asChild ? Slot : Text` — react-native's `Text`,
+inside `node_modules`, whenever `asChild` is absent. So the registry copies of
+`ui/alert-dialog.tsx`, `ui/dialog.tsx` and `ui/dropdown-menu.tsx` shipped every
+dialog title and description in the app in the **system face, uncapped**, across
+12 call sites, while a search of this repo for `<Text` came back clean and this
+section claimed full coverage. It is the quietest form the failure takes: the
+`className` we pass still resolves, so the colour and weight are right and only
+the typeface is wrong, and the accessibility tree is perfect. All three now
+compose `asChild` with `ui/text.tsx`'s `Text`, which also gets the primitive's
+`role='heading'` onto a Text the heading map can see; `AlertDialogTitle` carries
+the derivation. When adopting anything else from the registry, read what its
+primitive renders rather than what the wrapper looks like.
 
 The reasoning is worth restating because the alternative looks tidier: RN's
 default is unbounded scaling (iOS Dynamic Type reaches ~310%) while every

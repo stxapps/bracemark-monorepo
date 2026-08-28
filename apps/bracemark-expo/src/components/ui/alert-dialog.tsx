@@ -9,7 +9,7 @@ import type { VariantProps } from 'class-variance-authority';
 import { cn } from '../../lib/utils';
 import { buttonTextVariants, buttonVariants } from './button';
 import { NativeOnlyAnimatedView } from './native-only-animated-view';
-import { TextClassContext } from './text';
+import { Text, TextClassContext } from './text';
 
 // react-native-reusables `alert-dialog` (uniwind variant), copied from the
 // registry — see docs/setup.md for why the copy is manual (the CLI needs
@@ -127,11 +127,15 @@ function AlertDialogContent({
 // `gap-2` both platforms' plain `DialogHeader` uses. An alert dialog's description
 // is one clause finishing the sentence its title starts ("Delete permanently?" /
 // "…can't be undone"), where a dialog's is a standalone line, so it binds closer.
-// Only the gap ports: web's header is a grid with a centering and media-slot
-// machinery that has no counterpart on this side.
+// Only the gap ports: web's header is a grid with a media-slot machinery that
+// has no counterpart on this side, and its centring is gone on BOTH sides now —
+// the one caller (features/links/link-destroy-confirm.tsx) interpolates an
+// unbounded link title into its description, and centring is a ≤ 2-line device.
+// This context reaches the title and description below because they render
+// through ui/text's Text; see the note on AlertDialogTitle for why they have to.
 function AlertDialogHeader({ className, ...props }: ViewProps) {
   return (
-    <TextClassContext.Provider value="text-center sm:text-left">
+    <TextClassContext.Provider value="text-left">
       <View className={cn('flex flex-col gap-1.5', className)} {...props} />
     </TextClassContext.Provider>
   );
@@ -146,27 +150,40 @@ function AlertDialogFooter({ className, ...props }: ViewProps) {
   );
 }
 
+// `asChild` + ui/text's Text, diverging from the registry copy, and the reason
+// is invisible at this call site: rn-primitives' Title and Description render
+// **react-native's own Text** when `asChild` is absent
+// (@rn-primitives/alert-dialog `Component = asChild ? Slot : Text`, and the .web
+// build does the same inside its Radix wrapper). That is a bare RN Text one
+// delegation away, so it takes none of what ui/text.tsx adds — no `font-sans`,
+// meaning Inter silently degrades to the system face; no `maxFontSizeMultiplier`,
+// meaning these two strings scale past the app-wide 1.3 cap while everything
+// around them stops; no TextClassContext; no heading role. Nothing catches it:
+// the classes we pass here still apply, so the colour and weight look right, and
+// docs/accessibility.md's audit greps THIS repo for `<Text`, which finds nothing
+// because the render is in node_modules. The Slot merges the primitive's
+// `role='heading'` onto our Text, and ui/text.tsx spreads `{...props}` last, so
+// the role survives. dialog.tsx and dropdown-menu.tsx carry the same fix.
+// → docs/accessibility.md, _font scaling is an accessibility policy_.
 function AlertDialogTitle({
   className,
   ...props
-}: React.ComponentProps<typeof AlertDialogPrimitive.Title>) {
+}: Omit<React.ComponentProps<typeof AlertDialogPrimitive.Title>, 'asChild'>) {
   return (
-    <AlertDialogPrimitive.Title
-      className={cn('text-lg font-semibold text-foreground', className)}
-      {...props}
-    />
+    <AlertDialogPrimitive.Title asChild>
+      <Text className={cn('text-lg font-semibold text-foreground', className)} {...props} />
+    </AlertDialogPrimitive.Title>
   );
 }
 
 function AlertDialogDescription({
   className,
   ...props
-}: React.ComponentProps<typeof AlertDialogPrimitive.Description>) {
+}: Omit<React.ComponentProps<typeof AlertDialogPrimitive.Description>, 'asChild'>) {
   return (
-    <AlertDialogPrimitive.Description
-      className={cn('text-sm text-muted-foreground', className)}
-      {...props}
-    />
+    <AlertDialogPrimitive.Description asChild>
+      <Text className={cn('text-sm text-muted-foreground', className)} {...props} />
+    </AlertDialogPrimitive.Description>
   );
 }
 
