@@ -31,9 +31,18 @@
 // A server component: static links, no hooks, nothing to hydrate. The copyright
 // year is therefore the BUILD's year, same as the marketing site's footer.
 
-import { CircleQuestionMark, Code, Globe, Info, LifeBuoy, Scale, ShieldCheck } from 'lucide-react';
+import {
+  AtSign,
+  CircleQuestionMark,
+  Code,
+  Globe,
+  Info,
+  LifeBuoy,
+  Scale,
+  ShieldCheck,
+} from 'lucide-react';
 
-import { BRAND, COMPANY, SOURCE } from '@stxapps/shared';
+import { BRAND, COMPANY, SOCIAL, SOURCE } from '@stxapps/shared';
 import { BracemarkIcon } from '@stxapps/web-ui/components/icons/bracemark-icon';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
@@ -89,6 +98,29 @@ const PAGES = [
     icon: <Code className="size-5" />,
     title: 'Source code',
     description: `Read what runs on your device. ${SOURCE.license}.`,
+  },
+  {
+    // The second row that isn't the marketing site, and the only one pointing at
+    // a property we don't control — which is why it sits last, after the two
+    // rows that are ours, mirroring where the site's footer puts it (under
+    // _Company_ with "Source code", never under _Product_).
+    //
+    // TITLED WITH THE HANDLE, like the footer's link and for the footer's reason
+    // (docs/brand-assets.md — _the X account_): "X" alone names nothing read cold, and
+    // `@bracemarkapp` is not derivable from the product name — `@bracemark` was
+    // taken — so a user who means to search for us rather than press this has to
+    // be able to read the string we actually hold. From `SOCIAL`, never retyped:
+    // a wrong handle here credits someone else's account and looks exactly like
+    // a right one.
+    //
+    // The description says announcements and stops there. Support is two rows
+    // above this one, and it is email on purpose — a public reply is the
+    // wrong shape for questions that carry usernames (docs/brand-assets.md — _not on
+    // /support_), so this row must not read as a second way to reach us.
+    href: SOCIAL.url,
+    icon: <AtSign className="size-5" />,
+    title: SOCIAL.handle,
+    description: 'Announcements and release notes, on X.',
   },
 ];
 

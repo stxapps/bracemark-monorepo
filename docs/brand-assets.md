@@ -650,6 +650,7 @@ bracemark-web cannot read the marketing site's config.
 | --------------------------------- | ------------------------------------------------------------------ |
 | `twitter.site`, both root layouts | publishes the handle on every card that unfurls from either origin |
 | marketing site footer, _Company_  | the handle as its own label, beside "Source code"                  |
+| Settings → About, both apps       | the last row, after "Source code"; the handle as its title         |
 
 ⚠ **The failure is a handle that is WRONG, not one that is missing.** Both
 layouts left `twitter.site` deliberately unset for the repo's whole first public
@@ -669,6 +670,15 @@ than click has to be able to read the string we actually hold. It is also the
 only link on the marketing site pointing at a property we do not control, which
 is why it sits under _Company_ with "Source code" (a fact about who builds this)
 rather than under _Product_.
+
+**In Settings → About it is the LAST row, under "Pages", after "Source code"**,
+in both apps. Those two are the only rows in that group not pointing at the
+marketing site, and they end the list in the footer's order for the footer's
+reason: one is a fact about who builds this, the other is the only link on the
+surface to a property we do not control. The row is titled with the handle and
+described as _"Announcements and release notes, on X."_ — the description is
+where "X" is allowed to appear, because by then the reader has the string. It
+stops at announcements deliberately, two rows under "Support": see below.
 
 **Not on `/support`.** That page opens _"One address, and a person on the other
 end. No ticket queue, no chatbot, no phone tree."_ — a second channel on it makes
