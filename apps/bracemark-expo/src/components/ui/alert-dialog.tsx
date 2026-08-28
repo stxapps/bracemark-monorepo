@@ -163,7 +163,11 @@ function AlertDialogFooter({ className, ...props }: ViewProps) {
 // docs/accessibility.md's audit greps THIS repo for `<Text`, which finds nothing
 // because the render is in node_modules. The Slot merges the primitive's
 // `role='heading'` onto our Text, and ui/text.tsx spreads `{...props}` last, so
-// the role survives. dialog.tsx and dropdown-menu.tsx carry the same fix.
+// the role survives. dropdown-menu.tsx's Label carries the same fix; dialog.tsx
+// needs a DIFFERENT one — its primitive's native build never destructures
+// `asChild`, so the Slot there is inert and the bare Text comes back nested. Do
+// not copy this spelling to a fourth primitive without reading what its native
+// build does with `asChild`.
 // → docs/accessibility.md, _font scaling is an accessibility policy_.
 function AlertDialogTitle({
   className,

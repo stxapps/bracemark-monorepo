@@ -223,24 +223,48 @@ function DialogFooter({ className, ...props }: ViewProps) {
   );
 }
 
-// `asChild` + ui/text's Text, diverging from the registry copy: without it
-// rn-primitives renders **react-native's own Text** here (`Component = asChild ?
-// Slot : Text`), a bare one, one delegation away — no `font-sans` (Inter
-// degrades to the system face), no `maxFontSizeMultiplier` (these strings scale
-// past the app-wide 1.3 cap while their chrome does not), no TextClassContext,
-// no heading role. alert-dialog.tsx's AlertDialogTitle carries the full note,
-// including why nothing catches it.
+// ui/text's Text instead of the registry copy's bare `DialogPrimitive.Title` /
+// `.Description`: those render **react-native's own Text**, a bare one, one
+// delegation away — no `font-sans` (Inter degrades to the system face), no
+// `maxFontSizeMultiplier` (these strings scale past the app-wide 1.3 cap while
+// their chrome does not), no TextClassContext, no heading role the ui/text map
+// can see. alert-dialog.tsx's AlertDialogTitle carries the full note, including
+// why nothing catches it.
+//
+// The FIX differs from its two siblings, and that is the part worth writing
+// down. alert-dialog and dropdown-menu pass `asChild` and let the primitive slot
+// our Text in — their native builds spell `Component = asChild ? Slot : Text`.
+// @rn-primitives/dialog's native build does NOT: `dist/dialog.mjs`'s Title is
+// `({ ref, ...props }) => <Text ref={ref} role='heading' {...props} />`, which
+// never destructures `asChild` (only its `.web` build does). So the same
+// `asChild` spelling slots nothing here — it renders a bare RN Text *around*
+// ours and forwards `asChild={true}` to the native view. Nothing says so: the
+// types name `asChild` for both builds (`TitleProps = SlottableTextProps`), and
+// the glyphs still come out right because RN merges a child fragment's text
+// attributes over its parent's, so Inter and the cap survive the nesting. The
+// bare Text this file exists to avoid was in every native dialog title and
+// description while the file documented the opposite.
+//
+// Hence: native renders our Text directly, carrying the `role='heading'` the
+// primitive would have applied — the native Title adds nothing else (no context,
+// no id registration; there is nothing on this side to label). Web keeps the
+// primitive, where the Slot does work and Radix needs the element to wire
+// `aria-labelledby` / `aria-describedby` to it.
 function DialogTitle({
   className,
   ...props
 }: Omit<React.ComponentProps<typeof DialogPrimitive.Title>, 'asChild'>) {
-  return (
-    <DialogPrimitive.Title asChild>
-      <Text
-        className={cn('text-lg leading-none font-semibold text-foreground', className)}
-        {...props}
-      />
-    </DialogPrimitive.Title>
+  const title = (
+    <Text
+      className={cn('text-lg leading-none font-semibold text-foreground', className)}
+      role="heading"
+      {...props}
+    />
+  );
+  return Platform.OS === 'web' ? (
+    <DialogPrimitive.Title asChild>{title}</DialogPrimitive.Title>
+  ) : (
+    title
   );
 }
 
@@ -248,10 +272,13 @@ function DialogDescription({
   className,
   ...props
 }: Omit<React.ComponentProps<typeof DialogPrimitive.Description>, 'asChild'>) {
-  return (
-    <DialogPrimitive.Description asChild>
-      <Text className={cn('text-sm text-muted-foreground', className)} {...props} />
-    </DialogPrimitive.Description>
+  const description = (
+    <Text className={cn('text-sm text-muted-foreground', className)} {...props} />
+  );
+  return Platform.OS === 'web' ? (
+    <DialogPrimitive.Description asChild>{description}</DialogPrimitive.Description>
+  ) : (
+    description
   );
 }
 

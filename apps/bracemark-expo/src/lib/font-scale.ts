@@ -23,7 +23,10 @@ import { useWindowDimensions } from 'react-native';
 // docs/accessibility.md). That includes the ones rendered on our BEHALF: an
 // @rn-primitives `Title`/`Description`/`Label` falls back to react-native's Text
 // unless it is handed a child with `asChild`, which is invisible to a search of
-// this repo and is how every dialog title in the app once escaped the cap.
+// this repo and is how every dialog title in the app once escaped the cap. And
+// `asChild` is not a general answer either — @rn-primitives/dialog's NATIVE
+// build ignores the prop, so ui/dialog.tsx has to render our Text itself; read
+// what a primitive does with `asChild` before trusting it (the note there).
 //
 // The share tree is covered like everything else. It differs only in HOW it
 // imports them — by direct path rather than through a barrel, because its bundle

@@ -372,11 +372,28 @@ dialog title and description in the app in the **system face, uncapped**, across
 12 call sites, while a search of this repo for `<Text` came back clean and this
 section claimed full coverage. It is the quietest form the failure takes: the
 `className` we pass still resolves, so the colour and weight are right and only
-the typeface is wrong, and the accessibility tree is perfect. All three now
-compose `asChild` with `ui/text.tsx`'s `Text`, which also gets the primitive's
-`role='heading'` onto a Text the heading map can see; `AlertDialogTitle` carries
-the derivation. When adopting anything else from the registry, read what its
-primitive renders rather than what the wrapper looks like.
+the typeface is wrong, and the accessibility tree is perfect. `AlertDialogTitle`
+carries the derivation.
+
+`ui/alert-dialog.tsx` and `ui/dropdown-menu.tsx` fix it by composing `asChild`
+with `ui/text.tsx`'s `Text`, which also gets the primitive's `role='heading'`
+onto a Text the heading map can see. **`ui/dialog.tsx` cannot**, and that is the
+second layer of the same trap: `@rn-primitives/dialog`'s _native_ build never
+destructures `asChild` — its Title is `({ ref, ...props }) => <Text
+role='heading' {...props} />`, and only the `.web` build has the `Slot` branch —
+so the identical spelling slots nothing and renders the bare `Text` _around_ ours
+rather than in place of it. The types don't distinguish the two builds
+(`TitleProps = SlottableTextProps` names `asChild` for both), and the nesting is
+almost invisible at runtime, because RN merges a child fragment's text attributes
+over its parent's, so Inter and the cap survive it. `DialogTitle` and
+`DialogDescription` therefore render `ui/text.tsx`'s `Text` directly on native,
+carrying the `role='heading'` themselves, and keep the primitive only on web,
+where the Slot works and Radix needs the element to wire `aria-labelledby` /
+`aria-describedby` to it.
+
+When adopting anything else from the registry, read what its primitive renders
+**on the platform you ship**, rather than what the wrapper looks like — the types
+accepting `asChild` says nothing about whether the native build reads it.
 
 The reasoning is worth restating because the alternative looks tidier: RN's
 default is unbounded scaling (iOS Dynamic Type reaches ~310%) while every
