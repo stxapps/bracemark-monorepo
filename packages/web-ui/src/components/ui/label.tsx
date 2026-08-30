@@ -32,7 +32,11 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 //     extension's popup) and the advanced-search panel. The label reads as a
 //     caption against its value rather than a peer of it — which matters most in
 //     the add sheet, where the Input is 16px on a phone (below that iOS zooms on
-//     focus, so the VALUE can't shrink and only the label can move).
+//     focus, so the VALUE can't shrink and only the label can move). Note that
+//     bind is the ADD SHEET's, not every dense surface's: the extension's popup is
+//     dense over 14px controls, because it pins the step back to its desktop tier
+//     (input.tsx) and takes this tier for its own reason — a 14px label would tie
+//     its 14px `PopupTitle`.
 //
 // bracemark-expo's own field labels are `text-xs text-muted-foreground` already
 // (link-add-screen.tsx's Field helper), so dense is also what puts the two

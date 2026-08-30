@@ -41,12 +41,14 @@ import { PasswordInput } from './password-input';
 // against shadcn's `font-medium`, and its reasoning is stronger on native, not
 // weaker. That reasoning is "at 14px over an Input that's 16px until `md:`, the
 // extra weight read as shouting" (web-ui/components/ui/label.tsx) — and this
-// app's Input is `text-base` with a `md:text-sm` that no phone viewport ever
-// reaches, so the label is ALWAYS the smaller of the two here. Position and the
-// size gap carry the distinction; weight was a third signal doing the same job
-// twice. The `wght` axis of InterVariable really does back these utilities
-// (docs/expo-native-deps.md, _font_), so this is a visible 500 → 400, not a
-// no-op. It holds for create-account-form.tsx and new-password-field.tsx too.
+// app's Input is a flat `text-base` on native at EVERY width (the `md:text-sm`
+// sitting beside it is web-only and deliberately unported — input.tsx), so the
+// label is always the smaller of the two here, on a tablet as much as on a
+// phone. Position and the size gap carry the distinction; weight was a third
+// signal doing the same job twice. The `wght` axis of InterVariable really does
+// back these utilities (docs/expo-native-deps.md, _font_), so this is a visible
+// 500 → 400, not a no-op. It holds for create-account-form.tsx and
+// new-password-field.tsx too.
 // The one `font-medium` that STAYS in this folder is auth-alt-action.tsx's link,
 // whose web twin is medium as well — that one is an affordance, not a label.
 export function SignInForm() {

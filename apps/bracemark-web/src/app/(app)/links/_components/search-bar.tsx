@@ -187,7 +187,16 @@ function TriCheckList({
           onChange={(e) => setFilter(e.target.value)}
           placeholder={`Filter ${label.toLowerCase()}…`}
           aria-label={`Filter ${label.toLowerCase()}`}
-          className="h-7 text-sm"
+          // `text-base md:text-sm` — the control type step (web-ui's input.tsx).
+          // This box was the last control holding a flat `text-sm` against it,
+          // and it is a real text input: on a phone, focusing it zoomed the page,
+          // which is the whole thing the step exists to stop. The height steps
+          // with it — `h-7` cannot hold a 16px line box, and `h-8` is what the
+          // five Inputs further down this same panel already use on a phone (and
+          // what bracemark-expo's twin of this field uses at every width). The
+          // desktop tier is untouched: `md:` restores the 28px box at 14px, so
+          // the dense panel reads exactly as it did.
+          className="h-8 text-base md:h-7 md:text-sm"
         />
       )}
       {/* `scrollbar-gutter-stable` for the reason the links sidebar carries: the

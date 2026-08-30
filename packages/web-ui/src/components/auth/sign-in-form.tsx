@@ -27,14 +27,23 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 // are right, and neither can be derived from the other at render time.
 //
 // bracemark-web's /sign-in is a full-page card and takes the default. The browser
-// extension's popup passes `dense`, and it is the case label.tsx's dense tier was
-// written for, named there in as many words: the popup's viewport is 360px, so
-// `md:text-sm` on Input/Textarea NEVER fires and the control renders at 16px —
-// the same bind as the add sheet on a phone, where "the VALUE can't shrink and
-// only the label can move". Left at `standard` the popup put a 14px label under a
-// 14px `PopupTitle`, so a page heading and a field name were one weight apart and
-// nothing else; and it made this form the only popup screen not on the dense tier
-// its two siblings already use (Editor.tsx's List/Tags/Note labels).
+// extension's popup passes `dense`, and the reason is the POPUP'S OWN SCALE, not
+// the size of the control under the label: left at `standard` the popup put a 14px
+// label under a 14px `PopupTitle`, so a page heading and a field name were one
+// weight apart and nothing else; and it made this form the only popup screen not
+// on the dense tier its two siblings already use (Editor.tsx's List/Tags/Note
+// labels).
+//
+// This argument used to be led by a different one — that a 360px popup never
+// matches `md:`, so these Inputs rendered at 16px, "the same bind as the add sheet
+// on a phone, where the VALUE can't shrink and only the label can move". That
+// bind was real on the phone and imported wrongly to the popup: `md:` is a proxy
+// for a TOUCH DEVICE (iOS auto-zoom — input.tsx), and a toolbar popup is a desktop
+// with a mouse that merely happens to be 360px wide. The extension now pins all
+// five controls back to 14px in one rule (its `styles/globals.css`), so the popup's
+// fields are 14px and the dense tier stands on the `PopupTitle` collision alone —
+// which, note, it always could: a 14px label ties that heading at either value
+// size, so nothing about this prop changed when the controls did.
 //
 // WHAT DENSITY DOES NOT TOUCH, deliberately:
 //   - `FieldError`. It stays `text-sm` in both tiers. An error must not be

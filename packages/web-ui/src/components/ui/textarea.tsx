@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import { cn } from '@stxapps/web-ui/lib/utils';
 
+// `text-base` below `md` — the control type step; input.tsx carries the reasoning.
 function Textarea({ className, ...props }: React.ComponentProps<'textarea'>) {
   return (
     <textarea

@@ -46,9 +46,11 @@ silent visual regression, so they're written down:
   Before this, six components each carried `w-85 p-4` and had already drifted.
   The inset steps at `md` for a reason that belongs to bracemark-web — a settings
   section there can be a table that runs out of width on a phone — and no host
-  embeds the options page that wide, so it renders at 16px in practice; the `md:`
-  half is declared anyway, because the parity below is a promise about what the
-  two files SAY.
+  embeds the options page that wide, so it renders at its 16px inset in practice;
+  the `md:` half is declared anyway, because the parity below is a promise about
+  what the two files SAY. **That never-matching `md:` is not always harmless**,
+  which is the next bullet: it also governs web-ui's control type step, and there
+  it silently gave a desktop settings page a phone's 16px fields.
 - **The options page has no header, and that's the config's doing.**
   `options/index.html` pins `manifest.open_in_tab: false`, so the page only ever
   renders embedded — Chrome's options dialog on `chrome://extensions`, Firefox's
@@ -90,19 +92,39 @@ silent visual regression, so they're written down:
   24 / 12 / 8 / 12, in which a section break and a heading's own content measured
   the same — with no dividers and no cards, spacing is the only thing grouping
   these blocks, so each step has to be legibly its own size.
+- **Both entrypoints pin web-ui's control type step back to the desktop tier,
+  because `md:` is a proxy for "touch phone" and neither document is one.**
+  web-ui's five controls — `Input`, `Textarea`, both combobox triggers
+  (`ListSelect`, `TagsField`) and `CommandInput` — render at 16px below `md` and
+  14px at or above it, to stop iOS Safari zooming a focused sub-16px field
+  (`input.tsx` carries the argument). Neither of this app's documents ever matches
+  `md:`: the toolbar popup's viewport IS its 360px frame, since the browser sizes
+  the window to the document, and no host embeds the options page at 768px. So
+  every control here took the phone branch **on a desktop, with a mouse and
+  nothing to zoom** — a 16px note field beside 14px pickers in the popup's
+  `Editor`, 16px sign-in fields, and two 16px time inputs on a Settings page whose
+  whole claim is that it matches bracemark-web's scale. `styles/globals.css` fixes
+  all six in one unlayered rule naming the five selectors. It is a **rule, not a
+  class per call site**, because three of those controls come from `SignInForm`,
+  which bracemark-web also renders and which must keep 16px on a phone. The list
+  is exhaustive by hand and **nothing enforces it** — a new web-ui control that
+  joins the step lands here at 16px with no lint error, no type error and no
+  failing test.
 - **The popup runs the `dense` label tier, and the shared auth form has a prop
-  for it.** The popup's viewport is 360px, so `md:text-sm` on `Input`/`Textarea`
-  never fires and every control renders its value at **16px** — the same bind as
-  bracemark-web's add sheet on a phone, where the value cannot shrink and only the
-  label can move. `Label`'s `density="dense"` (`text-xs`, muted) is written for
-  exactly that case and names this surface; `Editor.tsx` uses it for List/Tags/Note.
-  `SignInForm` is shared with bracemark-web, which wants `standard`, so the tier is
-  a **prop** — `<SignInForm density="dense" />` — not a class override. Left at
-  `standard` it made the popup's 14px `PopupTitle` and its 14px field labels one
-  weight apart and nothing else, so a page heading read as a peer of a field name.
-  The resulting scale on a popup screen is two body tiers: **14px medium for the
-  `PopupTitle` and the Button, 12px muted for every caption, label and aside,
-  16px for user content**, under the header's 15px lockup. `FieldError` stays at
+  for it.** `Label`'s `density="dense"` (`text-xs`, muted) against the `standard`
+  `text-sm`; `Editor.tsx` uses it for List/Tags/Note. `SignInForm` is shared with
+  bracemark-web, which wants `standard`, so the tier is a **prop** —
+  `<SignInForm density="dense" />` — not a class override. The reason is the
+  popup's own scale rather than the control size above: left at `standard` it made
+  the popup's 14px `PopupTitle` and its 14px field labels one weight apart and
+  nothing else, so a page heading read as a peer of a field name. (That argument
+  is why the tier survived the control step landing on 14px — it never depended on
+  the 16px value, and a 14px label would tie `PopupTitle` either way.) The
+  resulting scale on a popup screen is two body tiers: **14px for the
+  `PopupTitle`, the Button and every control's value, 12px muted for every
+  caption, label and aside**, under the header's 15px lockup — which is also what
+  a link editor looks like on bracemark-web at desktop width, the parity the step
+  above buys. `FieldError` stays at
   14px in both tiers on purpose — an error must not be quieter than the label it
   corrects, and it is already differentiated by colour rather than by size
   ([accessibility.md](./accessibility.md)). `CreateAccountForm` has no such prop

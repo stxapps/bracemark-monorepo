@@ -93,7 +93,10 @@ export function ListSelect({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="w-full justify-between font-normal"
+          // `text-base md:text-sm` — the control type step (input.tsx). A
+          // `Button` carries a flat `text-sm`, which put this trigger 2px under
+          // the Input and Textarea beside it in every editor on a phone.
+          className="w-full justify-between text-base font-normal md:text-sm"
         >
           {selected ? (
             <span className="truncate">

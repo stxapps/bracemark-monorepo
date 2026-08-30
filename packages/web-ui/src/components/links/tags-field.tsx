@@ -94,7 +94,12 @@ export function TagsField({
           tabIndex={0}
           className={cn(
             'flex min-h-9 w-full flex-wrap items-center gap-1.5 rounded-2xl border',
-            'bg-input/30 px-3 py-1.5 text-sm outline-none',
+            // `text-base md:text-sm` — the control type step (input.tsx), which
+            // here sets the "Add tags" placeholder and the trigger's own line
+            // box. The chips keep `text-xs`: they are a caption tier of their
+            // own, and `min-h-9` already holds the empty trigger to the Input's
+            // height at either size.
+            'bg-input/30 px-3 py-1.5 text-base outline-none md:text-sm',
             focused || open ? 'border-ring ring-[3px] ring-ring/50' : 'border-input',
           )}
           // onFocus/onBlur (React's bubbling focusin/focusout) also cover focus

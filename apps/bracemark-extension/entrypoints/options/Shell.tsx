@@ -31,6 +31,14 @@ import { WEB_APP_URL } from '@/utils/web-app-url';
 // page renders at 16px; it is written anyway, because the parity above is a
 // promise about the DECLARATION, and a reader diffing the two files should find
 // them the same. If a host ever does give it that width, it widens with web's.
+//
+// THAT NEVER-MATCHING `md:` IS HARMLESS HERE AND WAS NOT ELSEWHERE. The inset
+// simply stays at its narrow value. But the same media query also governs web-ui's
+// control type step, and there it silently handed this page a phone's 16px fields
+// — ThemeSection's two `type="time"` inputs, sitting under 14px labels on a page
+// whose entire claim is that it renders at web's settings scale, where those same
+// fields are 14px. styles/globals.css pins all five controls back; see input.tsx
+// for why `md:` means "touch device" rather than "narrow".
 
 // `min-h-dvh` SURVIVES the header's removal, and it isn't the same assumption. It
 // does one job: hold the footer against the bottom of whatever frame the host gives

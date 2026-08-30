@@ -21,6 +21,41 @@ import { cn } from '../../lib/utils';
 // (lib/font-scale.ts owns that story — the pickers' fields are the sites it
 // saves); and `keyboardAppearance` bound to the active theme (below).
 
+// THE `md:text-sm` IN THE WEB BRANCH IS UPSTREAM'S CONTROL TYPE STEP, AND IT IS
+// DELIBERATELY NOT PORTED. The reason is PROVENANCE, not width. web-ui runs that
+// step across five controls — Input, Textarea, both combobox triggers and
+// CommandInput — 16px below `md`, 14px at or above (its input.tsx carries the
+// argument), and the two halves are not a type scale with a breakpoint in it:
+// `text-sm` is the kit's real control size, and `text-base` is a CONCESSION to
+// iOS Safari, which zooms the page when a field under 16px takes focus. Port it
+// and a browser bug's shape decides the native type scale. (Same reading, other
+// direction, as bracemark-extension pinning all five back to 14px: `md:` there
+// is a proxy for "touch phone", never for how much room there is.)
+//
+// Asked on its own terms instead, the native answer is 16 AT EVERY WIDTH. iOS
+// puts body at 17pt and Material puts a text field's value at 16sp, and neither
+// steps type by device class — a size class governs layout, not type — so 16
+// here is the platform's number and not the phone's leaking onto a tablet. A
+// tablet is also as touch-only as a phone, which makes a step whose premise is
+// "this device is not touch" exactly backwards there. Hence a flat `text-base`,
+// which the counterpart controls inherit rather than restate: ListSelect's
+// trigger is a `Text` at that same default, and TagsField, ListCommand and both
+// share pickers open with this Input at the top of the panel.
+//
+// It would also not sit STILL. Uniwind resolves a breakpoint against the window
+// and re-resolves on every `Dimensions` change, so a ported step would re-type
+// the controls as an iPad Split View divider crosses 768, and on rotation once
+// the app is not portrait-locked. Related and NOT settled: the `sm:h-9` below,
+// and Button's and DropdownMenu's `sm:` steps, are the same registry's answer to
+// the same web question and they DO fire on a large screen — shrinking touch
+// targets on a device that is entirely touch. They are invisible today only
+// because iOS is `supportsTablet: false` and Android is portrait-locked. Settle
+// those with the tablet layout; this file's answer is the type only. The one native control below it is the advanced-search WordField's
+// filter box (`h-8 text-sm`, features/links/search-bar.tsx) — dense on purpose,
+// and the one place the two clients now differ: its web twin takes the step
+// (`h-8 text-base md:h-7 md:text-sm`), because there it is a field a phone can
+// zoom. Same 32px box on a phone either way; only the type differs, and only
+// because one runtime has a browser under it.
 function Input({
   className,
   ...props

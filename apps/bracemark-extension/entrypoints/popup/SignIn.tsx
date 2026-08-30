@@ -51,9 +51,15 @@ import { WEB_APP_URL } from '@/utils/web-app-url';
 // `PopupTitle` at 14px medium, which after the density pass is the ONLY
 // medium-weight non-control text in the body and so is unambiguously the
 // heading; then 12px muted for the note under it, the field labels and both
-// footer lines; 16px for what the user typed, because a 360px viewport never
-// reaches Input's `md:text-sm`; and one filled 14px Button as the single anchor.
-// Two body tiers, and nothing competing with the heading at its own size.
+// footer lines; 14px for what the user typed; and one filled 14px Button as the
+// single anchor. Two body tiers, and nothing competing with the heading at its
+// own size — the values sit at the heading's SIZE but not its weight, which is
+// what `PopupTitle` being the body's only medium-weight text is for.
+//
+// Those fields read 16px until the extension started pinning web-ui's control
+// type step back to its desktop tier (styles/globals.css). A 360px popup never
+// matches `md:`, so they had been taking a branch that exists to stop iOS zooming
+// a focused field — on a desktop, with a mouse. See input.tsx.
 export function SignIn() {
   return (
     <PopupShell>

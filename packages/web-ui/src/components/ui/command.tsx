@@ -102,7 +102,11 @@ function CommandInput({
         <CommandPrimitive.Input
           data-slot="command-input"
           className={cn(
-            'w-full text-sm outline-hidden disabled:cursor-not-allowed disabled:opacity-50',
+            // `text-base md:text-sm` — the control type step (input.tsx). This one
+            // is not cosmetic: cmdk autofocuses this field when either picker
+            // opens, so at a flat 14px it was an iOS auto-zoom on every tap of a
+            // list or tag picker on a phone.
+            'w-full text-base outline-hidden disabled:cursor-not-allowed disabled:opacity-50 md:text-sm',
             className,
           )}
           {...props}

@@ -37,6 +37,46 @@ body {
 }
 
 /*
+ * THIS APP IS DESKTOP CHROME THAT HAPPENS TO BE NARROW.
+ *
+ * web-ui's five form controls step their type at `md:` — 16px below it, 14px at
+ * or above (input.tsx carries the full argument). That step is a proxy for "touch
+ * phone", because its reason is iOS Safari zooming a focused field under 16px.
+ *
+ * Neither of this app's documents is a phone, and neither of them matches `md:`
+ * either. A toolbar popup has no viewport to be responsive to — the browser sizes
+ * the window to the document, so the viewport IS the 360px frame (popup/Shell.tsx
+ * says the same thing about `scrollbar-gutter`, which the same fact misled). The
+ * options page is embedded by about:addons and no host hands it 768px
+ * (options/Shell.tsx). So every control in this extension took the phone branch
+ * on a desktop, with a mouse, and nothing to zoom: a 16px note field beside 14px
+ * pickers in the popup's Editor, 16px sign-in fields, and two 16px time inputs on
+ * a Settings page whose whole claim is that it renders at bracemark-web's scale.
+ *
+ * One rule instead of a class at each call site, because three of the six
+ * controls come from `SignInForm`, which bracemark-web also renders and which
+ * must keep 16px on a phone — there is no class to pass that means "here only".
+ *
+ * UNLAYERED ON PURPOSE. Tailwind emits its utilities inside `@layer utilities`,
+ * and an unlayered declaration outranks every layered one whatever its
+ * specificity, so this beats `md:text-sm` without an `!important` or a specificity
+ * ladder. The cost is that it also beats a deliberate per-call-site size override
+ * inside this app; nothing needs one today, and one that does should take the
+ * size as a prop rather than fight this rule.
+ *
+ * The list is exhaustive by hand and nothing enforces it: a NEW web-ui control
+ * that joins the step arrives here at 16px with no lint error, no type error and
+ * no failing test. input.tsx's comment points back at this rule for that reason.
+ */
+[data-slot='input'],
+[data-slot='textarea'],
+[data-slot='command-input'],
+[role='combobox'] {
+  font-size: var(--text-sm);
+  line-height: var(--text-sm--line-height);
+}
+
+/*
  * THE DOG-EAR.
  *
  * The brand mark is a B whose top-right corner is cut away at 45°, the way a page
