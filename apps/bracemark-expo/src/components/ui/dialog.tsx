@@ -2,6 +2,7 @@ import * as React from 'react';
 import {
   type GestureResponderEvent,
   Platform,
+  Pressable,
   Text as RNText,
   View,
   type ViewProps,
@@ -146,13 +147,62 @@ function DialogOverlay({
     </FullWindowOverlay>
   );
 }
+
+// The corner X, and `onClose` the guarded-editor escape hatch — web-ui's
+// DialogCloseButton and its rationale, ported. An editor that swallows a close
+// while dirty (docs/editors.md, invariant 3) does it in `onOpenChange`, which is
+// where a `DialogPrimitive.Close` lands too, so the guard cannot tell this aimed
+// press on a control named Close from a stray tap on the overlay, and the X goes
+// visibly dead at the moment it is most wanted. Given `onClose` the button calls
+// that directly, the way its Cancel does — a deliberate door, not an accidental
+// vector. bracemark-expo's link-edit-screen already draws the same division by
+// hand, with its own header X against `usePreventRemove`.
+//
+// The two branches spell the wrapper out rather than sharing one through
+// `asChild`, which would put the press path through the primitive's Slot on the
+// branch that is meant to bypass the primitive entirely.
+function DialogCloseButton({ onClose }: { onClose?: () => void }) {
+  const className = cn(
+    'absolute top-4 right-4 rounded opacity-70 active:opacity-100',
+    Platform.select({
+      web: 'ring-offset-background transition-opacity hover:opacity-100 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:outline-none data-[state=open]:bg-accent',
+    }),
+  );
+  const content = (
+    <>
+      <Icon
+        as={X}
+        className={cn('size-4 shrink-0 text-accent-foreground web:pointer-events-none')}
+      />
+      {/* The one deliberate bare RN Text in this file — `sr-only`
+          text paints nothing, so it needs neither Inter nor the font-
+          scale cap. Everything else here goes through ui/text's Text;
+          see DialogTitle. */}
+      <RNText className="sr-only">Close</RNText>
+    </>
+  );
+  return onClose ? (
+    <Pressable role="button" onPress={onClose} className={className} hitSlop={12}>
+      {content}
+    </Pressable>
+  ) : (
+    <DialogPrimitive.Close className={className} hitSlop={12}>
+      {content}
+    </DialogPrimitive.Close>
+  );
+}
+
 function DialogContent({
   className,
   portalHost,
   children,
+  showCloseButton = true,
+  onClose,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   portalHost?: string;
+  showCloseButton?: boolean;
+  onClose?: () => void;
 }) {
   return (
     <DialogPortal hostName={portalHost}>
@@ -192,25 +242,7 @@ function DialogContent({
           {...props}
         >
           {children}
-          <DialogPrimitive.Close
-            className={cn(
-              'absolute top-4 right-4 rounded opacity-70 active:opacity-100',
-              Platform.select({
-                web: 'ring-offset-background transition-opacity hover:opacity-100 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:outline-none data-[state=open]:bg-accent',
-              }),
-            )}
-            hitSlop={12}
-          >
-            <Icon
-              as={X}
-              className={cn('size-4 shrink-0 text-accent-foreground web:pointer-events-none')}
-            />
-            {/* The one deliberate bare RN Text in this file — `sr-only`
-                text paints nothing, so it needs neither Inter nor the font-
-                scale cap. Everything else here goes through ui/text's Text;
-                see DialogTitle. */}
-            <RNText className="sr-only">Close</RNText>
-          </DialogPrimitive.Close>
+          {showCloseButton && <DialogCloseButton onClose={onClose} />}
         </DialogPrimitive.Content>
       </DialogOverlay>
     </DialogPortal>

@@ -75,7 +75,7 @@
 // cosmetic: it IS the cap, since the server no longer counts links).
 
 import { useState } from 'react';
-import { ChevronDown, Plus, X } from 'lucide-react';
+import { ChevronDown, Plus } from 'lucide-react';
 import Link from 'next/link';
 
 import {
@@ -661,14 +661,17 @@ export function LinkAddSurface({
       <Sheet open={open} onOpenChange={onGuardedOpenChange}>
         <SheetTrigger asChild>{trigger}</SheetTrigger>
         {/* `rounded-t-2xl` to match the popover's corners — the same surface at
-            a different width. `showCloseButton={false}` because the built-in one
-            is a `SheetClose`, which routes through the guard above and would
-            silently no-op on a dirty draft; ours calls the unguarded close, the
-            way Cancel does. It's rendered AFTER the scroll container so the
-            first tabbable element stays the URL field, which is also what
-            `autoFocus` wants (sheet.tsx puts its own close last for the same
-            reason). `aria-describedby={undefined}`: the form is the description,
-            there's no paragraph to point at.
+            a different width. `onClose` is SheetContent's guarded-editor escape
+            hatch: the built-in X is a `SheetClose`, which routes through the
+            guard above and would silently no-op on a dirty draft, so this makes
+            it call the unguarded close the way Cancel does. This surface used to
+            spell that by hand, with `showCloseButton={false}` and its own copy
+            of the button; the hatch now lives in sheet.tsx (and dialog.tsx),
+            where the rest of the editor family reaches it. SheetContent renders
+            the button AFTER the scroll container, so the first tabbable element
+            stays the URL field — which is also what `autoFocus` wants.
+            `aria-describedby={undefined}`: the form is the description, there's
+            no paragraph to point at.
 
             The inline geometry is the keyboard lift (useSheetGeometry). The
             fallback `max-h` is for SSR and browsers without `visualViewport` —
@@ -676,20 +679,20 @@ export function LinkAddSurface({
             problem. */}
         <SheetContent
           side="bottom"
-          showCloseButton={false}
+          onClose={() => onOpenChange(false)}
           aria-describedby={undefined}
           className="max-h-[85dvh] rounded-t-2xl"
           style={sheetGeometry ?? undefined}
         >
           {/* Both paddings here are derived, not eyeballed.
 
-              `pt-5` is what levels the title with the close button below. That
-              button is `top-3` at `icon-sm` (size-8), so its centre sits at
+              `pt-5` is what levels the title with SheetContent's close button.
+              That button is `top-3` at `icon-sm` (size-8), so its centre sits at
               12 + 16 = 28px; the title is `text-base leading-none` (sheet.tsx), a
               16px box, so it needs to start at 20px to centre on the same line.
               The title moves rather than the button because `top-3 right-3` is
-              where sheet.tsx puts its own close — ours stands in for it (see
-              above), so it should sit where every other sheet's does.
+              where sheet.tsx puts its close on every sheet, and `onClose` changes
+              only what it calls, not where it sits.
 
               `pb-6` is the whole gap between the title and the form's first
               label: SheetContent sets no gap between its children and the
@@ -704,15 +707,6 @@ export function LinkAddSurface({
               without it the form's intrinsic height wins and the sheet overflows
               its own max-height instead of scrolling. */}
           <div className="min-h-0 overflow-y-auto px-4 pb-4">{body}</div>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Close"
-            className="absolute top-3 right-3"
-            onClick={() => onOpenChange(false)}
-          >
-            <X className="size-4" />
-          </Button>
         </SheetContent>
       </Sheet>
     );

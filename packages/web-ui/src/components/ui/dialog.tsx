@@ -37,13 +37,47 @@ function DialogOverlay({
   );
 }
 
+// The corner X. Given `onClose` it is a plain button calling that handler
+// directly; otherwise it is a `DialogPrimitive.Close` routing through the
+// Root's `onOpenChange`. See DialogContent's `onClose` for why the fork exists.
+function DialogCloseButton({ onClose }: { onClose?: () => void }) {
+  const button = (
+    <Button
+      type="button"
+      data-slot="dialog-close"
+      variant="ghost"
+      className="absolute top-4 right-4"
+      size="icon-sm"
+      onClick={onClose}
+    >
+      <XIcon />
+      <span className="sr-only">Close</span>
+    </Button>
+  );
+  return onClose ? button : <DialogPrimitive.Close asChild>{button}</DialogPrimitive.Close>;
+}
+
+// `onClose` is the GUARDED-EDITOR escape hatch, and it exists because Radix
+// gives a dialog exactly one close callback. An editor that swallows a close
+// while dirty (docs/editors.md, invariant 3) does it in `onOpenChange`, and the
+// corner X arrives there alongside Escape and the backdrop — so the guard cannot
+// tell an aimed click on a control named Close from a stray click on the
+// overlay, and the X goes visibly dead at the moment it is most wanted, with
+// nothing to announce the refusal. Passing `onClose` makes the button call the
+// caller's UNGUARDED close directly, the way its Cancel does: a deliberate door,
+// not an accidental vector. Escape and the backdrop keep going through
+// `onOpenChange`, which is the whole point — those are the strays. The same
+// division link-add-surface's sheet and bracemark-expo's link-edit-screen draw
+// by hand. `showCloseButton={false}` still drops the button entirely.
 function DialogContent({
   className,
   children,
   showCloseButton = true,
+  onClose,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean;
+  onClose?: () => void;
 }) {
   return (
     <DialogPortal>
@@ -105,14 +139,7 @@ function DialogContent({
         {...props}
       >
         {children}
-        {showCloseButton && (
-          <DialogPrimitive.Close data-slot="dialog-close" asChild>
-            <Button variant="ghost" className="absolute top-4 right-4" size="icon-sm">
-              <XIcon />
-              <span className="sr-only">Close</span>
-            </Button>
-          </DialogPrimitive.Close>
-        )}
+        {showCloseButton && <DialogCloseButton onClose={onClose} />}
       </DialogPrimitive.Content>
     </DialogPortal>
   );

@@ -66,15 +66,39 @@ const SIDES = {
     'inset-x-0 bottom-0 h-auto border-t pr-safe pb-safe pl-safe data-open:slide-in-from-bottom data-closed:slide-out-to-bottom',
 } as const;
 
+// The corner X, and `onClose` the guarded-editor escape hatch — dialog.tsx's
+// DialogCloseButton verbatim, for the same reason: a caller that swallows
+// `onOpenChange(false)` while dirty (docs/editors.md, invariant 3) cannot tell
+// this aimed click from a stray overlay tap, so given `onClose` the button stops
+// being a `SheetPrimitive.Close` and calls that directly.
+function SheetCloseButton({ onClose }: { onClose?: () => void }) {
+  const button = (
+    <Button
+      type="button"
+      data-slot="sheet-close"
+      variant="ghost"
+      size="icon-sm"
+      className="absolute top-3 right-3"
+      onClick={onClose}
+    >
+      <XIcon />
+      <span className="sr-only">Close</span>
+    </Button>
+  );
+  return onClose ? button : <SheetPrimitive.Close asChild>{button}</SheetPrimitive.Close>;
+}
+
 function SheetContent({
   className,
   children,
   side = 'right',
   showCloseButton = true,
+  onClose,
   ...props
 }: React.ComponentProps<typeof SheetPrimitive.Content> & {
   side?: keyof typeof SIDES;
   showCloseButton?: boolean;
+  onClose?: () => void;
 }) {
   return (
     <SheetPortal>
@@ -91,14 +115,7 @@ function SheetContent({
         {...props}
       >
         {children}
-        {showCloseButton && (
-          <SheetPrimitive.Close data-slot="sheet-close" asChild>
-            <Button variant="ghost" size="icon-sm" className="absolute top-3 right-3">
-              <XIcon />
-              <span className="sr-only">Close</span>
-            </Button>
-          </SheetPrimitive.Close>
-        )}
+        {showCloseButton && <SheetCloseButton onClose={onClose} />}
       </SheetPrimitive.Content>
     </SheetPortal>
   );

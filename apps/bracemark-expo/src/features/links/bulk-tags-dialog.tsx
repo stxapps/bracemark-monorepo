@@ -14,8 +14,9 @@
 // repaint the list under the modal. The editor invariants (docs/editors.md)
 // hold: draft copied from the seed at mount (closed = fully unmounted, so
 // every open starts fresh), dirty means exactly "Save would write something",
-// and the accidental close vectors (overlay press, the ✕) are swallowed while
-// dirty — the explicit Cancel bypasses the guard.
+// and the accidental close vectors (overlay press, hardware back) are swallowed
+// while dirty — the two deliberate doors, Cancel and the corner ✕, bypass the
+// guard (the ✕ via DialogContent's `onClose`).
 
 import { useState } from 'react';
 import { ScrollView, View } from 'react-native';
@@ -87,8 +88,12 @@ function BulkTagsForm({ links, onClose }: { links: LinkView[]; onClose: () => vo
   };
 
   return (
+    // Guard only the ACCIDENTAL close vectors — an overlay tap and the hardware
+    // back are the strays a dirty draft needs protecting from. The corner X is
+    // not one of them: it is a control named Close, aimed at deliberately, so it
+    // takes DialogContent's `onClose` and discards the way Cancel does.
     <Dialog open onOpenChange={(open) => !open && !isDirty && onClose()}>
-      <DialogContent>
+      <DialogContent onClose={onClose}>
         <DialogHeader>
           <DialogTitle>Edit tags</DialogTitle>
           <DialogDescription>

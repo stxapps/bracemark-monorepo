@@ -67,9 +67,10 @@ the occluded height measured off `useVisualViewport` ([safe-area.md](./safe-area
 _popups & dialogs_ (2) — the hand-rolled-geometry case). Two consequences worth
 keeping: all draft state lives **above** the container fork, so crossing `md`
 mid-edit (a rotation, a resized window) swaps the shell without dropping the draft;
-and the sheet supplies its **own** close X wired to the unguarded close, because the
-built-in `SheetClose` routes through the dirty guard below (invariant 3) and would
-silently no-op on a dirty draft. The **trigger** does not move — Add stays in the
+and the sheet passes `SheetContent`'s `onClose` so its X reaches the unguarded
+close, because the built-in `SheetClose` routes through the dirty guard below and
+would silently no-op on a dirty draft (invariant 3 — the corner X is a deliberate
+door). The **trigger** does not move — Add stays in the
 topbar at every width. bracemark-expo's FAB is a different affordance for a
 different frame; the two clients agree on the form, not on where it is summoned
 from.
@@ -538,15 +539,39 @@ resurrecting stale fields.
 **3. Guard the close so a stray click can't lose work.** The edit dialog and web
 quick-add both compute a `dirty` flag that mirrors the patch Save would write
 (`isDirty` in the dialog, `optionalDirty` in quick-add), and **swallow only the
-accidental close vectors** — backdrop click, Escape, the corner X — while dirty.
-The explicit **Cancel** button calls `onClose`/`onOpenChange(false)` directly,
-bypassing the guard, so a deliberate discard stays one click. Note the dirty check
-is the _same_ field-by-field comparison the patch builder uses, so "dirty" means
-exactly "Save would write something" — an untouched Save is a no-op that never
-bumps `updatedAt` (which would reorder the date-modified sort). The extension's
-popup editor has **no** close guard: a browser popup's close is the platform's
-(it dismisses on focus loss, not interceptable), and it's create-only, so there's
-less to lose — don't assume the invariant holds there.
+accidental close vectors** — backdrop click / overlay tap, Escape, hardware back
+— while dirty. Note the dirty check is the _same_ field-by-field comparison the
+patch builder uses, so "dirty" means exactly "Save would write something" — an
+untouched Save is a no-op that never bumps `updatedAt` (which would reorder the
+date-modified sort). The extension's popup editor has **no** close guard: a
+browser popup's close is the platform's (it dismisses on focus loss, not
+interceptable), and it's create-only, so there's less to lose — don't assume the
+invariant holds there.
+
+**The corner X is a DELIBERATE door, not an accidental vector** — it belongs with
+Cancel, on the far side of the guard. Both call the unguarded close directly, so a
+deliberate discard stays one click from either. The distinction is about what the
+user aimed at: a backdrop click and an Escape are things that happen _to_ a form,
+while a 32px control named Close is pressed on purpose, and someone who has read
+the header and reached for the X has already decided. Guarding it bought nothing —
+it did not save the work, it only made the button do nothing, with no lint error,
+no failing test and nothing to announce the refusal to a screen reader. Anyone
+whose eye went to the corner instead of the footer read the editor as **stuck**,
+since Escape and the backdrop were dead too and Cancel was the one live exit.
+
+Nothing about that was decided per surface: it is where the guard sits. Radix and
+`@rn-primitives` both give a dialog **one** close callback, so a
+`DialogPrimitive.Close` in the corner arrives at `onOpenChange` indistinguishable
+from an Escape, and a guard written there catches all three. The two surfaces that
+did not use a primitive's close had no such problem and always got this right —
+web quick-add's sheet (its own X, `onOpenChange(false)`) and bracemark-expo's
+link-edit-screen (its own header X, setting `closing` to drop
+`usePreventRemove`). So `DialogContent` on both platforms, and web's
+`SheetContent`, take an **`onClose`** prop: given one, the corner button stops
+being a primitive `Close` and calls it directly, while Escape and the backdrop
+keep routing through `onOpenChange` where the guard still wants them.
+`showCloseButton={false}` still drops the button entirely. A guarded editor that
+renders a corner X **must** pass `onClose`, or it ships the dead button again.
 
 **4. Hoist the editor above the rows, and hold `engaged` while it is open.** Rows
 are **virtualized and repaint under sync** — a touched link floats to the top of

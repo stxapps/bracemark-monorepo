@@ -17,8 +17,9 @@
 // (docs/editors.md): draft copied from the seed at mount (closed = fully
 // unmounted, so every open starts fresh; the dialog is modal, so it can't be
 // retargeted while open), dirty means exactly "Save would write something",
-// and the accidental close vectors are swallowed while dirty (the explicit
-// Cancel bypasses the guard).
+// and the accidental close vectors are swallowed while dirty — Escape and the
+// backdrop. The two DELIBERATE doors, Cancel and the corner X, bypass the guard
+// (the X via DialogContent's `onClose`).
 
 import { useState } from 'react';
 
@@ -90,6 +91,10 @@ function BulkTagsForm({ links, onClose }: { links: LinkView[]; onClose: () => vo
   };
 
   return (
+    // Guard only the ACCIDENTAL close vectors — a backdrop click and Escape are
+    // the strays a dirty draft needs protecting from. The corner X is not one of
+    // them: it is a control named Close, aimed at deliberately, so it takes
+    // DialogContent's `onClose` below and discards the way Cancel does.
     <Dialog open onOpenChange={(open) => !open && !isDirty && onClose()}>
       {/* `flex flex-col` replaces the base `grid` (tailwind-merge drops it —
           both are `display` utilities), and it is load-bearing rather than a
@@ -101,7 +106,7 @@ function BulkTagsForm({ links, onClose }: { links: LinkView[]; onClose: () => vo
           every step, so a two-chip dialog stays content-sized and only a full
           one gives way. link-edit-dialog.tsx is the same shape with `flex-1`,
           because its form is meant to fill. */}
-      <DialogContent className="flex flex-col">
+      <DialogContent className="flex flex-col" onClose={onClose}>
         <DialogHeader>
           <DialogTitle>Edit tags</DialogTitle>
           <DialogDescription>

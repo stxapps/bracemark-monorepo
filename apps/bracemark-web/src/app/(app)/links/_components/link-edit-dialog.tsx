@@ -226,11 +226,12 @@ function LinkEditForm({
   };
 
   return (
-    // Guard only the ACCIDENTAL close vectors — backdrop click, Escape, and the
-    // corner X all funnel through onOpenChange. When there are unsaved changes,
-    // swallow those so a stray click can't drop a typed note or picked image;
-    // the user must then reach for Save or the explicit Cancel below (which calls
-    // onClose directly, bypassing this — a deliberate discard stays one click).
+    // Guard only the ACCIDENTAL close vectors — a backdrop click and Escape are
+    // the strays. When there are unsaved changes, swallow those so a misplaced
+    // click can't drop a typed note or picked image; the user must then reach for
+    // Save or one of the two deliberate doors, which call onClose directly and
+    // bypass this — the Cancel button below, and the corner X via DialogContent's
+    // `onClose`. A deliberate discard stays one click, from either.
     <Dialog open onOpenChange={(open) => !open && !isDirty && onClose()}>
       {/* Scroll the fields region (below) rather than the whole dialog, so the
           header and Save/Cancel footer stay pinned when the form (image preview
@@ -243,6 +244,7 @@ function LinkEditForm({
           base `grid` purely so the region below can be a `min-h-0 flex-1` row. */}
       <DialogContent
         className="flex flex-col"
+        onClose={onClose}
         // Radix's default open-autofocus grabs the first focusable — the title
         // input — so "Edit note"/"Edit tags" would still land on title. Take
         // over: focus the field the opener asked for. The tags trigger rings
