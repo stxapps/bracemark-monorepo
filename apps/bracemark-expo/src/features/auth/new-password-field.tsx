@@ -21,6 +21,11 @@ import { ShowOnceSecret } from './show-once-secret';
 // `@stxapps/react`, which is the same module the web pair reads, so all four surfaces
 // print one set of strings.
 //
+// Its two field labels are `text-sm` with the weight left unset, matching web's
+// `FieldLabel` and the other two auth twins — sign-in-form.tsx carries the why.
+// Both surfaces render this one component, so a weight typed back in here moves
+// create-account and Settings → change password together.
+//
 // RN differences from the web file: a lazy state initializer instead of the
 // generate-on-mount effect (that dance exists so SSR and hydration agree, and native
 // has no SSR — hence no `passphrase !== ''` in the gate, the value is never empty);
@@ -120,7 +125,7 @@ export function NewPasswordField({
   if (mode === 'generated') {
     return (
       <View className="gap-2">
-        <Text className="text-sm font-medium">{copy.label}</Text>
+        <Text className="text-sm">{copy.label}</Text>
         <Text className="text-sm text-muted-foreground">{copy.generatedHelp}</Text>
         <ShowOnceSecret
           secret={passphrase}
@@ -167,7 +172,7 @@ export function NewPasswordField({
     <View className="gap-2">
       {/* RN has no <label for>, so the input is named directly rather than by the
           Text above it. */}
-      <Text className="text-sm font-medium">{copy.label}</Text>
+      <Text className="text-sm">{copy.label}</Text>
       <PasswordInput
         aria-label={copy.label}
         aria-invalid={invalid}

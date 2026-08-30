@@ -14,21 +14,66 @@ import { PasswordInput } from '@stxapps/web-ui/components/auth/password-input';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import { Field, FieldError, FieldGroup, FieldLabel } from '@stxapps/web-ui/components/ui/field';
 import { Input } from '@stxapps/web-ui/components/ui/input';
+import { cn } from '@stxapps/web-ui/lib/utils';
 
 // Client leaf for the sign-in route. Two modes: the normal password sign-in and
 // the recovery-code path (the escape hatch when the password is lost — the
 // recovery door unwraps the same DEK). The page stays a Server Component; only
 // this interactive form runs on the client.
-export function SignInForm() {
+//
+// DENSITY — the label tier, exactly the two `Label` already defines (label.tsx):
+// `standard` is `text-sm` foreground, `dense` is `text-xs` muted. A prop rather
+// than a class override because the two callers want DIFFERENT answers and both
+// are right, and neither can be derived from the other at render time.
+//
+// bracemark-web's /sign-in is a full-page card and takes the default. The browser
+// extension's popup passes `dense`, and it is the case label.tsx's dense tier was
+// written for, named there in as many words: the popup's viewport is 360px, so
+// `md:text-sm` on Input/Textarea NEVER fires and the control renders at 16px —
+// the same bind as the add sheet on a phone, where "the VALUE can't shrink and
+// only the label can move". Left at `standard` the popup put a 14px label under a
+// 14px `PopupTitle`, so a page heading and a field name were one weight apart and
+// nothing else; and it made this form the only popup screen not on the dense tier
+// its two siblings already use (Editor.tsx's List/Tags/Note labels).
+//
+// WHAT DENSITY DOES NOT TOUCH, deliberately:
+//   - `FieldError`. It stays `text-sm` in both tiers. An error must not be
+//     quieter than the label it corrects, it is the one line on the screen that
+//     HAS to be read, and it is already differentiated by colour rather than by
+//     size — so shrinking it buys tidiness and costs legibility (accessibility.md).
+//   - the submit `Button` (`h-9 text-sm font-medium`). It is the screen's single
+//     filled anchor; a dense form still wants a standard-sized commit, and the
+//     popup's other screens keep the default Button too.
+//   - every gap. `FieldGroup`'s 24 and `Field`'s vertical 8 are a ratio argument
+//     (field.tsx: 1:3 is what keeps a label attached to ITS control), and a ratio
+//     holds at either label size. Density is a TYPE tier here, nothing else — if
+//     the popup ever needs a tighter rhythm that is a separate, visible decision.
+export function SignInForm({ density = 'standard' }: { density?: 'standard' | 'dense' }) {
   const [mode, setMode] = React.useState<'password' | 'recovery'>('password');
   return mode === 'password' ? (
-    <PasswordSignIn onUseRecovery={() => setMode('recovery')} />
+    <PasswordSignIn density={density} onUseRecovery={() => setMode('recovery')} />
   ) : (
-    <RecoverySignIn onUsePassword={() => setMode('password')} />
+    <RecoverySignIn density={density} onUsePassword={() => setMode('password')} />
   );
 }
 
-function PasswordSignIn({ onUseRecovery }: { onUseRecovery: () => void }) {
+// The door to the other mode. Muted and underlined in both tiers; only the step
+// moves, so it stays level with the labels above it rather than becoming the
+// loudest secondary line on a dense surface.
+function modeSwitchClass(density: 'standard' | 'dense') {
+  return cn(
+    'mt-1 text-muted-foreground underline hover:text-foreground',
+    density === 'dense' ? 'text-xs' : 'text-sm',
+  );
+}
+
+function PasswordSignIn({
+  density,
+  onUseRecovery,
+}: {
+  density: 'standard' | 'dense';
+  onUseRecovery: () => void;
+}) {
   const {
     register,
     handleSubmit,
@@ -61,7 +106,9 @@ function PasswordSignIn({ onUseRecovery }: { onUseRecovery: () => void }) {
     <form onSubmit={handleSubmit(onSubmit)} noValidate>
       <FieldGroup>
         <Field data-invalid={!!errors.username}>
-          <FieldLabel htmlFor="username">Username</FieldLabel>
+          <FieldLabel htmlFor="username" density={density}>
+            Username
+          </FieldLabel>
           <Input
             id="username"
             type="text"
@@ -73,7 +120,9 @@ function PasswordSignIn({ onUseRecovery }: { onUseRecovery: () => void }) {
           <FieldError errors={errors.username ? [errors.username] : undefined} />
         </Field>
         <Field data-invalid={!!errors.password}>
-          <FieldLabel htmlFor="password">Password</FieldLabel>
+          <FieldLabel htmlFor="password" density={density}>
+            Password
+          </FieldLabel>
           <PasswordInput
             id="password"
             autoComplete="current-password"
@@ -92,11 +141,7 @@ function PasswordSignIn({ onUseRecovery }: { onUseRecovery: () => void }) {
             {isSubmitting ? 'Signing in…' : 'Sign in'}
           </Button>
           <FieldError errors={errors.root ? [errors.root] : undefined} />
-          <button
-            type="button"
-            onClick={onUseRecovery}
-            className="mt-1 text-sm text-muted-foreground underline hover:text-foreground"
-          >
+          <button type="button" onClick={onUseRecovery} className={modeSwitchClass(density)}>
             Forgot your password? Use a recovery code
           </button>
         </Field>
@@ -120,7 +165,13 @@ function PasswordSignIn({ onUseRecovery }: { onUseRecovery: () => void }) {
 // per-field, in the same announcing FieldError slots the password path uses, and
 // the button is live whenever a request isn't in flight. See docs/account.md,
 // _when a submit is allowed to be `disabled`_.
-function RecoverySignIn({ onUsePassword }: { onUsePassword: () => void }) {
+function RecoverySignIn({
+  density,
+  onUsePassword,
+}: {
+  density: 'standard' | 'dense';
+  onUsePassword: () => void;
+}) {
   const {
     register,
     handleSubmit,
@@ -154,7 +205,9 @@ function RecoverySignIn({ onUsePassword }: { onUsePassword: () => void }) {
     <form onSubmit={handleSubmit(onSubmit)} noValidate>
       <FieldGroup>
         <Field data-invalid={!!errors.username}>
-          <FieldLabel htmlFor="rec-username">Username</FieldLabel>
+          <FieldLabel htmlFor="rec-username" density={density}>
+            Username
+          </FieldLabel>
           <Input
             id="rec-username"
             type="text"
@@ -166,7 +219,9 @@ function RecoverySignIn({ onUsePassword }: { onUsePassword: () => void }) {
           <FieldError errors={errors.username ? [errors.username] : undefined} />
         </Field>
         <Field data-invalid={!!errors.recoveryCode}>
-          <FieldLabel htmlFor="rec-code">Recovery code</FieldLabel>
+          <FieldLabel htmlFor="rec-code" density={density}>
+            Recovery code
+          </FieldLabel>
           <Input
             id="rec-code"
             type="text"
@@ -184,11 +239,7 @@ function RecoverySignIn({ onUsePassword }: { onUsePassword: () => void }) {
             {isSubmitting ? 'Signing in…' : 'Sign in with recovery code'}
           </Button>
           <FieldError errors={errors.root ? [errors.root] : undefined} />
-          <button
-            type="button"
-            onClick={onUsePassword}
-            className="mt-1 text-sm text-muted-foreground underline hover:text-foreground"
-          >
+          <button type="button" onClick={onUsePassword} className={modeSwitchClass(density)}>
             Use your password instead
           </button>
         </Field>

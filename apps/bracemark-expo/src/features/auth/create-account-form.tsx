@@ -166,7 +166,7 @@ export function CreateAccountForm() {
       <View className="gap-6">
         <StepHeader step="setup" />
         <View className="gap-2">
-          <Text className="text-sm font-medium">Username</Text>
+          <Text className="text-sm">Username</Text>
           <Input
             autoComplete="username-new"
             autoCapitalize="none"

@@ -32,6 +32,23 @@ import { PasswordInput } from './password-input';
 // `aria-label`s are not the same job and do not replace them: RN has no
 // `<label for>`, so an Input whose only label is the adjacent `<Text>` announces
 // as an unnamed text field.
+//
+// A FIELD LABEL HERE IS `text-sm`, WEIGHT UNSET — not `font-medium`, which is
+// what all seven label sites across the three auth twins carried until they were
+// levelled. There is no `Label` component on this side (RN has no `<label>`, so
+// each is a bare `Text` above its control), which is exactly why the weight could
+// drift with nothing to catch it: web's `Label` deliberately ships `font-normal`
+// against shadcn's `font-medium`, and its reasoning is stronger on native, not
+// weaker. That reasoning is "at 14px over an Input that's 16px until `md:`, the
+// extra weight read as shouting" (web-ui/components/ui/label.tsx) — and this
+// app's Input is `text-base` with a `md:text-sm` that no phone viewport ever
+// reaches, so the label is ALWAYS the smaller of the two here. Position and the
+// size gap carry the distinction; weight was a third signal doing the same job
+// twice. The `wght` axis of InterVariable really does back these utilities
+// (docs/expo-native-deps.md, _font_), so this is a visible 500 → 400, not a
+// no-op. It holds for create-account-form.tsx and new-password-field.tsx too.
+// The one `font-medium` that STAYS in this folder is auth-alt-action.tsx's link,
+// whose web twin is medium as well — that one is an affordance, not a label.
 export function SignInForm() {
   const [mode, setMode] = React.useState<'password' | 'recovery'>('password');
   return mode === 'password' ? (
@@ -73,7 +90,7 @@ function PasswordSignIn({ onUseRecovery }: { onUseRecovery: () => void }) {
   return (
     <View className="gap-6">
       <View className="gap-2">
-        <Text className="text-sm font-medium">Username</Text>
+        <Text className="text-sm">Username</Text>
         <Controller
           control={control}
           name="username"
@@ -100,7 +117,7 @@ function PasswordSignIn({ onUseRecovery }: { onUseRecovery: () => void }) {
       </View>
 
       <View className="gap-2">
-        <Text className="text-sm font-medium">Password</Text>
+        <Text className="text-sm">Password</Text>
         <Controller
           control={control}
           name="password"
@@ -180,7 +197,7 @@ function RecoverySignIn({ onUsePassword }: { onUsePassword: () => void }) {
   return (
     <View className="gap-6">
       <View className="gap-2">
-        <Text className="text-sm font-medium">Username</Text>
+        <Text className="text-sm">Username</Text>
         <Controller
           control={control}
           name="username"
@@ -207,7 +224,7 @@ function RecoverySignIn({ onUsePassword }: { onUsePassword: () => void }) {
       </View>
 
       <View className="gap-2">
-        <Text className="text-sm font-medium">Recovery code</Text>
+        <Text className="text-sm">Recovery code</Text>
         <Controller
           control={control}
           name="recoveryCode"

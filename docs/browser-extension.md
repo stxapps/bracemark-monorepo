@@ -36,7 +36,7 @@ headlines and specimen panels; the extension has neither, and every font byte is
 paid for on every popup open. Where the site reaches for mono, this surface
 reaches for size and colour.
 
-Four conventions hold the two entrypoints together. Breaking any of them is a
+Five conventions hold the two entrypoints together. Breaking any of them is a
 silent visual regression, so they're written down:
 
 - **The frame owns the geometry.** `popup/Shell.tsx` declares the popup's width
@@ -90,6 +90,24 @@ silent visual regression, so they're written down:
   24 / 12 / 8 / 12, in which a section break and a heading's own content measured
   the same — with no dividers and no cards, spacing is the only thing grouping
   these blocks, so each step has to be legibly its own size.
+- **The popup runs the `dense` label tier, and the shared auth form has a prop
+  for it.** The popup's viewport is 360px, so `md:text-sm` on `Input`/`Textarea`
+  never fires and every control renders its value at **16px** — the same bind as
+  bracemark-web's add sheet on a phone, where the value cannot shrink and only the
+  label can move. `Label`'s `density="dense"` (`text-xs`, muted) is written for
+  exactly that case and names this surface; `Editor.tsx` uses it for List/Tags/Note.
+  `SignInForm` is shared with bracemark-web, which wants `standard`, so the tier is
+  a **prop** — `<SignInForm density="dense" />` — not a class override. Left at
+  `standard` it made the popup's 14px `PopupTitle` and its 14px field labels one
+  weight apart and nothing else, so a page heading read as a peer of a field name.
+  The resulting scale on a popup screen is two body tiers: **14px medium for the
+  `PopupTitle` and the Button, 12px muted for every caption, label and aside,
+  16px for user content**, under the header's 15px lockup. `FieldError` stays at
+  14px in both tiers on purpose — an error must not be quieter than the label it
+  corrects, and it is already differentiated by colour rather than by size
+  ([accessibility.md](./accessibility.md)). `CreateAccountForm` has no such prop
+  because the popup never renders it: the extension does its own sign-in but
+  never creates accounts, and its footer opens the web app in a tab instead.
 - **The page specimen is one component across the save.** `popup/PageSpecimen.tsx`
   renders the active tab in the editor and the saved link on the complete screen,
   and it does not move between them — the controls around it change instead. Its
