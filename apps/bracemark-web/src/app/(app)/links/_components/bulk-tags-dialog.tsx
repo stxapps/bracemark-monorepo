@@ -101,7 +101,7 @@ function BulkTagsForm({ links, onClose }: { links: LinkView[]; onClose: () => vo
           every step, so a two-chip dialog stays content-sized and only a full
           one gives way. link-edit-dialog.tsx is the same shape with `flex-1`,
           because its form is meant to fill. */}
-      <DialogContent className="flex flex-col sm:max-w-md">
+      <DialogContent className="flex flex-col">
         <DialogHeader>
           <DialogTitle>Edit tags</DialogTitle>
           <DialogDescription>

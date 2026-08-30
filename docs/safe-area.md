@@ -532,6 +532,48 @@ bottom` splits the correction evenly between two edges that aren't — 59 agains
    in the workspace today; `ListCommand` and `TagsCommand` render `Command` bare
    inside a `Popover` or a `Sheet`.
 
+   **The WIDTH cap is one `min()`, and a breakpoint pair is the wrong shape for
+   it.** shadcn ships `max-w-[calc(100%-2rem)]` capped by a `sm:max-w-*`, which
+   reads like "gutter on a phone, cap on a desktop" and is non-monotonic in the
+   band between the two: below `sm` only the gutter rule applies, and 40rem of
+   viewport minus 2rem is 38rem — _wider_ than the 28rem the dialog is capped to
+   the moment `sm` engages. Dragging a window down through 640px made every
+   dialog jump ~160px **wider as the window got narrower**, then hold that width
+   down to ~480px. `DialogContent` states both constraints at once instead:
+
+   ```
+   max-w-[min(var(--dialog-max-w,28rem),calc(100%-2rem))]
+   ```
+
+   Never wider than the cap, never closer than 1rem to either edge, falling
+   monotonically, with no breakpoint involved — the same reasoning as the height
+   cap one paragraph up, where a centred box also can't be left to a viewport
+   query.
+
+   `--dialog-max-w` is the caller's knob for a narrower dialog
+   (`[--dialog-max-w:24rem]` on the paywall and `lock-password-dialog.tsx`), and
+   unlike `--dialog-max-h` it is **not** declared in `:root`: the default belongs
+   to the component and no page would set it globally. Spelling it as an
+   arbitrary _property_ also keeps it invisible to tailwind-merge, which is the
+   point — a caller's `sm:max-w-sm` merges as a different key from an unprefixed
+   base, so it would apply only above 640px and leave the narrow dialogs
+   uncapped across exactly the band this fixes. Three other callers used to spell
+   `sm:max-w-md`, which was the base's own default repeated; a width override
+   that matches the default is always a no-op worth deleting.
+
+   `AlertDialogContent` sizes by a `data-[size=…]` variant instead and had the
+   OTHER half of the same bug: no gutter rule at all, so `max-w-xs` ran it edge
+   to edge at a 320px viewport — the cap and the viewport being the same 20rem.
+   Both of its caps now carry the `min(…, calc(100%-2rem))`, spelled per size
+   rather than through `--dialog-max-w`, because those two values belong to the
+   `size` variant and a token set by a variant would fight a caller's own
+   `[--dialog-max-w:…]` by source order instead of losing to it cleanly. Its
+   `sm:` step is **not** the non-monotonic pair above — it widens 20rem → 28rem
+   as the viewport GROWS, in step with the layout switch its header, footer,
+   title and media slots all make at that breakpoint for `size=default` — so it
+   stays a breakpoint and only the gutter was added. Measured: the only viewport
+   whose width moves at all is 320px, from 320 to 288.
+
 ### performance note
 
 `useMediaQuery` is cheap to use per-component: `change` fires only at the breakpoint
@@ -650,6 +692,20 @@ and both apps' surfaces are edge-to-edge by default (iOS always was; Android
     re-space at the content's `gap-6`. The footer stays outside it, pinned.
     Generalise from this rather than from the old exemption: what decides is
     whether the body has a BOUND, not whether the component is called "alert".
+
+    **The WIDTH cap on both is unprefixed `max-w-lg`, not the stock
+    `sm:max-w-lg`.** Because the gutter here is structural — the overlay pads by
+    `inset + 8` on every edge — the cap has no gutter rule to trade against, so
+    gating it on a breakpoint bought nothing and only made the width
+    non-monotonic in the same shape as web's (_a centred dialog needs a CAP_,
+    above): a 600dp tablet, the common 7" portrait, sat below `sm` and got the
+    full 584, while a 640dp one got 512. This is the one place the two platforms
+    need different spellings for one behaviour — web's Radix content is centred
+    by transform with no padded parent to inherit a gutter from, so it has to
+    say `min(cap, calc(100%-2rem))` where this side just says the cap.
+    `AlertDialogContent` deliberately keeps no `w-full`, so it stays
+    content-sized inside the overlay's `items-center` and a one-line
+    confirmation hugs its text; `DialogContent` fills.
 
   - **Anchored menus** (`ui/dropdown-menu.tsx`): @rn-primitives positions
     against the measured trigger with `avoidCollisions` (default on); its

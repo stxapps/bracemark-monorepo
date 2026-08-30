@@ -57,8 +57,26 @@ function AlertDialogContent({
         // dialog is always short" is not a property anything enforces. See
         // dialog.tsx for the full note, including why no `overflow-y-auto` comes
         // with it and where a growable caller puts its scroller instead.
+        //
+        // The width caps carry `min(…, calc(100%-2rem))` for the same reason
+        // DialogContent does, but for the OTHER half of that bug: this box had
+        // no gutter rule at all, so `max-w-xs` ran it edge to edge at a 320px
+        // viewport — the cap and the viewport are the same 20rem. The `sm:`
+        // step here is NOT the non-monotonic pair dialog.tsx describes; it
+        // widens 20rem → 28rem as the viewport GROWS, in step with the layout
+        // switch the header, footer, title and media slots all make at the same
+        // breakpoint for `size=default` (centred and stacked below it,
+        // left-aligned beside the media above it). So it stays a breakpoint,
+        // and only the gutter is added.
+        //
+        // Spelled per size rather than through DialogContent's
+        // `--dialog-max-w`: the two values belong to the `size` variant, not to
+        // the caller, and a token set here by a variant would fight a caller's
+        // own `[--dialog-max-w:…]` by source order rather than losing to it
+        // cleanly. `data-[size=sm]:max-w-xs` is gone — it was the unprefixed
+        // default repeated, since only `default` takes the `sm:` step.
         className={cn(
-          'group/alert-dialog-content fixed top-1/2 left-1/2 z-50 grid max-h-(--dialog-max-h) w-full -translate-x-1/2 -translate-y-1/2 gap-6 rounded-4xl bg-popover p-6 text-popover-foreground ring-1 ring-foreground/5 duration-100 outline-none data-[size=default]:max-w-xs data-[size=sm]:max-w-xs data-[size=default]:sm:max-w-md data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95',
+          'group/alert-dialog-content fixed top-1/2 left-1/2 z-50 grid max-h-(--dialog-max-h) w-full max-w-[min(20rem,calc(100%-2rem))] -translate-x-1/2 -translate-y-1/2 gap-6 rounded-4xl bg-popover p-6 text-popover-foreground ring-1 ring-foreground/5 duration-100 outline-none data-[size=default]:sm:max-w-[min(28rem,calc(100%-2rem))] data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95',
           className,
         )}
         {...props}

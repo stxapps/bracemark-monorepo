@@ -101,7 +101,7 @@ export function PaywallProvider({ children }: { children: React.ReactNode }) {
       {children}
       {copy && (
         <Dialog open onOpenChange={(open) => !open && close()}>
-          <DialogContent className="sm:max-w-sm" onCloseAutoFocus={onCloseAutoFocus}>
+          <DialogContent className="[--dialog-max-w:24rem]" onCloseAutoFocus={onCloseAutoFocus}>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Lock className="size-4" /> {copy.title}

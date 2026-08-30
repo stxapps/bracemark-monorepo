@@ -107,7 +107,7 @@ export function MoveToSurface({
       <Dialog open onOpenChange={handleOpenChange}>
         {/* No description: "Move to" over a list of lists says it. Radix warns
             about a missing one unless it's opted out of explicitly. */}
-        <DialogContent aria-describedby={undefined} className="sm:max-w-md">
+        <DialogContent aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle className="truncate">{title}</DialogTitle>
           </DialogHeader>

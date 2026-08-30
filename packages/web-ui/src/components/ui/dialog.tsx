@@ -79,8 +79,27 @@ function DialogContent({
         // (`flex flex-col` + an inner `min-h-0 flex-1` scroller) and
         // bulk-tags-dialog.tsx (a capped scroller around the chip area) are the
         // two worked examples.
+        //
+        // The WIDTH cap is one `min()` rather than the usual shadcn pair
+        // (`max-w-[calc(100%-2rem)]` capped by a `sm:max-w-*`), because that
+        // pair is non-monotonic: below the `sm` breakpoint only the gutter rule
+        // applies, and 40rem of viewport minus 2rem is 38rem — WIDER than the
+        // 28rem it is capped to the moment `sm` engages. Dragging a window down
+        // through 640px made every dialog jump ~160px wider as the window got
+        // narrower. `min()` states the two constraints at once — never wider
+        // than the cap, never closer than 1rem to either edge — so the width
+        // falls monotonically and no breakpoint is involved at all.
+        //
+        // `--dialog-max-w` is the caller's knob (`[--dialog-max-w:24rem]`) and
+        // is deliberately NOT declared in `:root` the way `--dialog-max-h` is:
+        // the default belongs to this component, and there is no global value a
+        // page would want to set. Being an arbitrary PROPERTY rather than a
+        // `max-w-*` class, it is also invisible to tailwind-merge — which is the
+        // point. A caller's `sm:max-w-sm` would merge as a different key from an
+        // unprefixed base and silently apply only above 640px, leaving the
+        // narrow dialogs uncapped across exactly the band this is fixing.
         className={cn(
-          'fixed top-1/2 left-1/2 z-50 grid max-h-(--dialog-max-h) w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-6 rounded-4xl bg-popover p-6 text-sm text-popover-foreground ring-1 ring-foreground/5 duration-100 outline-none sm:max-w-md data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95',
+          'fixed top-1/2 left-1/2 z-50 grid max-h-(--dialog-max-h) w-full max-w-[min(var(--dialog-max-w,28rem),calc(100%-2rem))] -translate-x-1/2 -translate-y-1/2 gap-6 rounded-4xl bg-popover p-6 text-sm text-popover-foreground ring-1 ring-foreground/5 duration-100 outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95',
           className,
         )}
         {...props}

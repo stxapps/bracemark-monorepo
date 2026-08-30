@@ -242,7 +242,7 @@ function LinkEditForm({
           (docs/safe-area.md, _popups & dialogs_). `flex flex-col` overrides the
           base `grid` purely so the region below can be a `min-h-0 flex-1` row. */}
       <DialogContent
-        className="flex flex-col sm:max-w-md"
+        className="flex flex-col"
         // Radix's default open-autofocus grabs the first focusable — the title
         // input — so "Edit note"/"Edit tags" would still land on title. Take
         // over: focus the field the opener asked for. The tags trigger rings

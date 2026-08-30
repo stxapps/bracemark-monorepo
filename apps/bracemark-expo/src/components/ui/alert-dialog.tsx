@@ -110,7 +110,15 @@ function AlertDialogContent({
             // cannot reach. A caller whose body can grow pairs this with
             // `shrink` on its own scroller (link-destroy-confirm.tsx), since RN
             // children do not shrink by default.
-            'z-50 flex max-h-full flex-col gap-6 rounded-lg border border-border bg-background p-6 shadow-lg shadow-black/5 sm:max-w-lg',
+            // `max-w-lg` is UNPREFIXED for the reason the sibling dialog.tsx
+            // spells out — the overlay's `inset + 8` padding is the gutter, so
+            // a `sm:` gate on the cap bought nothing and left a sub-640dp
+            // tablet uncapped — reaching the full available width wherever the
+            // description was long enough to get there, i.e. wider than the
+            // same content on a 640dp one. No `w-full` here, deliberately: this
+            // box stays content-sized inside the overlay's `items-center`, so a
+            // one-line confirmation hugs its text instead of filling.
+            'z-50 flex max-h-full max-w-lg flex-col gap-6 rounded-lg border border-border bg-background p-6 shadow-lg shadow-black/5',
             Platform.select({
               web: 'animate-in fade-in-0 zoom-in-95 duration-200 web:max-w-[calc(100%-2rem)]',
             }),

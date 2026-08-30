@@ -174,7 +174,16 @@ function DialogContent({
             // title. A caller whose body can grow pairs this with `shrink` on
             // its own scroller, which is what then absorbs the squeeze
             // (list-command.tsx, bulk-tags-dialog.tsx).
-            'z-50 mx-auto flex max-h-full w-full flex-col gap-6 rounded-lg border border-border bg-background p-6 shadow-lg shadow-black/5 sm:max-w-lg',
+            // `max-w-lg` is UNPREFIXED, unlike react-native-reusables' stock
+            // `sm:max-w-lg`. The gutter this side is structural — the overlay
+            // pads by `inset + 8` on every edge — so the cap has no gutter rule
+            // to trade against and gating it on a breakpoint only made the
+            // width non-monotonic: a 600dp tablet (the common 7" portrait) sat
+            // below `sm` and got the full 584, while a 640dp one got 512. Same
+            // correction as web-ui's DialogContent, which needs a `min()` to
+            // reach it because Radix centres by transform and has no padded
+            // parent to inherit a gutter from (docs/safe-area.md).
+            'z-50 mx-auto flex max-h-full w-full max-w-lg flex-col gap-6 rounded-lg border border-border bg-background p-6 shadow-lg shadow-black/5',
             Platform.select({
               web: 'animate-in fade-in-0 zoom-in-95 duration-200 web:max-w-[calc(100%-2rem)]',
             }),
