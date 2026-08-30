@@ -29,7 +29,18 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 //     the heading beneath it.
 //   - sub-view (sync detail) — a back button and the view's name in the
 //     wordmark's slot. The brand steps aside rather than sitting above a second
-//     title in 360px of width.
+//     title in 360px of width. The title takes the WORDMARK'S step, not a
+//     smaller one, so the bar is the same bar in both modes.
+//
+// THE LOCKUP IS THE CANONICAL ONE — `h-4` mark, `text-[0.9375rem]` wordmark,
+// `gap-2.5` — identical to both of bracemark-web's rails, its auth card and
+// bracemark-expo's five. This header briefly ran a smaller lockup of its own
+// (16px/13px/`gap-2`) on the theory that a 44px bar in a 360px window wanted the
+// whole thing a step down. It didn't: `h-11` clears a 16px mark with 14px to
+// spare, and the step-down had quietly changed the PROPORTION as well as the
+// size, flattening the mark against the word by ~8%. There is no small lockup —
+// 16px is the mark's legibility floor, so a surface can only render this pair or
+// About's larger stacked one (docs/brand-assets.md, _the lockup_).
 
 export function PopupShell({
   title,
@@ -50,7 +61,7 @@ export function PopupShell({
     <div className={cn('flex w-90 flex-col bg-background text-foreground')}>
       <header
         className={cn(
-          'sticky top-0 z-20 flex h-11 shrink-0 items-center gap-2 border-b border-border bg-background px-4',
+          'sticky top-0 z-20 flex h-11 shrink-0 items-center gap-2.5 border-b border-border bg-background px-4',
         )}
       >
         {onBack ? (
@@ -65,7 +76,7 @@ export function PopupShell({
               <ArrowLeft className={cn('size-4')} />
             </Button>
             <span
-              className={cn('truncate text-[0.8125rem] leading-none font-semibold tracking-tight')}
+              className={cn('truncate text-[0.9375rem] leading-none font-semibold tracking-tight')}
             >
               {title}
             </span>
@@ -73,7 +84,7 @@ export function PopupShell({
         ) : (
           <>
             <BracemarkIcon className={cn('h-4 w-auto shrink-0')} aria-hidden="true" />
-            <span className={cn('text-[0.8125rem] leading-none font-semibold tracking-tight')}>
+            <span className={cn('text-[0.9375rem] leading-none font-semibold tracking-tight')}>
               Bracemark
             </span>
           </>

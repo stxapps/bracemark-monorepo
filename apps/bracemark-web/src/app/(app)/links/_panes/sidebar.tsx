@@ -517,12 +517,20 @@ export function SidebarBody({
   return (
     <>
       {/* The lockup, at the same `h-14` as the topbar so the two hairlines meet
-          across the frame — and identical to the settings rail's and the browser
-          extension's options page (mark `h-5`, wordmark `text-[0.9375rem]
-          font-semibold tracking-tight`, `gap-2.5`). Three surfaces, one lockup:
-          it should be the same product wherever you entered it. */}
+          across the frame — and identical to the settings rail's, the auth
+          card's, the browser extension's popup header and bracemark-expo's five
+          (mark `h-4`, wordmark `text-[0.9375rem] font-semibold tracking-tight`,
+          `gap-2.5`). Nine surfaces, one lockup: it should be the same product
+          wherever you entered it.
+
+          The mark is 16px for two reasons that meet at the same number, and
+          docs/brand-assets.md holds both: it is 1.6× the wordmark's cap height
+          (the proportion that makes the two read as one lockup rather than as an
+          icon with text beside it), and it is the smallest size the 45° cut
+          still reads at (bracemark-icon.tsx). So the pair moves together or not
+          at all, and it can never move DOWN. */}
       <div className="flex h-14 shrink-0 items-center gap-2.5 border-b border-border px-4">
-        <BracemarkIcon className="h-5 w-auto shrink-0" aria-hidden="true" />
+        <BracemarkIcon className="h-4 w-auto shrink-0" aria-hidden="true" />
         <span className="text-[0.9375rem] leading-none font-semibold tracking-tight">
           Bracemark
         </span>

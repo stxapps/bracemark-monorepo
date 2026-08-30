@@ -6,6 +6,13 @@ import * as React from 'react';
 // category owns a ribbon; a dog-eared B says letter and bookmark at once, and it
 // is the only feature of the silhouette that is still legible at 16px.
 //
+// THAT 16px IS NOW LOAD-BEARING, not a remark: it is the size every lockup
+// renders the mark at (docs/brand-assets.md, _the lockup_), chosen because the
+// legibility floor and the 1.6×-cap-height proportion the lockup is pinned to
+// land on the same number. Retouching the path in a way that costs the cut a
+// little legibility therefore costs it on nine shipped surfaces at once, and
+// nothing under 16px is available to fall back to.
+//
 // ONE path, ONE colour. The two counters are subpaths of the same `d` and are
 // knocked out by `fill-rule="evenodd"`, so they are genuine holes rather than
 // background-coloured discs. Two consequences worth keeping:

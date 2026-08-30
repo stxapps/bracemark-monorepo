@@ -475,8 +475,8 @@ export function Sidebar({ closeDrawer }: { closeDrawer: () => void }) {
           wordmark and no rule — which made this the one surface in the app that
           showed the icon WITHOUT the name, the exact inverse of what a drawer is
           for. Both rails now open on the identical lockup (components/
-          brand-lockup.tsx), as do bracemark-web's two rails and the browser
-          extension's options page. */}
+          brand-lockup.tsx), as do bracemark-web's two rails, its auth card and
+          the browser extension's popup header. */}
       <View className="h-14 justify-center border-b border-border px-4">
         <BrandLockup />
       </View>

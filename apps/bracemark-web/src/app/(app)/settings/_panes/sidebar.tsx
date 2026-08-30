@@ -12,12 +12,12 @@
 //
 // The lockup replaced a bare back arrow that was pinned to the rail's top-RIGHT
 // corner, anchored to nothing and duplicating the topbar's close button. The rail
-// now says which app this is, matching the browser extension's options page
-// exactly (mark at `h-5`, wordmark at `text-[0.9375rem] font-semibold
-// tracking-tight`, `gap-2.5`) — the two settings surfaces should be
-// indistinguishable, and its header sits at the same `h-14` as the topbar so the
-// two hairlines meet across the frame. Leaving the surface is the topbar's job,
-// in one place, where a close control is looked for.
+// now says which app this is, matching the links rail and every other carrier
+// exactly (mark at `h-4`, wordmark at `text-[0.9375rem] font-semibold
+// tracking-tight`, `gap-2.5` — the ratio behind those numbers is pinned in
+// docs/brand-assets.md, _the lockup_), and its header sits at the same `h-14` as
+// the topbar so the two hairlines meet across the frame. Leaving the surface is
+// the topbar's job, in one place, where a close control is looked for.
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -54,7 +54,7 @@ export function Sidebar() {
   return (
     <aside className={cn('hidden h-full w-60 shrink-0 flex-col border-r border-border md:flex')}>
       <div className={cn('flex h-14 shrink-0 items-center gap-2.5 border-b border-border px-4')}>
-        <BracemarkIcon className={cn('h-5 w-auto shrink-0')} aria-hidden="true" />
+        <BracemarkIcon className={cn('h-4 w-auto shrink-0')} aria-hidden="true" />
         <span className={cn('text-[0.9375rem] leading-none font-semibold tracking-tight')}>
           Bracemark
         </span>

@@ -127,22 +127,56 @@ their full-bleed square: nothing paints _them_ onto an unknown colour.
 
 ### the lockup
 
-Mark beside wordmark — **one set of measurements rendered on seven surfaces**: a
-20px mark (`h-5`), the wordmark at
+Mark beside wordmark — **one set of measurements rendered on nine surfaces**: a
+16px mark (`h-4`), the wordmark at
 `text-[0.9375rem] leading-none font-semibold tracking-tight`, `gap-2.5` between
 them.
 
+⚠ **The invariant is the RATIO, and the pair is derived from it.** The mark's
+height is **1.6× the wordmark's cap height**. Inter's cap height is 0.6758em, so
+that is ≈1.08× the wordmark's font-size, and 15px of wordmark asks for 16.2px of
+mark. The usable band is roughly 1.55–1.70×: under it the mark is swallowed by
+the word, over it the mark stops reading as half of a lockup and starts reading
+as an icon that happens to have text beside it — which is what the previous
+20px/15px (1.97×) did, and it is why the mark looked unmoored from the word even
+though the two boxes were centred to the pixel by `items-center`.
+
+The ratio is written down because **an absolute pair cannot defend itself**. The
+browser extension's popup once stepped the lockup down to 16px/13px — the mark
+by ×0.80, the wordmark by ×0.867 — and nothing caught the 8% flattening, because
+"20 and 15" says nothing about what the two numbers owe each other. Nothing
+lints this and no test can see it.
+
+**16px is also the mark's floor, and the two constraints meet at the same
+number.** `bracemark-icon.tsx` records that the 45° cut is the last feature to
+survive small sizes and that it still reads at 16px, so nothing may render the
+mark under it. A surface therefore cannot carry a lockup SMALLER than the
+canonical one, which is why there is no second, compact lane for the popup or
+for anything else: it is this pair, or About's larger stacked one below.
+
+**Do not reach for `em` to enforce the ratio.** On web both numbers are already
+rem (`h-4` is `1rem`, the wordmark `0.9375rem`), so the proportion already
+survives root font scaling for free; an `em` mark height would only force the
+font-size onto the flex parent so the SVG could inherit it. On native it is not
+expressible at all — `rem` is baked at build time and `react-native-svg` sizes
+by a numeric prop ([theme.md](./theme.md), _extending_). This is an authoring
+rule, held by this paragraph and by the comments that point at it.
+
 It is the brand's only appearance on any surface that has no other carrier, so
 the surfaces have to agree: bracemark-web's links rail, its settings rail and its
-auth card; the browser extension's `OptionsShell`; and bracemark-expo's two
-drawers, its auth screen, and **its share sheet** — the purest case of the rule,
-since that one floats over somebody else's app and has nothing but the lockup to
-say whose sheet it is.
+auth card; the browser extension's popup header; and bracemark-expo's two
+drawers, its auth screen, its landing and **its share sheet** — the purest case
+of the rule, since that one floats over somebody else's app and has nothing but
+the lockup to say whose sheet it is. The browser extension's `OptionsShell` is
+**not** one of them and no longer carries a lockup at all: that document always
+renders embedded in a host which draws the name and icon immediately above it,
+so a lockup there was the second copy of both (its own header comment carries
+the reasoning).
 
-Web types the six utilities into each file with a comment naming the others.
+Web types the utilities into each file with a comment naming the others.
 **Expo does not, and must not** — the mark's height is a `height` **prop** there
 (`react-native-svg` sizes by prop, not by class), so a hand-typed copy drifts by
-a pixel the first time one is edited. All four native call sites go through
+a pixel the first time one is edited. All five native call sites go through
 `apps/bracemark-expo/src/components/brand-lockup.tsx`, which also takes the
 wordmark from `BRAND.name` rather than a literal.
 
@@ -153,7 +187,7 @@ bordered card. The rule above binds surfaces where the brand is a **carrier** �
 rail, a sheet, a card that is about something else and has to agree with the six
 others a user may have just come from. On About the brand is the **subject**: it
 is the screen a person opens to ask what this app is and which version they are
-running, and a 20px lockup under a 20px "About" heading reads there as a nav
+running, and a 16px lockup under a 20px "About" heading reads there as a nav
 fragment that wandered in from the rail. No third size follows from this — if a
 surface is not About, it is a carrier.
 
