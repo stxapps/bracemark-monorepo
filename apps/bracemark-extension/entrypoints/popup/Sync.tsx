@@ -108,9 +108,16 @@ export function SyncPill({ onClick }: { onClick: () => void }) {
 // One fact per row in a bordered panel — a spec sheet rather than a paragraph.
 // The label sits left in muted, the value right in foreground, so the column of
 // values can be read down without reading the labels twice.
+//
+// Stays at the popup's 12px caption tier (browser-extension.md, the `dense`
+// label bullet) — the whole panel is labels and values, and 14px here would put
+// the medium-weight `dd` at PopupTitle's exact size and weight. The panel read
+// cramped because it is one unbroken 12px block, so the air comes from row
+// padding instead: don't trade it back for a size step. No `leading-*` — every
+// row is single-line (`truncate`), so line-height would only pad the box again.
 function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className={cn('flex items-center justify-between gap-3 px-3 py-2 text-xs')}>
+    <div className={cn('flex items-center justify-between gap-3 px-3 py-2.5 text-xs')}>
       <dt className={cn('shrink-0 text-muted-foreground')}>{label}</dt>
       <dd className={cn('min-w-0 truncate text-right font-medium')}>{children}</dd>
     </div>
