@@ -78,42 +78,47 @@ export function LockPasswordDialog({
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
 
-        {/* 24 / 16 / 8, one scale down from DialogContent's own gap: 16 between
-            the form's blocks, 8 inside the field. Every message this dialog can
-            show is about the PASSWORD — the schema's, and the callers' "Password
-            is not correct…" — so the error sits in the field's column, under the
+        {/* 24 / 16 / 8. The 24 is the step between the dialog's three REGIONS —
+            header, body, footer — which is DialogContent's own gap; the `<form>`
+            is plumbing (the submit button has to sit inside it), not a region,
+            so it carries that same 24 and groups its body blocks in the wrapper
+            below at 16. 8 is inside a field. Every message this dialog can show
+            is about the PASSWORD — the schema's, and the callers' "Password is
+            not correct…" — so the error sits in the field's column, under the
             input it describes, not as a third block between the checkbox and the
             buttons where it took a full 16 on each side. */}
-        <form onSubmit={submit} className="flex flex-col gap-4">
-          <div className="flex flex-col gap-2">
-            <PasswordInput
-              autoFocus
-              autoComplete="off"
-              placeholder="Password"
-              aria-label="Password"
-              value={password}
-              onChange={(e) => {
-                setPassword(e.target.value);
-                if (error) setError(null);
-              }}
-            />
-            {error && (
-              <p role="alert" className="text-sm text-destructive">
-                {error}
-              </p>
+        <form onSubmit={submit} className="flex flex-col gap-6">
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-2">
+              <PasswordInput
+                autoFocus
+                autoComplete="off"
+                placeholder="Password"
+                aria-label="Password"
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  if (error) setError(null);
+                }}
+              />
+              {error && (
+                <p role="alert" className="text-sm text-destructive">
+                  {error}
+                </p>
+              )}
+            </div>
+
+            {checkboxLabel && (
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="lock-dialog-checkbox"
+                  checked={checked}
+                  onCheckedChange={(v) => setChecked(v === true)}
+                />
+                <Label htmlFor="lock-dialog-checkbox">{checkboxLabel}</Label>
+              </div>
             )}
           </div>
-
-          {checkboxLabel && (
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="lock-dialog-checkbox"
-                checked={checked}
-                onCheckedChange={(v) => setChecked(v === true)}
-              />
-              <Label htmlFor="lock-dialog-checkbox">{checkboxLabel}</Label>
-            </div>
-          )}
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

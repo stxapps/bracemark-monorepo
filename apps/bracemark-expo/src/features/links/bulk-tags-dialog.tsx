@@ -18,7 +18,7 @@
 // dirty — the explicit Cancel bypasses the guard.
 
 import { useState } from 'react';
-import { ScrollView } from 'react-native';
+import { ScrollView, View } from 'react-native';
 
 import { type LinkView, useLinkMutations } from '@stxapps/expo-react';
 
@@ -106,17 +106,32 @@ function BulkTagsForm({ links, onClose }: { links: LinkView[]; onClose: () => vo
             dialog in the app (~520 of the ~566pt an iPhone 17 Pro leaves), so it
             is the one that would otherwise lose its title off the top rather
             than scroll. */}
-        <ScrollView
-          className="max-h-60 shrink"
-          nestedScrollEnabled
-          keyboardShouldPersistTaps="handled"
-        >
-          <TagsField value={tagIds} onChange={setTagIds} />
-        </ScrollView>
-        <Text className="text-xs text-muted-foreground">
-          Only tags shared by every selected link start selected; a tag on just some of them is left
-          untouched.
-        </Text>
+        {/* Field and caption are ONE block, at the 16 below the dialog's own
+            24 — the caption is about the selection, so it belongs to the field
+            rather than standing beside the header and footer as a third
+            top-level block, which is what it did when all three steps were the
+            same 24 (see DialogContent's gap note for why the outer step has to
+            beat the inner one). Web reaches the same shape through the `<form>`
+            its submit button needs; this wrapper is what stands in for it here.
+
+            The wrapper MUST carry `shrink`: RN children don't shrink by default
+            (link-destroy-confirm.tsx says the same), so an unwrapped one would
+            hold its content height and the squeeze below would never reach the
+            ScrollView — the cap would push the title off the TOP instead, on
+            the one dialog where that actually bites. */}
+        <View className="flex shrink flex-col gap-4">
+          <ScrollView
+            className="max-h-60 shrink"
+            nestedScrollEnabled
+            keyboardShouldPersistTaps="handled"
+          >
+            <TagsField value={tagIds} onChange={setTagIds} />
+          </ScrollView>
+          <Text className="text-xs text-muted-foreground">
+            Only tags shared by every selected link start selected; a tag on just some of them is
+            left untouched.
+          </Text>
+        </View>
         <DialogFooter>
           <Button variant="ghost" size="sm" onPress={onClose}>
             <Text>Cancel</Text>

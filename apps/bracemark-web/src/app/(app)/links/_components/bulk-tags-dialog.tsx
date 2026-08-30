@@ -109,30 +109,53 @@ function BulkTagsForm({ links, onClose }: { links: LinkView[]; onClose: () => vo
             {links.length === 1 ? 'link' : 'links'}; a removed tag is removed from all of them.
           </DialogDescription>
         </DialogHeader>
-        <form className="flex min-h-0 shrink flex-col gap-4" onSubmit={onSubmit} noValidate>
-          <div className="flex min-h-0 shrink flex-col gap-1.5">
-            <Label htmlFor="bulk-tags" density="dense">
-              Tags
-            </Label>
-            {/* TagsField sets no height of its own and its chip area grows with
-                the selection, so this is the one dialog body here that can
-                outgrow the viewport — and DialogContent's
-                `max-h-(--dialog-max-h)` caps the box without scrolling it (see
-                dialog.tsx for why the cap deliberately ships without an
-                `overflow-y-auto`). So the chip area owns the scroll: `max-h-60`
-                (~9 rows) is the PREFERRED height and `min-h-0 shrink` is what
-                lets even that give way on a short viewport, which is where the
-                whole box would otherwise overflow — a landscape phone leaves
-                ~316px for a dialog this one wants ~456 for. Exactly the pair
-                expo's port uses (`max-h-60 shrink`).
+        {/* 24 / 16 / 6. The 24 is the step between the dialog's three REGIONS —
+            header, body, footer — which is DialogContent's own gap; the `<form>`
+            is plumbing (the submit button has to sit inside it), not a region,
+            so it carries that same 24 and groups its body blocks in the wrapper
+            below at 16, leaving 6 inside the field. The outer step has to beat
+            the inner one or nothing reads as grouped — expo's DialogContent says
+            the same, and at a uniform 16 the hint below became a peer of the
+            BUTTONS rather than of its field. The `min-h-0 shrink` repeats on
+            every level so the squeeze still reaches the chip scroller. */}
+        <form className="flex min-h-0 shrink flex-col gap-6" onSubmit={onSubmit} noValidate>
+          <div className="flex min-h-0 shrink flex-col gap-4">
+            <div className="flex min-h-0 shrink flex-col gap-1.5">
+              <Label htmlFor="bulk-tags" density="dense">
+                Tags
+              </Label>
+              {/* TagsField sets no height of its own and its chip area grows with
+                  the selection, so this is the one dialog body here that can
+                  outgrow the viewport — and DialogContent's
+                  `max-h-(--dialog-max-h)` caps the box without scrolling it (see
+                  dialog.tsx for why the cap deliberately ships without an
+                  `overflow-y-auto`). So the chip area owns the scroll: `max-h-60`
+                  (~9 rows) is the PREFERRED height and `min-h-0 shrink` is what
+                  lets even that give way on a short viewport, which is where the
+                  whole box would otherwise overflow — a landscape phone leaves
+                  ~316px for a dialog this one wants ~456 for. Exactly the pair
+                  expo's port uses (`max-h-60 shrink`).
 
-                `-m-1 p-1` gives the chips' focus rings room the way the edit
-                dialog's body scroller does. The inline popover TagsField opens
-                is `fixed` and its containing block is DialogContent, not this
-                box, so nothing here clips it. */}
-            <div className="-m-1 max-h-60 min-h-0 shrink overflow-y-auto p-1">
-              <TagsField id="bulk-tags" value={tagIds} onChange={setTagIds} />
+                  `-m-1 p-1` gives the chips' focus rings room the way the edit
+                  dialog's body scroller does. The inline popover TagsField opens
+                  is `fixed` and its containing block is DialogContent, not this
+                  box, so nothing here clips it. */}
+              <div className="-m-1 max-h-60 min-h-0 shrink overflow-y-auto p-1">
+                <TagsField id="bulk-tags" value={tagIds} onChange={setTagIds} />
+              </div>
             </div>
+            {/* A peer block of the BODY, not a line in the field's column.
+                lock-password-dialog draws the boundary: a message about the VALUE
+                in the field belongs inside the column, one about the OPERATION
+                gets its own block — and this is about the selection, not about the
+                chips. It also fixes what the column got wrong optically. Inside,
+                the group was bookended by 12px muted text at BOTH ends, so the
+                region step above and the button row below had nothing but a
+                hanging caption to push against; out here the group ends on the
+                TagsField's own border (the same hard edge lock-password's input
+                gives it), the 6 reads as the label's bond to its field, and the 16
+                reads as separation from it. expo's port has the same two blocks in
+                the same wrapper. */}
             <p className="text-xs text-muted-foreground">
               Only tags shared by every selected link are shown; a tag on just some of them is left
               untouched.

@@ -260,7 +260,12 @@ function LinkEditForm({
           <DialogDescription className="truncate">{link.url}</DialogDescription>
         </DialogHeader>
 
-        <form className="flex min-h-0 flex-1 flex-col gap-4" onSubmit={onSubmit} noValidate>
+        {/* `gap-6`, the step between the dialog's three REGIONS — header, body,
+            footer. The `<form>` is plumbing (the submit button has to sit inside
+            it), not a region of its own, so it carries DialogContent's own gap
+            rather than a smaller one; the body below keeps the 16 between its
+            fields and 6 inside each. */}
+        <form className="flex min-h-0 flex-1 flex-col gap-6" onSubmit={onSubmit} noValidate>
           {/* The scrollable body. overflow-y-auto clips at the border box on
               every side, so the -m-1 p-1 pair gives the 3px focus rings room
               (the note textarea's would otherwise be cut off at the bottom)
