@@ -1,6 +1,6 @@
 ---
 name: verify
-description: How to build, launch, and drive this repo's apps to verify a change end-to-end — bracemark-web via headless Chromium, bracemark-expo on the iOS simulator or Android emulator. Use when the change has to be SEEN running; when a test, typecheck, or a read of the code can settle the question, do that instead.
+description: How to build, launch, and drive this repo's apps to verify a change end-to-end — bracemark-web via headless Chromium, bracemark-extension as an unpacked build, bracemark-expo on the iOS simulator or Android emulator. Also which Chrome to drive for which app. Use when the change has to be SEEN running; when a test, typecheck, or a read of the code can settle the question, do that instead.
 ---
 
 # Verifying changes in this repo
@@ -53,9 +53,7 @@ actually settles the question:
 ## Drive bracemark-web (GUI surface)
 
 - **`playwright-core` is a root devDependency** — no per-session install, no scratch
-  dir needed. It ships no browser, so drive the system Chrome via `executablePath`;
-  **don't count on the `~/Library/Caches/ms-playwright/` browser cache**, which has
-  been empty (nothing in the repo populates it).
+  dir needed. It ships no browser, so drive the system Chrome via `executablePath`:
 
   ```js
   import { chromium } from 'playwright-core';
@@ -68,6 +66,17 @@ actually settles the question:
   screenshots legible at this repo's type sizes. Pass `headless: false` (plus
   `slowMo: 250`) to watch a run live. `/Applications/Chromium.app/Contents/MacOS/Chromium`
   works the same way if Chrome is gone.
+
+- **WHICH CHROME: system Chrome for everything except the browser extension.**
+  System Chrome **will not load an unpacked extension** — measured on Chrome 151
+  with the correct arg pair, and it stays unloaded with
+  `--disable-features=DisableLoadExtensionCommandLineSwitch` and with
+  `--enable-unsafe-extension-debugging` too. It doesn't error: the launch
+  succeeds, `chrome://extensions` lists nothing, and no service worker ever
+  appears, so it reads as a manifest problem. Playwright's own Chromium loads the
+  same directory first try. So: system Chrome for bracemark-web and
+  bracemark-site, Playwright's bundled Chromium **only** for
+  bracemark-extension — see its section below, which carries the install caveat.
 
 - **Narrow layouts: set the context viewport, don't size the window.**
   `newPage({ viewport: { width: 390, height: 844 } })` lays out at a true 390 —
@@ -116,6 +125,61 @@ actually settles the question:
   the host also shows on a secondary line/column. So untitled links ARE
   distinguishable by path — asserting on distinct paths (or distinct hosts)
   both work.
+
+## Drive bracemark-extension (popup + options)
+
+**Try the tab first.** `chrome-extension://<id>/popup.html` in an ordinary page,
+with `newPage({ viewport: { width: 360, height: 700 }, deviceScaleFactor: 2 })`,
+lays out and paints exactly as the real popup does and is screenshot-able.
+Everything below the first two bullets is only for questions about the popup
+**window** — its width, its scrollbars — which a tab cannot answer.
+
+- **Build first; there is no dev-server path.** `npx nx build
+@stxapps/bracemark-extension` → `apps/bracemark-extension/.output/chrome-mv3`,
+  ~2 s and gitignored. Load it with **both** args — `--load-extension` alone
+  silently loads nothing, even on Chromium:
+
+  ```js
+  import { chromium } from 'playwright'; // NOT playwright-core: needs the bundled browser
+  const ext = path.resolve('apps/bracemark-extension/.output/chrome-mv3');
+  const ctx = await chromium.launchPersistentContext(dir, {
+    headless: false, // headed: see the scrollbar note below
+    args: [`--disable-extensions-except=${ext}`, `--load-extension=${ext}`],
+  });
+  const sw = ctx.serviceWorkers()[0]; // poll for it; it is the background worker
+  const id = new URL(sw.url()).host; // the extension id
+  ```
+
+  **The bundled browser is not installed by default** — `npx playwright install
+chromium` (~550 MB into `~/Library/Caches/ms-playwright/`) if it is absent.
+  That is the one sanctioned reason to run that command here; see
+  `docs/e2e.md`, _the browser this repo drives_, for why it is otherwise avoided.
+
+- **Signed-out screens need no setup.** A fresh `userDataDir` opens on `SignIn`.
+- **The popup window is NOT an attachable page.** `chrome.action.openPopup()`
+  from the service worker opens it, but it never appears in `ctx.pages()` and no
+  `page` event fires, so you cannot `evaluate` or screenshot it directly. Nor can
+  the OS: `screencapture` fails with `could not create image from display` (no
+  screen-recording permission for the terminal). Measure it from **inside**:
+  append `<script src="./probe.js">` to `.output/chrome-mv3/popup.html`, have it
+  `chrome.storage.local.set({...})` after a delay, and read that back with
+  `sw.evaluate(() => chrome.storage.local.get(…))`. **A rebuild deletes the probe
+  and rewrites the html** — re-inject after every `nx build`, or the read silently
+  returns nothing.
+- **Popup width is content-driven, height caps at 600.** Measured: a 360px shell
+  gives a 360px popup; once the document passes 600px Chrome grows the popup to
+  **375** and paints the scrollbar outside the shell. So a fixed-width popup frame
+  never moves — which is why it opts out of the scrollbar gutter
+  (`entrypoints/popup/Shell.tsx`, `docs/safe-area.md`).
+- **Scrollbar bugs are invisible to the DOM — pixel-scan a screenshot, headed.**
+  The gutter bug that motivated all of this measured _perfectly_: `innerWidth`
+  360, shell 360, inputs 16→344, `p-4` resolving to 16px — while everything past
+  x=345 was never painted. `getBoundingClientRect` cannot see a paint clip. Shoot
+  a narrow `clip` of the edge in question, then decode it in a throwaway headless
+  page (`img` → `canvas` → `getImageData`) and print the last non-white x as a
+  number. Headless renders zero-width scrollbars, so the _subject_ browser must be
+  `headless: false` (`docs/safe-area.md`, _checking any of this_); the browser
+  doing the decoding can be headless.
 
 ## Gotchas
 

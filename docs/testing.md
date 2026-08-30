@@ -260,8 +260,19 @@ verdict rather than a poll — two specs, one rule, neither a port of the other.
 
 **`playwright-core` is a root devDependency.** It drives the _system_ Chrome via
 `executablePath` rather than a downloaded browser — that is why it is
-`playwright-core` and not `playwright`, whose install pulls a browser bundle
-this repo has never had (`~/Library/Caches/ms-playwright/` has been empty).
+`playwright-core` and not `playwright`, whose install pulls a browser bundle this
+repo does not otherwise want (`~/Library/Caches/ms-playwright/`, ~550 MB; see
+[e2e.md](./e2e.md), _the browser this repo drives_).
+
+**The one thing the system browser cannot do is load the browser extension.**
+Google Chrome refuses an unpacked `--load-extension` — silently, with the launch
+succeeding and `chrome://extensions` empty — and neither
+`--disable-features=DisableLoadExtensionCommandLineSwitch` nor
+`--enable-unsafe-extension-debugging` changes that (measured on Chrome 151).
+Playwright's bundled Chromium loads the same directory first try. So driving
+`bracemark-extension` is the one task that wants `npx playwright install
+chromium`, and it is the only exception to the paragraph above; the operational
+loop is in `.claude/skills/verify/SKILL.md`.
 
 ```js
 import { chromium } from 'playwright-core';

@@ -193,10 +193,10 @@
    * Reserve the scrollbar gutter so its width is constant: layout no longer
    * shifts when a scrollbar appears/disappears, which also keeps JS width math
    * and CSS media-query breakpoints in agreement. Wanted by every surface where
-   * the DOCUMENT is what scrolls — the marketing site's pages, bracemark-web's
-   * `min-h-dvh` screens (sign-in, the lock gate, the sync gate, 404), and the
-   * browser extension's popup, which has no inner scroll container at all
-   * (Chrome grows the popup to its content and scrolls the document past 600px).
+   * the DOCUMENT is what scrolls AND the viewport is fixed independently of it —
+   * the marketing site's pages, and bracemark-web's `min-h-dvh` screens (sign-in,
+   * the lock gate, the sync gate, 404). The browser extension's popup scrolls its
+   * document too but fails the second half, so it opts out below.
    */
   html {
     scrollbar-gutter: stable;
@@ -214,11 +214,26 @@
    * visible nearly always.
    *
    * Mark ONLY an element that establishes such a frame — one that sets both a
-   * viewport height and `overflow-hidden` on itself. On a `min-h-dvh` surface,
-   * which does scroll the document, this silently reinstates the layout shift the
-   * rule above exists to remove, with no lint or type error. The attribute is
-   * named for its EFFECT rather than for the frame so that misapplying it reads
-   * as wrong at the point of writing it.
+   * viewport height and `overflow-hidden` on itself — or a surface where the
+   * VIEWPORT ITSELF is sized to the content, which is the one exception and is
+   * bracemark-extension's popup (entrypoints/popup/Shell.tsx). On a `min-h-dvh`
+   * surface, which does scroll the document, this silently reinstates the layout
+   * shift the rule above exists to remove, with no lint or type error. The
+   * attribute is named for its EFFECT rather than for the frame so that
+   * misapplying it reads as wrong at the point of writing it.
+   *
+   * THE EXCEPTION, because it reads as a violation of the rule above and isn't.
+   * A toolbar popup has no viewport of its own: Chrome sizes the window to the
+   * document, so the popup's fixed-width frame IS the viewport, and reserving a
+   * gutter inside it takes 15px off the frame rather than off a viewport that
+   * was going to be that wide anyway. Measured: a 360px (`w-90`) popup, `html`
+   * content box 345, everything painted past 345 CLIPPED — the header hairline,
+   * the fields' right edge, their focus ring — while `p-4` still lays out its
+   * 16px of right padding and 15 of them are never drawn. It is not a layout
+   * error, so nothing in the DOM measures wrong and no test can see it; only a
+   * screenshot shows it. And the gutter buys nothing there in exchange: past
+   * 600px of content Chrome grows the popup to 375 and paints the real scrollbar
+   * OUTSIDE the 360px frame, so the frame never moves either way.
    *
    * A presence selector is correct here, unlike the `data-*` state variants
    * elsewhere in this package: the marker is static, never toggled from state,

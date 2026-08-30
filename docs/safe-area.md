@@ -82,11 +82,11 @@ Without it, none of the `safe-area` utilities or `useWindowInsets` do anything.
 
 - `scrollbar-gutter: stable` on `html` — reserves the scrollbar gutter so its
   width is constant; layout stops shifting and JS width math stays in sync with
-  CSS breakpoints. It is for surfaces where the **document** is what scrolls:
-  bracemark-site's pages, bracemark-web's `min-h-dvh` screens (sign-in, the lock
-  gate, the sync gate, the 404), and bracemark-extension's popup — which has no
-  inner scroll container at all, since Chrome grows the popup to its content and
-  scrolls the document itself past 600px.
+  CSS breakpoints. It is for surfaces where the **document** is what scrolls and
+  the viewport is sized independently of it: bracemark-site's pages, and
+  bracemark-web's `min-h-dvh` screens (sign-in, the lock gate, the sync gate, the
+  404). bracemark-extension's popup scrolls its document too, but its viewport is
+  sized _from_ that document, so it opts out — see the bullet after next.
 - `html:has([data-no-scrollbar-gutter]) { scrollbar-gutter: auto }` — the opt-out,
   for a screen that is its own viewport-sized frame. A `h-dvh overflow-hidden`
   frame (`/links`, `/settings`) can never scroll the document, so the reserved
@@ -94,10 +94,26 @@ Without it, none of the `safe-area` utilities or `useWindowInsets` do anything.
   that gutter, the pane's own `overflow-y-auto` scrollbar lands at the frame's
   right edge with the inert gutter beyond it — reading as two scrollbars.
   **Mark only an element that sets both a viewport height and `overflow-hidden`
-  on itself.** On a `min-h-dvh` surface it silently reinstates the layout shift,
-  with no lint or type error. Spell the attribute `data-no-scrollbar-gutter=""`
-  so no `"true"`/`"false"` string is ever emitted; the presence selector is
-  correct here because the marker is static, never toggled from state.
+  on itself** — or the one exception in the next bullet. On a `min-h-dvh` surface
+  it silently reinstates the layout shift, with no lint or type error. Spell the
+  attribute `data-no-scrollbar-gutter=""` so no `"true"`/`"false"` string is ever
+  emitted; the presence selector is correct here because the marker is static,
+  never toggled from state.
+- **The exception: a viewport sized to its own content — bracemark-extension's
+  popup.** `entrypoints/popup/Shell.tsx` carries `data-no-scrollbar-gutter` while
+  being neither `h-dvh` nor `overflow-hidden`, so it reads as a violation of the
+  rule above and is not one. A toolbar popup has no viewport to be responsive to:
+  Chrome sizes the window to the document, so the shell's fixed `w-90` IS the
+  viewport, and a gutter reserved inside it comes off the shell rather than off a
+  viewport that was going to be that wide regardless. Measured with the popup
+  open at 360px: `html`'s content box is 345, and **everything painted past 345 is
+  clipped** — the header's hairline, the fields' right edge, their focus ring. The
+  layout is untouched (`p-4` still resolves to 16px, the inputs still measure
+  16→344), so nothing in the DOM reads wrong and no test can catch it; the symptom
+  is only visible in a screenshot, as a form flush to the right edge with a sliced
+  focus ring. Nothing is given up in exchange, either: past 600px of content Chrome
+  grows the popup to 375 and paints the real scrollbar **outside** the 360px shell,
+  so the shell holds still with or without the gutter.
 - **The opt-out is about `html`, not about the pane.** A frame that carries it can
   still want a stable gutter on its own inner scroll container, and four of them
   do. The utility is `scrollbar-gutter-stable` (Tailwind core since v4.2; it used

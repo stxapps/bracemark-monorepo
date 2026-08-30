@@ -19,6 +19,18 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 // and starts scrolling the document itself at 600px, so an inner `overflow-y`
 // would only produce two nested scrollbars. The header is sticky instead.
 //
+// ...which is exactly why `data-no-scrollbar-gutter` is on this div, and it is
+// the one surface in the repo that carries it WITHOUT being a `h-dvh
+// overflow-hidden` frame. web-ui's blanket `html { scrollbar-gutter: stable }`
+// takes the gutter out of the VIEWPORT, and the viewport is what Chrome sized to
+// this div: the popup measures 360, `html`'s content box is 345, and everything
+// painted past 345 is clipped — the header's hairline, the fields' right edge,
+// their focus ring. `p-4` still lays out 16px of right padding; 15 of those 16
+// are simply never drawn, so the form reads as flush to the edge with a sliced
+// ring. Nothing the gutter buys applies here in the first place: there is no
+// fixed viewport to hold still, and when the document does pass 600px Chrome
+// grows the popup to 375 and paints the real scrollbar OUTSIDE this 360px div.
+//
 // THE HEADER HAS TWO MODES, and which one shows says where you are:
 //   - root (the save flow, sign-in) — the mark and the wordmark, because a
 //     toolbar popup opens with no context around it: no tab title, no URL bar
@@ -58,7 +70,10 @@ export function PopupShell({
   children: React.ReactNode;
 }) {
   return (
-    <div className={cn('flex w-90 flex-col bg-background text-foreground')}>
+    <div
+      data-no-scrollbar-gutter=""
+      className={cn('flex w-90 flex-col bg-background text-foreground')}
+    >
       <header
         className={cn(
           'sticky top-0 z-20 flex h-11 shrink-0 items-center gap-2.5 border-b border-border bg-background px-4',

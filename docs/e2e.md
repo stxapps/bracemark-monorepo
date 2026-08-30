@@ -109,9 +109,17 @@ dependency for auto-retrying `expect(locator)` assertions, the trace viewer, and
 worker fixtures; hand-rolling retry logic is the reinvention this repo's
 dependency culture exists to avoid.
 
-What it is _not_ allowed to bring is its browser bundle — ~450 MB into
-`~/Library/Caches/ms-playwright/`, which this repo has never had. That is what
-made the original root devDependency `playwright-core` rather than `playwright`.
+What it is _not_ allowed to bring **on its own** is its browser bundle — ~550 MB
+into `~/Library/Caches/ms-playwright/`, which no install here populates. That is
+what made the original root devDependency `playwright-core` rather than
+`playwright`.
+
+**The one sanctioned reason to fetch it deliberately is `bracemark-extension`.**
+Google Chrome will not load an unpacked extension from the command line and says
+nothing when it declines, so driving the popup needs Playwright's own Chromium
+(`npx playwright install chromium`) — see `docs/testing.md`, _driving
+bracemark-web_, and the extension section of `.claude/skills/verify/SKILL.md`.
+Nothing in `e2e/` uses it: every spec here still goes through `CHROME_PATH`.
 
 **No suppression is needed to keep it that way, and none is configured.** At
 1.62.1 none of `@playwright/test`, `playwright`, or `playwright-core` declares an
@@ -132,9 +140,10 @@ reintroduce it, or its `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`-from-`.zshenv`
 variant, without first confirming there is a hook to suppress.
 
 `@playwright/test` is pinned `^1.62.1`, so a future minor could in principle bring
-a download hook back. The tell is `~/Library/Caches/ms-playwright/` appearing after
-an install; check `hasInstallScript` in the lockfile diff before assuming a version
-bump is inert.
+a download hook back. The tell used to be `~/Library/Caches/ms-playwright/`
+appearing at all; it no longer is, because the extension exception above puts a
+browser there on purpose. `hasInstallScript` in the lockfile diff is the check
+that still means something — a populated cache does not.
 
 Because it borrows the system browser it is pinned against whatever Chrome is
 installed, and Chrome auto-updates. Expect an occasional bump when a new Chrome
