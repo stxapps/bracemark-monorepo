@@ -675,7 +675,23 @@ export default function Page() {
               </div>
             </div>
 
-            <div className={cn('lg:col-span-5')}>
+            {/* The width cap sits here rather than on HeroPanel's own root,
+                because below `lg` this grid is a single column and the panel
+                would stretch to the full 1088px band — twice the size the same
+                drawing is at `lg`, where `col-span-5` puts it at about 416px.
+                `max-w-md` is the nearest token to that, so it reads at roughly
+                one size across the whole range.
+
+                Capping at the call site keeps ONE owner of the width per
+                breakpoint: the grid above `lg`, this line below it. It is also
+                how every other cap on this page is applied — the lede's
+                `max-w-xl`, Band's `max-w-2xl`, /pricing's plan card — while a
+                cap inside the component would apply at `lg` too, where the
+                grid already decides. `lg:max-w-none` is not load-bearing
+                today (448px is wider than the column already), and is there so
+                a later change to `max-w-6xl` or to the gap cannot quietly make
+                this the constraint up there. */}
+            <div className={cn('mx-auto w-full max-w-md lg:col-span-5 lg:max-w-none')}>
               <HeroPanel />
             </div>
           </div>
