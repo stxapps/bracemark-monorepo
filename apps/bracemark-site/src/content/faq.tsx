@@ -35,7 +35,7 @@ export type FaqGroup = { id: string; title: string; blurb: string; items: FaqIte
 function MailLink({ address }: { address: string }) {
   return (
     <a
-      className="text-signal decoration-signal-line hover:decoration-signal rounded-sm underline underline-offset-2"
+      className="rounded-sm text-signal underline decoration-signal-line underline-offset-2 hover:decoration-signal"
       href={`mailto:${address}`}
     >
       {address}
@@ -48,7 +48,7 @@ function MailLink({ address }: { address: string }) {
 function ExternalLink({ href, children }: { href: string; children: React.ReactNode }) {
   return (
     <a
-      className="text-signal decoration-signal-line hover:decoration-signal rounded-sm underline underline-offset-2"
+      className="rounded-sm text-signal underline decoration-signal-line underline-offset-2 hover:decoration-signal"
       href={href}
       rel="noreferrer"
     >
@@ -60,7 +60,7 @@ function ExternalLink({ href, children }: { href: string; children: React.ReactN
 function PageLink({ href, children }: { href: string; children: React.ReactNode }) {
   return (
     <Link
-      className="text-signal decoration-signal-line hover:decoration-signal rounded-sm underline underline-offset-2"
+      className="rounded-sm text-signal underline decoration-signal-line underline-offset-2 hover:decoration-signal"
       href={href}
     >
       {children}

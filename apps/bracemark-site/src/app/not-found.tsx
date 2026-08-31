@@ -51,22 +51,22 @@ export default function NotFound() {
       title="That page isn’t here."
       lede="The address may be mistyped, or it may be from an older version of this site. Nothing is broken — this one just doesn’t exist."
     >
-      <ul className={cn('bg-border grid gap-px overflow-hidden rounded-xl')}>
+      <ul className={cn('grid gap-px overflow-hidden rounded-xl bg-border')}>
         {ELSEWHERE.map(({ href, title, body }) => (
           <li key={href} className={cn('bg-background')}>
             <Link
               className={cn(
-                'group hover:bg-muted/50 focus-visible:ring-ring/50 flex items-start justify-between gap-6 p-6 transition-colors focus-visible:ring-3 focus-visible:outline-none',
+                'group flex items-start justify-between gap-6 p-6 transition-colors hover:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none',
               )}
               href={href}
             >
               <span>
                 <span className={cn('block text-base font-semibold')}>{title}</span>
-                <span className={cn('text-muted-foreground text-body mt-1.5 block')}>{body}</span>
+                <span className={cn('mt-1.5 block text-body text-muted-foreground')}>{body}</span>
               </span>
               <ArrowGlyph
                 className={cn(
-                  'text-muted-foreground mt-1 size-4 shrink-0 transition-transform group-hover:translate-x-0.5',
+                  'mt-1 size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5',
                 )}
               />
             </Link>
@@ -77,11 +77,11 @@ export default function NotFound() {
       {/* A dead link on our own site is our bug, and this is the one page where
           someone has already proved they hit one. The address is the same
           published support mailbox /support gives, styled the same way. */}
-      <p className={cn('text-muted-foreground text-body mt-10')}>
+      <p className={cn('mt-10 text-body text-muted-foreground')}>
         If a link on this site sent you here, we’d like to know:{' '}
         <a
           className={cn(
-            'text-signal decoration-signal-line hover:decoration-signal focus-visible:ring-ring/50 rounded-sm font-mono underline underline-offset-2 focus-visible:ring-3 focus-visible:outline-none',
+            'rounded-sm font-mono text-signal underline decoration-signal-line underline-offset-2 hover:decoration-signal focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none',
           )}
           href={`mailto:${SUPPORT_EMAIL}`}
         >

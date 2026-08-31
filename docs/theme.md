@@ -351,8 +351,23 @@ drift against `global.css` and `web-ui/src/styles.css`.
 **Adding a `--color-*` token to `global.css` means adding its name to that file
 too.** Nothing enforces it; the symptom is class-order churn reappearing for
 utilities built on the new token. web-ui needs no equivalent — its `@theme
-inline` block already declares every `--color-*`, which is why the churn was
-expo-only.
+inline` block already declares every `--color-*`, so a shim is expo-only.
+
+The shim is expo-only; **an override is not.** Every app needs its own
+`tailwindStylesheet` entry in `.prettierrc`, and the failure when one is missing
+looks nothing like the expo case. `bracemark-site` had no entry at all for its
+whole first stretch, so the plugin fell back to stock tailwind and filed _every_
+token utility as unknown — not just the site's own `text-signal`, `font-display`
+and `text-body`, but web-ui's `text-muted-foreground` and `border-border` too,
+all of them hoisted to the front of every list. That is **stable**, so it never
+churns and `--list-different` stays at zero; it is simply the wrong order,
+everywhere, and nothing about a clean formatting run says so. The site's
+override points straight at `apps/bracemark-site/src/app/globals.css` and needs
+no shim, because its tokens are declared in a real `@theme` block — the
+`@import '@stxapps/web-ui/styles.css'` at the top of that file is followed
+through, so one stylesheet covers both the shared tokens and the site-local
+ones. A new app is the case to watch: add the override when you add the app, or
+its class lists sort against stock tailwind from the first commit.
 
 ### the state variants — and when the bare form lies
 

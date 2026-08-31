@@ -160,7 +160,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={cn(inter.variable, bricolage.variable, plexMono.variable)}>
       <body>
-        <div className={cn('bg-background text-foreground flex min-h-dvh flex-col antialiased')}>
+        <div className={cn('flex min-h-dvh flex-col bg-background text-foreground antialiased')}>
           <SiteHeader />
           <main className={cn('flex-1')}>{children}</main>
           <SiteFooter />

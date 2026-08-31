@@ -17,7 +17,7 @@ import { COMPANY, FOOTER_LINKS, SUPPORT_EMAIL } from '../lib/site';
 // of insetting it (docs/safe-area.md, _applying safe area_).
 export function SiteFooter() {
   return (
-    <footer className={cn('band px-safe pb-safe mt-24')}>
+    <footer className={cn('band mt-24 px-safe pb-safe')}>
       <div className={cn('mx-auto max-w-6xl px-4 py-14 md:px-6 lg:px-8')}>
         <div className={cn('grid gap-10 sm:grid-cols-2 lg:grid-cols-5 lg:gap-8')}>
           <div className={cn('lg:col-span-2')}>
@@ -27,13 +27,13 @@ export function SiteFooter() {
                 Bracemark
               </span>
             </div>
-            <p className={cn('text-muted-foreground mt-4 max-w-xs text-sm leading-6')}>
+            <p className={cn('mt-4 max-w-xs text-sm leading-6 text-muted-foreground')}>
               An end-to-end encrypted bookmark manager. Your links are encrypted on your device
               before they sync — we hold the ciphertext, and no key that opens it.
             </p>
             <a
               className={cn(
-                'text-signal decoration-signal-line hover:decoration-signal focus-visible:ring-ring/50 mt-4 inline-block rounded-sm font-mono text-sm underline underline-offset-4 focus-visible:ring-3 focus-visible:ring-offset-2 focus-visible:outline-none',
+                'mt-4 inline-block rounded-sm font-mono text-sm text-signal underline decoration-signal-line underline-offset-4 hover:decoration-signal focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-offset-2 focus-visible:outline-none',
               )}
               href={`mailto:${SUPPORT_EMAIL}`}
             >
@@ -76,7 +76,7 @@ export function SiteFooter() {
 
         <div
           className={cn(
-            'border-border text-muted-foreground mt-12 flex flex-col gap-2 border-t pt-6 text-xs sm:flex-row sm:items-center sm:justify-between',
+            'mt-12 flex flex-col gap-2 border-t border-border pt-6 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between',
           )}
         >
           <p>

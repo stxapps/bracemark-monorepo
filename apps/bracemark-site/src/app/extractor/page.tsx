@@ -166,16 +166,16 @@ export default function Page() {
       <div className={cn('space-y-14')}>
         {/* The string they searched for, given the weight /support gives its
             address: it is the one thing on the page the reader arrived holding. */}
-        <section className={cn('border-signal-line bg-signal-soft/60 rounded-2xl border p-8')}>
+        <section className={cn('rounded-2xl border border-signal-line bg-signal-soft/60 p-8')}>
           <p className={cn('eyebrow text-signal')}>The line in your log</p>
           <p
             className={cn(
-              'text-signal-strong mt-3 font-mono text-sm break-all sm:text-base md:text-lg',
+              'mt-3 font-mono text-sm break-all text-signal-strong sm:text-base md:text-lg',
             )}
           >
             {USER_AGENT}
           </p>
-          <p className={cn('text-muted-foreground text-body mt-5')}>
+          <p className={cn('mt-5 text-body text-muted-foreground')}>
             Bracemark is an end-to-end encrypted bookmark manager. When someone saves a link in the
             web app, the browser will not let that page fetch yours, so this service fetches it
             instead — reads the title and the preview image, hands both back to the person’s own
@@ -189,7 +189,7 @@ export default function Page() {
           <h2 className={cn('font-display text-2xl font-semibold tracking-tight')}>
             It is a fetcher, not a crawler
           </h2>
-          <div className={cn('text-muted-foreground mt-4 space-y-4 text-base leading-7')}>
+          <div className={cn('mt-4 space-y-4 text-base leading-7 text-muted-foreground')}>
             <p>
               There is no queue, no schedule and no index behind it. It never follows a link out of
               a page it fetched, never asks for a second page from your site on its own initiative,
@@ -220,7 +220,7 @@ export default function Page() {
               instead, with no server of ours in it. The full account of that is in the{' '}
               <Link
                 className={cn(
-                  'text-signal decoration-signal-line hover:decoration-signal underline underline-offset-2',
+                  'text-signal underline decoration-signal-line underline-offset-2 hover:decoration-signal',
                 )}
                 href="/privacy"
               >
@@ -235,24 +235,24 @@ export default function Page() {
           <h2 className={cn('font-display text-2xl font-semibold tracking-tight')}>
             What it costs you
           </h2>
-          <p className={cn('text-muted-foreground mt-4 text-base leading-7')}>
+          <p className={cn('mt-4 text-base leading-7 text-muted-foreground')}>
             Every one of these is a hard cap in the code rather than a target, and each applies to
             every hop of every request.
           </p>
-          <dl className={cn('border-border mt-6 border-t')}>
+          <dl className={cn('mt-6 border-t border-border')}>
             {FACTS.map(([term, detail]) => (
               <div
                 key={term}
                 className={cn(
-                  'border-border flex flex-wrap items-baseline justify-between gap-x-8 gap-y-1 border-b py-3.5',
+                  'flex flex-wrap items-baseline justify-between gap-x-8 gap-y-1 border-b border-border py-3.5',
                 )}
               >
                 <dt className={cn('eyebrow')}>{term}</dt>
-                <dd className={cn('text-muted-foreground font-mono text-sm')}>{detail}</dd>
+                <dd className={cn('font-mono text-sm text-muted-foreground')}>{detail}</dd>
               </div>
             ))}
           </dl>
-          <p className={cn('text-muted-foreground mt-6 text-base leading-7')}>
+          <p className={cn('mt-6 text-base leading-7 text-muted-foreground')}>
             Because nothing on the page is executed, what it sees is the markup you served and
             nothing more: no stylesheet, script or font is pulled in behind it, and a page that
             assembles its title in the browser yields nothing to find. The ceilings are ours as much
@@ -261,7 +261,7 @@ export default function Page() {
             each redirect before connecting to it, in{' '}
             <a
               className={cn(
-                'text-signal decoration-signal-line hover:decoration-signal underline underline-offset-2',
+                'text-signal underline decoration-signal-line underline-offset-2 hover:decoration-signal',
               )}
               href={SOURCE.url}
               rel="noreferrer"
@@ -278,9 +278,9 @@ export default function Page() {
           </h2>
           <dl className={cn('mt-8 space-y-6')}>
             {NEVER.map(([term, detail]) => (
-              <div key={term} className={cn('border-border border-t pt-5')}>
+              <div key={term} className={cn('border-t border-border pt-5')}>
                 <dt className={cn('text-base font-semibold')}>{term}</dt>
-                <dd className={cn('text-muted-foreground text-body mt-2')}>{detail}</dd>
+                <dd className={cn('mt-2 text-body text-muted-foreground')}>{detail}</dd>
               </div>
             ))}
           </dl>
@@ -290,7 +290,7 @@ export default function Page() {
           <h2 className={cn('font-display text-2xl font-semibold tracking-tight')}>
             It does not read your robots.txt
           </h2>
-          <div className={cn('text-muted-foreground mt-4 space-y-4 text-base leading-7')}>
+          <div className={cn('mt-4 space-y-4 text-base leading-7 text-muted-foreground')}>
             <p>
               Said plainly, because this is the page where you came looking for it. A robots
               directive will not stop this fetcher, and we would rather disclose that than let you
@@ -320,12 +320,12 @@ export default function Page() {
           <h2 className={cn('font-display text-2xl font-semibold tracking-tight')}>
             How to turn it away
           </h2>
-          <div className={cn('text-muted-foreground mt-4 space-y-4 text-base leading-7')}>
+          <div className={cn('mt-4 space-y-4 text-base leading-7 text-muted-foreground')}>
             <p>
               Match the user agent — every request carries{' '}
-              <span className={cn('text-foreground font-mono text-sm')}>bracemark-extractor</span>{' '}
+              <span className={cn('font-mono text-sm text-foreground')}>bracemark-extractor</span>{' '}
               in that header, and it is never spoofed as a browser — then answer with{' '}
-              <span className={cn('text-foreground font-mono text-sm')}>403</span>.
+              <span className={cn('font-mono text-sm text-foreground')}>403</span>.
             </p>
           </div>
           <div className={cn('mt-6 space-y-4')}>
@@ -333,7 +333,7 @@ export default function Page() {
               <p className={cn('eyebrow')}>nginx</p>
               <pre
                 className={cn(
-                  'border-border bg-muted/50 mt-2 overflow-x-auto rounded-xl border p-4 font-mono text-xs leading-6',
+                  'mt-2 overflow-x-auto rounded-xl border border-border bg-muted/50 p-4 font-mono text-xs leading-6',
                 )}
               >
                 <code>{'if ($http_user_agent ~* "bracemark-extractor") { return 403; }'}</code>
@@ -343,16 +343,16 @@ export default function Page() {
               <p className={cn('eyebrow')}>Cloudflare WAF</p>
               <pre
                 className={cn(
-                  'border-border bg-muted/50 mt-2 overflow-x-auto rounded-xl border p-4 font-mono text-xs leading-6',
+                  'mt-2 overflow-x-auto rounded-xl border border-border bg-muted/50 p-4 font-mono text-xs leading-6',
                 )}
               >
                 <code>{'(http.user_agent contains "bracemark-extractor")  →  Block'}</code>
               </pre>
             </div>
           </div>
-          <div className={cn('text-muted-foreground mt-6 space-y-4 text-base leading-7')}>
+          <div className={cn('mt-6 space-y-4 text-base leading-7 text-muted-foreground')}>
             <p>
-              <strong className={cn('text-foreground font-semibold')}>
+              <strong className={cn('font-semibold text-foreground')}>
                 The status code you pick decides how long we keep trying.
               </strong>{' '}
               A <span className={cn('font-mono text-sm')}>403</span> is retried on a widening
@@ -365,7 +365,7 @@ export default function Page() {
               403 if you want it gone.
             </p>
             <p>
-              <strong className={cn('text-foreground font-semibold')}>
+              <strong className={cn('font-semibold text-foreground')}>
                 Do not block it by address.
               </strong>{' '}
               It runs on Cloudflare Workers, so its requests leave from a shared pool that has
@@ -383,15 +383,15 @@ export default function Page() {
         {/* No signup CTA closes this page. The reader is not a prospect, and an
             "or you could try Bracemark!" band under a blocking guide would read
             as exactly the kind of bot that ignores robots.txt. */}
-        <section className={cn('border-border rounded-2xl border p-8')}>
+        <section className={cn('rounded-2xl border border-border p-8')}>
           <h2 className={cn('font-display text-xl font-semibold tracking-tight')}>
             If it misbehaved
           </h2>
-          <p className={cn('text-muted-foreground text-body mt-3')}>
+          <p className={cn('mt-3 text-body text-muted-foreground')}>
             Write to{' '}
             <a
               className={cn(
-                'text-signal decoration-signal-line hover:decoration-signal rounded-sm font-mono underline underline-offset-2',
+                'rounded-sm font-mono text-signal underline decoration-signal-line underline-offset-2 hover:decoration-signal',
               )}
               href={`mailto:${ABUSE_EMAIL}`}
             >

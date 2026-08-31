@@ -106,7 +106,7 @@ export default function Page() {
             <h2 className={cn('font-display text-2xl font-semibold tracking-tight')}>
               Why this one exists
             </h2>
-            <div className={cn('text-muted-foreground mt-4 space-y-4 text-base leading-7')}>
+            <div className={cn('mt-4 space-y-4 text-base leading-7 text-muted-foreground')}>
               <p>
                 What you save is a fairly complete picture of what you are reading, buying, worrying
                 about and working on. Most bookmark managers hold that picture in readable form on
@@ -136,7 +136,7 @@ export default function Page() {
             <h2 className={cn('font-display text-2xl font-semibold tracking-tight')}>
               What it costs to build it this way
             </h2>
-            <p className={cn('text-muted-foreground mt-4 text-base leading-7')}>
+            <p className={cn('mt-4 text-base leading-7 text-muted-foreground')}>
               Four things you can do in an ordinary bookmark manager, you cannot do here. We would
               rather you knew now.
             </p>
@@ -146,9 +146,9 @@ export default function Page() {
                 measure and reads as a list of costs rather than a feature grid. */}
             <dl className={cn('mt-8 grid gap-8 sm:grid-cols-2')}>
               {TRADEOFFS.map(([term, detail]) => (
-                <div key={term} className={cn('border-border border-t pt-5')}>
+                <div key={term} className={cn('border-t border-border pt-5')}>
                   <dt className={cn('text-base font-semibold text-balance')}>{term}</dt>
-                  <dd className={cn('text-muted-foreground text-body mt-2')}>{detail}</dd>
+                  <dd className={cn('mt-2 text-body text-muted-foreground')}>{detail}</dd>
                 </div>
               ))}
             </dl>
@@ -158,7 +158,7 @@ export default function Page() {
             <h2 className={cn('font-display text-2xl font-semibold tracking-tight')}>
               Where it came from
             </h2>
-            <div className={cn('text-muted-foreground mt-4 space-y-4 text-base leading-7')}>
+            <div className={cn('mt-4 space-y-4 text-base leading-7 text-muted-foreground')}>
               <p>
                 Bracemark is the second version of Brace.to, a bookmark manager we have run for
                 years on a decentralised identity stack. That version worked, and the people who
@@ -178,7 +178,7 @@ export default function Page() {
             <h2 className={cn('font-display text-2xl font-semibold tracking-tight')}>
               How it pays for itself
             </h2>
-            <div className={cn('text-muted-foreground mt-4 space-y-4 text-base leading-7')}>
+            <div className={cn('mt-4 space-y-4 text-base leading-7 text-muted-foreground')}>
               <p>
                 Subscriptions. That is the whole model. There is no advertising, no data to sell
                 even if we wanted to, and no investor expecting one of those to appear later.
@@ -190,7 +190,7 @@ export default function Page() {
                 {FREE_LINKS} links rather than a nag screen, and why{' '}
                 <Link
                   className={cn(
-                    'text-signal decoration-signal-line hover:decoration-signal underline underline-offset-2',
+                    'text-signal underline decoration-signal-line underline-offset-2 hover:decoration-signal',
                   )}
                   href="/pricing"
                 >
@@ -209,7 +209,7 @@ export default function Page() {
             <h2 className={cn('font-display text-2xl font-semibold tracking-tight')}>
               Who makes it
             </h2>
-            <div className={cn('text-muted-foreground mt-4 space-y-4 text-base leading-7')}>
+            <div className={cn('mt-4 space-y-4 text-base leading-7 text-muted-foreground')}>
               <p>
                 A small team at {COMPANY.legalName} in Bangkok. Small enough that the person who
                 answers <span className={cn('font-mono text-sm')}>{SUPPORT_EMAIL}</span> is the
@@ -240,13 +240,13 @@ export default function Page() {
             <h2 className={cn('font-display text-2xl font-semibold tracking-tight')}>
               See for yourself
             </h2>
-            <div className={cn('text-muted-foreground mt-4 space-y-4 text-base leading-7')}>
+            <div className={cn('mt-4 space-y-4 text-base leading-7 text-muted-foreground')}>
               <p>
                 Everything above is a claim about how the software works, made by the people who
                 profit from you believing it. So the software is public:{' '}
                 <a
                   className={cn(
-                    'text-signal decoration-signal-line hover:decoration-signal underline underline-offset-2',
+                    'text-signal underline decoration-signal-line underline-offset-2 hover:decoration-signal',
                   )}
                   href={SOURCE.url}
                   rel="noreferrer"
@@ -291,16 +291,16 @@ export default function Page() {
                 ("Bricolage Grotesque · Inter · IBM Plex Mono") wrap mid-list and
                 the columns stop lining up, which is the one thing a specimen
                 list has to do. */}
-            <dl className={cn('border-border mt-6 border-t')}>
+            <dl className={cn('mt-6 border-t border-border')}>
               {BUILT_WITH.map(([term, detail]) => (
                 <div
                   key={term}
                   className={cn(
-                    'border-border flex flex-wrap items-baseline justify-between gap-x-8 gap-y-1 border-b py-3.5',
+                    'flex flex-wrap items-baseline justify-between gap-x-8 gap-y-1 border-b border-border py-3.5',
                   )}
                 >
                   <dt className={cn('eyebrow')}>{term}</dt>
-                  <dd className={cn('text-muted-foreground font-mono text-sm')}>{detail}</dd>
+                  <dd className={cn('font-mono text-sm text-muted-foreground')}>{detail}</dd>
                 </div>
               ))}
             </dl>
@@ -308,7 +308,7 @@ export default function Page() {
         </div>
       </PageShell>
 
-      <section className={cn('band px-safe mt-24')}>
+      <section className={cn('band mt-24 px-safe')}>
         <div className={cn('mx-auto max-w-3xl px-4 py-20 text-center md:px-6 lg:px-8')}>
           <h2
             className={cn(
@@ -317,7 +317,7 @@ export default function Page() {
           >
             The best way to judge it is to use it.
           </h2>
-          <p className={cn('text-muted-foreground mx-auto mt-4 max-w-lg text-lg leading-8')}>
+          <p className={cn('mx-auto mt-4 max-w-lg text-lg leading-8 text-muted-foreground')}>
             {FREE_LINKS} links, no card, no email address.
           </p>
           <Button asChild size="lg" className={cn('mt-8')}>

@@ -75,17 +75,17 @@ export default function Page() {
     >
       <div className={cn('space-y-14')}>
         {/* The primary route, given the weight it deserves. */}
-        <section className={cn('border-signal-line bg-signal-soft/60 rounded-2xl border p-8')}>
+        <section className={cn('rounded-2xl border border-signal-line bg-signal-soft/60 p-8')}>
           <p className={cn('eyebrow text-signal')}>Support</p>
           <a
             className={cn(
-              'text-signal-strong decoration-signal-line hover:decoration-signal focus-visible:ring-ring/50 mt-3 block rounded-sm font-mono text-xl break-all underline underline-offset-8 focus-visible:ring-3 focus-visible:outline-none sm:text-2xl',
+              'mt-3 block rounded-sm font-mono text-xl break-all text-signal-strong underline decoration-signal-line underline-offset-8 hover:decoration-signal focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none sm:text-2xl',
             )}
             href={`mailto:${SUPPORT_EMAIL}`}
           >
             {SUPPORT_EMAIL}
           </a>
-          <p className={cn('text-muted-foreground text-body mt-5')}>
+          <p className={cn('mt-5 text-body text-muted-foreground')}>
             Bugs, billing, imports, exports, anything at all. We are a small team in one timezone,
             so a reply can take a day or two. A person reads every message, and anything that needs
             an answer gets one.
@@ -97,7 +97,7 @@ export default function Page() {
               <li
                 key={line}
                 className={cn(
-                  'text-muted-foreground before:bg-signal-line text-body flex gap-3 before:mt-3 before:size-1 before:shrink-0 before:rounded-full',
+                  'flex gap-3 text-body text-muted-foreground before:mt-3 before:size-1 before:shrink-0 before:rounded-full before:bg-signal-line',
                 )}
               >
                 {line}
@@ -111,30 +111,30 @@ export default function Page() {
           <h2 className={cn('font-display text-2xl font-semibold tracking-tight')}>
             What we can’t do
           </h2>
-          <p className={cn('text-muted-foreground mt-4 text-base leading-7')}>
+          <p className={cn('mt-4 text-base leading-7 text-muted-foreground')}>
             These aren’t policies we could be talked out of — they are consequences of an app where
             the key never reaches us.
           </p>
           <dl className={cn('mt-8 space-y-6')}>
-            <div className={cn('border-border border-t pt-5')}>
+            <div className={cn('border-t border-border pt-5')}>
               <dt className={cn('text-base font-semibold')}>Recover a lost password</dt>
-              <dd className={cn('text-muted-foreground text-body mt-2')}>
+              <dd className={cn('mt-2 text-body text-muted-foreground')}>
                 If you still have your recovery code, use it to sign in and then set a new password.
                 If both are gone, the library cannot be opened by anyone — including us. There is no
                 override, no support escalation, and no exception.
               </dd>
             </div>
-            <div className={cn('border-border border-t pt-5')}>
+            <div className={cn('border-t border-border pt-5')}>
               <dt className={cn('text-base font-semibold')}>See or fix your data for you</dt>
-              <dd className={cn('text-muted-foreground text-body mt-2')}>
+              <dd className={cn('mt-2 text-body text-muted-foreground')}>
                 We can’t read a link, restore one you deleted, or look at your library to debug it.
                 If something looks wrong, an export is the fastest way to show us the shape of the
                 problem without sending us your contents.
               </dd>
             </div>
-            <div className={cn('border-border border-t pt-5')}>
+            <div className={cn('border-t border-border pt-5')}>
               <dt className={cn('text-base font-semibold')}>Refund a store purchase directly</dt>
-              <dd className={cn('text-muted-foreground text-body mt-2')}>
+              <dd className={cn('mt-2 text-body text-muted-foreground')}>
                 Subscriptions bought inside the iOS or Android apps are handled by Apple and Google,
                 and refunds have to go through them. For a subscription bought on the web, write to
                 us — we can help with those.
@@ -145,15 +145,15 @@ export default function Page() {
 
         {/* Security reports get their own address so they don't queue behind
             "how do I import from Raindrop". */}
-        <section className={cn('border-border rounded-2xl border p-8')}>
+        <section className={cn('rounded-2xl border border-border p-8')}>
           <h2 className={cn('font-display text-xl font-semibold tracking-tight')}>
             Reporting a security problem
           </h2>
-          <p className={cn('text-muted-foreground text-body mt-3')}>
+          <p className={cn('mt-3 text-body text-muted-foreground')}>
             Please write to{' '}
             <a
               className={cn(
-                'text-signal decoration-signal-line hover:decoration-signal rounded-sm font-mono underline underline-offset-2',
+                'rounded-sm font-mono text-signal underline decoration-signal-line underline-offset-2 hover:decoration-signal',
               )}
               href={`mailto:${SECURITY_EMAIL}`}
             >
@@ -169,24 +169,24 @@ export default function Page() {
           <h2 className={cn('font-display text-2xl font-semibold tracking-tight')}>
             Faster than an email
           </h2>
-          <ul className={cn('bg-border mt-6 grid gap-px overflow-hidden rounded-xl')}>
+          <ul className={cn('mt-6 grid gap-px overflow-hidden rounded-xl bg-border')}>
             {ELSEWHERE.map(({ href, title, body }) => (
               <li key={href} className={cn('bg-background')}>
                 <Link
                   className={cn(
-                    'group hover:bg-muted/50 focus-visible:ring-ring/50 flex items-start justify-between gap-6 p-6 transition-colors focus-visible:ring-3 focus-visible:outline-none',
+                    'group flex items-start justify-between gap-6 p-6 transition-colors hover:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none',
                   )}
                   href={href}
                 >
                   <span>
                     <span className={cn('block text-base font-semibold')}>{title}</span>
-                    <span className={cn('text-muted-foreground text-body mt-1.5 block')}>
+                    <span className={cn('mt-1.5 block text-body text-muted-foreground')}>
                       {body}
                     </span>
                   </span>
                   <ArrowGlyph
                     className={cn(
-                      'text-muted-foreground mt-1 size-4 shrink-0 transition-transform group-hover:translate-x-0.5',
+                      'mt-1 size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5',
                     )}
                   />
                 </Link>

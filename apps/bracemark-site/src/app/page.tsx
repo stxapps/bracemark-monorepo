@@ -123,7 +123,7 @@ const SCREENSHOT_SRCSET =
 
 function HeroPanel() {
   return (
-    <div className={cn('border-border bg-card overflow-hidden rounded-2xl border shadow-sm')}>
+    <div className={cn('overflow-hidden rounded-2xl border border-border bg-card shadow-sm')}>
       {/* Plaintext half — the only place the accent carries real content. The
           extra bottom padding keeps the tag row clear of the AES chip below. */}
       <div className={cn('p-5 pb-8 sm:p-6 sm:pb-9')}>
@@ -141,7 +141,7 @@ function HeroPanel() {
               while two of those were square; they all moved together. */}
           <div
             className={cn(
-              'bg-signal-soft ring-signal-line mt-0.5 h-10 w-16 shrink-0 rounded ring-1 ring-inset',
+              'mt-0.5 h-10 w-16 shrink-0 rounded bg-signal-soft ring-1 ring-signal-line ring-inset',
             )}
             aria-hidden="true"
           />
@@ -157,7 +157,7 @@ function HeroPanel() {
             <p className={cn('text-[0.9375rem] leading-snug font-medium')}>
               Local-first sync: the hard parts
             </p>
-            <p className={cn('text-muted-foreground mt-1 font-mono text-xs')}>
+            <p className={cn('mt-1 font-mono text-xs text-muted-foreground')}>
               martin.kleppmann.com
             </p>
             <div className={cn('mt-2.5 flex flex-wrap gap-1.5')}>
@@ -170,7 +170,7 @@ function HeroPanel() {
                 <span
                   key={tag}
                   className={cn(
-                    'bg-muted text-muted-foreground rounded-md px-1.5 py-0.5 font-mono text-[0.6875rem]',
+                    'rounded-md bg-muted px-1.5 py-0.5 font-mono text-[0.6875rem] text-muted-foreground',
                   )}
                 >
                   {tag}
@@ -182,10 +182,10 @@ function HeroPanel() {
       </div>
 
       {/* The seam. The chip names the mechanism rather than describing it. */}
-      <div className={cn('border-border relative border-t')}>
+      <div className={cn('relative border-t border-border')}>
         <span
           className={cn(
-            'border-border bg-background text-muted-foreground absolute -top-2.5 left-5 rounded-full border px-2 py-0.5 font-mono text-[0.625rem] tracking-wider uppercase sm:left-6',
+            'absolute -top-2.5 left-5 rounded-full border border-border bg-background px-2 py-0.5 font-mono text-[0.625rem] tracking-wider text-muted-foreground uppercase sm:left-6',
           )}
         >
           AES-256-GCM
@@ -193,11 +193,11 @@ function HeroPanel() {
       </div>
 
       {/* Ciphertext half — inverted, because this is the side we live on. */}
-      <div className={cn('bg-foreground text-background px-5 pt-7 pb-6 sm:px-6')}>
+      <div className={cn('bg-foreground px-5 pt-7 pb-6 text-background sm:px-6')}>
         <p className={cn('eyebrow text-background/60')}>What our servers store</p>
         <div className={cn('mt-4 flex items-baseline justify-between gap-4 font-mono text-xs')}>
           <span className={cn('truncate')}>links/01JD7QK2X8N4WYB3F0.enc</span>
-          <span className={cn('text-background/50 shrink-0')}>2.1 KB</span>
+          <span className={cn('shrink-0 text-background/50')}>2.1 KB</span>
         </div>
         {/* The third field, and the reason this panel is now truthful. /privacy
             has always said we hold the path, the size AND when the file last
@@ -208,17 +208,17 @@ function HeroPanel() {
             an overclaim in the one place we ask to be checked costs more than
             the fact does. Relative rather than a date: an illustration with a
             hard-coded 2026 stamp reads as abandoned by 2028. */}
-        <p className={cn('text-background/50 mt-1 font-mono text-xs')}>
+        <p className={cn('mt-1 font-mono text-xs text-background/50')}>
           last changed 2 minutes ago
         </p>
         <p
           className={cn(
-            'text-background/45 mt-3 font-mono text-[0.6875rem] leading-5 break-all select-all',
+            'mt-3 font-mono text-[0.6875rem] leading-5 break-all text-background/45 select-all',
           )}
         >
           {CIPHERTEXT}
         </p>
-        <p className={cn('text-background/70 mt-5 text-sm leading-6')}>
+        <p className={cn('mt-5 text-sm leading-6 text-background/70')}>
           A path, a size, a timestamp, and bytes we hold no key for. Not the title, not the address,
           not the tags — there is nowhere for them to be.
         </p>
@@ -232,7 +232,7 @@ function HeroPanel() {
             it would stage the concession as fine print, which is the exact move
             this paragraph exists to refuse. It is the caption's second half,
             so it is set as the caption's second half. */}
-        <p className={cn('text-background/70 mt-3 text-sm leading-6')}>
+        <p className={cn('mt-3 text-sm leading-6 text-background/70')}>
           What that shape still tells us: how many files you keep and when they change. It is the
           whole of what we can infer, and we would rather say it than have you work it out.
         </p>
@@ -267,13 +267,13 @@ function Band({
         <p className={cn('eyebrow')}>{label}</p>
         <h2
           className={cn(
-            'font-display mt-4 max-w-2xl text-3xl leading-[1.1] font-semibold tracking-tight text-balance md:text-4xl',
+            'mt-4 max-w-2xl font-display text-3xl leading-[1.1] font-semibold tracking-tight text-balance md:text-4xl',
           )}
         >
           {title}
         </h2>
         {lede && (
-          <p className={cn('text-muted-foreground mt-4 max-w-xl text-lg leading-8')}>{lede}</p>
+          <p className={cn('mt-4 max-w-xl text-lg leading-8 text-muted-foreground')}>{lede}</p>
         )}
         <div className={cn('mt-12')}>{children}</div>
       </div>
@@ -533,7 +533,7 @@ const DURABILITY: [string, React.ReactNode][] = [
       previews are a single repository under the {SOURCE.license}:{' '}
       <a
         className={cn(
-          'text-signal decoration-signal-line hover:decoration-signal underline underline-offset-2',
+          'text-signal underline decoration-signal-line underline-offset-2 hover:decoration-signal',
         )}
         href={SOURCE.url}
         rel="noreferrer"
@@ -568,7 +568,7 @@ export default function Page() {
               <p className={cn('eyebrow')}>End-to-end encrypted · Local-first</p>
               <h1
                 className={cn(
-                  'font-display mt-5 text-[2.75rem] leading-[0.98] font-semibold tracking-tight text-balance sm:text-6xl lg:text-[4.25rem]',
+                  'mt-5 font-display text-[2.75rem] leading-[0.98] font-semibold tracking-tight text-balance sm:text-6xl lg:text-[4.25rem]',
                 )}
               >
                 {BRAND.tagline}.
@@ -607,7 +607,7 @@ export default function Page() {
                     derive". The old phrasing is false as written — anyone
                     holding the password derives it, which is the entire point
                     of the recovery-code paragraphs further down. */}
-              <p className={cn('text-muted-foreground mt-6 max-w-xl text-lg leading-8')}>
+              <p className={cn('mt-6 max-w-xl text-lg leading-8 text-muted-foreground')}>
                 What you save is a fairly complete picture of what you are reading, buying, worrying
                 about and working on. Bracemark encrypts every part of it on your device before it
                 syncs — the address, the title, the tags, whatever you write about it — with a key
@@ -642,7 +642,7 @@ export default function Page() {
                   the claim block's footnote and in the closer; those are the
                   three places that used to state the risk with only one of the
                   two secrets in view. */}
-              <p className={cn('text-muted-foreground mt-5 max-w-md text-sm leading-6')}>
+              <p className={cn('mt-5 max-w-md text-sm leading-6 text-muted-foreground')}>
                 Free for your first {FREE_LINKS} links — start empty, or bring the library you
                 already have. No card, and no email address, because the account has nowhere to put
                 one: the two doors into it are your password and a recovery code, and you save both
@@ -661,7 +661,7 @@ export default function Page() {
                           actually on them. */}
                       <a
                         className={cn(
-                          'focus-visible:ring-ring/50 block rounded-sm opacity-80 grayscale transition duration-200 hover:opacity-100 hover:grayscale-0 focus-visible:ring-3 focus-visible:ring-offset-2 focus-visible:outline-none',
+                          'block rounded-sm opacity-80 grayscale transition duration-200 hover:opacity-100 hover:grayscale-0 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-offset-2 focus-visible:outline-none',
                         )}
                         href={href}
                         target="_blank"
@@ -683,10 +683,10 @@ export default function Page() {
       </div>
 
       {/* --- the three things a sceptic checks first --------------------- */}
-      <section className={cn('band px-safe bg-muted/40')}>
+      <section className={cn('band bg-muted/40 px-safe')}>
         <div className={cn('mx-auto max-w-6xl px-4 md:px-6 lg:px-8')}>
           <dl
-            className={cn('divide-border grid divide-y sm:grid-cols-3 sm:divide-x sm:divide-y-0')}
+            className={cn('grid divide-y divide-border sm:grid-cols-3 sm:divide-x sm:divide-y-0')}
           >
             {[
               // The investor clause is the second half of the sentence and it
@@ -714,7 +714,7 @@ export default function Page() {
             ].map(([term, detail]) => (
               <div key={term} className={cn('py-8 sm:px-8 sm:first:pl-0 sm:last:pr-0')}>
                 <dt className={cn('font-display text-lg font-semibold tracking-tight')}>{term}</dt>
-                <dd className={cn('text-muted-foreground mt-1.5 text-sm leading-6')}>{detail}</dd>
+                <dd className={cn('mt-1.5 text-sm leading-6 text-muted-foreground')}>{detail}</dd>
               </div>
             ))}
           </dl>
@@ -738,16 +738,16 @@ export default function Page() {
         title="Four ways in, all of them one gesture."
         lede="Saving has to be faster than not saving, or the library never happens. Whichever surface you use, the link is encrypted on the device before it syncs."
       >
-        <ul className={cn('bg-border grid gap-px overflow-hidden rounded-xl sm:grid-cols-2')}>
+        <ul className={cn('grid gap-px overflow-hidden rounded-xl bg-border sm:grid-cols-2')}>
           {CAPTURE.map(({ name, where, body }) => (
             <li key={name} className={cn('bg-background p-7 md:p-8')}>
               <div className={cn('flex items-baseline justify-between gap-4')}>
                 <h3 className={cn('font-display text-xl font-semibold tracking-tight')}>{name}</h3>
-                <span className={cn('text-muted-foreground shrink-0 font-mono text-xs')}>
+                <span className={cn('shrink-0 font-mono text-xs text-muted-foreground')}>
                   {where}
                 </span>
               </div>
-              <p className={cn('text-muted-foreground text-body mt-3')}>{body}</p>
+              <p className={cn('mt-3 text-body text-muted-foreground')}>{body}</p>
             </li>
           ))}
         </ul>
@@ -766,7 +766,7 @@ export default function Page() {
             from the saving device is the one thing a grid of covers cannot show
             and the thing that decides whether a free web-only visitor sees any. */}
         <figure className={cn('mb-16')}>
-          <div className={cn('border-border bg-card overflow-hidden rounded-2xl border shadow-sm')}>
+          <div className={cn('overflow-hidden rounded-2xl border border-border bg-card shadow-sm')}>
             {/* `loading="lazy"`: this figure sits several screens down and
                 there is no image in the hero, so nothing here is the LCP
                 element — the bytes are better spent after first paint.
@@ -789,20 +789,20 @@ export default function Page() {
               two-word LABEL naming a band; a full sentence set that way is hard
               to read and shouts. This matches the band's other secondary line —
               the Plus footnote below the grid — which is what it is. */}
-          <figcaption className={cn('text-muted-foreground mt-4 text-sm leading-6')}>
+          <figcaption className={cn('mt-4 text-sm leading-6 text-muted-foreground')}>
             {SCREENSHOT.caption}
           </figcaption>
         </figure>
 
         <ul className={cn('grid gap-x-10 gap-y-8 sm:grid-cols-2 lg:grid-cols-3')}>
           {LIBRARY.map(([name, body]) => (
-            <li key={name} className={cn('border-border border-t pt-5')}>
+            <li key={name} className={cn('border-t border-border pt-5')}>
               <h3 className={cn('text-base font-semibold')}>{name}</h3>
-              <p className={cn('text-muted-foreground text-body mt-2')}>{body}</p>
+              <p className={cn('mt-2 text-body text-muted-foreground')}>{body}</p>
             </li>
           ))}
         </ul>
-        <p className={cn('text-muted-foreground mt-10 max-w-2xl text-sm leading-6')}>
+        <p className={cn('mt-10 max-w-2xl text-sm leading-6 text-muted-foreground')}>
           Nested lists, hidden lists, the app lock and the structured search editor are{' '}
           {PLAN_LABELS.plus}. Everything above stays free.
         </p>
@@ -835,7 +835,7 @@ export default function Page() {
             accent to what is genuinely yours or genuinely on, and three more
             marks here would double the page's accent count to make a point the
             weight difference already makes. */}
-        <dl className={cn('divide-border border-border grid divide-y border-y')}>
+        <dl className={cn('grid divide-y divide-border border-y border-border')}>
           {TRADE.map(({ aspect, hosted, ours }) => (
             <div
               key={aspect}
@@ -846,11 +846,11 @@ export default function Page() {
               </dt>
               <dd className={cn('md:col-span-4')}>
                 <p className={cn('eyebrow')}>A hosted manager</p>
-                <p className={cn('text-muted-foreground text-body mt-2.5')}>{hosted}</p>
+                <p className={cn('mt-2.5 text-body text-muted-foreground')}>{hosted}</p>
               </dd>
               <dd className={cn('md:col-span-5')}>
                 <p className={cn('eyebrow text-foreground')}>{BRAND.name}</p>
-                <p className={cn('text-body mt-2.5')}>{ours}</p>
+                <p className={cn('mt-2.5 text-body')}>{ours}</p>
               </dd>
             </div>
           ))}
@@ -861,7 +861,7 @@ export default function Page() {
           The one loud moment on the site, and it is loud with nothing but type
           on an inverted ground. Everything it asserts is architecture, which is
           why the three columns underneath are mechanisms, not values. */}
-      <section className={cn('bg-foreground text-background px-safe')}>
+      <section className={cn('bg-foreground px-safe text-background')}>
         <div className={cn('mx-auto max-w-6xl px-4 py-24 md:px-6 md:py-32 lg:px-8')}>
           <p
             className={cn(
@@ -874,9 +874,9 @@ export default function Page() {
           </p>
           <dl className={cn('mt-20 grid gap-10 md:grid-cols-3 md:gap-12')}>
             {GUARANTEES.map(([term, detail]) => (
-              <div key={term} className={cn('border-background/20 border-t pt-5')}>
+              <div key={term} className={cn('border-t border-background/20 pt-5')}>
                 <dt className={cn('eyebrow text-background/60')}>{term}</dt>
-                <dd className={cn('text-background/85 text-body mt-3')}>{detail}</dd>
+                <dd className={cn('mt-3 text-body text-background/85')}>{detail}</dd>
               </div>
             ))}
           </dl>
@@ -894,7 +894,7 @@ export default function Page() {
               concession is load-bearing"). It now reads as the reprise of a fact
               the reader already met, which is the only reason the starker
               wording is affordable here. */}
-          <p className={cn('text-background/60 mt-14 max-w-2xl text-sm leading-6')}>
+          <p className={cn('mt-14 max-w-2xl text-sm leading-6 text-background/60')}>
             The honest cost of building it this way: lose your password and your recovery code, and
             nobody — us included — can get the library back.{' '}
             <Link className={cn('text-background underline underline-offset-4')} href="/faq">
@@ -917,9 +917,9 @@ export default function Page() {
       >
         <dl className={cn('grid gap-x-10 gap-y-8 sm:grid-cols-2 lg:grid-cols-3')}>
           {DURABILITY.map(([term, detail]) => (
-            <div key={term} className={cn('border-border border-t pt-5')}>
+            <div key={term} className={cn('border-t border-border pt-5')}>
               <dt className={cn('text-base font-semibold text-balance')}>{term}</dt>
-              <dd className={cn('text-muted-foreground text-body mt-2')}>{detail}</dd>
+              <dd className={cn('mt-2 text-body text-muted-foreground')}>{detail}</dd>
             </div>
           ))}
         </dl>
@@ -929,13 +929,13 @@ export default function Page() {
             as a footnote rather than a fourth column because it is a track
             record, not a property — the section's whole argument is that the
             other three hold whether or not you believe this one. */}
-        <p className={cn('text-muted-foreground mt-10 max-w-2xl text-sm leading-6')}>
+        <p className={cn('mt-10 max-w-2xl text-sm leading-6 text-muted-foreground')}>
           For whatever a track record is worth: Bracemark is the second version of Brace.to, a
           bookmark manager we have run for years. Same team, same job — this version keeps the
           promise and drops the prerequisite.{' '}
           <Link
             className={cn(
-              'text-signal decoration-signal-line hover:decoration-signal underline underline-offset-2',
+              'text-signal underline decoration-signal-line underline-offset-2 hover:decoration-signal',
             )}
             href="/about"
           >
@@ -954,7 +954,7 @@ export default function Page() {
         <div className={cn('flex flex-wrap items-end gap-x-16 gap-y-8')}>
           <div>
             <p className={cn('eyebrow')}>{PLAN_LABELS.free}</p>
-            <p className={cn('font-display mt-2 text-4xl font-semibold tracking-tight')}>$0</p>
+            <p className={cn('mt-2 font-display text-4xl font-semibold tracking-tight')}>$0</p>
             {/* "No time limit", not "forever" — the twin of /pricing's Free card,
                 where the reasoning lives. The sharper half of it is here: FREE_LINKS
                 is interpolated precisely so this page can never quote a cap the app
@@ -962,15 +962,15 @@ export default function Page() {
                 100 one day and this line renders "100 links, forever" — truthful
                 about the number, and false to everyone who signed up under the old
                 one. */}
-            <p className={cn('text-muted-foreground mt-1 text-sm')}>
+            <p className={cn('mt-1 text-sm text-muted-foreground')}>
               {FREE_LINKS} links, no time limit
             </p>
           </div>
           <div>
             <p className={cn('eyebrow text-signal')}>{PLAN_LABELS.plus}</p>
-            <p className={cn('font-display mt-2 text-4xl font-semibold tracking-tight')}>
+            <p className={cn('mt-2 font-display text-4xl font-semibold tracking-tight')}>
               ${PLAN_USD_PER_YEAR.plus}
-              <span className={cn('text-muted-foreground text-lg font-normal')}>/year</span>
+              <span className={cn('text-lg font-normal text-muted-foreground')}>/year</span>
             </p>
             {/* "Advanced search" was the one overclaim on an otherwise literal
                 page. Every reader arriving from a competitor decoded it as
@@ -981,7 +981,7 @@ export default function Page() {
                 which were accurate all along, and they restore nested lists:
                 the one Plus feature a switcher with folders actually needs, and
                 the one the old line left out. */}
-            <p className={cn('text-muted-foreground mt-1 text-sm')}>
+            <p className={cn('mt-1 text-sm text-muted-foreground')}>
               Unlimited links, nested lists, app lock, search editor
             </p>
           </div>
@@ -1017,7 +1017,7 @@ export default function Page() {
         <div className={cn('mx-auto max-w-6xl px-4 py-24 text-center md:px-6 md:py-28 lg:px-8')}>
           <h2
             className={cn(
-              'font-display mx-auto max-w-2xl text-3xl leading-[1.1] font-semibold tracking-tight text-balance md:text-5xl',
+              'mx-auto max-w-2xl font-display text-3xl leading-[1.1] font-semibold tracking-tight text-balance md:text-5xl',
             )}
           >
             Start empty, or bring the library you already have.
@@ -1028,7 +1028,7 @@ export default function Page() {
               library. Both secrets are named here too: the passphrase and the
               recovery code are what the account rests on, and the closer is the
               last place before the ceremony to say so. */}
-          <p className={cn('text-muted-foreground mx-auto mt-5 max-w-lg text-lg leading-8')}>
+          <p className={cn('mx-auto mt-5 max-w-lg text-lg leading-8 text-muted-foreground')}>
             Pick a username, save the passphrase we generate for you and the recovery code beside
             it, and save your first link a minute later.
           </p>

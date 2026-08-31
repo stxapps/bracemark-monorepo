@@ -34,25 +34,25 @@ export function PageShell({
   // long document uses, so it is also what keeps the first character of each line
   // in /terms and /privacy out from under a landscape notch.
   return (
-    <article className={cn('px-safe pt-14 pb-4 md:pt-20')}>
+    <article className={cn('pt-14 px-safe pb-4 md:pt-20')}>
       <div className={cn('mx-auto px-4 md:px-6 lg:px-8')}>
         <header className={cn('mx-auto', width === 'document' ? 'max-w-2xl' : 'max-w-3xl')}>
           {eyebrow && <p className={cn('eyebrow')}>{eyebrow}</p>}
           <h1
             className={cn(
-              'font-display mt-3 text-4xl leading-[1.05] font-semibold tracking-tight text-balance md:text-5xl',
+              'mt-3 font-display text-4xl leading-[1.05] font-semibold tracking-tight text-balance md:text-5xl',
             )}
           >
             {title}
           </h1>
           {lede && (
-            <p className={cn('text-muted-foreground mt-5 max-w-2xl text-lg leading-8')}>{lede}</p>
+            <p className={cn('mt-5 max-w-2xl text-lg leading-8 text-muted-foreground')}>{lede}</p>
           )}
-          {meta && <p className={cn('text-muted-foreground mt-6 font-mono text-xs')}>{meta}</p>}
+          {meta && <p className={cn('mt-6 font-mono text-xs text-muted-foreground')}>{meta}</p>}
         </header>
         <div
           className={cn(
-            'border-border mx-auto mt-12 border-t pt-10',
+            'mx-auto mt-12 border-t border-border pt-10',
             width === 'document' ? 'max-w-2xl' : 'max-w-3xl',
           )}
         >

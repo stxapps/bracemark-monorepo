@@ -115,7 +115,7 @@
    * reaches the physical edge while the type stays inset (docs/safe-area.md).
    */
   .band {
-    @apply border-border border-t;
+    @apply border-t border-border;
   }
 
   /*
@@ -124,7 +124,7 @@
    * it names the band, the display type states the claim.
    */
   .eyebrow {
-    @apply text-muted-foreground font-mono text-[0.6875rem] font-medium tracking-[0.18em] uppercase;
+    @apply font-mono text-[0.6875rem] font-medium tracking-[0.18em] text-muted-foreground uppercase;
   }
 
   /*
@@ -134,13 +134,13 @@
    * store reviewer, not only by whoever is comfortable in Tailwind.
    */
   .legal-prose {
-    @apply text-muted-foreground text-base leading-7;
+    @apply text-base leading-7 text-muted-foreground;
   }
   .legal-prose h2 {
-    @apply font-display text-foreground mt-14 text-2xl font-semibold tracking-tight;
+    @apply mt-14 font-display text-2xl font-semibold tracking-tight text-foreground;
   }
   .legal-prose h3 {
-    @apply text-foreground mt-8 text-base font-semibold;
+    @apply mt-8 text-base font-semibold text-foreground;
   }
   .legal-prose p {
     @apply mt-4;
@@ -162,7 +162,7 @@
     @apply text-muted-foreground;
   }
   .legal-prose strong {
-    @apply text-foreground font-semibold;
+    @apply font-semibold text-foreground;
   }
   /* The all-caps liability blocks these documents carry by convention. Set
      smaller and looser so a wall of capitals stays readable instead of shouting. */
@@ -170,7 +170,7 @@
     @apply text-sm leading-6 tracking-wide;
   }
   .legal-prose a {
-    @apply text-signal decoration-signal-line hover:decoration-signal underline underline-offset-2;
+    @apply text-signal underline decoration-signal-line underline-offset-2 hover:decoration-signal;
   }
 }
 

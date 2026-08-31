@@ -27,18 +27,18 @@ export default function Page() {
   const freeLinks = entitlementsOf('free').maxLinks;
 
   return (
-    <div className={cn('px-safe pt-14 pb-4 md:pt-20')}>
+    <div className={cn('pt-14 px-safe pb-4 md:pt-20')}>
       <div className={cn('mx-auto max-w-6xl px-4 md:px-6 lg:px-8')}>
         <header className={cn('max-w-3xl')}>
           <p className={cn('eyebrow')}>Answers</p>
           <h1
             className={cn(
-              'font-display mt-3 text-4xl leading-[1.05] font-semibold tracking-tight text-balance md:text-5xl',
+              'mt-3 font-display text-4xl leading-[1.05] font-semibold tracking-tight text-balance md:text-5xl',
             )}
           >
             Questions, including the ones with awkward answers.
           </h1>
-          <p className={cn('text-muted-foreground mt-5 max-w-2xl text-lg leading-8')}>
+          <p className={cn('mt-5 max-w-2xl text-lg leading-8 text-muted-foreground')}>
             An app built so we can’t read your library also can’t recover it for you. That trade
             runs through most of what follows, so it is stated plainly rather than buried.
           </p>
@@ -56,7 +56,7 @@ export default function Page() {
                   <li key={group.id}>
                     <a
                       className={cn(
-                        'border-border text-muted-foreground hover:text-foreground focus-visible:ring-ring/50 inline-block rounded-full border px-3 py-1 text-sm transition-colors focus-visible:ring-3 focus-visible:outline-none lg:rounded-sm lg:border-0 lg:px-0 lg:py-1',
+                        'inline-block rounded-full border border-border px-3 py-1 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none lg:rounded-sm lg:border-0 lg:px-0 lg:py-1',
                       )}
                       href={`#${group.id}`}
                     >
@@ -82,18 +82,18 @@ export default function Page() {
                 <h2 className={cn('font-display text-2xl font-semibold tracking-tight')}>
                   {group.title}
                 </h2>
-                <p className={cn('text-muted-foreground text-body mt-2')}>{group.blurb}</p>
+                <p className={cn('mt-2 text-body text-muted-foreground')}>{group.blurb}</p>
 
-                <div className={cn('border-border mt-6 border-t')}>
+                <div className={cn('mt-6 border-t border-border')}>
                   {group.items.map((item) => (
                     <details
                       key={item.id}
                       id={item.id}
-                      className={cn('group border-border border-b')}
+                      className={cn('group border-b border-border')}
                     >
                       <summary
                         className={cn(
-                          'focus-visible:ring-ring/50 flex cursor-pointer list-none items-start justify-between gap-6 rounded-sm py-4 focus-visible:ring-3 focus-visible:outline-none [&::-webkit-details-marker]:hidden',
+                          'flex cursor-pointer list-none items-start justify-between gap-6 rounded-sm py-4 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none [&::-webkit-details-marker]:hidden',
                         )}
                       >
                         <h3 className={cn('text-base leading-7 font-medium text-balance')}>
@@ -101,11 +101,11 @@ export default function Page() {
                         </h3>
                         <ChevronGlyph
                           className={cn(
-                            'text-muted-foreground mt-1.5 size-4 shrink-0 transition-transform duration-200 group-open:rotate-180',
+                            'mt-1.5 size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-open:rotate-180',
                           )}
                         />
                       </summary>
-                      <div className={cn('text-muted-foreground text-body max-w-2xl pb-6')}>
+                      <div className={cn('max-w-2xl pb-6 text-body text-muted-foreground')}>
                         {item.a}
                       </div>
                     </details>
@@ -116,14 +116,14 @@ export default function Page() {
 
             <section
               className={cn(
-                'border-border bg-muted/40 mt-16 rounded-2xl border p-8 sm:flex sm:items-center sm:justify-between sm:gap-8',
+                'mt-16 rounded-2xl border border-border bg-muted/40 p-8 sm:flex sm:items-center sm:justify-between sm:gap-8',
               )}
             >
               <div>
                 <h2 className={cn('font-display text-xl font-semibold tracking-tight')}>
                   Still stuck?
                 </h2>
-                <p className={cn('text-muted-foreground text-body mt-2 max-w-md')}>
+                <p className={cn('mt-2 max-w-md text-body text-muted-foreground')}>
                   Write to us and a person answers. Or start with {freeLinks} free links and find
                   the question you actually have.
                 </p>

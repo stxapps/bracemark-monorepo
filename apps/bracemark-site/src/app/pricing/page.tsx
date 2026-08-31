@@ -250,14 +250,14 @@ function LifetimeStrip() {
   return (
     <section
       className={cn(
-        'border-signal-line bg-signal-soft mx-auto mt-8 flex max-w-3xl flex-col items-center gap-5 rounded-2xl border p-7 text-center sm:flex-row sm:justify-between sm:text-left',
+        'mx-auto mt-8 flex max-w-3xl flex-col items-center gap-5 rounded-2xl border border-signal-line bg-signal-soft p-7 text-center sm:flex-row sm:justify-between sm:text-left',
       )}
     >
       <div>
         <h2 className={cn('font-display text-lg font-semibold tracking-tight')}>
           Lifetime {PLAN_LABELS[LIFETIME_PLAN]} — ${LIFETIME_USD} once
         </h2>
-        <p className={cn('text-muted-foreground mt-1.5 text-sm leading-6')}>
+        <p className={cn('mt-1.5 text-sm leading-6 text-muted-foreground')}>
           Pay once, keep {PLAN_LABELS[LIFETIME_PLAN]} forever. Limited to the first {LIFETIME_SEATS}{' '}
           people — then it is gone for good.
         </p>
@@ -273,18 +273,18 @@ function LifetimeStrip() {
 // comparison table needs the landing page's width.
 export default function Page() {
   return (
-    <div className={cn('px-safe pt-14 pb-4 md:pt-20')}>
+    <div className={cn('pt-14 px-safe pb-4 md:pt-20')}>
       <div className={cn('mx-auto w-full max-w-6xl px-4 md:px-6 lg:px-8')}>
         <section className={cn('mx-auto max-w-2xl text-center')}>
           <p className={cn('eyebrow')}>Pricing</p>
           <h1
             className={cn(
-              'font-display mt-3 text-4xl leading-[1.05] font-semibold tracking-tight text-balance md:text-5xl',
+              'mt-3 font-display text-4xl leading-[1.05] font-semibold tracking-tight text-balance md:text-5xl',
             )}
           >
             Two plans. One of them is free.
           </h1>
-          <p className={cn('text-muted-foreground mt-5 text-lg leading-8')}>
+          <p className={cn('mt-5 text-lg leading-8 text-muted-foreground')}>
             Start free and keep {formatLinks('free')} links for as long as you like. Upgrade when
             your library outgrows it — with a {TRIAL_DAYS}-day free trial, and the same encryption,
             sync and export on every plan.
@@ -316,7 +316,7 @@ export default function Page() {
               <h2 className={cn('font-display text-lg font-semibold tracking-tight')}>
                 {PLAN_LABELS[card.plan]}
               </h2>
-              <p className={cn('text-muted-foreground mt-1.5 text-sm')}>{card.blurb}</p>
+              <p className={cn('mt-1.5 text-sm text-muted-foreground')}>{card.blurb}</p>
 
               <p className={cn('mt-7 flex items-baseline gap-1')}>
                 <span className={cn('font-display text-5xl font-semibold tracking-tight')}>
@@ -326,23 +326,23 @@ export default function Page() {
                   <span className={cn('text-muted-foreground')}>{card.cadence}</span>
                 )}
               </p>
-              <p className={cn('text-muted-foreground mt-1.5 text-sm')}>{card.priceNote}</p>
+              <p className={cn('mt-1.5 text-sm text-muted-foreground')}>{card.priceNote}</p>
               {card.trialNote && (
-                <p className={cn('text-signal mt-2 font-mono text-xs')}>{card.trialNote}</p>
+                <p className={cn('mt-2 font-mono text-xs text-signal')}>{card.trialNote}</p>
               )}
 
-              <p className={cn('border-border mt-7 border-t pt-5 text-sm font-medium')}>
+              <p className={cn('mt-7 border-t border-border pt-5 text-sm font-medium')}>
                 {limitsLine(card.plan)}
               </p>
               {card.inherits && (
-                <p className={cn('text-muted-foreground mt-4 text-sm')}>{card.inherits}</p>
+                <p className={cn('mt-4 text-sm text-muted-foreground')}>{card.inherits}</p>
               )}
               <ul className={cn('mt-3 flex flex-1 flex-col gap-2.5')}>
                 {card.features.map((feature) => (
                   <li
                     key={feature}
                     className={cn(
-                      'text-muted-foreground flex items-start gap-2.5 text-sm leading-6',
+                      'flex items-start gap-2.5 text-sm leading-6 text-muted-foreground',
                     )}
                   >
                     <CheckGlyph
@@ -369,7 +369,7 @@ export default function Page() {
         {/* Compare — the table the cards can't be, without becoming a wall of text. */}
         <section className={cn('mx-auto mt-24 max-w-3xl')}>
           <p className={cn('eyebrow text-center')}>Side by side</p>
-          <h2 className={cn('font-display mt-3 text-center text-3xl font-semibold tracking-tight')}>
+          <h2 className={cn('mt-3 text-center font-display text-3xl font-semibold tracking-tight')}>
             Compare plans
           </h2>
           {/* Narrow screens scroll the table itself; the page never scrolls sideways.
@@ -383,7 +383,7 @@ export default function Page() {
           <div className={cn('relative mt-8 overflow-x-auto')}>
             <table className={cn('w-full min-w-120 border-collapse text-left text-sm')}>
               <thead>
-                <tr className={cn('border-foreground/15 border-b')}>
+                <tr className={cn('border-b border-foreground/15')}>
                   <th scope="col" className={cn('eyebrow py-3 pr-4')}>
                     Feature
                   </th>
@@ -391,7 +391,7 @@ export default function Page() {
                     <th
                       key={plan}
                       scope="col"
-                      className={cn('font-display w-28 px-4 py-3 text-center font-semibold')}
+                      className={cn('w-28 px-4 py-3 text-center font-display font-semibold')}
                     >
                       {PLAN_LABELS[plan]}
                     </th>
@@ -400,8 +400,8 @@ export default function Page() {
               </thead>
               <tbody>
                 {COMPARISON.map((row) => (
-                  <tr key={row.label} className={cn('border-border border-b')}>
-                    <th scope="row" className={cn('text-muted-foreground py-3.5 pr-4 font-normal')}>
+                  <tr key={row.label} className={cn('border-b border-border')}>
+                    <th scope="row" className={cn('py-3.5 pr-4 font-normal text-muted-foreground')}>
                       {row.label}
                     </th>
                     {COLUMNS.map((plan) => {
@@ -412,7 +412,7 @@ export default function Page() {
                             value
                           ) : value ? (
                             <>
-                              <CheckGlyph className={cn('text-signal mx-auto size-4')} />
+                              <CheckGlyph className={cn('mx-auto size-4 text-signal')} />
                               <span className={cn('sr-only')}>Included</span>
                             </>
                           ) : (
@@ -436,7 +436,7 @@ export default function Page() {
         {/* The four billing questions, pulled by id from the shared FAQ. */}
         <section className={cn('mx-auto mt-24 max-w-3xl')}>
           <p className={cn('eyebrow text-center')}>Before you decide</p>
-          <h2 className={cn('font-display mt-3 text-center text-3xl font-semibold tracking-tight')}>
+          <h2 className={cn('mt-3 text-center font-display text-3xl font-semibold tracking-tight')}>
             The fine print, in plain words
           </h2>
           <dl className={cn('mt-10 grid gap-x-10 gap-y-8 sm:grid-cols-2')}>
@@ -444,9 +444,9 @@ export default function Page() {
               const item = faqById(id);
               if (!item) return null;
               return (
-                <div key={id} className={cn('border-border border-t pt-5')}>
+                <div key={id} className={cn('border-t border-border pt-5')}>
                   <dt className={cn('text-base leading-7 font-semibold text-balance')}>{item.q}</dt>
-                  <dd className={cn('text-muted-foreground text-body mt-2')}>{item.a}</dd>
+                  <dd className={cn('mt-2 text-body text-muted-foreground')}>{item.a}</dd>
                 </div>
               );
             })}
@@ -454,7 +454,7 @@ export default function Page() {
           <p className={cn('mt-10 text-center')}>
             <Link
               className={cn(
-                'text-signal decoration-signal-line hover:decoration-signal focus-visible:ring-ring/50 inline-flex items-center gap-1.5 rounded-sm text-sm font-medium underline underline-offset-4 focus-visible:ring-3 focus-visible:outline-none',
+                'inline-flex items-center gap-1.5 rounded-sm text-sm font-medium text-signal underline decoration-signal-line underline-offset-4 hover:decoration-signal focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none',
               )}
               href="/faq"
             >
@@ -466,7 +466,7 @@ export default function Page() {
 
         <section
           className={cn(
-            'border-border text-muted-foreground mx-auto mt-24 max-w-2xl space-y-3 border-t pt-10 text-center text-sm leading-6',
+            'mx-auto mt-24 max-w-2xl space-y-3 border-t border-border pt-10 text-center text-sm leading-6 text-muted-foreground',
           )}
         >
           <p>
@@ -511,14 +511,14 @@ export default function Page() {
           <p>
             By subscribing, you agree to our{' '}
             <Link
-              className={cn('text-signal decoration-signal-line underline underline-offset-2')}
+              className={cn('text-signal underline decoration-signal-line underline-offset-2')}
               href="/terms"
             >
               Terms of Service
             </Link>{' '}
             and{' '}
             <Link
-              className={cn('text-signal decoration-signal-line underline underline-offset-2')}
+              className={cn('text-signal underline decoration-signal-line underline-offset-2')}
               href="/privacy"
             >
               Privacy Policy
@@ -528,7 +528,7 @@ export default function Page() {
           <p>
             Already have an account? Upgrade from{' '}
             <a
-              className={cn('text-signal decoration-signal-line underline underline-offset-2')}
+              className={cn('text-signal underline decoration-signal-line underline-offset-2')}
               href={UPGRADE_URL}
             >
               Settings → Subscription

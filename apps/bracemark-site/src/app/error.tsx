@@ -56,16 +56,16 @@ export default function Error({
           printed: on a static marketing site it is either a minified framework
           string or nothing, so it would be noise dressed as information. */}
       {error.digest && (
-        <p className={cn('text-muted-foreground mt-10 font-mono text-xs')}>
+        <p className={cn('mt-10 font-mono text-xs text-muted-foreground')}>
           Reference {error.digest}
         </p>
       )}
 
-      <p className={cn('text-muted-foreground text-body mt-4')}>
+      <p className={cn('mt-4 text-body text-muted-foreground')}>
         If it keeps happening, tell us what you were opening:{' '}
         <a
           className={cn(
-            'text-signal decoration-signal-line hover:decoration-signal focus-visible:ring-ring/50 rounded-sm font-mono underline underline-offset-2 focus-visible:ring-3 focus-visible:outline-none',
+            'rounded-sm font-mono text-signal underline decoration-signal-line underline-offset-2 hover:decoration-signal focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none',
           )}
           href={`mailto:${SUPPORT_EMAIL}`}
         >

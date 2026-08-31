@@ -25,13 +25,13 @@ export function SiteHeader() {
   return (
     <header
       className={cn(
-        'border-border bg-background/85 px-safe pt-safe sticky top-0 z-50 border-b backdrop-blur-md',
+        'sticky top-0 z-50 border-b border-border bg-background/85 pt-safe px-safe backdrop-blur-md',
       )}
     >
       <div className={cn('mx-auto flex h-16 max-w-6xl items-center gap-4 px-4 md:px-6 lg:px-8')}>
         <Link
           className={cn(
-            'focus-visible:ring-ring/50 flex shrink-0 items-center gap-2.5 rounded-sm focus-visible:ring-3 focus-visible:ring-offset-2 focus-visible:outline-none',
+            'flex shrink-0 items-center gap-2.5 rounded-sm focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-offset-2 focus-visible:outline-none',
           )}
           href="/"
         >
@@ -41,7 +41,7 @@ export function SiteHeader() {
               needs the room more than the wordmark does. */}
           <span
             className={cn(
-              'font-display hidden text-lg leading-none font-semibold tracking-tight sm:block',
+              'hidden font-display text-lg leading-none font-semibold tracking-tight sm:block',
             )}
           >
             Bracemark
@@ -81,7 +81,7 @@ export function SiteHeader() {
               <li key={link.href} className={cn(i === 0 && 'max-[359px]:hidden')}>
                 <Link
                   className={cn(
-                    'text-muted-foreground hover:text-foreground focus-visible:ring-ring/50 rounded-sm text-sm font-medium transition-colors focus-visible:ring-3 focus-visible:ring-offset-2 focus-visible:outline-none',
+                    'rounded-sm text-sm font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-offset-2 focus-visible:outline-none',
                   )}
                   href={link.href}
                 >
