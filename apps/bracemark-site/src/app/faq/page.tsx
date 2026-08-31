@@ -82,7 +82,7 @@ export default function Page() {
                 <h2 className={cn('font-display text-2xl font-semibold tracking-tight')}>
                   {group.title}
                 </h2>
-                <p className={cn('text-muted-foreground mt-2 text-[0.9375rem]')}>{group.blurb}</p>
+                <p className={cn('text-muted-foreground text-body mt-2')}>{group.blurb}</p>
 
                 <div className={cn('border-border mt-6 border-t')}>
                   {group.items.map((item) => (
@@ -105,11 +105,7 @@ export default function Page() {
                           )}
                         />
                       </summary>
-                      <div
-                        className={cn(
-                          'text-muted-foreground max-w-2xl pb-6 text-[0.9375rem] leading-7',
-                        )}
-                      >
+                      <div className={cn('text-muted-foreground text-body max-w-2xl pb-6')}>
                         {item.a}
                       </div>
                     </details>
@@ -127,7 +123,7 @@ export default function Page() {
                 <h2 className={cn('font-display text-xl font-semibold tracking-tight')}>
                   Still stuck?
                 </h2>
-                <p className={cn('text-muted-foreground mt-2 max-w-md text-[0.9375rem] leading-7')}>
+                <p className={cn('text-muted-foreground text-body mt-2 max-w-md')}>
                   Write to us and a person answers. Or start with {freeLinks} free links and find
                   the question you actually have.
                 </p>

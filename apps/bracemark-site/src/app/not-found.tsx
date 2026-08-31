@@ -62,11 +62,7 @@ export default function NotFound() {
             >
               <span>
                 <span className={cn('block text-base font-semibold')}>{title}</span>
-                <span
-                  className={cn('text-muted-foreground mt-1.5 block text-[0.9375rem] leading-7')}
-                >
-                  {body}
-                </span>
+                <span className={cn('text-muted-foreground text-body mt-1.5 block')}>{body}</span>
               </span>
               <ArrowGlyph
                 className={cn(
@@ -81,7 +77,7 @@ export default function NotFound() {
       {/* A dead link on our own site is our bug, and this is the one page where
           someone has already proved they hit one. The address is the same
           published support mailbox /support gives, styled the same way. */}
-      <p className={cn('text-muted-foreground mt-10 text-[0.9375rem] leading-7')}>
+      <p className={cn('text-muted-foreground text-body mt-10')}>
         If a link on this site sent you here, we’d like to know:{' '}
         <a
           className={cn(

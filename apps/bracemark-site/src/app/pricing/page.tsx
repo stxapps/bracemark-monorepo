@@ -446,9 +446,7 @@ export default function Page() {
               return (
                 <div key={id} className={cn('border-border border-t pt-5')}>
                   <dt className={cn('text-base leading-7 font-semibold text-balance')}>{item.q}</dt>
-                  <dd className={cn('text-muted-foreground mt-2 text-[0.9375rem] leading-7')}>
-                    {item.a}
-                  </dd>
+                  <dd className={cn('text-muted-foreground text-body mt-2')}>{item.a}</dd>
                 </div>
               );
             })}

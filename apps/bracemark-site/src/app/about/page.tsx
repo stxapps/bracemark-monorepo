@@ -148,9 +148,7 @@ export default function Page() {
               {TRADEOFFS.map(([term, detail]) => (
                 <div key={term} className={cn('border-border border-t pt-5')}>
                   <dt className={cn('text-base font-semibold text-balance')}>{term}</dt>
-                  <dd className={cn('text-muted-foreground mt-2 text-[0.9375rem] leading-7')}>
-                    {detail}
-                  </dd>
+                  <dd className={cn('text-muted-foreground text-body mt-2')}>{detail}</dd>
                 </div>
               ))}
             </dl>

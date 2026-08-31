@@ -533,6 +533,26 @@ muted colour exactly when they land on the wash.
   says `rotate-90`. For an angle with no glyph — the dog-eared card's 45° corner
   — write the RN `transform` array inline in `style`
   (`features/share/share-specimen.tsx`).
+- **A new type-scale token** — the bar is high, and it is not "this size repeats".
+  Tailwind's `--text-*` names a size, but what usually has to hold is a size
+  **paired** with a leading, and a role that shares a number with a different
+  role is not the same token. `0.9375rem` (15px) is the worked example: it is
+  the marketing site's prose step at `leading-7`, the brand wordmark at
+  `leading-none`, and the page specimen at `leading-snug` — one number, three
+  roles. Only the first is a token
+  (`--text-body` + `--text-body--line-height`, in
+  `apps/bracemark-site/src/app/globals.css`), because only it repeats inside one
+  stylesheet, in one role, ~24 times. The wordmark is deliberately **not** one —
+  its invariant is a ratio to the mark's `h-4`, and a token would make the
+  one-line edit that breaks the ratio look safe
+  ([brand-assets.md](./brand-assets.md), _the lockup_); the specimen is three
+  call sites across three apps, held by comments that name each other.
+  Site-local tokens go in the site's own sheet, never `web-ui`'s — a token the
+  app never uses does not belong in the app's sheet. On the expo side a
+  `--text-*` token also needs the Uniwind check above; it does **not** need a
+  line in `tools/prettier/expo-tailwind.css`, which `@import`s `global.css` and
+  therefore already sees anything declared in a plain `@theme` block (the shim
+  exists only for the `@variant`-nested `--color-*` names).
 - **A quick toggle** (e.g. a menu button, not the settings picker) — write through
   `useSettingMutations` to the active source; don't reintroduce a writer on the
   provider. Read the preference from `useSettings()`, or the rendered light/dark

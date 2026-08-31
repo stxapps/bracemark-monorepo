@@ -175,7 +175,7 @@ export default function Page() {
           >
             {USER_AGENT}
           </p>
-          <p className={cn('text-muted-foreground mt-5 text-[0.9375rem] leading-7')}>
+          <p className={cn('text-muted-foreground text-body mt-5')}>
             Bracemark is an end-to-end encrypted bookmark manager. When someone saves a link in the
             web app, the browser will not let that page fetch yours, so this service fetches it
             instead — reads the title and the preview image, hands both back to the person’s own
@@ -280,9 +280,7 @@ export default function Page() {
             {NEVER.map(([term, detail]) => (
               <div key={term} className={cn('border-border border-t pt-5')}>
                 <dt className={cn('text-base font-semibold')}>{term}</dt>
-                <dd className={cn('text-muted-foreground mt-2 text-[0.9375rem] leading-7')}>
-                  {detail}
-                </dd>
+                <dd className={cn('text-muted-foreground text-body mt-2')}>{detail}</dd>
               </div>
             ))}
           </dl>
@@ -389,7 +387,7 @@ export default function Page() {
           <h2 className={cn('font-display text-xl font-semibold tracking-tight')}>
             If it misbehaved
           </h2>
-          <p className={cn('text-muted-foreground mt-3 text-[0.9375rem] leading-7')}>
+          <p className={cn('text-muted-foreground text-body mt-3')}>
             Write to{' '}
             <a
               className={cn(

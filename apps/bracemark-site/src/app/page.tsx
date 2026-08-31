@@ -146,6 +146,14 @@ function HeroPanel() {
             aria-hidden="true"
           />
           <div className={cn('min-w-0')}>
+            {/* NOT `text-body`, though it is the same 15px. This line is a
+                SPECIMEN TITLE — the same string, size and leading as
+                bracemark-extension's `popup/PageSpecimen.tsx` and
+                bracemark-expo's `features/share/share-specimen.tsx`, which is
+                what lets this panel claim to be a drawing of them. `text-body`
+                is this site's prose pairing (15/28) and would set it on a
+                28px line; the specimen is `leading-snug` in all three ports.
+                Two roles, one size, and only the prose one has a token. */}
             <p className={cn('text-[0.9375rem] leading-snug font-medium')}>
               Local-first sync: the hard parts
             </p>
@@ -739,7 +747,7 @@ export default function Page() {
                   {where}
                 </span>
               </div>
-              <p className={cn('text-muted-foreground mt-3 text-[0.9375rem] leading-7')}>{body}</p>
+              <p className={cn('text-muted-foreground text-body mt-3')}>{body}</p>
             </li>
           ))}
         </ul>
@@ -790,7 +798,7 @@ export default function Page() {
           {LIBRARY.map(([name, body]) => (
             <li key={name} className={cn('border-border border-t pt-5')}>
               <h3 className={cn('text-base font-semibold')}>{name}</h3>
-              <p className={cn('text-muted-foreground mt-2 text-[0.9375rem] leading-7')}>{body}</p>
+              <p className={cn('text-muted-foreground text-body mt-2')}>{body}</p>
             </li>
           ))}
         </ul>
@@ -838,13 +846,11 @@ export default function Page() {
               </dt>
               <dd className={cn('md:col-span-4')}>
                 <p className={cn('eyebrow')}>A hosted manager</p>
-                <p className={cn('text-muted-foreground mt-2.5 text-[0.9375rem] leading-7')}>
-                  {hosted}
-                </p>
+                <p className={cn('text-muted-foreground text-body mt-2.5')}>{hosted}</p>
               </dd>
               <dd className={cn('md:col-span-5')}>
                 <p className={cn('eyebrow text-foreground')}>{BRAND.name}</p>
-                <p className={cn('mt-2.5 text-[0.9375rem] leading-7')}>{ours}</p>
+                <p className={cn('text-body mt-2.5')}>{ours}</p>
               </dd>
             </div>
           ))}
@@ -870,9 +876,7 @@ export default function Page() {
             {GUARANTEES.map(([term, detail]) => (
               <div key={term} className={cn('border-background/20 border-t pt-5')}>
                 <dt className={cn('eyebrow text-background/60')}>{term}</dt>
-                <dd className={cn('text-background/85 mt-3 text-[0.9375rem] leading-7')}>
-                  {detail}
-                </dd>
+                <dd className={cn('text-background/85 text-body mt-3')}>{detail}</dd>
               </div>
             ))}
           </dl>
@@ -915,9 +919,7 @@ export default function Page() {
           {DURABILITY.map(([term, detail]) => (
             <div key={term} className={cn('border-border border-t pt-5')}>
               <dt className={cn('text-base font-semibold text-balance')}>{term}</dt>
-              <dd className={cn('text-muted-foreground mt-2 text-[0.9375rem] leading-7')}>
-                {detail}
-              </dd>
+              <dd className={cn('text-muted-foreground text-body mt-2')}>{detail}</dd>
             </div>
           ))}
         </dl>

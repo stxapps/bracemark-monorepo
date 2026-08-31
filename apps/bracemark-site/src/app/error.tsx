@@ -61,7 +61,7 @@ export default function Error({
         </p>
       )}
 
-      <p className={cn('text-muted-foreground mt-4 text-[0.9375rem] leading-7')}>
+      <p className={cn('text-muted-foreground text-body mt-4')}>
         If it keeps happening, tell us what you were opening:{' '}
         <a
           className={cn(

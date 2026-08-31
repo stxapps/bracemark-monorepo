@@ -49,6 +49,36 @@
   --font-mono: var(--font-plex-mono), ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
   /*
+   * THE SITE'S RUNNING-PROSE STEP, and the one place a `--text-*` token earns
+   * its keep in this repo.
+   *
+   * 15px is the size this site sets nearly all of its body copy at: every
+   * section blurb, every `<dd>`, the FAQ answers, the 404 and error pages. It
+   * sits between Tailwind's `text-sm` (14) and `text-base` (16) because a
+   * marketing page is read at arm's length in one long column, where 14 is
+   * mean and 16 is loud — the app, which is read in dense rows, stays on 14.
+   *
+   * It is a token rather than the `text-[0.9375rem] leading-7` it replaces
+   * because of the PAIR, not the size: the leading is what makes a column of
+   * prose a column, and 23 call sites re-typed both numbers. A size alone
+   * would have deduplicated the number nobody was going to get wrong and left
+   * the one that actually has to match spelled out 23 times.
+   *
+   * Site-local ON PURPOSE. bracemark-web and the browser extension never use
+   * this pairing (see the file header: a token the app never uses does not
+   * belong in the app's sheet), and the other two 15px roles in the repo — the
+   * brand wordmark and the page specimen — carry different leadings and are
+   * held by components and by docs/brand-assets.md instead.
+   *
+   * NOT the whole 15px story on this page: `web-ui`'s sheet is what the app
+   * renders against and has no matching step, so a shared component pulled
+   * into this site will still measure in `text-sm`/`text-base`. That is
+   * correct — this token is the site's voice, not the product's scale.
+   */
+  --text-body: 0.9375rem;
+  --text-body--line-height: 1.75rem;
+
+  /*
    * The one colour on an otherwise achromatic site. Every token in web-ui's sheet
    * is `oklch(L 0 0)` — literally zero chroma — and that suits a product whose
    * whole claim is that the server can't read your library. So the accent is rationed to the

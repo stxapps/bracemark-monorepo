@@ -85,7 +85,7 @@ export default function Page() {
           >
             {SUPPORT_EMAIL}
           </a>
-          <p className={cn('text-muted-foreground mt-5 text-[0.9375rem] leading-7')}>
+          <p className={cn('text-muted-foreground text-body mt-5')}>
             Bugs, billing, imports, exports, anything at all. We are a small team in one timezone,
             so a reply can take a day or two. A person reads every message, and anything that needs
             an answer gets one.
@@ -97,7 +97,7 @@ export default function Page() {
               <li
                 key={line}
                 className={cn(
-                  'text-muted-foreground before:bg-signal-line flex gap-3 text-[0.9375rem] leading-7 before:mt-3 before:size-1 before:shrink-0 before:rounded-full',
+                  'text-muted-foreground before:bg-signal-line text-body flex gap-3 before:mt-3 before:size-1 before:shrink-0 before:rounded-full',
                 )}
               >
                 {line}
@@ -118,7 +118,7 @@ export default function Page() {
           <dl className={cn('mt-8 space-y-6')}>
             <div className={cn('border-border border-t pt-5')}>
               <dt className={cn('text-base font-semibold')}>Recover a lost password</dt>
-              <dd className={cn('text-muted-foreground mt-2 text-[0.9375rem] leading-7')}>
+              <dd className={cn('text-muted-foreground text-body mt-2')}>
                 If you still have your recovery code, use it to sign in and then set a new password.
                 If both are gone, the library cannot be opened by anyone — including us. There is no
                 override, no support escalation, and no exception.
@@ -126,7 +126,7 @@ export default function Page() {
             </div>
             <div className={cn('border-border border-t pt-5')}>
               <dt className={cn('text-base font-semibold')}>See or fix your data for you</dt>
-              <dd className={cn('text-muted-foreground mt-2 text-[0.9375rem] leading-7')}>
+              <dd className={cn('text-muted-foreground text-body mt-2')}>
                 We can’t read a link, restore one you deleted, or look at your library to debug it.
                 If something looks wrong, an export is the fastest way to show us the shape of the
                 problem without sending us your contents.
@@ -134,7 +134,7 @@ export default function Page() {
             </div>
             <div className={cn('border-border border-t pt-5')}>
               <dt className={cn('text-base font-semibold')}>Refund a store purchase directly</dt>
-              <dd className={cn('text-muted-foreground mt-2 text-[0.9375rem] leading-7')}>
+              <dd className={cn('text-muted-foreground text-body mt-2')}>
                 Subscriptions bought inside the iOS or Android apps are handled by Apple and Google,
                 and refunds have to go through them. For a subscription bought on the web, write to
                 us — we can help with those.
@@ -149,7 +149,7 @@ export default function Page() {
           <h2 className={cn('font-display text-xl font-semibold tracking-tight')}>
             Reporting a security problem
           </h2>
-          <p className={cn('text-muted-foreground mt-3 text-[0.9375rem] leading-7')}>
+          <p className={cn('text-muted-foreground text-body mt-3')}>
             Please write to{' '}
             <a
               className={cn(
@@ -180,11 +180,7 @@ export default function Page() {
                 >
                   <span>
                     <span className={cn('block text-base font-semibold')}>{title}</span>
-                    <span
-                      className={cn(
-                        'text-muted-foreground mt-1.5 block text-[0.9375rem] leading-7',
-                      )}
-                    >
+                    <span className={cn('text-muted-foreground text-body mt-1.5 block')}>
                       {body}
                     </span>
                   </span>
