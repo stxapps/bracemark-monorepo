@@ -67,7 +67,7 @@ export function TagsCommand({
   };
 
   return (
-    <Command shouldFilter={false} className={cn('rounded-2xl outline-none', className)}>
+    <Command shouldFilter={false} className={cn('outline-none', className)}>
       <CommandInput placeholder="Search or create tags…" value={query} onValueChange={setQuery} />
       <CommandList>
         {/* Only shown when there's nothing to pick AND nothing to create (blank

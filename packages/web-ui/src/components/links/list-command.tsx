@@ -134,7 +134,7 @@ export function ListCommand({
     <Command
       shouldFilter={false}
       tabIndex={searchable ? undefined : 0}
-      className={cn('rounded-2xl outline-none', className)}
+      className={cn('outline-none', className)}
     >
       {searchable && (
         <CommandInput

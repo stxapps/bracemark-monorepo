@@ -12,12 +12,25 @@ import {
 import { InputGroup, InputGroupAddon } from '@stxapps/web-ui/components/ui/input-group';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
+// `rounded-2xl`, matching PopoverContent and DropdownMenuSubContent — the two
+// things this is dropped into with their own padding stripped (`p-0`), so this
+// root IS the visible panel and its corner is the panel's corner. This used to
+// be `rounded-4xl` with both callers spelling `rounded-2xl` over it locally; the
+// value now lives here and those overrides are gone.
+//
+// Not cosmetic, because `overflow-hidden` applies the corner to the CONTENT: a
+// row's hover rect starts 4px down and 8px in, and a 32px arc is still ~16px in
+// from the side at that height, so it would shear the top corners off the first
+// row of an input-less picker (either "Move to" menu). A 16px arc is ~5px in
+// there — clear of the row and of its own `rounded-xl`. Inside CommandDialog
+// it's the dialog that's `rounded-4xl`; this one being tighter only clips less,
+// and both are `bg-popover`, so no seam shows.
 function Command({ className, ...props }: React.ComponentProps<typeof CommandPrimitive>) {
   return (
     <CommandPrimitive
       data-slot="command"
       className={cn(
-        'flex size-full flex-col overflow-hidden rounded-4xl bg-popover p-1 text-popover-foreground',
+        'flex size-full flex-col overflow-hidden rounded-2xl bg-popover p-1 text-popover-foreground',
         className,
       )}
       {...props}
@@ -94,8 +107,15 @@ function CommandInput({
   className,
   ...props
 }: React.ComponentProps<typeof CommandPrimitive.Input>) {
-  // The wrapper takes a full `p-1`, not `pb-0`: CommandList has no padding of its
-  // own, so without the bottom inset the first row butts against the field.
+  // The wrapper takes a full `p-1`. Its bottom inset is the gap down to the
+  // first row (CommandList has no vertical padding of its own, so without it the
+  // first row butts against the field), and its horizontal inset is what puts
+  // this field's border box on the same 8px from the panel edge as a row's hover
+  // rect — 4 from Command plus 4 here, matched by CommandList's `px-1`. Removing
+  // it to align them the other way, with both at 4px, is the wrong half of the
+  // fix: it leaves `ring-[3px]` on focus with nothing to breathe into before
+  // Command's `overflow-hidden` edge, and nothing at all under
+  // move-to-surface.tsx, which passes `p-0` on Command.
   return (
     <div data-slot="command-input-wrapper" className="p-1">
       <InputGroup className="h-9 bg-input/30">
@@ -138,12 +158,19 @@ function CommandInput({
 // real `@utility no-scrollbar` in styles.css — but a filterable list with no
 // scrollbar also loses its only "there is more below" cue, which is why this
 // keeps the scrollbar and merely stops it from moving the rows.
+//
+// `px-1` puts a row's hover rect at the same 8px from the panel edge as the
+// filter input's border box above it (CommandInput, which explains the pair).
+// Horizontal only, deliberately: the vertical spacing here is load-bearing
+// OUTSIDE this file — move-to-surface.tsx's sheet derives its header's `pb-4`
+// from where the first row's ink lands, and a `pt` here would move that by 4px
+// without touching the comment that derives it.
 function CommandList({ className, ...props }: React.ComponentProps<typeof CommandPrimitive.List>) {
   return (
     <CommandPrimitive.List
       data-slot="command-list"
       className={cn(
-        'max-h-72 scroll-py-1 scrollbar-gutter-stable overflow-x-hidden overflow-y-auto outline-none',
+        'max-h-72 scroll-py-1 scrollbar-gutter-stable overflow-x-hidden overflow-y-auto px-1 outline-none',
         className,
       )}
       {...props}
@@ -210,7 +237,7 @@ function CommandItem({
     <CommandPrimitive.Item
       data-slot="command-item"
       className={cn(
-        "group/command-item relative flex cursor-default items-center gap-2 rounded-lg px-3 py-2 text-sm outline-hidden select-none in-data-[slot=dialog-content]:rounded-2xl data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 data-[selected=true]:bg-muted data-[selected=true]:text-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 data-[selected=true]:*:[svg]:text-foreground",
+        "group/command-item relative flex cursor-default items-center gap-2 rounded-xl px-3 py-2 text-sm outline-hidden select-none in-data-[slot=dialog-content]:rounded-2xl data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 data-[selected=true]:bg-muted data-[selected=true]:text-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 data-[selected=true]:*:[svg]:text-foreground",
         className,
       )}
       {...props}
