@@ -15,6 +15,7 @@ import { AppStoreIcon } from '@stxapps/web-ui/components/icons/app-store-icon';
 import { ChromeWebStoreIcon } from '@stxapps/web-ui/components/icons/chrome-web-store-icon';
 import { FirefoxAddonsIcon } from '@stxapps/web-ui/components/icons/firefox-addons-icon';
 import { PlayStoreIcon } from '@stxapps/web-ui/components/icons/play-store-icon';
+import { HostMonogram } from '@stxapps/web-ui/components/links/host-monogram';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
@@ -61,12 +62,21 @@ const CIPHERTEXT =
   'Z9yB2nM5kJ8hG1fD4sA7pO0iU3tE6rW9qY2xC5vB8nM1kL4jH7gF0dS3aP6oI9uY' +
   '2tR5eW8qA1zX4cV7bN0mK3jH6gF9dS2aP5oI8uY1tR4eW7qZ0xC3vB6nM9kJ2hG5';
 
+// The specimen's host, and the one constant behind BOTH halves of its identity:
+// the line under the title, and the monogram's letter and hue. `hueFromHost` is
+// keyed on this exact display string (shared `url/host-identity`), so splitting
+// them would let the tile drift from the host printed beside it — "same site,
+// same mark" is the whole point of that tile, and this panel is where a visitor
+// meets it first.
+const SPECIMEN_HOST = 'martin.kleppmann.com';
+
 // --- the one picture of the product ---------------------------------------
 // There was no screenshot on any page of this site. The only depiction of a
-// saved link was the hero panel, which shows a grey block where a cover image
-// would be — so the section headed "A private library is still a library" was
-// proving a visual product with six lines of text, and a visitor who came for
-// the wall of covers filled the gap with the one visual we had given them.
+// saved link was the hero panel, whose preview slot draws an identity tile
+// rather than a cover — so the section headed "A private library is still a
+// library" was proving a visual product with six lines of text, and a visitor
+// who came for the wall of covers filled the gap with the one visual we had
+// given them.
 //
 // Not next/image: `images.unoptimized` is on for the static export, so the
 // component would add a wrapper and a dependency and emit the same <img>.
@@ -129,22 +139,49 @@ function HeroPanel() {
       <div className={cn('p-5 pb-8 sm:p-6 sm:pb-9')}>
         <p className={cn('eyebrow text-signal')}>On your device</p>
         <div className={cn('mt-4 flex gap-3.5')}>
-          {/* The preview slot, empty on purpose — a grey block where a cover
-              image would be, so the panel stays a diagram rather than a
-              screenshot (there is a real one further down the page).
+          {/* The preview slot, filled the way the library will really fill it
+              for a link like this one: `HostMonogram`, the deterministic
+              letter-on-hue tile that stands in wherever there is no extracted
+              image — which on the free plan is most links, since previews come
+              from the device that saved them. It was an empty accent-tinted
+              block, defended as "a diagram, not a screenshot"; what it actually
+              read as was a hole, in the one artefact a visitor studies, exactly
+              where the product's own subject belongs.
+
+              WHY THE MONOGRAM AND NOT A REAL PREVIEW IMAGE. This was tried with
+              a genuine og:image and the answer is measurement, not taste: the
+              slot is 64x40 and every social card is ~1200x630, so any of them
+              centre-cropped in here is a colour swatch — a smear of somebody
+              else's brand colour, sometimes landing a few degrees off
+              `--color-signal` and reading as our own accent misprinted. The
+              tile is a VECTOR sized to the box, so it is the one thing that
+              stays legible at this size. That is the same reason the browser
+              extension's popup and the expo share sheet both END their fallback
+              chains on it rather than beginning there.
 
               64x40, because this panel is a DRAWING of a real component and has
               to measure the same as it: bracemark-web's list row
               (`_layouts/list-layout.tsx`), bracemark-extension's popup specimen
               (`popup/PageSpecimen.tsx`) and bracemark-expo's share specimen all
               draw this object in an `h-10 w-16` slot. It was `size-11` here
-              while two of those were square; they all moved together. */}
+              while two of those were square; they all moved together.
+
+              `ratio` must match the slot's 16:10 and `rx={0}` because the slot
+              already clips to `rounded` — host-monogram.tsx carries the contract
+              for both, and holding either wrong fails softly (letterboxing, or a
+              sliver of plate at each corner) rather than loudly. The ring is
+              `border` now rather than the accent it used to be: the tile fills
+              the box, so a petrol hairline around a hue field is the accent
+              spent on nothing, and globals.css rations it to what is genuinely
+              yours or genuinely on. */}
           <div
             className={cn(
-              'mt-0.5 h-10 w-16 shrink-0 rounded bg-signal-soft ring-1 ring-signal-line ring-inset',
+              'mt-0.5 h-10 w-16 shrink-0 overflow-hidden rounded ring-1 ring-border ring-inset',
             )}
             aria-hidden="true"
-          />
+          >
+            <HostMonogram host={SPECIMEN_HOST} ratio={16 / 10} rx={0} className={cn('size-full')} />
+          </div>
           <div className={cn('min-w-0')}>
             {/* NOT `text-body`, though it is the same 15px. This line is a
                 SPECIMEN TITLE — the same string, size and leading as
@@ -153,13 +190,28 @@ function HeroPanel() {
                 what lets this panel claim to be a drawing of them. `text-body`
                 is this site's prose pairing (15/28) and would set it on a
                 28px line; the specimen is `leading-snug` in all three ports.
-                Two roles, one size, and only the prose one has a token. */}
+                Two roles, one size, and only the prose one has a token.
+
+                A REAL ARTICLE, which the one it replaces was not. "Local-first
+                sync: the hard parts" was set on martin.kleppmann.com — a real
+                person's real domain — and no such piece exists there, so the
+                panel a visitor is invited to study opened with an invented
+                citation. This title is what `bracemark-extractor` returns for
+                martin.kleppmann.com/2020/12/02/bloom-filter-hash-graph-sync.html,
+                minus the " — Martin Kleppmann's blog" suffix the extractor
+                faithfully keeps and a person trims. The subject is the same one
+                the fiction was reaching for, and it keeps the tags below
+                accurate.
+
+                It must stay somebody's ACTUAL INTEREST and not a link about us.
+                A page about privacy or tracking in this slot makes the panel
+                self-referential — the product demonstrating itself with a link
+                to its own pitch — and an advocacy org's page reads as an
+                endorsement we do not have. */}
             <p className={cn('text-[0.9375rem] leading-snug font-medium')}>
-              Local-first sync: the hard parts
+              Using Bloom filters to efficiently synchronise hash graphs
             </p>
-            <p className={cn('mt-1 font-mono text-xs text-muted-foreground')}>
-              martin.kleppmann.com
-            </p>
+            <p className={cn('mt-1 font-mono text-xs text-muted-foreground')}>{SPECIMEN_HOST}</p>
             <div className={cn('mt-2.5 flex flex-wrap gap-1.5')}>
               {/* No `Reading list` here any more. Two words of set dressing were
                   advertising a category this product deliberately isn't in — a
