@@ -170,7 +170,9 @@ they are read by the same components, not because it is one of them.
 - `components/links/*` is the shared link-editing surface — the pickers both
   editors render (`list-select`, `tags-field`), the at-cap wall
   (`link-quota-banner`), and `host-monogram`, the deterministic letter-on-hue
-  tile a host falls back to when it has no favicon. A piece lands here the
+  tile that fills an icon-less host's **preview slot** (not the chip beside its
+  host line, which falls back to a plate so the row escalates once — see
+  [link-extraction.md](./link-extraction.md), _favicons_). A piece lands here the
   moment a SECOND surface draws it: the monogram moved out of bracemark-web's
   `link-media.tsx` when bracemark-extension's popup specimen became its second
   consumer, because "same site, same tile" has to hold across the popup and the

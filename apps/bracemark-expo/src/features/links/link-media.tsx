@@ -1,8 +1,9 @@
 // The item's icon/image presentation chain — the expo port of bracemark-web's
 // `_layouts/shared/link-media.tsx` (canonical doc for the chain's design: the
-// deterministic HostMonogram, the Favicon that falls back to it, why the
-// fallbacks are steady states, the fixed-size contract with the layouts). Shared
-// by both link-item renderers (link-row, link-card). Divergences here:
+// deterministic HostMonogram, the Favicon that falls back to a quiet plate so the
+// row escalates once rather than twice, why the fallbacks are steady states, the
+// fixed-size contract with the layouts). Shared by both link-item renderers
+// (link-row, link-card). Divergences here:
 //
 //  - Favicons come from expo-react's device-local per-host cache
 //    (useFaviconUri — a DIRECT native fetch under the extraction opt-in, no
@@ -21,12 +22,11 @@
 //    so no `cachePolicy` here may be 'disk'/'memory-disk': that would duplicate
 //    the library into a second copy on the same device.
 //  - HostMonogram is a View tile, not SVG, so its letter cannot scale with the
-//    box the way web's viewBox does — each caller passes the size as a class.
-//    The two in use are web's two `fontSize`s worked out against their own
-//    slots: `text-[10px]` for the host chip (web's `Favicon` passes
-//    fontSize={10} against a 16px tile) and `text-xl` for the row slot's
-//    full-bleed field (the default 8, i.e. 8/16 x 40). Nothing enforces the
-//    pair — see the note at `fontSize` in web-ui's host-monogram.tsx.
+//    box the way web's viewBox does — the size is a class. There is one size
+//    left, `text-xl`: web's `FONT_SIZE` of 8 worked out against the 40px-tall
+//    row slot (8/16 x 40). Nothing enforces that it tracks web — see the note at
+//    `fontSize` in web-ui's host-monogram.tsx. The host chip's `text-[10px]`
+//    tile went when `Favicon` below stopped drawing one.
 //  - RN's color parser wants the comma hsl() syntax (web's space-separated
 //    form isn't universally parsed), hence the style props.
 
@@ -48,24 +48,19 @@ const Image = withUniwind(ExpoImage);
 // A deterministic monogram for a host — the expo counterpart of web-ui's
 // HostMonogram: an icon-less site still gets a consistent mark to recognize rows
 // by (and the tile never changes under the user when the real icon later lands).
-function HostMonogram({
-  host,
-  className,
-  // In the box's own units, not a fraction of it — see the header. The default is
-  // the host chip's, the smaller and by far the commoner of the two.
-  textClassName = 'text-[10px]',
-}: {
-  host: string;
-  className: string;
-  textClassName?: string;
-}) {
+function HostMonogram({ host, className }: { host: string; className: string }) {
   return (
     <View
       aria-hidden
       className={`items-center justify-center ${className}`}
       style={{ backgroundColor: `hsl(${hueFromHost(host)}, 45%, 45%)` }}
     >
-      <Text className={`font-semibold text-white ${textClassName}`}>{initialFromHost(host)}</Text>
+      {/* `text-xl` in the box's own units, not a fraction of it — see the header.
+          One caller, one size: 8/16 of the 40px row slot this only ever fills, so
+          it is a constant here as `FONT_SIZE` is on web. It was a per-caller prop
+          while the host chip drew a `text-[10px]` tile; that went with `Favicon`'s
+          monogram. */}
+      <Text className="text-xl font-semibold text-white">{initialFromHost(host)}</Text>
     </View>
   );
 }
@@ -89,14 +84,22 @@ function useBrokenUri(): [(uri: string) => boolean, (uri: string) => void] {
 
 // The site's favicon, keyed by DISPLAY HOST — web's Favicon: cached per host
 // and fetched at most once per host per device (useFaviconUri /
-// favicon-provider). Falls back to the monogram whenever there are no bytes to
-// show — in flight, no reachable favicon, or (by design, not failure) for
-// every host while the extraction opt-in is off. So the fallback is a steady
-// state, not just a loading state.
+// favicon-provider). Falls back to a QUIET PLATE whenever there are no bytes to
+// show — in flight, no reachable favicon, a decode failure (the onError backstop
+// above), or (by design, not failure) for every host while the extraction opt-in
+// is off, which is the default. So the fallback is a steady state, not just a
+// loading state, and on a device that never opted in it is the only state.
+//
+// Not the monogram, which is what it drew until this line beside the host TEXT
+// turned out to be the row's second escalation: the tile's letter is
+// `initialFromHost` of the string rendered right next to it, and with no image
+// the slot below was already filling 64x40 with that same letter on that same
+// hue. A plate rather than nothing keeps the host strings on one left edge. Web's
+// `Favicon` carries the full argument.
 export function Favicon({ host, className }: { host: string; className: string }) {
   const uri = useFaviconUri(host);
   const [isBroken, markBroken] = useBrokenUri();
-  if (!uri || isBroken(uri)) return <HostMonogram host={host} className={className} />;
+  if (!uri || isBroken(uri)) return <View aria-hidden className={`bg-muted ${className}`} />;
   // contain, not cover: a favicon is a whole mark, so it letterboxes rather
   // than crops (unlike the preview image, which is a photo filled into a box).
   //
@@ -122,8 +125,9 @@ export function Favicon({ host, className }: { host: string; className: string }
 // The image-less ROW fallback — web's PreviewFallbackIcon, and its reasoning
 // verbatim: the favicon on a quiet muted plate, escalating to the monogram
 // FILLING the slot when there is no favicon either, because that is the state
-// where the mark is the only identity left. It resolves the favicon itself rather
-// than delegating to `Favicon` (which falls back at its own chip size) for the
+// where the mark is the only identity left. It is the row's ONE escalation — the
+// host chip above yields to it. It resolves the favicon itself rather than
+// delegating to `Favicon` (which renders a bare plate in this state) for the
 // reason web gives — the SLOT is what has to know whether there are bytes.
 //
 // The row's slot is `overflow-hidden rounded` already (link-row.tsx), so the
@@ -139,9 +143,7 @@ function PreviewFallbackIcon({
 }) {
   const uri = useFaviconUri(host);
   const [isBroken, markBroken] = useBrokenUri();
-  if (!uri || isBroken(uri)) {
-    return <HostMonogram host={host} className={className} textClassName="text-xl" />;
-  }
+  if (!uri || isBroken(uri)) return <HostMonogram host={host} className={className} />;
   return (
     <View className={`items-center justify-center bg-muted ${className}`}>
       {/* Same slot as Favicon, same reasoning — see its cachePolicy note. */}

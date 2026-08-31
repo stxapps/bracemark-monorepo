@@ -1,9 +1,14 @@
 'use client';
 
 // The row's icon/image presentation chain: the site Favicon, which falls back to
-// the shared HostMonogram, and the LinkPreviewImage slot, which falls back to
-// either a small favicon (list) or a full-bleed hue panel (card). Shared by both
-// link layouts.
+// a quiet plate, and the LinkPreviewImage slot, which falls back to a small
+// favicon escalating to the shared HostMonogram (list) or to a full-bleed hue
+// panel (card). Shared by both link layouts.
+//
+// ONE identity escalation per row, and the SLOT owns it. Both halves resolve the
+// same host's favicon independently, so for a while both ran the escalation
+// locally and both took it — see `Favicon` for what that painted and why the chip
+// beside the host line is the half that yields.
 
 // The letter/hue derivations (initialFromHost/hueFromHost) live in
 // @stxapps/shared (url/host-identity.ts): bracemark-expo's card panel is a second
@@ -25,17 +30,38 @@ import { HostMonogram } from '@stxapps/web-ui/components/links/host-monogram';
 // disclosed every rendered link's host to Google and was the last third-party leak
 // in the app.
 //
-// Falls back to the monogram whenever there are no bytes to show — while the fetch
-// is in flight, for a host with no reachable favicon, and (by design, not failure)
-// for every host when the serverExtraction opt-in is off. So the fallback is a
-// steady state, not just a loading state.
+// With no bytes to show it falls back to a QUIET PLATE — while the fetch is in
+// flight, for a host with no reachable favicon, and (by design, not failure) for
+// every host while the serverExtraction opt-in is off, which is the DEFAULT. So
+// the fallback is a steady state rather than a loading state, and on a library
+// that never opted in it is the ONLY state.
+//
+// It used to draw the monogram here, and that put the mark on the row twice. The
+// tile's letter is `initialFromHost` of the very string rendered ~6px to its
+// right, so beside the host text it only restates what the reader is already
+// reading — and with no image either, PreviewFallbackIcon below fills its 64x40
+// slot with that same letter on that same hue, ~12px away. (The quieter half of
+// the same duplication was always there: a row with a favicon and no image drew
+// that one favicon twice, once per box.)
+//
+// The rule is unchanged — it is PreviewFallbackIcon's own: the hue field appears
+// only where the monogram is the last identity left. What changed is that it is
+// now applied once per ROW instead of once per component. Beside a host string
+// the monogram is never the last identity left, and the slot is the box with the
+// stronger claim: 64x40 with nothing else in it, against 14px with the host name
+// spelled out alongside. bracemark-extension's PageSpecimen keeps its escalation
+// for exactly that reason — the popup prints no host chip, so its slot really
+// does stand alone.
+//
+// A plate rather than NOTHING, so the host strings keep one left edge. Dropped
+// outright, the chip's ~20px would come back only on the rows that lack an icon,
+// and a mixed list would run ragged — list-layout.tsx makes the same argument for
+// top-aligning the thumbnail rail.
 export function Favicon({ host, className }: { host: string; className: string }) {
   const url = useFaviconUrl(host);
-  // `fontSize={10}` rather than the component's default 8: this is the 14-16px
-  // chip beside a host line, the smallest box the monogram is drawn in, and half
-  // its height is a ~5px cap — see host-monogram.tsx's header. The preview SLOT
-  // below is the other end of that range and takes the default.
-  if (!url) return <HostMonogram host={host} fontSize={10} className={className} />;
+  // `rounded-sm` here rather than at the call sites: they size the box and nothing
+  // else shaped it, because the monogram used to bring its own `rx`.
+  if (!url) return <span aria-hidden className={`rounded-sm bg-muted ${className}`} />;
   // object-contain, not cover: a favicon is a whole mark, so it letterboxes rather
   // than crops (unlike the preview image, which is a photo being filled into a box).
   return <img src={url} alt="" className={`object-contain ${className}`} />;
@@ -52,11 +78,15 @@ export function Favicon({ host, className }: { host: string; className: string }
 // marooned in a 64x40 rectangle, which reads as an image that failed to load
 // rather than as the site's mark.
 //
-// It resolves the favicon ITSELF rather than delegating to `Favicon` (which falls
-// back to the monogram internally, at its own chip size): the slot is what has to
-// know whether there are bytes, because that is what decides between a small
-// centred mark and a full-bleed field. PreviewFallbackPanel below is built the
-// same way, for the same reason.
+// It is also the row's ONLY escalation now — `Favicon` above stopped taking the
+// same one beside the host line, where it drew this letter on this hue a second
+// time, ~12px away.
+//
+// It resolves the favicon ITSELF rather than delegating to `Favicon` (which
+// renders a bare plate in this state): the slot is what has to know whether there
+// are bytes, because that is what decides between a small centred mark and a
+// full-bleed field. PreviewFallbackPanel below is built the same way, for the
+// same reason.
 //
 // `ratio={16 / 10}` is the slot's own aspect — the fixed 64x40 that four surfaces
 // share (PageSpecimen.tsx names them). Hard-coded rather than taken from a prop

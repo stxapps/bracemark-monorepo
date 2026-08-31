@@ -135,7 +135,10 @@ silent visual regression, so they're written down:
   and it does not move between them — the controls around it change instead. Its
   tile falls back extracted image → the live tab's `favIconUrl` (free from
   `tabs.query`, no network, no host disclosed) → `HostMonogram`, the same
-  letter-on-hue tile bracemark-web's rows use, which now lives in
+  letter-on-hue tile that fills an icon-less row's preview slot in
+  bracemark-web (the chip beside a row's host line falls back to a plate — this
+  popup prints no host chip, so the escalation below is uncontested here), which
+  now lives in
   `web-ui/components/links/host-monogram.tsx` so the popup and the library can't
   draw one host two ways. Its proportions are bracemark-site's hero panel: that
   hero is a drawing of this component.

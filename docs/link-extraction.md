@@ -456,7 +456,18 @@ sits **outside** everything above: not a facet, not in `extractions/`, no
 the render is a derived `file://` uri) — holding
 raw icon bytes, or a recorded `none` verdict (with a long retry TTL) so an
 iconless host doesn't re-buy its fetch on every reload. A row shows the cached
-icon or falls back to its **monogram**; nothing ever waits on it. Three
+icon where it has one; nothing ever waits on it. Where it doesn't, the row falls
+back **once**, in its preview slot, which fills with the **monogram** — the chip
+beside the host line goes to a quiet plate instead. Both boxes resolve the same
+host's favicon independently, so each used to escalate on its own and an
+image-less, icon-less row drew the same letter on the same hue twice, ~12px
+apart. Beside a host string the monogram is never the last identity left: its
+letter is the first letter of the text next to it. The escalation rule itself is
+unchanged, it is just applied per row rather than per component (bracemark-web
+`_layouts/shared/link-media.tsx`'s `Favicon`, bracemark-expo
+`features/links/link-media.tsx`). bracemark-extension's popup specimen keeps its
+own escalation — it prints no host chip, so its slot really does stand alone
+([browser-extension.md](./browser-extension.md), _the page specimen_). Three
 decisions, each deliberate:
 
 - **Not a facet — the axis is wrong.** Every `extractions/` field varies per
