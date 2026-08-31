@@ -7,21 +7,27 @@ import { BracemarkIcon } from './icons/bracemark-icon';
 import { Text } from './ui/text';
 
 // The mark next to the name — the one thing every surface that has no other
-// brand carrier renders. It exists as a component for the reason web's DOESN'T
-// need to: web types the same utilities into four files (the auth layout, both
-// settings/links rails, the browser extension's popup header) and a comment in
-// each says "same size, same step, same gap as the others, keep them equal".
-// Native has no `className` cascade to make that cheap, and the mark's height is
-// a PROP here rather than a class (react-native-svg sizes by prop), so a
-// hand-typed copy drifts by a pixel the first time one is edited. One component,
-// five call sites, no drift.
+// brand carrier renders. Web has the same component now
+// (`packages/web-ui/src/components/brand-lockup.tsx`, four call sites: the auth
+// card, both settings/links rails, the browser extension's popup header); this
+// file is its port, and the two are one lockup in two languages. Web reached it
+// second, having typed the utilities into all four files with a comment in each
+// saying "same size, same step, same gap as the others, keep them equal" — a
+// rule stated four times and enforced nowhere, which the popup had already
+// drifted off once. Native never had that option to begin with: there is no
+// `className` cascade to make a hand-typed copy cheap, and the mark's height is
+// a PROP here rather than a class (react-native-svg sizes by prop), so a copy
+// drifts by a pixel the first time one is edited. Nine call sites, two
+// components, no drift.
 //
 // THE MEASUREMENTS ARE WEB'S, not new ones: a 16px mark (`h-4` there),
 // `text-[0.9375rem] leading-none font-semibold tracking-tight` for the wordmark,
 // `gap-2.5` between them. bracemark-web's links rail, its settings rail, its auth
-// card and the browser extension's popup all render exactly this — it should be
-// the same product wherever you entered it, and this app is the fourth door into
-// it.
+// card and the browser extension's popup all render exactly this, through
+// web-ui's `BrandLockup` — it should be the same product wherever you entered it,
+// and this app is the fourth door into it. Those spellings are duplicated here
+// rather than imported because there is nothing to import: Uniwind and Tailwind
+// are separate compilers over separate stylesheets. Change one, change the other.
 //
 // THE PAIR IS A RATIO, and the height below is the half of it that can't say so.
 // 16 against 15 is the mark at 1.6× the wordmark's cap height — the proportion

@@ -1,6 +1,6 @@
 import { ArrowLeft } from 'lucide-react';
 
-import { BracemarkIcon } from '@stxapps/web-ui/components/icons/bracemark-icon';
+import { BrandLockup } from '@stxapps/web-ui/components/brand-lockup';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
@@ -44,15 +44,21 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 //     title in 360px of width. The title takes the WORDMARK'S step, not a
 //     smaller one, so the bar is the same bar in both modes.
 //
-// THE LOCKUP IS THE CANONICAL ONE — `h-4` mark, `text-[0.9375rem]` wordmark,
-// `gap-2.5` — identical to both of bracemark-web's rails, its auth card and
+// THE LOCKUP IS THE CANONICAL ONE — web-ui's `BrandLockup`, the same component
+// both of bracemark-web's rails and its auth card render, ported to
 // bracemark-expo's five. This header briefly ran a smaller lockup of its own
 // (16px/13px/`gap-2`) on the theory that a 44px bar in a 360px window wanted the
 // whole thing a step down. It didn't: `h-11` clears a 16px mark with 14px to
 // spare, and the step-down had quietly changed the PROPORTION as well as the
-// size, flattening the mark against the word by ~8%. There is no small lockup —
-// 16px is the mark's legibility floor, so a surface can only render this pair or
-// About's larger stacked one (docs/brand-assets.md, _the lockup_).
+// size, flattening the mark against the word by ~8%. That drift is why the
+// measurements are a component now rather than four hand-typed copies. There is
+// no small lockup — 16px is the mark's legibility floor, so a surface can only
+// render this pair or About's larger stacked one (docs/brand-assets.md, _the
+// lockup_).
+//
+// `actions` stays OUTSIDE the lockup (rather than riding its `action` slot, as
+// the links rail's toggle does) because the sub-view mode has no lockup at all
+// and must still show them.
 
 export function PopupShell({
   title,
@@ -90,6 +96,11 @@ export function PopupShell({
             >
               <ArrowLeft className={cn('size-4')} />
             </Button>
+            {/* Deliberately the WORDMARK'S step, re-typed rather than taken
+                from `BrandLockup` — it is a view title standing in the
+                wordmark's slot so the bar is the same bar in both modes, not a
+                lockup. If the lockup's step ever moves, this moves with it; the
+                two are not otherwise related. */}
             <span
               className={cn('truncate text-[0.9375rem] leading-none font-semibold tracking-tight')}
             >
@@ -97,12 +108,7 @@ export function PopupShell({
             </span>
           </>
         ) : (
-          <>
-            <BracemarkIcon className={cn('h-4 w-auto shrink-0')} aria-hidden="true" />
-            <span className={cn('text-[0.9375rem] leading-none font-semibold tracking-tight')}>
-              Bracemark
-            </span>
-          </>
+          <BrandLockup />
         )}
         <div className={cn('-mr-1.5 ml-auto flex items-center gap-0.5')}>{actions}</div>
       </header>

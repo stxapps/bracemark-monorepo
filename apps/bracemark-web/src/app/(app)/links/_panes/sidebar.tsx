@@ -83,7 +83,7 @@ import {
   useTags,
   writeSidebarCollapsedIds,
 } from '@stxapps/web-react';
-import { BracemarkIcon } from '@stxapps/web-ui/components/icons/bracemark-icon';
+import { BrandLockup } from '@stxapps/web-ui/components/brand-lockup';
 import { Input } from '@stxapps/web-ui/components/ui/input';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
@@ -517,25 +517,16 @@ export function SidebarBody({
   return (
     <>
       {/* The lockup, at the same `h-14` as the topbar so the two hairlines meet
-          across the frame — and identical to the settings rail's, the auth
-          card's, the browser extension's popup header and bracemark-expo's five
-          (mark `h-4`, wordmark `text-[0.9375rem] font-semibold tracking-tight`,
-          `gap-2.5`). Nine surfaces, one lockup: it should be the same product
-          wherever you entered it.
+          across the frame. The mark, the wordmark and the gap between them are
+          web-ui's `BrandLockup` — one component for this rail, the settings
+          rail, the auth card and the browser extension's popup header, ported
+          1:1 to bracemark-expo's five surfaces. Nine surfaces, one lockup: it
+          should be the same product wherever you entered it.
 
-          The mark is 16px for two reasons that meet at the same number, and
-          docs/brand-assets.md holds both: it is 1.6× the wordmark's cap height
-          (the proportion that makes the two read as one lockup rather than as an
-          icon with text beside it), and it is the smallest size the 45° cut
-          still reads at (bracemark-icon.tsx). So the pair moves together or not
-          at all, and it can never move DOWN. */}
-      <div className="flex h-14 shrink-0 items-center gap-2.5 border-b border-border px-4">
-        <BracemarkIcon className="h-4 w-auto shrink-0" aria-hidden="true" />
-        <span className="text-[0.9375rem] leading-none font-semibold tracking-tight">
-          Bracemark
-        </span>
-        {action ? <span className="ml-auto flex items-center">{action}</span> : null}
-      </div>
+          What stays HERE is only this rail's chrome — the `h-14`, the hairline
+          and the `px-4` — because those answer to the topbar beside it, not to
+          the brand. `flex` and `items-center` come from the component. */}
+      <BrandLockup className="h-14 shrink-0 border-b border-border px-4" action={action} />
 
       {showFilter && (
         <div className="shrink-0 px-2 pt-2">

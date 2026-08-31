@@ -1,4 +1,4 @@
-import { BracemarkIcon } from '@stxapps/web-ui/components/icons/bracemark-icon';
+import { BrandLockup } from '@stxapps/web-ui/components/brand-lockup';
 import { Card } from '@stxapps/web-ui/components/ui/card';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
@@ -47,10 +47,10 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 // each of them is reached by someone dropped mid-flow — from the marketing site's
 // Get started, from the browser extension's "Create an account", from a bookmarked
 // or mistyped app.bracemark.com URL, or from a screen that just broke under them.
-// The tab title is otherwise the only thing identifying where they are. Same mark
-// size, same wordmark step and same gap as the browser extension's popup header
-// and both rails, so these are one lockup rendered nine times rather than nine
-// that drift (docs/brand-assets.md, _the lockup_, pins the ratio behind them).
+// The tab title is otherwise the only thing identifying where they are. It is
+// web-ui's `BrandLockup`, the same component the browser extension's popup header
+// and both rails render, so these are one lockup rendered nine times rather than
+// nine that drift (docs/brand-assets.md, _the lockup_, pins the ratio behind it).
 export function FocusedPage({ children }: { children: React.ReactNode }) {
   return (
     <div className={cn('flex min-h-dvh flex-col bg-muted safe-area dark:bg-background')}>
@@ -58,12 +58,7 @@ export function FocusedPage({ children }: { children: React.ReactNode }) {
         {/* `px-4` has to keep sitting OUTSIDE the `max-w-sm` column — moving it
             inside would cap the card at 352px instead of 384. */}
         <div className={cn('flex w-full max-w-sm flex-col gap-6')}>
-          <div className={cn('flex items-center gap-2.5')}>
-            <BracemarkIcon className={cn('h-4 w-auto shrink-0')} aria-hidden="true" />
-            <span className={cn('text-[0.9375rem] leading-none font-semibold tracking-tight')}>
-              Bracemark
-            </span>
-          </div>
+          <BrandLockup />
           {children}
         </div>
       </div>

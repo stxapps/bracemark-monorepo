@@ -173,12 +173,32 @@ renders embedded in a host which draws the name and icon immediately above it,
 so a lockup there was the second copy of both (its own header comment carries
 the reasoning).
 
-Web types the utilities into each file with a comment naming the others.
-**Expo does not, and must not** — the mark's height is a `height` **prop** there
-(`react-native-svg` sizes by prop, not by class), so a hand-typed copy drifts by
-a pixel the first time one is edited. All five native call sites go through
-`apps/bracemark-expo/src/components/brand-lockup.tsx`, which also takes the
-wordmark from `BRAND.name` rather than a literal.
+**Nine call sites, two components, no hand-typed copies.** Web goes through
+`packages/web-ui/src/components/brand-lockup.tsx` and native through
+`apps/bracemark-expo/src/components/brand-lockup.tsx`; both take the wordmark
+from `BRAND.name` rather than a literal, and each call site passes only its own
+chrome (the rails' `h-14` and hairline, the popup header's `h-11`).
+
+Web typed the utilities into all four files for a long time, with a comment in
+each naming the other three — which is how the popup's 16/13 flattening got in
+and stayed. Expo never had that option: the mark's height is a `height` **prop**
+there (`react-native-svg` sizes by prop, not by class), so a copy drifts by a
+pixel the first time one is edited.
+
+The two components are duplicates on purpose. Uniwind and Tailwind are separate
+compilers over separate stylesheets, so there is nothing for the native file to
+import; the numbers are stated twice and this section is what keeps them equal.
+The one remaining hand-typed wordmark step is the browser extension popup's
+**sub-view title** (`popup/Shell.tsx`), which stands in the wordmark's slot so
+the header is the same bar in both modes — it is a title, not a lockup, and its
+comment says so.
+
+Do **not** reach for a `--text-*` token to hold the 15px. The invariant is the
+ratio to the mark, and a token names only the half that cannot defend itself: a
+one-line edit would move all nine wordmarks and leave every `h-4` where it is,
+which is precisely the drift above, made cheaper. bracemark-site's `--text-body`
+is the same number for running prose at a different leading, and is unrelated
+(`apps/bracemark-site/src/app/globals.css`).
 
 **Settings → About is the one surface that departs from those measurements**, in
 both apps: a **40px** mark stacked above the name
