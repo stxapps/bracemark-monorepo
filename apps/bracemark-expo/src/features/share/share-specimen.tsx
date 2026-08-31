@@ -93,9 +93,10 @@ export function ShareSpecimen({
       {/* The hue field FILLS the slot, as web's monogram branch does — this sheet
           has no favicon and no image to fall back FROM (see the divergences
           above), so the mark is the only identity there will ever be here and it
-          gets the whole rectangle. `text-2xl` (24px) tracks web's letter, which is
-          `fontSize="10"` on a 16-unit-tall viewBox and so renders at 25 in a
-          40px-tall slot.
+          gets the whole rectangle. `text-xl` (20px) tracks web's letter, which is
+          `fontSize="8"` on a 16-unit-tall viewBox and so renders at exactly 20 in a
+          40px-tall slot. Nothing enforces the pair — see the note at that
+          `fontSize` in web-ui's host-monogram.tsx.
 
           `mt-0.5` for the reason the row's slot carries it: `items-start` aligns
           this box to the title's text box, whose glyphs start ~1.5px below that
@@ -109,7 +110,7 @@ export function ShareSpecimen({
           backgroundColor: `hsl(${hueFromHost(host)}, 45%, 45%)`,
         }}
       >
-        <Text className="text-2xl font-semibold text-white">{initialFromHost(host)}</Text>
+        <Text className="text-xl font-semibold text-white">{initialFromHost(host)}</Text>
         {saved && (
           <View
             className="absolute bg-background"

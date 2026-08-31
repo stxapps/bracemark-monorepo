@@ -31,10 +31,63 @@ import { HostMonogram } from '@stxapps/web-ui/components/links/host-monogram';
 // steady state, not just a loading state.
 export function Favicon({ host, className }: { host: string; className: string }) {
   const url = useFaviconUrl(host);
-  if (!url) return <HostMonogram host={host} className={className} />;
+  // `fontSize={10}` rather than the component's default 8: this is the 14-16px
+  // chip beside a host line, the smallest box the monogram is drawn in, and half
+  // its height is a ~5px cap — see host-monogram.tsx's header. The preview SLOT
+  // below is the other end of that range and takes the default.
+  if (!url) return <HostMonogram host={host} fontSize={10} className={className} />;
   // object-contain, not cover: a favicon is a whole mark, so it letterboxes rather
   // than crops (unlike the preview image, which is a photo being filled into a box).
   return <img src={url} alt="" className={`object-contain ${className}`} />;
+}
+
+// The image-less ROW fallback: the site favicon on a quiet muted plate, and —
+// when there is no favicon either — the monogram FILLING the slot.
+//
+// That escalation is PageSpecimen's (bracemark-extension), and this is the same
+// 64x40 box, so it now follows the same rule: the plate stays quiet while there
+// is a real mark to show, and the hue field appears only when the monogram is the
+// last identity left, which is exactly when it should be doing the most work. It
+// used to centre a `size-4` monogram on the muted plate in that last state — 16px
+// marooned in a 64x40 rectangle, which reads as an image that failed to load
+// rather than as the site's mark.
+//
+// It resolves the favicon ITSELF rather than delegating to `Favicon` (which falls
+// back to the monogram internally, at its own chip size): the slot is what has to
+// know whether there are bytes, because that is what decides between a small
+// centred mark and a full-bleed field. PreviewFallbackPanel below is built the
+// same way, for the same reason.
+//
+// `ratio={16 / 10}` is the slot's own aspect — the fixed 64x40 that four surfaces
+// share (PageSpecimen.tsx names them). Hard-coded rather than taken from a prop
+// because that shared shape IS the contract; a caller that ever sizes this slot
+// differently has to bring the ratio with it, or the field letterboxes.
+// `overflow-hidden` because `rx={0}` leaves square corners for the caller's
+// `rounded` to clip — the popup's slot carries it already, this one never needed
+// it while the child was a small centred image.
+function PreviewFallbackIcon({
+  host,
+  className,
+  iconClassName,
+}: {
+  host: string;
+  className: string;
+  iconClassName?: string;
+}) {
+  const url = useFaviconUrl(host);
+  if (!url) {
+    return (
+      <div className={`overflow-hidden ${className}`}>
+        <HostMonogram host={host} ratio={16 / 10} rx={0} className="size-full" />
+      </div>
+    );
+  }
+  // object-contain, not cover — `Favicon`'s rule above, same bitmap argument.
+  return (
+    <div className={`flex items-center justify-center bg-muted ${className}`}>
+      <img src={url} alt="" className={`object-contain ${iconClassName ?? ''}`} />
+    </div>
+  );
 }
 
 // The image-less card fallback: a full-bleed panel painted with the host's hue
@@ -70,9 +123,10 @@ function PreviewFallbackPanel({ host, className }: { host: string; className: st
 // is the row's override-wins image ref (LinkView), read from Dexie and fetched
 // on demand by useImageFileUrl the moment the row mounts (rows are virtualized,
 // so mounted = displayed). Until bytes exist — or when the link has no image at
-// all — the slot shows a fallback keyed by `fallback`: the small site favicon on
-// a muted background (`icon`, the list's compact h-10 slot) or the full-bleed hue
-// panel (`panel`, the card's tall h-28 slot). Either way the placeholder still
+// all — the slot shows a fallback keyed by `fallback`: the site favicon on a muted
+// background, escalating to the full-bleed monogram when there is no favicon
+// either (`icon`, the list's compact 64x40 slot), or the full-bleed hue panel
+// (`panel`, the card's 12:7 banner). Either way the placeholder still
 // identifies the link and the geometry never shifts — both call sites pass a
 // FIXED-size `className` (the layouts' row estimates depend on it).
 export function LinkPreviewImage({
@@ -96,9 +150,5 @@ export function LinkPreviewImage({
   if (fallback === 'panel') {
     return <PreviewFallbackPanel host={host} className={className} />;
   }
-  return (
-    <div className={`flex items-center justify-center bg-muted ${className}`}>
-      <Favicon host={host} className={iconClassName ?? ''} />
-    </div>
-  );
+  return <PreviewFallbackIcon host={host} className={className} iconClassName={iconClassName} />;
 }

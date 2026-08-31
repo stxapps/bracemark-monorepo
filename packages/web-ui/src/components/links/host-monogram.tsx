@@ -41,10 +41,19 @@
 // `overflow-hidden rounded`) — otherwise the field's rounder corners sit inside
 // the parent's tighter ones and leave a sliver of plate at each corner.
 //
+// `fontSize` is per-caller for the same reason `rx` is, and it is the one knob
+// the single-component design could not carry as a constant. The letter is a
+// FRACTION of the short edge, so one number has to serve boxes two decades
+// apart: the 40px-tall preview slot, where 8/16 (the default, the usual
+// monogram-avatar ratio) is right, and the 14-16px chip beside a host line,
+// where that same 8 draws a ~5px cap — under the size a glyph is reliably
+// identifiable at, white on a mid-hue field. link-media.tsx's `Favicon` passes
+// 10 for exactly that; nothing else should need to.
+//
 // Not to be confused with link-media.tsx's PreviewFallbackPanel, which is the
 // CARD's image-less banner: same hue family, but its letter is a fixed `text-4xl`
 // rather than a fraction of the box, because a 12:7 banner 230px tall would draw
-// a 146px letter under this component's rule.
+// a 115px letter under this component's rule.
 
 import { hueFromHost, initialFromHost } from '@stxapps/shared';
 
@@ -53,6 +62,7 @@ export function HostMonogram({
   className,
   ratio = 1,
   rx = 3,
+  fontSize = 8,
 }: {
   host: string;
   className?: string;
@@ -62,6 +72,10 @@ export function HostMonogram({
   // Corner radius in viewBox units (3/16 of the height by default), so it scales
   // with the box. `0` when the parent clips.
   rx?: number;
+  // Letter size in viewBox units, i.e. a fraction of the box's SHORT edge. The
+  // default 8 is half of it. Raise it for a box small enough that half its height
+  // is an illegible cap — see the header.
+  fontSize?: number;
 }) {
   const letter = initialFromHost(host);
   const hue = hueFromHost(host);
@@ -76,12 +90,27 @@ export function HostMonogram({
       <rect width={width} height="16" rx={rx} fill={`hsl(${hue} 45% 45%)`} />
       <text
         x={width / 2}
-        // 8.5, not 8: the half-unit is an optical nudge for the cap-height of a
-        // capital sitting in a `central` baseline box.
-        y="8.5"
+        // Below centre, not at it: `central` centres the EM box, not the cap, so a
+        // capital reads high without the nudge. The correction is proportional to
+        // the font size — 0.5 was tuned against a fontSize of 10 — so it is spelled
+        // as that ratio rather than as the constant 8.5 it used to be, and it stays
+        // right as callers move `fontSize`.
+        y={8 + fontSize / 20}
         textAnchor="middle"
         dominantBaseline="central"
-        fontSize="10"
+        // PINNED ACROSS APPS, with nothing to enforce it. bracemark-expo can't use
+        // this component (it's RN, not SVG), so two files there hard-code the pixel
+        // size this rule works out to in their own boxes, and both go quietly out of
+        // step if the numbers here move — which breaks "same site, same mark" across
+        // the share sheet, the extension popup and the library:
+        //
+        //   features/share/share-specimen.tsx — `text-xl`, i.e. 8/16 x its 40px slot
+        //   features/links/link-media.tsx     — `Monogram`'s two sizes, the row
+        //                                       slot's `text-xl` (8/16 x 40) and the
+        //                                       host chip's `text-[10px]`, which
+        //                                       tracks `Favicon`'s fontSize={10}
+        //                                       against a 16px tile
+        fontSize={fontSize}
         fontWeight="600"
         fill="#fff"
       >

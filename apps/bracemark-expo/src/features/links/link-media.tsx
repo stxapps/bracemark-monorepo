@@ -20,9 +20,13 @@
 //    lib/image.ts — `isSvgBytes`). Note the sources are ALREADY on local disk,
 //    so no `cachePolicy` here may be 'disk'/'memory-disk': that would duplicate
 //    the library into a second copy on the same device.
-//  - Monogram is a View tile, not SVG: its consumers are the small fixed icon
-//    slots, so the letter size is fixed too (10/16 of the size-4 tile, web's
-//    viewBox ratio) instead of scaling with the box.
+//  - Monogram is a View tile, not SVG, so its letter cannot scale with the box
+//    the way web's viewBox does — each caller passes the size as a class. The
+//    two in use are web's two `fontSize`s worked out against their own slots:
+//    `text-[10px]` for the host chip (web's `Favicon` passes fontSize={10}
+//    against a 16px tile) and `text-xl` for the row slot's full-bleed field
+//    (the default 8, i.e. 8/16 x 40). Nothing enforces the pair — see the note
+//    at `fontSize` in web-ui's host-monogram.tsx.
 //  - RN's color parser wants the comma hsl() syntax (web's space-separated
 //    form isn't universally parsed), hence the style props.
 
@@ -44,14 +48,24 @@ const Image = withUniwind(ExpoImage);
 // A deterministic monogram for a host — web's Monogram: an icon-less site still
 // gets a consistent mark to recognize rows by (and the tile never changes under
 // the user when the real icon later lands).
-function Monogram({ host, className }: { host: string; className: string }) {
+function Monogram({
+  host,
+  className,
+  // In the box's own units, not a fraction of it — see the header. The default is
+  // the host chip's, the smaller and by far the commoner of the two.
+  textClassName = 'text-[10px]',
+}: {
+  host: string;
+  className: string;
+  textClassName?: string;
+}) {
   return (
     <View
       aria-hidden
       className={`items-center justify-center ${className}`}
       style={{ backgroundColor: `hsl(${hueFromHost(host)}, 45%, 45%)` }}
     >
-      <Text className="text-[10px] font-semibold text-white">{initialFromHost(host)}</Text>
+      <Text className={`font-semibold text-white ${textClassName}`}>{initialFromHost(host)}</Text>
     </View>
   );
 }
@@ -105,6 +119,45 @@ export function Favicon({ host, className }: { host: string; className: string }
   );
 }
 
+// The image-less ROW fallback — web's PreviewFallbackIcon, and its reasoning
+// verbatim: the favicon on a quiet muted plate, escalating to the monogram
+// FILLING the slot when there is no favicon either, because that is the state
+// where the mark is the only identity left. It resolves the favicon itself rather
+// than delegating to `Favicon` (which falls back at its own chip size) for the
+// reason web gives — the SLOT is what has to know whether there are bytes.
+//
+// The row's slot is `overflow-hidden rounded` already (link-row.tsx), so the
+// field's square corners are clipped by the caller, as web's `rx={0}` is.
+function PreviewFallbackIcon({
+  host,
+  className,
+  iconClassName,
+}: {
+  host: string;
+  className: string;
+  iconClassName?: string;
+}) {
+  const uri = useFaviconUri(host);
+  const [isBroken, markBroken] = useBrokenUri();
+  if (!uri || isBroken(uri)) {
+    return <Monogram host={host} className={className} textClassName="text-xl" />;
+  }
+  return (
+    <View className={`items-center justify-center bg-muted ${className}`}>
+      {/* Same slot as Favicon, same reasoning — see its cachePolicy note. */}
+      <Image
+        source={{ uri }}
+        accessibilityIgnoresInvertColors
+        contentFit="contain"
+        cachePolicy="none"
+        recyclingKey={uri}
+        className={iconClassName ?? ''}
+        onError={() => markBroken(uri)}
+      />
+    </View>
+  );
+}
+
 // The image-less card fallback: a full-bleed panel painted with the host's hue
 // (same hsl family as the Monogram tile) — web's PreviewFallbackPanel: the real
 // favicon, when present, sits centered on a white chip (its own light
@@ -146,9 +199,9 @@ function PreviewFallbackPanel({ host, className }: { host: string; className: st
 // and fetched on demand the moment the item mounts (FlashList items are
 // virtualized, so mounted = displayed — useImageFileUri adds the settle delay).
 // Until a uri exists — or when the link has no image at all — the slot shows a
-// fallback keyed by `fallback`: the small site favicon on a muted background
-// (`icon`, the row's compact slot) or the full-bleed hue panel (`panel`, the
-// card's banner). Either way the placeholder still identifies the link and the
+// fallback keyed by `fallback`: the site favicon on a muted background, escalating
+// to the full-bleed monogram when there is no favicon either (`icon`, the row's
+// compact slot), or the full-bleed hue panel (`panel`, the card's banner). Either way the placeholder still identifies the link and the
 // geometry never shifts — both call sites pass a FIXED-size `className` (the
 // card's height budget depends on it).
 export function LinkPreviewImage({
@@ -192,9 +245,5 @@ export function LinkPreviewImage({
   if (fallback === 'panel') {
     return <PreviewFallbackPanel host={host} className={className} />;
   }
-  return (
-    <View className={`items-center justify-center bg-muted ${className}`}>
-      <Favicon host={host} className={iconClassName ?? ''} />
-    </View>
-  );
+  return <PreviewFallbackIcon host={host} className={className} iconClassName={iconClassName} />;
 }
