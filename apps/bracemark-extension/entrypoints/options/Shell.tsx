@@ -40,6 +40,27 @@ import { WEB_APP_URL } from '@/utils/web-app-url';
 // fields are 14px. styles/globals.css pins all five controls back; see input.tsx
 // for why `md:` means "touch device" rather than "narrow".
 
+// THE VERTICAL PADDING IS ASYMMETRIC ON PURPOSE, and it's the one measure that
+// does NOT copy bracemark-web (whose SettingsPane is a flat `py-8`). The two edges
+// aren't the same kind of edge here. The bottom one is ours alone — 40px of run-out
+// before the footer's `border-t`, the last thing in the document. The top one is
+// SHARED with the host: Chrome's options dialog draws the icon, the name and the
+// close affordance in a header with its own padding below it, and Firefox's
+// about:addons Preferences tab sits under the add-on card the same way, so whatever
+// is written here lands on top of ~16-20px the host already spent. At `py-10` that
+// totalled ~56-60px above the `h1` in both — a page that starts a long way down
+// from the title naming it.
+//
+// 24px is the value that survives all three hosts. Under a host header it reads as
+// one deliberate gap rather than two stacked ones; standing alone it's still a
+// margin. That last case is Safari, which is why this doesn't go lower: Safari's
+// web-extension support has never had an embedded options host of Chrome's or
+// Firefox's kind, so if this page ships there at all it most likely opens in its
+// own window or tab, where this padding is the ONLY inset above the title and a
+// 16px one would read as text jammed against the top of the frame. 24 is also on
+// the scale this page already uses — between the 32 of a section break and the 16
+// of the horizontal inset — rather than a fourth number.
+
 // `min-h-dvh` SURVIVES the header's removal, and it isn't the same assumption. It
 // does one job: hold the footer against the bottom of whatever frame the host gives
 // this document. Chrome's options dialog has a definite height, so on a short screen
@@ -55,7 +76,7 @@ import { WEB_APP_URL } from '@/utils/web-app-url';
 export function OptionsShell({ children }: { children: React.ReactNode }) {
   return (
     <div className={cn('flex min-h-dvh flex-col bg-background text-foreground')}>
-      <main className={cn('mx-auto w-full max-w-2xl flex-1 px-4 py-10 md:px-6')}>{children}</main>
+      <main className={cn('mx-auto w-full max-w-2xl flex-1 px-4 pt-6 pb-10 md:px-6')}>{children}</main>
 
       <Footer />
     </div>
