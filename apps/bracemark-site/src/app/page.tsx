@@ -129,9 +129,19 @@ function HeroPanel() {
       <div className={cn('p-5 pb-8 sm:p-6 sm:pb-9')}>
         <p className={cn('eyebrow text-signal')}>On your device</p>
         <div className={cn('mt-4 flex gap-3.5')}>
+          {/* The preview slot, empty on purpose — a grey block where a cover
+              image would be, so the panel stays a diagram rather than a
+              screenshot (there is a real one further down the page).
+
+              64x40, because this panel is a DRAWING of a real component and has
+              to measure the same as it: bracemark-web's list row
+              (`_layouts/list-layout.tsx`), bracemark-extension's popup specimen
+              (`popup/PageSpecimen.tsx`) and bracemark-expo's share specimen all
+              draw this object in an `h-10 w-16` slot. It was `size-11` here
+              while two of those were square; they all moved together. */}
           <div
             className={cn(
-              'bg-signal-soft ring-signal-line mt-0.5 size-11 shrink-0 rounded-lg ring-1 ring-inset',
+              'bg-signal-soft ring-signal-line mt-0.5 h-10 w-16 shrink-0 rounded ring-1 ring-inset',
             )}
             aria-hidden="true"
           />

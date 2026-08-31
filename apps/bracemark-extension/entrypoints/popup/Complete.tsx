@@ -22,8 +22,10 @@ import { WEB_APP_URL } from '@/utils/web-app-url';
 // The complete screen — shown right after a save AND when the active tab is already
 // saved (the revisit / bonus path). It is the same PageSpecimen the editor showed,
 // with its corner now cut: the page has been marked, which is the brand's own
-// gesture and the whole "saved" signal (see PageSpecimen). The form beneath it is
-// replaced by the one thing left to do, opening the library.
+// gesture performed on the thing the user just kept (see PageSpecimen). It is not
+// the whole "saved" signal and never was — the title below says "Saved", the list
+// row names where it landed, and the form is replaced by the one thing left to do,
+// opening the library. The cut is the part of that which happens to the OBJECT.
 //
 // The specimen stays reactive. The titleImage facet fills `title`/`imageId` into
 // the link's `extractions/{id}.enc` in the background a beat after the save, and

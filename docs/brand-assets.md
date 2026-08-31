@@ -207,8 +207,8 @@ meaning, because there is no mark beside it to explain the shape.
 
 | where                                                                       | cut     | what it means                                                                                                               |
 | --------------------------------------------------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------- |
-| the browser extension's page tile (`corner-cut`/`corner-square`)            | 0.75rem | **state** — square is unsaved, cut is saved; the whole signal, no badge ([browser-extension.md](./browser-extension.md))    |
-| bracemark-expo's share-sheet specimen (`features/share/share-specimen.tsx`) | 12px    | **state**, the same one — the native port of the row above, on the same 44px tile                                           |
+| the browser extension's page tile (`corner-cut`/`corner-square`)            | 0.75rem | **state** — square is unsaved, cut is saved; the part of it on the OBJECT ([browser-extension.md](./browser-extension.md))  |
+| bracemark-expo's share-sheet specimen (`features/share/share-specimen.tsx`) | 12px    | **state**, the same one — the native port of the row above, on the same 64x40 slot                                          |
 | bracemark-web's auth card (`(auth)/layout.tsx`)                             | 1.5rem  | **identity** — the signed-out routes have no rail to carry the brand, so the card itself is the Bracemark surface           |
 | bracemark-expo's auth card (`components/dog-eared-card.tsx`)                | 24px    | **identity**, the same one — the native port of the row above, not a third meaning; the case is _stronger_ here (see below) |
 
@@ -218,11 +218,37 @@ same two screens, same job, same 1.5rem/24px cut, and a native app has no tab
 title to fall back on, so it is even more true there that these screens are the
 only place the app never says its own name. The share sheet's specimen is the
 browser extension's page tile on another platform, and the pairing is just as
-tight: the same question ("this page — saved or not?"), the same 44px tile, the
+tight: the same question ("this page — saved or not?"), the same 64x40 slot, the
 same 12px cut, both drawn as the thing the library will draw for that link.
+
+⚠ **The 12px is read against the slot's SHORT edge, and only the short edge.**
+Both specimens drew a 44px square until the four surfaces that render a saved
+link were measured against each other — bracemark-web's list row and its
+skeleton, bracemark-expo's row, and the two specimens — and only the specimens
+were square. They now carry the row's `h-10 w-16`, and the cut's ratio survived
+the move intact: 12 of 40 is 30%, against 12 of 44's 27%, where the mark's own
+fold is ~29%. It survived because the cut is 45° and takes the same 12px off
+both edges, so the SHORT one governs — sizing to the 64px width instead would
+want 17px, which is 43% of the height and reads as a wedge rather than a folded
+corner. A 40px-tall object is still inside the range where the fold reads as a
+silhouette of the mark at all, which is what the whole pair depends on. If that
+slot's height ever moves, the cut moves with it; its width may move freely.
+The derivation is in `bracemark-extension/styles/globals.css`, above the pair.
 
 ⚠ **A third meaning is what is forbidden.** A fold that means "saved" somewhere
 and nothing in particular elsewhere teaches users it means nothing.
+
+**The state fold is not the whole confirmation, and the code said so before the
+prose did.** Both specimens' headers claimed the cut was the entire "saved"
+signal — "no check badge, no colour, no state word competing with the title" —
+while `Complete.tsx` set its `PopupTitle` to "Saved" and named the list, and
+`share-screen.tsx` printed "Saved to <list>". The words carry the state on both
+platforms; the fold is the part of the confirmation that happens to the OBJECT
+rather than to the chrome around it, which is the whole reason the specimen does
+not move across the save. Keep it — it is one CSS pair and one RN overlay, and
+dropping it would take one of the two meanings in the table above with it — but
+do not restate the stronger claim, which is the version an accessibility review
+would fail us on if it were true (a fold announces nothing).
 
 The two platforms draw it differently, and on RN the technique is chosen by
 **scale** rather than by taste:

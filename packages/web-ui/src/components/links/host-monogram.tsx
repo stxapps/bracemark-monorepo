@@ -16,22 +16,68 @@
 // across the popup and the library it saves into or the recognition cue is worth
 // nothing.
 //
-// SVG, not a styled div, so ONE component serves every call site's box (size-4 in
-// the rows, size-6 in the preview slot, size-11 in the popup specimen) — the
+// SVG, not a styled div, so ONE component serves every call site's box — the
 // viewBox scales the letter with the tile, where a Tailwind text size would have
-// to be passed in per caller and kept in step with it.
+// to be passed in per caller and kept in step with it. Today: `size-4` beside a
+// host, `size-4` in the list row's preview slot, and the popup specimen's whole
+// 64x40 slot.
+//
+// `ratio` is what lets it be that last one. The viewBox was a fixed `0 0 16 16`,
+// so the tile could only ever be SQUARE: dropped into a 16:10 box it letterboxed,
+// leaving 12px of plate down each side, and the alternative — stretching it — puts
+// the letter on a diet. Widening the viewBox instead keeps the letter round and
+// centred while the hue field fills the box, which is what a slot whose only
+// content is this mark wants.
+//
+// PASS THE BOX'S OWN ASPECT. `ratio` is width ÷ height of the box `className`
+// sizes, and nothing checks the two agree — this is the one way to hold the
+// component wrong. It fails softly, though: `preserveAspectRatio` still defaults
+// to `meet`, so a mismatch letterboxes visibly (the state the default `ratio: 1`
+// was always in) rather than deforming anything.
+//
+// `rx` is in the same viewBox units, so it SCALES with the box: the default 3 is
+// 3/16 of the height, which is ~3px on a `size-4` tile and 7.5px on a 40px-tall
+// one. Pass `rx={0}` when the parent already clips (the specimen's slot is
+// `overflow-hidden rounded`) — otherwise the field's rounder corners sit inside
+// the parent's tighter ones and leave a sliver of plate at each corner.
+//
+// Not to be confused with link-media.tsx's PreviewFallbackPanel, which is the
+// CARD's image-less banner: same hue family, but its letter is a fixed `text-4xl`
+// rather than a fraction of the box, because a 12:7 banner 230px tall would draw
+// a 146px letter under this component's rule.
 
 import { hueFromHost, initialFromHost } from '@stxapps/shared';
 
-export function HostMonogram({ host, className }: { host: string; className?: string }) {
+export function HostMonogram({
+  host,
+  className,
+  ratio = 1,
+  rx = 3,
+}: {
+  host: string;
+  className?: string;
+  // Width ÷ height of the box `className` sizes. See the header — it must match,
+  // and a mismatch letterboxes rather than distorts.
+  ratio?: number;
+  // Corner radius in viewBox units (3/16 of the height by default), so it scales
+  // with the box. `0` when the parent clips.
+  rx?: number;
+}) {
   const letter = initialFromHost(host);
   const hue = hueFromHost(host);
+  // The viewBox is anchored to a height of 16 and widened, never the other way
+  // round, which is what keeps `fontSize` and `rx` reading against the SHORT edge
+  // at any aspect — the letter is then the same fraction of the tile's height in
+  // a 16:10 slot as in a square one.
+  const width = 16 * ratio;
 
   return (
-    <svg viewBox="0 0 16 16" className={className} aria-hidden>
-      <rect width="16" height="16" rx="3" fill={`hsl(${hue} 45% 45%)`} />
+    <svg viewBox={`0 0 ${width} 16`} className={className} aria-hidden>
+      <rect width={width} height="16" rx={rx} fill={`hsl(${hue} 45% 45%)`} />
       <text
-        x="8"
+        x={width / 2}
+        // 8.5, not 8: the half-unit is an optical nudge for the cap-height of a
+        // capital sitting in a `central` baseline box.
         y="8.5"
         textAnchor="middle"
         dominantBaseline="central"

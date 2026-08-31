@@ -92,11 +92,21 @@ body {
  * animatable as a transition on one property rather than a keyframed overlay.
  * If you retouch either, keep the point counts equal or the change will snap.
  *
- * 0.75rem (12px) on the 44px tile is the mark's own ratio, near enough: an
- * 11-unit cut on a 38-unit-wide grid is 29%, and 12 of 44 is 27%. Measured
- * against the icon at 5× the pair reads as the same gesture. Don't shrink it
- * much below this — at 11px the cut was already marginal at 1×, and the tile is
- * only ever rendered at 1×.
+ * 0.75rem (12px) is the mark's own ratio, near enough: an 11-unit cut on a
+ * 38-unit-wide grid is 29%. Measured against the icon at 5× the pair reads as
+ * the same gesture. Don't shrink it much below this — at 11px the cut was
+ * already marginal at 1×, and the tile is only ever rendered at 1×.
+ *
+ * READ THE RATIO AGAINST THE SHORT EDGE. The tile was a 44px square, where 12
+ * of 44 is 27%; it is now the library row's 64x40 slot (PageSpecimen.tsx has
+ * the argument), where 12 of 40 is 30% — closer to the mark than the square
+ * was. It is the SHORT edge that governs, because the cut is 45° and so takes
+ * the same 12px off both: 12 of the 64px width is 19%, and sizing to fix THAT
+ * would want 17px, which is 43% of the height — a wedge, not a folded corner.
+ * A 40px-tall object is still inside the range where the fold reads as the
+ * mark's silhouette at all (docs/brand-assets.md, _the mark_), which is the
+ * condition this whole pair depends on. If the slot's height ever moves, this
+ * number moves with it; the width may move freely.
  */
 @utility corner-square {
   clip-path: polygon(0 0, 100% 0, 100% 0, 100% 100%, 0 100%);

@@ -139,12 +139,40 @@ silent visual regression, so they're written down:
   `web-ui/components/links/host-monogram.tsx` so the popup and the library can't
   draw one host two ways. Its proportions are bracemark-site's hero panel: that
   hero is a drawing of this component.
+- **The specimen's slot is the library row's, `h-10 w-16`.** Four surfaces draw a
+  saved link — bracemark-web's list row (and the skeleton that stands in for it),
+  bracemark-expo's row, this popup specimen and the share sheet's — and until
+  recently only the two specimens were square, so the one component whose job is
+  "the page, as the library will draw it" was the one drawing it differently.
+  16:10 is also the shape of what lands in the slot: an `og:image` is a landscape
+  capture, and a square cropped it harder here than the library crops the same
+  bytes. The hero panel moved with them. The cost is width — `w-90` minus `p-4`
+  leaves ~250px for the title where the square left ~270 — which two lines of
+  15px absorb. Inside the slot both fallbacks are a centred square on the muted
+  plate: the favicon at `size-6`, because it is a 16–32px bitmap that must not be
+  scaled past its pixels, and the monogram at `size-10` — the slot's full height —
+  because it is a vector. Neither fills the WIDTH: that would stretch the square
+  monogram — so `HostMonogram` grew a `ratio` (and an `rx`, for when the parent
+  already clips): the viewBox widens with the box, the letter stays round and
+  centred, and the field fills. The favicon does not get the same treatment; it is
+  a 16–32px **bitmap** and stays `size-6`, `object-contain`, centred on the muted
+  plate. That split is an escalation, not an inconsistency — the plate stays quiet
+  while there is a real mark to show, and the hue field appears only when the
+  monogram is the last identity left. It also means the corner cut lands on a
+  filled rectangle in all three states, which is what makes a turned-down corner
+  read as one. (Not to be confused with `link-media.tsx`'s `panel` fallback, the
+  CARD's image-less banner: same hue family, but a fixed `text-4xl` letter rather
+  than a fraction of the box.)
 - **Saving cuts the tile's corner** (`corner-cut` / `corner-square`, defined in
   the extension's `globals.css`). That 45° cut is the brand mark's own geometry —
-  the turned-down page corner — and it is the whole "saved" signal: no check
-  badge, no colour. The two clip paths are 5-point polygons with matching vertex
-  counts so the change can transition on one property; keep them equal or it
-  snaps.
+  the turned-down page corner — performed on the thing the user just kept. It is
+  **not** the whole "saved" signal, though both specimens' headers said so for a
+  long time: `Complete.tsx` sets the `PopupTitle` to "Saved", names the list, and
+  replaces the form with "Open Bracemark", and the share sheet does the same. The
+  words carry the state; the fold is the part of the confirmation that happens to
+  the OBJECT, which is why the specimen doesn't move across the save. The two clip
+  paths are 5-point polygons with matching vertex counts so the change can
+  transition on one property; keep them equal or it snaps.
 - **Colour means attention, and nothing else.** The sync dot's healthy states are
   `bg-foreground/25` at rest and `bg-foreground/50 animate-pulse` while a cycle
   runs — distinguished by motion, not hue. Only `cycle-error`/`initial-error`
