@@ -13,7 +13,22 @@ import { OptionsSection } from './Shell';
 // The two are one bordered row rather than a label/value line with a button
 // floating under it: sign-out acts on the identity named beside it, and a button
 // that means "stop being THIS account" should not be separated from the account it
-// ends.
+// ends. Its measures are bracemark-web's SettingsRow (`gap-3`, `p-4`) — that
+// component lives in bracemark-web's app tree with no export path, so this is a
+// re-typing of it rather than an import, the same precedent SignIn.tsx and
+// bracemark-expo's own settings-kit already set.
+//
+// SIGN-OUT LIVES IN THE ACCOUNT SECTION ONLY IN THIS APP, and the extra button is
+// not drift. bracemark-web's Account section deliberately has none — its links
+// topbar's more-options menu owns sign-out, and bracemark-expo's does the same, so
+// both leave the section to the durable identity above. There is no topbar here to
+// own it: the popup has no menu, and this page has no header at all (Shell.tsx
+// carries why), which leaves this row as the extension's only way out of a session.
+// The label follows from that. Both of the others print "Username" — the noun, as a
+// row in a list of rows — but a noun beside a control that acts on the SESSION
+// rather than on the value reads as a field with a stray button next to it, where
+// "Signed in as <name> [Sign out]" reads as one statement. If sign-out ever moves
+// off this row, this goes back to "Username".
 //
 // The line underneath says what sign-out actually does, because here it does more
 // than it does on a website. clearData() wipes this browser's decrypted copy of the
@@ -28,7 +43,7 @@ export function AccountSection({ className }: { className?: string }) {
     <OptionsSection className={className} title="Account">
       <div
         className={cn(
-          'flex items-center justify-between gap-4 rounded-lg border border-border px-4 py-3',
+          'flex items-center justify-between gap-3 rounded-lg border border-border p-4',
         )}
       >
         <div className={cn('min-w-0')}>
@@ -46,7 +61,7 @@ export function AccountSection({ className }: { className?: string }) {
         </Button>
       </div>
 
-      <p className={cn('mt-3 text-xs leading-5 text-muted-foreground')}>
+      <p className={cn('mt-3 text-sm leading-6 text-muted-foreground')}>
         Signing out removes this browser’s copy of your library and its encryption key. Nothing on
         the server changes — signing back in downloads and decrypts it again.
       </p>

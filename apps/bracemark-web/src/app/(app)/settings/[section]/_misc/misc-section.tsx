@@ -208,8 +208,12 @@ function ThemeControls({
         })}
       </RadioGroup>
 
+      {/* The 40px inset is OptionRow's own: p-3 + a size-4 radio + gap-3 is where its
+          label text starts, so these two fields align under "Custom time" and read as
+          part of that option. Flush left they share an edge with all four cards and
+          read as a peer of the whole group, like the sort field pairs above. */}
       {value.mode === 'custom' && (
-        <div className="mt-4 flex flex-wrap gap-4">
+        <div className="mt-4 ml-10 flex flex-wrap gap-4">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="theme-light-start">Light starts</Label>
             <Input

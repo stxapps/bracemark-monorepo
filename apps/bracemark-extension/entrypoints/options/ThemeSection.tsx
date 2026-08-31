@@ -122,8 +122,11 @@ function ThemeControls({
         })}
       </RadioGroup>
 
+      {/* `ml-10` is OptionRow's own inset — p-3 + a size-4 radio + gap-3 — so these two
+          fields align under "Custom time" and read as part of that option rather than
+          as a peer of the whole group. bracemark-web's misc-section carries the same. */}
       {value.mode === 'custom' && (
-        <div className={cn('mt-4 flex flex-wrap gap-4')}>
+        <div className={cn('mt-4 ml-10 flex flex-wrap gap-4')}>
           <div className={cn('flex flex-col gap-1.5')}>
             <Label htmlFor="theme-light-start">Light starts</Label>
             <Input
