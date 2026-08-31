@@ -91,7 +91,7 @@ function PreviewFallbackIcon({
 }
 
 // The image-less card fallback: a full-bleed panel painted with the host's hue
-// (same hsl family as the Monogram tile), so an image-less card reads as an
+// (same hsl family as the HostMonogram tile), so an image-less card reads as an
 // intentional colored block rather than a tiny icon lost on grey. The real favicon,
 // when present, sits centered on a white chip (its own light background, so it never
 // clashes with the panel hue); with no favicon — the default when serverExtraction

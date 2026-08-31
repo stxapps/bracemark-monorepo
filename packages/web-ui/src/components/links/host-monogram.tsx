@@ -102,10 +102,10 @@ export function HostMonogram({
         // this component (it's RN, not SVG), so two files there hard-code the pixel
         // size this rule works out to in their own boxes, and both go quietly out of
         // step if the numbers here move — which breaks "same site, same mark" across
-        // the share sheet, the extension popup and the library:
+        // the share sheet, the browser extension's popup and the library:
         //
         //   features/share/share-specimen.tsx — `text-xl`, i.e. 8/16 x its 40px slot
-        //   features/links/link-media.tsx     — `Monogram`'s two sizes, the row
+        //   features/links/link-media.tsx     — `HostMonogram`'s two sizes, the row
         //                                       slot's `text-xl` (8/16 x 40) and the
         //                                       host chip's `text-[10px]`, which
         //                                       tracks `Favicon`'s fontSize={10}

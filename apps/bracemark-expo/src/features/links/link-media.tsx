@@ -1,8 +1,8 @@
 // The item's icon/image presentation chain — the expo port of bracemark-web's
 // `_layouts/shared/link-media.tsx` (canonical doc for the chain's design: the
-// deterministic Monogram, the Favicon that falls back to it, why the fallbacks
-// are steady states, the fixed-size contract with the layouts). Shared by both
-// link-item renderers (link-row, link-card). Divergences here:
+// deterministic HostMonogram, the Favicon that falls back to it, why the
+// fallbacks are steady states, the fixed-size contract with the layouts). Shared
+// by both link-item renderers (link-row, link-card). Divergences here:
 //
 //  - Favicons come from expo-react's device-local per-host cache
 //    (useFaviconUri — a DIRECT native fetch under the extraction opt-in, no
@@ -20,13 +20,13 @@
 //    lib/image.ts — `isSvgBytes`). Note the sources are ALREADY on local disk,
 //    so no `cachePolicy` here may be 'disk'/'memory-disk': that would duplicate
 //    the library into a second copy on the same device.
-//  - Monogram is a View tile, not SVG, so its letter cannot scale with the box
-//    the way web's viewBox does — each caller passes the size as a class. The
-//    two in use are web's two `fontSize`s worked out against their own slots:
-//    `text-[10px]` for the host chip (web's `Favicon` passes fontSize={10}
-//    against a 16px tile) and `text-xl` for the row slot's full-bleed field
-//    (the default 8, i.e. 8/16 x 40). Nothing enforces the pair — see the note
-//    at `fontSize` in web-ui's host-monogram.tsx.
+//  - HostMonogram is a View tile, not SVG, so its letter cannot scale with the
+//    box the way web's viewBox does — each caller passes the size as a class.
+//    The two in use are web's two `fontSize`s worked out against their own
+//    slots: `text-[10px]` for the host chip (web's `Favicon` passes
+//    fontSize={10} against a 16px tile) and `text-xl` for the row slot's
+//    full-bleed field (the default 8, i.e. 8/16 x 40). Nothing enforces the
+//    pair — see the note at `fontSize` in web-ui's host-monogram.tsx.
 //  - RN's color parser wants the comma hsl() syntax (web's space-separated
 //    form isn't universally parsed), hence the style props.
 
@@ -45,10 +45,10 @@ import { Text } from '../../components/ui/text';
 // sized by `className`, so this is load-bearing, not cosmetic.
 const Image = withUniwind(ExpoImage);
 
-// A deterministic monogram for a host — web's Monogram: an icon-less site still
-// gets a consistent mark to recognize rows by (and the tile never changes under
-// the user when the real icon later lands).
-function Monogram({
+// A deterministic monogram for a host — the expo counterpart of web-ui's
+// HostMonogram: an icon-less site still gets a consistent mark to recognize rows
+// by (and the tile never changes under the user when the real icon later lands).
+function HostMonogram({
   host,
   className,
   // In the box's own units, not a fraction of it — see the header. The default is
@@ -96,7 +96,7 @@ function useBrokenUri(): [(uri: string) => boolean, (uri: string) => void] {
 export function Favicon({ host, className }: { host: string; className: string }) {
   const uri = useFaviconUri(host);
   const [isBroken, markBroken] = useBrokenUri();
-  if (!uri || isBroken(uri)) return <Monogram host={host} className={className} />;
+  if (!uri || isBroken(uri)) return <HostMonogram host={host} className={className} />;
   // contain, not cover: a favicon is a whole mark, so it letterboxes rather
   // than crops (unlike the preview image, which is a photo filled into a box).
   //
@@ -140,7 +140,7 @@ function PreviewFallbackIcon({
   const uri = useFaviconUri(host);
   const [isBroken, markBroken] = useBrokenUri();
   if (!uri || isBroken(uri)) {
-    return <Monogram host={host} className={className} textClassName="text-xl" />;
+    return <HostMonogram host={host} className={className} textClassName="text-xl" />;
   }
   return (
     <View className={`items-center justify-center bg-muted ${className}`}>
@@ -159,8 +159,8 @@ function PreviewFallbackIcon({
 }
 
 // The image-less card fallback: a full-bleed panel painted with the host's hue
-// (same hsl family as the Monogram tile) — web's PreviewFallbackPanel: the real
-// favicon, when present, sits centered on a white chip (its own light
+// (same hsl family as the HostMonogram tile) — web's PreviewFallbackPanel: the
+// real favicon, when present, sits centered on a white chip (its own light
 // background, so it never clashes with the panel hue); with no favicon — the
 // default while the extraction opt-in is off — the panel carries a large
 // centered letter instead.

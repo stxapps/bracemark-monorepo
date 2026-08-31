@@ -35,7 +35,7 @@
 //     must stay clear of bytes-heavy work and of the app's sqlite, where a
 //     cached favicon would live (docs/share-sheet.md). So the deterministic
 //     tile is the whole chain — and it is the SAME tile the library will draw
-//     for this host (features/links/link-media.tsx's Monogram, over shared's
+//     for this host (features/links/link-media.tsx's HostMonogram, over shared's
 //     hueFromHost/initialFromHost), so "same site, same mark" still holds
 //     between the sheet and the list it saves into.
 //   - THE CUT IS AN OVERLAY, NOT A CLIP. RN has no `clip-path`. The hairline
