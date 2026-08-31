@@ -760,12 +760,36 @@ export default function Page() {
               // The investor clause is the second half of the sentence and it
               // was on /about, which is where the strongest writing on the
               // property kept ending up. "No ads" is a policy; "no investor
-              // expecting one to appear later" is the reason the policy can
+              // waiting for us to change that" is the reason the policy can
               // hold, and it is the half a reader who has watched this promise
               // break before is actually listening for.
+              //
+              // No pronoun to resolve, which is half of the second pass here.
+              // "No investor is expecting a second one to appear later" asked
+              // the reader to carry "one" back across a comma to "business
+              // model", and the nearest noun it could land on was "investor" —
+              // a second investor, appearing later, which is not the claim. A
+              // reassurance that has to be parsed twice is not reassuring. The
+              // same pronoun was doing the same damage in the /about section
+              // this clause came from ("one of those") and in the store
+              // listing's closing line ("either"); all three now end on "change
+              // that", where the antecedent is the whole sentence before it.
+              //
+              // The cost clause is the other half, and it is the answer to the
+              // objection a reader actually has. "Subscriptions are the only
+              // model" invites "yes, until the money runs out" — so the cell
+              // names WHY one revenue line is enough: the same architecture the
+              // rest of the page is about leaves us storing bytes and doing no
+              // work on them. /about argues it at length ("a fraction of a cent
+              // a year"); this is that argument at the width of a cell.
+              //
+              // NOT the word "sustainable", which was the obvious way to say it.
+              // It is a self-assessment a reader cannot check, and it is the
+              // register of a company that is about to be acquired. The fact
+              // underneath it is checkable and says more.
               [
                 'No ads, ever',
-                'The subscription is the entire business model, and no investor is expecting a second one to appear later.',
+                'The subscription is the whole business model, and a server that cannot read your library is cheap to run. No investor is waiting for us to change that.',
               ],
               // The carve-out is not a weakening, it is the difference between a
               // claim and a slogan. /privacy and the FAQ's `trackers` answer both
@@ -774,11 +798,33 @@ export default function Page() {
               // the same claim, was the only one that did not. A reader who meets
               // that script after reading an absolute here has caught us, over a
               // checkout nobody would have objected to.
+              //
+              // "No ad networks" came out of the list, and not because the term
+              // above already says "No ads": an ad network's pixel is an OUTSIDE
+              // SCRIPT, so the sentence that follows denies it absolutely and by
+              // construction, where the enumeration only denied it by name. It
+              // was the one item earning nothing, in the cell that ran a line
+              // longer than either of its neighbours.
               [
                 'No trackers',
-                'No analytics, no fingerprinting, no ad networks. The only outside script we load is our payment provider’s, on the one screen where you subscribe.',
+                'No analytics, no fingerprinting. The only outside script we load is our payment provider’s, on the one screen where you subscribe.',
               ],
-              ['No lock-in', 'Full export on every plan, including the free one.'],
+              // The local copy, not the format list. Lock-in is answered hardest
+              // by the data already being on the machine — an export is a copy
+              // you make, not a request you file — and that fact was left
+              // entirely to the durability band, seven screens further down,
+              // while this cell sat at one line against three and four.
+              //
+              // The four format names stay in that band and are stated once
+              // (see the note over LIBRARY's Export entry). And what must not go
+              // in here at any length: "imports straight into other apps". Our
+              // half of that is a bookmarks HTML file and a CSV; whether
+              // somebody else's importer reads them is their promise to keep,
+              // not ours to make on a landing page.
+              [
+                'No lock-in',
+                'Full export on every plan, including the free one. The library is already on your device, so leaving is a copy you make rather than a request you file.',
+              ],
             ].map(([term, detail]) => (
               <div key={term} className={cn('py-8 sm:px-8 sm:first:pl-0 sm:last:pr-0')}>
                 <dt className={cn('font-display text-lg font-semibold tracking-tight')}>{term}</dt>

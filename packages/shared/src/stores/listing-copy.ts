@@ -164,7 +164,7 @@ YOURS TO LEAVE WITH
 WHAT IT COSTS TO BUILD IT THIS WAY
 We hold no key, so there is no password reset. A recovery code is your second door, and saving it is genuinely on you. Search runs on your device rather than ours. There are no shared or public lists.
 
-Bracemark is paid for by subscriptions. There is no advertising, no data to sell, and no investor expecting either to appear later.`;
+Bracemark is paid for by subscriptions. There is no advertising, no data to sell, and no investor waiting for us to change that.`;
 
 // --- the browser extension ---------------------------------------------------
 //

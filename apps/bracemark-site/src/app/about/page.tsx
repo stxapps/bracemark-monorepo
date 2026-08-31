@@ -181,7 +181,7 @@ export default function Page() {
             <div className={cn('mt-4 space-y-4 text-base leading-7 text-muted-foreground')}>
               <p>
                 Subscriptions. That is the whole model. There is no advertising, no data to sell
-                even if we wanted to, and no investor expecting one of those to appear later.
+                even if we wanted to, and no investor waiting for us to change that.
               </p>
               <p>
                 It works because the architecture that keeps us out of your library also keeps it
