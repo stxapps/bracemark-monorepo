@@ -110,7 +110,7 @@ export function PageSpecimen({
           // list of rows whose borders already bound it; this one is a lone object
           // on an otherwise empty popup, and the ring is what makes the SQUARE
           // corner legible as a corner — which is half of what the cut says.
-          'ring-1 ring-foreground/10 ring-inset',
+          'ring-1 ring-border ring-inset',
           'transition-[clip-path] duration-300 ease-out motion-reduce:transition-none',
           saved ? 'corner-cut' : 'corner-square',
         )}

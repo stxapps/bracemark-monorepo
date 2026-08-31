@@ -120,8 +120,13 @@ export function TagsField({
                 // `bg-input` (not `bg-muted`) so the chip separates from the
                 // trigger's own `bg-input/30` well in BOTH themes: light, the
                 // opaque token is denser than the 30% wash; dark, `--input` is
-                // `white/15%`, so it composites lighter. `--muted` (0.97) sits
-                // above `--input` (0.922) in light, which is why it vanished.
+                // `white/20%` against a fill of the same token at 30% OF that,
+                // so it composites lighter. `--muted` (0.97) sits above
+                // `--input` (0.922) in light, which is why it vanished.
+                // The chip is one of the three roles `--input`'s dark value is
+                // balanced across (styles.css, `.dark`) — it reads Lc 14.2 on
+                // the field here against light mode's 10.9, which is what kept
+                // that value at 20% rather than the 25% the border role wanted.
                 className="inline-flex items-center gap-1 rounded-full bg-input px-2 py-0.5 text-xs"
               >
                 {t.name}

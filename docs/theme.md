@@ -488,7 +488,17 @@ Three things follow.
   `apps/bracemark-expo/global.css` (the `light` _and_ `dark` variants). Re-deriving
   either block from an upstream shadcn theme silently reverts it, and nothing lints
   or fails — the symptom is only ever a measurement. Only the token's _value_ moves,
-  so `tools/prettier/expo-tailwind.css` needs nothing (it shims names).
+  so `tools/prettier/expo-tailwind.css` needs nothing (it shims names). The same is
+  true of the three edge tokens in the next section, which diverge for the same
+  reason and travel in the same two files.
+- **The dark wash is PINNED at 0.269 and cannot be raised.** It is the surface
+  `--muted-foreground` was solved against, and it sits exactly on the floor: 0.78
+  reads Lc 60.5 there, and a wash of 0.280 drops it to Lc 60.0 — through the
+  body-text bar. So "make the hover row easier to see by lightening the wash" is
+  not available; it spends a token that has no headroom left (parity would need
+  ~0.85, which collides with `--foreground`). Dark's row hover is consequently
+  Lc 3.0 on a popover against light's 6.1, and that is a deliberate ceiling, not
+  an oversight. A brighter hover has to come from something other than the wash.
 - **A new wash darker than 0.97 re-opens the question.** Check it against
   `--muted-foreground` before adding it; icons are the easier case (WCAG 1.4.11
   asks 3:1 of a meaningful glyph, which muted clears on every surface we have).
@@ -499,6 +509,70 @@ Three things follow.
 Contrast is not otherwise linted anywhere. `hover:text-foreground` on the `ghost`
 button is why ghost triggers are exempt in their hovered state — they leave the
 muted colour exactly when they land on the wash.
+
+### contrast — dark mode, where the edge does the work
+
+The section above is about text. The same trap catches **boundaries** one layer
+down, and there it is worse, because the metric that hides it is the one a
+designer reaches for first.
+
+Take the hairline. Light's `--border` (0.922) on `--background` composites to a
+lightness difference of **dOkL 0.078**. Dark's stock `--border` (`white/10%`) on
+its `--background` composites to **dOkL 0.109** — by OKLab lightness, a _bigger_
+step than light's. Measured with APCA, light's hairline reads **Lc 15.6** and
+dark's reads **Lc 3.2**: a fifth as visible. Near black, APCA's soft-clamp models
+the screen flare that actually eats those differences, and the arithmetic that
+says the step is larger is describing a distinction the eye does not get to make.
+So: **dOkL is not a boundary metric at the dark end.** The three edge tokens now
+diverge from shadcn for that reason, by the same
+worst-surface rule that picked `--muted-foreground`:
+
+| token      | shadcn dark | ours        | why                                                                                                                                  |
+| ---------- | ----------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `--border` | `white/10%` | `white/20%` | dark's worst surface (`--background`, Lc 9.4) now matches light's worst (the 0.97 wash, Lc 9.6); 12.0 on a popover, 14.4 on the wash |
+| `--input`  | `white/15%` | `white/20%` | equal to `--border`, as the two already are in light (both 0.922) — see below                                                        |
+| `--ring`   | `0.556`     | `0.7`       | `ring-ring/50` is what `focus-visible` paints: Lc 11.9 → 20.0 against light's 27.8; `border-ring` 30.5 → 51.6 against light's 53.4   |
+
+`--sidebar-border` / `--sidebar-ring` move in lockstep, as they do in light.
+
+**`--input` is three roles, not one**, and that is what fixes its value at 20%
+rather than the 25% the border role alone would want: it is the control's border
+(`border-input`), the control's fill (`bg-input/30`), and the tag chip
+(`bg-input`, `links/tags-field.tsx`). At 25% the border matches light exactly but
+the chip goes to Lc 18.9 against light's 10.9; at 20% the chip reads 14.2 and the
+border 12.0. shadcn's 10/15 split existed only to prop up a `--border` too weak to
+draw a control — once the hairline is right, the split has no job, and equality
+restores the structure light already has.
+
+#### elevation: in dark, a panel has no fill and no shadow, only an edge
+
+A floating panel normally separates from what it sits on three ways. In dark two
+of them are unavailable, and both fail to **exactly Lc 0.0**:
+
+- **Shadow does nothing.** `shadow-2xl` is a black shadow; on `--background` it
+  measures Lc 0.0. There is no dark-mode shadow that separates anything.
+- **Fill does nothing, twice over.** `--popover` on `--background` is only Lc 1.6
+  to begin with — and the popovers in `links/list-select.tsx` and
+  `links/tags-field.tsx` open from inside the quick-add popover and the edit
+  Dialog, which are **themselves `bg-popover`**. Panel and backdrop are then the
+  same colour: Lc 0.0.
+
+Raising `--popover` does not rescue this: the dark end is so compressed that
+moving it 0.205 → 0.34 — far enough to wreck the surface ramp — buys only Lc 7.5.
+**The edge is the efficient lever, and in dark it is the only one.** So every
+elevated surface draws one with `ring-1 ring-border`: `popover`, `select`,
+`dropdown-menu` (both), `dialog`, `alert-dialog`, `card`, and the extension's
+`PageSpecimen`. That replaced three hand-typed values (`ring-foreground/5`,
+`ring-foreground/10`, and a `dark:ring-foreground/10` one-off on `dropdown-menu`
+— a local patch for exactly this bug, which reached only Lc 4.8 and only on one of
+the six surfaces). Using the token instead of a `foreground/N` mix is what lets
+the edge be a whisper in light and a real line in dark from one declaration; it
+also costs light mode nothing, since `ring-border` there is Lc 15.6, which is
+where `card` already was.
+
+This is why **expo needs no counterpart change**: React Native has no `ring`, so
+`apps/bracemark-expo` already draws every panel edge — its `dropdown-menu`
+popover included — with `border-border`, and inherits the fix from the token.
 
 ### extending
 

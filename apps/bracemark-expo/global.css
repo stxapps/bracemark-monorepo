@@ -112,9 +112,17 @@
       --color-accent: oklch(0.269 0 0);
       --color-accent-foreground: oklch(0.985 0 0);
       --color-destructive: oklch(0.704 0.191 22.216);
-      --color-border: oklch(1 0 0 / 10%);
-      --color-input: oklch(1 0 0 / 15%);
-      --color-ring: oklch(0.556 0 0);
+      /* 20% / 20% / 0.70, not shadcn's 10% / 15% / 0.556 — the dark-hairline,
+         form-control and focus-ring parity fixes argued at the same three tokens
+         in packages/web-ui/src/styles.css (OKLab lightness says the dark hairline
+         is the stronger one; APCA says it is a fifth as visible). Mirrored here so
+         the two apps render one set of edges. Values only, so the formatter shim
+         needs nothing. This app leans on --color-border harder than web does: it
+         has no `ring`, so every elevated panel — the dropdown-menu popover
+         included — draws its edge with `border-border`. */
+      --color-border: oklch(1 0 0 / 20%);
+      --color-input: oklch(1 0 0 / 20%);
+      --color-ring: oklch(0.7 0 0);
       --color-chart-1: oklch(0.488 0.243 264.376);
       --color-chart-2: oklch(0.696 0.17 162.48);
       --color-chart-3: oklch(0.769 0.188 70.08);
@@ -126,8 +134,8 @@
       --color-sidebar-primary-foreground: oklch(0.985 0 0);
       --color-sidebar-accent: oklch(0.269 0 0);
       --color-sidebar-accent-foreground: oklch(0.985 0 0);
-      --color-sidebar-border: oklch(1 0 0 / 10%);
-      --color-sidebar-ring: oklch(0.556 0 0);
+      --color-sidebar-border: oklch(1 0 0 / 20%);
+      --color-sidebar-ring: oklch(0.7 0 0);
     }
   }
 }

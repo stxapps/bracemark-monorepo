@@ -107,9 +107,38 @@
   --accent: oklch(0.269 0 0);
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  /* 20%, not shadcn's 10%. THE HAIRLINE IS THE TOKEN DARK MODE GETS MOST WRONG,
+     and OKLab lightness is what hides it: white/10% on --background composites to
+     okL 0.254, a dOkL of 0.109 against light mode's border-on-white 0.078 — so
+     every lightness-based intuition says the dark hairline is the STRONGER of the
+     two. Measured the way the eye works it is a fifth as visible: APCA reads light's
+     border-on-white at Lc 15.6 and this at Lc 3.2, because near black the soft-clamp
+     (screen flare) collapses differences that the arithmetic still shows. Same trap
+     as --muted-foreground above, one row down the stack. 20% restores parity by the
+     same rule that picked that token: match light on the WORST surface each theme
+     has. Light's border is Lc 15.6 on --background but only 9.6 on the 0.97 wash;
+     dark's worst is --background, where 20% reads Lc 9.4. The two themes now bottom
+     out together, and dark reads 12.0 on a popover and 14.4 on the wash. */
+  --border: oklch(1 0 0 / 20%);
+  /* Equal to --border, as the two already are in light mode (both 0.922). shadcn
+     splits them 10/15 in dark only to compensate for a --border too weak to draw a
+     form control; with the hairline corrected the split has nothing left to do, and
+     one value keeps the light/dark structure the same. This token is also a FILL —
+     `bg-input/30` on a select/tags trigger and `bg-input` on a tag chip — so it was
+     checked in all three roles, not just as a line: against light's chip-on-field
+     Lc 10.9 and border Lc 15.6, dark at 20% gives a chip at 14.2 and a border at
+     12.0. 25% would have matched the border exactly and pushed the chip to 18.9,
+     which is why it is not 25%. */
+  --input: oklch(1 0 0 / 20%);
+  /* 0.70, not shadcn's 0.556. The focus ring is the one boundary WCAG 1.4.11 is
+     unambiguous about, and dark shipped it at half of light's strength: what
+     `focus-visible` actually paints is `ring-ring/50`, which read Lc 11.9 against
+     light's 27.8. Full-opacity `border-ring` was 30.5 against light's 53.4. 0.70
+     lifts those to 20.0 and 51.6 — the full-opacity role lands on light parity
+     almost exactly, and the translucent one closes most of its gap. Going further
+     (0.75) would overshoot the border role to Lc 60 to buy 3 Lc on the ring, so
+     0.70 is where the two roles balance. */
+  --ring: oklch(0.7 0 0);
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.769 0.188 70.08);
@@ -121,8 +150,10 @@
   --sidebar-primary-foreground: oklch(0.985 0 0);
   --sidebar-accent: oklch(0.269 0 0);
   --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  /* Lockstep with --border / --ring above, as in light mode — a sidebar hairline
+     left at 10% would be the one surface still invisible after the fix. */
+  --sidebar-border: oklch(1 0 0 / 20%);
+  --sidebar-ring: oklch(0.7 0 0);
 }
 
 @theme inline {

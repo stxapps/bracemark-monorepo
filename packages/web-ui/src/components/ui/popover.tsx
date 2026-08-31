@@ -44,6 +44,17 @@ function PopoverContent({
   portal = true,
   ...props
 }: Omit<React.ComponentProps<typeof PopoverPrimitive.Content>, 'collisionPadding'> & {
+  // `ring-1 ring-border` below is the panel's EDGE, and in dark mode it is the
+  // only thing separating this panel from what it floats on — which is why it is
+  // the shared token and not the `foreground/5` whisper it used to be. Two of the
+  // three cues a floating panel normally gets are unavailable here: `shadow-2xl`
+  // measures APCA Lc 0.0 on a dark surface (a black shadow on near-black), and the
+  // fill can't help either, because this popover ALSO opens from inside the
+  // quick-add popover and the edit Dialog — both `bg-popover` — so it is the same
+  // colour as its own backdrop, Lc 0.0. That left the panel with no boundary at all
+  // in dark. See docs/theme.md, _contrast — dark mode, where the edge does the
+  // work_; don't drop this back to a foreground/N value on either this or the four
+  // sibling surfaces (select, dropdown-menu, dialog, alert-dialog, card).
   collisionPadding?: CollisionPadding;
   portal?: boolean;
 }) {
@@ -55,7 +66,7 @@ function PopoverContent({
       sideOffset={sideOffset}
       collisionPadding={collisionPadding}
       className={cn(
-        'z-50 flex max-h-(--radix-popover-content-available-height) w-72 origin-(--radix-popover-content-transform-origin) flex-col gap-4 overflow-x-hidden overflow-y-auto rounded-2xl bg-popover p-4 text-sm text-popover-foreground shadow-2xl ring-1 ring-foreground/5 outline-hidden duration-100 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95',
+        'z-50 flex max-h-(--radix-popover-content-available-height) w-72 origin-(--radix-popover-content-transform-origin) flex-col gap-4 overflow-x-hidden overflow-y-auto rounded-2xl bg-popover p-4 text-sm text-popover-foreground shadow-2xl ring-1 ring-border outline-hidden duration-100 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95',
         className,
       )}
       {...props}
