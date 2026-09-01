@@ -332,9 +332,22 @@ function HeroPanel() {
         >
           {CIPHERTEXT}
         </p>
+        {/* "no key to open", not the compressed "no key for". The clause is
+            the panel's whole payoff — the hero paragraph beside it has just
+            said the key is derived from your password on the device, and this
+            is where that lands — but stranded on "for" it asks the reader to
+            invert it themselves, and the one who doesn't reads four nouns with
+            no claim attached. Completing the verb is how the idiom is spelled
+            everywhere else it appears (the footer's "no key that opens it",
+            /about, /privacy, the FAQ). Keep the INABILITY: "bytes we must hold
+            to operate" and its kin describe the path, the size and the
+            timestamp equally well, so they say nothing about this fourth item
+            and quietly drop the only sentence on the page that R2's
+            ciphertext-only guarantee actually earns us
+            (docs/brand-assets.md, _the voice_ — mechanical). */}
         <p className={cn('mt-5 text-sm leading-6 text-background/70')}>
-          A path, a size, a timestamp, and bytes we hold no key for. Not the title, not the address,
-          not the tags — there is nowhere for them to be.
+          A path, a size, a timestamp, and bytes we hold no key to open. Not the title, not the
+          address, not the tags — there is nowhere for them to be.
         </p>
         {/* Named by us, in one clause, rather than left for a reader to derive
             and then distrust us for omitting. It is the cheapest credibility on
@@ -504,11 +517,20 @@ const CAPTURE = [
 const LIBRARY: [string, string][] = [
   [
     'Lists, tags and pins',
-    'File a link where you will look for it, or tag it and find it later. The handful you are working from stays pinned at the top.',
+    'Save a link to a list, tag it, and find it later. Pin a few of them to the top.',
   ],
-  ['Notes', 'A line to yourself about why you saved it — encrypted with the link, like the rest.'],
-  ['Card and list layouts', 'A wall of previews, or a dense list. Per device, if you like.'],
-  ['Search', 'Across titles, addresses and hosts — every link, on every plan.'],
+  [
+    'Notes',
+    `A line to yourself, whatever you want in it — encrypted, and searchable with ${PLAN_LABELS.plus}.`,
+  ],
+  [
+    'Card and list layouts',
+    'A wall of preview images, or a dense list. Choose one per device, if you like.',
+  ],
+  [
+    'Search',
+    `Across titles, addresses and hosts, every link. The ${PLAN_LABELS.plus} editor adds more fields.`,
+  ],
   // The old line was true and quietly left out the half a switcher cares about:
   // a link no device fetched gets nothing. Until now that fact existed on one
   // surface, as the word "Opt-in" in a /pricing table cell — and for anyone
@@ -518,17 +540,14 @@ const LIBRARY: [string, string][] = [
   // it names the two cases and stops.
   [
     'Previews',
-    'Titles and images, pulled by the device that saved the link — so imports and web-app saves are the two that need the opt-in Plus extraction.',
+    `Titles and images, pulled by the device that saved it. Web saves and imports need ${PLAN_LABELS.plus}.`,
   ],
   // "In formats other apps read" appeared three times across the site and never
   // named one, which reads exactly like a company that doesn't export well. The
   // count and the round-trip claim go here; the four format names go in the
   // durability band below, where the export is load-bearing rather than a
   // feature bullet, so the list is stated once.
-  [
-    'Export',
-    'Four formats, one of them a complete backup that restores everything. Free, on every plan.',
-  ],
+  ['Export', 'Four formats, one a complete backup that restores everything. Free on every plan.'],
 ];
 
 // --- the trade -------------------------------------------------------------
@@ -569,7 +588,7 @@ const TRADE: { aspect: string; hosted: string; ours: string }[] = [
   {
     aspect: 'Previews',
     hosted: 'Their servers fetch every page you save, and keep what they find.',
-    ours: 'The device that saved the link pulls the title and image, so nothing fetches the page on your behalf. The links no device fetched — imports, and saves made in the web app — need a server, and that is the one opt-in Plus feature.',
+    ours: `The device that saved the link pulls the title and image, so nothing fetches the page on your behalf. The links no device fetched — imports, and saves made in the web app — need a server, and that is the one opt-in ${PLAN_LABELS.plus} feature.`,
   },
   {
     // The row that does a second job. The no-reset fact and its answer used to
@@ -758,12 +777,41 @@ export default function Page() {
                   - "A key derived from your password", not "a key only you can
                     derive". The old phrasing is false as written — anyone
                     holding the password derives it, which is the entire point
-                    of the recovery-code paragraphs further down. */}
+                    of the recovery-code paragraphs further down.
+
+                  WHY "THAT KEY NEVER REACHES US" EARNS ITS FOUR WORDS, and why
+                  nothing longer belongs here. The outcome a reader wants — only
+                  you can open it — is already the h1 above in `lg:text-[4.25rem]`
+                  ("can’t read your bookmarks") and the panel beside it at
+                  `lg:col-span-5` ("bytes we hold no key to open"), both in the
+                  same viewport on desktop. So this sentence must not RESTATE the
+                  outcome; it adds the one fact neither of those carries, which is
+                  where the key isn’t (/terms says the same: neither the password
+                  nor the key it produces is ever sent to us). A fuller version —
+                  "only you hold the key, only you can decrypt, we never touch it"
+                  — says the same thing a fourth time in the weakest type of the
+                  four, and drifts back toward the "only you can derive" overclaim
+                  retired directly above.
+
+                  KEEP "undo". "A thing we can’t turn back into text" was the
+                  considered alternative and is worse on three counts: the
+                  antecedent of "a thing" is the ENCRYPTION, which is what you
+                  can’t undo, whereas only CIPHERTEXT can be turned back into
+                  text — so the two halves of the dash stop sharing a referent;
+                  "text" understates a payload that is also images, screenshots
+                  and page copy (`files/{id}.enc`); and the balance is the point,
+                  because these two clauses are `BRAND.slogan` compressed ("We
+                  don’t promise not to look. We built it so we can’t."), where
+                  "undo" is what mirrors "can’t". The ambiguity it was meant to
+                  fix — "undo" as reverse-a-decision rather than reverse-the-
+                  encryption — is what the new third sentence already settles, by
+                  putting the reader on keys one clause earlier. */}
               <p className={cn('mt-6 max-w-xl text-lg leading-8 text-muted-foreground')}>
                 What you save is a fairly complete picture of what you are reading, buying, worrying
                 about and working on. Bracemark encrypts every part of it on your device before it
                 syncs — the address, the title, the tags, whatever you write about it — with a key
-                derived from your password. Not a promise we make. A thing we can’t undo.
+                derived from your password. That key never reaches us. Not a promise we make — a
+                thing we can’t undo.
               </p>
 
               <div className={cn('mt-9 flex flex-wrap items-center gap-3')}>
@@ -1056,7 +1104,7 @@ export default function Page() {
           {CAPTURE.map(({ name, where, body }) => (
             <li
               key={name}
-              className={cn('bg-background py-7 md:py-8 sm:px-8 sm:odd:pl-0 sm:even:pr-0')}
+              className={cn('bg-background py-7 sm:px-8 sm:odd:pl-0 sm:even:pr-0 md:py-8')}
             >
               <div className={cn('flex items-baseline justify-between gap-4')}>
                 <h3 className={cn('font-display text-xl font-semibold tracking-tight')}>{name}</h3>
@@ -1074,7 +1122,7 @@ export default function Page() {
       <Band
         label="Finding them again"
         title="A private library is still a library."
-        lede="Encryption is the part you don’t see. This is the part you use every day — and all of it is on the free plan."
+        lede="Encryption is the part you don’t see. This is the part you use every day — and most of it is on the free plan."
       >
         {/* The picture goes above the list, not beside it: the band's claim is
             that the library looks like a library, and a wall of covers makes
@@ -1120,8 +1168,8 @@ export default function Page() {
           ))}
         </ul>
         <p className={cn('mt-10 max-w-2xl text-sm leading-6 text-muted-foreground')}>
-          Nested lists, hidden lists, the app lock and the structured search editor are{' '}
-          {PLAN_LABELS.plus}. Everything above stays free.
+          Nested lists, hidden lists, the app lock, the structured search editor and previews from
+          our server are {PLAN_LABELS.plus}. Everything else above is free.
         </p>
       </Band>
 

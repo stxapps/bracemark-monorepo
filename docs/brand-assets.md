@@ -321,7 +321,7 @@ claim inverted to a positive.
 "Privacy-focused", "private & secure" and the rest are claims about intent, in a
 product whose whole argument is that intent is worthless — putting them next to
 "we don't promise not to look" contradicts it out loud. Prose says the mechanism
-("a path, a size, and bytes we hold no key for").
+("a path, a size, a timestamp, and bytes we hold no key to open").
 
 ### the voice
 
@@ -344,8 +344,11 @@ into corporate.
   with us" are claims about intent, in a product whose whole argument is that
   intent is worth nothing beside architecture. Putting one next to _"we don't
   promise not to look"_ contradicts it out loud.
-- **Sounds like**: "A path, a size, and bytes we hold no key for. Not the title,
-  not the address, not the tags." (the home page's inverted half)
+- **Sounds like**: "A path, a size, a timestamp, and bytes we hold no key to
+  open. Not the title, not the address, not the tags." (the home page's inverted
+  half). Note the completed verb: the compressed "bytes we hold no key **for**"
+  shipped for a stretch and read as vague — a stranded preposition makes the
+  reader invert the clause to find the claim in it.
 - **Does not sound like**: "Your bookmarks are private and secure."
 
 **States its own costs, unprompted.** The distinctive one, and the one most

@@ -1,10 +1,10 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
 
 import { cn } from '@stxapps/web-ui/lib/utils';
 
-import { ArrowGlyph } from '../../components/glyphs';
+import { ElsewhereList } from '../../components/elsewhere-list';
 import { PageShell } from '../../components/page-shell';
+import { type ElsewhereCard, PRICING_CARD } from '../../content/elsewhere';
 import { SECURITY_EMAIL, SUPPORT_EMAIL } from '../../lib/site';
 
 export const metadata: Metadata = {
@@ -48,17 +48,13 @@ const INCLUDE = [
   'Your username, if the problem is with your account. Never your password or recovery code.',
 ];
 
-const ELSEWHERE: { href: string; title: string; body: string }[] = [
+const ELSEWHERE: ElsewhereCard[] = [
   {
     href: '/faq',
     title: 'Read the FAQ first',
     body: 'Encryption, the account model, plans and the day-to-day questions — most answers are already there.',
   },
-  {
-    href: '/pricing',
-    title: 'Plans and what they include',
-    body: 'What the free plan covers, what Plus adds, and how the trial works.',
-  },
+  PRICING_CARD,
   {
     href: '/privacy',
     title: 'What we store about you',
@@ -169,30 +165,7 @@ export default function Page() {
           <h2 className={cn('font-display text-2xl font-semibold tracking-tight')}>
             Faster than an email
           </h2>
-          <ul className={cn('mt-6 grid gap-px overflow-hidden rounded-xl bg-border')}>
-            {ELSEWHERE.map(({ href, title, body }) => (
-              <li key={href} className={cn('bg-background')}>
-                <Link
-                  className={cn(
-                    'group flex items-start justify-between gap-6 p-6 transition-colors hover:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none',
-                  )}
-                  href={href}
-                >
-                  <span>
-                    <span className={cn('block text-base font-semibold')}>{title}</span>
-                    <span className={cn('mt-1.5 block text-body text-muted-foreground')}>
-                      {body}
-                    </span>
-                  </span>
-                  <ArrowGlyph
-                    className={cn(
-                      'mt-1 size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5',
-                    )}
-                  />
-                </Link>
-              </li>
-            ))}
-          </ul>
+          <ElsewhereList cards={ELSEWHERE} className={cn('mt-6')} />
         </section>
       </div>
     </PageShell>

@@ -26,7 +26,7 @@ export const metadata: Metadata = {
   // Derived like everything else on the page: a search snippet that promises a
   // cap or a trial length the product doesn't have is the same drift, just
   // harder to notice because nobody reads it in review.
-  description: `Bracemark is free for your first ${entitlementsOf('free').maxLinks} links. Plus adds unlimited links, app lock and hidden lists, and the search editor — with a ${TRIAL_DAYS}-day free trial.`,
+  description: `Bracemark is free for your first ${entitlementsOf('free').maxLinks} links. ${PLAN_LABELS.plus} adds unlimited links, app lock and hidden lists, and the search editor — with a ${TRIAL_DAYS}-day free trial.`,
 };
 
 // The public pricing page. Every NUMBER on it — the prices, the link caps, the

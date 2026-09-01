@@ -1,10 +1,10 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
 
 import { cn } from '@stxapps/web-ui/lib/utils';
 
-import { ArrowGlyph } from '../components/glyphs';
+import { ElsewhereList } from '../components/elsewhere-list';
 import { PageShell } from '../components/page-shell';
+import { type ElsewhereCard, PRICING_CARD } from '../content/elsewhere';
 import { SUPPORT_EMAIL } from '../lib/site';
 
 export const metadata: Metadata = { title: 'Page not found' };
@@ -26,17 +26,13 @@ export const metadata: Metadata = { title: 'Page not found' };
 // built carefully by people who don't need your attention; a gag on the error page
 // is the cheapest possible way to undercut that.
 
-const ELSEWHERE: { href: string; title: string; body: string }[] = [
+const ELSEWHERE: ElsewhereCard[] = [
   {
     href: '/',
     title: 'Start at the beginning',
     body: 'What Bracemark is, how the encryption works, and where you can save links from.',
   },
-  {
-    href: '/pricing',
-    title: 'Plans and what they include',
-    body: 'What the free plan covers, what Plus adds, and how the trial works.',
-  },
+  PRICING_CARD,
   {
     href: '/faq',
     title: 'Questions people actually ask',
@@ -51,28 +47,7 @@ export default function NotFound() {
       title="That page isn’t here."
       lede="The address may be mistyped, or it may be from an older version of this site. Nothing is broken — this one just doesn’t exist."
     >
-      <ul className={cn('grid gap-px overflow-hidden rounded-xl bg-border')}>
-        {ELSEWHERE.map(({ href, title, body }) => (
-          <li key={href} className={cn('bg-background')}>
-            <Link
-              className={cn(
-                'group flex items-start justify-between gap-6 p-6 transition-colors hover:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none',
-              )}
-              href={href}
-            >
-              <span>
-                <span className={cn('block text-base font-semibold')}>{title}</span>
-                <span className={cn('mt-1.5 block text-body text-muted-foreground')}>{body}</span>
-              </span>
-              <ArrowGlyph
-                className={cn(
-                  'mt-1 size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5',
-                )}
-              />
-            </Link>
-          </li>
-        ))}
-      </ul>
+      <ElsewhereList cards={ELSEWHERE} />
 
       {/* A dead link on our own site is our bug, and this is the one page where
           someone has already proved they hit one. The address is the same
