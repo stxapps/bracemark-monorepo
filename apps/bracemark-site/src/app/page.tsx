@@ -68,7 +68,7 @@ const CIPHERTEXT =
 // them would let the tile drift from the host printed beside it — "same site,
 // same mark" is the whole point of that tile, and this panel is where a visitor
 // meets it first.
-const SPECIMEN_HOST = 'martin.kleppmann.com';
+const SPECIMEN_HOST = 'askamanager.org';
 
 // --- the one picture of the product ---------------------------------------
 // There was no screenshot on any page of this site. The only depiction of a
@@ -192,24 +192,52 @@ function HeroPanel() {
                 28px line; the specimen is `leading-snug` in all three ports.
                 Two roles, one size, and only the prose one has a token.
 
-                A REAL ARTICLE, which the one it replaces was not. "Local-first
-                sync: the hard parts" was set on martin.kleppmann.com — a real
-                person's real domain — and no such piece exists there, so the
-                panel a visitor is invited to study opened with an invented
-                citation. This title is what `bracemark-extractor` returns for
-                martin.kleppmann.com/2020/12/02/bloom-filter-hash-graph-sync.html,
-                minus the " — Martin Kleppmann's blog" suffix the extractor
-                faithfully keeps and a person trims. The subject is the same one
-                the fiction was reaching for, and it keeps the tags below
-                accurate.
+                A REAL ARTICLE, and two separate repairs got it here. The first
+                pass invented "Local-first sync: the hard parts" on
+                martin.kleppmann.com — a real person's real domain, no such piece
+                on it — so the panel a visitor is invited to study opened with a
+                false citation. The replacement was real and wrong a second way:
+                a paper on Bloom filters and hash-graph sync, tagged
+                `crdt`/`offline`/`databases`, is a link about OUR OWN machinery,
+                it cast the fictional user as a distributed-systems engineer, and
+                it argued against the hero paragraph beside it — nobody needs a
+                public CS paper encrypted.
+
+                WHAT THE SLOT WANTS: a link that implies an ACT, not a TASTE.
+                Taste says what kind of person you are; an act says what you are
+                about to do, and the hero's "a fairly complete picture of what
+                you are reading, buying, worrying about and working on" is a
+                claim about circumstances. Interview prep is something you are
+                doing on Thursday and have not told your manager about —
+                ordinary, non-medical, and still nobody's business. Sensitive
+                specimens (illness, debt) were considered and declined twice
+                over: they argue by making the reader anxious, which is the
+                privacy-by-fear register this brand refuses, and they trade the
+                AGGREGATE claim for a weaker "some links are secrets" that has an
+                easy exit — then I won't save those here.
 
                 It must stay somebody's ACTUAL INTEREST and not a link about us.
                 A page about privacy or tracking in this slot makes the panel
                 self-referential — the product demonstrating itself with a link
                 to its own pitch — and an advocacy org's page reads as an
-                endorsement we do not have. */}
+                endorsement we do not have. So does a VENDOR, which is what rules
+                out the topic that scores highest on everything above: every
+                therapy candidate sits on a host selling therapy.
+
+                THE LOWERCASE IS THEIRS. Ask a Manager styles every headline
+                lowercase; this is the title as published, minus the
+                " - Ask a Manager" suffix a person trims. Sentence-casing it
+                falsifies the citation, which is the one thing this slot has
+                already been wrong about once. Re-verifying it needs a BROWSER:
+                askamanager.org answers 403 to automated fetchers, so a curl or a
+                script reads as though the page were gone. Our own extractor
+                would see that 403 too (`verdictForStatus` settles it as
+                permanent), which is consistent rather than awkward — this panel
+                draws the browser-extension save, where the title comes from the
+                page your own browser is already showing and no server fetches
+                anything. */}
             <p className={cn('text-[0.9375rem] leading-snug font-medium')}>
-              Using Bloom filters to efficiently synchronise hash graphs
+              here’s a step-by-step guide to preparing for a job interview
             </p>
             <p className={cn('mt-1 font-mono text-xs text-muted-foreground')}>{SPECIMEN_HOST}</p>
             <div className={cn('mt-2.5 flex flex-wrap gap-1.5')}>
@@ -217,8 +245,17 @@ function HeroPanel() {
                   advertising a category this product deliberately isn't in — a
                   read-it-later app — and they were doing it in the one artefact a
                   visitor studies. Plain topical tags make the same point about
-                  what a tag IS without steering the category. */}
-              {['crdt', 'offline', 'databases'].map((tag) => (
+                  what a tag IS without steering the category.
+
+                  `thursday` is not topical, and it is the reason the row is here
+                  at all. Tags are the one part of a saved link the USER writes,
+                  so a day in among them is more revealing than the headline above
+                  it: two topic words and a date, and the reader assembles an
+                  interview on Thursday out of parts, none of which is a secret.
+                  That is the hero paragraph's argument — a picture, not a
+                  confession — drawn rather than asserted. Single words, like
+                  every other tag specimen in the repo; nothing enforces it. */}
+              {['work', 'interview', 'thursday'].map((tag) => (
                 <span
                   key={tag}
                   className={cn(
