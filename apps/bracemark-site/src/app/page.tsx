@@ -168,12 +168,16 @@ const SCREENSHOT = {
   // small false note that costs more than the fact it hides. The Plus footnote
   // under the grid below already carries the same split.
   //
-  // "the default" is worth the three words: it is the one thing the picture
-  // cannot say about itself, a visitor comparing managers is reading for what
-  // they get without configuring anything, and it is checkable — main.tsx
-  // resolves `LAYOUTS[linksLayout] ?? ListLayout`.
+  // It once read "The list layout, the default", to say the one thing the picture
+  // cannot say about itself (`main.tsx` resolves `LAYOUTS[linksLayout] ?? ListLayout`).
+  // Measured, that clause cost more than it bought: at the `max-w-2xl` cap it put
+  // the sentence 14px over one line, so it wrapped with `on Plus.` alone under a
+  // 100%-full first line. There is no phrasing that keeps the word and fits — "The
+  // default list layout" lands at 648px + a 32px `Plus.`, worse. Any future edit
+  // here is subject to the same budget: 672px at `text-sm`, which this sentence
+  // fills to 634px. Adding a clause re-opens the widow the wrapper below guards.
   caption:
-    'The list layout, the default. Previews come from the device that saved the link — or from ' +
+    'The list layout. Previews come from the device that saved the link — or from ' +
     `our server, on ${PLAN_LABELS.plus}.`,
 };
 
@@ -1210,7 +1214,7 @@ export default function Page() {
               height={760}
               loading="lazy"
               decoding="async"
-              className={cn('block aspect-[25/19] w-full object-cover object-top')}
+              className={cn('block aspect-25/19 w-full object-cover object-top')}
             />
           </div>
           {/* Not `.eyebrow`, despite being the small mono-ish line under a
@@ -1220,21 +1224,28 @@ export default function Page() {
               the Plus footnote below the grid — which is what it is.
 
               `text-balance` and NOT on that footnote, which is the one thing
-              here the two do not share. Both are `max-w-2xl` (672px) at `text-sm`,
-              which is a hair over one line for this sentence and two for the
-              footnote's — but the caption's overflow is the last two words, so it
-              set `on Plus.` alone on a second line under a 100%-full first one.
-              A widow that short reads as a rendering fault rather than as a line
-              break, and it lands directly under the picture the band is arguing
-              from. `text-wrap: balance` evens the two instead; the footnote wraps
-              with a full clause on its second line already and would gain nothing.
-              It is the same instrument the band titles and the `dt` terms use, and
-              it degrades to today's wrapping where it is unsupported.
+              here the two do not share. It is INERT at the desktop cap and kept
+              for the narrow widths, so read it as a below-`sm` guard: the caption
+              was shortened to fit `max-w-2xl` (672px) at `text-sm` on one line —
+              634px, with 38px to spare — and balancing does nothing to a single
+              line. Below that the same sentence orphans `Plus.` twice over, which
+              is what this holds off. Measured, unbalanced: a 32px `Plus.` from
+              ~690px down to ~650px of viewport and a 53px `on Plus.` to ~630px
+              (tablet portrait, half-screen desktop), then again as a 32px third
+              line at or under 365px — which is 360dp, the standard Android
+              viewport. Balanced those read 308 + 322, and 201/201/225 on the
+              phone. A widow that short reads as a rendering fault rather than as
+              a line break, and it lands directly under the picture the band is
+              arguing from. The footnote wraps with a full clause on its second
+              line already and would gain nothing. It is the same instrument the
+              band titles and the `dt` terms use, and it degrades to plain
+              wrapping where it is unsupported.
 
               Scoped by the LINE COUNT, not by taste: browsers cap balancing at a
-              handful of lines (Chrome stops at six), so this holds for the caption
-              at every width it is read — two lines at the desktop cap, three on a
-              phone, where the same sentence otherwise orphans `Plus.` */}
+              handful of lines (Chrome stops at six), so this holds at every width
+              the caption is read. Re-measure it if the sentence changes — a
+              longer one wraps on the desktop cap too, where balance stops being
+              free and starts setting two half-empty lines under a wide figure. */}
           <figcaption
             className={cn('mt-4 max-w-2xl text-sm leading-6 text-balance text-muted-foreground')}
           >
