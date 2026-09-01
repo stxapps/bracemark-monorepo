@@ -143,8 +143,8 @@ Every link you save is encrypted on your device before it syncs: the address, th
 That is not a privacy policy. It is the architecture. We cannot look, so we cannot be asked to.
 
 SAVING A LINK
-• Share into Bracemark from any app — a browser, a podcast player, a group chat
-• One click from the browser extension on Chrome and Firefox
+• Share into Bracemark from any app — a browser, a podcast player, a social app
+• Save the tab you’re reading with the browser extension on Chrome and Firefox
 • Paste a URL into the web app
 • Import a browser bookmarks export, a CSV, or a plain list of URLs
 
@@ -175,10 +175,19 @@ Bracemark is paid for by subscriptions. There is no advertising, no data to sell
 // Sold on the gesture rather than the architecture. Someone browsing the Web Store
 // has already decided they want to save tabs; what they are choosing between is how
 // many clicks it takes.
+//
+// Which is why the number has to be the real one. This said "in one click" and the
+// extension has never had a one-click path: the toolbar action opens the popup and
+// `entrypoints/popup/Editor.tsx` requires an explicit Save, with no `commands`,
+// `contextMenus` or `action.onClicked` shortcut past it. Nothing here could catch
+// that — the budget spec measures length, not truth, and this file cannot see
+// bracemark-extension — and it is the single easiest claim we make to falsify,
+// since the reader disproves it on their own toolbar the minute after installing.
+// Two is still a good number to be sold on. Walk the popup before changing it back.
 export const BROWSER_EXTENSION_LISTING = {
   name: APP_STORE.name,
   description:
-    'Save the tab you’re reading in one click. Bracemark encrypts every link in your browser before it syncs — only you can read it.',
+    'Save the tab you’re reading in two clicks. Bracemark encrypts every link in your browser before it syncs — only you can read it.',
 } as const;
 
 /**
@@ -186,4 +195,4 @@ export const BROWSER_EXTENSION_LISTING = {
  * it be set on the listing rather than in the manifest — so this is a paste field,
  * and the manifest keeps the shorter string above for both browsers.
  */
-export const FIREFOX_ADDONS_SUMMARY = `${BRAND.tagline}. Save the tab you’re reading in one click, encrypted in your browser with a key derived from your password before it syncs. Of your library we hold a path, a size, and bytes we have no key for.`;
+export const FIREFOX_ADDONS_SUMMARY = `${BRAND.tagline}. Save the tab you’re reading in two clicks, encrypted in your browser with a key derived from your password before it syncs. Of your library we hold a path, a size, and bytes we have no key for.`;

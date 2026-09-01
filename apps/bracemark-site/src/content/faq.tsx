@@ -593,6 +593,16 @@ export const FAQ_GROUPS: FaqGroup[] = [
         // of claim a reader falsifies from their own screen. The causes below
         // are drawn from `verdictForStatus`; keep them in step with it. The
         // settings pane carries the same fact next to the number itself.
+        //
+        // "The browser won’t let a web page fetch another site" is shared VERBATIM
+        // with the landing page's web-app capture card (app/page.tsx, `CAPTURE`),
+        // which took its wording from here so the two surfaces read as one voice.
+        // Nothing links them — different files, no import, no test — so reword one
+        // and the other silently disagrees about the single fact that explains why
+        // server extraction has to exist at all. Keep the actor the web PAGE:
+        // same-origin binds the document running in the browser, not sites, and a
+        // server fetching another site is exactly what the sentence goes on to
+        // sell (docs/link-extraction.md, _server extraction_).
         id: 'no-title-image',
         q: 'Why don’t some of my links show a title or image?',
         a: (

@@ -405,7 +405,16 @@ const CAPTURE = [
   {
     name: 'Browser extension',
     where: 'Chrome · Firefox',
-    body: 'One click on the tab you are already reading. The extension takes the title and preview image from your own browser, so nothing has to fetch the page on your behalf.',
+    // "One click" was false, not merely loose. The toolbar action opens the
+    // popup; `entrypoints/popup/Editor.tsx` then requires an explicit Save, and
+    // there is no shortcut past it — bracemark-extension registers no
+    // `commands`, no `contextMenus` and no `action.onClicked`, so two clicks is
+    // the floor on every path. The claim does not need inflating: two clicks
+    // with NOTHING to type, on a preview the browser already has, is the best of
+    // the four, and a reader can check this one against their own toolbar in
+    // about four seconds. Same correction in packages/shared/src/stores/
+    // listing-copy.ts, which shipped it to both extension stores.
+    body: 'Click the icon on the tab you are already reading, then Save. The extension takes the title and preview image from your own browser, so nothing has to fetch the page on your behalf.',
   },
   {
     name: 'Phone and tablet',
@@ -418,22 +427,51 @@ const CAPTURE = [
     // The real fetch happens later, in the app's own foreground drain. The
     // encryption half WAS accurate and stays: the save is written and sealed on
     // the handset at the moment you share.
-    body: 'Share into Bracemark from any app — a browser, a podcast player, a group chat. It saves what that app hands over, sealed on the handset before it syncs; the app fills in the title and preview image itself the next time you open it.',
+    //
+    // The three examples are all one part of speech on purpose — a KIND OF APP,
+    // not a situation. "A group chat" sat here and was the odd one out; "a social
+    // app" is the same shape as the two beside it and covers where a shared link
+    // actually comes from. "Itself" is load-bearing and not a filler word: the
+    // app does that fetch, NOT our server, which is the entire difference between
+    // this card and the web-app card next to it.
+    body: 'Share into Bracemark from any app — a browser, a podcast player, a social app. It saves what that app hands over, sealed on the handset before it syncs. The app fills in the title and preview image itself the next time you open it.',
   },
   {
     name: 'The web app',
     where: 'Any browser',
-    body: 'Paste a URL and it is saved. Browsers stop a web page from fetching another site, so previews for web saves are the one thing that needs a server — opt-in, on Plus.',
+    // "Won’t let a web page fetch another site" is the FAQ's wording verbatim
+    // (content/faq.tsx, `no-title-image`) — the same fact is stated on two
+    // surfaces and they now read as one voice. Keep the actor as the web PAGE:
+    // the same-origin policy binds the document running in the browser, not
+    // sites, and a server fetching another site is exactly what the rest of the
+    // sentence sells (docs/link-extraction.md, _server extraction_) — so
+    // "a web site can't fetch another web site" would refute its own next clause.
+    body: `Paste a URL and it is saved. Browsers won’t let a web page fetch another site, so previews for web saves are the one thing that needs a server — opt-in, on ${PLAN_LABELS.plus}.`,
   },
   {
     name: 'Import',
     where: 'One file',
     // The over-cap sentence is the answer to the question this card raises and
     // the free tier contradicts — a library bigger than the cap was the one
-    // thing the invitation didn't cover. It states the real behaviour (count
-    // first, ask, nothing written until you answer) rather than the outcome, so
-    // it reads as a route and not a wall.
-    body: `Bring the library you already have: a browser bookmarks export, a Raindrop CSV, or a plain list of URLs. It is read on your device, so the file never uploads. Bringing more than ${FREE_LINKS} links? It counts them first and asks — take the first ${FREE_LINKS} now, or start the ${TRIAL_DAYS}-day trial and bring all of it.`,
+    // thing the invitation didn't cover. It offers the two answers rather than
+    // narrating the gate that asks for them (docs/data-lifecycle.md, _the
+    // import's quota gate_): the imperative pair IS the ask, so spelling out
+    // "it counts them first and asks" described what the next clause already
+    // demonstrated, and cost the card a fifth line — which the 2-col grid spends
+    // as dead space under the web-app card beside it, since a row stretches to
+    // its taller cell. What the cut gives up is "nothing is written until you
+    // answer"; the second person keeps the user as the one choosing, so it still
+    // reads as a route and not a wall.
+    //
+    // No sentence about the file staying local, deliberately. "It is read on your
+    // device, so the file never uploads" was true of the .html/.csv and
+    // misleading about everything the reader cares about — the LINKS in it sync
+    // like any other save, so the line reads as a promise the next device
+    // immediately falsifies (docs/brand-assets.md — a narrow true claim that
+    // sounds like precision is the expensive kind). The band's lede already
+    // covers the real fact for every surface including this one: encrypted on
+    // the device before it syncs.
+    body: `Bring the library you already have: a browser bookmarks export, a Raindrop CSV, or a plain list of URLs. Bringing more than ${FREE_LINKS} links? Take the first ${FREE_LINKS} now, or start the ${TRIAL_DAYS}-day trial and bring it all.`,
   },
 ];
 
@@ -973,15 +1011,53 @@ export default function Page() {
           reaching for is kept: friction is what decides whether a link gets
           saved. It is now stated at the size of one save, in the second person,
           which is also what sets up the title above it and the four cards
-          below — "one gesture" is the answer to it. */}
+          below.
+
+          The title used to answer it with "all of them one gesture", and no
+          reading of "gesture" makes that true: the extension is icon-then-Save,
+          the share sheet is share-pick-Save, the web app is Add-link-paste-submit
+          (links/_components/link-add-surface.tsx), and Import is Settings → Data
+          → Import, a file picker, and possibly the over-cap question. Import is
+          the one that cannot be defended even loosely — the card directly beneath
+          the title DESCRIBES a decision point ("take the first N now, or start
+          the trial"), so the claim was refuted by its own grid. What survives the
+          check is the typing, which is the actual friction the lede names: none
+          of the four asks you for the link itself. Anything here that counts
+          clicks, taps or gestures has to be walked through all four first. */}
       <Band
         label="Getting links in"
-        title="Four ways in, all of them one gesture."
+        title="Four ways in, and none of them ask you to type the link."
         lede="A save you have to stop and think about is a save you skip. Whichever surface you use, the link is encrypted on the device before it syncs."
       >
-        <ul className={cn('grid gap-px overflow-hidden rounded-xl bg-border sm:grid-cols-2')}>
+        {/* Rules, not a box — the same shape as the sceptic grid above and the
+            library grid below, which is this page's idiom (the only real panels
+            on it, the two screenshot frames, are image frames). This carried
+            `overflow-hidden rounded-xl` and a uniform `p-7 md:p-8`, which reads
+            as an enclosed card and never rendered as one: `.band` has no fill
+            (globals.css, `.band` is border-t and nothing else), the page wrapper
+            is `bg-background` (app/layout.tsx) and the cells are `bg-background`
+            too — the same token — so the whole construction drew a 1px cross
+            between the four cells and nothing at the perimeter. With no visible
+            edge there was nothing for the inset to be inside of, and it pushed
+            all four outer edges off the band's text column: the eyebrow, the h2
+            and the lede sit flush at `max-w-6xl px-4/md:px-6/lg:px-8`, and the
+            left column's copy started 28-32px to the right of them.
+
+            So padding goes on the divider-facing sides only, which is the
+            sceptic grid's `sm:px-8 sm:first:pl-0 sm:last:pr-0` adapted to two
+            columns — `first`/`last` are the top-LEFT and bottom-RIGHT cells in a
+            2×2 and would zero the wrong pair, where `odd`/`even` track the
+            columns exactly at any item count. Below `sm` this is one column, so
+            it takes no horizontal padding at all and is flush by construction.
+            `gap-px` + `bg-border` stays as the hairline technique: `divide-x`
+            puts a left border on every child but the first, which in two columns
+            means a spurious one down the middle of item 3. */}
+        <ul className={cn('grid gap-px bg-border sm:grid-cols-2')}>
           {CAPTURE.map(({ name, where, body }) => (
-            <li key={name} className={cn('bg-background p-7 md:p-8')}>
+            <li
+              key={name}
+              className={cn('bg-background py-7 md:py-8 sm:px-8 sm:odd:pl-0 sm:even:pr-0')}
+            >
               <div className={cn('flex items-baseline justify-between gap-4')}>
                 <h3 className={cn('font-display text-xl font-semibold tracking-tight')}>{name}</h3>
                 <span className={cn('shrink-0 font-mono text-xs text-muted-foreground')}>
@@ -1030,7 +1106,7 @@ export default function Page() {
               two-word LABEL naming a band; a full sentence set that way is hard
               to read and shouts. This matches the band's other secondary line —
               the Plus footnote below the grid — which is what it is. */}
-          <figcaption className={cn('mt-4 text-sm leading-6 text-muted-foreground')}>
+          <figcaption className={cn('mt-4 max-w-2xl text-sm leading-6 text-muted-foreground')}>
             {SCREENSHOT.caption}
           </figcaption>
         </figure>
