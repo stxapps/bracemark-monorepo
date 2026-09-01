@@ -1,5 +1,6 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 import { expect, type Page } from '@playwright/test';
 
@@ -148,7 +149,12 @@ async function seedOne(user: SeedUser, archivePath: string | undefined): Promise
 // input is hidden behind a "Choose a file" button; `setInputFiles` drives it
 // directly, which is the one place this is allowed to reach past the UI — a real
 // OS file picker cannot be driven at all.
-async function importArchive(page: Page, archivePath: string): Promise<void> {
+//
+// Exported for seed/shot/, which needs the same import and the same wait but not
+// `seedOne` around them: it has to keep the browser OPEN afterwards to photograph
+// what it just made, and `seedOne`'s whole contract is that it closes the profile
+// on the way out.
+export async function importArchive(page: Page, archivePath: string): Promise<void> {
   console.log(`importing ${archivePath}`);
   await page.goto('/settings/data');
   await page.getByRole('button', { name: /^Import data/ }).click();
@@ -184,7 +190,7 @@ async function importArchive(page: Page, archivePath: string): Promise<void> {
 // function exists to prevent — and it would look like a clean run.
 const SETTLED_POLLS = 3;
 
-async function waitForSync(page: Page): Promise<void> {
+export async function waitForSync(page: Page): Promise<void> {
   await page.goto('/settings/data');
 
   const pending = page.getByText(/\d+ changes? waiting to sync/);
@@ -241,4 +247,13 @@ async function recordAccount(account: SeededAccount): Promise<void> {
   await writeFile(path, `${JSON.stringify(next, null, 2)}\n`, 'utf8');
 }
 
-await main();
+// Guarded on being the entry module, exactly as seed/generate.ts is, and for a
+// reason that is easy to create and hard to see: `importArchive` and `waitForSync`
+// are imported by seed/shot/, and an UNGUARDED top-level `await main()` runs on
+// IMPORT — so `npm run shot` silently re-seeded all four dev accounts before
+// taking its screenshot. Nothing fails when that happens. The seed is idempotent,
+// so it prints its usual receipts, exits clean, and only costs ten minutes and a
+// confusing log.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  await main();
+}

@@ -92,23 +92,28 @@ const SPECIMEN_HOST = 'askamanager.org';
 // writes into `public/`, and two more runtime dependencies, for a site with one
 // screenshot on it.
 //
-// TO REPLACE: capture at 2200px wide or more, then
+// HOW THIS ONE WAS MADE, and how to remake it: `e2e/seed/shot/` — a Plus account
+// seeded with two dozen real, checked URLs and nothing else, which then turns on
+// server extraction and lets the PRODUCT fetch every title and every cover before
+// the frame is taken (`npm run shot`; docs/e2e.md, _the marketing screenshot_).
+// Nothing in the image is authored, which is the point: this band's argument is
+// what the library looks like, and a hand-built mock of it is the same mistake as
+// the hero's hand-typed ciphertext, one screen further down.
 //
-//   tools/scripts/make-image-variants.sh <capture> \
+// The raw capture is 3200x2000; the three variants below come from
+//
+//   tools/scripts/make-image-variants.sh e2e/.artifacts/shot/library-cards.png \
 //     apps/bracemark-site/public/screenshots/library-cards
-//
-// point `src` at `/screenshots/library-cards-1600.webp`, paste the `widths` the
-// script prints, and delete `library-cards.svg` — a labelled placeholder, drawn
-// to be obvious in production rather than to pass as the real thing.
 const SCREENSHOT = {
-  // What a browser loads if it ignores `srcSet` — and, while this is still the
-  // vector placeholder, the whole of it.
-  src: '/screenshots/library-cards.svg',
+  // What a browser loads if it ignores `srcSet`. The middle variant, not the
+  // largest: an old browser without `srcSet` is not a browser to hand a 2200px
+  // file to.
+  src: '/screenshots/library-cards-1600.webp',
   // The variant path without its `-<width>.webp` suffix, and the widths that
-  // exist on disk. Empty here because an SVG is resolution-independent: a
-  // srcSet over one would be three descriptors pointing at the same file.
+  // exist on disk. Both come from make-image-variants.sh, which names the width
+  // in the file so a file and its `w` descriptor cannot drift apart.
   stem: '/screenshots/library-cards',
-  widths: [] as number[],
+  widths: [1100, 1600, 2200],
   // Width descriptors are only half the instruction. Without `sizes` the
   // browser assumes the image fills the viewport and over-fetches on every
   // phone; with it, the choice folds in layout width as well as pixel ratio,
@@ -119,10 +124,22 @@ const SCREENSHOT = {
   // `px-4` → 2rem). Approximate is fine — the browser rounds up to the next
   // variant — which is why the `px-safe` insets are not modelled here.
   sizes: '(min-width: 1024px) 1088px, (min-width: 768px) calc(100vw - 3rem), calc(100vw - 2rem)',
-  // Written for the capture this becomes, not for the placeholder: a screen
-  // reader gets the same account of the product a sighted visitor does.
-  alt: 'The card layout in Bracemark: a grid of saved links, each with its preview image, title and host, beside a sidebar of lists.',
-  caption: 'The card layout. Previews come from the device that saved the link.',
+  // A screen reader gets the same account of the product a sighted visitor does,
+  // which means it has to describe THIS image rather than the band's argument:
+  // the covers, the two lines under each of them, and the rail — the tags
+  // included, since they are half of what the sidebar shows and the thing the
+  // band's own list calls out.
+  alt: 'The card layout in Bracemark: a grid of saved links, each with its preview image, title and host, beside a sidebar of lists and tags.',
+  // The caption has to cover the picture ABOVE it, and the old one did not: it
+  // said previews come from the device that saved the link, full stop, under a
+  // grid whose covers were fetched by our server. Both halves are true of the
+  // product and only one was true of the photograph — and this is a page that
+  // asks to be checked, so a caption naming the path the image did NOT take is
+  // the kind of small false note that costs more than the fact it hides. The
+  // Plus footnote under the grid below already carries the same split.
+  caption:
+    'The card layout. Previews come from the device that saved the link — or from our server, on ' +
+    `${PLAN_LABELS.plus}.`,
 };
 
 // Undefined rather than an empty string while `widths` is empty, so the
@@ -237,19 +254,30 @@ function HeroPanel() {
                 out the topic that scores highest on everything above: every
                 therapy candidate sits on a host selling therapy.
 
+                THE PAGE IS
+                https://www.askamanager.org/2018/09/15838.html, and the URL is
+                written down here because for a long stretch it was not written
+                down anywhere. The panel stores the HOST and the TITLE — which is
+                all it renders — so the citation could be read but not checked,
+                and the one thing this slot has already been wrong about is a
+                citation. Reconstructing the URL from the headline does not work:
+                the slug is the post id, not the words, and a guessed
+                `/2018/03/heres-a-step-by-step-guide-…` returns a 404 that looks
+                exactly like the piece having been taken down.
+
                 THE LOWERCASE IS THEIRS. Ask a Manager styles every headline
                 lowercase; this is the title as published, minus the
                 " - Ask a Manager" suffix a person trims. Sentence-casing it
-                falsifies the citation, which is the one thing this slot has
-                already been wrong about once. Re-verifying it does NOT work from
-                an ordinary shell: the zone answers Cloudflare's interstitial with
-                a 403 to curl and to any server-side fetcher off Cloudflare, so a
+                falsifies the citation. Re-verifying it does NOT work from an
+                ordinary shell: the zone answers Cloudflare's interstitial with a
+                403 to curl and to any server-side fetcher off Cloudflare, so a
                 script reads as though the page were gone. Two routes that do
                 work — `bracemark-extractor`, which is itself a Worker and gets a
                 200 out of the same zone (POST /v1/extract on
                 extractor.bracemark.com), and the Wayback `id_` snapshot, which
                 serves the raw markup. Don't record the 403 as the page's own
-                verdict: our extractor reads this URL fine.
+                verdict: our extractor reads this URL fine, and returns this
+                headline verbatim.
 
                 THE APOSTROPHE IS `’` ON PURPOSE, and the page publishes it BOTH
                 ways — the rendered headline (`.entry-title`) carries `&#8217;`,

@@ -28,6 +28,8 @@
     "e2e:contract": "nx e2e-contract @stxapps/e2e",
     "seed": "nx seed @stxapps/e2e",
     "seed:fixtures": "nx seed:fixtures @stxapps/e2e",
+    "shot": "nx shot @stxapps/e2e",
+    "shot:preflight": "nx shot:preflight @stxapps/e2e",
     "build": "nx run-many -t build --output-style=stream",
     "deploy:web:staging": "bash tools/scripts/deploy-static.sh web staging",
     "deploy:web:production": "bash tools/scripts/deploy-static.sh web production",

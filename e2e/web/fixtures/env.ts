@@ -16,6 +16,14 @@ export const WEB_URL = process.env.E2E_WEB_URL ?? 'http://localhost:3000';
 // against a half-up api fails in a way that looks like a UI bug.
 export const API_URL = process.env.E2E_API_URL ?? 'http://localhost:8787';
 
+// bracemark-extractor — the server-extraction origin, on 8788 (docs/env-files.md,
+// _the local port map_), and brought up by `npm run dev` alongside the api and the
+// web app. Only the marketing-screenshot capture needs it (seed/shot/): it is the
+// one thing in e2e/ that deliberately fetches real, public URLs, and its preflight
+// asks THIS origin rather than curl because the two genuinely disagree — a zone
+// behind Cloudflare answers a Worker where it 403s a shell.
+export const EXTRACTOR_URL = process.env.E2E_EXTRACTOR_URL ?? 'http://localhost:8788';
+
 // bracemark-site — the marketing apex. Sign-out leaves the app for this origin via
 // a cross-origin `location.replace`, so a spec that asserts on it needs the value
 // but NOT a running server: asserting on the URL the browser navigated to is the

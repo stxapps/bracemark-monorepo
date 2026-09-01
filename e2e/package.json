@@ -23,6 +23,12 @@
       },
       "seed:fixtures": {
         "cache": false
+      },
+      "shot": {
+        "cache": false
+      },
+      "shot:preflight": {
+        "cache": false
       }
     }
   },
@@ -34,7 +40,9 @@
     "e2e-mobile": "tsx runner/mobile.ts",
     "e2e-contract": "tsx runner/web-to-mobile.ts && tsx runner/mobile-to-web.ts",
     "seed": "tsx seed/seed.ts",
-    "seed:fixtures": "tsx seed/generate.ts"
+    "seed:fixtures": "tsx seed/generate.ts",
+    "shot": "tsx seed/shot/capture.ts",
+    "shot:preflight": "tsx seed/shot/preflight.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",

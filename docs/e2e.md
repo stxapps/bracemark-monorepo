@@ -519,6 +519,117 @@ extracted title, notes, pins spread through the library rather than sitting on
 top, and a generated preview image on every third link so the `files/` half of the
 backup format is exercised at all.
 
+### the marketing screenshot
+
+`e2e/seed/shot/` is the seed's odd cousin: a fifth account whose only job is to be
+photographed. The marketing site has exactly one screenshot on it — the card grid
+under "A private library is still a library" — and this is what makes it.
+
+```sh
+npm run dev              # api + web + extractor (the extractor is the point)
+npm run shot:preflight   # check the URL list — seconds, no browser
+npm run shot             # account → import → extract → capture
+npm run shot -- --fresh  # …after wiping the account's data first
+```
+
+Out comes `e2e/.artifacts/shot/library-cards.png` at 3200x2000, and the run prints
+the `tools/scripts/make-image-variants.sh` line that turns it into the `.webp`
+variants `SCREENSHOT` in `apps/bracemark-site/src/app/page.tsx` points at.
+
+One consequence of sharing `seed.ts`'s helpers is worth knowing, because it
+failed silently in exactly the way this repo's tripwires do: `seed/seed.ts` and
+`seed/generate.ts` both end in a top-level `await main()`, and only `generate.ts`
+was guarded on being the entry module. Importing `importArchive`/`waitForSync`
+from the unguarded one **re-seeded all four dev accounts** before the capture
+started — no error, no failed check, just the seed's own receipts in the log and
+ten wasted minutes, because the seed is idempotent. Both are guarded now; a new
+top-level `await` in either is the same bug again.
+
+**It is not a fifth entry in `SEED_USERS`, deliberately.** `npm run seed` fans out
+over that list, and this account does not belong in a dev session's 2x2: it exists
+for one asset, its library is a hand-typed list rather than the generator, and —
+alone in `e2e/` — it fetches real, public URLs off the machine it runs on. It has
+its own entry point for all three reasons.
+
+**Nothing in the picture is authored.** The archive carries two dozen bare URLs,
+their list membership and their tags, and no `extractions/` entities at all — absence
+counts as pending, so every link lands in the drain's queue. The run then turns on
+the `serverExtraction` opt-in through the real Switch, presses **Generate all**,
+and waits for the section's own "N of N links previewed" before it photographs
+anything. Every
+title and every cover in the shipped image was fetched by `bracemark-extractor`
+and written back by the client. That is the whole design: the band's claim is
+about what the product looks like, and the placeholder it replaces is a labelled
+box precisely because a convincing mock grid is the trap this site has fallen into
+once already (the hero's hand-typed ciphertext).
+
+**Three things that are load-bearing and look like details:**
+
+- **The library is not `seed/library.ts`'s.** That generator speaks rust,
+  Postgres, Kubernetes and WASM over `example.com` hosts, with a failed extraction
+  every eleventh link and a preview image every third. All three are wrong here:
+  fake hosts have no covers, a two-thirds-monogram wall argues against the band it
+  sits in, and the vocabulary casts the user as a distributed-systems engineer —
+  the exact repair `HeroPanel`'s comment records making, twice. The shot library is
+  the hero's persona: an interview on Thursday, a trip, a tenancy, dinner, a bike,
+  something to read.
+- **The URL list is checked, not trusted.** `shot:preflight` asks the local
+  extractor about every URL and fails on any that is not `ok` _with an
+  `imageUrl`_ — a title-only result is a fine saved link and a bad card. It goes
+  through the extractor rather than `curl` because the two disagree: a zone behind
+  Cloudflare answers a Worker where it 403s a shell. Run it after any edit to the
+  list. A URL that has 404'd or lost its og:image since costs one grey tile in the
+  middle of the wall, which is invisible in a diff and obvious in the shipped PNG.
+- **The drain is two mechanisms, and each has a way of looking finished when it
+  is not.** `Generate all` starts it — the auto drain would not, being
+  displayed-scoped, visibility-gated and budget-capped by design (web-react's
+  `ExtractionProvider`), where extract-all is the one mode that is finite rather
+  than attention-bounded. But `extractAll()` is client state on the provider, so
+  **a full page load ends the job**: a first version of `fillPreviews` polled by
+  re-visiting the settings page every thirty seconds, cancelling the drain on
+  every pass, and sat at zero previewed while the log read like a slow network. Phase
+  one therefore stays on the page it started on and watches the Pause button
+  disappear. Then phase two, for a different failure: a link whose fetch fails
+  _transiently_ (a slow site against the extractor's 8s per-hop timeout, or a 429
+  from its own per-IP cap during the image pass) gets a `failed` facet, which
+  leaves the pending bucket at once and does not come back for
+  `backoff(attempts)` — ten minutes, doubling. The screen then reads Pending 0,
+  **Generate all disabled** (it gates on the pending count), two cards blank:
+  settled-looking, and not settled, with no button to press. Only the auto drain
+  retries it, and only for rows it can see — the grid is virtualized, so a
+  failure below the fold is never re-scanned while the run parks at the top.
+  That stuck three short of the library and looked exactly like a bad URL list.
+  Phase two walks the whole grid, which is the gesture the provider's cost model
+  is built around.
+
+  **And the bug that hid behind both of those.** "Generate all" is
+  `disabled={pendingCount === 0}`, where `pendingCount` comes from the same
+  on-demand liveQuery — which has no result for the first moment after the
+  section mounts. Sampling `isEnabled()` there reads the button as disabled
+  because the count is _unknown_, not because there is nothing to do, so the
+  click was skipped, extract-all never ran, and phase two's scrolling dragged the
+  whole library in by itself. It still finished, which is why it survived a dozen
+  captures: the only symptom was `previewed 0/25` logged between two phases that
+  both appeared to work, and the shortfall it produced was misread for a while as
+  the extractor's per-IP cap. Read the progress line BEFORE the button — waiting
+  for the line is waiting for that query to answer, so the button's state means
+  something by the time it is read. With the click actually landing, a clean run
+  previews the whole library in one pass and finishes in under a minute.
+
+**Reach for `--fresh` whenever you edit the URL list.** A Bracemark backup merges
+skip-existing **by path**, so re-running against the account that already holds
+these ids imports nothing — you would photograph the old library while the log
+reports a clean import, which is the same trap the four seeded accounts carry
+(_four things that will surprise you_). It is also the way out of a stuck drain:
+the `backoff(attempts)` ladder lives on the facet and survives re-runs, so a link
+that has failed three times is 40 minutes from its next attempt and a fresh run
+can spend its whole budget waiting for one retry window. A wipe drops the facets
+and the next import starts the ladder at zero.
+
+The capture is the **Show All** view (`?list=all`), because every link is filed in
+one of the eight named lists and the default My List is genuinely empty — and
+because Show All is the view the figure's alt text describes.
+
 ### state today
 
 | surface  | status                                                                   |
