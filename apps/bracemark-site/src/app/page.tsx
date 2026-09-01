@@ -883,11 +883,21 @@ export default function Page() {
           anything") was contradicted by the card sitting directly under it.
           Encryption-before-sync is the claim the architecture actually supports,
           and it is the same scoping the hero, the footer and every store listing
-          use. */}
+          use.
+
+          The first sentence describes the act now rather than asserting a law
+          about it. It read "Saving has to be faster than not saving, or the
+          library never happens", which inverts the moment anyone checks it —
+          not saving takes no time at all — on a page whose whole authority is
+          that its sentences survive being read closely. What that line was
+          reaching for is kept: friction is what decides whether a link gets
+          saved. It is now stated at the size of one save, in the second person,
+          which is also what sets up the title above it and the four cards
+          below — "one gesture" is the answer to it. */}
       <Band
         label="Getting links in"
         title="Four ways in, all of them one gesture."
-        lede="Saving has to be faster than not saving, or the library never happens. Whichever surface you use, the link is encrypted on the device before it syncs."
+        lede="A save you have to stop and think about is a save you skip. Whichever surface you use, the link is encrypted on the device before it syncs."
       >
         <ul className={cn('grid gap-px overflow-hidden rounded-xl bg-border sm:grid-cols-2')}>
           {CAPTURE.map(({ name, where, body }) => (
