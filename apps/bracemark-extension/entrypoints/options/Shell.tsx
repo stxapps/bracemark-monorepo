@@ -76,7 +76,9 @@ import { WEB_APP_URL } from '@/utils/web-app-url';
 export function OptionsShell({ children }: { children: React.ReactNode }) {
   return (
     <div className={cn('flex min-h-dvh flex-col bg-background text-foreground')}>
-      <main className={cn('mx-auto w-full max-w-2xl flex-1 px-4 pt-6 pb-10 md:px-6')}>{children}</main>
+      <main className={cn('mx-auto w-full max-w-2xl flex-1 px-4 pt-6 pb-10 md:px-6')}>
+        {children}
+      </main>
 
       <Footer />
     </div>
