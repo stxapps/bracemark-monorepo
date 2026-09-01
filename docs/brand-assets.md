@@ -532,7 +532,8 @@ no flip — nothing was ever pulling the choice wrong. It has consequently been
 right by taste alone since the beginning: all 25 quotation marks in the workspace
 are `“ ”`, and every straight `"` in a `.ts`/`.tsx` is a **comment** or **data**
 (the CSV quoting in `import/csv.ts` and `export/csv.ts`, the HTML attributes in
-`export/netscape.ts`, the entity table in `expo-react`'s `parse-html-head.ts`).
+`export/netscape.ts`, the attribute-scanner regexes in `expo-react`'s
+`parse-html-head.ts` and the HTML fixtures its spec feeds them).
 Which is exactly why it is written down at zero rather than after a drift:
 nothing was pulling it wrong, and nothing is pulling it right either.
 
@@ -550,7 +551,8 @@ pair is `‘ ’`, whose closing mark is the SAME codepoint as the apostrophe �
 nested quotation puts a character that means _apostrophe_ everywhere else in the
 product at the end of a phrase, one word away from a real one. Restructure the
 sentence instead. There is no nesting today, and the only `‘` in the workspace is
-a parser token in `parse-html-head.ts`.
+a table entry in `shared`'s `html/entities.ts` — the windows-1252 character at
+0x91, which is that codepoint as DATA rather than as punctuation.
 
 **Whether to quote a UI label is the one case with a real choice in it**, and the
 line is what the reader has to do with the string. A **named surface or system

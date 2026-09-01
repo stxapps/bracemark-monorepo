@@ -890,6 +890,35 @@ except the inline `title`, same plaintext-typing rule — see
 `customTitle?` / `customImageId?` (see _manual overrides_); it carries **none** of
 the extracted display fields — that's the writer-split (see _the data model_).
 
+#### three collectors, one meaning — and only one of them decodes for free
+
+WHICH tag becomes a link's title/image is `selectTitleImage` in `@stxapps/shared`
+(`extract/select.ts`), shared by all three extracting clients so a tier upgrade
+is an improvement and not a change. What each client does BEFORE that differs,
+because each parses a page with what its runtime has:
+
+| client                | parser                                 | character references     |
+| --------------------- | -------------------------------------- | ------------------------ |
+| `bracemark-extension` | the live DOM, via `executeScript`      | decoded by the DOM, free |
+| `bracemark-extractor` | `HTMLRewriter` (`lib/html.ts`)         | **decoded by us**        |
+| `bracemark-expo`      | a regex scanner (`parse-html-head.ts`) | **decoded by us**        |
+
+`HTMLRewriter` decodes **nothing** — not a `text()` chunk (a `<title>` is RCDATA)
+and not `getAttribute`, which is the surprising half, since the DOM method of the
+same name does. So both raw-HTML parsers run every collected value through
+`decodeHtmlEntities` (`shared/html/entities.ts`), which is exactly what the DOM
+would have done: without it a blog with no og:title stores
+`Kleppmann&rsquo;s blog`, and an og:image spelled `?w=1200&amp;h=630` is fetched
+with a literal `&amp;` in its query string. `lib/html.spec.ts` asserts the
+runtime behaviour against the real `HTMLRewriter` rather than trusting this
+paragraph.
+
+**Decode at the parse boundary, exactly once — never in `cleanTitle`.** The
+normalizer is downstream of all three clients, and the extension's value has
+already been decoded by the DOM; a page that wants to display `&amp;` writes
+`&amp;amp;`, so a second decode there would turn it into `&` for everyone. Same
+shape as the selection rule: parse per platform, agree afterwards.
+
 ### the queue is a query, not a structure
 
 Save-time extraction (see _who extracts_) handles the common case; this loop

@@ -1,5 +1,6 @@
 import {
   type CollectedMeta,
+  decodeHtmlEntities,
   LINK_TITLE_MAX,
   selectTitleImage,
   type TitleImage,
@@ -10,6 +11,15 @@ import {
 // The extractor runs NO JavaScript, so this is raw-HTML / server-rendered tags only
 // (docs "server tier is raw-HTML only"); a JS-shell SPA with no server-side og tags
 // degrades to the host fallback at the route, not here.
+//
+// `HTMLRewriter` DECODES NOTHING, and it is the only parser here that looks like it
+// might. A `text()` chunk is the raw RCDATA of the `<title>` — `&rsquo;` arrives as
+// four characters — and, less obviously, so is `getAttribute`: an og:title reads back
+// with its entities intact, and an og:image spelled `?w=1200&amp;h=630` would be
+// fetched with the `&amp;` in the query string. Every value collected below therefore
+// goes through `decodeHtmlEntities` (shared html/entities.ts), which is what the
+// extension gets free from the DOM; `html.spec.ts` pins the runtime behaviour so this
+// isn't taken on trust.
 //
 // This file only COLLECTS candidates; WHICH of them becomes the title/image is
 // `selectTitleImage` in `@stxapps/shared` (extract/select.ts), shared with every other
@@ -35,7 +45,7 @@ export async function extractTitleImage(
   const setMeta = (key: string | null, content: string | null): void => {
     if (!key || !content) return;
 
-    const value = content.trim();
+    const value = decodeHtmlEntities(content).trim();
     if (value === '') return;
 
     switch (key.toLowerCase()) {
@@ -64,7 +74,9 @@ export async function extractTitleImage(
     .on('title', {
       text(chunk) {
         // Bound the buffer so a pathological <title> can't grow unboundedly; the
-        // final cap is applied in cleanTitle.
+        // final cap is applied in cleanTitle. Entities are decoded once, after the
+        // last chunk — a reference can straddle a chunk boundary, so decoding per
+        // chunk would miss exactly the ones a long title contains.
         if (titleBuffer.length < LINK_TITLE_MAX * 2) titleBuffer += chunk.text;
       },
     })
@@ -77,7 +89,9 @@ export async function extractTitleImage(
     .on('link[rel~="image_src"]', {
       element(el) {
         const href = el.getAttribute('href');
-        if (href && href.trim() !== '') collected.imageSrc ??= href.trim();
+        if (!href) return;
+        const value = decodeHtmlEntities(href).trim();
+        if (value !== '') collected.imageSrc ??= value;
       },
     });
 
@@ -85,7 +99,7 @@ export async function extractTitleImage(
   // size-capped (readCappedBytes), so buffering it here is bounded.
   const transformed = rewriter.transform(new Response(html));
   await transformed.arrayBuffer();
-  collected.docTitle = titleBuffer;
+  collected.docTitle = decodeHtmlEntities(titleBuffer);
 
   return selectTitleImage(collected, finalUrl);
 }

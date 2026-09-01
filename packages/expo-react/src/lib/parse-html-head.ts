@@ -1,4 +1,4 @@
-import type { CollectedMeta } from '@stxapps/shared';
+import { type CollectedMeta, CP1252_HIGH, decodeHtmlEntities } from '@stxapps/shared';
 
 // Collect a page's title/image/icon CANDIDATES out of its raw HTML — the Hermes-side
 // counterpart of bracemark-extractor's `HTMLRewriter` pass (apps/bracemark-extractor/src/lib/
@@ -15,8 +15,11 @@ import type { CollectedMeta } from '@stxapps/shared';
 // would buy correctness we can't use and ship a parser into the app bundle for it, so:
 // a scanner, kept honest by fixtures (parse-html-head.spec.ts). The pieces below are
 // the malformed-input hazards that actually bite in the wild — comments and inline
-// scripts containing tag-like text, single/unquoted attributes, entity-escaped titles
-// — not a general-purpose HTML implementation.
+// scripts containing tag-like text, single/unquoted attributes — not a general-purpose
+// HTML implementation. The other thing a real parser does for free, resolving
+// character references, is `@stxapps/shared`'s `decodeHtmlEntities` (html/entities.ts),
+// shared with bracemark-extractor because `HTMLRewriter` doesn't decode either; every
+// value collected here goes through it, since the DOM the extension reads would have.
 
 // How much of the response we look at. Everything we want is in `<head>`, which is
 // tiny; this is the backstop for a page that never closes it (or a multi-MB inline
@@ -24,49 +27,17 @@ import type { CollectedMeta } from '@stxapps/shared';
 // SCAN, so a pathological body costs bounded regex work.
 export const MAX_HEAD_CHARS = 256 * 1024;
 
-// The 0x80–0x9F range where windows-1252 differs from latin-1 — smart quotes, dashes
-// and ellipsis, i.e. exactly the characters a real page title uses. Pages that declare
-// (or are served as) `iso-8859-1` are windows-1252 in practice, and every browser
-// decodes them that way; matching that is the difference between `It’s` and `It?s`.
-const CP1252_HIGH = [
-  '€',
-  '',
-  '‚',
-  'ƒ',
-  '„',
-  '…',
-  '†',
-  '‡',
-  'ˆ',
-  '‰',
-  'Š',
-  '‹',
-  'Œ',
-  '',
-  'Ž',
-  '',
-  '',
-  '‘',
-  '’',
-  '“',
-  '”',
-  '•',
-  '–',
-  '—',
-  '˜',
-  '™',
-  'š',
-  '›',
-  'œ',
-  '',
-  'ž',
-  'Ÿ',
-];
+// The windows-1252 high range is `@stxapps/shared`'s `CP1252_HIGH` (html/entities.ts),
+// shared with the numeric-reference remap that needs the same 32 characters. Pages
+// that declare (or are served as) `iso-8859-1` are windows-1252 in practice — smart
+// quotes, dashes and ellipsis, i.e. exactly the characters a real page title uses —
+// and every browser decodes them that way; matching that is the difference between
+// `It’s` and `It?s`.
 
 function decodeCp1252(bytes: Uint8Array): string {
   let out = '';
   for (const byte of bytes) {
-    // The five unassigned slots in that range map to '' in the table above; those (and
+    // The five unassigned slots in that range are '' in the shared table; those (and
     // every byte outside it) fall through to the latin-1 identity mapping.
     const high = byte >= 0x80 && byte <= 0x9f ? CP1252_HIGH[byte - 0x80] : '';
     out += high === '' ? String.fromCharCode(byte) : high;
@@ -112,32 +83,6 @@ export function decodeHtmlBytes(bytes: Uint8Array, contentType?: string): string
   }
 }
 
-// The named entities worth resolving in a title (`&amp;` and friends), plus numeric
-// refs. Anything else is left literal: a title is display text, so an unresolved
-// `&hellip;` is a cosmetic miss, while a full entity table is a lot of bytes to carry
-// for one field.
-const NAMED_ENTITIES: Record<string, string> = {
-  amp: '&',
-  lt: '<',
-  gt: '>',
-  quot: '"',
-  apos: "'",
-  nbsp: ' ',
-};
-
-function decodeEntities(text: string): string {
-  return text.replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (whole, body: string) => {
-    if (body.startsWith('#')) {
-      const code =
-        body[1] === 'x' || body[1] === 'X' ? parseInt(body.slice(2), 16) : Number(body.slice(1));
-      return Number.isFinite(code) && code > 0 && code <= 0x10ffff
-        ? String.fromCodePoint(code)
-        : whole;
-    }
-    return NAMED_ENTITIES[body.toLowerCase()] ?? whole;
-  });
-}
-
 // One tag's attributes as a lowercase-keyed map. Handles double-quoted, single-quoted
 // and bare values — all three appear in the wild, and a missed `content` is a missed
 // og:title.
@@ -145,7 +90,7 @@ function parseAttrs(raw: string): Record<string, string> {
   const attrs: Record<string, string> = {};
   const re = /([a-z_:][-a-z0-9_:.]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/gi;
   for (let m = re.exec(raw); m !== null; m = re.exec(raw)) {
-    attrs[m[1].toLowerCase()] = decodeEntities(m[2] ?? m[3] ?? m[4] ?? '');
+    attrs[m[1].toLowerCase()] = decodeHtmlEntities(m[2] ?? m[3] ?? m[4] ?? '');
   }
   return attrs;
 }
@@ -173,7 +118,7 @@ export function parseHtmlHead(html: string): CollectedMeta {
   const collected: CollectedMeta = {};
 
   const title = /<title[^>]*>([\s\S]*?)<\/title\s*>/i.exec(head);
-  if (title) collected.docTitle = decodeEntities(title[1]);
+  if (title) collected.docTitle = decodeHtmlEntities(title[1]);
 
   const metaRe = /<meta\b([^>]*)>/gi;
   for (let m = metaRe.exec(head); m !== null; m = metaRe.exec(head)) {

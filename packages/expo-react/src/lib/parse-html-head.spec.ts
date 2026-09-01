@@ -50,11 +50,33 @@ describe('parseHtmlHead', () => {
     expect(collected.ogTitle).toBe('First');
   });
 
+  // Decoding is `@stxapps/shared`'s `decodeHtmlEntities` (its own spec covers the
+  // table); what these pin is that the scanner routes BOTH the RCDATA title and the
+  // attribute values through it, which is what the DOM would have done for the
+  // extension and what the extractor now does for the server tier.
   it('decodes entities in titles and attributes', () => {
     const collected = parseHtmlHead(
       `<title>Tom &amp; Jerry &#8212; &quot;best&quot; &#x1F600;</title>`,
     );
     expect(collected.docTitle).toBe('Tom & Jerry — "best" 😀');
+  });
+
+  it('decodes the typographic entities a real blog title uses', () => {
+    const collected = parseHtmlHead(
+      `<title>Please stop calling databases CP or AP &mdash; Martin Kleppmann&rsquo;s blog</title>`,
+    );
+    expect(collected.docTitle).toBe(
+      'Please stop calling databases CP or AP — Martin Kleppmann’s blog',
+    );
+  });
+
+  it('decodes entities in an og:title and an og:image query string', () => {
+    const collected = parseHtmlHead(`
+      <meta property="og:title" content="Caf&eacute; &amp; co&hellip;">
+      <meta property="og:image" content="https://cdn.example.com/a.png?w=1200&amp;h=630">
+    `);
+    expect(collected.ogTitle).toBe('Café & co…');
+    expect(collected.ogImage).toBe('https://cdn.example.com/a.png?w=1200&h=630');
   });
 
   // The two hazards that make a naive scan collect things the page never declared.

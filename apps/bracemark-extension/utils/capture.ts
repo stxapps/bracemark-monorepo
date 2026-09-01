@@ -73,6 +73,13 @@ export async function captureTitleImage(
       //
       // Blank stays absent, never '': select.ts's chains are `??`, so an empty string
       // would win over the fallback behind it.
+      //
+      // Nothing here decodes character references, and nothing should: `getAttribute`
+      // and `document.title` are DOM reads, so `&rsquo;` is already `’` by the time we
+      // see it. That is the one thing this collector gets for free — the other two
+      // parse markup themselves and have to call `decodeHtmlEntities` (shared
+      // html/entities.ts) to reach the same value. Calling it HERE would decode a
+      // second time and turn a title that really displays `&amp;` into `&`.
       const setMeta = (key: string | null, content: string | null): void => {
         if (!key || !content) return;
 
