@@ -474,23 +474,35 @@ export async function readRawPendingTitleImageCount(): Promise<number> {
 }
 
 // The Settings section's tally, headlined on `titleImage` (the "fill in title + image"
-// job). `failed` folds in `permanent` — both are "not extracted, won't auto-retry
-// without help". Field semantics: web-react queries.ts `ExtractionFacetCounts`.
+// job). FOUR buckets, the two failure kinds named as a pair: `failedTransient` (cooling,
+// retried forever up the backoff ladder) and `failedPermanent` (settled without a result,
+// never eligible on any device) are counted and rendered APART — summing them into one
+// "Failed" stat merged a number that moves with one that can't, and read as a stuck queue.
+// `pending` stays strictly "no facet at all", the set the drain picks up now, because the
+// section gates "Generate all" on it. Neither failure spelling is the schema's `'failed'` /
+// `'permanent'`; full reasoning and field semantics: web-react queries.ts
+// `ExtractionFacetCounts`.
 export interface ExtractionFacetCounts {
   done: number;
   pending: number;
-  failed: number;
+  failedTransient: number;
+  failedPermanent: number;
 }
 
 // The trash correction, as ONE aggregate instead of web's O(trash) read-and-decode
-// join: trashed links are excluded from all three buckets to match the drains (which
+// join: trashed links are excluded from all four buckets to match the drains (which
 // skip Trash), or the section would show a Pending stat that never drops and a
 // "Generate all" button that drains nothing. Web pays a per-trashed-link blob decode
 // because its two terms live on DIFFERENT RECORDS of its single `items` store —
 // `itemListId` on the link, the status tokens on the co-keyed extraction — and IndexedDB
 // can't join; the same correlation is a LEFT JOIN on the token junction here, so nothing
 // is decoded at all.
-function readTrashedTitleImageCounts(): { total: number; done: number; failed: number } {
+function readTrashedTitleImageCounts(): {
+  total: number;
+  done: number;
+  failedTransient: number;
+  failedPermanent: number;
+} {
   // The join is restricted to the three titleImage tokens, so at most ONE junction row
   // can match a link (a facet has exactly one status) and `COUNT(*)` stays the trashed
   // LINK count — an unrestricted join would multiply each link by its other facets'
@@ -499,7 +511,8 @@ function readTrashedTitleImageCounts(): { total: number; done: number; failed: n
     .select({
       total: count(),
       done: sql<number>`SUM(CASE WHEN ${itemFacetStatuses.token} = ${DONE_TOKEN} THEN 1 ELSE 0 END)`,
-      failed: sql<number>`SUM(CASE WHEN ${itemFacetStatuses.token} IN (${FAILED_TOKEN}, ${PERMANENT_TOKEN}) THEN 1 ELSE 0 END)`,
+      failedTransient: sql<number>`SUM(CASE WHEN ${itemFacetStatuses.token} = ${FAILED_TOKEN} THEN 1 ELSE 0 END)`,
+      failedPermanent: sql<number>`SUM(CASE WHEN ${itemFacetStatuses.token} = ${PERMANENT_TOKEN} THEN 1 ELSE 0 END)`,
     })
     .from(items)
     .leftJoin(
@@ -512,21 +525,29 @@ function readTrashedTitleImageCounts(): { total: number; done: number; failed: n
     .where(eq(items.itemListId, TRASH_ID))
     .get();
   // SUM over zero rows is NULL — normalize (COUNT is already 0).
-  return { total: row?.total ?? 0, done: row?.done ?? 0, failed: row?.failed ?? 0 };
+  return {
+    total: row?.total ?? 0,
+    done: row?.done ?? 0,
+    failedTransient: row?.failedTransient ?? 0,
+    failedPermanent: row?.failedPermanent ?? 0,
+  };
 }
 
 export async function readExtractionFacetCounts(): Promise<ExtractionFacetCounts> {
   const trashed = readTrashedTitleImageCounts();
   const totalLinks = await countLinks();
-  // Each term drops its trashed share, so the three still sum to the live link total —
-  // the section renders `done + pending + failed` as the total.
+  // Each term drops its trashed share, so the four still sum to the live link total — the
+  // section renders that sum as the total, so a bucket that didn't subtract its own trash
+  // would inflate the denominator of "N of M links previewed".
   const liveLinks = totalLinks - trashed.total;
   const liveDone = countToken(DONE_TOKEN) - trashed.done;
-  const liveFailed = countToken(FAILED_TOKEN) + countToken(PERMANENT_TOKEN) - trashed.failed;
+  const liveFailedTransient = countToken(FAILED_TOKEN) - trashed.failedTransient;
+  const liveFailedPermanent = countToken(PERMANENT_TOKEN) - trashed.failedPermanent;
   return {
     done: liveDone,
-    failed: liveFailed,
-    pending: Math.max(0, liveLinks - liveDone - liveFailed),
+    failedTransient: liveFailedTransient,
+    failedPermanent: liveFailedPermanent,
+    pending: Math.max(0, liveLinks - liveDone - liveFailedTransient - liveFailedPermanent),
   };
 }
 

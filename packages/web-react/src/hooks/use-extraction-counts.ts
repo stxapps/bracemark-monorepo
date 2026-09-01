@@ -17,7 +17,12 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { useExtraction } from '../contexts/extraction-provider';
 import { type ExtractionFacetCounts, readExtractionFacetCounts } from '../data/queries';
 
-const EMPTY_COUNTS: ExtractionFacetCounts = { done: 0, pending: 0, failed: 0 };
+const EMPTY_COUNTS: ExtractionFacetCounts = {
+  done: 0,
+  pending: 0,
+  failedTransient: 0,
+  failedPermanent: 0,
+};
 
 export function useExtractionCounts(): ExtractionFacetCounts {
   const { enabled } = useExtraction();

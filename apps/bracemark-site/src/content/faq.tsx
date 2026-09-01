@@ -580,6 +580,19 @@ export const FAQ_GROUPS: FaqGroup[] = [
     blurb: 'The day-to-day questions.',
     items: [
       {
+        // Two halves, and only the first one existed anywhere for the whole
+        // first public stretch. Every surface explained a missing preview as a
+        // CLIENT-or-PLAN matter — which device saved it, or turn on the opt-in —
+        // and none of them said a PAGE can simply refuse. But `verdictForStatus`
+        // (packages/shared/src/extract/retry.ts) settles 404/410/451, the auth
+        // walls, a non-HTML content type, an empty body and a persistent 403 as
+        // `permanent`: never retried again by any device, deliberately. So a
+        // Plus user who ran Generate all and landed on a `Failed: 34` that never
+        // moves had nothing on any surface telling them that number is finished
+        // rather than stuck — which reads as a broken feature, and is the sort
+        // of claim a reader falsifies from their own screen. The causes below
+        // are drawn from `verdictForStatus`; keep them in step with it. The
+        // settings pane carries the same fact next to the number itself.
         id: 'no-title-image',
         q: 'Why don’t some of my links show a title or image?',
         a: (
@@ -588,7 +601,12 @@ export const FAQ_GROUPS: FaqGroup[] = [
             Links saved in the web app are the exception — the browser won’t let a web page fetch
             another site — so those show the bare address unless you turn on the opt-in{' '}
             {PLAN_LABELS.plus} extraction. Installing the browser extension is the free fix, and the
-            better one.
+            better one. Some pages give nothing up whichever device asks, and no plan changes that:
+            anything behind a login or a paywall, a PDF or another file that isn’t a web page, a
+            site that turns away automated requests, and pages whose text is assembled by JavaScript
+            after they load. We stop retrying those, so they land in the failed count under Link
+            previews in Settings rather than a queue that is still working on them. The link is
+            saved either way, and you can give it a title of your own.
           </>
         ),
       },

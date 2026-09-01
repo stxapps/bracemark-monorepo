@@ -457,16 +457,41 @@ function countTitleImageOutcomes(): Promise<[number, number, number, number]> {
 // deletion problem, not an accounting one: sweepDanglingExtractions removes them
 // (bracemark-web fires it once per session, after the first completed sync cycle).
 export async function readRawPendingTitleImageCount(): Promise<number> {
-  const [totalLinks, done, failedTransient, permanent] = await countTitleImageOutcomes();
-  return Math.max(0, totalLinks - done - failedTransient - permanent);
+  const [totalLinks, done, failedTransient, failedPermanent] = await countTitleImageOutcomes();
+  return Math.max(0, totalLinks - done - failedTransient - failedPermanent);
 }
 
 // The Settings page's extraction tally, headlined on the `titleImage` facet (the
 // primary "fill in title + image" job) — the DISPLAY counterpart of the raw wake count
-// above, exact because Trash is folded out. `failed` folds in `permanent` (both are
-// "not extracted, won't auto-retry without help").
+// above, exact because Trash is folded out.
 //
-// TRASHED links are excluded from all three, matching the drains (which skip them — see
+// FOUR buckets, not three, and the fourth is why: `failedTransient` and `permanent` used
+// to be summed into one `failed` field rendered under one "Failed" stat, which merged
+// "we try this again on the backoff ladder" with "no device will ever try this again".
+// That reads as one stuck number — the settled half never moves, so a user who ran
+// Generate all saw a by-design outcome as a broken feature, and no sentence could sit
+// under the stat without being false for the other half of it. The panes now label them
+// `Will retry` / `Won't retry`. Keep them separate here; the fold is the bug.
+//
+// The two failure buckets are named as a PAIR — `failedTransient` / `failedPermanent` —
+// and neither spelling is the schema's. `ExtractVerdict` (shared extract/retry.ts) is
+// `'failed' | 'permanent'`, so a faithful copy would reuse the bare `failed` that caused
+// this bug and would leave the pair reading as two unrelated things. These are DISPLAY
+// buckets; the mapping is `failed` → `failedTransient`, `permanent` → `failedPermanent`,
+// applied to both so the vocabulary is consistent rather than half-borrowed. The old
+// `failed` field is GONE rather than narrowed, which is the other half of the same idea —
+// a consumer that still reads `.failed` should fail to compile, not quietly under-count by
+// the permanent share.
+//
+// `pending` keeps its exact meaning: links with NO facet at all, which is precisely the
+// set the drains will pick up right now. That is load-bearing beyond display — both panes
+// gate "Generate all" on `pending === 0` and print it in the confirm line — so a cooling
+// `failedTransient` link must NOT be folded in here, however much it reads like pending
+// work to a user. Doing so would enable a button that drains nothing (the drains skip
+// still-cooling links; see readLinksPendingTitleImagePage), which is the same failure the
+// trash exclusion below exists to prevent.
+//
+// TRASHED links are excluded from all four, matching the drains (which skip them — see
 // readLinksPendingTitleImagePage): a trashed pending link is work the drains will never
 // do, so counting it would show a Pending stat that never drops and a "Generate all"
 // button that drains nothing. Exactness costs the O(trash) link↔extraction join below,
@@ -475,7 +500,15 @@ export async function readRawPendingTitleImageCount(): Promise<number> {
 export interface ExtractionFacetCounts {
   done: number;
   pending: number;
-  failed: number;
+  // A transient failure, cooling off — retried once past `backoff(attempts)`, forever
+  // (the curve caps at a day, it never gives up). A 403 climbs this ladder and converts
+  // itself to the bucket below when it tops out, so links migrate out of here on their own.
+  failedTransient: number;
+  // Settled without a result: 404/410/451, the auth walls, a non-HTML content type, an
+  // empty body, a topped-out 403. Never eligible again on ANY device, because the verdict
+  // is synced. This is the only bucket that never drains on its own — trashing a link
+  // still drops it, since every term below subtracts its trashed share.
+  failedPermanent: number;
 }
 
 // The trash correction for the tally: how many TRASHED links sit in each bucket, so each
@@ -502,26 +535,30 @@ export interface ExtractionFacetCounts {
 async function readTrashedTitleImageCounts(): Promise<{
   total: number;
   done: number;
-  failed: number;
+  failedTransient: number;
+  failedPermanent: number;
 }> {
   const paths = await db.items
     .where('[itemListId+itemUpdatedAt]')
     .between([TRASH_ID, Dexie.minKey], [TRASH_ID, Dexie.maxKey], true, true)
     .primaryKeys();
-  if (paths.length === 0) return { total: 0, done: 0, failed: 0 };
+  if (paths.length === 0) return { total: 0, done: 0, failedTransient: 0, failedPermanent: 0 };
 
   const exRecords = await db.items.bulkGet(paths.map((path) => extractionPathForLink(path)));
   let done = 0;
-  let failed = 0;
+  let failedTransient = 0;
+  let failedPermanent = 0;
   for (const exRecord of exRecords) {
     const status = exRecord
       ? decodeCachedExtraction(exRecord)?.facets.titleImage?.status
       : undefined;
+    // One bucket per status, matching the tally's own — the two failure kinds are counted
+    // apart here for the same reason they are rendered apart.
     if (status === 'done') done += 1;
-    // `failed` folds in `permanent`, matching the tally's own bucketing.
-    else if (status === 'failed' || status === 'permanent') failed += 1;
+    else if (status === 'failed') failedTransient += 1;
+    else if (status === 'permanent') failedPermanent += 1;
   }
-  return { total: paths.length, done, failed };
+  return { total: paths.length, done, failedTransient, failedPermanent };
 }
 
 export async function readExtractionFacetCounts(): Promise<ExtractionFacetCounts> {
@@ -529,16 +566,19 @@ export async function readExtractionFacetCounts(): Promise<ExtractionFacetCounts
   // readLinks' zone-echo note. countTitleImageOutcomes is await-free (a Promise.all of
   // direct Dexie calls), so it's safe as-is; only the stacked-await helper needs the wrap.
   const trashed = await Promise.resolve(readTrashedTitleImageCounts());
-  const [totalLinks, done, failedTransient, permanent] = await countTitleImageOutcomes();
-  // Each term drops its trashed share, so the three still sum to the live link total —
-  // the Settings stats render `done + pending + failed` as the total.
+  const [totalLinks, done, failedTransient, failedPermanent] = await countTitleImageOutcomes();
+  // Each term drops its trashed share, so the four still sum to the live link total — the
+  // Settings stats render that sum as the total, so a bucket that didn't subtract its own
+  // trash would inflate the denominator of "N of M links previewed".
   const liveLinks = totalLinks - trashed.total;
   const liveDone = done - trashed.done;
-  const liveFailed = failedTransient + permanent - trashed.failed;
+  const liveFailedTransient = failedTransient - trashed.failedTransient;
+  const liveFailedPermanent = failedPermanent - trashed.failedPermanent;
   return {
     done: liveDone,
-    failed: liveFailed,
-    pending: Math.max(0, liveLinks - liveDone - liveFailed),
+    failedTransient: liveFailedTransient,
+    failedPermanent: liveFailedPermanent,
+    pending: Math.max(0, liveLinks - liveDone - liveFailedTransient - liveFailedPermanent),
   };
 }
 

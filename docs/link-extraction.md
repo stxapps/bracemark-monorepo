@@ -843,6 +843,59 @@ Each facet answers the same questions independently:
     never recorded per-link — so no synced deadline field is needed. If a
     _per-link_ server deadline ever appears, it isn't derivable from `attempts`
     and earns its own field at that point — until then, don't pre-pay it.)
+- **`permanent` is a user-facing fact, and three surfaces now say so in prose.**
+  The settings pane used to render `done`/`pending`/`failed` as three stats, with
+  `readExtractionFacetCounts` folding `permanent` **into `failed`** — one number
+  merging a count that moves with one that can't, which is why the settled half
+  read as a stuck queue. **The fold was the bug**, and no sentence could sit under
+  that stat without being false for the other half of it: a transient `failed`
+  past its backoff _is_ picked up again by the ordinary drain, so "we stop
+  retrying these" was wrong about part of the very number it explained.
+  `ExtractionFacetCounts` now carries four buckets and the panes render a 2×2 —
+  `With preview` / `Pending` on top, **`Will retry` / `Won't retry`** paired
+  underneath, so the distinction reads as one thing rather than two unrelated
+  numbers. The two failure fields are named as a pair too —
+  **`failedTransient` / `failedPermanent`** — and neither is the schema's
+  spelling: `ExtractVerdict` is `'failed' | 'permanent'`, so copying it faithfully
+  would have reused the bare `failed` that caused this bug and left the pair
+  reading as two unrelated things. These are display buckets, mapped
+  `failed → failedTransient`, `permanent → failedPermanent`, both or neither. The
+  old `failed` field was **removed rather than narrowed** so a stale reader fails
+  to compile instead of quietly under-counting by the permanent share.
+
+  Three constraints on anything that touches this again. **`pending` must stay
+  "no facet at all"** — it is what both panes gate _Generate all_ on and print in
+  the confirm line, so folding the cooling-transient links into it (tempting: to a
+  user they _are_ pending) would enable a button that drains nothing, the same
+  failure the trash exclusion exists to prevent. **Every bucket subtracts its own
+  trashed share**, so the four sum to the live library and the "N of M previewed"
+  denominator stays honest — and so trashing a link genuinely does drop `Won't
+retry`, which is why its copy says the count won't come down _on its own_ rather
+  than that it is frozen. **`Will retry` never gives up**: the curve caps at a day
+  and a 403 converts itself to `permanent` when the ladder tops out, so links
+  migrate out of it on their own. For the whole first public stretch every surface explained a missing
+  preview as a **client-or-plan** matter (which device saved it; the web-app
+  exception; the opt-in), and not one said a **page** can simply refuse — so a
+  user who took the opt-in, ran _Generate all_ and was left on `Failed: 34` had
+  nothing anywhere telling them that number was finished rather than broken.
+  Three surfaces now carry it and they are pinned to `verdictForStatus` exactly
+  the way `/extractor`'s blocking advice is (_server extraction_): /faq's
+  `no-title-image` (`apps/bracemark-site/src/content/faq.tsx`) at length, and —
+  now that the label carries the "we have stopped" half — one line of causes
+  beside the stats in each settings pane
+  (`apps/bracemark-web/src/app/(app)/settings/[section]/_extraction/`,
+  `apps/bracemark-expo/src/features/settings/extraction-section.tsx`). Widen or
+  narrow the permanent set in `extract/retry.ts` and all three describe a product
+  that no longer exists, with no lint error, type error or failing test — the
+  copy names login/paywall pages, non-HTML targets and hosts that turn away
+  automated requests because that is what 401/403/451 and the synthetic `415`
+  settle as today. Note the shape of the claim: it says **we stop retrying**, not
+  that the page is unreachable — a `permanent` verdict is our decision about a
+  ladder that topped out, not a fact about the site, and the honest version is
+  the one a user can check by opening the link themselves. The missing half is
+  still open: a per-link **manual capture** trigger would turn this from a dead
+  end into something the user can act on (_deferred / open_).
+
 - **cross-device dedup** → **none, by design.** There is no claim lease. A lease
   would force an extra _write-claim-then-sync before extraction_ on the critical
   path, yet stay best-effort anyway (two devices waking in the same poll window

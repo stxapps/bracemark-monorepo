@@ -60,7 +60,12 @@ function Stat({ label, value }: { label: string; value: number }) {
 export function ExtractionSection() {
   const { enabled, isRunning, isExtractingAll, autoLimitReached, extractAll, pause } =
     useExtraction();
-  const { done: doneCount, pending: pendingCount, failed: failedCount } = useExtractionCounts();
+  const {
+    done: doneCount,
+    pending: pendingCount,
+    failedTransient: failedTransientCount,
+    failedPermanent: failedPermanentCount,
+  } = useExtractionCounts();
 
   // The opt-in itself. `enabled` above is the composite gate (signed in + store
   // ready + extractor configured + this), so the toggle binds to the raw
@@ -125,7 +130,7 @@ export function ExtractionSection() {
     );
   };
 
-  const total = doneCount + pendingCount + failedCount;
+  const total = doneCount + pendingCount + failedTransientCount + failedPermanentCount;
 
   // All three swap the contents of the button slot, so all three hand focus on.
   // `extractAll` flips `isExtractingAll` in the same event, so the slot the
@@ -216,10 +221,18 @@ export function ExtractionSection() {
         </SettingsNotice>
       ) : enabled ? (
         <div className="flex flex-col gap-4">
-          <div className="grid grid-cols-3 gap-3">
+          {/* 2x2, and the ROWS carry meaning: the happy path on top, the two
+              failure kinds paired underneath. `Will retry` / `Won't retry` reads
+              as one distinction rather than two unrelated numbers, which is the
+              whole point of splitting them — a single "Failed" stat merged a
+              count that moves with one that can't, so the settled half looked
+              like a stuck queue. A 1x4 row would flatten the pairing back out,
+              and "With preview" / "Won't retry" wrap badly at narrow widths. */}
+          <div className="grid grid-cols-2 gap-3">
             <Stat label="With preview" value={doneCount} />
             <Stat label="Pending" value={pendingCount} />
-            <Stat label="Failed" value={failedCount} />
+            <Stat label="Will retry" value={failedTransientCount} />
+            <Stat label="Won’t retry" value={failedPermanentCount} />
           </div>
 
           <p className="text-sm text-muted-foreground">
@@ -227,6 +240,32 @@ export function ExtractionSection() {
               ? 'No links to preview yet.'
               : `${doneCount} of ${total} link${total === 1 ? '' : 's'} previewed.`}
           </p>
+
+          {/* What "Won't retry" COVERS — the one stat here that never drains on
+              its own, so it is the one a user reads as broken. The label now
+              carries the fact that we have stopped, which is why this line only
+              has to name the causes; they track `verdictForStatus`
+              (packages/shared/src/extract/retry.ts), so widening or narrowing the
+              permanent set makes this false with no failing test. /faq's
+              `no-title-image` says the same thing at more length.
+
+              It does NOT claim the number is frozen: trashing one of these links
+              drops it, since every bucket subtracts its trashed share
+              (readExtractionFacetCounts).
+
+              Deliberately NOT role="alert": this mounts when the count first
+              crosses zero, which during a Generate all run is mid-drain, and it
+              is an explanation of a stat rather than an error the user just
+              caused — announcing it would be the inverse bug in
+              docs/accessibility.md. The failure ITSELF is per-link and already
+              visible in the count. */}
+          {failedPermanentCount > 0 && (
+            <p className="text-sm text-muted-foreground">
+              Won’t retry means the page gave us nothing to use — it sits behind a login or a
+              paywall, it isn’t a web page, or it turns away automated requests. Those links are
+              saved either way, and you can give them a title of your own.
+            </p>
+          )}
 
           {autoLimitReached && !isExtractingAll && (
             <SettingsNotice tone="pending">

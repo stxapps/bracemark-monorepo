@@ -131,7 +131,12 @@ function Stat({ label, value }: { label: string; value: number }) {
 export function ExtractionSection() {
   const { enabled, isRunning, isExtractingAll, autoLimitReached, extractAll, pause } =
     useExtraction();
-  const { done: doneCount, pending: pendingCount, failed: failedCount } = useExtractionCounts();
+  const {
+    done: doneCount,
+    pending: pendingCount,
+    failedTransient: failedTransientCount,
+    failedPermanent: failedPermanentCount,
+  } = useExtractionCounts();
 
   // The mode itself. `enabled` above is the composite gate (signed in + store ready
   // + mode `all`), so the radios bind to the raw setting — picking one while the
@@ -149,7 +154,7 @@ export function ExtractionSection() {
     );
   };
 
-  const total = doneCount + pendingCount + failedCount;
+  const total = doneCount + pendingCount + failedTransientCount + failedPermanentCount;
 
   return (
     <SettingsPane>
@@ -214,10 +219,20 @@ export function ExtractionSection() {
         </SettingsNotice>
       ) : enabled ? (
         <View>
-          <View className="flex-row gap-3">
-            <Stat label="With preview" value={doneCount} />
-            <Stat label="Pending" value={pendingCount} />
-            <Stat label="Failed" value={failedCount} />
+          {/* 2x2 — web's grid, as two RN rows (no CSS grid here), and the rows
+              carry the same meaning: happy path on top, the two failure kinds
+              paired underneath, so `Will retry` / `Won't retry` reads as one
+              distinction. Four tiles across a phone would be unreadably narrow
+              even before the labels wrap. */}
+          <View className="gap-3">
+            <View className="flex-row gap-3">
+              <Stat label="With preview" value={doneCount} />
+              <Stat label="Pending" value={pendingCount} />
+            </View>
+            <View className="flex-row gap-3">
+              <Stat label="Will retry" value={failedTransientCount} />
+              <Stat label="Won’t retry" value={failedPermanentCount} />
+            </View>
           </View>
 
           <Text className="mt-4 text-sm text-muted-foreground">
@@ -225,6 +240,28 @@ export function ExtractionSection() {
               ? 'No links to preview yet.'
               : `${doneCount} of ${total} link${total === 1 ? '' : 's'} previewed.`}
           </Text>
+
+          {/* What "Won't retry" COVERS — the web pane's twin, same wording. It
+              is the one stat here that never drains on its own, so it is the one
+              a user reads as broken; the label carries the fact that we have
+              stopped, leaving this line only the causes. They track
+              `verdictForStatus` (packages/shared/src/extract/retry.ts), so
+              widening or narrowing the permanent set makes this false with no
+              failing test. It does not claim the number is frozen — trashing one
+              of these links drops it. /faq's `no-title-image` says the same thing
+              at more length.
+
+              No accessibility role, deliberately — it explains a stat rather
+              than reporting an error the user just caused, and it mounts
+              mid-drain when the count first crosses zero, so announcing it would
+              be the inverse bug in docs/accessibility.md. */}
+          {failedPermanentCount > 0 && (
+            <Text className="mt-4 text-sm text-muted-foreground">
+              Won’t retry means the page gave us nothing to use — it sits behind a login or a
+              paywall, it isn’t a web page, or it turns away automated requests. Those links are
+              saved either way, and you can give them a title of your own.
+            </Text>
+          )}
 
           {autoLimitReached && !isExtractingAll && (
             <SettingsNotice tone="pending" className="mt-4">

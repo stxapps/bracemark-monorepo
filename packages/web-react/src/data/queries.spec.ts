@@ -91,19 +91,32 @@ describe('readExtractionFacetCounts', () => {
     // set difference.
     await seedLink('a');
 
-    expect(await readExtractionFacetCounts()).toEqual({ done: 0, pending: 1, failed: 0 });
+    expect(await readExtractionFacetCounts()).toEqual({
+      done: 0,
+      pending: 1,
+      failedTransient: 0,
+      failedPermanent: 0,
+    });
   });
 
   it('counts a settled facet with no title or image as done', async () => {
     await seedLink('a');
     await seedFacet('a', 'done');
 
-    expect(await readExtractionFacetCounts()).toEqual({ done: 1, pending: 0, failed: 0 });
+    expect(await readExtractionFacetCounts()).toEqual({
+      done: 1,
+      pending: 0,
+      failedTransient: 0,
+      failedPermanent: 0,
+    });
   });
 
-  it('folds permanent into failed', async () => {
-    // Both are "not extracted, won't auto-retry without help", so the section shows them
-    // as one number.
+  it('counts transient and permanent failures as separate buckets', async () => {
+    // The two used to be summed into one `failed`, which put a number that moves (a
+    // transient failure is retried once past its backoff) in the same stat as one that
+    // cannot (a permanent verdict is never eligible again, on any device). The section
+    // renders them as `Will retry` / `Won't retry` precisely so the settled half stops
+    // reading as a stuck queue — keep them apart.
     await seedLink('a');
     await seedFacet('a', 'done');
     await seedLink('b');
@@ -112,13 +125,20 @@ describe('readExtractionFacetCounts', () => {
     await seedFacet('c', 'permanent');
     await seedLink('d');
 
-    expect(await readExtractionFacetCounts()).toEqual({ done: 1, pending: 1, failed: 2 });
+    expect(await readExtractionFacetCounts()).toEqual({
+      done: 1,
+      pending: 1,
+      failedTransient: 1,
+      failedPermanent: 1,
+    });
   });
 
   it('excludes trashed links from every bucket', async () => {
-    // The correction, in all three directions at once: a trashed link must not raise
+    // The correction, in all four directions at once: a trashed link must not raise
     // Pending (the drains skip Trash, so it would be a stat that never drops), and must
-    // not raise Done/Failed either, or the buckets stop summing to the live library.
+    // not raise Done/Will-retry/Won't-retry either, or the buckets stop summing to the
+    // live library. The trashed permanent link is also the one case the pane's copy
+    // leans on — trashing is what makes that stat come down.
     await seedLink('live-pending');
     await seedLink('live-done');
     await seedFacet('live-done', 'done');
@@ -127,12 +147,14 @@ describe('readExtractionFacetCounts', () => {
     await seedFacet('trash-done', 'done');
     await seedLink('trash-permanent', TRASH_ID);
     await seedFacet('trash-permanent', 'permanent');
+    await seedLink('trash-failed', TRASH_ID);
+    await seedFacet('trash-failed', 'failed');
 
     const counts = await readExtractionFacetCounts();
 
-    expect(counts).toEqual({ done: 1, pending: 1, failed: 0 });
-    // The invariant the Settings section renders: the three buckets ARE the live library.
-    expect(counts.done + counts.pending + counts.failed).toBe(2);
+    expect(counts).toEqual({ done: 1, pending: 1, failedTransient: 0, failedPermanent: 0 });
+    // The invariant the Settings section renders: the four buckets ARE the live library.
+    expect(counts.done + counts.pending + counts.failedTransient + counts.failedPermanent).toBe(2);
   });
 
   it('never reports negative pending when a dangling extraction inflates the settled terms', async () => {
