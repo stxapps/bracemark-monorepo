@@ -201,6 +201,19 @@ The policy, decided once:
 - A file-carried title is **provisional**: it seeds `extraction.title` (which
   extraction may later upgrade), never `customTitle` — unless the source marks it
   user-authored, which only the Brace.to export does today (below).
+- **HTML character references are decoded by the Netscape parser only**, because
+  it is the only interop format that IS HTML: a browser writes
+  `Kleppmann&rsquo;s blog` and `HREF="…?a=1&amp;b=2"`, so decoding is reading the
+  format, not cleaning it up. It uses the same `decodeHtmlEntities`
+  (`html/entities.ts`) as the two raw-HTML title parsers — see
+  [link-extraction.md](./link-extraction.md), _three collectors, one meaning_ —
+  and for the same reason: one table, so a title can't mean two things depending
+  on which door it came in. **CSV and plain text must NOT decode.** Their fields
+  are literal text (RFC 4180 quoting is the only escaping a CSV has), so a
+  Raindrop title that really reads `Tom &amp; Jerry` means those characters, and
+  decoding it would be the double-decode `cleanTitle` is forbidden from doing.
+  A Brace.to export is JSON, likewise not HTML-escaped.
+
 - Folder paths **find-or-create lists** by case-insensitive name walk; without
   the `nestedLists` entitlement a nested path flattens to one root-level list.
   Trash never matches a folder name.

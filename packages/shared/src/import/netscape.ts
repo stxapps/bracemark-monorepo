@@ -1,3 +1,4 @@
+import { decodeHtmlEntities } from '../html/entities';
 import { normalizeUrl } from '../url/url';
 import type { ImportedLink } from './bundle';
 import { parseEpoch } from './epoch';
@@ -30,36 +31,20 @@ function attr(attrs: string, name: string): string | undefined {
   return match ? match[1] : undefined;
 }
 
-// Undo the writer-side esc() (the predefined entities) plus the numeric forms
-// and &nbsp; that other exporters emit. ONE pass over the source, so a decoded
-// result is never re-scanned (`&#38;lt;` yields the literal `&lt;`, not `<`).
-// Unknown named entities pass through untouched — better a literal `&eacute;`
-// than a dropped title.
-const ENTITY_RE = /&(#x[0-9a-f]+|#\d+|amp|lt|gt|quot|apos|nbsp);/gi;
-const NAMED_ENTITIES: Record<string, string> = {
-  amp: '&',
-  lt: '<',
-  gt: '>',
-  quot: '"',
-  apos: "'",
-  nbsp: ' ',
-};
-
-function unescapeHtml(value: string): string {
-  return value.replace(ENTITY_RE, (whole, body: string) => {
-    if (body[0] === '#') {
-      const hex = body[1] === 'x' || body[1] === 'X';
-      const code = parseInt(body.slice(hex ? 2 : 1), hex ? 16 : 10);
-      return Number.isFinite(code) && code <= 0x10ffff ? String.fromCodePoint(code) : whole;
-    }
-    return NAMED_ENTITIES[body.toLowerCase()] ?? whole;
-  });
-}
+// Undo the writer-side esc(), and everything else a real exporter emits: this is
+// an HTML format, so a title is HTML-escaped by definition and the reference set
+// is the whole of HTML's, not just the five characters WE escape on the way out.
+// `decodeHtmlEntities` (html/entities.ts) is shared with the two raw-HTML title
+// parsers for exactly that reason — it decodes in ONE pass, so a decoded result is
+// never re-scanned (`&#38;lt;` yields the literal `&lt;`, not `<`), and leaves an
+// unknown name untouched, which is better than a dropped title. It carried only
+// `&amp;`-and-friends when it lived here, so a browser export of
+// `Kleppmann&rsquo;s blog` imported with the entity still in it.
 
 // Inner text of a tokenized element → display text: drop any nested markup
 // (Firefox can nest e.g. <img> inside anchors), unescape, collapse whitespace.
 function innerText(value: string): string {
-  return unescapeHtml(value.replace(/<[^>]*>/g, ''))
+  return decodeHtmlEntities(value.replace(/<[^>]*>/g, ''))
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -99,7 +84,7 @@ export function parseNetscapeHtml(text: string): ImportedLink[] {
     const attrs = match[3];
     const href = attr(attrs, 'href');
     if (href === undefined) continue;
-    const url = normalizeUrl(unescapeHtml(href));
+    const url = normalizeUrl(decodeHtmlEntities(href));
     // Non-web hrefs (bookmarklets, place:/mailto: rows) aren't storable links.
     if (url === null) continue;
 
@@ -116,7 +101,7 @@ export function parseNetscapeHtml(text: string): ImportedLink[] {
     // (export/netscape.ts writes it too), comma-joined names.
     const tags = attr(attrs, 'tags');
     if (tags !== undefined) {
-      link.tagNames = unescapeHtml(tags)
+      link.tagNames = decodeHtmlEntities(tags)
         .split(',')
         .map((name) => name.trim())
         .filter((name) => name !== '');

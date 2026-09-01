@@ -149,7 +149,30 @@ describe('parseNetscapeHtml', () => {
     ].join('\n');
     const [link] = parseNetscapeHtml(html);
     expect(link.title).toBe('Read this & that');
-    // Unknown named entities (&eacute;) pass through untouched; numeric ones decode.
-    expect(link.folderPath).toEqual(['Caf&eacute;é & more']);
+    // Named and numeric spellings of the same character both decode — the table is
+    // shared with the extraction parsers (html/entities.ts), so an exporter's
+    // `&eacute;` lands as the character a browser would have shown.
+    expect(link.folderPath).toEqual(['Caféé & more']);
+  });
+
+  // The bug the shared table fixed: the local one held six names, so every
+  // typographic entity a browser writes survived into the imported title.
+  it('decodes the typographic entities a browser export actually writes', () => {
+    const html =
+      '<DT><A HREF="https://example.com/a">' +
+      'Please stop &mdash; Martin Kleppmann&rsquo;s blog&hellip;</A>';
+    expect(parseNetscapeHtml(html)[0].title).toBe('Please stop — Martin Kleppmann’s blog…');
+  });
+
+  it('leaves an unknown named entity literal rather than dropping the title', () => {
+    const html = '<DT><A HREF="https://example.com/a">a &bogus; b</A>';
+    expect(parseNetscapeHtml(html)[0].title).toBe('a &bogus; b');
+  });
+
+  it('decodes entities in the href and TAGS attributes too', () => {
+    const html = '<DT><A HREF="https://example.com/s?a=1&amp;b=2" TAGS="caf&eacute;,r&amp;d">T</A>';
+    const [link] = parseNetscapeHtml(html);
+    expect(link.url).toBe('https://example.com/s?a=1&b=2');
+    expect(link.tagNames).toEqual(['café', 'r&d']);
   });
 });
