@@ -75,14 +75,22 @@ const SPECIMEN_HOST = 'askamanager.org';
 // saved link was the hero panel, whose preview slot draws an identity tile
 // rather than a cover — so the section headed "A private library is still a
 // library" was proving a visual product with six lines of text, and a visitor
-// who came for the wall of covers filled the gap with the one visual we had
-// given them.
+// who came to see what a library looks like filled the gap with the one visual
+// we had given them.
 //
 // Not next/image: `images.unoptimized` is on for the static export, so the
 // component would add a wrapper and a dependency and emit the same <img>.
-// Explicit `width`/`height` reserve the box so the band below it doesn't jump,
-// and the frame crops with object-cover, so the real capture only has to be
-// roughly 16:10.
+// Explicit `width`/`height` reserve the box so the band below it doesn't jump.
+//
+// THE FRAME'S RATIO IS THE CAPTURE'S, exactly — `aspect-[25/19]` here and
+// 1000x760 in `e2e/seed/shot/capture.ts` (SHOT_WIDTH/SHOT_HEIGHT), which is why
+// `object-cover` has nothing to crop. That is a change from the card grid's
+// 16:10, and it is the layout swap's real cost: the list is a TALL object where
+// the grid was a wide one, and at 16:10 this capture held five rows, which reads
+// as a to-do list rather than as a library. The two numbers have to move
+// together — capture.ts counts its height off the row geometry (56 + 6*107 + 62)
+// and this ratio follows it. A mismatch does not fail anything; it just silently
+// starts cropping the bottom row somewhere ugly.
 //
 // Not `next-image-export-optimizer` either, which is the usual answer to that
 // first sentence and was declined deliberately — the trade is argued in
@@ -100,19 +108,32 @@ const SPECIMEN_HOST = 'askamanager.org';
 // what the library looks like, and a hand-built mock of it is the same mistake as
 // the hero's hand-typed ciphertext, one screen further down.
 //
-// The raw capture is 3200x2000; the three variants below come from
+// WHICH LAYOUT IT PHOTOGRAPHS, and why it changed. The first version of this
+// figure was the CARD grid, and both halves of the argument for the list are
+// worth keeping. It is the DEFAULT (`_panes/main.tsx` falls back to
+// `ListLayout`), so the grid was advertising a mode a visitor has to go and turn
+// on. And twelve full-bleed covers were the loudest thing on a page that is
+// achromatic except for one petrol accent — a stack of other companies' brand
+// colours, in the one band that is supposed to be about OUR product — so the
+// picture fought the page instead of sitting in it. The list draws the same
+// covers at 64x40, which is enough to say "these are real pages" without the
+// photographs taking the band over, and spends the rest of the frame on type and
+// hairlines, which is the page's own material. `Card and list layouts` in
+// LIBRARY below still names both, so the half not pictured is not hidden.
 //
-//   tools/scripts/make-image-variants.sh e2e/.artifacts/shot/library-cards.png \
-//     apps/bracemark-site/public/screenshots/library-cards
+// The raw capture is 3000x2280; the three variants below come from
+//
+//   tools/scripts/make-image-variants.sh e2e/.artifacts/shot/library-list.png \
+//     apps/bracemark-site/public/screenshots/library-list
 const SCREENSHOT = {
   // What a browser loads if it ignores `srcSet`. The middle variant, not the
   // largest: an old browser without `srcSet` is not a browser to hand a 2200px
   // file to.
-  src: '/screenshots/library-cards-1600.webp',
+  src: '/screenshots/library-list-1600.webp',
   // The variant path without its `-<width>.webp` suffix, and the widths that
   // exist on disk. Both come from make-image-variants.sh, which names the width
   // in the file so a file and its `w` descriptor cannot drift apart.
-  stem: '/screenshots/library-cards',
+  stem: '/screenshots/library-list',
   widths: [1100, 1600, 2200],
   // Width descriptors are only half the instruction. Without `sizes` the
   // browser assumes the image fills the viewport and over-fetches on every
@@ -126,20 +147,34 @@ const SCREENSHOT = {
   sizes: '(min-width: 1024px) 1088px, (min-width: 768px) calc(100vw - 3rem), calc(100vw - 2rem)',
   // A screen reader gets the same account of the product a sighted visitor does,
   // which means it has to describe THIS image rather than the band's argument:
-  // the covers, the two lines under each of them, and the rail — the tags
-  // included, since they are half of what the sidebar shows and the thing the
-  // band's own list calls out.
-  alt: 'The card layout in Bracemark: a grid of saved links, each with its preview image, title and host, beside a sidebar of lists and tags.',
-  // The caption has to cover the picture ABOVE it, and the old one did not: it
-  // said previews come from the device that saved the link, full stop, under a
-  // grid whose covers were fetched by our server. Both halves are true of the
-  // product and only one was true of the photograph — and this is a page that
-  // asks to be checked, so a caption naming the path the image did NOT take is
-  // the kind of small false note that costs more than the fact it hides. The
-  // Plus footnote under the grid below already carries the same split.
+  // one row per link, what each row carries, and the rail — the tags included,
+  // since they are half of what the sidebar shows and the thing the band's own
+  // list calls out.
+  //
+  // It has to be RE-READ whenever the picture is re-taken, and the layout swap is
+  // the proof: this said "a grid of saved links, each with its preview image"
+  // for as long as the file underneath it was a list, so AT was given a different
+  // product from the one on screen. Nothing catches that — no lint rule, no type
+  // error, no test — because the string and the bytes are checked by different
+  // people at different times. docs/accessibility.md.
+  alt:
+    'The list layout in Bracemark: saved links one per row, each with a small preview image, ' +
+    'its title, its site and its tags, beside a sidebar of lists and tags.',
+  // The caption has to cover the picture ABOVE it, and an earlier one did not: it
+  // said previews come from the device that saved the link, full stop, over
+  // covers that were fetched by our server. Both halves are true of the product
+  // and only one was true of the photograph — and this is a page that asks to be
+  // checked, so a caption naming the path the image did NOT take is the kind of
+  // small false note that costs more than the fact it hides. The Plus footnote
+  // under the grid below already carries the same split.
+  //
+  // "the default" is worth the three words: it is the one thing the picture
+  // cannot say about itself, a visitor comparing managers is reading for what
+  // they get without configuring anything, and it is checkable — main.tsx
+  // resolves `LAYOUTS[linksLayout] ?? ListLayout`.
   caption:
-    'The card layout. Previews come from the device that saved the link — or from our server, on ' +
-    `${PLAN_LABELS.plus}.`,
+    'The list layout, the default. Previews come from the device that saved the link — or from ' +
+    `our server, on ${PLAN_LABELS.plus}.`,
 };
 
 // Undefined rather than an empty string while `widths` is empty, so the
@@ -1153,11 +1188,12 @@ export default function Page() {
         lede="Encryption is the part you don’t see. This is the part you use every day — and most of it is on the free plan."
       >
         {/* The picture goes above the list, not beside it: the band's claim is
-            that the library looks like a library, and a wall of covers makes
-            that argument in less time than six bullets can. The caption is the
-            mono instrument voice, and it does a second job — previews coming
-            from the saving device is the one thing a grid of covers cannot show
-            and the thing that decides whether a free web-only visitor sees any. */}
+            that the library looks like a library, and a screenful of real saved
+            links makes that argument in less time than six bullets can. The
+            caption is the mono instrument voice, and it does a second job —
+            previews coming from the saving device is the one thing the picture
+            cannot show, and the thing that decides whether a free web-only
+            visitor sees any. */}
         <figure className={cn('mb-16')}>
           <div className={cn('overflow-hidden rounded-2xl border border-border bg-card shadow-sm')}>
             {/* `loading="lazy"`: this figure sits several screens down and
@@ -1170,19 +1206,38 @@ export default function Page() {
               srcSet={SCREENSHOT_SRCSET}
               sizes={SCREENSHOT_SRCSET ? SCREENSHOT.sizes : undefined}
               alt={SCREENSHOT.alt}
-              width={1600}
-              height={1000}
+              width={1000}
+              height={760}
               loading="lazy"
               decoding="async"
-              className={cn('block aspect-16/10 w-full object-cover object-top')}
+              className={cn('block aspect-[25/19] w-full object-cover object-top')}
             />
           </div>
           {/* Not `.eyebrow`, despite being the small mono-ish line under a
               figure. An eyebrow is uppercase at 0.18em tracking because it is a
               two-word LABEL naming a band; a full sentence set that way is hard
               to read and shouts. This matches the band's other secondary line —
-              the Plus footnote below the grid — which is what it is. */}
-          <figcaption className={cn('mt-4 max-w-2xl text-sm leading-6 text-muted-foreground')}>
+              the Plus footnote below the grid — which is what it is.
+
+              `text-balance` and NOT on that footnote, which is the one thing
+              here the two do not share. Both are `max-w-2xl` (672px) at `text-sm`,
+              which is a hair over one line for this sentence and two for the
+              footnote's — but the caption's overflow is the last two words, so it
+              set `on Plus.` alone on a second line under a 100%-full first one.
+              A widow that short reads as a rendering fault rather than as a line
+              break, and it lands directly under the picture the band is arguing
+              from. `text-wrap: balance` evens the two instead; the footnote wraps
+              with a full clause on its second line already and would gain nothing.
+              It is the same instrument the band titles and the `dt` terms use, and
+              it degrades to today's wrapping where it is unsupported.
+
+              Scoped by the LINE COUNT, not by taste: browsers cap balancing at a
+              handful of lines (Chrome stops at six), so this holds for the caption
+              at every width it is read — two lines at the desktop cap, three on a
+              phone, where the same sentence otherwise orphans `Plus.` */}
+          <figcaption
+            className={cn('mt-4 max-w-2xl text-sm leading-6 text-balance text-muted-foreground')}
+          >
             {SCREENSHOT.caption}
           </figcaption>
         </figure>

@@ -522,7 +522,7 @@ backup format is exercised at all.
 ### the marketing screenshot
 
 `e2e/seed/shot/` is the seed's odd cousin: a fifth account whose only job is to be
-photographed. The marketing site has exactly one screenshot on it — the card grid
+photographed. The marketing site has exactly one screenshot on it — the links page
 under "A private library is still a library" — and this is what makes it.
 
 ```sh
@@ -532,9 +532,30 @@ npm run shot             # account → import → extract → capture
 npm run shot -- --fresh  # …after wiping the account's data first
 ```
 
-Out comes `e2e/.artifacts/shot/library-cards.png` at 3200x2000, and the run prints
+Out comes `e2e/.artifacts/shot/library-list.png` at 3000x2280, and the run prints
 the `tools/scripts/make-image-variants.sh` line that turns it into the `.webp`
 variants `SCREENSHOT` in `apps/bracemark-site/src/app/page.tsx` points at.
+
+**It photographs the LIST layout, and the geometry is derived rather than picked.**
+It was the card grid first; the swap is argued at the top of `capture.ts` and in
+`SCREENSHOT`'s own comment, and it costs a step the grid did not need —
+`useListLayout()` clicks the Settings → Misc radio before capturing, because
+`linksLayout` **syncs** and this account is reused, so one manual click in the app
+would otherwise silently photograph cards on the next run. Three numbers hang
+together and nothing checks them against each other:
+
+| where               | what                    | why                                                                                                                                       |
+| ------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `SHOT_WIDTH` = 1000 | the capture's CSS width | sets the type size in the figure (1088/1000 ≈ 1.09x) **and** the air between a title and the date column, which grows straight with width |
+| `SHOT_HEIGHT` = 760 | `56 + 6*107 + 62`       | six whole rows, the seventh cut past its host line and before its tags                                                                    |
+| `aspect-[25/19]`    | the frame, in page.tsx  | the capture's own ratio, so `object-cover` crops nothing                                                                                  |
+
+Move one and the other two are wrong — silently. A frame that no longer matches
+the capture just starts slicing the bottom row somewhere ugly, and a width change
+re-scales every glyph in the picture. `SHOT_SCALE` = 3 is the odd one out and is
+**not** a design number: `make-image-variants.sh` refuses to upscale and the site
+ships a 2200px variant, so a 1000px-wide capture has to be rastered at 3x to feed
+it. That is why `launchApp` takes a `deviceScaleFactor` at all.
 
 One consequence of sharing `seed.ts`'s helpers is worth knowing, because it
 failed silently in exactly the way this repo's tripwires do: `seed/seed.ts` and
@@ -568,18 +589,20 @@ once already (the hero's hand-typed ciphertext).
 - **The library is not `seed/library.ts`'s.** That generator speaks rust,
   Postgres, Kubernetes and WASM over `example.com` hosts, with a failed extraction
   every eleventh link and a preview image every third. All three are wrong here:
-  fake hosts have no covers, a two-thirds-monogram wall argues against the band it
-  sits in, and the vocabulary casts the user as a distributed-systems engineer —
+  fake hosts have no covers, a column two-thirds monograms argues against the band
+  it sits in, and the vocabulary casts the user as a distributed-systems engineer —
   the exact repair `HeroPanel`'s comment records making, twice. The shot library is
   the hero's persona: an interview on Thursday, a trip, a tenancy, dinner, a bike,
   something to read.
 - **The URL list is checked, not trusted.** `shot:preflight` asks the local
   extractor about every URL and fails on any that is not `ok` _with an
-  `imageUrl`_ — a title-only result is a fine saved link and a bad card. It goes
+  `imageUrl`_ — a title-only result is a fine saved link and a bad row. It goes
   through the extractor rather than `curl` because the two disagree: a zone behind
   Cloudflare answers a Worker where it 403s a shell. Run it after any edit to the
-  list. A URL that has 404'd or lost its og:image since costs one grey tile in the
-  middle of the wall, which is invisible in a diff and obvious in the shipped PNG.
+  list. A URL that has 404'd or lost its og:image since costs one monogram in the
+  column of covers, which is invisible in a diff and obvious in the shipped PNG.
+  Only the top seven links are in frame, so an edit near the top of
+  `SHOT_LINKS` is the one to re-check hardest.
 - **The drain is two mechanisms, and each has a way of looking finished when it
   is not.** `Generate all` starts it — the auto drain would not, being
   displayed-scoped, visibility-gated and budget-capped by design (web-react's
@@ -596,10 +619,10 @@ once already (the hero's hand-typed ciphertext).
   `backoff(attempts)` — ten minutes, doubling. The screen then reads Pending 0,
   **Generate all disabled** (it gates on the pending count), two cards blank:
   settled-looking, and not settled, with no button to press. Only the auto drain
-  retries it, and only for rows it can see — the grid is virtualized, so a
+  retries it, and only for rows it can see — the list is virtualized, so a
   failure below the fold is never re-scanned while the run parks at the top.
   That stuck three short of the library and looked exactly like a bad URL list.
-  Phase two walks the whole grid, which is the gesture the provider's cost model
+  Phase two walks the whole list, which is the gesture the provider's cost model
   is built around.
 
   **And the bug that hid behind both of those.** "Generate all" is

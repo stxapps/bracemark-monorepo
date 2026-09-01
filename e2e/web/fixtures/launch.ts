@@ -52,6 +52,15 @@ export interface LaunchOptions {
   // Watch the run. `slowMo` is only useful with this on.
   headed?: boolean;
   slowMo?: number;
+  // Raster density for `page.screenshot`. 2 everywhere except the marketing
+  // capture (seed/shot/), which asks for 3 — and the reason is a constraint one
+  // step downstream: `make-image-variants.sh` refuses to upscale, so the widest
+  // variant the site ships (2200px) needs a source at least that wide. The
+  // capture's CSS width is a DESIGN choice — it sets how large the app's own type
+  // renders inside the figure, and how much air sits between a title and the date
+  // column — so it must not be forced up to 1100 just to reach 2200 device px.
+  // Splitting the two lets the shot pick 1000 CSS and still hand the script 3000.
+  deviceScaleFactor?: number;
 }
 
 export async function launchApp(
@@ -69,7 +78,7 @@ export async function launchApp(
     slowMo: options.slowMo,
     // The repo's type sizes are small enough that a 1x screenshot is hard to read
     // when a failure needs eyeballing.
-    deviceScaleFactor: 2,
+    deviceScaleFactor: options.deviceScaleFactor ?? 2,
     viewport: { width: 1280, height: 900 },
   });
 

@@ -15,9 +15,15 @@ import {
 import type { SeedUser } from '../catalog';
 import type { SeedLibrary } from '../library';
 
-// The library behind the marketing site's ONE screenshot — the card grid in the
+// The library behind the marketing site's ONE screenshot — the list layout in the
 // "A private library is still a library" band
 // (apps/bracemark-site/src/app/page.tsx, `SCREENSHOT`).
+//
+// Sized for a frame that shows SEVEN of these links, not twenty-four: the capture
+// is 1000x760 over a virtualized list (capture.ts counts the geometry), so the top
+// seven are the picture and the rest are what makes the account worth signing back
+// into. Order is newest-first, so the first entries in SHOT_LINKS below are the
+// ones that ship.
 //
 // It is deliberately NOT `seed/library.ts`. That generator exists to make the app
 // hard to break — a thousand synthetic links on `example.com` hosts, with a
@@ -259,13 +265,16 @@ export const SHOT_USER = {
   links: SHOT_LINKS.length,
   lists: 8,
   tags: 12,
-  // Flat. Nesting is a Plus feature and this account has it, but the picture is
-  // of the CARD GRID, and a rail of eight plain lists is legible at the width
-  // the figure is actually rendered (1088px, scaled into a 16:10 frame) where a
-  // three-deep tree is a column of indented slivers.
+  // Flat. Nesting is a Plus feature and this account has it, but a rail of eight
+  // plain lists is legible at the width the figure is actually rendered (a 240px
+  // sidebar inside 1088px) where a three-deep tree is a column of indented
+  // slivers. The list layout does not change that — the rail is the same component
+  // either way — but it does raise the stakes: the rail is a larger share of a
+  // 1000px-wide frame than it was of the 1600px one the cards were shot at.
   nested: false,
-  // No pins. The pinned block is a second, differently-shaped row above the grid,
-  // and the band's claim is about the grid.
+  // No pins. Pinned links sort to the top and wear a badge on the host line, so a
+  // pin would spend one of the seven visible rows saying something the caption
+  // does not explain.
   pins: 0,
   // `satisfies`, not a `: SeedUser` annotation: the annotation widens `plan` to
   // `SeedPlan`, and `grantPlan` takes the paid half of that union — so the
@@ -324,8 +333,8 @@ export function buildShotLibrary(now: number): SeedLibrary {
       // override would put a string WE wrote into a picture whose entire claim is
       // that the product wrote it, and it would do so in the one place a reader
       // cannot tell the difference. Notes are the same argument one step quieter:
-      // the card grid renders a note as a badge, so a note is a visual assertion
-      // about a page nobody here has read.
+      // the row renders a note as a badge on the host line, so a note is a visual
+      // assertion about a page nobody here has read.
     };
     items.push({ path: pathFromId(`shot-link-${pad(i)}`, LINKS_PREFIX), data: link });
   });

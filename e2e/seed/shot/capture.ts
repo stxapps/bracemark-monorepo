@@ -20,10 +20,21 @@ import { buildShotLibrary, SHOT_USER } from './library';
 //   npm run shot
 //   npm run shot -- --fresh  # wipe the account's data first (see below)
 //
-// What comes out: `e2e/.artifacts/shot/library-cards.png`, a 3200x2000 capture of
-// the card grid, which is then handed to `tools/scripts/make-image-variants.sh`
+// What comes out: `e2e/.artifacts/shot/library-list.png`, a 3000x2280 capture of
+// the LIST layout, which is then handed to `tools/scripts/make-image-variants.sh`
 // (the last lines below print the exact command). The site's `SCREENSHOT` const in
 // apps/bracemark-site/src/app/page.tsx carries the rest of the hand-off.
+//
+// WHY THE LIST AND NOT THE CARD GRID. It photographed the cards first, and the
+// argument for the swap is two-sided. It is the DEFAULT — `_panes/main.tsx`
+// resolves `LAYOUTS[linksLayout] ?? ListLayout` — so the grid was advertising a
+// mode a visitor has to go and turn on. And a wall of twelve full-bleed
+// photographs is the loudest thing on a page whose whole design is achromatic
+// except for one petrol accent (page.tsx's design note): the covers read as
+// somebody else's brand colours stacked twelve high, and the band under them
+// went quiet. A list renders the same covers at 64x40 — present, still doing the
+// "these are real pages" job — and spends the rest of the frame on the type and
+// the rules, which are the page's own material.
 //
 // THE POINT OF DOING IT THIS WAY. The band this picture sits in claims that a
 // private library is still a library, and the placeholder it replaces is a
@@ -32,8 +43,8 @@ import { buildShotLibrary, SHOT_USER } from './library';
 // ciphertext). So nothing in the finished image is authored: the archive carries
 // bare URLs, `bracemark-extractor` fetches the titles and the covers, the client
 // decrypts and lays them out, and the capture is of whatever that produced. If a
-// page has no og:image the card is a monogram, and the honest fix is a different
-// URL rather than a different screenshot.
+// page has no og:image the row's slot is a monogram, and the honest fix is a
+// different URL rather than a different screenshot.
 //
 // It is a SEPARATE ENTRY POINT from `npm run seed`, not a fifth account in it.
 // The four seeded accounts are a 2x2 that a dev session wants filled and this one
@@ -41,14 +52,52 @@ import { buildShotLibrary, SHOT_USER } from './library';
 // list rather than the generator, and — unlike every other thing in e2e/ — it
 // deliberately fetches real, public URLs off the machine it runs on.
 
-// The capture geometry. 1600x1000 is the figure's own 16:10 (the `width`/`height`
-// on the <img>, and `aspect-16/10` on the frame), and `launchApp` already runs at
-// deviceScaleFactor 2 — so this comes out 3200x2000, comfortably over the
-// "capture at 2200px wide or more" the site's hand-off note asks for. The frame
-// crops with `object-cover object-top`, so the height is slack and the width is
-// what matters.
-const SHOT_WIDTH = 1600;
-const SHOT_HEIGHT = 1000;
+// The capture geometry, and every number in it is load-bearing. It is also the
+// figure's own ratio — `aspect-[25/19]` on the frame and the `width`/`height` on
+// the <img> — so `object-cover` crops nothing and what is framed here is exactly
+// what ships.
+//
+// THE WIDTH SETS THE TYPE SIZE. The figure is 1088 CSS px at the desktop cap
+// (make-image-variants.sh derives that from `Band`'s max-w-6xl inside lg:px-8), so
+// a capture W CSS px wide is displayed at 1088/W. At 1000 that is 1.09x — the
+// app's 14px row title lands at ~15px, which is the site's own `text-body`, and
+// the screenshot reads as continuous with the prose around it rather than as a
+// thumbnail of a different document. The card grid was captured at 1600 and
+// therefore displayed at 0.68x, which a grid of photographs survives and a list of
+// 14px type does not.
+//
+// THE WIDTH ALSO SETS THE DEAD SPACE. The row is `flex`: the text column takes
+// `flex-1` and the date column is `shrink-0` against the right edge, so every
+// pixel of pane width past the title's own ink becomes air between the two. The
+// sidebar is a fixed 240 and the date column's right edge sits ~121 in, so the gap
+// after a short title ("Belém Tower - Wikipedia" is ~166px of ink) grows straight
+// with W: ~38% of the frame at 1000, ~44% at 1100, ~52% at 1280. 1000 is the
+// narrowest setting that still keeps the date column at all — it is gated on the
+// PANE reaching `@xl` (576px), and 1000 - 240 = 760 clears it with room. Below
+// ~816 the column vanishes and the picture stops showing the sorted field.
+//
+// THE HEIGHT IS COUNTED, NOT CHOSEN. The header is 56 and every row in this
+// library measures exactly 107 (14 + title 20 + 2 + host 20 + 12 + one chip line
+// 24 + 14 + 1 — the four shapes are enumerated in list-layout.tsx; these links all
+// have tags and none wraps to a second title line at this width). So
+//
+//   56 + 6*107 + 62 = 760
+//
+// puts six whole rows in the frame and cuts the seventh 62px in — past its
+// thumbnail (40, ending at 56), its title and its host line, and before its tag
+// strip. A partial row is wanted: it is what says the library continues. WHERE it
+// is cut is the part worth keeping — land in the first 14 and the frame ends on an
+// empty sliver of padding, land at 20-34 and it slices a line of type in half.
+// Re-derive this if the row ever changes shape.
+const SHOT_WIDTH = 1000;
+const SHOT_HEIGHT = 760;
+
+// Raster density, and NOT a design choice — see `deviceScaleFactor` in
+// web/fixtures/launch.ts. make-image-variants.sh never upscales and the site's
+// widest variant is 2200, so at the default 2 a 1000px-wide capture (2000 device
+// px) could not produce one. 3 hands it 3000x2280 and every variant is a
+// downscale.
+const SHOT_SCALE = 3;
 
 // The first pass over 24 links: one batched extract request (the server fans the
 // URLs out), then an image per link pulled through the proxy at a small
@@ -61,7 +110,8 @@ const DRAIN_TIMEOUT_MS = 10 * 60 * 1000;
 // `sync/extraction.ts`) — so fifteen minutes buys the first retry and no more.
 // Waiting for the second and third rounds was tried and is not worth it: the
 // links still missing at that point are, by construction, below the fold of a
-// 16:10 frame, and `capture()` is what decides whether the picture is good.
+// six-and-a-bit-row frame, and `capture()` is what decides whether the picture is
+// good.
 const RETRY_TIMEOUT_MS = 15 * 60 * 1000;
 
 async function main(): Promise<void> {
@@ -87,6 +137,7 @@ async function main(): Promise<void> {
 
   const app = await launchApp(profileDir('shot'), {
     ...(existingId ? { existing: credentials } : { create: credentials }),
+    deviceScaleFactor: SHOT_SCALE,
   });
 
   try {
@@ -125,6 +176,7 @@ async function main(): Promise<void> {
 
     await enableServerExtraction(page);
     await fillPreviews(page);
+    await useListLayout(page);
     // The drain wrote an `extractions/` record and a `files/` blob per link, all
     // of which are pending ops. Not strictly needed for the photograph — the
     // rendering reads Dexie, not the server — but this account is meant to be
@@ -137,11 +189,11 @@ async function main(): Promise<void> {
     console.log('\nNext:');
     console.log(
       `  tools/scripts/make-image-variants.sh ${path} \\\n` +
-        `    apps/bracemark-site/public/screenshots/library-cards`,
+        `    apps/bracemark-site/public/screenshots/library-list`,
     );
     console.log(
-      '  then point SCREENSHOT.src at /screenshots/library-cards-1600.webp, paste the\n' +
-        '  widths the script prints into SCREENSHOT.widths, and delete library-cards.svg.',
+      '  then check SCREENSHOT in apps/bracemark-site/src/app/page.tsx: `widths` is what\n' +
+        '  the script prints, and the frame ratio must still match SHOT_WIDTH/SHOT_HEIGHT.',
     );
   } finally {
     await app.close();
@@ -191,7 +243,31 @@ async function enableServerExtraction(page: Page): Promise<void> {
   console.log('server extraction on');
 }
 
-// Fill in every card, and keep at it until they ARE every card. Two phases, and
+// Settings → Misc → Layout → List, taken through the real radio for the same
+// reason `enableServerExtraction` takes the real Switch: a value written straight
+// into the archive's settings blob would land silently, and a picture of the wrong
+// layout is not something the run could then notice.
+//
+// It is asserted rather than assumed even though `list` is already the default
+// (`DEFAULT_LINKS_LAYOUT`, and `_panes/main.tsx` falls back to `ListLayout`),
+// because the account is REUSED across runs and `linksLayout` SYNCS: one manual
+// click in the app — or on any other device signed into this fixture — is
+// persisted, restored on the next sign-in, and would silently photograph cards.
+//
+// The synced setting is the one to write, not the device-local override: the
+// device tab only takes effect while `linksLayoutSource` is `local`
+// (use-settings.ts), and this account has never set that, so the sync tab is what
+// the page is actually reading. Nothing here touches the source toggle.
+async function useListLayout(page: Page): Promise<void> {
+  await page.goto('/settings/misc');
+  const list = page.getByRole('radio', { name: 'List' });
+  await expect(list).toBeVisible();
+  if ((await list.getAttribute('data-state')) !== 'checked') await list.click();
+  await expect(list).toHaveAttribute('data-state', 'checked');
+  console.log('list layout on');
+}
+
+// Fill in every preview slot, and keep at it until they ARE every slot. Two phases, and
 // each one exists because the other cannot do its half — the comments inside say
 // which failure taught us that.
 async function fillPreviews(page: Page): Promise<void> {
@@ -261,15 +337,15 @@ async function fillPreviews(page: Page): Promise<void> {
   // 8s per-hop timeout, or a 429 from its own per-IP cap during the image pass)
   // has a `failed` facet. That leaves the pending bucket immediately, so the
   // screen now reads Pending 0 with Generate all DISABLED — it gates on the
-  // pending count — while two cards have no cover. There is no button to press.
+  // pending count — while two rows have no cover. There is no button to press.
   //
   // The auto drain is what retries it, once `backoff(attempts)` has elapsed: ten
   // minutes, doubling. But the auto drain is DISPLAYED-scoped
-  // (`reportDisplayedLinkPaths`) and the card grid is virtualized, so it only
+  // (`reportDisplayedLinkPaths`) and the list is virtualized, so it only
   // ever looks at the rows near the viewport — and a failure below the fold is
   // never re-scanned while a run parks at the top of the page. That is exactly
   // where this stuck the first time, at 22 of 24, looking for all the world like
-  // a bad URL. So phase 2 WALKS THE GRID, which is the gesture the provider's
+  // a bad URL. So phase 2 WALKS THE LIST, which is the gesture the provider's
   // cost model is built around and the only thing that reaches those rows.
   const deadline = Date.now() + RETRY_TIMEOUT_MS;
   while (Date.now() < deadline) {
@@ -286,7 +362,7 @@ async function fillPreviews(page: Page): Promise<void> {
     }
 
     await page.goto('/links?list=all');
-    await scrollThroughGrid(page);
+    await scrollThroughList(page);
 
     await page.goto('/settings/extraction');
     progress = await readPreviewedCount(page);
@@ -299,11 +375,11 @@ async function fillPreviews(page: Page): Promise<void> {
   }
   // Running out of budget is a WARNING here, not a failure, and the split is
   // deliberate: this function is about the whole library, and the photograph is
-  // not. The frame is 16:10 over a virtualized grid, so what ships is the top two
-  // rows or so — and `capture()` below hard-fails if any card IN THE PICTURE is
-  // wearing a monogram. Gating on all 24 instead would spend forty minutes
-  // waiting for cards nobody will ever see, and then throw away a perfectly good
-  // capture over them.
+  // not. The frame holds six rows and a bit over a virtualized list, so what ships
+  // is the top seven links — and `capture()` below hard-fails if any row IN THE
+  // PICTURE is wearing a monogram. Gating on all 24 instead would spend forty
+  // minutes waiting for rows nobody will ever see, and then throw away a perfectly
+  // good capture over them.
   //
   // The shortfall is still worth saying out loud, because it is the honest
   // reading of the library the account is left holding.
@@ -314,19 +390,19 @@ async function fillPreviews(page: Page): Promise<void> {
       `stored on the facet, so a plain re-run resumes ` +
       `mid-ladder; \`npm run shot -- --fresh\` starts the attempt counts at zero.`,
   );
-  console.warn('Capturing anyway — the frame is gated on the cards it actually shows.\n');
+  console.warn('Capturing anyway — the frame is gated on the rows it actually shows.\n');
 }
 
-// Walk the grid top to bottom and back, pausing at each step so the newly mounted
+// Walk the list top to bottom and back, pausing at each step so the newly mounted
 // rows are reported as displayed and the drain gets a turn at them. The step is a
 // viewport at a time; the pauses are what make the pass useful rather than a
 // scrollbar animation.
-async function scrollThroughGrid(page: Page): Promise<void> {
+async function scrollThroughList(page: Page): Promise<void> {
   const steps = 6;
   for (let i = 0; i <= steps; i++) {
     await page.evaluate((fraction) => {
       const doc = document.scrollingElement ?? document.documentElement;
-      // The grid may scroll in its own pane rather than the document, so move
+      // The list may scroll in its own pane rather than the document, so move
       // whichever one actually has overflow.
       const pane = [...document.querySelectorAll('*')].find(
         (element) => element.scrollHeight > element.clientHeight + 40,
@@ -404,8 +480,8 @@ function report(progress: PreviewProgress | null, links: number): string {
 // The photograph. Show All (`?list=all`) rather than the default My List: every
 // link in this library is filed in one of the eight named lists, so the default
 // view is genuinely empty, and Show All is the only view that spans them — which
-// is also the one the figure's alt text describes ("a grid of saved links … beside
-// a sidebar of lists").
+// is also the one the figure's alt text describes ("one row per link … beside a
+// sidebar of lists and tags").
 async function capture(page: Page): Promise<string> {
   await page.setViewportSize({ width: SHOT_WIDTH, height: SHOT_HEIGHT });
   await page.goto('/links?list=all');
@@ -413,26 +489,35 @@ async function capture(page: Page): Promise<string> {
   // The two things that have to be true of the picture, and neither is what
   // "wait for the images" first looks like.
   //
-  // FIRST: no card may be wearing a MONOGRAM. `LinkPreviewImage` renders an
+  // FIRST: no row may be wearing a MONOGRAM. `LinkPreviewImage` renders an
   // `<img>` only once the bytes are in hand; with no image it renders
-  // `PreviewFallbackPanel`, an inline hue panel and no `<img>` at all. So "every
-  // img has loaded" is satisfied vacuously by a grid of monograms — the exact
-  // picture this run exists to avoid, passing the check meant to catch it. Both
-  // branches take the slot's own `aspect-12/7` class, though, so counting the
-  // slots and counting the images that fill them is the reading that means
+  // `PreviewFallbackIcon`/`PreviewFallbackPanel`, a `<div>` — so "every img has
+  // loaded" is satisfied vacuously by a column of monograms, the exact picture
+  // this run exists to avoid, passing the check meant to catch it. Every branch
+  // takes the SLOT's own `h-10 w-16` (list-layout.tsx sizes the box and
+  // link-media.tsx passes that className straight through all three), so counting
+  // the slots and counting the `<img>`s among them is the reading that means
   // something.
   //
-  // SECOND: every one of those images DECODED. The card grid pulls each preview
-  // out of `files/` as its row mounts (rows are virtualized, so mounted =
-  // displayed), which means an `<img>` can be attached and on screen with nothing
-  // in it yet. `naturalWidth` is the only reading that says the bytes arrived.
+  // Matching on the two size classes rather than on one distinctive one, because
+  // there isn't one: the card grid had `aspect-12/7`, which nothing else on the
+  // page wore, where `h-10` and `w-16` are ordinary utilities that are only this
+  // slot IN COMBINATION. `PreviewFallbackIcon` nests a second `<img>` inside the
+  // slot for the favicon it escalates through — that one is `size-4`, so it is not
+  // caught here, and a row showing it is correctly counted as a slot with no
+  // cover.
+  //
+  // SECOND: every one of those images DECODED. The list pulls each preview out of
+  // `files/` as its row mounts (rows are virtualized, so mounted = displayed),
+  // which means an `<img>` can be attached and on screen with nothing in it yet.
+  // `naturalWidth` is the only reading that says the bytes arrived.
   //
   // Both are scoped to what is MOUNTED rather than to all 24 links, and that is
   // correct rather than a compromise: the virtualizer only builds the rows near
   // the viewport, and the rows near the viewport are precisely what gets
   // photographed.
-  const slots = page.getByRole('main').locator('[class~="aspect-12/7"]');
-  const covers = page.getByRole('main').locator('img[class~="aspect-12/7"]');
+  const slots = page.getByRole('main').locator('[class~="h-10"][class~="w-16"]');
+  const covers = page.getByRole('main').locator('img[class~="h-10"][class~="w-16"]');
   await expect(covers.first()).toBeVisible();
 
   await expect
@@ -455,16 +540,23 @@ async function capture(page: Page): Promise<string> {
   // extractor, one `GET /v1/image` each, bounded to `MAX_IN_FLIGHT` with a
   // stagger so they never compete with the previews (web-react's
   // FaviconProvider) — which means they are still arriving for several seconds
-  // after every cover has decoded. Capturing on the covers alone caught the grid
-  // mid-fill: every card correct, and a row of empty grey circles where the site
-  // marks go, which reads as a half-loaded page rather than as a product.
+  // after every cover has decoded. Capturing on the covers alone caught the page
+  // mid-fill: every row correct, and a column of empty grey plates where the site
+  // marks go, which reads as a half-loaded page rather than as a product. The
+  // list layout prints the host as TEXT beside each one, so a missing mark is more
+  // conspicuous here than it was in the grid, not less.
+  //
+  // Located positively, on the host line's own `size-3.5`, rather than as "every
+  // img that is not a cover" — that negation was written when the cover carried a
+  // class nothing else did, and against `h-10 w-16` it would also sweep in
+  // `PreviewFallbackIcon`'s nested favicon and count it twice.
   //
   // This waits for the count to STOP CHANGING rather than for some number of
   // them, and that is deliberate: a host that serves no `/favicon.ico` records
-  // `none` and shows its monogram forever, which is a correct final state and
-  // not something to wait out. Quiescence is the only condition that is true of
-  // both outcomes.
-  const favicons = page.getByRole('main').locator('img:not([class~="aspect-12/7"])');
+  // `none` and `Favicon` renders its quiet plate forever, which is a correct final
+  // state and not something to wait out. Quiescence is the only condition that is
+  // true of both outcomes. Three of this library's hosts land there.
+  const favicons = page.getByRole('main').locator('img[class~="size-3.5"]');
   let settled = 0;
   let previous = -1;
   while (settled < 3) {
@@ -475,7 +567,7 @@ async function capture(page: Page): Promise<string> {
   }
 
   await mkdir(SHOT_OUTPUT, { recursive: true });
-  const path = join(SHOT_OUTPUT, 'library-cards.png');
+  const path = join(SHOT_OUTPUT, 'library-list.png');
   await page.screenshot({ path, scale: 'device' });
   return path;
 }

@@ -30,8 +30,10 @@ import { shotLinkUrls } from './library';
 // It asserts on three things, and the third one was learned the expensive way.
 //
 // `ok`, obviously. Then `imageUrl`: a title-only result is a perfectly good saved
-// link and a bad card, and the band's whole argument is the wall of covers, so
-// "extracted fine, no picture" is a failure here rather than a pass.
+// link and a bad ROW — the list layout draws a monogram in the 64x40 slot where a
+// cover should be, and the band's argument is that these are real pages someone
+// really saved — so "extracted fine, no picture" is a failure here rather than a
+// pass. The slot is smaller than the card's was; the requirement is not.
 //
 // And then LATENCY, because a slow host does not fail cleanly. The extractor
 // gives each hop 8 seconds (`FETCH_TIMEOUT_MS`) and the og:image is a second hop
