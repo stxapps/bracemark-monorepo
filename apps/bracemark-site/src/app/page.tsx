@@ -155,7 +155,20 @@ function HeroPanel() {
               else's brand colour, sometimes landing a few degrees off
               `--color-signal` and reading as our own accent misprinted. The
               tile is a VECTOR sized to the box, so it is the one thing that
-              stays legible at this size. That is the same reason the browser
+              stays legible at this size.
+
+              THIS specimen's own og:image makes the case twice over, and it is
+              the one thing here that is NOT a faithful drawing — a real
+              browser-extension save of this link would show a picture, because
+              the extension reads the live DOM and this page has an og:image.
+              What that image IS: a 480x480 site-wide Ask a Manager logo card,
+              the same one on every post, not art for this article. Cropped to
+              16:10 it is a band of olive and orange with a third party's
+              wordmark sliced through the middle — a smear by the measurement
+              above, and by the endorsement test below (which is what rules out
+              vendors and advocacy orgs) somebody else's mark in our hero. So
+              the slot draws the FALLBACK deliberately, not this link's real
+              preview. That is the same reason the browser
               extension's popup and the expo share sheet both END their fallback
               chains on it rather than beginning there.
 
@@ -228,14 +241,26 @@ function HeroPanel() {
                 lowercase; this is the title as published, minus the
                 " - Ask a Manager" suffix a person trims. Sentence-casing it
                 falsifies the citation, which is the one thing this slot has
-                already been wrong about once. Re-verifying it needs a BROWSER:
-                askamanager.org answers 403 to automated fetchers, so a curl or a
-                script reads as though the page were gone. Our own extractor
-                would see that 403 too (`verdictForStatus` settles it as
-                permanent), which is consistent rather than awkward — this panel
-                draws the browser-extension save, where the title comes from the
-                page your own browser is already showing and no server fetches
-                anything. */}
+                already been wrong about once. Re-verifying it does NOT work from
+                an ordinary shell: the zone answers Cloudflare's interstitial with
+                a 403 to curl and to any server-side fetcher off Cloudflare, so a
+                script reads as though the page were gone. Two routes that do
+                work — `bracemark-extractor`, which is itself a Worker and gets a
+                200 out of the same zone (POST /v1/extract on
+                extractor.bracemark.com), and the Wayback `id_` snapshot, which
+                serves the raw markup. Don't record the 403 as the page's own
+                verdict: our extractor reads this URL fine.
+
+                THE APOSTROPHE IS `’` ON PURPOSE, and the page publishes it BOTH
+                ways — the rendered headline (`.entry-title`) carries `&#8217;`,
+                while `<title>` and `og:title` carry `&#039;`, so an extraction
+                (and the extension's `document.title`) yields the straight one.
+                This slot quotes the HEADLINE a reader sees, not the metadata,
+                and the root eslint.config.mjs `no-restricted-syntax` rule
+                requires `’` in JSXText regardless — matching the extractor byte
+                for byte would need a disable comment for no gain, and the string
+                is already a drawing rather than a capture (the suffix above is
+                trimmed the way a person trims it). */}
             <p className={cn('text-[0.9375rem] leading-snug font-medium')}>
               here’s a step-by-step guide to preparing for a job interview
             </p>
@@ -743,14 +768,69 @@ export default function Page() {
                 <ul className={cn('flex items-end gap-4')}>
                   {STORES.map(({ href, label, Icon, width }) => (
                     <li key={label}>
-                      {/* Desaturated at rest, true colour on hover. Four brand
+                      {/* Desaturated at rest, true colour on hover. Three brand
                           marks in full colour are the loudest thing on an
                           otherwise achromatic page, and they are recognised by
                           silhouette anyway — the colour is there when a hand is
-                          actually on them. */}
+                          actually on them.
+
+                          THREE, not four, and `AppStoreIcon` is why the row
+                          needs `text-muted-foreground` as well as the filter. It
+                          is the Apple mark drawn in `currentColor` + white — the
+                          only one of the four with no brand colour to
+                          desaturate — so `grayscale` is a NO-OP on it and it
+                          renders at whatever the page's ink is. Measured on the
+                          rendered row (mean luminance of each mark's own ink,
+                          0–255): Play 162, Chrome Web Store 181, Firefox 139,
+                          and Apple 18. Eight times the depth of its neighbours,
+                          over twice their ink coverage, and in dark mode the
+                          same fault inverted — the three brand marks desaturate
+                          to a fixed grey that does NOT move with the theme
+                          (135/157/179 there, unchanged), while an Apple mark on
+                          `--foreground` swings to 242 and is the brightest thing
+                          in the row. `text-muted-foreground` lands it at 116
+                          light / 177 dark, inside the band at both ends, and
+                          `hover:text-foreground` gives it the same resolve-on-
+                          hover the other three get from `grayscale-0`. Nothing
+                          else in the row reads `currentColor`, so a colour on
+                          the shared anchor reaches this mark and only this mark.
+
+                          IT IS NOT A "COMING SOON" GREY, and it must not become
+                          one. The resting state used to stack `opacity-80` on
+                          top of the filter; desaturated AND dimmed is the pair
+                          that reads disabled, so the opacity is gone. Opacity is
+                          also the wrong instrument for the Apple mark
+                          specifically — `opacity-80` on it measures 65, still
+                          twice the depth of the darkest neighbour, and the
+                          amount that WOULD match differs per theme because the
+                          value it is fading from does. Set the colour, not the
+                          alpha. Whatever this row says about availability should
+                          be said in words.
+
+                          The colour ELSEWHERE on the page is not an
+                          inconsistency to reconcile with this: the hero panel's
+                          monogram is a hue field (askamanager.org hashes to 107,
+                          a green) and the capture below the library band will be
+                          a wall of real previews. Both sit INSIDE a bordered
+                          frame and are the product's own content — someone
+                          else's site, drawn as the app draws it. This row is
+                          page chrome on the bare ground, four inches under the
+                          primary CTA. Colour that is depicted is not colour that
+                          is spent, which is the line globals.css rations the
+                          petrol accent along too.
+
+                          The hover reveal is MOUSE-ONLY by construction and that
+                          is accepted, not a bug to fix: Tailwind v4 compiles
+                          `hover:` inside `@media (hover: hover)`, so a phone
+                          never fires it, not even on tap. A `pointer-coarse:`
+                          escape hatch exists and is declined — it would hand the
+                          three-in-colour-plus-black-Apple row to exactly the
+                          visitors who cannot see it resolve on hover.
+                          `focus-visible` gets the reveal as well as the ring, so
+                          a keyboard reaches the same state a pointer does. */}
                       <a
                         className={cn(
-                          'block rounded-sm opacity-80 grayscale transition duration-200 hover:opacity-100 hover:grayscale-0 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-offset-2 focus-visible:outline-none',
+                          'block rounded-sm text-muted-foreground grayscale transition duration-200 hover:text-foreground hover:grayscale-0 focus-visible:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-offset-2 focus-visible:grayscale-0 focus-visible:outline-none',
                         )}
                         href={href}
                         target="_blank"
