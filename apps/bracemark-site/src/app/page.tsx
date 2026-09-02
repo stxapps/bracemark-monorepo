@@ -856,7 +856,7 @@ const DURABILITY: [string, React.ReactNode][] = [
     // `self-hosting`, where the reader who actually wants them will look.
     <>
       Both apps, the browser extension, the server they sync to and the one that fetches link
-      previews are{' '}
+      previews are in{' '}
       <a
         className={cn(
           'text-signal underline decoration-signal-line underline-offset-2 hover:decoration-signal',
@@ -1531,7 +1531,7 @@ export default function Page() {
       <Band
         label="Pricing"
         title="Free until your library outgrows free."
-        lede={`Start with ${FREE_LINKS} links and no card. Upgrade when the cap starts to pinch — on day one if you are arriving with a library, later if you are starting fresh — with a ${TRIAL_DAYS}-day trial, and the same encryption, sync and export on both plans.`}
+        lede={`Start with ${FREE_LINKS} links and no card. Upgrade when the cap starts to pinch — on day one if you are arriving with a library, later if you are starting fresh — with a ${TRIAL_DAYS}-day trial, and the same encryption, sync and export on every plan.`}
       >
         <div className={cn('flex flex-wrap items-end gap-x-16 gap-y-8')}>
           <div>
