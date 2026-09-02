@@ -67,12 +67,7 @@ describe('the signed auth payloads', () => {
   it('lets create-account omit the recovery door, but not malform it', () => {
     // The ceremony is skippable (docs/account.md) — an account may start with a
     // password door only.
-    const { recoveryDoor: _omitted, ...withoutRecovery } = {
-      action: 'create-account' as const,
-      ...base,
-      passwordDoor: door,
-      recoveryDoor: door,
-    };
+    const withoutRecovery = { action: 'create-account' as const, ...base, passwordDoor: door };
     expect(createAccountPayloadSchema.safeParse(withoutRecovery).success).toBe(true);
     expect(
       createAccountPayloadSchema.safeParse({ ...withoutRecovery, recoveryDoor: {} }).success,
