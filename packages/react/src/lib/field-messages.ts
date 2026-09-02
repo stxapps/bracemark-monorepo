@@ -216,7 +216,7 @@ export function newPasswordMessage(
               // instead of the outcome, and "your" presumes one — a user without a manager
               // is told to use a thing they don't have at the moment they most need to act,
               // and the app's own answer is broader anyway (the marketing site's FAQ,
-              // _where should I keep my passphrase_: a manager is best, a notes app that
+              // _where should I keep my password_: a manager is best, a notes app that
               // locks or paper both work). It was also least apt HERE, since this rung only
               // shows on the typed-your-own path; the generated path's helper text is where
               // that advice belongs. "Somewhere safe" is the phrase the rest of the app

@@ -666,7 +666,7 @@ const TRADE: { aspect: string; hosted: string; ours: string }[] = [
     // deliberate reprise rather than as the first time anyone hears it.
     aspect: 'A forgotten password',
     hosted: 'They can mail you a reset, because they can read the library either way.',
-    ours: 'Your recovery code opens the account instead. It is generated at signup beside the passphrase, and it is the only other way in — there is no third one we could open for you.',
+    ours: 'Your recovery code opens the account instead. It is generated at signup beside your password, and it is the only other way in — there is no third one we could open for you.',
   },
 ];
 
@@ -1484,12 +1484,12 @@ export default function Page() {
           {/* Two doors on purpose. The old closer named only the empty one,
               which dismissed the switcher the Import card had just courted —
               the last line on the page addressed to a person who has no
-              library. Both secrets are named here too: the passphrase and the
+              library. Both secrets are named here too: the password and the
               recovery code are what the account rests on, and the closer is the
               last place before the ceremony to say so. */}
           <p className={cn('mx-auto mt-5 max-w-lg text-lg leading-8 text-muted-foreground')}>
-            Pick a username, save the passphrase we generate for you and the recovery code beside
-            it, and save your first link a minute later.
+            Pick a username, save the password we generate for you and the recovery code beside it,
+            and save your first link a minute later.
           </p>
           <Button asChild size="lg" className={cn('mt-9')}>
             <a href={CREATE_ACCOUNT_URL}>

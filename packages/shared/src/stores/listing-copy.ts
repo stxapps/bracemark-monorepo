@@ -106,7 +106,7 @@ export const APP_STORE = {
    * Shown above the description, and not indexed.
    */
   promotionalText:
-    'Pick a username, save the passphrase we generate for you, and save your first link a minute later. No email address, because the account has nowhere to put one.',
+    'Pick a username, save the password we generate for you, and save your first link a minute later. No email address, because the account has nowhere to put one.',
 } as const;
 
 // --- Google Play -------------------------------------------------------------

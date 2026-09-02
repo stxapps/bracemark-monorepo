@@ -307,8 +307,8 @@ export const FAQ_GROUPS: FaqGroup[] = [
         a: (
           <>
             A username and a password. That is the whole form — no email address, no phone number,
-            no card. We suggest the passphrase the app generates for you: it is long enough to be
-            safe against an offline attack, which a memorable password is not.
+            no card. We suggest the password the app generates for you: seven random words, long
+            enough to be safe against an offline attack, which a memorable password is not.
           </>
         ),
       },
@@ -371,7 +371,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
       },
       {
         id: 'where-to-keep',
-        q: 'Where should I keep my passphrase?',
+        q: 'Where should I keep my password?',
         a: (
           <>
             A password manager is the best answer. A notes app that locks, or paper somewhere only
