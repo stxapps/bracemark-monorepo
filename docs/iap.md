@@ -187,6 +187,19 @@ The trade is that the two gates were never defending the same thing:
   limit no legitimate account reaches needs no create-vs-update subtlety, and
   the one population that _did_ legitimately reach it (the downgraded account)
   is exactly what the high-water rule below removes.
+  **Of the pair, `maxBytes` is the one meant to bind.** It is the only ceiling
+  denominated in something we are billed for; R2 charges stored bytes and
+  operations and never object count, so what `maxFiles` actually bounds is the
+  per-user DO, which holds a `file_sizes` row per path. The paid number is sized
+  so the bytes run out first: at the old 200 000 they did for a library carrying
+  preview images (~100 KB per link over 3 files → ~50 000 links) but not for one
+  without them (~2.5 KB per link over 2 files), where the object cap refused the
+  account at ~100 000 links while it held 250 MB of a 5 GiB quota — a refusal
+  with no cost behind it, from a gate whose whole premise is cost. It is
+  1 000 000 now, which leaves both shapes far above any real library and is what
+  lets the storefront say "Unlimited links" without a footnote. Free's 5 000 is
+  untouched: it is 8× the headroom a 200-link cap can consume, and free's
+  binding limit is the link cap, not either ceiling.
 - **`maxLinks`** is a conversion gate. Bypassing it costs a few hundred KB of
   metadata and is still bounded by `maxBytes`. So it is **honor-system**: the
   create surfaces refuse at the cap, and devtools or a patched extension build

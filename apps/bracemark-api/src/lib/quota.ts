@@ -49,7 +49,7 @@
 // unknown until it's uploaded, so growth is charged on the NEXT batch), and it is
 // what lets this gate stop caring about create-vs-update: charging an in-place
 // update against a ceiling only matters if accounts sit at the ceiling, and
-// nobody legitimately sits at 5 000 files / 100 MB (free) or 200 000 / 5 GB
+// nobody legitimately sits at 5 000 files / 100 MB (free) or 1 000 000 / 5 GB
 // (paid). The 200-link cap was the opposite case — a limit every free account is
 // DESIGNED to live at — which is precisely why it needed the distinction and why
 // it doesn't belong in a backstop. The high-water rule above is what keeps that

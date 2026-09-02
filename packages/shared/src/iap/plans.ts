@@ -114,8 +114,14 @@ export type Entitlements = {
   // ceiling for what actually bites). It counts PATHS, not links, and the server
   // counts them namespace-blind: a link is 2 objects (`links/` + `extractions/`)
   // before its preview image makes 3, so 5 000 files is ~1 600-2 500 links, not
-  // 5 000. Generous on paid plans: ~5 000 bookmarks at 2-3 files each stays well
-  // under 200 000.
+  // 5 000.
+  //
+  // What it guards is NOT the R2 bill — R2 bills stored bytes and class-A/B
+  // operations, never object COUNT — but the per-user DO, which holds one
+  // `file_sizes` row per path (bracemark-api do/repositories/file-sizes.ts).
+  // `maxBytes` below is the ceiling denominated in money, so it is the one meant
+  // to bind first, and the paid number is sized so it does; the note on the Plus
+  // value has the arithmetic and what went wrong when it wasn't.
   maxFiles: number;
   // Total stored bytes (the storage quota). The real
   // server-hard wall on EVERY plan — and, with maxFiles, now the ONLY one: it is
@@ -213,7 +219,21 @@ const ENTITLEMENTS: Record<Plan, Entitlements> = {
   plus: {
     maxLinks: null,
     maxPageCopies: 50,
-    maxFiles: 200_000,
+    // 1 000 000, and it was 200 000. Which ceiling binds depends on whether a
+    // library carries preview images, and only one of the two answers was
+    // defensible. WITH them a link is ~100 KB over 3 files (PREVIEW_MAX_DIMENSION
+    // 1024 at PREVIEW_JPEG_QUALITY 0.82 — image/preview.ts), so maxBytes binds
+    // first at ~50 000 links and this cap never fires. WITHOUT them — an import
+    // of bare URLs, nothing extracted — a link is ~2.5 KB over 2 files, so
+    // 200 000 refused the account at ~100 000 links while it was holding 250 MB
+    // of its 5 GiB: an object cap firing at 5% of the ceiling that actually
+    // costs us something, which is precisely what lib/quota.ts says this gate is
+    // not for. At 1 000 000 the byte ceiling binds first in the shape that has
+    // previews and this one binds at ~500 000 links in the shape that doesn't,
+    // both far above any real library — which is what lets the storefront say
+    // "Unlimited links" plainly (bracemark-site lib/plans.ts). Not higher,
+    // because the DO row count is the thing this number is really bounding.
+    maxFiles: 1_000_000,
     maxBytes: 5 * GIB,
     serverExtraction: true,
     // Plus = structural organization.
@@ -227,7 +247,8 @@ const ENTITLEMENTS: Record<Plan, Entitlements> = {
   pro: {
     maxLinks: null,
     maxPageCopies: null,
-    maxFiles: 200_000,
+    // Same object bound as Plus, for the same reason — what Pro buys is bytes.
+    maxFiles: 1_000_000,
     maxBytes: 20 * GIB,
     serverExtraction: true,
     nestedLists: true,

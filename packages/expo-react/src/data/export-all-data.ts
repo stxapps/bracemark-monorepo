@@ -120,7 +120,7 @@ export interface ExportOutcome {
 // 65 536 files missing. Silent data loss, in the one format that's supposed to
 // round-trip, so the ceilings are asserted here instead.
 //
-// These are reachable, not theoretical: the paid plans sell `maxFiles` 200 000
+// These are reachable, not theoretical: the paid plans sell `maxFiles` 1 000 000
 // and `maxBytes` up to 20 GiB (@stxapps/shared iap/plans.ts), both past the
 // zip32 wall. Web's zip.js writes zip64 and has neither ceiling — which is why
 // the message points there.
