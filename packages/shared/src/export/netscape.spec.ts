@@ -1,3 +1,4 @@
+import { parseImportText } from '../import/parse';
 import type { ExportBundle, ExportFolder, ExportLinkRow } from './bundle';
 import { toNetscapeHtml } from './netscape';
 
@@ -80,5 +81,107 @@ describe('toNetscapeHtml', () => {
     expect(html).toContain('HREF="https://example.com/?a=1&amp;b=&quot;2&quot;"');
     expect(html).toContain('>A &lt;i&gt;&amp;&lt;/i&gt; B</A>');
     expect(html).toContain('TAGS="&lt;t&gt;"');
+  });
+
+  it('opens and closes one DL per folder, at the folder’s own indent', () => {
+    // The nesting test above pins where the H3s land; this pins the CLOSES. An
+    // unbalanced or mis-indented `</DL><p>` leaves the tree malformed, and a
+    // line-wise importer (which is what real ones are) then reparents every
+    // link after it — a restore whose folders are silently wrong, not missing.
+    const html = toNetscapeHtml(
+      bundle([folder('Parent', [link()], [folder('Child', [link()])]), folder('Sibling')]),
+    );
+    const opens = html.match(/<DL><p>/g) ?? [];
+    const closes = html.match(/<\/DL><p>/g) ?? [];
+
+    expect(opens).toHaveLength(closes.length); // root + 3 folders
+    expect(opens).toHaveLength(4);
+    expect(html).toContain('        </DL><p>'); // Child, one level in from Parent
+    expect(html).toContain('    </DL><p>'); // Parent and Sibling
+    expect(html.trimEnd().endsWith('\n</DL><p>')).toBe(true); // the root list, last
+  });
+
+  it('emits an empty folder as a header and an empty list', () => {
+    // bundle.ts calls this out as deliberate: "empty folders DO appear — an
+    // importer recreating the user's structure is a feature, not noise." Dropping
+    // them would still pass every other assertion in this file.
+    const html = toNetscapeHtml(bundle([folder('Empty')]));
+
+    expect(html).toContain('    <DT><H3>Empty</H3>\n    <DL><p>\n    </DL><p>');
+  });
+
+  it('truncates sub-second timestamps rather than rounding them', () => {
+    // The existing seconds test uses whole-second inputs, so `Math.round` would
+    // pass it. Truncation is the right choice — a rounded-up ADD_DATE puts the
+    // link a second in the future of when it was saved.
+    const html = toNetscapeHtml(
+      bundle([folder('L', [link({ createdAt: 1_700_000_000_999, updatedAt: 1_700_000_001_500 })])]),
+    );
+
+    expect(html).toContain('ADD_DATE="1700000000"');
+    expect(html).toContain('LAST_MODIFIED="1700000001"');
+  });
+});
+
+// export/netscape.ts and import/netscape.ts are documented as read mirrors of
+// each other, and nothing tested the pair: every assertion above is a substring
+// of the written file, so a serializer and a parser could drift apart and both
+// specs stay green. Going through parseImportText also pins DETECTION — a file
+// we write but do not recognise re-imports as the wrong format entirely.
+describe('toNetscapeHtml → parseImportText', () => {
+  const reimport = (text: string) => parseImportText(text).links;
+
+  it('recovers the folder chain from the nesting, detection included', () => {
+    const html = toNetscapeHtml(
+      bundle([
+        folder(
+          'Parent',
+          [link({ url: 'https://example.com/top' })],
+          [folder('Child', [link({ url: 'https://example.com/deep' })])],
+        ),
+      ]),
+    );
+
+    // The serializer's root <DL> is an anonymous scope on the way back in, so it
+    // contributes nothing to the path — the chain is the user's own folders.
+    expect(reimport(html).map((row) => [row.url, row.folderPath])).toEqual([
+      ['https://example.com/top', ['Parent']],
+      ['https://example.com/deep', ['Parent', 'Child']],
+    ]);
+  });
+
+  it('recovers title, tags and both timestamps at second precision', () => {
+    const html = toNetscapeHtml(
+      bundle([folder('L', [link({ title: 'A <i>&</i> B', tagNames: ['work', 'read later'] })])]),
+    );
+
+    expect(reimport(html)).toEqual([
+      {
+        url: 'https://example.com/a',
+        title: 'A <i>&</i> B',
+        tagNames: ['work', 'read later'],
+        folderPath: ['L'],
+        createdAt: 1_700_000_000_000,
+        updatedAt: 1_700_000_001_000,
+      },
+    ]);
+  });
+
+  it('survives a title that looks like markup', () => {
+    // The parser is a regex tokenizer over tag soup, so an escaped `</A>` inside
+    // a title is the case that could end the anchor early and swallow the rest of
+    // the file. It has to come back as text.
+    const html = toNetscapeHtml(bundle([folder('L', [link({ title: 'closing </A> tag' })])]));
+
+    expect(reimport(html)).toHaveLength(1);
+    expect(reimport(html)[0]?.title).toBe('closing </A> tag');
+  });
+
+  it('drops an empty folder, which is the round trip’s one structural loss', () => {
+    // The serializer writes the header (see above), but a folder with no links
+    // yields no ROWS, and rows are all an importer gets — so the empty list is
+    // recreated only by an importer that reads the headers themselves. Ours
+    // doesn't, deliberately: it resolves folders from each link's path.
+    expect(reimport(toNetscapeHtml(bundle([folder('Empty')])))).toEqual([]);
   });
 });

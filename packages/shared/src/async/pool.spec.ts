@@ -120,6 +120,69 @@ describe('mapLimit', () => {
     expect(slowFinished).toBe(true);
   });
 
+  it('serializes completely at `limit` 1', async () => {
+    const gates = Array.from({ length: 3 }, deferred);
+    const started: number[] = [];
+
+    const done = mapLimit([0, 1, 2], 1, async (i) => {
+      started.push(i);
+      await gates[i].promise;
+    });
+
+    await flush();
+    expect(started).toEqual([0]);
+
+    gates.forEach((g) => g.resolve());
+    await done;
+    expect(started).toEqual([0, 1, 2]);
+  });
+
+  it('runs an `undefined` item instead of mistaking it for an exhausted queue', async () => {
+    // The drain loop cannot use `undefined` as its end sentinel: `T` is generic,
+    // so an `undefined` item is legal, and treating one as "nothing left" halted
+    // every worker early while the pool STILL resolved — a partial pass reported
+    // as a complete one, with no error anywhere. The sync engines size their
+    // next cycle off "this cycle finished", so a silent short pass is worse here
+    // than a loud failure.
+    const seen: unknown[] = [];
+
+    await mapLimit(['a', undefined, 'c', 'd'], 1, async (item) => {
+      seen.push(item);
+    });
+
+    expect(seen).toEqual(['a', undefined, 'c', 'd']);
+  });
+
+  it('runs the holes of a sparse list rather than stopping at the first', async () => {
+    let calls = 0;
+
+    await mapLimit(new Array(3), 2, async () => {
+      calls += 1;
+    });
+
+    expect(calls).toBe(3);
+  });
+
+  // `Math.min(limit, n)` turns a non-positive limit into ZERO workers, so the pool
+  // resolved cleanly having called `fn` not once — every item skipped, reported as
+  // a successful pass. That is the same false 'idle' this file's failure policy
+  // exists to prevent, arriving through the argument instead of the queue.
+  describe('rejects a limit that is not a positive integer', () => {
+    // `mapLimit` is async, so the refusal arrives as a rejection — the shape every
+    // call site already awaits, rather than a sync throw only some would catch.
+    it.each([0, -1, 1.5, NaN, Infinity])('rejects on %p', async (limit) => {
+      const fn = jest.fn(async () => undefined);
+
+      await expect(mapLimit([1, 2, 3], limit, fn)).rejects.toThrow(RangeError);
+      expect(fn).not.toHaveBeenCalled();
+    });
+
+    it('rejects rather than treating an empty list as nothing to validate', async () => {
+      // Otherwise the bad limit hides until the first non-empty batch.
+      await expect(mapLimit([], 0, async () => undefined)).rejects.toThrow(RangeError);
+    });
+  });
+
   it('observes every worker rejection, not only the one it rethrows', async () => {
     const unhandled: unknown[] = [];
     const onUnhandled = (err: unknown): void => {

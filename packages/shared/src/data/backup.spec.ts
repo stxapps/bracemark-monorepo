@@ -19,6 +19,31 @@ const RANKS = ranksBetween(null, null, 3);
 
 const link = { url: 'https://a.test/', listId: 'my-list', tagIds: [], createdAt: 1, updatedAt: 2 };
 
+// One valid entity per namespace — the six kinds an archive can carry.
+const ENTITIES = {
+  link: { path: 'links/lnk1.enc', data: link },
+  list: {
+    path: 'lists/lst1.enc',
+    data: { id: 'lst1', name: 'A', parentId: null, rank: RANKS[0], createdAt: 1, updatedAt: 1 },
+  },
+  tag: {
+    path: 'tags/tag1.enc',
+    data: { id: 'tag1', name: 'T', parentId: null, rank: RANKS[1], createdAt: 1, updatedAt: 1 },
+  },
+  pin: {
+    path: 'pins/lnk1.enc',
+    data: { id: 'lnk1', rank: RANKS[2], createdAt: 1, updatedAt: 1 },
+  },
+  extraction: {
+    path: 'extractions/lnk1.enc',
+    data: { id: 'lnk1', facets: {}, imageId: 'img-a', createdAt: 1, updatedAt: 1 },
+  },
+  settings: {
+    path: 'settings/general.enc',
+    data: { linksLayout: 'list' as const, createdAt: 1, updatedAt: 1 },
+  },
+} as const;
+
 describe('the archive layout', () => {
   it('names its fixed entries', () => {
     expect(BACKUP_MANIFEST_ENTRY).toBe('manifest.json');
@@ -33,6 +58,54 @@ describe('the archive layout', () => {
   it('terminates a non-empty items body and leaves an empty one empty', () => {
     expect(serializeBackupItems(['a', 'b'])).toBe('a\nb\n');
     expect(serializeBackupItems([])).toBe('');
+  });
+});
+
+// The promise the whole file exists for, and the one thing no test composed: what
+// the EXPORTER writes, the IMPORTER reads back — every kind, unchanged, with the
+// version bump that would break it landing on both platforms at once. Each piece
+// was covered alone; a mismatch between them (a prefix renamed on one side, a
+// namespace dropped from BUNDLE_NAMESPACES) passed every existing assertion.
+describe('the items.jsonl round trip', () => {
+  // The reader half both importers actually run — including the blank-line skip
+  // that pairs with serializeBackupItems' trailing newline. That skip lives
+  // duplicated in web-react and expo-react import-all-data.ts and in no shared
+  // function, so this is the only place the pairing is stated.
+  const read = (text: string): (BundleEntry | undefined)[] =>
+    text
+      .split('\n')
+      .filter((line) => line.trim() !== '')
+      .map(classifyBundleLine);
+
+  it('reads every namespace back with its kind and path intact', () => {
+    const kinds = Object.keys(ENTITIES) as (keyof typeof ENTITIES)[];
+    const body = serializeBackupItems(
+      kinds.map((k) => jsonlLine(ENTITIES[k].path, ENTITIES[k].data)),
+    );
+
+    const entries = read(body);
+
+    expect(entries).toHaveLength(kinds.length);
+    expect(entries.map((e) => e?.kind)).toEqual(kinds);
+    for (const [i, kind] of kinds.entries()) {
+      expect(entries[i]?.path).toBe(ENTITIES[kind].path);
+      expect(entries[i]?.data).toEqual(ENTITIES[kind].data);
+    }
+  });
+
+  it('does not count the trailing newline as an invalid line', () => {
+    // serializeBackupItems terminates the body, so a reader that classifies every
+    // split segment would report one invalid row on EVERY backup — a number in the
+    // corner of a clean restore, with nothing wrong.
+    const body = serializeBackupItems([jsonlLine(ENTITIES.link.path, ENTITIES.link.data)]);
+
+    expect(body.endsWith('\n')).toBe(true);
+    expect(read(body)).toHaveLength(1);
+    expect(classifyBundleLine('')).toBeUndefined(); // …which is why the skip is needed
+  });
+
+  it('survives an empty archive', () => {
+    expect(read(serializeBackupItems([]))).toEqual([]);
   });
 });
 
@@ -59,6 +132,42 @@ describe('the manifest round trip', () => {
     ).toThrow(/newer version of Bracemark/);
   });
 
+  it('gives the user-facing message for a manifest that is JSON but not an object', () => {
+    // `JSON.parse` succeeds on `null`, and reading `.format` off it threw a raw
+    // TypeError — from the one function whose entire job is to produce the
+    // message the import view renders verbatim.
+    for (const text of ['null', '123', '"bracemark-backup"']) {
+      expect(() => parseBackupManifest(text)).toThrow(/not a Bracemark backup/);
+    }
+  });
+
+  // A damaged `version` and a FUTURE `version` are different diagnoses with
+  // different advice, and they shared one branch: a manifest whose version was a
+  // string or missing entirely was reported as "created by a newer version of
+  // Bracemark. Update the app and try again" — advice no update can satisfy,
+  // sending the user to the store to fix a truncated file.
+  it.each([
+    ['a string version', '1'],
+    ['a null version', null],
+    ['a missing version', undefined],
+    ['an object version', {}],
+  ])('reports %s as a damaged manifest, not a newer app', (_label, version) => {
+    const text = JSON.stringify({ format: BRACEMARK_BACKUP_FORMAT, version, counts: {} });
+
+    expect(() => parseBackupManifest(text)).toThrow(/invalid manifest version/);
+    expect(() => parseBackupManifest(text)).not.toThrow(/Update the app/);
+  });
+
+  it('reserves the update advice for a version this app genuinely cannot read', () => {
+    const text = JSON.stringify({
+      format: BRACEMARK_BACKUP_FORMAT,
+      version: BRACEMARK_BACKUP_VERSION + 1,
+    });
+
+    expect(() => parseBackupManifest(text)).toThrow(/newer version of Bracemark/);
+    expect(() => parseBackupManifest(text)).toThrow(/Update the app and try again/);
+  });
+
   // Older archives stay readable — that's the whole point of gating on `>`.
   it('accepts an older version', () => {
     const text = JSON.stringify({ format: BRACEMARK_BACKUP_FORMAT, version: 0, counts: {} });
@@ -67,25 +176,14 @@ describe('the manifest round trip', () => {
 });
 
 describe('classifyBundleLine', () => {
-  it('classifies each namespace by its path', () => {
-    expect(classifyBundleLine(jsonlLine('links/a.enc', link))?.kind).toBe('link');
-    expect(
-      classifyBundleLine(
-        jsonlLine('lists/a.enc', {
-          id: 'a',
-          name: 'A',
-          parentId: null,
-          rank: RANKS[0],
-          createdAt: 1,
-          updatedAt: 1,
-        }),
-      )?.kind,
-    ).toBe('list');
-    expect(
-      classifyBundleLine(
-        jsonlLine('settings/general.enc', { linksLayout: 'list', createdAt: 1, updatedAt: 1 }),
-      )?.kind,
-    ).toBe('settings');
+  // Every kind, not a sample of them: a namespace missing from BUNDLE_NAMESPACES
+  // (or carrying the wrong prefix or schema) silently classifies as invalid, so
+  // those entities vanish from a restore and land in the invalid COUNT instead —
+  // the user's tags simply aren't there, with a number in the corner.
+  it.each(Object.keys(ENTITIES) as (keyof typeof ENTITIES)[])('classifies %s', (kind) => {
+    expect(classifyBundleLine(jsonlLine(ENTITIES[kind].path, ENTITIES[kind].data))?.kind).toBe(
+      kind,
+    );
   });
 
   it('rejects malformed lines', () => {
@@ -131,5 +229,19 @@ describe('referencedFileIds', () => {
       },
     ];
     expect(referencedFileIds(entries)).toEqual(new Set(['img-a', 'img-b', 'copy-a', 'shot-a']));
+  });
+
+  it('yields each id once even when two entities share a blob', () => {
+    // The exporter writes one `files/{id}` entry per id, so a duplicate here
+    // would write the same bytes into the archive twice.
+    const entries: BundleEntry[] = [
+      { path: 'links/a.enc', kind: 'link', data: { ...link, customImageId: 'img-a' } },
+      { path: 'links/b.enc', kind: 'link', data: { ...link, customImageId: 'img-a' } },
+    ];
+    expect(referencedFileIds(entries)).toEqual(new Set(['img-a']));
+  });
+
+  it('yields nothing for no entries', () => {
+    expect(referencedFileIds([])).toEqual(new Set());
   });
 });

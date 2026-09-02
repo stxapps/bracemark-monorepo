@@ -96,19 +96,45 @@ export function serializeBackupManifest(counts: BackupCounts): string {
 }
 
 // Read + gate the manifest. Throws with the USER-FACING message the import view
-// renders verbatim — the three rejections are: not JSON, not our format, and
-// written by a newer app than this one (a version we can't promise to read).
+// renders verbatim. Four rejections: not JSON (or not an object), not our
+// format, a damaged `version`, and written by a newer app than this one (a
+// version we can't promise to read). Only the LAST is something the user can act
+// on, which is why it gets its own sentence and the other three share the
+// `not a Bracemark backup (…)` family — the same family both importers use for
+// a missing manifest.json.
 export function parseBackupManifest(text: string): BackupManifest {
-  let manifest: { format?: unknown; version?: unknown; exportedAt?: unknown; counts?: unknown };
+  let parsed: unknown;
   try {
-    manifest = JSON.parse(text) as typeof manifest;
+    parsed = JSON.parse(text);
   } catch {
     throw new Error('This zip is not a Bracemark backup (unreadable manifest).');
   }
+  // JSON.parse SUCCEEDS on `null` and on any bare scalar, and reading `.format`
+  // off null throws — a raw TypeError escaping the one function whose whole job
+  // is to produce the message the import view renders verbatim.
+  if (typeof parsed !== 'object' || parsed === null) {
+    throw new Error('This zip is not a Bracemark backup (unreadable manifest).');
+  }
+  const manifest = parsed as {
+    format?: unknown;
+    version?: unknown;
+    exportedAt?: unknown;
+    counts?: unknown;
+  };
   if (manifest.format !== BRACEMARK_BACKUP_FORMAT) {
     throw new Error('This zip is not a Bracemark backup (unrecognized format).');
   }
-  if (typeof manifest.version !== 'number' || manifest.version > BRACEMARK_BACKUP_VERSION) {
+  // A `version` that is not a number at all means the manifest is DAMAGED —
+  // truncated, hand-edited, or written by something that isn't us despite the
+  // matching format. That is not the same as a backup from a newer app, and
+  // folding the two together told the user to "update the app and try again",
+  // which no update can fix. (JSON cannot carry NaN or Infinity, so a numeric
+  // `version` here is always a real number.)
+  if (typeof manifest.version !== 'number') {
+    throw new Error('This zip is not a Bracemark backup (invalid manifest version).');
+  }
+  // Older versions stay readable on purpose — the gate is one-sided.
+  if (manifest.version > BRACEMARK_BACKUP_VERSION) {
     throw new Error(
       'This backup was created by a newer version of Bracemark. Update the app and try again.',
     );

@@ -1,11 +1,16 @@
 import { generateRecoveryCode } from '../crypto/recovery-code';
+import type { z } from '../zod';
 import {
+  createAccountSchema,
+  lockPasswordSchema,
   NEW_PASSWORD_MIN_LENGTH,
   newPasswordSchema,
   PASSWORD_MIN_GUESSES_LOG10,
   passwordSchema,
   recoveryCodeSchema,
+  recoverySignInSchema,
   RESERVED_USERNAMES,
+  signInSchema,
   usernameSchema,
 } from './credentials';
 
@@ -88,6 +93,43 @@ describe('recoveryCodeSchema (recovery sign-in — permissive)', () => {
   it('does NOT enforce the canonical 52-char length — the GCM tag is the real check', () => {
     expect(recoveryCodeSchema.safeParse('ABC12').success).toBe(true);
   });
+
+  it('bounds a paste accident at 256 characters', () => {
+    expect(recoveryCodeSchema.safeParse('A'.repeat(256)).success).toBe(true);
+    expect(recoveryCodeSchema.safeParse('A'.repeat(257)).success).toBe(false);
+  });
+});
+
+// `usernameSchema` is not only the form's rule — it backs every auth endpoint's
+// payload (endpoints.ts), so it is the SERVER's gate on the handle too, and it
+// runs before the directory claim. The blocklist below was the only part pinned.
+describe('usernameSchema (length + charset)', () => {
+  it('accepts the shortest and longest allowed handles', () => {
+    expect(usernameSchema.safeParse('abc').success).toBe(true); // 3
+    expect(usernameSchema.safeParse('a'.repeat(32)).success).toBe(true); // 32
+  });
+
+  it('rejects one character either side of the bounds', () => {
+    expect(usernameSchema.safeParse('ab').success).toBe(false); // 2
+    expect(usernameSchema.safeParse('a'.repeat(33)).success).toBe(false); // 33
+  });
+
+  it('allows only letters, digits and underscore', () => {
+    for (const u of ['alice_01', 'ALICE', '___', '000']) {
+      expect(usernameSchema.safeParse(u).success).toBe(true);
+    }
+    // The near-misses a user actually types — the shapes other products allow.
+    for (const u of ['alice-01', 'alice.01', 'alice 01', 'alice@01', 'alicé']) {
+      expect(usernameSchema.safeParse(u).success).toBe(false);
+    }
+  });
+
+  it('measures the TRIMMED handle and yields the trimmed value', () => {
+    // The parsed value is what the payload carries to the server, which stores
+    // its canonical form as the unique handle — padding must never reach it.
+    expect(usernameSchema.parse('  alice_01  ')).toBe('alice_01');
+    expect(usernameSchema.safeParse('  ab  ').success).toBe(false); // trims to 2
+  });
 });
 
 describe('usernameSchema (reserved-name blocklist)', () => {
@@ -118,6 +160,118 @@ describe('usernameSchema (reserved-name blocklist)', () => {
       // Would a real user typing this exact handle be blocked? Only if the entry
       // could pass the length+charset rules to begin with.
       expect(name).toMatch(/^[a-z0-9_]{3,32}$/);
+    }
+  });
+});
+
+// A lock gates already-decrypted local data; the verifier PBKDF2s the password
+// bytes exactly as given (web-crypto/expo-crypto lock-verifier.ts — no
+// canonicalization, unlike the account password's trim + NFC), and the lock
+// dialog hashes this schema's PARSED value. So the absence of `.trim()` here is
+// load-bearing, not an oversight.
+describe('lockPasswordSchema (device-local app/list locks)', () => {
+  it('accepts any non-empty password — no policy floor', () => {
+    expect(lockPasswordSchema.safeParse('a').success).toBe(true);
+    expect(lockPasswordSchema.safeParse('1234').success).toBe(true);
+  });
+
+  it('rejects an empty password', () => {
+    expect(lockPasswordSchema.safeParse('').success).toBe(false);
+  });
+
+  it('keeps the same 128-char ceiling as the account password', () => {
+    expect(lockPasswordSchema.safeParse('a'.repeat(128)).success).toBe(true);
+    expect(lockPasswordSchema.safeParse('a'.repeat(129)).success).toBe(false);
+  });
+
+  it('does NOT trim — the verifier hashes the bytes as typed', () => {
+    // Adding `.trim()` here "for consistency" with passwordSchema would lock out
+    // every existing lock whose password has leading or trailing space: the
+    // verifier stored a hash of the padded bytes and would now be handed the
+    // trimmed ones. Nothing else in the workspace would fail.
+    expect(lockPasswordSchema.parse('  pw  ')).toBe('  pw  ');
+    expect(lockPasswordSchema.safeParse('   ').success).toBe(true);
+  });
+});
+
+// Which password rule each FORM is wired to is its own fact: the field schemas
+// above are pinned individually, but nothing checked that create-account got the
+// strict one and sign-in the permissive one. Swapping them is a one-token edit
+// that types and lints clean, and fails in opposite, equally bad directions —
+// weak passwords admitted at create, or valid accounts locked out at sign-in.
+describe('the composed form schemas', () => {
+  const strongEnough = 'a'.repeat(NEW_PASSWORD_MIN_LENGTH);
+  const eightChars = 'abcdefgh';
+
+  it('wires create-account to the POLICY floor', () => {
+    expect(createAccountSchema.safeParse({ username: 'alice', password: eightChars }).success).toBe(
+      false,
+    );
+    expect(
+      createAccountSchema.safeParse({ username: 'alice', password: strongEnough }).success,
+    ).toBe(true);
+  });
+
+  it('wires sign-in to the PERMISSIVE floor, so a short old password still submits', () => {
+    expect(signInSchema.safeParse({ username: 'alice', password: eightChars }).success).toBe(true);
+  });
+
+  it('applies the username rules on every form, including the recovery door', () => {
+    expect(signInSchema.safeParse({ username: 'ad min', password: eightChars }).success).toBe(
+      false,
+    );
+    expect(
+      createAccountSchema.safeParse({ username: 'admin', password: strongEnough }).success,
+    ).toBe(false);
+    expect(
+      recoverySignInSchema.safeParse({ username: 'admin', recoveryCode: generateRecoveryCode() })
+        .success,
+    ).toBe(false);
+  });
+
+  it('accepts a well-formed recovery sign-in and rejects an empty code', () => {
+    const username = 'alice';
+    expect(
+      recoverySignInSchema.safeParse({ username, recoveryCode: generateRecoveryCode() }).success,
+    ).toBe(true);
+    expect(recoverySignInSchema.safeParse({ username, recoveryCode: '' }).success).toBe(false);
+  });
+});
+
+// The width budget the source comment spells out and then says nothing enforces:
+// these messages render into a one-line slot under the field — ~223px on web at a
+// 320px viewport, ~185px effective on native at 1.3x text — so past roughly 33
+// characters they wrap and walk the submit button down the form. It lints, types
+// and tests clean; the symptom only shows on a phone. This is the enforcement.
+describe('the field messages fit their one-line slot', () => {
+  const MESSAGE_BUDGET = 33;
+
+  // Every rule that can produce a message, driven by an input that trips it.
+  const cases: [string, z.ZodType, unknown][] = [
+    ['username too short', usernameSchema, 'ab'],
+    ['username too long', usernameSchema, 'a'.repeat(33)],
+    ['username charset', usernameSchema, 'alice-01'],
+    ['username reserved', usernameSchema, 'admin'],
+    ['password too short', passwordSchema, 'abc'],
+    ['password too long', passwordSchema, 'a'.repeat(129)],
+    ['new password too short', newPasswordSchema, 'abc'],
+    ['new password too long', newPasswordSchema, 'a'.repeat(129)],
+    ['lock password empty', lockPasswordSchema, ''],
+    ['lock password too long', lockPasswordSchema, 'a'.repeat(129)],
+    ['recovery code empty', recoveryCodeSchema, ''],
+    ['recovery code too long', recoveryCodeSchema, 'A'.repeat(257)],
+  ];
+
+  it.each(cases)('%s', (_name, schema, input) => {
+    const result = schema.safeParse(input);
+
+    expect(result.success).toBe(false); // the case must actually trip its rule
+    if (result.success) return;
+    for (const issue of result.error.issues) {
+      expect(issue.message.length).toBeLessThanOrEqual(MESSAGE_BUDGET);
+      // A raw zod default ("String must contain at least 3 character(s)") is both
+      // over budget and in the wrong voice — every rule here carries its own.
+      expect(issue.message).not.toMatch(/^Invalid|^String must/);
     }
   });
 });

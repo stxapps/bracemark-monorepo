@@ -10,7 +10,21 @@
 //
 // Lives in `shared` (platform-agnostic — only Array, no web/worker/expo APIs) so
 // bracemark-web/bracemark-extension and bracemark-expo partition the same way.
+//
+// `size` must be a positive integer, and a bad one is REFUSED rather than
+// absorbed, because each way of being bad failed silently and differently: 0 or
+// a negative never advances the cursor (an unbounded loop allocating until the
+// tab or app dies), NaN ran the body once and returned a single EMPTY batch
+// (dropping every element while looking like it worked), and a fraction emitted
+// batches LARGER than `size` — `chunk([a, b, c, d], 1.5)` gave
+// `[[a], [b, c], [d]]`, which is exactly the bound-variable overflow the SQLite
+// callers use this to prevent. Every call site today passes a literal, so this
+// only fires on a newly derived size.
 export function chunk<T>(arr: T[], size: number): T[][] {
+  if (!Number.isInteger(size) || size < 1) {
+    throw new RangeError(`chunk: size must be a positive integer, got ${size}`);
+  }
+
   const out: T[][] = [];
   for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
   return out;
