@@ -311,7 +311,7 @@ export function LinkAddScreen() {
 
                 `font-normal` on the label because buttonTextVariants' base is
                 `text-sm font-medium` — the native analogue of overriding the web
-                Button's own `font-medium`. `text-foreground/70` is web's colour
+                Button's own `font-medium`. `text-foreground/80` is web's colour
                 step (its comment carries the reasoning: between the Input's
                 foreground and the Field labels' `text-muted-foreground`, which the
                 control must not wear). It is spelled TWICE, on the Text and on the
@@ -353,10 +353,10 @@ export function LinkAddScreen() {
               }
               className="-ml-3 self-start"
             >
-              <Text className="font-normal text-foreground/70">List, tags & note</Text>
+              <Text className="font-normal text-foreground/80">List, tags & note</Text>
               <Icon
                 as={openOptional ? ChevronUp : ChevronDown}
-                className="size-4 text-foreground/70"
+                className="size-4 text-foreground/80"
               />
               {!openOptional && optionalDirty && (
                 <View aria-hidden className="size-1.5 rounded-full bg-foreground/70" />

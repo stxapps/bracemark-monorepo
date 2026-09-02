@@ -456,18 +456,23 @@ export function LinkAddSurface({
 
         {/* A quiet disclosure, made quiet by WEIGHT and one measured step of
             COLOUR, never by size: `font-normal` against the Button base's
-            `text-sm font-medium`, plus `text-foreground/70`. Shrinking the type
+            `text-sm font-medium`, plus `text-foreground/80`. Shrinking the type
             costs legibility on the one control in the form that isn't
             self-evident, so the type stays at 14.
 
-            `text-foreground/70` and NOT `text-muted-foreground`, which is the
+            `text-foreground/80` and NOT `text-muted-foreground`, which is the
             colour of the field Labels this button sits above (Label's `dense`
             density is `text-xs text-muted-foreground`) — wearing it would tie the
             control with the captions it introduces and read as one of them. The
-            /70 lands between: `#545454` on white against muted's `#6e6e6e`,
-            `#b2b2b2` on the dark ground against muted's `#a1a1a1` — 7.6:1 where
-            muted is 5.1:1, which is a step back from the Input's full foreground
-            without arriving at caption grey. Same idiom, same value, as the tag
+            /80 lands between: `#3b3b3b` on white against muted's `#6f6f6f`,
+            `#cacaca` on the dark ground against muted's `#b7b7b7` — Lc 96 / 74
+            where full foreground is 106 / 104 and muted is 75 / 63, which is a
+            step back from the Input's full foreground without arriving at caption
+            grey. It was /70 until the APCA sweep: light was never the problem
+            (Lc 87) but dark measured Lc 60.5, under the body-text floor, because
+            on that ground this is light-on-dark and the WCAG figure it was
+            originally chosen against — 9.3:1, healthier-looking than light's
+            7.6:1 — is the one docs/theme.md says not to trust here. Same idiom, same value, as the tag
             chips on both clients (link-tag-chips.tsx). Weight alone WAS the whole
             adjustment while the label was the single word "Advanced"; three words
             and a chevron carry more, so the same quiet now costs colour too.
@@ -573,9 +578,9 @@ export function LinkAddSurface({
               : undefined
           }
           className={cn(
-            '-ml-3 self-start font-normal text-foreground/70',
+            '-ml-3 self-start font-normal text-foreground/80',
             'aria-expanded:bg-transparent aria-expanded:hover:bg-muted',
-            'aria-expanded:text-foreground/70 aria-expanded:hover:text-foreground',
+            'aria-expanded:text-foreground/80 aria-expanded:hover:text-foreground',
           )}
           onClick={() => setOpenOptional((v) => !v)}
         >

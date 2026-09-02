@@ -15,7 +15,7 @@ import { useEngagedOpen } from './shared';
 import { useLinksViewState } from './view-state-provider';
 
 // 24pt tall exactly: py-1 (4+4) around the 16pt line box `leading-4` pins on the
-// chip's Text. The label is `text-foreground/70`, not `text-muted-foreground`:
+// chip's Text. The label is `text-foreground/80`, not `text-muted-foreground`:
 // that token is calibrated against the screen background, and on the chip's own
 // fill it drops to 4.4:1 and below in light mode as the item moves under it —
 // under the 4.5:1 AA floor at 12pt.
@@ -172,7 +172,7 @@ export function LinkTagChips({
       {chips.slice(0, visibleCount).map((chip) =>
         bulkEditing ? (
           <View key={chip.id} className={`shrink ${TAG_CHIP_CLASS}`}>
-            <Text numberOfLines={1} className="text-xs leading-4 text-foreground/70">
+            <Text numberOfLines={1} className="text-xs leading-4 text-foreground/80">
               {chip.name}
             </Text>
           </View>
@@ -183,7 +183,7 @@ export function LinkTagChips({
             onPress={() => onTagPress(chip.id)}
             className={`shrink ${TAG_CHIP_CLASS}`}
           >
-            <Text numberOfLines={1} className="text-xs leading-4 text-foreground/70">
+            <Text numberOfLines={1} className="text-xs leading-4 text-foreground/80">
               {chip.name}
             </Text>
           </Pressable>
@@ -192,7 +192,7 @@ export function LinkTagChips({
       {overflow.length > 0 &&
         (bulkEditing ? (
           <View className={`shrink-0 ${TAG_CHIP_CLASS}`}>
-            <Text className="text-xs leading-4 text-foreground/70">+{overflow.length}</Text>
+            <Text className="text-xs leading-4 text-foreground/80">+{overflow.length}</Text>
           </View>
         ) : (
           <DropdownMenu onOpenChange={onOverflowOpenChange}>
@@ -202,7 +202,7 @@ export function LinkTagChips({
                 aria-label={`Show ${overflow.length} more ${overflow.length === 1 ? 'tag' : 'tags'}`}
                 className={`shrink-0 ${TAG_CHIP_CLASS}`}
               >
-                <Text className="text-xs leading-4 text-foreground/70">+{overflow.length}</Text>
+                <Text className="text-xs leading-4 text-foreground/80">+{overflow.length}</Text>
               </Pressable>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="max-w-64">

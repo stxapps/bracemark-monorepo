@@ -97,7 +97,7 @@ export function SyncPill({ onClick }: { onClick: () => void }) {
       <ChevronRight
         aria-hidden="true"
         className={cn(
-          'ml-auto size-3.5 shrink-0 text-muted-foreground/60',
+          'ml-auto size-3.5 shrink-0 text-muted-foreground',
           'transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none',
         )}
       />

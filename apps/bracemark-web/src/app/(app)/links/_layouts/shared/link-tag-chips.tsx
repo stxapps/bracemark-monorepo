@@ -19,7 +19,7 @@ import { useEngagedOpen } from './hooks';
 // same weight competes with it for the eye. Tags are metadata; the size and the
 // pill already mark them, so the weight doesn't have to.
 //
-// `text-foreground/70` rather than the obvious `text-muted-foreground`, which is
+// `text-foreground/80` rather than the obvious `text-muted-foreground`, which is
 // the token for quiet text everywhere else in the row and is WRONG here for a
 // reason that only shows up on the pill: that token is calibrated against the
 // page BACKGROUND, and the chip is not the page background. Ours is already
@@ -60,7 +60,7 @@ import { useEngagedOpen } from './hooks';
 // Which is also why nothing in this file reads the selection: one fill answers
 // all three surfaces, so a chip never has to know what its item is doing.
 const TAG_CHIP_CLASS =
-  'max-w-32 shrink-0 truncate rounded-full bg-foreground/6 px-2 py-1 text-xs leading-4 text-foreground/70 hover:bg-foreground/12';
+  'max-w-32 shrink-0 truncate rounded-full bg-foreground/6 px-2 py-1 text-xs leading-4 text-foreground/80 hover:bg-foreground/12';
 
 // Whether the strip renders anything for this link — EXACTLY the test the
 // component applies below, hoisted so a layout can ask it before rendering. Both

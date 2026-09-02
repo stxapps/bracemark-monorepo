@@ -57,7 +57,7 @@ function SignedOut() {
   return (
     <div className={cn('mt-8 rounded-xl border border-border px-6 py-12 text-center')}>
       <BracemarkIcon
-        className={cn('mx-auto h-7 w-auto text-muted-foreground/40')}
+        className={cn('mx-auto h-7 w-auto text-muted-foreground')}
         aria-hidden="true"
       />
       <p className={cn('mt-5 text-base font-medium')}>Not signed in</p>

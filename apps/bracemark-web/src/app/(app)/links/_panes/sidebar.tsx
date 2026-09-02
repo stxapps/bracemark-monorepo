@@ -281,9 +281,7 @@ function NavItem({
         <span className="flex size-4 shrink-0 items-center justify-center">{icon}</span>
         <span className="truncate">{label}</span>
         {badge && (
-          <span className="ml-auto flex shrink-0 items-center text-muted-foreground/70">
-            {badge}
-          </span>
+          <span className="ml-auto flex shrink-0 items-center text-muted-foreground">{badge}</span>
         )}
       </button>
       {action}
@@ -388,7 +386,7 @@ function Section({
           // x=0, the row div carries no padding). At `px-2` it sat 2px right of
           // every chevron under it. Both are children of the same `nav.px-2`,
           // so that one origin is what makes the two numbers comparable.
-          'flex w-full items-center gap-1 rounded-md px-1.5 py-1 text-muted-foreground/70 transition-colors hover:text-foreground',
+          'flex w-full items-center gap-1 rounded-md px-1.5 py-1 text-muted-foreground transition-colors hover:text-foreground',
           FOCUS_RING,
         )}
       >
@@ -598,7 +596,7 @@ export function SidebarBody({
               // for a one-line placeholder. Tracks the header's padding, so it
               // moves whenever that does. bracemark-expo's sidebar makes the
               // same choice against its own header.
-              <p className="py-1 pr-2 pl-5.5 text-xs text-muted-foreground/60">No matching lists</p>
+              <p className="py-1 pr-2 pl-5.5 text-xs text-muted-foreground">No matching lists</p>
             )
           ) : (
             <NavTree
@@ -633,10 +631,10 @@ export function SidebarBody({
                 />
               ))
             ) : (
-              <p className="py-1 pr-2 pl-5.5 text-xs text-muted-foreground/60">No matching tags</p>
+              <p className="py-1 pr-2 pl-5.5 text-xs text-muted-foreground">No matching tags</p>
             )
           ) : tags.length === 0 ? (
-            <p className="py-1 pr-2 pl-5.5 text-xs text-muted-foreground/60">No tags yet</p>
+            <p className="py-1 pr-2 pl-5.5 text-xs text-muted-foreground">No tags yet</p>
           ) : (
             <NavTree
               nodes={tags}

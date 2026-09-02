@@ -505,6 +505,28 @@ Three things follow.
 - **Check dark pairings with APCA, not a WCAG ratio.** Any new light-on-dark text
   colour — a tone on a coloured surface, a disabled state, a placeholder — will
   pass the ratio long before it is comfortable to read.
+- **NEVER stack an alpha modifier on `text-muted-foreground`.** It follows from
+  how both values above were picked — each is _the lowest value clearing the
+  floor on its worst surface_ — so the token has zero headroom by construction and
+  every `/NN` on it lands under the bar automatically. It is not a near miss:
+  against the token's own Lc 75 light / 63 dark, `/70` reads Lc 54 / 36, `/60`
+  reads 47 / 28 and `/50` reads 39 / 21, so a dimmed caption in dark mode is at
+  or below APCA's Lc 30 spot-reading floor. Dark is always the half that
+  collapses, and WCAG hides it — `/60` on the dark background still measures a
+  comfortable-looking 5.5:1. Thirteen such call sites had accumulated across
+  bracemark-web, bracemark-expo and bracemark-extension (both sidebars' empty
+  strings and section headers, two icons, the extension's options mark, and
+  `bracemark-expo`'s Input, whose NATIVE branch alone dimmed the placeholder to
+  `/50` while its own web branch and all three web-ui fields used the token
+  whole — the same field at Lc 63 on web and Lc 21 on a dark phone). All of them
+  now use the token as-is. **When something must sit quieter than muted, move
+  size or weight, not opacity** — or give dark its own token the way
+  `TabsTrigger` does (`text-foreground/60` with a `dark:text-muted-foreground`
+  override), which is the one instance of this shape in the workspace that is
+  correct. `text-foreground/NN` is the safe half of the family — `--foreground`
+  has room to spare — but it is measured on the same axis: `/70` reads Lc 87
+  light and only 60.5 dark, so the tag chips and disclosure buttons on both
+  clients use `/80` (96 / 74), which still sits a clear rank above muted.
 
 Contrast is not otherwise linted anywhere. `hover:text-foreground` on the `ghost`
 button is why ghost triggers are exempt in their hovered state — they leave the

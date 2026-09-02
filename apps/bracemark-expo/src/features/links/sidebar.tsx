@@ -355,9 +355,9 @@ function Section({
             `rotate-90` class is silently inert here. */}
         <Icon
           as={isCollapsed ? ChevronRight : ChevronDown}
-          className="size-3.5 text-muted-foreground/70"
+          className="size-3.5 text-muted-foreground"
         />
-        <Text className="text-xs font-semibold tracking-wide text-muted-foreground/70 uppercase">
+        <Text className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
           {label}
         </Text>
       </Pressable>
@@ -551,7 +551,7 @@ export function Sidebar({ closeDrawer }: { closeDrawer: () => void }) {
               // header but lands on a different NUMBER (`pl-5.5`, 22px) — this
               // side's chrome is a size up throughout, so the two files agree on
               // the rule, not on the value. Don't sync them by hand.
-              <Text className="py-1 pr-2 pl-6 text-xs text-muted-foreground/60">
+              <Text className="py-1 pr-2 pl-6 text-xs text-muted-foreground">
                 No matching lists
               </Text>
             )
@@ -590,12 +590,10 @@ export function Sidebar({ closeDrawer }: { closeDrawer: () => void }) {
                 />
               ))
             ) : (
-              <Text className="py-1 pr-2 pl-6 text-xs text-muted-foreground/60">
-                No matching tags
-              </Text>
+              <Text className="py-1 pr-2 pl-6 text-xs text-muted-foreground">No matching tags</Text>
             )
           ) : tags.length === 0 ? (
-            <Text className="py-1 pr-2 pl-6 text-xs text-muted-foreground/60">No tags yet</Text>
+            <Text className="py-1 pr-2 pl-6 text-xs text-muted-foreground">No tags yet</Text>
           ) : (
             <NavTree
               nodes={tags}
