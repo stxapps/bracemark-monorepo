@@ -367,7 +367,7 @@ export const LIFETIME_ON_SALE = false;
 // is the "Your plan includes" list on both settings sections' current-plan box
 // (what the account has). The second reading is the stricter one — a feature
 // promised to someone who has already paid is a support ticket, not a lost sale.
-// Three rules when editing:
+// Four rules when editing:
 //   - Only list what actually SHIPS. Reader view, screenshots, page copies, and AI
 //     are gated in ENTITLEMENTS above but not yet built, so they are NOT promised
 //     here — re-add each line as it lands. At launch Plus is unlimited links +
@@ -390,6 +390,14 @@ export const LIFETIME_ON_SALE = false;
 //     one that can preview a link no device fetched — a save made in the web app,
 //     where CORS blocks the tab, and the back-fill of imported links. Free gets
 //     the BEST extractor, on the device doing the saving.
+//   - "Unlimited" is fixed, not a word to re-pick. docs/brand-assets.md quotes
+//     'Unlimited saved links' — this exact string — as its specimen of the object
+//     noun, and /faq and both of bracemark-site's pricing surfaces spell it the
+//     same way, so a synonym here ("uncapped", "no limit") forks the vocabulary
+//     for one entitlement. What retires the word is a byte ceiling that can bind
+//     a real library, and the honest fix then is a clause about stored bytes
+//     rather than a quieter adjective — to write when the heavy blobs ship, not
+//     before (bracemark-site lib/plans.ts carries the long form).
 //   - Pro's copy is kept as spec-in-waiting even though Pro isn't sold: only
 //     AVAILABLE_PAID_PLANS get a card, so putting Pro on sale stays the one-line
 //     change described above.

@@ -19,6 +19,7 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { ArrowGlyph, CheckGlyph } from '../../components/glyphs';
 import { faqById, PRICING_FAQ_IDS } from '../../content/faq';
+import { formatLinks, linksLimitLabel } from '../../lib/plans';
 import { CREATE_ACCOUNT_URL, UPGRADE_URL } from '../../lib/site';
 
 export const metadata: Metadata = {
@@ -67,19 +68,6 @@ export const metadata: Metadata = {
 // TODO before launch: the launch-lever copy ("early supporters keep this price"),
 // and the monthly cadence if `AVAILABLE_CADENCES` grows — a cadence toggle, not a
 // second card, since monthly is the same entitlement billed differently.
-
-function formatLinks(plan: Plan): string {
-  const { maxLinks } = entitlementsOf(plan);
-  return maxLinks === null ? 'Unlimited' : `${maxLinks}`;
-}
-
-// The one line of hard limits under each card, straight from the entitlements
-// table — the number a buyer would otherwise have to take on faith. Links are
-// the whole line on purpose: the storage quota is unpublished (see the header),
-// and the link cap is the only limit that actually binds a library today.
-function limitsLine(plan: Plan): string {
-  return entitlementsOf(plan).maxLinks === null ? 'Unlimited links' : `${formatLinks(plan)} links`;
-}
 
 // $48/yr shown the way the buyer evaluates it. Derived from the same number, so
 // it can never disagree with the sticker price or with the Paddle catalog.
@@ -331,8 +319,13 @@ export default function Page() {
                 <p className={cn('mt-2 font-mono text-xs text-signal')}>{card.trialNote}</p>
               )}
 
+              {/* The one line of hard limits under each card, straight from the
+                  entitlements table — the number a buyer would otherwise have to
+                  take on faith. Links are the whole line on purpose: the storage
+                  quota is unpublished (see the header), and the link cap is the
+                  only limit that actually binds a library today. */}
               <p className={cn('mt-7 border-t border-border pt-5 text-sm font-medium')}>
-                {limitsLine(card.plan)}
+                {linksLimitLabel(card.plan)}
               </p>
               {card.inherits && (
                 <p className={cn('mt-4 text-sm text-muted-foreground')}>{card.inherits}</p>

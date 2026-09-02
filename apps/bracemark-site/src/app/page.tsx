@@ -1543,7 +1543,9 @@ export default function Page() {
                 does not enforce, and "forever" put the promise back. Drop the cap to
                 100 one day and this line renders "100 links, forever" — truthful
                 about the number, and false to everyone who signed up under the old
-                one. */}
+                one. The same const the page's other three mentions of the cap use:
+                one idiom for one number, rather than a second spelling of it three
+                lines above a hand-typed "Unlimited links". */}
             <p className={cn('mt-1 text-sm text-muted-foreground')}>
               {FREE_LINKS} links, no time limit
             </p>
@@ -1562,7 +1564,25 @@ export default function Page() {
                 the product. These are the comparison table's own row labels,
                 which were accurate all along, and they restore nested lists:
                 the one Plus feature a switcher with folders actually needs, and
-                the one the old line left out. */}
+                the one the old line left out.
+
+                The links half is typed out like the three beside it, and the
+                line the site draws is DERIVE A NUMBER, CURATE A CLAIM. The free
+                card above interpolates because 200 is a number that moves;
+                "Unlimited" is not a number, it is a curated label of exactly the
+                kind the other three are — and `PLAN_CARD_COPY.plus` types it out
+                too ("Unlimited saved links"), so computing it here would have
+                bought consistency with one surface at the cost of this list. It
+                also bought less protection than it looked like: the app's own
+                upgrade cards, /pricing's meta description and the FAQ all spell
+                the word by hand, so a derived teaser would have self-corrected
+                while every other surface went on promising no cap.
+                What guards the claim is a test rather than a template — shared's
+                plans.spec.ts asserts `maxLinks` is `null` on every paid plan, so
+                giving Plus a number fails the suite at the source instead of
+                quietly re-rendering this line into a figure nobody wrote.
+                /pricing's card line stays derived for a reason that does not
+                apply here: it maps over every plan, so it has to be generic. */}
             <p className={cn('mt-1 text-sm text-muted-foreground')}>
               Unlimited links, nested lists, app lock, search editor
             </p>
