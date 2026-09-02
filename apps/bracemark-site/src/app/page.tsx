@@ -802,12 +802,12 @@ const GUARANTEES: [string, string][] = [
 // above. The line before it already carries the reasoning, so the promise was
 // spending the band's register to add nothing.
 //
-// The self-hosting sentence is here because an AGPL repository containing the
+// The self-hosting clause is here because an AGPL repository containing the
 // sync server raises exactly one question from the only audience that reads
 // AGPL notices, and saying nothing reads as an oversight rather than a
-// position. "Not configurable" is a fact about the build, not a policy: the API
-// origin is baked at build time (see lib/site.ts), so a shipped client cannot
-// be pointed anywhere else.
+// position. It states the POSITION and no longer argues it — the obstacles are
+// /faq `self-hosting`, in one place, because listing one of them here read as
+// listing the only one. See the note on the entry itself.
 //
 // Two rules from docs/brand-assets.md, _the source_, that this band is written
 // against:
@@ -837,9 +837,26 @@ const DURABILITY: [string, React.ReactNode][] = [
     // time the repo appears on the landing page and the placement is deliberate
     // — see the note above DURABILITY for why the band, and not the hero, is
     // where it belongs.
+    //
+    // The LINK CARRIES THE PROSE, and does not print `SOURCE.label` beside it.
+    // Setting the bare URL inside an argued paragraph puts a 40-character string
+    // where a clause should be, and the two surfaces whose job is to print it
+    // rather than link it already do: the footer's _Source code_ on every page,
+    // and /about's colophon, which sets `AGPL-3.0 · github.com/…` as a specimen
+    // line. Naming the host in the anchor text is what keeps that readable —
+    // "a single repository" alone does not tell a reader where the link goes.
+    //
+    // ONE REASON READS AS THE ONLY REASON. This used to name the compiled-in API
+    // origin, which invites "then make it configurable" — and a settings field
+    // would leave both larger obstacles standing (the Worker is wired to
+    // Cloudflare's own databases and object storage; the mobile and extension
+    // builds come through stores only we can publish to). Naming a true subset
+    // and stopping is the same error the privacy claims were rewritten to avoid,
+    // so the position stays here and the obstacles live in one place, /faq
+    // `self-hosting`, where the reader who actually wants them will look.
     <>
       Both apps, the browser extension, the server they sync to and the one that fetches link
-      previews are a single repository under the {SOURCE.license}:{' '}
+      previews are{' '}
       <a
         className={cn(
           'text-signal underline decoration-signal-line underline-offset-2 hover:decoration-signal',
@@ -847,10 +864,10 @@ const DURABILITY: [string, React.ReactNode][] = [
         href={SOURCE.url}
         rel="noreferrer"
       >
-        {SOURCE.label}
-      </a>
-      . We do not support self-hosting today — the apps we ship have our server’s address compiled
-      into them — but the code does not stop existing when a company does.
+        a single GitHub repository
+      </a>{' '}
+      under the {SOURCE.license}. We do not support self-hosting today, but the code does not stop
+      existing when a company does.
     </>,
   ],
 ];
@@ -1478,11 +1495,26 @@ export default function Page() {
             fourth page a visitor reaches, behind the objection it answers. Kept
             as a footnote rather than a fourth column because it is a track
             record, not a property — the section's whole argument is that the
-            other three hold whether or not you believe this one. */}
+            other three hold whether or not you believe this one.
+
+            SUCCESSOR, not "second version" — the predecessor was renamed and
+            rebuilt, so a version number describes an increment that did not
+            happen. The same sentence is on /about, _Where it came from_, where
+            the next clause spells the rename out; the two have to agree. The
+            terminology table in docs/brand-assets.md carries the row, including
+            why "next generation" is not the fix.
+
+            The closing clause is /about's verbatim, and both moved off "drops the
+            prerequisite" together: the predecessor generated its own key and asked
+            for no errand, so there was no prerequisite to drop. Whatever this
+            clause becomes, it has to say the same thing in both places — here it
+            has no context at all, so it must not shrink to something like "drops
+            the dependency", which reads as a claim of independence we do not have
+            (this band's own third entry concedes the Cloudflare wiring). */}
         <p className={cn('mt-10 max-w-2xl text-sm leading-6 text-muted-foreground')}>
-          For whatever a track record is worth: Bracemark is the second version of Brace.to, a
-          bookmark manager we have run for years. Same team, same job — this version keeps the
-          promise and drops the prerequisite.{' '}
+          For whatever a track record is worth: Bracemark is the successor to Brace.to, a bookmark
+          manager we have run for years. Same team, same job — this one keeps the promise and
+          rebuilds what it rests on.{' '}
           <Link
             className={cn(
               'text-signal underline decoration-signal-line underline-offset-2 hover:decoration-signal',

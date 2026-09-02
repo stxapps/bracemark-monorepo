@@ -159,17 +159,87 @@ export default function Page() {
               Where it came from
             </h2>
             <div className={cn('mt-4 space-y-4 text-base leading-7 text-muted-foreground')}>
+              {/* NO PREREQUISITE IS CLAIMED HERE, and two plausible ones were
+                  tried and are both false. The old stack's 24-word secret key is
+                  a contrast we are not entitled to draw — our own recommended path
+                  is a GENERATED passphrase plus a long recovery code
+                  (docs/account.md), so "they made you keep a long secret"
+                  describes Bracemark too, and the reader finds that out in the
+                  create-account ceremony. And there was no errand: Brace.to
+                  generated that key itself, so "go and get an account somewhere
+                  else first" never happened. What is left is two reasons that are
+                  both about US, which is why the sentence no longer says the old
+                  product asked anything of anyone.
+
+                  WE WERE NOT FORCED OUT, and the copy must never imply it. That
+                  stack is open source: we could have gone on running it for as long
+                  as we liked. Better ways to do the same job turned up and we chose
+                  to move — that is the whole of it. Two drafts here got it wrong in
+                  the same direction: "an account model we did not own turned out to
+                  be one we could not keep", and then "the tools underneath it
+                  stopped being maintained". Both read as our predecessor having
+                  been killed by a dependency, and the second is the more tempting
+                  because it is nearly true — but on the one section whose job is to
+                  answer "will this one last?", either hands the reader the
+                  objection it was written to settle. A chosen migration is the
+                  answer; a forced one is the fear. Note what that costs: with no
+                  external cause on the page, the ONLY reason left is that we
+                  thought the alternative was better, so the sentence has to be
+                  willing to say so plainly.
+
+                  "A blockchain was never the part that kept those bookmarks
+                  private" is load-bearing in a way it does not look: a blockchain
+                  registered NAMES. The privacy came from client-side encryption,
+                  then as now — which is what makes leaving it a simplification
+                  rather than a retreat, and what the next paragraph's "ours end to
+                  end" then claims.
+
+                  THE NAME CLAUSE GOES FIRST, and it stays. It reads as the outlier
+                  beside an engineering reason, and the temptation is to cut it —
+                  but it is the only place on the site that explains the
+                  RENAME, which is what earns "successor" over "second version";
+                  docs/brand-assets.md's terminology row cites this clause by name
+                  as the thing that settles it. Last in the list it took the
+                  punchline slot and left "Nothing forced the move" answering the
+                  item before it rather than the one it is about. First, the pair
+                  escalates into the reason that carries, the defence sits against
+                  the claim it defends, and the name lands next to the patience it
+                  was asking for.
+
+                  Three things it must not become:
+
+                  - Nothing here is retired, sunset or dead. Brace.to is the one
+                    predecessor we import from and the docs describe it in the
+                    present tense (docs/data-lifecycle.md, _importing from
+                    Brace.to_); "it was sunset" would say we discontinued our own
+                    product two clauses after saying we have run it for years, and
+                    the same word aimed at the stack reintroduces the forced move.
+                  - No vendor-blaming, and no naming who did or did not keep what
+                    going. It buys nothing and costs the register — every clause
+                    here is about our decision.
+                  - It stops at the ENCRYPTION AND THE ACCOUNT. It cannot widen
+                    into "everything is ours now" — the Worker still runs on
+                    Cloudflare's databases and object storage, which the landing
+                    page's _If we disappear_ band concedes by name.
+
+                  "Keeps the promise and rebuilds what it rests on" is also the
+                  landing page's footnote, verbatim (page.tsx, _If we disappear_).
+                  It used to be "drops the prerequisite" on both, and that phrase
+                  died with the prerequisite — the two surfaces have to agree
+                  (docs/brand-assets.md, the successor row). */}
               <p>
-                Bracemark is the second version of Brace.to, a bookmark manager we have run for
-                years on a decentralised identity stack. That version worked, and the people who
-                used it were generous with their patience — but it asked everyone to understand a
-                blockchain account before they could save a link, and it was named after a domain
-                nobody could say out loud.
+                Bracemark is the successor to Brace.to, a bookmark manager we have run for years on
+                a decentralised identity stack. That one worked, and the people who used it were
+                generous with their patience — but it was named after a domain nobody could say out
+                loud, and better ways to do the same job arrived. Nothing forced the move: that
+                stack is open source and we could have kept it running forever. We would rather
+                build on the best tools for the job than keep a stack going out of loyalty to it —
+                and a blockchain was never the part that kept those bookmarks private.
               </p>
               <p>
-                This version keeps the promise and drops the prerequisite. The encryption is now
-                ours end to end: a key derived from a password you choose, with a recovery code as
-                the second door. You sign up with a username. Nothing else.
+                This one keeps the promise and rebuilds what it rests on. The encryption is now ours
+                end to end: a key derived from a password you choose, with a recovery code as the
+                second door. You sign up with a username. Nothing else.
               </p>
             </div>
           </section>

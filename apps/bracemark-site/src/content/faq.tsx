@@ -294,6 +294,42 @@ export const FAQ_GROUPS: FaqGroup[] = [
           </>
         ),
       },
+      {
+        // The question `source` creates and does not answer. Whoever opens an AGPL
+        // repository containing the sync server asks it within a minute, and until
+        // this existed the only answer on the property was one clause on the
+        // landing page, inside the durability band — which is the right place for
+        // the POSITION and the wrong place for what it would actually take.
+        //
+        // NAME MORE THAN ONE OBSTACLE. The landing page used to carry a single
+        // reason (“our server’s address is compiled in”), which reads as the only
+        // one and invites “then make it configurable” — the same shape of error as
+        // a privacy claim that names a true subset and stops. The build-time origin
+        // is the smallest of the three; the infrastructure and the store-distributed
+        // builds are the ones that would still be there after a settings field.
+        //
+        // NO PROMISE, and no invitation. “Today” is a description of where things
+        // stand, not a roadmap entry — docs/brand-assets.md, _the source_: nothing
+        // here may read as a commitment about our future. It also stops short of
+        // telling anyone how to try, because a half-followed attempt becomes a
+        // support thread we have just said we do not take.
+        id: 'self-hosting',
+        q: 'Can I run it on my own server?',
+        a: (
+          <>
+            Not today, and we would rather say so than let the licence imply otherwise. The builds
+            we ship — web, mobile, and the browser extension — have our API’s address compiled in
+            when they are built, so there is no setting that points one somewhere else, and the
+            mobile and extension builds reach you through stores that only we can publish to. Behind
+            that, the sync server is not a container you can run: it is a Cloudflare Worker wired to
+            Cloudflare’s own databases and object storage, and its subscriptions run through our
+            Paddle account. The {SOURCE.license}
+            does not stop you building your own from the repository, and the code being public is
+            what makes that possible at all — but it is not a path we document, and not one we can
+            help you debug.
+          </>
+        ),
+      },
     ],
   },
   {
