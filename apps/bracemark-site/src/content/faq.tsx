@@ -361,14 +361,34 @@ export const FAQ_GROUPS: FaqGroup[] = [
         ),
       },
       {
+        // Four surfaces described this code four ways, and /terms had the only
+        // account that matches the build: the sign-up ceremony OFFERS it and the
+        // last step is labelled "Create account without a recovery code", so it is
+        // skippable (docs/account.md, _the create-account ceremony_), and
+        // `regenerateRecoveryDoor` / `useRecoveryCode` mean it can be minted or
+        // replaced later from Settings against an existing door. "Generated when
+        // you sign up", full stop, was wrong at both ends.
+        //
+        // The replaceability clause is the half that changes behaviour rather than
+        // belief: a reader who thinks the code is a one-shot artefact treats losing
+        // track of it as terminal, when in fact it is a chore they can redo any day
+        // they can still sign in. It carries its own condition for exactly that
+        // reason — replacing a door needs an open door.
+        //
+        // WHERE TO KEEP IT is stated here rather than left to `where-to-keep` four
+        // items away, which answers a different question about a different secret.
+        // The split — password in the manager, code somewhere else — is the site's
+        // standing advice and the reason the second door exists; never advise
+        // putting both in one place, whatever a reader's convenience argues.
         id: 'recovery-code',
         q: 'What is the recovery code?',
         a: (
           <>
-            A second way into your account, generated at random and shown once when you sign up. It
-            opens the same library your password does, so it is what you use if the password is
-            gone. Keep it somewhere different from your password — the two failing together is the
-            case it exists to survive.
+            A second way into your account: a random code the app offers you when you create it,
+            shown once. It opens the same library your password does, so it is what you use if the
+            password is gone. Keep it somewhere different from your password — printed and filed, or
+            in a safe — because the two failing together is the case it exists to survive. You can
+            generate or replace one later in Settings, as long as you can still sign in.
           </>
         ),
       },
@@ -385,13 +405,36 @@ export const FAQ_GROUPS: FaqGroup[] = [
         ),
       },
       {
+        // ⚠ THE ONE ANSWER ON THIS PROPERTY THAT CAN SILENTLY PROMISE PROTECTION
+        // THE BUILD DOES NOT PROVIDE. A password change is a tier-1 DOOR rotation:
+        // prove an existing door, re-wrap the same DEK, upsert one `account_keys`
+        // row (docs/account.md, _the DEK / KEK door model_ and the rotation status
+        // callout). The DEK is UNCHANGED, so anything an attacker already decrypted
+        // — or a wrapped blob they already pulled, since that blob is served
+        // pre-auth — stays theirs forever. docs/account.md says it in one line: "A
+        // leaked password needs DEK rotation, not a password change."
+        //
+        // This answer used to end "which is what you want if you are changing it
+        // because you are worried", which sells the session revocation as the whole
+        // remedy and lets a worried reader leave believing the break-in is undone.
+        // The session half is TRUE and stays — it cuts off ongoing access, which is
+        // real — but it now arrives with what it does not cover attached, because a
+        // reader who works that out unaided stops believing the claims they cannot
+        // check, and on this property that is most of them.
+        //
+        // DEK rotation ("Reset account security") is deferred and MUST NOT be
+        // hinted at here — no "yet", no "coming soon". /pricing's rule holds for
+        // the whole site: only what ships.
         id: 'change-password',
         q: 'Can I change my password?',
         a: (
           <>
-            Yes, in Settings. Changing it re-locks the key rather than re-encrypting your library,
-            so it takes a moment, not an afternoon — and it signs out every other device, which is
-            what you want if you are changing it because you are worried.
+            Yes, in Settings. It re-locks your key with the new password rather than re-encrypting
+            your library, so it takes a moment, not an afternoon — and it signs out every other
+            device, which cuts off anyone signed in with the old one. What it cannot do is unmake a
+            copy: the key itself does not change, so anything someone already decrypted stays
+            readable to them. Changing your password is the right move after a scare; it is not a
+            way to undo a break-in that already happened.
           </>
         ),
       },
@@ -692,6 +735,49 @@ export const FAQ_GROUPS: FaqGroup[] = [
         ),
       },
       {
+        // The conflict policy, which was written down in docs/local-first-sync.md
+        // (_conflict policy_) and had never reached a page. A reader arriving from
+        // a sync product that burned them looks for this answer first, and a
+        // silence where a policy should be reads as evasion rather than as an
+        // omission — the more so on a property whose whole method is itemising.
+        //
+        // Every clause is a fact about the shipped engine, not a promise:
+        //   - ONE ENTITY PER FILE (`links/{id}.enc`, `lists/{id}.enc`,
+        //     `tags/{id}.enc`) is what makes the granularity claim true: two
+        //     devices touching different links write different R2 objects and
+        //     never contend.
+        //   - LAST-WRITER-WINS on the same path, and the earlier edit is lost
+        //     SILENTLY. Said plainly because it is the real cost, and because the
+        //     reason we cannot do better is the same architecture the rest of the
+        //     page sells: there is no readable copy server-side to merge, and no
+        //     version history to roll back to. The band on the landing page makes
+        //     the same trade in the same words.
+        //   - THE EXTRACTION SPLIT is not a detail, it is the reassurance: the
+        //     metadata blob is split by WRITER — `links/{id}.enc` user-authored,
+        //     `extractions/{id}.enc` machine-derived, same id — precisely so a
+        //     background title fetch can never clobber a title you typed.
+        //
+        // NOT MENTIONED, DELIBERATELY: R2 conditional writes (`If-Match` on the
+        // etag) are the designed upgrade and are deferred, and the true-conflict
+        // winner (local-wins vs server-wins) is an open product call. Neither is a
+        // thing that ships, so neither belongs on a page whose rule is only what
+        // ships — and "we plan to fix this" is the answer a sync-burned reader
+        // trusts least of all.
+        id: 'two-devices',
+        q: 'What happens if I change the same link on two devices?',
+        a: (
+          <>
+            Each link, list and tag is stored as its own encrypted file, so two devices working on
+            different things never collide. If the same link is edited in both places before they
+            sync, the later edit is the one that survives and the earlier one is replaced — we hold
+            nothing readable at our end, so there is no merge we could do for you and no older
+            version to restore. Anything you change offline queues up and goes out in order the next
+            time you have a network. Titles and preview images fetched in the background are kept in
+            a separate file from what you write, so one never overwrites the other.
+          </>
+        ),
+      },
+      {
         id: 'dark-mode',
         q: 'Is there a dark theme?',
         a: (
@@ -736,8 +822,10 @@ export const FAQ_GROUPS: FaqGroup[] = [
             <PageLink href="/faq#import-over-cap">
               what if I import more than {FREE_LINKS} links
             </PageLink>
-            ). Export gives you the whole library as a full backup or in the formats other apps
-            read, on every plan.
+            ). Export gives you the whole library on every plan: a full backup that restores
+            everything, or one of three formats other apps read — a browser bookmarks file, a CSV
+            carrying the address, list, title, note, tags and date of every link, and a plain list
+            of URLs.
           </>
         ),
       },

@@ -74,6 +74,22 @@ const TRADEOFFS: [string, string][] = [
   // read of the page at the time" is open at the right end and closed at the one
   // that matters: however much a save captures, it is a capture, and the page it
   // came from is still somebody else's to change.
+  // The sync cost, which belongs in a list of things we would rather you knew
+  // now and had been left to docs/local-first-sync.md. It is the counterpart of
+  // the landing page's third trade row and /faq `two-devices`; all three state
+  // the shipped last-writer-wins policy, and none of them mentions the deferred
+  // conditional-write upgrade, because a list whose standing rests on
+  // volunteering costs cannot start volunteering fixes.
+  //
+  // Phrased as NO VERSION HISTORY rather than "edits can be lost", because the
+  // absent feature is the durable fact and the lost edit is the symptom. It is
+  // also the one framing that stays true if the winner ever changes: whichever
+  // side wins a conflict, there is no readable copy at our end to have kept the
+  // other one in.
+  [
+    'No version history',
+    'Each link is its own encrypted file and the newest write is the one that survives. We hold no readable copy to keep earlier versions in, so an edit you regret cannot be rolled back from our side — a backup export is the answer if that matters to you.',
+  ],
   [
     'A saved link can rot',
     'A save keeps the address and whatever Bracemark could read of the page at the time — its title, its preview image, and anything you write about it. The page itself is on someone else’s server: if it changes or goes away, what the library keeps is your record of the web, not the web.',
@@ -253,11 +269,30 @@ export default function Page() {
                 Subscriptions. That is the whole model. There is no advertising, no data to sell
                 even if we wanted to, and no investor waiting for us to change that.
               </p>
+              {/* "A fraction of a cent a year" was two lines above the price, and
+                  every reader who noticed did the same division and arrived at the
+                  same place: a margin argument, in our own words, on the one page
+                  that has to justify the number. The figure was doing no work the
+                  sentence around it wasn't — the CHEAP-TO-RUN argument is what
+                  earns the free plan, and it survives intact without a
+                  denominator. A precise number invites arithmetic; if the
+                  arithmetic argues against you, the precision is a cost.
+
+                  What replaced it is the half that was missing rather than a
+                  hedge: the storage is cheap and the SOFTWARE is not, and nothing
+                  on this page had ever said what the subscription actually buys.
+                  Four clients and two servers is a countable claim a reader can
+                  check against the repository, which is the register this page is
+                  written in.
+
+                  {FREE_LINKS} and PLAN_USD_PER_YEAR stay interpolated. The whole
+                  method of this property is that it cannot quote a number the app
+                  does not enforce, and a typed "200 links" or "$48" ends that the
+                  first time either moves. */}
               <p>
                 It works because the architecture that keeps us out of your library also keeps it
-                cheap to run: we store opaque blobs and do no work on their contents, so a free
-                account costs us a fraction of a cent a year. That is why the free plan can be{' '}
-                {FREE_LINKS} links rather than a nag screen, and why{' '}
+                cheap to run: we store opaque blobs and do no work on their contents. That is why
+                the free plan can be {FREE_LINKS} links rather than a nag screen. What{' '}
                 <Link
                   className={cn(
                     'text-signal underline decoration-signal-line underline-offset-2 hover:decoration-signal',
@@ -266,7 +301,8 @@ export default function Page() {
                 >
                   {PLAN_LABELS.plus} costs ${PLAN_USD_PER_YEAR.plus} a year
                 </Link>{' '}
-                instead of needing to squeeze every user who ever signs up.
+                pays for is the part that is not cheap: four clients, two servers, and the people
+                who keep all of them working on platforms that change every year.
               </p>
               <p>
                 We intend to keep today’s free features free, and to never show an advertisement. If

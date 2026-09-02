@@ -79,9 +79,26 @@ const TITLE = `${BRAND.name} — ${BRAND.tagline}`;
 //     PLAINTEXT URL (docs/link-extraction.md, _server extraction_). What is true
 //     whatever that setting says is that what we STORE of the library is
 //     ciphertext.
-// 157 characters, inside the ~160 Google shows.
+//
+//   - "we hold your username, your plan, and ciphertext" — the version this one
+//     replaces, and the subtlest of the four. Everything in it is TRUE; what is
+//     wrong is the shape. It reads as an inventory and closes at two plaintext
+//     fields, when `bracemark-api` also holds the PUBLIC KEY a sign-in signature
+//     is checked against and a SESSIONS row per signed-in device — both of which
+//     the landing page's `Our blindness` entry and /privacy name out loud. So the
+//     most-published sentence we own was the least accurate one, and a reader who
+//     went to check found two fields it had left out. A short enumeration invites
+//     completeness in a way a scoped claim does not: this slot is ~155 characters
+//     and can never carry the real list, so it must not look like it is trying.
+//     The fix is to SCOPE rather than to enumerate — the claim is now about the
+//     LIBRARY, which is the one thing here that really is ciphertext-only, and it
+//     survives any field we ever add to the account record. The workspace tripwire
+//     spells the safe form the same way ("never sees your library in plaintext").
+//     If you find yourself wanting to name the account fields back into this
+//     string, the answer is /privacy, which exists to hold the whole list.
+// 158 characters, inside the ~160 Google shows.
 const DESCRIPTION =
-  'Bracemark is an end-to-end encrypted bookmark manager. Links are encrypted on your device before they sync: we hold your username, your plan, and ciphertext.';
+  'Bracemark is an end-to-end encrypted bookmark manager. Links are encrypted on your device before they sync: of your library we hold ciphertext we cannot open.';
 
 export const metadata: Metadata = {
   metadataBase: new URL(appUrl),

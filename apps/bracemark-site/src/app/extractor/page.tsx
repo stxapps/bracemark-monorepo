@@ -125,6 +125,7 @@ const FACTS: [string, string][] = [
   ['HTML read', 'first 1 MB, then cancelled'],
   ['Images', '10 MB ceiling · never resized'],
   ['Per request', '20 URLs at most'],
+  ['Rate limit', 'per calling IP address · a counter, not a log'],
   ['JavaScript', 'not executed'],
   ['Runs on', 'Cloudflare Workers'],
 ];
@@ -133,14 +134,30 @@ const FACTS: [string, string][] = [
 // is a property of what this service IS, so none of them moves when the thing it
 // extracts changes. If you find yourself wanting to add a row that begins "it only
 // takes…", it belongs in FACTS.
+//
+// ⚠ THE IP CLAUSE IN `Write down the address you saved` IS LOAD-BEARING AND MUST
+// NOT BE TIGHTENED BACK INTO AN ABSOLUTE. `middleware/rate-limit.ts` keys
+// Cloudflare's native rate-limit binding on `{cf-connecting-ip}:{path}`, so it does
+// hold the caller's address — for the 10 or 60 seconds of a counter window, never
+// in a log line and never beside the URL. The workspace tripwire is explicit that
+// /privacy and /extractor must both name it, and /privacy has all along ("Its rate
+// limiter does record IP addresses"); this page, written for the operators owed the
+// disclosure, was the one omitting it. The word `address` does double duty on this
+// page — the URL a person saved, and the IP a request came from — which is exactly
+// why the TERM itself now says which one it means — the heading above this list
+// reads "What it never does", so a bare `Write down the address` is read as the
+// never-claim and the body cannot walk it back. An anonymous endpoint
+// that fetches any URL has to cap something per caller, so a reader who thinks
+// about it for ten seconds derives the IP anyway: the closed version was
+// falsifiable by its own audience.
 const NEVER: [string, string][] = [
   [
     'Keep what it read',
     'Nothing is buffered to disk, cached, indexed or stored. What it finds goes straight back to the device that asked and the bytes are gone — there is no copy of your page at our end to leak, subpoena or change our mind about.',
   ],
   [
-    'Write down the address',
-    'The whole reason this service is separate from the rest of Bracemark is that the URL it sees stays transient. Observability is counts, latency and error rates — the address never reaches a log line.',
+    'Write down the address you saved',
+    'The whole reason this service is separate from the rest of Bracemark is that the URL it sees stays transient. Observability is counts, latency and error rates — that address never reaches a log line. The one you connect FROM is a different thing and we do hold it, briefly: the rate limiter counts requests against it for a few seconds so that a single source cannot flood the service. It is never written down beside the URL, and the privacy policy inventories it.',
   ],
   [
     'Know who asked',

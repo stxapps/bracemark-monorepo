@@ -68,7 +68,18 @@ export default function Page() {
     <PageShell
       eyebrow="Legal"
       title="Privacy Policy"
-      lede="The short version: we hold encrypted files we cannot open, the smallest account record that makes signing in possible, and nothing else. Here is the long version."
+      // "and nothing else" was falsified by this page's own table of contents:
+      // a subscription record, request data including an IP address, and any
+      // support mail you send us are all inventoried below it. A lede that closes
+      // a list the document then reopens costs more than the fields it was
+      // hiding — the reader disproves it without leaving the page, and then
+      // reads the rest looking for the next one. It now ENDS BY OPENING: the two
+      // things worth saying in a sentence, and a pointer down the page for the
+      // remainder, which is the move `Our blindness` on the landing page already
+      // makes ("The privacy policy inventories every field of it"). This is the
+      // surface that pointer points AT, so it is the one place on the property
+      // that must never claim to be shorter than it is.
+      lede="The short version: we hold encrypted files we cannot open, and the smallest account record that makes signing in possible. Everything else — a subscription record if you buy one, the request data any web service processes, an email you send us — is inventoried below."
       meta={`Effective ${PRIVACY_UPDATED}`}
       width="document"
     >
@@ -115,10 +126,26 @@ export default function Page() {
           from your password or recovery code on your device — they are useless to us and to anyone
           who obtains them.
         </p>
+        {/* The second sentence used to end "we hold nothing that identifies you as
+            a person", which the Technical and security data heading two sections
+            down disproves in its first line: our infrastructure processes your IP
+            address and user agent, as any web service must. An absolute a reader
+            can disprove without leaving the document is the most expensive kind —
+            it converts a page whose whole standing is precision into one that
+            overstates when it thinks nobody is checking, and the field it was
+            hiding was never worth that.
+
+            The repair is to SCOPE the claim to the thing it is actually true of —
+            the account record, which really does hold no name — and then to hand
+            the reader the residual and where it is described, rather than waiting
+            to be caught with it. The clause that survives ("we do not join it to
+            your account") is the one that carries the meaning a reader wanted from
+            the absolute, and unlike the absolute it is true. */}
         <p>
           We do not collect an email address, a phone number, a name, or any other identifier at
-          sign-up. If you never write to us and never subscribe, we hold nothing that identifies you
-          as a person.
+          sign-up. If you never write to us and never subscribe, the account itself holds nothing
+          that names you — what remains is the ordinary request data described under{' '}
+          <em>Technical and security data</em> below, which we do not join to your account.
         </p>
         <p>
           Signing in creates a <strong>session record</strong> — a hashed token, the account it

@@ -459,9 +459,23 @@ function HeroPanel() {
             note used to argue from `/50` being "roughly 4.4:1, under AA", which
             was the right conclusion off the wrong instrument: on this ground the
             WCAG figure is the one that flatters, not the one that bites.) */}
+        {/* "It is the whole of what we can infer" was the one sentence in this
+            panel a reader could disprove from the panel itself — the size is
+            printed three lines up, and a size is an inference the closing clause
+            said was not on the list. The move that buys the most here is
+            volunteering a residual; a CLOSED enumeration is the one way to spend
+            that credit and end up behind, because the reader who checks is
+            exactly the reader this paragraph was written to win.
+            So the list now names the size it was omitting, and then stops
+            claiming to be a list: it ends at the inventory instead of standing in
+            for one, which is what `Our blindness` in the claim band already does
+            and the reason that entry survived every reading this one failed.
+            The concession itself is untouched and stays at the caption's weight —
+            see the note above. */}
         <p className={cn('mt-3 text-sm leading-6 text-background/80')}>
-          What that shape still tells us: how many files you keep and when they change. It is the
-          whole of what we can infer, and we would rather say it than have you work it out.
+          What that shape still tells us: how many files you keep, how big each one is, and when
+          they change. We would rather say it than have you work it out — and the privacy policy
+          inventories every field we hold.
         </p>
       </div>
     </div>
@@ -584,7 +598,17 @@ const CAPTURE = [
     // sounds like precision is the expensive kind). The band's lede already
     // covers the real fact for every surface including this one: encrypted on
     // the device before it syncs.
-    body: `Bring the library you already have: a browser bookmarks export, a Raindrop CSV, or a plain list of URLs. Bringing more than ${FREE_LINKS} links? Take the first ${FREE_LINKS} now, or start the ${TRIAL_DAYS}-day trial and bring it all.`,
+    //
+    // "WHICH TAKES A CARD" IS NOT OPTIONAL AND IS NOT A HEDGE. /pricing's
+    // `trialNote` and /faq `trial` have always said it; this page was the only
+    // surface that mentioned the trial and didn't, two hundred pixels under a
+    // hero that says "No card" about the free plan. The gap is the whole problem:
+    // a site that says "no card" wherever it is true has to say "takes a card"
+    // wherever it is not, or the first thing a reader discovers at checkout is
+    // that our disclosure has a floor. The same three words went into the pricing
+    // band's lede below, which puts "no card" and "trial" in one sentence and so
+    // carries the misreading harder than this card does.
+    body: `Bring the library you already have: a browser bookmarks export, a Raindrop CSV, or a plain list of URLs. Bringing more than ${FREE_LINKS} links? Take the first ${FREE_LINKS} now, or start the ${TRIAL_DAYS}-day trial, which takes a card, and bring it all.`,
   },
 ];
 
@@ -675,9 +699,15 @@ const LIBRARY: [string, string][] = [
 // this band reads as a swipe: a reader who catches us being unfair about a
 // competitor has no reason to trust us about ourselves.
 //
-// EVERY ROW IS A REAL LOSS, WORST FIRST. Nothing goes in here that we win
-// outright. That argument belongs to the claim band immediately below, and it
-// lands harder for following an honest tally than for replacing one.
+// EVERY ROW IS A REAL LOSS. Nothing goes in here that we win outright. That
+// argument belongs to the claim band immediately below, and it lands harder for
+// following an honest tally than for replacing one.
+//
+// THE ORDER IS FREQUENCY, THEN WEIGHT — it read as "worst first" for as long as
+// there were three rows and it was never that. Search and previews are hit by
+// every reader on day one; the same link edited twice is hit by anyone with two
+// devices; a forgotten password is rare and total, and it goes last for a second
+// reason its own note gives. Insert by that rule, not by severity alone.
 const TRADE: { aspect: string; hosted: string; ours: string }[] = [
   {
     aspect: 'Search',
@@ -691,6 +721,36 @@ const TRADE: { aspect: string; hosted: string; ours: string }[] = [
     ours: `The device that saved the link pulls the title and image, so nothing fetches the page on your behalf. The links no device fetched — imports, and saves made in the web app — need a server, and that is an opt-in ${PLAN_LABELS.plus} feature.`,
   },
   {
+    // The loss a hosted-manager user is actually buying against, and the one this
+    // band shipped without. The policy was written down in
+    // docs/local-first-sync.md (_conflict policy_) and had never reached a page,
+    // so the band's lede promised "the whole trade" over three rows with the sync
+    // cost missing — which, to a reader who has been burned by a sync product, is
+    // the row whose ABSENCE is the answer. The band gets stronger with the real
+    // cost in it; a trade list that omits the expensive one is a feature list.
+    //
+    // The left column is generous per this band's rule and it is also just true:
+    // a server holding the readable copy is what MAKES merging and version
+    // history possible, which is the same sentence as the Search row one level up.
+    //
+    // PLACED THIRD, and the order in this array is frequency-then-weight rather
+    // than strict severity — Search and Previews are hit by everyone, this is hit
+    // by anyone with two devices, and a forgotten password is rare and total. The
+    // forgotten-password row stays LAST because it is the heaviest and because it
+    // has a second job (see its own note): arriving three sections before the
+    // claim band's stark version. Insert anything new by that ordering.
+    //
+    // "The later edit is the one that survives" is the shipped LWW policy stated
+    // in the user's terms. Do not soften it to "we keep the newest version" —
+    // there is no version kept, which is the actual cost — and do not mention the
+    // conditional-write upgrade, which is deferred. /faq `two-devices` carries the
+    // long form, including the extraction split.
+    aspect: 'The same link, edited twice',
+    hosted:
+      'Their server holds the readable copy, so it can merge two edits, keep a version history, and give you back the one you wanted.',
+    ours: 'Each link is its own encrypted file, so edits to different links never collide. Edit the same link on two devices before they sync and the later edit is the one that survives — there is nothing readable at our end to merge, and no earlier version to restore.',
+  },
+  {
     // The row that does a second job. The no-reset fact and its answer used to
     // sit five sections apart — the cost in the claim band, the recovery code
     // only in the closer — and the link out of the claim band sent a worried
@@ -699,7 +759,13 @@ const TRADE: { aspect: string; hosted: string; ours: string }[] = [
     // deliberate reprise rather than as the first time anyone hears it.
     aspect: 'A forgotten password',
     hosted: 'They can mail you a reset, because they can read the library either way.',
-    ours: 'Your recovery code opens the account instead. It is generated at signup beside your password, and it is your other way in — like your password, a door only you hold. There is none we could open for you.',
+    // "Generated at signup" overstated a step the app lets you decline: the
+    // create-account ceremony OFFERS the code and its last screen carries a
+    // second submit labelled "Create account without a recovery code"
+    // (docs/account.md, _the create-account ceremony_). /terms has always had the
+    // true account — offered at creation, and can be generated or replaced later
+    // — and this row, the hero and /faq `recovery-code` now tell it the same way.
+    ours: 'Your recovery code opens the account instead. The app offers you one when you create the account, and it is your other way in — like your password, a door only you hold. There is none we could open for you.',
   },
 ];
 
@@ -825,9 +891,34 @@ const DURABILITY: [string, React.ReactNode][] = [
     'It is already on your device',
     'Bracemark is local-first: the copy you open, search and edit is held on the machine in front of you, and syncing is how your other devices catch up. The library does not need us to be reachable in order to open.',
   ],
+  // THE CANONICAL STATEMENT OF WHAT COMES OUT, and the only one on the page: the
+  // LIBRARY band's Export bullet stays a bullet ("Four formats, one a complete
+  // backup"), because a feature list is read by a scanner and this is read by
+  // someone deciding whether they can leave.
+  //
+  // The exit was claimed on three surfaces and described on none of them. "Open
+  // formats" and "restores everything" are ADJECTIVES, and they are the same
+  // adjectives used by every service whose export turned out to be a
+  // three-column CSV — so to the reader who cares most about the exit, the
+  // strongest sentence we had was indistinguishable from the weakest one they
+  // had been burned by. Naming the bytes converts a promise into a noun they can
+  // check on their own disk in about a minute.
+  //
+  // The bytes are the shipped archive, not an intention: `data/export-all-data.ts`
+  // writes `manifest.json` + `items.jsonl` (one JSON line per entity) + `files/{id}`
+  // (the decrypted blobs), and that layout is shared by web and expo so a backup
+  // made on either imports on the other (docs/data-lifecycle.md, _export_). "With
+  // nothing of ours installed" is the claim that matters and is literally true of
+  // that layout — it is why the format is jsonl and a folder rather than anything
+  // that needs a reader.
+  //
+  // COST, ACCEPTED: this entry now runs roughly twice its two siblings in a
+  // three-column grid. The ragged column is worth a purchase gate; if it is ever
+  // trimmed, trim the four-format clause and keep the archive sentence, never the
+  // other way round.
   [
     'Export is free, on every plan',
-    'Four formats — a complete backup that restores everything, a browser bookmarks file, a CSV, and a plain list of URLs. Charging you to leave would undo the point of building it this way.',
+    'Four formats — a browser bookmarks file, a CSV, a plain list of URLs, and a complete backup that restores everything. The backup is a zip: one JSON line per item, your preview images beside it as ordinary files, decrypted, readable in a text editor with nothing of ours installed. Charging you to leave would undo the point of building it this way.',
   ],
   [
     'The code is public',
@@ -997,11 +1088,35 @@ export default function Page() {
                   the claim block's footnote and in the closer; those are the
                   three places that used to state the risk with only one of the
                   two secrets in view. */}
+              {/* Third pass on this line, and both changes are the same kind:
+                  the cliff was stated and the railing was somewhere else.
+
+                  THE INSTRUCTION IS NOW ATTACHED. Naming the two doors told a
+                  nervous reader what she stood to lose and not one thing to do
+                  about it, and she went looking for the escape hatch immediately
+                  — the instruction that answers her was in /faq `where-to-keep`,
+                  four items away, answering a different question about a
+                  different secret. It is one clause: the password where a
+                  password goes, the code somewhere else. Never both in the
+                  password manager, however tidy that sounds — the two failing
+                  together is the entire case the second door exists to survive,
+                  and advice that puts them in one place defeats it.
+
+                  "THE APP ASKS YOU TO SAVE BOTH", not "you save both". The
+                  recovery step is skippable by design — its second submit reads
+                  "Create account without a recovery code" (docs/account.md, _the
+                  create-account ceremony_) — so the old wording asserted a step
+                  the product lets you decline, on the one page whose rule is to
+                  describe what the system does. The steer is preserved (the app
+                  does ask) without claiming the outcome. Same correction in the
+                  trade band's third row and /faq `recovery-code`; /terms had it
+                  right all along. */}
               <p className={cn('mt-5 max-w-md text-sm leading-6 text-muted-foreground')}>
                 Free for your first {FREE_LINKS} links — start empty, or bring the library you
                 already have. No card, and no email address, because the account has nowhere to put
-                one: the two doors into it are your password and a recovery code, and you save both
-                at sign-up.
+                one: the two doors into it are your password and a recovery code, and the app asks
+                you to save both at sign-up — the password in your password manager, the code
+                somewhere else.
               </p>
 
               <div className={cn('mt-10 flex items-center gap-5')}>
@@ -1461,9 +1576,21 @@ export default function Page() {
               concession is load-bearing"). It now reads as the reprise of a fact
               the reader already met, which is the only reason the starker
               wording is affordable here. */}
+          {/* The cost sentence is UNCHANGED and stays unhedged — see the note
+              above, and docs/brand-assets.md, _states its own costs, unprompted_.
+              What follows it is not a softening, it is a CHORE: the reader who
+              stops scrolling here does not want the cliff removed, she wants it
+              finished, and an instruction is the one addition that answers her
+              without spending the starkness. Stated as the split rather than as
+              "save them safely", because the split IS the mechanism — two doors
+              kept in one place are one door — and because a reader already has a
+              habit for both halves of it. The hero states it at the top of the
+              page and /faq `recovery-code` states it at the bottom; this is the
+              beat between them where the fact is loudest. */}
           <p className={cn('mt-14 max-w-2xl text-sm leading-6 text-background/80')}>
             The honest cost of building it this way: lose your password and your recovery code, and
-            nobody — us included — can get the library back.{' '}
+            nobody — us included — can get the library back. So keep them apart: the password in
+            your password manager, the code printed and filed somewhere else.{' '}
             <Link className={cn('text-background underline underline-offset-4')} href="/faq">
               How the account works
             </Link>
@@ -1531,7 +1658,7 @@ export default function Page() {
       <Band
         label="Pricing"
         title="Free until your library outgrows free."
-        lede={`Start with ${FREE_LINKS} links and no card. Upgrade when the cap starts to pinch — on day one if you are arriving with a library, later if you are starting fresh — with a ${TRIAL_DAYS}-day trial, and the same encryption, sync and export on every plan.`}
+        lede={`Start with ${FREE_LINKS} links and no card. Upgrade when the cap starts to pinch — on day one if you are arriving with a library, later if you are starting fresh — with a ${TRIAL_DAYS}-day trial that takes a card, and the same encryption, sync and export on every plan.`}
       >
         <div className={cn('flex flex-wrap items-end gap-x-16 gap-y-8')}>
           <div>

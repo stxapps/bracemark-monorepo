@@ -92,18 +92,36 @@ export const viewport = {
 //     path hands ours the address in the clear (docs/link-extraction.md, _server
 //     extraction_). The clause was true of `bracemark-api` and false of us.
 //
-// So: the plaintext we DO hold is named, in the same breath, in the order
-// /privacy and the FAQ already name it — and the third item is what we STORE of
-// the library, which is ciphertext whatever the extraction setting says. A claim
-// about a boundary we can point at survives any amount of re-architecting behind
-// it. 157 characters, inside the ~160 Google shows.
+//
+//   - "we hold your username, your plan, and ciphertext" — the version this one
+//     replaces, and the subtlest of the four. Everything in it is TRUE; what is
+//     wrong is the shape. It reads as an inventory and closes at two plaintext
+//     fields, when `bracemark-api` also holds the PUBLIC KEY a sign-in signature
+//     is checked against and a SESSIONS row per signed-in device — both of which
+//     the landing page's `Our blindness` entry and /privacy name out loud. So the
+//     most-published sentence we own was the least accurate one, and a reader who
+//     went to check found two fields it had left out. A short enumeration invites
+//     completeness in a way a scoped claim does not: this slot is ~155 characters
+//     and can never carry the real list, so it must not look like it is trying.
+//     The fix is to SCOPE rather than to enumerate — the claim is now about the
+//     LIBRARY, which is the one thing here that really is ciphertext-only, and it
+//     survives any field we ever add to the account record. The workspace tripwire
+//     spells the safe form the same way ("never sees your library in plaintext").
+//     If you find yourself wanting to name the account fields back into this
+//     string, the answer is /privacy, which exists to hold the whole list.
+// So: the claim is SCOPED rather than enumerated. It is about the library, which
+// is ciphertext whatever the extraction setting says, and it says what we cannot
+// do with it rather than reciting what else we happen to hold. A boundary we can
+// point at survives any amount of re-architecting behind it, and it cannot be
+// falsified by a field being added on the other side of it.
+// 158 characters, inside the ~160 Google shows.
 //
 // ⚠ THE SAME SENTENCE IS IN bracemark-web's `app/layout.tsx`, and the two must
 // move together. That app is a separate origin and cannot import this config, so
 // a comment in each naming the other is the whole of what holds them — the
 // pattern the lockup measurements already use.
 const DESCRIPTION =
-  'Bracemark is an end-to-end encrypted bookmark manager. Links are encrypted on your device before they sync: we hold your username, your plan, and ciphertext.';
+  'Bracemark is an end-to-end encrypted bookmark manager. Links are encrypted on your device before they sync: of your library we hold ciphertext we cannot open.';
 
 // The tagline itself, verbatim from shared's brand/brand.ts, so the OG
 // title, the hero, and every store listing say one sentence rather than four
