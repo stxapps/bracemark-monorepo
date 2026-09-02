@@ -6,9 +6,10 @@ module.exports = {
   // globals once per test file; each spec still clears the tables between cases.
   //
   // 'node', not 'jsdom': fake-indexeddb needs `structuredClone`, which the node
-  // environment provides and jest-environment-jsdom does not. Nothing under test here
-  // touches the DOM — a future spec that renders a hook can opt itself into jsdom with
-  // an `@jest-environment jsdom` docblock (and would then have to polyfill the clone).
+  // environment provides and jest-environment-jsdom does not. Almost nothing under test
+  // here touches the DOM; a spec that renders one opts itself into jsdom with an
+  // `@jest-environment jsdom` docblock — `contexts/server-extraction-gate.spec.tsx` does,
+  // and needs no clone polyfill because it mocks the store away rather than reaching it.
   testEnvironment: 'node',
   setupFiles: ['fake-indexeddb/auto'],
   transform: {

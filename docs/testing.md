@@ -219,27 +219,57 @@ an install, check that link before anything else.
 
 ### coverage today
 
-The honest state, so nobody reads a green `npm run test` as coverage:
+The honest state, so nobody reads a green `npm run test` as coverage. Exact
+counts are left out on purpose — they go stale the week they are written and
+they invite reading a number as a verdict.
 
-| project               | specs | note                                                                         |
-| --------------------- | ----- | ---------------------------------------------------------------------------- |
-| `shared`              | 37    | the best-covered project, by a lot                                           |
-| `bracemark-api`       | 13    | real D1/DO/R2 through the Workers pool; one is the workerd portability suite |
-| `expo-react`          | 10    |                                                                              |
-| `bracemark-expo`      | 8     |                                                                              |
-| `bracemark-extractor` | 5     |                                                                              |
-| `web-react`           | 3     |                                                                              |
-| **`bracemark-web`**   | **2** | **the generated `page.spec.tsx`, plus one settings regression**              |
-| `web-crypto`          | 1     |                                                                              |
-| `expo-crypto`         | 1     |                                                                              |
-| `bracemark-site`      | 1     | scaffold only                                                                |
-| **`web-ui`**          | **0** | test target, no specs                                                        |
-| **`react`**           | **0** | test target, no specs                                                        |
+`shared` is the best-covered project by a wide margin, and it is where most of
+this workspace's real logic lives, so that is the right shape. `bracemark-api`
+is next, exercising real D1/DO/R2 through the Workers pool (one of its specs is
+the workerd portability suite). The two expo projects and `bracemark-extractor`
+carry a working middle layer.
 
-The bold rows are the gap worth naming: `bracemark-web` is the primary app and
-has two specs, one of which is generated, and the two web packages it is built
-out of have none. `passWithNoTests` is what keeps that green — it is the right
-setting for a young package and the wrong thing to read as a pass.
+The gap worth naming is the **web app and the packages under it**.
+`bracemark-web` is the primary app and has a handful of specs, one of which is
+generated; `web-ui` has a test target and no specs at all. `passWithNoTests` is
+what keeps that green — the right setting for a young package and the wrong
+thing to read as a pass.
+
+What `react` and `web-react` do have is deliberately shaped, and it is the model
+to follow rather than a coverage percentage to chase. Both packages are mostly
+seams — providers, query options, copy tables — and a spec that renders a
+context and asserts `useContext` gives it back is testing React. So the specs
+that exist there sit on the three things that fail SILENTLY:
+
+- **A ladder's ordering.** `react`'s `lib/field-messages.spec.ts` pins the
+  credential-field message ladders, whose interesting rungs live in windows a
+  person cannot hold still — the ~400ms after a keystroke where the availability
+  answer still describes the previous name, an aborted request, a zxcvbn chunk
+  that never arrives. Every rung is reachable by hand; the ORDER between them is
+  not. It also holds the one-line width budget, which is invisible on the
+  desktop viewport those strings get written on and wraps on every phone.
+- **A claim about another package.** `lib/paywall-copy.spec.ts` checks each
+  upgrade gate against `@stxapps/shared`'s entitlement table: the plan a dialog
+  sells must actually grant the feature, and the feature must actually be
+  withheld from free. The two files typecheck independently, so the failure is a
+  sale — the user pays and comes back to a locked feature.
+- **A gate whose closed side nothing else exercises.** `web-react`'s
+  `contexts/server-extraction-gate.spec.tsx` pins the one rule
+  `ExtractionProvider` and `FaviconProvider` hold in duplicate: no URL leaves the
+  browser unless the `serverExtraction` opt-in is on AND an extractor origin is
+  configured. It asserts at the wire (did anything ask the extractor), not on the
+  `enabled` expression, which would just restate the code. The null-extractor
+  half has no other cover anywhere — every `bracemark-web` env file sets
+  `NEXT_PUBLIC_EXTRACTOR_URL`, so no dev run, e2e run or deployed tier reaches
+  it.
+
+The corollary, and it is the more useful half: several files in those packages
+have **no spec on purpose**. The two client-context providers are `createContext`
+plus a guard; `use-auth-forms` is `useForm` with a zod resolver;
+`use-sign-out-others` is one `api.call`; the copy modules other than the paywall
+one are strings a `Record<Union, …>` already pins. Before adding a spec in this
+layer, mutate the source and re-run — a gap is only real if the suite stays
+green, and an assertion only earns its place if it then fails.
 
 The one real `bracemark-web` spec is worth reading as a model of _which_ web
 behaviour is worth this layer. It pins a two-line contradiction — a subscription
