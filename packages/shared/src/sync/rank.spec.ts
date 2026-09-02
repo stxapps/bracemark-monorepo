@@ -1,4 +1,4 @@
-import { ranksBetween, rerankToOrder } from './rank';
+import { rankBetween, rankForIndex, ranksBetween, rerankToOrder } from './rank';
 
 // A pool of five real, ascending fractional-index keys (k[0] < … < k[4]).
 // rerankToOrder validates its bounds as genuine order keys, so inputs must be
@@ -55,5 +55,47 @@ describe('rerankToOrder', () => {
   it('handles empty and single-item groups', () => {
     expect(rerankToOrder([])).toEqual([]);
     expect(rerankToOrder([{ rank: k[0] }])).toEqual([null]);
+  });
+});
+
+describe('rankForIndex', () => {
+  // The one helper a reorder/move UI calls: "drop at position i" → the key to
+  // persist on the moved entity, with nothing else rewritten.
+  const siblings = [{ rank: k[1] }, { rank: k[2] }, { rank: k[3] }];
+
+  it('mints a key that lands the entity at the requested slot', () => {
+    for (let index = 0; index <= siblings.length; index++) {
+      const minted = rankForIndex(siblings, index);
+      const after = [...siblings.map((s) => s.rank)];
+      after.splice(index, 0, minted);
+      expect(isStrictlyAscending(after)).toBe(true);
+    }
+  });
+
+  it('prepends at 0 and appends at length', () => {
+    expect(rankForIndex(siblings, 0) < k[1]).toBe(true);
+    expect(rankForIndex(siblings, siblings.length) > k[3]).toBe(true);
+  });
+
+  it('opens both ends for an empty group', () => {
+    expect(rankForIndex([], 0)).toBe(rankBetween(null, null));
+  });
+
+  it('clamps an out-of-range index instead of reading past the array', () => {
+    // A drag surface computes the index from a hit test, so an off-by-one at the
+    // ends is ordinary. Unclamped, `siblings[i - 1]` / `siblings[i]` is undefined
+    // and this throws a TypeError mid-drop — the user's move is lost and the
+    // error surfaces nowhere near the cause.
+    expect(rankForIndex(siblings, 99)).toBe(rankForIndex(siblings, siblings.length));
+    expect(rankForIndex(siblings, -5)).toBe(rankForIndex(siblings, 0));
+  });
+
+  it('leaves the neighbours untouched — the whole point of a fractional key', () => {
+    // Under file-level LWW a move must write ONE file. If this renumbered
+    // siblings, every move would be several LWW points and two devices moving
+    // two different entities would clobber each other.
+    const before = siblings.map((s) => s.rank);
+    rankForIndex(siblings, 1);
+    expect(siblings.map((s) => s.rank)).toEqual(before);
   });
 });

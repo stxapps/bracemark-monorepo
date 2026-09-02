@@ -1,4 +1,5 @@
-import { excludeLists, hasPositiveNoteClause, type LinkQuery } from './link-query';
+import { coerceLinkSortOn, coerceLinkSortOrder } from './entities';
+import { emptyQuery, excludeLists, hasPositiveNoteClause, type LinkQuery } from './link-query';
 
 // A base query with the given list clause; other clauses empty, sort fixed.
 const q = (any: string[], none: string[] = []): LinkQuery => ({
@@ -86,5 +87,54 @@ describe('hasPositiveNoteClause', () => {
 
   it('is true when a positive term sits alongside a `none` term', () => {
     expect(hasPositiveNoteClause(withNote({ all: ['recipe'], none: ['draft'] }))).toBe(true);
+  });
+});
+
+describe('emptyQuery', () => {
+  it('is a FACTORY, so no caller can poison the next query', () => {
+    // A shared const would hand every caller the same clause arrays. The search
+    // UI builds on this by spreading and filling, and one caller pushing into a
+    // clause would silently add that term to every view built afterwards — a
+    // filter nobody typed, on a page that looks normal.
+    const first = emptyQuery();
+    first.tags.any.push('poisoned');
+    expect(emptyQuery().tags.any).toEqual([]);
+    expect(emptyQuery()).not.toBe(first);
+  });
+
+  it('leaves every clause empty, so it filters nothing', () => {
+    // Walks the query rather than naming the clauses, so a field added to the
+    // grammar later is covered without anyone remembering to add it here. The
+    // two sort axes are the only string-valued fields.
+    for (const [field, value] of Object.entries(emptyQuery())) {
+      if (typeof value === 'string') continue;
+      for (const terms of Object.values(value))
+        expect({ field, terms }).toEqual({ field, terms: [] });
+    }
+  });
+
+  it('has the same clause shape excludeLists and the read layers expect', () => {
+    // `lists` is the one clause with no `all` — a link belongs to exactly one
+    // list, so "in two lists at once" is never satisfiable.
+    const query = emptyQuery();
+    expect(Object.keys(query.lists).sort()).toEqual(['any', 'none']);
+    for (const key of ['tags', 'text', 'url', 'title', 'note'] as const) {
+      expect(Object.keys(query[key]).sort()).toEqual(['all', 'any', 'none']);
+    }
+  });
+
+  it('sorts newest-modified-first, agreeing with the read-edge coercers', () => {
+    // Two files own this default: a view with no `?sort` renders emptyQuery's,
+    // and a settings blob carrying an unknown value renders the coercers'. If
+    // they part, the same library orders differently depending on which path the
+    // page took to get there — and neither file can see the other's value.
+    const query = emptyQuery();
+    expect(query.sortOn).toBe(coerceLinkSortOn(undefined));
+    expect(query.sortOrder).toBe(coerceLinkSortOrder(undefined));
+    expect(query.sortOrder).toBe('desc');
+  });
+
+  it('asks for nothing in the note, so the badge stays dark', () => {
+    expect(hasPositiveNoteClause(emptyQuery())).toBe(false);
   });
 });

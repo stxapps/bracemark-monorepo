@@ -1,5 +1,7 @@
 import {
+  bgStatusForOutcome,
   emptySyncOutcome,
+  formatSyncedAt,
   getSyncPhase,
   initialSyncProgressLabel,
   recordBlocked,
@@ -66,6 +68,40 @@ describe('recordBlocked', () => {
   });
 });
 
+// The other half of the accumulator's job: turning a finished cycle into the
+// indicator both providers set. Owned in shared so web-react's SyncProvider and
+// expo-react's cannot drift on what a blocked cycle settles to.
+describe('bgStatusForOutcome', () => {
+  it('settles a clean cycle to idle', () => {
+    expect(bgStatusForOutcome(emptySyncOutcome())).toBe('idle');
+  });
+
+  it('settles a blocked cycle to blocked-capacity, not idle', () => {
+    // The cycle COMPLETED, so the tempting reading is "it worked". But part of
+    // the push was refused and will not retry itself into success — reporting
+    // idle would leave the user's changes stranded with the UI saying
+    // "Up to date", which is the one thing a sync indicator must never say
+    // while something is unsynced.
+    const outcome = emptySyncOutcome();
+    recordBlocked(outcome, 3);
+    expect(bgStatusForOutcome(outcome)).toBe('blocked-capacity');
+  });
+
+  it('reads `blocked`, not the count', () => {
+    // The two fields are kept independently truthful on purpose, so a cycle that
+    // hit the gate without a countable number still reports as blocked.
+    const outcome = emptySyncOutcome();
+    recordBlocked(outcome, 0);
+    expect(bgStatusForOutcome(outcome)).toBe('blocked-capacity');
+  });
+
+  it('feeds getSyncPhase the phase the surfaces render', () => {
+    const outcome = emptySyncOutcome();
+    recordBlocked(outcome, 1);
+    expect(getSyncPhase('ready', bgStatusForOutcome(outcome))).toBe('capacity-blocked');
+  });
+});
+
 describe('syncBlockedDetail', () => {
   it('names the fix for a blocked cycle', () => {
     expect(syncBlockedDetail('capacity-blocked', 12)).toContain('Free up space');
@@ -105,5 +141,43 @@ describe('initialSyncProgressLabel', () => {
     // has to be able to render the completed state the gate holds up during its
     // minimum-visible floor.
     expect(initialSyncProgressLabel({ done: 8, total: 8 })).toBe('8 of 8 items');
+  });
+});
+
+describe('formatSyncedAt', () => {
+  const ago = (ms: number) => formatSyncedAt(Date.now() - ms);
+  const MIN = 60_000;
+  const HR = 60 * MIN;
+
+  it('says "just now" inside the first minute', () => {
+    // The common case by far — a sync fires on nearly every visit — so this is
+    // the branch a user sees most.
+    expect(ago(0)).toBe('just now');
+    expect(ago(59 * 1000)).toBe('just now');
+  });
+
+  it('counts whole minutes up to an hour', () => {
+    expect(ago(MIN)).toBe('1 min ago');
+    expect(ago(45 * MIN)).toBe('45 min ago');
+    expect(ago(59 * MIN)).toBe('59 min ago');
+  });
+
+  it('rolls to hours at exactly an hour, and to a date at a day', () => {
+    // The boundaries, because an off-by-one here reads as "60 min ago" or
+    // "24 hr ago" — both correct arithmetic and both obviously wrong on screen.
+    expect(ago(HR)).toBe('1 hr ago');
+    expect(ago(23 * HR)).toBe('23 hr ago');
+    expect(ago(24 * HR)).not.toContain('hr ago');
+  });
+
+  it('falls back to a date past a day', () => {
+    const ts = Date.now() - 5 * 24 * HR;
+    expect(formatSyncedAt(ts)).toBe(new Date(ts).toLocaleDateString());
+  });
+
+  it('never reports a future timestamp as elapsed time', () => {
+    // Clock skew between the device and the server's stamps is ordinary, and a
+    // negative elapsed would otherwise render "-3 min ago".
+    expect(ago(-5 * MIN)).toBe('just now');
   });
 });

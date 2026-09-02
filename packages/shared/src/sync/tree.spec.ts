@@ -28,10 +28,15 @@ const shape = (nodes: ReturnType<typeof buildTree<Node>>) =>
 
 describe('buildTree', () => {
   it('orders roots by rank, then by id on a tie', () => {
+    // The tied pair is fed in REVERSE id order deliberately. Array.sort is
+    // stable, so with the ids in their expected order the assertion passes
+    // whether or not the tie-break runs at all — and the tie-break is the whole
+    // reason two devices render the same order, since input order here is the
+    // local store's iteration order, not something the devices share.
     const out = buildTree([
       n('c', null, 'b'),
-      n('a', null, 'a'),
-      n('b', null, 'a'), // ties with `a` on rank → id breaks it
+      n('b', null, 'a'),
+      n('a', null, 'a'), // ties with `b` on rank → id breaks it
     ]);
     expect(out.map((node) => node.item.id)).toEqual(['a', 'b', 'c']);
   });

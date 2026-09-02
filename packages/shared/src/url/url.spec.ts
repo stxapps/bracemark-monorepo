@@ -1,4 +1,4 @@
-import { canonicalUrlKey, normalizeUrl } from './url';
+import { canonicalUrlKey, displayUrl, hostFromText, hostFromUrl, normalizeUrl } from './url';
 
 describe('normalizeUrl', () => {
   it('prepends https:// to a bare domain', () => {
@@ -81,6 +81,22 @@ describe('canonicalUrlKey', () => {
     );
   });
 
+  it('sorts repeated keys by value, so param ORDER never splits an identity', () => {
+    // A repeated key is ordinary (?tag=a&tag=b). Sorting on the key alone leaves
+    // those two entries in input order — a stable sort keeps them where they were
+    // — so the same page reached from two links would key differently and
+    // dedup would miss it. The tie-break on the value is what closes that.
+    expect(canonicalUrlKey('https://example.com/?tag=b&tag=a')).toBe(
+      canonicalUrlKey('https://example.com/?tag=a&tag=b'),
+    );
+  });
+
+  it('keeps a param whose value differs, and one that is empty', () => {
+    // The sort must not become a dedup: ?a=1&a=2 is not ?a=1.
+    expect(canonicalUrlKey('https://example.com/?a=1&a=2')).toBe('example.com?a=1&a=2');
+    expect(canonicalUrlKey('https://example.com/?a=')).toBe('example.com?a=');
+  });
+
   it('drops the fragment', () => {
     expect(canonicalUrlKey('https://example.com/p#section')).toBe(
       canonicalUrlKey('https://example.com/p'),
@@ -111,5 +127,64 @@ describe('canonicalUrlKey', () => {
     expect(canonicalUrlKey('note to self')).toBeNull();
     expect(canonicalUrlKey('')).toBeNull();
     expect(canonicalUrlKey('mailto:a@b.com')).toBeNull();
+  });
+});
+
+describe('hostFromUrl / hostFromText', () => {
+  // The DISPLAY host — the provisional title, the secondary line, the favicon
+  // domain. Every surface renders this string, and the extractor's server-side
+  // title fallback has to produce the same one, so the www rule is asserted on
+  // its own rather than only through canonicalUrlKey.
+  it('strips a leading www. and nothing else', () => {
+    expect(hostFromUrl(new URL('https://www.example.com/a?b=1#c'))).toBe('example.com');
+    expect(hostFromUrl(new URL('https://news.ycombinator.com/item?id=1'))).toBe(
+      'news.ycombinator.com',
+    );
+    // Only LEADING, and only as a label: "wwwx." and an inner "www." both stay.
+    expect(hostFromUrl(new URL('https://wwwx.example.com'))).toBe('wwwx.example.com');
+    expect(hostFromUrl(new URL('https://a.www.example.com'))).toBe('a.www.example.com');
+  });
+
+  it('reads the host out of raw text the same way', () => {
+    expect(hostFromText('https://www.example.com/a/b')).toBe('example.com');
+  });
+
+  it('falls back to the raw string when the text will not parse', () => {
+    // The stored url comes from user input and normalizeUrl's null is a SOFT
+    // result — the user can confirm-and-save prose — so this receives text that
+    // is not a URL by design. A slightly-off label beats a crashed list row.
+    expect(hostFromText('note to self')).toBe('note to self');
+    expect(hostFromText('')).toBe('');
+  });
+});
+
+describe('displayUrl', () => {
+  // The title-line fallback for an untitled link. Unlike hostFromText it KEEPS
+  // the path, so three untitled articles from one site stay distinguishable
+  // instead of collapsing to a single repeated host.
+  it('keeps the path, query and fragment', () => {
+    expect(displayUrl('https://example.com/a/b?q=1#x')).toBe('example.com/a/b?q=1#x');
+  });
+
+  it('hides https:// but KEEPS http:// — the insecure scheme stays visible', () => {
+    expect(displayUrl('https://example.com')).toBe('example.com');
+    expect(displayUrl('http://example.com')).toBe('http://example.com');
+  });
+
+  it('strips only a LEADING scheme', () => {
+    // A redirector carries a whole URL in its query. An unanchored strip would
+    // eat that inner scheme instead (or as well), rewriting the link the user
+    // reads into one that no longer says where it goes.
+    expect(displayUrl('https://example.com/r?to=https://other.com')).toBe(
+      'example.com/r?to=https://other.com',
+    );
+    expect(displayUrl('http://example.com/r?to=https://other.com')).toBe(
+      'http://example.com/r?to=https://other.com',
+    );
+  });
+
+  it('leaves text it cannot recognize alone', () => {
+    // Same soft-null path as hostFromText: unparseable text still has to render.
+    expect(displayUrl('note to self')).toBe('note to self');
   });
 });

@@ -12,9 +12,18 @@
 
 import {
   coerceDeviceExtractionMode,
+  coerceLinkSortOn,
+  coerceLinkSortOrder,
   DEFAULT_DEVICE_EXTRACTION_MODE,
   DEVICE_EXTRACTION_MODES,
+  extractionSchema,
+  LINK_SORT_ONS,
+  LINK_SORT_ORDERS,
+  linkSchema,
+  listSchema,
+  pinSchema,
   settingsGeneralSchema,
+  tagSchema,
 } from './entities';
 
 const FRAME = { createdAt: 1, updatedAt: 2 };
@@ -108,4 +117,103 @@ describe('coerceDeviceExtractionMode', () => {
   it('defaults to `saves`, the position that matches the old boolean-off behavior', () => {
     expect(DEFAULT_DEVICE_EXTRACTION_MODE).toBe('saves');
   });
+});
+
+// The file-wide rule the settings suite above tests one schema of: EVERY entity
+// is a `looseObject`, so an unknown field written by a newer client survives an
+// older client parsing, editing and re-uploading the same file.
+//
+// Asserted per schema rather than trusted, because the failure is silent and
+// permanent. Nothing here would throw: `z.object` — zod's own default, and what
+// anyone tightening a schema would reach for — strips unknown keys quietly, so an
+// old client's next edit to a link RE-UPLOADS it without the newer client's data
+// and the sync layer treats that as an ordinary write. The user loses whatever
+// the new field held, on a device that never showed it to them, with no error on
+// either device.
+describe('unknown fields round-trip through every entity schema', () => {
+  const cases = [
+    [
+      'link',
+      linkSchema,
+      { url: 'https://example.com', listId: 'my-list', tagIds: [], createdAt: 1, updatedAt: 2 },
+    ],
+    [
+      'list',
+      listSchema,
+      { id: 'a', name: 'Work', parentId: null, rank: 'a0', createdAt: 1, updatedAt: 2 },
+    ],
+    [
+      'tag',
+      tagSchema,
+      { id: 'a', name: 'recipes', parentId: null, rank: 'a0', createdAt: 1, updatedAt: 2 },
+    ],
+    ['pin', pinSchema, { id: 'a', rank: 'a0', createdAt: 1, updatedAt: 2 }],
+    ['extraction', extractionSchema, { id: 'a', facets: {}, createdAt: 1, updatedAt: 2 }],
+  ] as const;
+
+  it.each(cases)('%s keeps a field this build has never heard of', (_name, schema, base) => {
+    const parsed = schema.parse({ ...base, futureField: { nested: ['value'] } });
+    expect(parsed).toMatchObject({ futureField: { nested: ['value'] } });
+  });
+
+  it('keeps unknown fields inside a facet too', () => {
+    // The nested case, and the live one: a tier attaches its own field to the
+    // facet it writes (the extension's read-mode fileId). A strict facetSchema
+    // would strip it on every other client's next extraction write.
+    const parsed = extractionSchema.parse({
+      id: 'a',
+      facets: { titleImage: { status: 'done', attempts: 0, fileId: 'f1' } },
+      createdAt: 1,
+      updatedAt: 2,
+    });
+    expect(parsed.facets.titleImage).toMatchObject({ fileId: 'f1' });
+  });
+
+  // The other half, and the same shape as the settings frame above: tolerance is
+  // about UNKNOWN fields, not absent KNOWN ones. `classifyBundleLine`
+  // (shared/data/backup.ts) picks the schema by path prefix and then uses the
+  // parse as its only gate, so a truncated or half-written line under a valid
+  // path is admitted as a real entity the moment a required field stops being
+  // required — and it lands in the store, not in an error.
+  describe.each(cases)('%s rejects a blob missing a required field', (_name, schema, base) => {
+    it.each(Object.keys(base))('without %s', (field) => {
+      const missing: Record<string, unknown> = { ...base };
+      delete missing[field];
+      expect(schema.safeParse(missing).success).toBe(false);
+    });
+  });
+
+  it('requires parentId to be an EXPLICIT null, not merely absent', () => {
+    // "Top-level" has to be a value rather than an absence: two devices editing
+    // the same list concurrently must not be able to disagree about whether an
+    // omitted parent means root or means "unchanged".
+    const list = { id: 'a', name: 'Work', rank: 'a0', createdAt: 1, updatedAt: 2 };
+    expect(listSchema.safeParse({ ...list, parentId: null }).success).toBe(true);
+    expect(listSchema.safeParse({ ...list, parentId: undefined }).success).toBe(false);
+  });
+});
+
+// The read-edge narrowing for the two sort axes. Both persist as free strings so
+// a value a newer client stores round-trips (the rule above); these are what keep
+// the RENDER honest meanwhile. Without them an unknown value indexes the read
+// layer's sort tables to `undefined` and crashes the query.
+describe('coerceLinkSortOn / coerceLinkSortOrder', () => {
+  it.each(LINK_SORT_ONS)('passes through the known sort field %s', (value) => {
+    expect(coerceLinkSortOn(value)).toBe(value);
+  });
+
+  it.each(LINK_SORT_ORDERS)('passes through the known direction %s', (value) => {
+    expect(coerceLinkSortOrder(value)).toBe(value);
+  });
+
+  it.each([undefined, '', 'title', 'updatedat', 'UPDATEDAT'])(
+    'falls back to newest-modified-first for %p',
+    (value) => {
+      // The pair has to agree with `emptyQuery` (link-query.ts), which is what a
+      // view without an explicit sort renders — otherwise a URL with no `?sort`
+      // and a settings blob with an unknown one order differently.
+      expect(coerceLinkSortOn(value)).toBe('updatedAt');
+      expect(coerceLinkSortOrder(value)).toBe('desc');
+    },
+  );
 });

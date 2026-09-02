@@ -15,6 +15,22 @@ import {
 //
 // It does NOT check that the copy is good — only that it fits and is well-formed.
 
+// Walks the whole module rather than a list of names, so an export added later is
+// covered without anyone remembering to add it here. Its twin lives in
+// brand/brand.spec.ts and does the same for the brand lines, COMPANY and SOURCE.
+const everyString = (value: unknown, path: string): [string, string][] => {
+  if (typeof value === 'string') return [[path, value]];
+  if (value && typeof value === 'object') {
+    return Object.entries(value).flatMap(([key, inner]) => everyString(inner, `${path}.${key}`));
+  }
+  return [];
+};
+
+const EVERY_EXPORTED_STRING = everyString(LISTING_COPY, 'listing-copy');
+
+const offending = (test: (value: string) => boolean) =>
+  EVERY_EXPORTED_STRING.filter(([, value]) => test(value)).map(([path]) => path);
+
 describe('store listing copy — character budgets', () => {
   const cases: [string, string, number][] = [
     ['App Store name', APP_STORE.name, STORE_LIMITS.appStore.name],
@@ -90,24 +106,97 @@ describe('App Store keyword field', () => {
   });
 });
 
-describe('the long description', () => {
-  it('names no other mobile platform (App Store guideline 2.3.10)', () => {
-    // "on iPhone, iPad and Android" is the natural line for someone to add to a
-    // features list, and it gets the build rejected. Browser names are fine and
-    // deliberately not matched here — the description says "Chrome and Firefox".
-    expect(FULL_DESCRIPTION).not.toMatch(/\b(android|google play|play store|windows|iphone)\b/i);
-  });
+describe('rules that bind every exported string', () => {
+  // The rules below were each written against FULL_DESCRIPTION, which is the one
+  // export a human pastes and re-reads. The strings that actually ship UNWATCHED
+  // are the other ones: BROWSER_EXTENSION_LISTING is read into manifest.json by
+  // wxt.config.ts at build time, and the short fields are pasted once and never
+  // opened again — which is how Brace.to v1's copy survived the whole rename. So
+  // they range over the module.
 
   it('never writes "extension" bare (docs/architecture.md — naming)', () => {
-    // Two unrelated things carry the name; a store listing is read by people who
-    // know about neither, so the qualifier matters most here.
-    const bare = [...FULL_DESCRIPTION.matchAll(/(\w+)\s+extension/gi)].filter(
-      ([, word]) => word.toLowerCase() !== 'browser',
+    // Two unrelated things carry the name — the browser extension and
+    // bracemark-expo's iOS share extension. A store listing is read by people who
+    // know about neither, so the qualifier matters more here than anywhere.
+    const bare = offending(
+      (value) =>
+        [...value.matchAll(/(\w+)\s+extension/gi)].some(
+          ([, word]) => word.toLowerCase() !== 'browser',
+        ) || /^extension\b/im.test(value),
     );
     expect(bare).toEqual([]);
-    expect(FULL_DESCRIPTION).not.toMatch(/^extension\b/im);
   });
 
+  // The server claims. Nothing else in the workspace can catch these: the tables
+  // that make them true or false live in bracemark-api, a different app, and the
+  // wording sounds MORE rigorous the more wrong it gets. Each of these spellings
+  // reached shipped copy at least once (CLAUDE.md — tripwires), so they are
+  // barred by name rather than by a rule someone has to re-derive.
+  const BANNED: [RegExp, string][] = [
+    [
+      /sees? nothing\b/i,
+      'the same host holds the username, public key, sessions and plan in the clear',
+    ],
+    [
+      /only ever sees? ciphertext/i,
+      'true of R2 alone, not of the Worker that serves auth and billing',
+    ],
+    [/ciphertext and nothing else/i, 'an enumeration that closes, and it closes on a subset'],
+    [/nothing else (?:on file|about you)/i, 'same closed enumeration, one step quieter'],
+    [
+      /\bsync server\b/i,
+      'there is no separate sync server — inventing one to carry a smaller claim is the same error',
+    ],
+    [
+      /before (?:it|they|anything|any of it) (?:ever )?leaves? (?:your|the) (?:device|browser|phone)/i,
+      'bracemark-extractor is handed a plaintext URL by construction — say "before it syncs"',
+    ],
+  ];
+
+  it.each(BANNED)('makes no claim matching %s (%s)', (pattern) => {
+    expect(offending((value) => pattern.test(value))).toEqual([]);
+  });
+
+  it('keeps the holdings enumeration scoped to the library', () => {
+    // "our servers hold a path, a size, and bytes we have no key for" is true of
+    // the LIBRARY and false as a sentence about the servers. Dropping the two
+    // scoping words is a plausible edit — it reads tighter — and it turns the
+    // sentence into a claim a reader can falsify from /privacy. Asserted on the
+    // sentence rather than the whole string so the scope cannot drift into a
+    // different paragraph.
+    const sentenceWithTheClaim = (value: string) =>
+      value.split('.').find((sentence) => /bytes we have no key for/i.test(sentence));
+
+    const unscoped = offending((value) => {
+      const sentence = sentenceWithTheClaim(value);
+      return sentence !== undefined && !/\bof your library\b/i.test(sentence);
+    });
+    expect(unscoped).toEqual([]);
+
+    // And the enumeration is load-bearing enough that it has to still be there:
+    // the two strings that carry it are the product's whole argument.
+    expect(EVERY_EXPORTED_STRING.filter(([, v]) => sentenceWithTheClaim(v)).length).toBe(2);
+  });
+});
+
+describe('the strings Apple reads', () => {
+  // Guideline 2.3.10 binds every Apple-bound field, not just the description —
+  // and the promotional text is the likeliest place to trip it, because it is the
+  // field for launch notes and "now on Android too" is exactly the note someone
+  // would write there. FULL_DESCRIPTION is included: Apple reads it too.
+  const appleFields = everyString(APP_STORE, 'APP_STORE').concat([
+    ['FULL_DESCRIPTION', FULL_DESCRIPTION],
+  ]);
+
+  it.each(appleFields)('%s names no other mobile platform (guideline 2.3.10)', (_path, value) => {
+    // "on iPhone, iPad and Android" is the natural line for someone to add to a
+    // features list, and it gets the build rejected. Browser names are fine and
+    // deliberately not matched — the description says "Chrome and Firefox".
+    expect(value).not.toMatch(/\b(android|google play|play store|windows|iphone)\b/i);
+  });
+});
+
+describe('the long description', () => {
   it('quotes no price, cap or trial length (they change without a review)', () => {
     // Numbers belong in APP_STORE.promotionalText, which Apple lets us edit
     // outside the review cycle. Anything here goes stale on the storefront for as
@@ -128,25 +217,11 @@ describe('the apostrophe and the quotation marks', () => {
   // are read into the browser extension's manifest at build time, and the rest are
   // pasted into a store console. The budget cases above cannot catch it — U+2019 is
   // one UTF-16 code unit, exactly like `'`, so no length moves.
-  //
-  // Walks the whole module rather than a list of names, so an export added later
-  // is covered without anyone remembering to add it here. Its twin lives in
-  // brand/brand.spec.ts and does the same for the brand lines, COMPANY and SOURCE.
-  const everyString = (value: unknown, path: string): [string, string][] => {
-    if (typeof value === 'string') return [[path, value]];
-    if (value && typeof value === 'object') {
-      return Object.entries(value).flatMap(([key, inner]) => everyString(inner, `${path}.${key}`));
-    }
-    return [];
-  };
 
   it('is the typographic ’ in every exported string', () => {
     // Between two letters, which is an apostrophe and nothing else. A bare `'` is
     // left alone: no exported string is a quotation today, but one could be.
-    const offenders = everyString(LISTING_COPY, 'listing-copy')
-      .filter(([, value]) => /[A-Za-z]'[A-Za-z]/.test(value))
-      .map(([path]) => path);
-    expect(offenders).toEqual([]);
+    expect(offending((value) => /[A-Za-z]'[A-Za-z]/.test(value))).toEqual([]);
   });
 
   // `“ ”`, never a straight `"` — the same editorial rule, and it matters most
@@ -157,9 +232,6 @@ describe('the apostrophe and the quotation marks', () => {
   // between-two-letters test to write: a `"` in an exported listing string is a
   // quotation mark in every case, so the whole character is barred.
   it('is the typographic “ ” in every exported string', () => {
-    const offenders = everyString(LISTING_COPY, 'listing-copy')
-      .filter(([, value]) => value.includes('"'))
-      .map(([path]) => path);
-    expect(offenders).toEqual([]);
+    expect(offending((value) => value.includes('"'))).toEqual([]);
   });
 });
