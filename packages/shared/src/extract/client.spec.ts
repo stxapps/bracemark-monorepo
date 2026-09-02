@@ -1,0 +1,357 @@
+import { ApiError } from '../api/client';
+import { createExtractClient } from './client';
+import { MAX_EXTRACT_URLS } from './endpoints';
+
+// The client binding to bracemark-extractor. `callEndpoint` already has its own spec
+// (api/client.spec.ts) — what this file pins is the part that is this client's own
+// judgement, none of which a type or a lint rule can catch:
+//
+//   - THE INLINE SPLIT. `extract` opts into `inlineImage`, `extractMany` must not:
+//     the contract honors it only for a single URL, so a batch that asked for it
+//     would get the flag ignored at best and N base64 blobs in one JSON body at
+//     worst, defeating the streaming proxy the batch path exists to use.
+//   - ANONYMITY. No bearer token ever rides these requests. Attaching one converts
+//     the leak from "the server saw this URL" into "the server tied this URL to this
+//     account" — the strictly-worse one the design forbids (docs/link-extraction.md,
+//     _server extraction_).
+//   - THE HAND-BUILT PROXY REQUEST. `fetchImage` can't ride `callEndpoint` (the
+//     success body is a binary stream, not JSON), so it re-implements the URL build,
+//     the front SSRF gate and the ApiError throw. Each is a place the two paths can
+//     silently drift apart.
+//
+// The extract CONTRACT's own schemas (endpoints.ts) are exercised here rather than in
+// a spec of their own: this is where they run on a client, and the extractor's route
+// specs run them on a server.
+
+const BASE = 'https://extractor.example.test';
+const URL_A = 'https://example.com/a';
+const URL_B = 'https://example.com/b';
+
+// Duck-typed responses keep these specs free of the global Response/Headers — the
+// client only reads .ok/.status/.headers.get()/.json()/.text()/.arrayBuffer().
+function response(init: {
+  ok?: boolean;
+  status?: number;
+  json?: unknown;
+  bytes?: Uint8Array;
+  text?: () => Promise<string>;
+  retryAfter?: string | null;
+}): Response {
+  const { ok = true, status = ok ? 200 : 500, json, bytes, text, retryAfter = null } = init;
+  return {
+    ok,
+    status,
+    headers: { get: () => retryAfter },
+    json: () => Promise.resolve(json),
+    text: text ?? (() => Promise.resolve('')),
+    arrayBuffer: () => Promise.resolve((bytes ?? new Uint8Array(0)).slice().buffer),
+  } as unknown as Response;
+}
+
+// A fetch impl that records what the client handed it.
+function recordingFetch(res: Response = response({ json: { results: [] } })) {
+  const calls: [string, RequestInit][] = [];
+  const impl = ((url: string, requestInit: RequestInit) => {
+    calls.push([url, requestInit]);
+    return Promise.resolve(res);
+  }) as unknown as typeof fetch;
+  return {
+    fetch: impl,
+    count: () => calls.length,
+    url: () => new URL(calls[0][0]),
+    init: () => calls[0][1],
+    // The request as it reaches the WIRE — an `inlineImage: undefined` the schema
+    // left behind disappears here exactly as it would on the network.
+    body: () => JSON.parse(String(calls[0][1].body)) as Record<string, unknown>,
+  };
+}
+
+const results = (list: unknown[]) => response({ json: { results: list } });
+const clientWith = (f: ReturnType<typeof recordingFetch>) =>
+  createExtractClient({ baseUrl: BASE, fetch: f.fetch });
+
+describe('extract — the interactive single save', () => {
+  it('POSTs the URL to the contract path as a one-entry batch, asking for the inline image', async () => {
+    // `inlineImage` is the whole reason this method is separate from a one-URL
+    // extractMany: it saves the interactive save a second GET /v1/image round trip.
+    const f = recordingFetch(results([{ url: URL_A, ok: true, title: 'A' }]));
+
+    await clientWith(f).extract(URL_A);
+
+    expect(f.url().origin + f.url().pathname).toBe(`${BASE}/v1/extract`);
+    expect(f.init().method).toBe('POST');
+    expect(f.body()).toEqual({ urls: [URL_A], inlineImage: true });
+  });
+
+  it('sends no credential of any kind — the extractor is anonymous by design', async () => {
+    // A token here would tie the URL to the account. Asserting the whole header bag
+    // (rather than the absence of one name) is what makes a future `authorization`,
+    // `cookie` or `x-user` fail this.
+    const f = recordingFetch(results([{ url: URL_A, ok: true }]));
+
+    await clientWith(f).extract(URL_A);
+
+    expect(f.init().headers).toEqual({ 'content-type': 'application/json' });
+    expect(f.init().credentials).toBeUndefined();
+  });
+
+  it('returns that URL’s own result', async () => {
+    const result = { url: URL_A, ok: true, title: 'A', imageUrl: 'https://cdn.example.com/a.png' };
+    const f = recordingFetch(results([result]));
+
+    await expect(clientWith(f).extract(URL_A)).resolves.toEqual(result);
+  });
+
+  it('returns a per-URL FAILURE as a value, not as a throw', async () => {
+    // Partial success is the contract (docs/link-extraction.md — "pure function,
+    // never a writer"): the caller needs `error`/`status` to reach a verdict
+    // (verdictForExtractError), which a rejected promise would deny it.
+    const failure = { url: URL_A, ok: false, error: 'bad_status' as const, status: 404 };
+    const f = recordingFetch(results([failure]));
+
+    await expect(clientWith(f).extract(URL_A)).resolves.toEqual(failure);
+  });
+
+  it('throws rather than handing back an undefined typed as a result', async () => {
+    // `results[0]` on an empty array is `undefined` wearing the ExtractResult type.
+    // Without the guard that value flows into the caller and fails somewhere else
+    // entirely, as a property read on undefined.
+    const f = recordingFetch(results([]));
+
+    await expect(clientWith(f).extract(URL_A)).rejects.toThrow(/empty result/);
+  });
+
+  it('rejects a non-http(s) URL at the contract, before spending a request', async () => {
+    const f = recordingFetch();
+
+    await expect(clientWith(f).extract('javascript:alert(1)')).rejects.toThrow();
+    expect(f.count()).toBe(0);
+  });
+
+  it('forwards an AbortSignal so an abandoned save can be cancelled', async () => {
+    const f = recordingFetch(results([{ url: URL_A, ok: true }]));
+    const controller = new AbortController();
+
+    await clientWith(f).extract(URL_A, controller.signal);
+
+    expect(f.init().signal).toBe(controller.signal);
+  });
+});
+
+describe('extractMany — the batch drain', () => {
+  it('sends every URL in ONE request and does NOT ask for inline images', async () => {
+    // Both halves matter and both are invisible in a diff: the single round trip is
+    // the latency win the displayed-scoped / extract-all drains are built on, and the
+    // absent flag is what keeps the response small (imageUrl strings, bytes later
+    // through the streaming proxy).
+    const f = recordingFetch(results([]));
+
+    await clientWith(f).extractMany([URL_A, URL_B]);
+
+    expect(f.count()).toBe(1);
+    expect(f.url().origin + f.url().pathname).toBe(`${BASE}/v1/extract`);
+    expect(f.body()).toEqual({ urls: [URL_A, URL_B] });
+    expect(f.body()).not.toHaveProperty('inlineImage');
+  });
+
+  it('still omits inlineImage for a one-URL batch — the flag is the caller’s call, not urls.length', async () => {
+    // The server would honor it here (urls.length === 1), which is exactly why this
+    // has to be asserted: "interactive save" vs "bulk drain" is a distinction only
+    // the CLIENT knows, and `extractMany([one])` is the drain.
+    const f = recordingFetch(results([]));
+
+    await clientWith(f).extractMany([URL_A]);
+
+    expect(f.body()).toEqual({ urls: [URL_A] });
+  });
+
+  it('returns the results verbatim — failures kept, server order untouched', async () => {
+    // The caller correlates by `result.url` (order is not guaranteed), so this must
+    // not sort, filter or reshape: dropping the failures would strand those links
+    // pending forever, and re-ordering would silently invite index-correlation.
+    const list = [
+      { url: URL_B, ok: false, error: 'timeout' as const },
+      { url: URL_A, ok: true, title: 'A' },
+    ];
+    const f = recordingFetch(results(list));
+
+    await expect(clientWith(f).extractMany([URL_A, URL_B])).resolves.toEqual(list);
+  });
+
+  it('refuses a batch over the fan-out cap without spending a request', async () => {
+    // The abuse gate: one request may never fan out to more than MAX_EXTRACT_URLS
+    // arbitrary-URL fetches. Failing at the client costs nothing; the server 400s the
+    // whole request anyway, which would lose the batch's good URLs too.
+    const f = recordingFetch();
+    const urls = Array.from({ length: MAX_EXTRACT_URLS + 1 }, (_, i) => `https://example.com/${i}`);
+
+    await expect(clientWith(f).extractMany(urls)).rejects.toThrow();
+    expect(f.count()).toBe(0);
+
+    // And exactly at the cap it goes through — otherwise the assertion above would
+    // pass just as well against a client that refused every batch.
+    const atCap = recordingFetch(results([]));
+    await clientWith(atCap).extractMany(urls.slice(0, MAX_EXTRACT_URLS));
+    expect(atCap.count()).toBe(1);
+  });
+
+  it('refuses an empty batch before the network', async () => {
+    const f = recordingFetch();
+
+    await expect(clientWith(f).extractMany([])).rejects.toThrow();
+    expect(f.count()).toBe(0);
+  });
+
+  it('forwards an AbortSignal so a superseded drain is cancelled', async () => {
+    const f = recordingFetch(results([]));
+    const controller = new AbortController();
+
+    await clientWith(f).extractMany([URL_A], controller.signal);
+
+    expect(f.init().signal).toBe(controller.signal);
+  });
+});
+
+// The response half of the contract, checked where it runs on a client. A drifted or
+// hostile extractor is the threat model here: whatever it answers, the client must
+// not pass it on as a value its types promise it cannot be.
+describe('the response, validated against the contract', () => {
+  it('refuses an imageUrl that is not http(s)', async () => {
+    // The one with teeth: an unvalidated `imageUrl` is handed straight back to
+    // `fetchImage`, so a `data:`/`javascript:` value would ride into the proxy call.
+    const f = recordingFetch(
+      results([{ url: URL_A, ok: true, imageUrl: 'data:image/png;base64,x' }]),
+    );
+
+    await expect(clientWith(f).extract(URL_A)).rejects.toThrow();
+  });
+
+  it('refuses a body whose shape drifted', async () => {
+    const f = recordingFetch(response({ json: { results: 'not an array' } }));
+
+    await expect(clientWith(f).extractMany([URL_A])).rejects.toThrow();
+  });
+
+  it('throws ApiError with the status on a non-2xx extract', async () => {
+    const f = recordingFetch(response({ ok: false, status: 429, retryAfter: '30' }));
+
+    await expect(clientWith(f).extract(URL_A)).rejects.toMatchObject({
+      name: 'ApiError',
+      status: 429,
+      retryAfterSeconds: 30,
+    });
+  });
+});
+
+describe('fetchImage — the streaming proxy', () => {
+  const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
+
+  it('GETs the contract path with the target as a query param, and no credential', async () => {
+    const f = recordingFetch(response({ bytes: PNG }));
+
+    await clientWith(f).fetchImage('https://cdn.example.com/a.png?v=2&x=1');
+
+    expect(f.url().origin + f.url().pathname).toBe(`${BASE}/v1/image`);
+    expect(f.init().method).toBe('GET');
+    // Read back through searchParams: the target's own `?v=2&x=1` must survive as
+    // ONE encoded param, not leak into the proxy request's query.
+    expect(f.url().searchParams.get('url')).toBe('https://cdn.example.com/a.png?v=2&x=1');
+    expect([...f.url().searchParams.keys()]).toEqual(['url']);
+    expect(f.init().headers).toBeUndefined();
+  });
+
+  it('lets the contract path replace a path on the baseUrl, exactly as callEndpoint does', async () => {
+    // This URL is hand-built rather than built by callEndpoint, so the two can drift.
+    // `new URL('/v1/image', 'https://…/api')` drops `/api` — same silent rule the
+    // JSON endpoints live by (docs/api-contracts.md, "url versioning").
+    const f = recordingFetch(response({ bytes: PNG }));
+
+    await createExtractClient({ baseUrl: `${BASE}/api`, fetch: f.fetch }).fetchImage(URL_A);
+
+    expect(f.url().pathname).toBe('/v1/image');
+  });
+
+  it('returns the raw bytes, not a parsed body', async () => {
+    const f = recordingFetch(response({ bytes: PNG }));
+
+    const bytes = await clientWith(f).fetchImage(URL_A);
+
+    expect(bytes).toBeInstanceOf(Uint8Array);
+    expect(Array.from(bytes)).toEqual(Array.from(PNG));
+  });
+
+  it.each([
+    ['a data uri', 'data:image/png;base64,iVBORw0KGgo='],
+    ['a javascript url', 'javascript:alert(1)'],
+    ['an unparseable url', 'not a url'],
+    ['an empty url', ''],
+    ['a url past the length cap', `https://example.com/${'a'.repeat(2048)}`],
+  ])('re-runs the contract’s front SSRF gate on %s, before the network', async (_name, url) => {
+    // The gate `callEndpoint` runs for the JSON endpoints — a binary success body
+    // can't ride that path, so this call site has to run it itself, and nothing but
+    // this assertion says so.
+    const f = recordingFetch();
+
+    await expect(clientWith(f).fetchImage(url)).rejects.toThrow();
+    expect(f.count()).toBe(0);
+  });
+
+  it('throws ApiError carrying the status and body on a non-2xx', async () => {
+    // `instanceof ApiError` + `.status` is precisely how the caller decides an image
+    // failure is permanent vs. retryable (web-react's `loadImage`): a plain Error
+    // here would make every 404 look transient and retry it forever.
+    const f = recordingFetch(
+      response({ ok: false, status: 502, text: () => Promise.resolve('upstream refused') }),
+    );
+
+    const err = await clientWith(f)
+      .fetchImage(URL_A)
+      .catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err).toMatchObject({ status: 502, body: 'upstream refused' });
+  });
+
+  it('carries the proxy’s Retry-After hint onto the error', async () => {
+    const f = recordingFetch(response({ ok: false, status: 429, retryAfter: '30' }));
+
+    await expect(clientWith(f).fetchImage(URL_A)).rejects.toMatchObject({
+      status: 429,
+      retryAfterSeconds: 30,
+    });
+  });
+
+  it('still reports the status when the error body cannot be read', async () => {
+    const f = recordingFetch(
+      response({ ok: false, status: 503, text: () => Promise.reject(new Error('stream closed')) }),
+    );
+
+    await expect(clientWith(f).fetchImage(URL_A)).rejects.toMatchObject({ status: 503, body: '' });
+  });
+
+  it('forwards an AbortSignal', async () => {
+    const f = recordingFetch(response({ bytes: PNG }));
+    const controller = new AbortController();
+
+    await clientWith(f).fetchImage(URL_A, controller.signal);
+
+    expect(f.init().signal).toBe(controller.signal);
+  });
+});
+
+describe('createExtractClient', () => {
+  it('falls back to the global fetch when the app injects none', async () => {
+    // bracemark-web builds this client from a baseUrl alone, so the default parameter
+    // is the only fetch that path ever gets.
+    const f = recordingFetch(results([{ url: URL_A, ok: true }]));
+    const original = globalThis.fetch;
+    globalThis.fetch = f.fetch;
+    try {
+      await createExtractClient({ baseUrl: BASE }).extract(URL_A);
+    } finally {
+      globalThis.fetch = original;
+    }
+
+    expect(f.count()).toBe(1);
+  });
+});

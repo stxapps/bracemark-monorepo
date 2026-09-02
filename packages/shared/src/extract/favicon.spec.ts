@@ -53,6 +53,17 @@ describe('isRenderableIconBytes', () => {
     );
   });
 
+  it('inherits the cap, not just the sniffs', () => {
+    // This is the verdict EXPO gates its cache on, and expo's fetch has no ceiling
+    // in front of it (no proxy, and RN's fetch can't stream-abort) — so a boolean
+    // that asked only "is it an image" would write a multi-megabyte body into
+    // db.favicons, where `ok` rows never expire. Delegating to sniffIconMime is what
+    // keeps the two verdicts one verdict; nothing else says so.
+    const oversized = new Uint8Array(MAX_FAVICON_BYTES + 1);
+    oversized.set(PNG);
+    expect(isRenderableIconBytes(oversized)).toBe(false);
+  });
+
   it('still refuses a page and an empty body', () => {
     expect(isRenderableIconBytes(utf8('<!DOCTYPE html><html><body>Not found</body></html>'))).toBe(
       false,

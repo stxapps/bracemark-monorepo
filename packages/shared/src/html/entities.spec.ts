@@ -14,6 +14,14 @@ describe('decodeHtmlEntities', () => {
     ).toBe('Please stop calling databases CP or AP — Martin Kleppmann’s blog');
   });
 
+  it('decodes the reported og:image query string too', () => {
+    // The other bug named in entities.ts's header: an `&amp;` left in the URL is
+    // fetched literally, and the preview image 404s.
+    expect(decodeHtmlEntities('https://img.test/p.jpg?w=1200&amp;h=630')).toBe(
+      'https://img.test/p.jpg?w=1200&h=630',
+    );
+  });
+
   it.each([
     ['&amp;', '&'],
     ['&lt;', '<'],
@@ -50,6 +58,22 @@ describe('decodeHtmlEntities', () => {
     expect(decodeHtmlEntities('Kleppmann&#146;s blog &#151; a post')).toBe(
       'Kleppmann’s blog — a post',
     );
+  });
+
+  it('remaps the whole range and stops at both ends', () => {
+    // Nothing else here sits near either edge, so a range narrowed by one slot
+    // decodes `&#128;`/`&#159;` to unprintable controls — a stored title that looks
+    // fine in a diff and wrong on screen.
+    expect(decodeHtmlEntities('&#128;&#159;')).toBe('€Ÿ');
+    // One past the top is plain latin-1 (a non-breaking space), not a remap.
+    expect(decodeHtmlEntities('&#160;')).toBe('\u00a0');
+  });
+
+  it('falls through an UNASSIGNED slot rather than decoding it to nothing', () => {
+    // The five blanks in CP1252_HIGH mean "no character here", not "the empty
+    // string": handing the blank back DELETES the reference from the title. The
+    // shape assertion below counts the blanks but says nothing about this.
+    expect(decodeHtmlEntities('a&#129;b')).toBe('a\u0081b');
   });
 
   it('is case-sensitive, because the table holds both spellings', () => {

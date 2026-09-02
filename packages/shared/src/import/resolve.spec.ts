@@ -63,6 +63,21 @@ describe('ListResolver', () => {
     expect(resolver.created).toHaveLength(3);
   });
 
+  // Sibling groups are keyed by parent; matching across the whole tree would adopt
+  // any list that merely shares a name with a segment.
+  it('matches a segment against its OWN parent’s children, not every list', () => {
+    const resolver = new ListResolver(
+      [node({ id: 'root-archive', name: 'Archive' })],
+      100,
+      idMinter(),
+    );
+    // "Work/Archive" must mint a child of Work — filing those rows into the
+    // account's unrelated root-level "Archive" would be invisible in the import
+    // report and wrong on every row.
+    expect(resolver.resolve(['Work', 'Archive'])).toBe('new-2');
+    expect(resolver.created.map((entry) => entry.data.parentId)).toEqual([null, 'new-1']);
+  });
+
   // The memo key is NUL-joined so a slash in a name can't collide with nesting.
   it('does not confuse ["a/b"] with ["a", "b"]', () => {
     const resolver = new ListResolver([], 100, idMinter());
@@ -109,6 +124,18 @@ describe('TagResolver', () => {
     expect(resolver.resolve(['x'])).toEqual(['new-1']);
     expect(resolver.resolve(['x'])).toEqual(['new-1']);
     expect(resolver.created).toHaveLength(1);
+  });
+
+  it('ranks each new tag after the one it just minted', () => {
+    // The stateful-over-one-run half of ranking: a file naming ten new tags must
+    // produce ten ASCENDING keys, not ten copies of the same one. Equal ranks don't
+    // throw — compareRank falls back to id — so the only symptom is a tag list
+    // ordered by id instead of by the order the import created them.
+    const resolver = new TagResolver([], 100, idMinter());
+    resolver.resolve(['a', 'b', 'c']);
+    const ranks = resolver.created.map((entry) => entry.data.rank);
+    expect([...ranks].sort()).toEqual(ranks);
+    expect(new Set(ranks).size).toBe(3);
   });
 
   // New tags are root-level, ranked after the existing ROOT siblings only.

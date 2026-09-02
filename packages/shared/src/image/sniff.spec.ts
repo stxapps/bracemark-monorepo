@@ -56,14 +56,34 @@ describe('isSvgBytes', () => {
 });
 
 describe('sniffImageMime', () => {
-  it('identifies raster formats by magic bytes', () => {
-    expect(sniffImageMime(PNG)).toBe('image/png');
-    expect(sniffImageMime(new Uint8Array([0xff, 0xd8, 0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0]))).toBe(
-      'image/jpeg',
+  // The whole set, because the set IS the contract: this verdict gates what expo's
+  // probeImageSize/resizeImage are handed, so a format dropped from here is an image
+  // silently refused at the store edge — no error, just a link with no preview.
+  it.each([
+    ['image/png', PNG],
+    ['image/jpeg', [0xff, 0xd8, 0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0]],
+    ['image/x-icon', [0, 0, 0x01, 0, 0, 0, 0, 0, 0, 0, 0, 0]],
+    ['image/gif', [0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0, 0, 0, 0, 0, 0]],
+    ['image/bmp', [0x42, 0x4d, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]],
+    ['image/webp', [...utf8('RIFF'), 0, 0, 0, 0, ...utf8('WEBP')]],
+  ])('identifies %s by its magic bytes', (mime, bytes) => {
+    expect(sniffImageMime(new Uint8Array(bytes))).toBe(mime);
+  });
+
+  it('refuses a RIFF container that is not WebP', () => {
+    // WebP is the one format whose magic is split across two places — the container
+    // tag at 0 and the form type at 8. Checking only "RIFF" would call a WAV or an
+    // AVI an image, and the decoder downstream is the thing that finds out.
+    expect(sniffImageMime(new Uint8Array([...utf8('RIFF'), 0, 0, 0, 0, ...utf8('WAVE')]))).toBe(
+      undefined,
     );
-    expect(sniffImageMime(new Uint8Array([0, 0, 0x01, 0, 0, 0, 0, 0, 0, 0, 0, 0]))).toBe(
-      'image/x-icon',
-    );
+  });
+
+  it('refuses a truncated header, however right its first bytes are', () => {
+    // The 12-byte floor is what lets the WebP branch read b[8..11] without bounds
+    // checks; it also means a stalled/empty response can never sniff as an image.
+    expect(sniffImageMime(PNG.slice(0, 8))).toBeUndefined();
+    expect(sniffImageMime(new Uint8Array(0))).toBeUndefined();
   });
 
   it('keeps refusing SVG — the store path measures and caps what it accepts', () => {

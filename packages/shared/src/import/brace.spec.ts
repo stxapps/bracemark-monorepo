@@ -209,6 +209,117 @@ describe('parseBraceExport', () => {
     expect(images.get('images/kept.png')).toEqual(new Uint8Array([0x68, 0x69]));
   });
 
+  // The name maps come from the NEWEST settings file, and an export carries every
+  // revision of it — nothing else here has more than one.
+  it('reads the newest settings file, whatever order the export lists them in', () => {
+    const older = entry('settings1600000000000zzzz.json', {
+      listNameMap: [{ listName: '1600000000000-aaaa-bbbb', displayName: 'What it used to be' }],
+    });
+    const newer = entry('settings1700000000000aaaa.json', {
+      listNameMap: [{ listName: '1600000000000-aaaa-bbbb', displayName: 'Work' }],
+    });
+    const linkEntry = entry(
+      'links/1600000000000-aaaa-bbbb/1700000000000-abcd-efgh.json',
+      link('1700000000000-abcd-efgh', 'https://example.com/a'),
+    );
+
+    // Both orders, because the export's own order is not sorted and taking the
+    // first (or the last) file seen would pass exactly one of these.
+    expect(parseBraceExport(exportText([linkEntry, older, newer])).links[0].folderPath).toEqual([
+      'Work',
+    ]);
+    expect(parseBraceExport(exportText([linkEntry, newer, older])).links[0].folderPath).toEqual([
+      'Work',
+    ]);
+  });
+
+  it('keeps a list the name map no longer knows as a visible folder', () => {
+    // A list deleted after the link was filed has no display name left. Dropping
+    // the folder would silently pour those links into the default list, where the
+    // user cannot tell them apart from everything else.
+    const { links } = parseBraceExport(
+      exportText([
+        entry(
+          'links/1600000000009-dead-beef/1700000000000-abcd-efgh.json',
+          link('1700000000000-abcd-efgh', 'https://example.com/a'),
+        ),
+        SETTINGS,
+      ]),
+    );
+
+    expect(links[0].folderPath).toEqual(['1600000000009-dead-beef']);
+  });
+
+  it('names a re-tagged tag once, not once per tags/ file', () => {
+    // Re-tagging writes a SECOND file at a new rank rather than moving the first,
+    // so a link can carry two entries naming one tag — which would resolve to the
+    // same display name twice and mint a duplicate on the way in.
+    const { links } = parseBraceExport(
+      exportText([
+        entry(
+          'links/My List/1700000000000-abcd-efgh.json',
+          link('1700000000000-abcd-efgh', 'https://example.com/a'),
+        ),
+        entry(
+          'tags/1600000000002-eeee-ffff/0i0001/1700000000000/1700000000000/1700000000000-abcd-efgh.json',
+        ),
+        entry(
+          'tags/1600000000002-eeee-ffff/0i0009/1700000009999/1700000000000/1700000000000-abcd-efgh.json',
+        ),
+        SETTINGS,
+      ]),
+    );
+
+    expect(links[0].tagNames).toEqual(['to read']);
+  });
+
+  it('re-keys an image written at an absolute on-device path (a phone-made export)', () => {
+    // Brace's MOBILE export writes the device path instead of the `images/<fname>`
+    // key its own importer expects. Without the re-key the blob simply never
+    // matches a link's reference and every custom image is dropped — silently, on
+    // exactly the exports made by the app most people used.
+    const { links, images } = parseBraceExport(
+      exportText([
+        entry(
+          'links/My List/1700000000000-abcd-efgh.json',
+          link('1700000000000-abcd-efgh', 'https://example.com/a', {
+            custom: { image: 'cdroot/images/kept.png' },
+          }),
+        ),
+        entry(
+          '/var/mobile/Containers/Data/Application/ABCD/Documents/images/kept.png',
+          'data:image/png;base64,aGk=',
+        ),
+        SETTINGS,
+      ]),
+    );
+
+    expect(links[0].imageRef).toBe('images/kept.png');
+    expect([...images.keys()]).toEqual(['images/kept.png']);
+  });
+
+  it('imports the link without its image when the blob is not a base64 data URL', () => {
+    // The two halves have to agree: the parser keeps the REFERENCE and yields no
+    // bytes, and the projection treats a ref with no bytes as "no custom image"
+    // (project.ts) rather than a broken pointer.
+    const { links, images } = parseBraceExport(
+      exportText([
+        entry(
+          'links/My List/1700000000000-abcd-efgh.json',
+          link('1700000000000-abcd-efgh', 'https://example.com/a', {
+            custom: { image: 'cdroot/images/kept.png' },
+          }),
+        ),
+        entry('images/kept.png', 'https://cdn.example.com/kept.png'),
+        SETTINGS,
+      ]),
+    );
+
+    expect(links).toHaveLength(1);
+    expect(links[0].imageRef).toBe('images/kept.png');
+    expect(images.size).toBe(0);
+  });
+
   it('drops unstorable urls and survives junk', () => {
     expect(parseBraceExport('not json at all').links).toEqual([]);
     expect(parseBraceExport('{"path":"links/x"}').links).toEqual([]);

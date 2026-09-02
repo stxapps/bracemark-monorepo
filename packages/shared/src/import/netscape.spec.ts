@@ -120,6 +120,46 @@ describe('parseNetscapeHtml', () => {
     ]);
   });
 
+  // Every existing case puts its links BEFORE any </DL>, so nothing here exercised
+  // the pop — a scanner that never closed a scope passed the whole file.
+  it('closes a folder at </DL>, so the next one is a sibling and not a child', () => {
+    const html = [
+      '<DL><p>',
+      '    <DT><H3>Work</H3>',
+      '    <DL><p>',
+      '        <DT><A HREF="https://example.com/w">W</A>',
+      '    </DL><p>',
+      '    <DT><H3>Personal</H3>',
+      '    <DL><p>',
+      '        <DT><A HREF="https://example.com/p">P</A>',
+      '    </DL><p>',
+      '    <DT><A HREF="https://example.com/root">R</A>',
+      '</DL><p>',
+    ].join('\n');
+
+    expect(parseNetscapeHtml(html).map((l) => l.folderPath)).toEqual([['Work'], ['Personal'], []]);
+  });
+
+  it('stops popping on an unbalanced </DL> instead of going negative', () => {
+    // A truncated or hand-edited file (this file's header names the case): the
+    // extra close must leave the scanner at the root, still importing.
+    const html = [
+      '<DL><p><DT><H3>A</H3><DL><p>',
+      '<DT><A HREF="https://example.com/a">A</A>',
+      '</DL><p></DL><p></DL><p>',
+      '<DT><A HREF="https://example.com/b">B</A>',
+    ].join('\n');
+
+    expect(parseNetscapeHtml(html).map((l) => l.folderPath)).toEqual([['A'], []]);
+  });
+
+  it('gives an unnamed folder header no folder at all', () => {
+    // `<H3></H3>` opens an ANONYMOUS scope — a list named '' is not a thing the
+    // resolver should ever be asked to find or create.
+    const html = '<DL><p><DT><H3>  </H3><DL><p><DT><A HREF="https://example.com/a">A</A>';
+    expect(parseNetscapeHtml(html)[0].folderPath).toEqual([]);
+  });
+
   it('normalizes second/millisecond/microsecond timestamps to ms', () => {
     const html = [
       '<DL><p>',

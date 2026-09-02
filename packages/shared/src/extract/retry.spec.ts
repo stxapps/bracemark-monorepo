@@ -1,11 +1,13 @@
-import { EXTRACTION_BACKOFF_BASE_MS, EXTRACTION_BACKOFF_MAX_MS } from '../sync/extraction';
+import { backoff, EXTRACTION_BACKOFF_MAX_MS } from '../sync/extraction';
 import { isPermanent, verdictForExtractError, verdictForStatus } from './retry';
 
 // The attempt count at which the backoff ladder tops out — the point the 403 rule gives up
-// at. Derived, not hardcoded, so a change to the curve moves this with it.
+// at. Derived by WALKING `backoff` itself, not by restating its curve: a copy of the formula
+// keeps agreeing with a ladder that has changed shape (a different multiplier, jitter), so
+// the 403 cases below would go on passing while testing a boundary that no longer exists.
 const LADDER_TOP = (() => {
   let attempts = 1;
-  while (EXTRACTION_BACKOFF_BASE_MS * 2 ** (attempts - 1) < EXTRACTION_BACKOFF_MAX_MS) attempts++;
+  while (backoff(attempts) < EXTRACTION_BACKOFF_MAX_MS) attempts++;
   return attempts;
 })();
 
@@ -31,7 +33,10 @@ describe('verdictForStatus', () => {
     await expect(verdictForStatus(status, never)).resolves.toBe('failed');
   });
 
-  it.each([400, 401, 404, 410, 451])('settles %i permanently', async (status) => {
+  // 499 is the boundary: the retry rung is `>= 500`, so nginx's client-closed code
+  // settles like the 4xx it is. Nothing else here sits close enough to catch a slipped
+  // comparison.
+  it.each([400, 401, 404, 410, 451, 499])('settles %i permanently', async (status) => {
     await expect(verdictForStatus(status, never)).resolves.toBe('permanent');
   });
 

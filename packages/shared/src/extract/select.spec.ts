@@ -40,15 +40,38 @@ describe('selectTitleImage', () => {
     expect(selectTitleImage({}, BASE).title).toBeUndefined();
   });
 
-  // The documented image order, walked one fallback at a time.
+  // The documented image order, walked one fallback at a time. Each row carries the
+  // winner as `/a.png` plus EVERY lower-priority candidate — without the full set a
+  // row only proves "beats the tags that happened to be present", and swapping two
+  // rungs of the `??` chain (og:image:url ahead of og:image, say) passes the table.
   it.each([
-    ['og:image', { ogImage: '/a.png', twitterImage: '/b.png', imageSrc: '/c.png' }, '/a.png'],
-    ['og:image:url', { ogImageUrl: '/a.png', twitterImage: '/b.png' }, '/a.png'],
-    ['og:image:secure_url', { ogImageSecure: '/a.png', twitterImage: '/b.png' }, '/a.png'],
-    ['twitter:image', { twitterImage: '/b.png', imageSrc: '/c.png' }, '/b.png'],
-    ['link rel=image_src', { imageSrc: '/c.png' }, '/c.png'],
-  ])('picks %s', (_name, collected: CollectedMeta, expected) => {
-    expect(selectTitleImage(collected, BASE).imageUrl).toBe(`https://example.com${expected}`);
+    [
+      'og:image',
+      {
+        ogImage: '/a.png',
+        ogImageUrl: '/other.png',
+        ogImageSecure: '/other.png',
+        twitterImage: '/other.png',
+        imageSrc: '/other.png',
+      },
+    ],
+    [
+      'og:image:url',
+      {
+        ogImageUrl: '/a.png',
+        ogImageSecure: '/other.png',
+        twitterImage: '/other.png',
+        imageSrc: '/other.png',
+      },
+    ],
+    [
+      'og:image:secure_url',
+      { ogImageSecure: '/a.png', twitterImage: '/other.png', imageSrc: '/other.png' },
+    ],
+    ['twitter:image', { twitterImage: '/a.png', imageSrc: '/other.png' }],
+    ['link rel=image_src', { imageSrc: '/a.png' }],
+  ])('picks %s over every lower-priority tag', (_name, collected: CollectedMeta) => {
+    expect(selectTitleImage(collected, BASE).imageUrl).toBe('https://example.com/a.png');
   });
 
   it('drops a non-http(s) image instead of returning it', () => {
@@ -76,6 +99,44 @@ describe('selectFaviconUrl', () => {
       icon('/i48.png', 'icon', '48x48'),
     ];
     expect(selectFaviconUrl({ icons }, BASE)).toBe('https://example.com/i48.png');
+  });
+
+  it('counts an icon exactly at the 32px floor as big enough', () => {
+    // The floor is inclusive, and only a pair pins it: make the bound exclusive and
+    // the 32px icon is skipped, the 16px one wins as the last resort, and the page
+    // that declared a sharp icon shows a soft one. Every other case here passes
+    // either way.
+    const icons = [icon('/i16.png', 'icon', '16x16'), icon('/i32.png', 'icon', '32x32')];
+    expect(selectFaviconUrl({ icons }, BASE)).toBe('https://example.com/i32.png');
+  });
+
+  it('prefers an unsized icon over a declared one below the floor', () => {
+    // Rung two of the ladder: a below-floor icon is SKIPPED, not ranked, so the plain
+    // `rel="icon"` most pages declare beats a 16px sibling rather than losing to it
+    // on document order.
+    const icons = [icon('/i16.png', 'icon', '16x16'), icon('/plain.png', 'icon')];
+    expect(selectFaviconUrl({ icons }, BASE)).toBe('https://example.com/plain.png');
+  });
+
+  it('reads the LARGEST dimension a multi-size attribute declares', () => {
+    // `sizes="16x16 40x40"` is one 40px icon, not a 16px one — reading the first
+    // token instead drops it below the floor and hands the row to the 48px sibling.
+    const icons = [icon('/multi.png', 'icon', '16x16 40x40'), icon('/i48.png', 'icon', '48x48')];
+    expect(selectFaviconUrl({ icons }, BASE)).toBe('https://example.com/multi.png');
+  });
+
+  it('treats sizes="any" as unsized rather than as a size', () => {
+    // Scalable, so there is no pixel count to rank — it lands on the unsized rung,
+    // ahead of a 16px declaration.
+    const icons = [icon('/scalable.png', 'icon', 'any'), icon('/i16.png', 'icon', '16x16')];
+    expect(selectFaviconUrl({ icons }, BASE)).toBe('https://example.com/scalable.png');
+  });
+
+  it('ignores an icon declared with a blank href', () => {
+    // `<link rel="icon" href="">` would otherwise be CHOSEN (first unsized) and then
+    // resolve to nothing — undefined returned from a page that declared a usable icon.
+    const icons = [icon('  ', 'icon'), icon('/i.png', 'icon')];
+    expect(selectFaviconUrl({ icons }, BASE)).toBe('https://example.com/i.png');
   });
 
   it('prefers an unsized declaration over nothing and resolves it', () => {
