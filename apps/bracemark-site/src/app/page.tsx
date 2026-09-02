@@ -373,12 +373,42 @@ function HeroPanel() {
         </span>
       </div>
 
-      {/* Ciphertext half — inverted, because this is the side we live on. */}
+      {/* Ciphertext half — inverted, because this is the side we live on.
+
+          THE ALPHAS ON THIS GROUND ARE SET BY APCA, NOT BY THE WCAG RATIO, and
+          every one of them was raised once already for that reason. docs/theme.md
+          (_contrast — dark mode, where the ratio lies_) is explicit that WCAG 2.x
+          is polarity-blind and OVERRATES light-on-dark at low luminance, which is
+          precisely what `text-background/*` on `bg-foreground` is in light mode —
+          so this surface is the one place on the site where the ratio is actively
+          misleading. It is not a small gap: `/60` here measures a comfortable
+          7.3:1 and Lc 49, and `/45` measures 4.5:1 and Lc 31, which is APCA's
+          spot-reading floor — text that passes AA and is genuinely hard to read.
+          That is theme.md's own warning verbatim ("will pass the ratio long before
+          it is comfortable to read"), and it went unnoticed here for the same
+          reason it does everywhere: nothing lints contrast, and the numbers that
+          get checked by hand are the numbers that say it is fine.
+
+          The ladder, measured in LIGHT mode because that is the worse surface for
+          this polarity (the band inverts in dark, where every value scores ~15-25
+          Lc higher):
+            /80  Lc 77 — anything that must be READ: the eyebrow (11px uppercase
+                 mono at 0.18em tracking, which wants MORE than body copy, not
+                 less) and both caption paragraphs.
+            /75  Lc 70 — supporting metadata beside a full-opacity sibling: the
+                 size, the timestamp.
+            /55  Lc 43 — the ciphertext block alone. It is texture rather than
+                 text (`select-all`, never read as prose), so it is deliberately
+                 below the body floor; the point of raising it from `/45` was to
+                 clear the invisible threshold, not to make it competitive with
+                 the path above it.
+          Use this ladder for anything new here rather than picking an alpha that
+          looks right in whichever theme the browser happened to open in. */}
       <div className={cn('bg-foreground px-5 pt-7 pb-6 text-background sm:px-6')}>
-        <p className={cn('eyebrow text-background/60')}>What our servers store</p>
+        <p className={cn('eyebrow text-background/80')}>What our servers store</p>
         <div className={cn('mt-4 flex items-baseline justify-between gap-4 font-mono text-xs')}>
           <span className={cn('truncate')}>links/01JD7QK2X8N4WYB3F0.enc</span>
-          <span className={cn('shrink-0 text-background/50')}>2.1 KB</span>
+          <span className={cn('shrink-0 text-background/75')}>2.1 KB</span>
         </div>
         {/* The third field, and the reason this panel is now truthful. /privacy
             has always said we hold the path, the size AND when the file last
@@ -389,12 +419,12 @@ function HeroPanel() {
             an overclaim in the one place we ask to be checked costs more than
             the fact does. Relative rather than a date: an illustration with a
             hard-coded 2026 stamp reads as abandoned by 2028. */}
-        <p className={cn('mt-1 font-mono text-xs text-background/50')}>
+        <p className={cn('mt-1 font-mono text-xs text-background/75')}>
           last changed 2 minutes ago
         </p>
         <p
           className={cn(
-            'mt-3 font-mono text-[0.6875rem] leading-5 break-all text-background/45 select-all',
+            'mt-3 font-mono text-[0.6875rem] leading-5 break-all text-background/55 select-all',
           )}
         >
           {CIPHERTEXT}
@@ -412,7 +442,7 @@ function HeroPanel() {
             and quietly drop the only sentence on the page that R2's
             ciphertext-only guarantee actually earns us
             (docs/brand-assets.md, _the voice_ — mechanical). */}
-        <p className={cn('mt-5 text-sm leading-6 text-background/70')}>
+        <p className={cn('mt-5 text-sm leading-6 text-background/80')}>
           A path, a size, a timestamp, and bytes we hold no key to open. Not the title, not the
           address, not the tags — there is nowhere for them to be.
         </p>
@@ -421,12 +451,15 @@ function HeroPanel() {
             the page: the truthful version is more impressive than the
             overclaim, because a team that volunteers its own residual leak is
             one you can believe about the leaks you cannot see. */}
-        {/* Same weight as the line above it, not a dimmer footnote. `/50` on
-            this ground is roughly 4.4:1 — under AA for body text — and dimming
-            it would stage the concession as fine print, which is the exact move
-            this paragraph exists to refuse. It is the caption's second half,
-            so it is set as the caption's second half. */}
-        <p className={cn('mt-3 text-sm leading-6 text-background/70')}>
+        {/* Same weight as the line above it, not a dimmer footnote. Dimming it
+            would stage the concession as fine print, which is the exact move
+            this paragraph exists to refuse. It is the caption's second half, so
+            it is set as the caption's second half — the two move together, and
+            they moved together to `/80` in the APCA pass described above. (This
+            note used to argue from `/50` being "roughly 4.4:1, under AA", which
+            was the right conclusion off the wrong instrument: on this ground the
+            WCAG figure is the one that flatters, not the one that bites.) */}
+        <p className={cn('mt-3 text-sm leading-6 text-background/80')}>
           What that shape still tells us: how many files you keep and when they change. It is the
           whole of what we can infer, and we would rather say it than have you work it out.
         </p>
@@ -650,12 +683,12 @@ const TRADE: { aspect: string; hosted: string; ours: string }[] = [
     aspect: 'Search',
     hosted:
       'Runs on their servers, over your titles and addresses in readable form. That is what makes it possible.',
-    ours: 'Runs on your device, across titles, addresses and hosts — every link, on every plan, with no index of your library anywhere else.',
+    ours: `Runs on your device, across titles, addresses and hosts — every link, on every plan, and no search you type leaves it. Searching by field, or across several lists and tags at once, is the ${PLAN_LABELS.plus} editor.`,
   },
   {
     aspect: 'Previews',
     hosted: 'Their servers fetch every page you save, and keep what they find.',
-    ours: `The device that saved the link pulls the title and image, so nothing fetches the page on your behalf. The links no device fetched — imports, and saves made in the web app — need a server, and that is the one opt-in ${PLAN_LABELS.plus} feature.`,
+    ours: `The device that saved the link pulls the title and image, so nothing fetches the page on your behalf. The links no device fetched — imports, and saves made in the web app — need a server, and that is an opt-in ${PLAN_LABELS.plus} feature.`,
   },
   {
     // The row that does a second job. The no-reset fact and its answer used to
@@ -666,14 +699,40 @@ const TRADE: { aspect: string; hosted: string; ours: string }[] = [
     // deliberate reprise rather than as the first time anyone hears it.
     aspect: 'A forgotten password',
     hosted: 'They can mail you a reset, because they can read the library either way.',
-    ours: 'Your recovery code opens the account instead. It is generated at signup beside your password, and it is the only other way in — there is no third one we could open for you.',
+    ours: 'Your recovery code opens the account instead. It is generated at signup beside your password, and it is your other way in — like your password, a door only you hold. There is none we could open for you.',
   },
 ];
 
 const GUARANTEES: [string, string][] = [
+  // "RANDOM RATHER THAN DERIVED" IS PINNED TO THE DOOR MODEL, and it is the one
+  // clause here a reader can check against another claim on this same page. The
+  // entry used to open "Derived from your password", which describes the design
+  // this app had BEFORE the DEK/KEK doors: the root is now a random DEK that is
+  // never derived from anything, and the password runs through Argon2id to a KEK
+  // that UNWRAPS a copy of it (docs/account.md, _the DEK / KEK door model_).
+  // The distinction is not pedantry — it is load-bearing for the trade band three
+  // sections up, which promises a recovery code opens the account. A key that
+  // really was derived from the password could not also be opened by a recovery
+  // code, so the old wording had the claim band contradicting the mechanism the
+  // trade band sells. Nothing catches that: `bracemark-site` imports PLAN_LABELS
+  // and SOURCE and nothing from `crypto`, so the sentence describing the door
+  // model and the code implementing it sit in different packages with no link,
+  // and a third door (passkey-PRF, docs/account.md _phase 2_) lands the same way.
+  //
+  // "BEFORE IT SYNCS", never "before anything leaves the device" — the same
+  // scoping the capture band's lede is written to, and for the same reason: the
+  // web app and Import hand `bracemark-extractor` a PLAINTEXT URL when the opt-in
+  // is on, because a server that fetches a page for you has to be told which page.
+  // See the note above the capture section, which carries the full argument.
+  //
+  // "ENCRYPTION KEY", never "private key". There IS a keypair, and its public half
+  // is named two columns over ("the public key your sign-ins are checked against")
+  // — so "private key" would point at the SIGNING half and imply the library is
+  // encrypted to the keypair, which it is not. The bare "key" is fine after the
+  // first mention, and the eyebrow heading wants the short form.
   [
     'Your key',
-    'Derived from your password on your device, with Argon2id. The password never leaves the device, and neither does the key it unlocks.',
+    'Your encryption key is unlocked by your password on your device, with Argon2id. The key itself is random rather than derived from the password — which is how a recovery code can open the same library. Every link is encrypted with it before it syncs, and nothing but that key turns the result back into readable form. Neither the password nor the key is ever sent to us.',
   ],
   // The same repair as the hero panel's caption, in the same voice, because the
   // same reader checks both: "it cannot index your library" is the one claim in
@@ -712,10 +771,6 @@ const GUARANTEES: [string, string][] = [
     'Our blindness',
     'For each thing you save we hold a path, a size, a timestamp and an encrypted blob — we cannot index your library, search it, or hand it to anyone in a readable form. What we can read is the account around it: your username, the public key your sign-ins are checked against, the sessions that keep your devices signed in, and your subscription if you buy one. The privacy policy inventories every field of it.',
   ],
-  [
-    'Your exit',
-    'Export everything, in open formats, on every plan, forever. Charging you to leave would defeat the point of building it this way.',
-  ],
 ];
 
 // --- what happens if we stop ------------------------------------------------
@@ -729,7 +784,23 @@ const GUARANTEES: [string, string][] = [
 //
 // The three are ordered by how little they depend on us — the device copy needs
 // nothing from us at all, the export needs the app to run once more, the source
-// needs only that GitHub outlive us.
+// needs only that GitHub outlive us. THE LEDE NOW SAYS EXACTLY THAT, because the
+// absolute it used to say was false on two of the three entries it introduces.
+// "Three properties of how it is built, none of which we can revoke later" holds
+// only for the device copy: export pricing is pure policy and we could change it
+// tomorrow, and the AGPL makes PUBLISHED commits irrevocable without obliging us
+// to publish the next one. A reader who spends ten seconds on it gets there ("you
+// could just charge me next year"), which is the same falsifiable-absolute shape
+// the claim band retired twice — and the more rigorous it sounds, the more it
+// costs when it fails. The gradient is both true and the stronger argument: it
+// concedes that two of the three need SOMETHING from us, which is what makes the
+// first one land.
+//
+// Relatedly, "so we never will" is gone from the export entry. It was the one
+// promise about our future left standing in a band whose entire premise is that
+// it is not making any — under a lede that says so in the sentence directly
+// above. The line before it already carries the reasoning, so the promise was
+// spending the band's register to add nothing.
 //
 // The self-hosting sentence is here because an AGPL repository containing the
 // sync server raises exactly one question from the only audience that reads
@@ -756,7 +827,7 @@ const DURABILITY: [string, React.ReactNode][] = [
   ],
   [
     'Export is free, on every plan',
-    'Four formats — a complete backup that restores everything, a browser bookmarks file, a CSV, and a plain list of URLs. Charging you to leave would undo the point of building it this way, so we never will.',
+    'Four formats — a complete backup that restores everything, a browser bookmarks file, a CSV, and a plain list of URLs. Charging you to leave would undo the point of building it this way.',
   ],
   [
     'The code is public',
@@ -1319,7 +1390,21 @@ export default function Page() {
       {/* --- the claim -----------------------------------------------------
           The one loud moment on the site, and it is loud with nothing but type
           on an inverted ground. Everything it asserts is architecture, which is
-          why the three columns underneath are mechanisms, not values. */}
+          why the two columns underneath are mechanisms, not values.
+
+          THERE WERE THREE, AND "Your exit" IS NOT COMING BACK — not for symmetry,
+          and not because two columns look sparse. It was the only entry that
+          broke the rule in the sentence above: a key unlocked by Argon2id and a
+          row of "a path, a size, a timestamp and an encrypted blob" are things we
+          CANNOT do, which is what the headline promises; an export policy is a
+          thing we WOULD not do, which is the register this band exists to refuse
+          ("We built it so we can't"). It also said "Charging you to leave would
+          defeat the point of building it this way" one band above DURABILITY's
+          export entry saying the same sentence, and DURABILITY is where it earns
+          its place — that band's subject IS what survives us, and it names the
+          four formats. Nothing was lost from the page by removing it; the grid
+          dropped to `md:grid-cols-2` so the two survivors read as the whole set
+          rather than as a row with a hole in it. */}
       <section className={cn('bg-foreground px-safe text-background')}>
         <div className={cn('mx-auto max-w-6xl px-4 py-24 md:px-6 md:py-32 lg:px-8')}>
           <p
@@ -1329,12 +1414,18 @@ export default function Page() {
           >
             We don’t promise not to look.
             <br />
-            <span className={cn('text-background/55')}>We built it so we can’t.</span>
+            <span className={cn('text-background/70')}>We built it so we can’t.</span>
           </p>
-          <dl className={cn('mt-20 grid gap-10 md:grid-cols-3 md:gap-12')}>
+          {/* Alphas per the APCA ladder documented at the hero's ciphertext
+              panel — the same inverted ground, the same trap. The headline's
+              second clause stays a step down from the first (`/70`, Lc 63 against
+              Lc 108) because the two-tone IS the device, but it is the sentence
+              the whole band pays off, so it is no longer the dimmest thing on
+              the screen. */}
+          <dl className={cn('mt-20 grid gap-10 md:grid-cols-2 md:gap-12')}>
             {GUARANTEES.map(([term, detail]) => (
               <div key={term} className={cn('border-t border-background/20 pt-5')}>
-                <dt className={cn('eyebrow text-background/60')}>{term}</dt>
+                <dt className={cn('eyebrow text-background/80')}>{term}</dt>
                 <dd className={cn('mt-3 text-body text-background/85')}>{detail}</dd>
               </div>
             ))}
@@ -1353,7 +1444,7 @@ export default function Page() {
               concession is load-bearing"). It now reads as the reprise of a fact
               the reader already met, which is the only reason the starker
               wording is affordable here. */}
-          <p className={cn('mt-14 max-w-2xl text-sm leading-6 text-background/60')}>
+          <p className={cn('mt-14 max-w-2xl text-sm leading-6 text-background/80')}>
             The honest cost of building it this way: lose your password and your recovery code, and
             nobody — us included — can get the library back.{' '}
             <Link className={cn('text-background underline underline-offset-4')} href="/faq">
@@ -1372,7 +1463,7 @@ export default function Page() {
       <Band
         label="If we disappear"
         title="The library outlives the company."
-        lede="Every subscription should have to answer this, and ours cannot answer it with a promise about our future. Three properties of how it is built, none of which we can revoke later."
+        lede="Every subscription should have to answer this, and ours cannot answer it with a promise about our future. Three properties of how it is built, ordered by how little each one needs from us."
       >
         <dl className={cn('grid gap-x-10 gap-y-8 sm:grid-cols-2 lg:grid-cols-3')}>
           {DURABILITY.map(([term, detail]) => (
