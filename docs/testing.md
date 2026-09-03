@@ -268,10 +268,50 @@ internal (`/privacy` and `/extractor` both name `cf-connecting-ip`). What the
 suite cannot check is the thing `wrangler.jsonc` decides — that no URL reaches a
 log.
 
-The gap worth naming is the **web app**. `bracemark-web` is the primary app and
-has a handful of specs, one of which is generated; `passWithNoTests` is what
-keeps that green — the right setting for a young package and the wrong thing to
-read as a pass.
+`bracemark-web` was the gap worth naming and no longer is. Its suite is shaped
+by what only this app can lose, so most of the file tree has no spec on purpose —
+the panes, the layouts and the section components are composition over hooks and
+copy that other projects already pin. What it does cover:
+
+- **The URL grammar, in both directions.** `links/_contexts/page-provider.spec.tsx`
+  is the largest of them, because the view IS the URL (docs/search.md) and the
+  parser and the serializer are two private functions in one file that nothing
+  types against each other. The round-trip cases feed the serializer's output
+  back through the parser, which is the property neither half can hold alone;
+  the rest sit on the bare-name sugar, `?list=all` expressing NO list filter,
+  the read-only `?sort` override, and the stale-selection bounce's
+  positive-evidence guard.
+- **The two exits nothing else can see.** `components/auth-guard.spec.tsx` pins
+  the `?next=` composition, the installed-vs-browser-tab split (a standalone
+  window that leaves manifest scope is gone for good), and 'ending' as a state
+  to hold still in. `components/guest-guard.spec.tsx` pins the other half of the
+  same param — the open-redirect rejection, which is the one value in this app a
+  stranger can put into a navigation. Both mock `redirect()` as the throw it
+  really is, so "protected content never paints" is asserted rather than assumed.
+  Neither can stub `location`: it is `[LegacyUnforgeable]`, so the cross-origin
+  exit is asserted as "a document navigation was attempted", not as its
+  destination — the spec says so at its head.
+- **The read edge's two silent jobs.** `links/_hooks/use-links.spec.tsx` asserts
+  lock/trash suppression at the WIRE (what `readLinks` was handed, with the real
+  `excludeLists`) rather than on the expression, and drives the staged repaint
+  against a stand-in `useLiveQuery`. It keeps two render logs — attempts and
+  COMMITS — because the promote-during-render rule is precisely the difference
+  between them: promoting in an effect commits one frame that still reports
+  `hasPending`, and that frame is the pill flashing on the user's own edit.
+- **The state that sticks.** `links/_contexts/view-state-provider.spec.tsx` and
+  `links/_layouts/shared/hooks.spec.tsx` cover the two ways `engaged` gets
+  wedged — a count driven negative by a stray close, and an overlay that unmounts
+  while open and never releases its increment. Both wedge the list closed for the
+  life of the page with nothing on screen to point at.
+- **`initial-sync-gate.spec.tsx`**, for the accessibility tripwire in both
+  directions on one screen: the error MOUNTS so it announces (and the carrier is
+  the wrapper, so the reassurance is announced too), while the count must NOT —
+  it rides `aria-valuetext` and its visible copy is `aria-hidden`. Plus the
+  no-flash pair, which is two one-frame bugs nobody catches by looking.
+- **`app/robots.spec.ts` and `lib/links-return.spec.ts`**, the two small ones,
+  both guards rather than getters: `ALLOW_INDEXING` required in BOTH directions
+  (a truthiness check reads `"false"` as allow), and a sessionStorage value that
+  goes straight into a `<Link href>` and so is validated on the way out.
 
 `web-ui` was that gap too and no longer is. Its suite is shaped by the same rule
 as `react`/`web-react` below rather than by a percentage — it covers the hooks
@@ -325,7 +365,7 @@ one are strings a `Record<Union, …>` already pins. Before adding a spec in thi
 layer, mutate the source and re-run — a gap is only real if the suite stays
 green, and an assertion only earns its place if it then fails.
 
-The one real `bracemark-web` spec is worth reading as a model of _which_ web
+`bracemark-web`'s subscription spec is worth reading as a model of _which_ web
 behaviour is worth this layer. It pins a two-line contradiction — a subscription
 notice that outlives the status it described — by mocking the whole IAP edge and
 driving the activation poll on fake timers, in about a second. The same
