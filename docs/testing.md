@@ -45,10 +45,10 @@ See [accessibility.md](./accessibility.md).
 Two runners, split by **the runtime the code has to execute in** — not by
 preference, and not by drift.
 
-| runner       | projects                               | why                                                                       |
-| ------------ | -------------------------------------- | ------------------------------------------------------------------------- |
-| **jest 30**  | all 7 packages + `web`, `site`, `expo` | jsdom for web, `jest-expo` for React Native. Pinned in the root manifest. |
-| **vitest 4** | `bracemark-api`, `bracemark-extractor` | `@cloudflare/vitest-pool-workers` runs specs **inside workerd**.          |
+| runner       | projects                                            | why                                                                       |
+| ------------ | --------------------------------------------------- | ------------------------------------------------------------------------- |
+| **jest 30**  | all 7 packages + `web`, `site`, `extension`, `expo` | jsdom for web, `jest-expo` for React Native. Pinned in the root manifest. |
+| **vitest 4** | `bracemark-api`, `bracemark-extractor`              | `@cloudflare/vitest-pool-workers` runs specs **inside workerd**.          |
 
 The two Workers apps are the exception that explains itself: their tests run in
 the real runtime via miniflare, so `bracemark-api` gets real local D1, a real
@@ -60,13 +60,11 @@ has no jest equivalent, so the choice was made by the runtime. Both
 a paraphrase here. Vitest is declared in the two app manifests; jest is pinned
 at the root.
 
-`npm run test` is `nx run-many -t test` and covers **all 12 projects with a test
+`npm run test` is `nx run-many -t test` and covers **all 13 projects with a test
 target**. A second run prints almost nothing and finishes in ~150ms — that is
-Nx cache reporting `12/12 hit`, not projects being skipped. To force real
+Nx cache reporting `13/13 hit`, not projects being skipped. To force real
 execution, `npx nx reset` or scope to one project with
 `npx nx test @stxapps/<project>`.
-
-`bracemark-extension` has no test target and no specs.
 
 ### the one thing outside the two runners
 
@@ -166,7 +164,7 @@ write into a directory nobody created.
 
 ### the shared jest plumbing
 
-Three config families, because `preset` takes exactly one value:
+Four config families, because `preset` takes exactly one value:
 
 - **`jest.preset.js`** — the Nx base. Used directly by six packages: `shared`,
   `react`, `web-ui`, `web-react`, `web-crypto` and — note — **`expo-crypto`**,
@@ -178,6 +176,32 @@ Three config families, because `preset` takes exactly one value:
   everything `jest.preset.js` would have given them is restated once in a
   factory. It is not itself a preset — spread its result, never point a
   `preset:` at it.
+- **`bracemark-extension`'s own `jest.config.cts`** — preset-based like the six
+  packages, but restating web-ui's transform pair rather than taking the
+  preset's: `@nx/jest/preset`'s transform key covers `.ts` and **not `.tsx`**,
+  and every component spec there is `.tsx`. Two things about it are specific to
+  WXT and are written at the top of the file. First, `browser` and
+  `defineBackground` are **auto-imports** — the source uses them as bare globals
+  and WXT's vite plugin rewrites them at build time — so `testing/setup.ts`
+  installs both as real globals, `browser` as a fresh
+  `testing/fake-browser.ts` per test (its `storage.local` is a real in-memory
+  store that fires `onChanged`, since that mirror IS the contract between the
+  worker and the popup). Second, `utils/web-app-url.ts` branches on
+  `import.meta.env.MODE`, which has no CommonJS spelling at all, so
+  `moduleNameMapper` swaps that one module for `testing/web-app-url.ts` — the
+  value the development build resolves to. Note the `@/` alias there is the
+  PROJECT root, not `src/` (WXT's convention, see `.wxt/tsconfig.json`).
+
+  **A spec directly under `entrypoints/` breaks the BUILD, not the test run.**
+  WXT reads every file at that level as an entrypoint and names it by the
+  basename up to the first dot, so `background.spec.ts` becomes a second
+  entrypoint called "background" and `wxt build` fails with "Multiple
+  entrypoints with the same name" — with `npm run test` perfectly green, since
+  jest neither knows nor cares. An `entrypoints:found` hook in `wxt.config.ts`
+  drops `*.spec.*`/`*.test.*` from that scan. Specs inside a directory
+  entrypoint (`popup/`, `options/`) were never affected; only a bare file like
+  `background.ts` has its spec land at the scanned level.
+
 - **`next/jest`** — `bracemark-web` and `bracemark-site`. These **layer on top of
   `jest.preset.js`** rather than replacing it: the config handed to
   `nextJest()` still sets `preset: '../../jest.preset.js'`, and both files then
@@ -193,8 +217,8 @@ Three config families, because `preset` takes exactly one value:
   alias, naming a module that plainly exists.
 
 **`jest.esm-packages.cjs` is the single source of truth** for node_modules that
-ship raw ESM and must be transpiled rather than ignored. All three families read
-it. Adding an ESM-only dependency that any spec touches means adding it there,
+ship raw ESM and must be transpiled rather than ignored. Every family that
+reaches the preset reads it. Adding an ESM-only dependency that any spec touches means adding it there,
 once — the symptom of forgetting is `Cannot use import statement outside a
 module` from inside node_modules.
 

@@ -8,9 +8,10 @@
       "!{projectRoot}/eslint.config.mjs",
       "!{projectRoot}/**/?(*.)+(spec|test).[jt]s?(x)?(.snap)",
       "!{projectRoot}/tsconfig.spec.json",
-      "!{projectRoot}/jest.config.[jt]s",
+      "!{projectRoot}/jest.config.[cjt]s",
       "!{projectRoot}/vitest.config.[jt]s",
       "!{projectRoot}/test/**/*",
+      "!{projectRoot}/testing/**/*",
       "!{projectRoot}/src/test-setup.[jt]s",
       "!{projectRoot}/test-setup.[jt]s"
     ],

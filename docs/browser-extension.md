@@ -16,6 +16,14 @@ password-unlocked account model the auth flows build on.
   recent-list React app; `options/` → account / passphrase / key-management React
   app; `content.ts` → the programmatic content script (active-tab DOM read for the
   active-page extraction tier — see [link-extraction.md](./link-extraction.md)).
+- **Test helpers live in `testing/`, and that is not an arbitrary choice either.**
+  WXT auto-imports everything under the reserved directories, so a fake `browser`
+  parked in `utils/` would be registered into `#imports` and become a global the
+  real bundle can reach. `testing/` is invisible to WXT (and excluded from Nx's
+  `production` inputs, so editing a helper doesn't invalidate the build cache).
+  See [testing.md](./testing.md), _the shared jest plumbing_, for what has to be
+  faked here and why — `browser` and `defineBackground` are auto-imports, so
+  under jest they have to be real globals.
 - **`bracemark-extension/utils/` is a WXT-reserved directory name** — don't rename it
   to `lib/` for consistency with the other apps/packages. WXT (like Nuxt) does
   directory-based auto-imports: it scans `utils/` (alongside `components/`,

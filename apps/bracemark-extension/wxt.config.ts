@@ -79,6 +79,21 @@ function stubArgon2WorkerPlugin(): Plugin {
 // genuinely differ between stores.
 export default defineConfig({
   modules: ['@wxt-dev/module-react'],
+  // WXT treats EVERY file directly under `entrypoints/` as an entrypoint, and
+  // `getEntrypointName` takes the basename up to the first dot — so
+  // `background.spec.ts` is read as a second entrypoint named "background" and the
+  // build dies with "Multiple entrypoints with the same name". (The specs that sit
+  // INSIDE a directory entrypoint — `popup/`, `options/` — are already invisible to
+  // this scan, which is why only the bare `background.ts` needed a rule.) Dropping
+  // them here keeps a spec beside the file it covers, and keeps the next one from
+  // breaking the build the same way. See docs/testing.md.
+  hooks: {
+    'entrypoints:found': (_wxt, infos) => {
+      for (let i = infos.length - 1; i >= 0; i--) {
+        if (/\.(spec|test)\.[cm]?[jt]sx?$/.test(infos[i].inputPath)) infos.splice(i, 1);
+      }
+    },
+  },
   // Both neighbouring dev servers are already spoken for: bracemark-web's `npm run
   // dev` owns :3000 and bracemark-site's `npm run dev:site` owns :3001 (see each
   // app's package.json). WXT's dev server defaults to :3000, so it collides with
