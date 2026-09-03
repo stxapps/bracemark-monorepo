@@ -229,11 +229,26 @@ is next, exercising real D1/DO/R2 through the Workers pool (one of its specs is
 the workerd portability suite). The two expo projects and `bracemark-extractor`
 carry a working middle layer.
 
-The gap worth naming is the **web app and the packages under it**.
-`bracemark-web` is the primary app and has a handful of specs, one of which is
-generated; `web-ui` has a test target and no specs at all. `passWithNoTests` is
-what keeps that green — the right setting for a young package and the wrong
-thing to read as a pass.
+The gap worth naming is the **web app**. `bracemark-web` is the primary app and
+has a handful of specs, one of which is generated; `passWithNoTests` is what
+keeps that green — the right setting for a young package and the wrong thing to
+read as a pass.
+
+`web-ui` was that gap too and no longer is. Its suite is shaped by the same rule
+as `react`/`web-react` below rather than by a percentage — it covers the hooks
+whose contract is a RE-RENDER rather than a value (the window-metrics store's
+per-slice reference stability, `useMediaQuery`'s deliberately-blind `false`
+seed, `useElementWidth` keying on the element and not a ref), the announced-error
+carrier (`FieldError`'s `role="alert"`, the tripwire in
+[accessibility.md](./accessibility.md)), the auth ceremony's gate
+(`useNewPassword.ok` in both modes, including the username penalty term whose
+absence let the same password pass at signup and fail at rotation), and the
+picker rules no single call site can see (`ListCommand`'s six surfaces, each
+opting in and out of a different row). Its `src/testing/jsdom-stubs.ts` supplies
+only the APIs jsdom omits and cmdk/Radix reach for at mount — a spec that cares
+about a MEASUREMENT installs its own controllable observer instead, because a
+shared one that silently reports nothing is exactly what makes such a spec pass
+while measuring nothing.
 
 What `react` and `web-react` do have is deliberately shaped, and it is the model
 to follow rather than a coverage percentage to chase. Both packages are mostly
