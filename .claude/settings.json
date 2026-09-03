@@ -7,18 +7,5 @@
         "repo": "nrwl/nx-ai-agents-config"
       }
     }
-  },
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Bash|Read|Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR/tools/claude-hooks/pretooluse-guard.sh\""
-          }
-        ]
-      }
-    ]
   }
 }

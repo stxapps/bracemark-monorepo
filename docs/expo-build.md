@@ -283,19 +283,40 @@ this the workspace's first **local config plugin**:
 `apps/bracemark-expo/plugins/with-android-signing.js`, listed last in
 `app.config.ts`'s `plugins`.
 
-It does two things at prebuild, both driven by four env vars:
+It does exactly one thing at prebuild, and it handles **no credential**:
+`withAppBuildGradle` inserts a `release { … }` into `signingConfigs` that
+_names_ four Gradle properties — `BRACEMARK_UPLOAD_STORE_FILE`,
+`…_STORE_PASSWORD`, `…_KEY_ALIAS`, `…_KEY_PASSWORD` — and rewires
+`buildTypes.release`'s `signingConfig` from `signingConfigs.debug` to
+`signingConfigs.findByName('release') ?: signingConfigs.debug`. The rewrite is
+anchored on the template's own `// Caution!` comment so it can't hit the
+identical line in the `debug` buildType, and it **throws** if either anchor is
+missing — an SDK bump that moves them fails the prebuild instead of silently
+producing a debug-signed bundle.
 
-- **`withGradleProperties`** writes `BRACEMARK_UPLOAD_STORE_FILE` (resolved to an
-  absolute path), `…_STORE_PASSWORD`, `…_KEY_ALIAS`, `…_KEY_PASSWORD` into
-  `android/gradle.properties`, replacing any same-key entries so a prebuild
-  _without_ `--clean` doesn't append duplicates.
-- **`withAppBuildGradle`** inserts a `release { … }` into `signingConfigs`
-  referencing those property names, and rewires `buildTypes.release`'s
-  `signingConfig` from `signingConfigs.debug` to `signingConfigs.release`. The
-  rewrite is anchored on the template's own `// Caution!` comment so it can't hit
-  the identical line in the `debug` buildType, and it **throws** if either anchor
-  is missing — an SDK bump that moves them fails the prebuild instead of
-  silently producing a debug-signed bundle.
+The injection is **unconditional**, and the missing-credential check moved with
+it. The plugin can't see the values any more, so it can't decide anything: it
+emits a `project.hasProperty(…)` test over all four names and lets Groovy decide
+at _build_ time. That is not a straight port of the old config-time no-op,
+because the old one was silent in both directions and one of those directions is
+a trap:
+
+- **Nothing missing** → the `release` config is created and used.
+- **Something missing, debug build** → the config is never created, `findByName`
+  returns null, `buildTypes.release` gets the debug config, and Gradle prints a
+  `logger.warn` naming the missing properties. A fresh clone still prebuilds and
+  still runs `assembleDebug`.
+- **Something missing, release build** → **`GradleException`**, naming the
+  missing properties. This is the case the old no-op got wrong. A debug-signed
+  AAB builds perfectly, takes minutes, and is rejected by the **Play Store** at
+  upload, so the only cheap place to fail is configuration time. "Release build"
+  is `gradle.startParameter.taskNames` containing `release`, which covers
+  `bundleRelease`, `assembleRelease` and `expo run:android --variant release`.
+
+The consequence for reading the generated file: `signingConfigs.release` is in
+`android/app/build.gradle` on every machine now, configured or not, so **its
+presence proves nothing** about whether signing works. `./gradlew
+:app:signingReport` is the check.
 
 **The signingConfig line has two spellings, and the plugin must accept both.**
 Groovy's method-call form (`signingConfig signingConfigs.debug`) and the
@@ -310,40 +331,55 @@ beside it). If you touch that regex, test it against both spellings — the
 generated `android/app/build.gradle` can't be the fixture, since the plugin's
 own idempotency guard makes it a no-op.
 
-**Credentials live in `.env.local`** — the `APPLE_TEAM_ID` precedent exactly
-(see [env-files.md](./env-files.md)): gitignored, mode-agnostic (prebuild forces
-`NODE_ENV=development` before loading env files), and deliberately not
-`EXPO_PUBLIC_`-prefixed, since these are config-time values that must never
-reach the JS bundle. **Unset is safe** — the plugin no-ops and the template's
-debug signing stands, so a fresh clone still prebuilds, the same falsy-skip
-behaviour `withDevelopmentTeam` has on iOS.
+**Nothing about the upload key is inside this repo — not the keystore, not the
+passwords, not the path to either.** All four properties live in
+`~/.gradle/gradle.properties` (mode `600`), which Gradle merges into every build
+on the machine, and the keystore itself sits wherever that file points, outside
+the workspace. The repo holds only the four _names_.
 
-**The keystore itself goes in `apps/bracemark-expo/credentials/`** (gitignored, as
-is `*.keystore` globally) — _outside_ `android/`, because `--clean` deletes that
-directory and would take the key with it. Never commit it: leaking it or losing
-it both permanently end the ability to update the Play listing. Google Play App
-Signing means this is the **upload** key, so a loss is recoverable by asking
-Google to reset it — but only if the app is already enrolled.
+That is a deliberate reversal. The credentials used to live in `.env.local`, on
+the `APPLE_TEAM_ID` precedent, and `withGradleProperties` copied them into the
+generated `android/gradle.properties` on every prebuild — so a release build put
+two plaintext keystore passwords inside the worktree of a **public** repo. Both
+files were gitignored, so nothing could commit them; the exposure was to
+anything that _reads_ the tree without honouring `.gitignore` — a recursive
+grep, a backup, an editor index, an AI agent. Naming a Gradle property cannot
+leak one, so the class of accident is gone rather than guarded. `APPLE_TEAM_ID`
+stays in `.env.local`: it is an identifier, not a credential, and it has to be
+readable by `app.config.ts` at config-evaluation time.
 
-Passwords therefore land in plaintext in the generated `android/gradle.properties`.
-That's gitignored, but if you'd rather they never sit in the project tree at all,
-put the same four keys in `~/.gradle/gradle.properties` and drop the
-`withGradleProperties` half of the plugin — the `build.gradle` half reads them
-identically via gradle's property resolution.
+**`BRACEMARK_UPLOAD_STORE_FILE` must be an absolute path.** Gradle's `file()`
+resolves a relative one against `android/app/`, and the keystore deliberately
+lives outside the directory `--clean` deletes. The plugin used to `path.resolve`
+it; it can't any more, because the value is invisible to JS — so a relative path
+now fails at build time with a missing-keystore error instead of at prebuild.
 
-**Escape `$` in the passwords.** Expo runs `dotenv-expand` over the env files,
-so an unescaped `$` starts a variable reference: `Bracemark$1MTo` loads as `Bracemark`,
-and gradle then fails with a keystore-password error that says nothing about
-env files. Write `Bracemark\$1MTo`. Verify with
-`node -e "require('@expo/env').load(process.cwd(),{force:true}); console.log(process.env.BRACEMARK_UPLOAD_STORE_PASSWORD.length)"`
-from `apps/bracemark-expo`.
+**Never commit the keystore**: leaking it or losing it both permanently end the
+ability to update the Play listing. Google Play App Signing means this is the
+**upload** key, so a loss is recoverable by asking Google to reset it — but only
+if the app is already enrolled.
+
+**Don't escape `$` in the passwords any more.** That rule was a dotenv rule:
+Expo runs `dotenv-expand` over the env files, so an unescaped `$` started a
+variable reference and `Bracemark$1MTo` loaded as `Bracemark`. `gradle.properties`
+is a **Java properties** file with no interpolation, so the same password is now
+written literally as `Bracemark$1MTo` — and a backslash there is an _escape
+character_, so carrying the old `Bracemark\$1MTo` spelling across is itself the
+bug. Both failure modes surface identically, as a keystore-password error that
+says nothing about where the value came from.
 
 Store build: `cd apps/bracemark-expo/android && ./gradlew bundleRelease`. Verify what
 actually signed it — `keytool -printcert -jarfile
 app/build/outputs/bundle/release/app-release.aab`, or ask gradle before building
 with `./gradlew :app:signingReport` (its `Variant: release` block prints the
-store path, alias, and fingerprint). `CN=Android Debug` means the plugin no-opped
-— a credential is missing from `.env.local`.
+store path, alias, and fingerprint). `CN=Android Debug` means the Groovy guard
+fell through — one of the four properties is missing from
+`~/.gradle/gradle.properties`. The `signingConfigs.release` block is present in
+`android/app/build.gradle` either way now, so its presence proves nothing —
+`signingReport` is the check, since it resolves the properties and prints the
+store path and alias **without** the passwords. Don't reach for
+`./gradlew :app:properties` to debug this: it prints every property value in the
+clear, passwords included.
 
 Two unrelated things had to be fixed before any of that could run, both worth
 knowing about because neither is signing and both fail confusingly:

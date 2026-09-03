@@ -50,37 +50,6 @@ responsibilities, and the reasoning: `docs/architecture.md`.
 - **Whole workspace vs. one project.** The root scripts above fan out to every project (`nx run-many`). To run a target on a single app/package after a change, scope it by the project's full Nx name: `npx nx <target> <project>`, e.g. `npx nx typecheck @stxapps/bracemark-web`, `npx nx test @stxapps/bracemark-api`, `npx nx build @stxapps/bracemark-web` (`npx nx show projects` lists them). To check only what a change affected across the graph, use `npx nx affected -t <target>`.
 - **After making changes, autofix before checking.** Run the fixer first so `lint`/`typecheck` only report what needs real attention: whole-workspace `npm run fix` (ESLint `--fix` + prettier), or scoped `npx nx lint @stxapps/<project> --fix` for a single project. Then run `npm run lint` and `npm run typecheck` (or their scoped forms).
 
-# Searching
-
-Three rules, all **enforced** by the `PreToolUse` guard wired in
-`.claude/settings.json` (`tools/claude-hooks/pretooluse-guard.sh`), which
-refuses the wrong spelling and names the substitute in its rejection — this
-section was prose alone for a while and was followed in 13 of 826 calls.
-
-- Search with `rg` or `git grep`, never a **recursive** `grep`. A recursive
-  grep does not honour `.gitignore`, so it reads the credentials the guard
-  protects, and it never _names_ them so nothing else can catch it; `git grep`
-  only reads tracked content and `rg` honours `.gitignore`. Non-recursive
-  `grep pattern file` on a named file is fine. `rg -u`, `rg -uu`,
-  `rg --no-ignore` and `git grep --no-index` opt back out of `.gitignore` and
-  are refused too — `rg --hidden` on its own does not, and is fine.
-- **Never prefix a search with `cd`.** It makes the working directory
-  indeterminate, so a relative argument after it cannot be resolved. Every Bash
-  call starts in the primary working directory and it persists between calls,
-  so the `cd` buys nothing: pass the path as an argument.
-- **Everything else already works, so don't write around it.** A bare repo-wide
-  `rg -l pat` with no path at all, a relative path, an absolute path, several
-  paths at once, `--glob` filters, and a pipe into `head` or `wc` all run
-  unprompted. Reaching for a bounded or hand-split search to avoid a prompt
-  that isn't there costs a turn and narrows the result.
-
-That last line is only true because `permissions.deny` is **empty**. A `Read()`
-deny rule pointing anywhere inside the repo makes the checker refuse every
-pathless search — it resolves a bare `rg` to `.`, sees `.` contains the denied
-path, and cannot model `.gitignore`; as of Claude Code 2.1.259 that fires even
-on an `rg` reading stdin in a pipeline, which touches no files at all. Don't
-re-add one; put the path in the guard instead.
-
 # Docs
 
 `docs/` is the design record — read the relevant file **before** changing code in
@@ -134,25 +103,29 @@ test. Check the linked doc before acting on any of these.
   messages. `tools/git-hooks/pre-commit` and `npm run check:private` only stop the
   _directory_ from being committed; a sentence copied out of it passes every
   check, and once pushed to a public repo it is unrecoverable (forks, caches,
-  mirrors). Default search won't surface the folder either — ripgrep respects
-  `.gitignore` — so the failure mode is writing the reference by hand. The folder
-  carries its own instructions; nothing about its contents belongs in this file.
-- **`tools/claude-hooks/pretooluse-guard.sh` is the ONLY thing keeping tooling
-  out of the credentials.** `apps/bracemark-expo/credentials/`, any
-  `.env*.local` and `apps/bracemark-expo/android/gradle.properties` were
-  covered by `Read()` rules in `.claude/settings.json`'s `permissions.deny`
-  until those moved into that hook — because a deny rule pointing inside the
-  repo makes the permission checker refuse **every** pathless search (it
-  resolves a bare `rg` to `.` and cannot model `.gitignore`), and a hook cannot
-  re-grant it: `permissions.deny` outranks `permissionDecision:"allow"`. The
-  trade-off is assurance. A deny rule is enforced by the harness and cannot
-  fail; the guard is a shell script that **fails open** by design — no `jq` on
-  `PATH`, a lost `chmod +x`, a `settings.json` that drops the `matcher`, and
-  every one of those files becomes readable again with no error, no lint
-  failure and no test. Nothing here re-checks it. If you touch that script or
-  the `hooks` block, re-run its case matrix (deny: the three paths via `Read`
-  and via `head`; pass: `.env.example`, `app.config.ts`, a bare `rg -l pat`).
-  → `docs/` has no page for this; the reasoning lives in the script's header.
+  mirrors). **Reading it is fine and is now expected** — searches are unrestricted
+  and `rg -u` reaches it — which makes this the load-bearing rule rather than a
+  backstop: the folder's contents are in front of you, and the only thing between
+  them and a public commit is not writing them down. The folder carries its own
+  instructions; nothing about its contents belongs in this file.
+- **No credential goes in the worktree, and `.gitignore` is not the reason it's
+  safe.** Nothing guards the tree any more — no `permissions.deny`, no
+  `PreToolUse` hook — because there is nothing there to guard. That holds only as
+  long as the next credential goes outside: `~/.gradle/gradle.properties` for the
+  Play upload key, the login keychain plus `tools/scripts/deploy-worker.sh` for
+  the Cloudflare API token and the R2 key pair, `wrangler secret` for anything a
+  Worker needs. A gitignored file inside the checkout is **not** a substitute: it
+  is invisible to `git` and to a default `rg`, which is exactly what makes it feel
+  safe, and it is fully visible to a backup, an editor index, a recursive grep and
+  an AI agent. The four `BRACEMARK_UPLOAD_*` values sat in
+  `apps/bracemark-expo/.env.local` and were copied into the generated
+  `android/gradle.properties` on every prebuild for months on that reasoning.
+  Nothing catches a regression: no lint rule, no type error, no test, and the
+  pre-commit hook is happy because the file is correctly ignored. What stays in
+  the tree is identifiers only — `APPLE_TEAM_ID`, account ids, distribution ids —
+  and "is this an identifier or a credential?" is the whole question. →
+  `env-files.md`, _what's committed vs ignored_; `expo-build.md`, _android release
+  signing_.
 - **Dependency versions on the Expo side.** Root `package.json` pins the
   version; `bracemark-expo` declares `*`; packages declare a peer `*` (a real floor
   only where it means something). Never declare `expo-modules-core` anywhere;

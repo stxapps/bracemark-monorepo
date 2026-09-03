@@ -110,11 +110,6 @@ node_modules/
 /apps/bracemark-expo/modules/*/android/.cxx/
 /packages/*/android/build/
 /packages/*/android/.cxx/
-# Release signing material — the Play upload keystore, read by the
-# with-android-signing config plugin. Lives here rather than under android/
-# because --clean deletes that directory. NEVER commit it: leaking it or losing
-# it both end the ability to update the Play listing.
-/apps/bracemark-expo/credentials/
 .yarn/
 dist/
 npm-debug.*

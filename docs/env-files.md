@@ -299,7 +299,7 @@ Files in `apps/bracemark-expo/` (committed except `.env.local`):
 | `.env.development` | `nx dev @stxapps/bracemark-expo`, `expo prebuild` | Expo (auto) |
 | `.env.production`  | release build / `expo export`                     | Expo (auto) |
 | `.env.staging`     | a staging build (var supplied inline)             | you         |
-| `.env.local`       | every mode — signing creds (gitignored)           | Expo (auto) |
+| `.env.local`       | every mode — `APPLE_TEAM_ID` only (gitignored)    | Expo (auto) |
 
 Current public vars:
 
@@ -317,13 +317,21 @@ Current public vars:
 Adding a new var = add the line to all three files, same deliberate symmetry as
 the other frontends.
 
-**The non-`EXPO_PUBLIC_` vars are the native signing credentials**, all in
-`.env.local` and all read at config-evaluation time by `expo prebuild` rather
-than at runtime: `APPLE_TEAM_ID` (iOS, below) and the four `BRACEMARK_UPLOAD_*` vars
-that carry the Android Play upload key into `signingConfigs.release` (see
-[expo-build.md](./expo-build.md) — _android release signing_). The three bullets below
-apply to both groups verbatim — same file, same mode-agnostic reason, same
-no-prefix reason, same falsy-skip safety.
+**The only non-`EXPO_PUBLIC_` var is `APPLE_TEAM_ID`**, read at
+config-evaluation time by `expo prebuild` rather than at runtime. It is an
+**identifier, not a credential** — leaking it grants nothing — which is what
+keeps it in a file inside the worktree.
+
+The four `BRACEMARK_UPLOAD_*` vars that carry the Android Play upload key used to
+sit beside it here and **no longer do**. They are Gradle properties now, in
+`~/.gradle/gradle.properties`, outside the repo entirely; the config plugin names
+them and never sees a value. Two real passwords in a gitignored file inside a
+public repo's checkout is a different kind of thing from a team id, and the old
+arrangement also copied them into the generated `android/gradle.properties` on
+every prebuild. Same rule as the [Cloudflare API token](#whats-committed-vs-ignored)
+below: a secret gets injected by the tool that needs it, from outside the tree.
+See [expo-build.md](./expo-build.md) — _android release signing_. The three
+bullets below are about `APPLE_TEAM_ID`.
 
 `APPLE_TEAM_ID` is the reason this app's config is `app.config.ts` and not
 `app.json` — `ios.appleTeamId` has to come from the environment, and JSON has no
@@ -457,6 +465,14 @@ browser frontends — bracemark-web and bracemark-site — need an allowed origi
   one command. Same rule for the R2 S3-API key pair and every other real secret:
   `wrangler secret`, never a file here. See
   [hosting.md](./hosting.md#deploying-the-workers--deploy-workersh).
+- **in no env file at all, second case:** the **Android Play upload key** — the
+  keystore and its two passwords. Same reasoning one platform over, and it
+  reached the same answer late: the four `BRACEMARK_UPLOAD_*` values were env
+  vars in `apps/bracemark-expo/.env.local` until they moved to
+  `~/.gradle/gradle.properties`, which Gradle merges into every build on the
+  machine without the values ever entering the worktree. The keystore file
+  itself lives outside the workspace, at whatever absolute path that file names.
+  See [expo-build.md](./expo-build.md) — _android release signing_.
 
 **The workspace root has its own pair, and it belongs to no app.** Root `.env` is
 committed and holds non-secret Nx task-running defaults; root `.env.local` is

@@ -160,8 +160,10 @@ const config: ExpoConfig = {
     '@react-native-community/datetimepicker',
     // Play upload-key signing for release builds. Local plugin because there is
     // no signing surface in app config or expo-build-properties, and `android/`
-    // is wiped by `prebuild --clean`. No-ops when the BRACEMARK_UPLOAD_* vars are
-    // absent from `.env.local`. See docs/setup.md — android release signing.
+    // is wiped by `prebuild --clean`. Handles no credential: it names four
+    // BRACEMARK_UPLOAD_* Gradle properties that live in ~/.gradle/gradle.properties,
+    // outside the repo, and Gradle falls back to debug signing when they are
+    // absent. See docs/expo-build.md — android release signing.
     './plugins/with-android-signing',
   ],
 };
