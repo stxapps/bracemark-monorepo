@@ -5,7 +5,7 @@
 // module above it run for real.
 //
 // The shape modelled is the NEW expo-file-system API (`Directory`/`File`/
-// `Paths`), which is what file-store.ts uses; the legacy `uploadAsync` surface
+// `Paths`), which is what file-store.ts and favicon-store.ts use; the legacy `uploadAsync` surface
 // belongs to sync/r2.ts and is stubbed by the specs that touch it. Contents are
 // STRINGS, not bytes: nothing above this layer inspects `files/` payload bytes
 // (they move path-to-path through native crypto), so a string is the readable
@@ -70,6 +70,18 @@ export class File extends FileSystemNode {
 
   delete(): void {
     if (!files.delete(this.uri)) throw new Error(`No such file: ${this.uri}`);
+  }
+
+  // The one write the real `File` surface offers that a store above this layer uses
+  // directly (data/favicon-store.ts writes an icon's bytes). Bytes are stored as their
+  // decoded text so the map stays string-valued like the rest of the shim — nothing above
+  // this layer reads a stored file's bytes back through it, so the round trip only has to
+  // preserve presence and length, not the exact encoding.
+  write(contents: string | Uint8Array): void {
+    writeFileText(
+      this.uri,
+      typeof contents === 'string' ? contents : String.fromCharCode(...contents),
+    );
   }
 
   copy(destination: File | Directory): void {
