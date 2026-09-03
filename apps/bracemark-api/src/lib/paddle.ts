@@ -226,7 +226,11 @@ const PADDLE_STATUS_MAP: Record<string, PurchaseStatus> = {
 };
 
 export function normalizePaddleStatus(status: string): PurchaseStatus | null {
-  return PADDLE_STATUS_MAP[status] ?? null;
+  // `Object.hasOwn`, not a bare index: a status spelled like an Object.prototype
+  // member ('constructor', 'toString') would otherwise resolve to the INHERITED
+  // value — truthy, so it skips the `?? null` and flows into the fold as a
+  // "status" that is not one of ours.
+  return Object.hasOwn(PADDLE_STATUS_MAP, status) ? PADDLE_STATUS_MAP[status] : null;
 }
 
 // ISO 8601 → epoch ms, null for absent/unparseable (never NaN into the db).

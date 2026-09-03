@@ -285,9 +285,12 @@ export async function fetchPlaystoreSubscription(
     return null;
   }
 
-  const status = PLAY_STATE_MAP[parsed.data.subscriptionState] ?? null;
+  // `Object.hasOwn`, not a bare index — see normalizePaddleStatus for why an
+  // inherited Object.prototype member must not read as a mapped state.
+  const state = parsed.data.subscriptionState;
+  const status = (Object.hasOwn(PLAY_STATE_MAP, state) ? PLAY_STATE_MAP[state] : null) ?? null;
   if (status === null) {
-    console.error(`fetchPlaystoreSubscription: unmapped state "${parsed.data.subscriptionState}"`);
+    console.error(`fetchPlaystoreSubscription: unmapped state "${state}"`);
     return null;
   }
 

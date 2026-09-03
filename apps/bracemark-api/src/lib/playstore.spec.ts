@@ -283,6 +283,19 @@ describe('fetchPlaystoreSubscription — trialing', () => {
     expect(snapshot?.canceledAt).toBe(snapshot?.expiresAt);
   });
 
+  it('drops a state outside the map — including one named like a prototype member', async () => {
+    // The unmapped path is the safety valve for a state Google adds later: it
+    // must yield null (log + drop), never a snapshot. A bare index lookup
+    // returns an INHERITED value for a handful of names, which is truthy and
+    // would sail past the null check into a purchase row.
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    apiBody = subscriptionBody({ state: 'SUBSCRIPTION_STATE_SOMETHING_NEW' });
+    expect(await fetchPlaystoreSubscription(env, 'play-token-1')).toBeNull();
+
+    apiBody = subscriptionBody({ state: 'constructor' });
+    expect(await fetchPlaystoreSubscription(env, 'play-token-1')).toBeNull();
+  });
+
   it('tolerates a line item with no offerDetails at all', async () => {
     // Base-plan purchases omit the field entirely; a missing offer is not a
     // parse failure.
