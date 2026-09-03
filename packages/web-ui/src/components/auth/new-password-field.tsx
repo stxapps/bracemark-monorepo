@@ -16,7 +16,7 @@ import { Field, FieldDescription, FieldLabel } from '@stxapps/web-ui/components/
 
 // CHOOSING A NEW PASSWORD — the whole block, in one place. A generated ~77-bit
 // passphrase shown wallet-style is the DEFAULT, with a typed-your-own escape hatch
-// gated by a zxcvbn floor; the account is a password-derived wallet with no email and
+// gated by a zxcvbn floor; the account is a password-unlocked wallet with no email and
 // no reset, so the safe path has to be the path of least resistance (docs/account.md,
 // _generated password_).
 //

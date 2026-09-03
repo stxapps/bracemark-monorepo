@@ -470,9 +470,9 @@ export default function Page() {
 
         <h2>Security</h2>
         <p>
-          Your library is encrypted on your device with AES-256-GCM, under a key derived from your
-          password with Argon2id; connections use TLS; and the keys that open your account are
-          stored only in a form that your password or recovery code can unlock. No system is
+          Your library is encrypted on your device with AES-256-GCM, under a random key that your
+          password unlocks via Argon2id; connections use TLS; and the keys that open your account
+          are stored only in a form that your password or recovery code can unlock. No system is
           perfectly secure, and we do not claim otherwise — but the design deliberately limits how
           much a breach of ours could reveal, because what we hold is not readable.
         </p>

@@ -205,8 +205,8 @@ export default defineConfig({
                 // All `required`, no `optional`: none of it is a toggle, because putting
                 // a saved page into the user's account IS the extension.
                 //   authenticationInfo — the extension runs its own sign-in (see
-                //     docs/browser-extension.md), sending a username + password-derived
-                //     proof to bracemark-api. Mozilla's definition covers "registration
+                //     docs/browser-extension.md), sending a username + a signed
+                //     proof the password unlocks, to bracemark-api. Mozilla's definition covers "registration
                 //     information for extensions that offer account-based services".
                 //   browsingActivity   — the saved link's specific URL leaves the device.
                 //   websiteContent     — title, og:image bytes, the viewport screenshot,

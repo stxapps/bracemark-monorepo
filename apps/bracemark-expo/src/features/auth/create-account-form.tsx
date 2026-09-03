@@ -19,7 +19,7 @@ import { ShowOnceSecret } from './show-once-secret';
 
 // The "Secure your account" ceremony — the native port of web-ui's
 // components/auth/create-account-form.tsx (see that file and docs/account.md
-// for the full rationale). Because the account is a password-derived wallet —
+// for the full rationale). Because the account is a password-unlocked wallet —
 // no email, no server-side reset — the safe path is the DEFAULT path: a
 // generated ~77-bit passphrase, shown once wallet-style, with a "type my own"
 // escape hatch gated by a zxcvbn strength floor. Three steps:

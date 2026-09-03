@@ -138,7 +138,7 @@ export const FULL_DESCRIPTION = `Bracemark is a bookmark manager that cannot rea
 
 Save anything worth coming back to — articles, docs, threads, products, videos — and read it later on any device.
 
-Every link you save is encrypted on your device before it syncs: the address, the title, the tags, the list you filed it in. Your key is derived from your password, on your device, and never leaves it. Of your library, our servers hold a path, a size, and bytes we have no key for; the account around it — your username, your plan — is what we can read.
+Every link you save is encrypted on your device before it syncs: the address, the title, the tags, the list you filed it in. Your key is unlocked by your password, on your device, and never leaves it. Of your library, our servers hold a path, a size, and bytes we have no key for; the account around it — your username, your plan — is what we can read.
 
 That is not a privacy policy. It is the architecture. We cannot look, so we cannot be asked to.
 
@@ -195,4 +195,4 @@ export const BROWSER_EXTENSION_LISTING = {
  * it be set on the listing rather than in the manifest — so this is a paste field,
  * and the manifest keeps the shorter string above for both browsers.
  */
-export const FIREFOX_ADDONS_SUMMARY = `${BRAND.tagline}. Save the tab you’re reading in two clicks, encrypted in your browser with a key derived from your password before it syncs. Of your library we hold a path, a size, and bytes we have no key for.`;
+export const FIREFOX_ADDONS_SUMMARY = `${BRAND.tagline}. Save the tab you’re reading in two clicks, encrypted in your browser with a key your password unlocks before it syncs. Of your library we hold a path, a size, and bytes we have no key for.`;

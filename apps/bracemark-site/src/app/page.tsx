@@ -431,7 +431,7 @@ function HeroPanel() {
         </p>
         {/* "no key to open", not the compressed "no key for". The clause is
             the panel's whole payoff — the hero paragraph beside it has just
-            said the key is derived from your password on the device, and this
+            said the key is one your password unlocks on the device, and this
             is where that lands — but stranded on "for" it asks the reader to
             invert it themselves, and the one who doesn't reads four nouns with
             no claim attached. Completing the verb is how the idiom is spelled
@@ -1046,10 +1046,22 @@ export default function Page() {
                     falls to the capture and trade bands, which describe what a
                     save actually captures — a weaker signal, and the right trade
                     against publishing a boundary we intend to move.
-                  - "A key derived from your password", not "a key only you can
-                    derive". The old phrasing is false as written — anyone
-                    holding the password derives it, which is the entire point
-                    of the recovery-code paragraphs further down.
+                  - "A KEY YOUR PASSWORD UNLOCKS", and the two wordings it is not.
+                    Not "a key only you can derive": false as written, since
+                    anyone holding the password derives it, which is the entire
+                    point of the recovery-code paragraphs further down. And no
+                    longer "a key derived from your password", which replaced it
+                    and was false a second way — it describes the design this app
+                    had BEFORE the DEK/KEK doors. The root is a random DEK that is
+                    never derived from anything; the password runs through
+                    Argon2id to a KEK that UNWRAPS a copy of it, which is exactly
+                    how a recovery code opens the same library
+                    (docs/account.md, _the DEK / KEK door model_). A key really
+                    derived from the password could not have a second door, so
+                    that wording had the hero contradicting the recovery code
+                    named four lines below it. UNLOCKS, not DERIVES, on every
+                    surface — see the GUARANTEES note above, which caught this
+                    first and where the long form lives.
 
                   WHY "THAT KEY NEVER REACHES US" EARNS ITS FOUR WORDS, and why
                   nothing longer belongs here. The outcome a reader wants — only
@@ -1082,8 +1094,8 @@ export default function Page() {
                 What you save is a fairly complete picture of what you are reading, buying, worrying
                 about and working on. Bracemark encrypts every part of it on your device before it
                 syncs — the address, the title, the tags, whatever you write about it — with a key
-                derived from your password. That key never reaches us. Not a promise we make — a
-                thing we can’t undo.
+                your password unlocks. That key never reaches us. Not a promise we make — a thing we
+                can’t undo.
               </p>
 
               <div className={cn('mt-9 flex flex-wrap items-center gap-3')}>

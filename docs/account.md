@@ -14,15 +14,29 @@ client — native Argon2id/HKDF/AES-GCM via react-native-quick-crypto, plus the
 parameters and validators live in `@stxapps/shared` (`crypto/params.ts`,
 `auth/credentials.ts`).
 
-### the model: a password-derived wallet, with extra doors
+### the model: a password-unlocked wallet, with extra doors
+
+> ⚠ **"Password-unlocked", never "password-derived" — the name above is a shape,
+> not a mechanism.** The password _opens_ the wallet; it does not _make_ the key.
+> The root is a **random DEK** ([the DEK / KEK door model](#the-dek--kek-door-model)
+> below); the password derives only a **KEK**, which unwraps a copy of it. So any
+> sentence saying the encryption key is _derived from_ your password is false —
+> and false in a way that contradicts itself one clause later, because a key
+> genuinely derived from the password could not also have a recovery-code door.
+> This heading read "password-derived wallet" for a long stretch, and that wording
+> was copied out of here onto **eight** user-facing surfaces, /terms, /privacy and
+> the store listings among them. In user-facing copy the verb is **unlocks**.
+> "Password-derived" remains correct for the KEK itself, and as a name for the
+> account _model_ — say which one you mean.
 
 bracemark is a **zero-knowledge** bookmark manager. The server stores only
 ciphertext and never sees the password, the data key, or any private key. That
 makes the account model structurally identical to a **crypto wallet**:
 
 - the secret **is** the account — no email, no server-side password reset;
-- keys are derived **deterministically**, the same way every time, on every
-  device;
+- each **door** derives its key **deterministically**, the same way every time,
+  on every device — though the DEK it unwraps is random, and is fetched (wrapped)
+  rather than recomputed;
 - the default door is the password, and **if it is the only door, there is no
   recovery** — lose it and the data is gone, exactly like a wallet seed phrase.
 

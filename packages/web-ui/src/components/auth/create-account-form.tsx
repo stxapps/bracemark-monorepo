@@ -24,7 +24,7 @@ import {
 import { Input } from '@stxapps/web-ui/components/ui/input';
 
 // The "Secure your account" ceremony (docs/account.md). Because the account is a
-// password-derived wallet — no email, no server-side reset — the safe path is the
+// password-unlocked wallet — no email, no server-side reset — the safe path is the
 // DEFAULT path: a generated ~77-bit passphrase, shown once wallet-style, with a
 // "type my own" escape hatch gated by a zxcvbn strength floor. Three steps:
 //   1. setup    — username + choose a password (generated default | typed own)

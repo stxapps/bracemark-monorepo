@@ -138,7 +138,7 @@ export default function Page() {
                   contradicting it. Naming them in the same breath costs a clause
                   and makes the claim checkable rather than merely confident. */}
               <p>
-                So Bracemark is built the other way round. Your password derives a key on your own
+                So Bracemark is built the other way round. Your password unlocks a key on your own
                 device; every link, list and tag becomes its own encrypted file before it is
                 uploaded; what the server keeps of it is a path, a size and some bytes. Around that
                 sits the account — your username, your sessions, your plan if you buy one — and
@@ -254,8 +254,8 @@ export default function Page() {
               </p>
               <p>
                 This one keeps the promise and rebuilds what it rests on. The encryption is now ours
-                end to end: a key derived from a password you choose, with a recovery code as the
-                second door. You sign up with a username. Nothing else.
+                end to end: a key your password unlocks, with a recovery code as the second door.
+                You sign up with a username. Nothing else.
               </p>
             </div>
           </section>

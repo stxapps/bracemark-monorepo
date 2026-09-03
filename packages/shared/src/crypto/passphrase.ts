@@ -2,7 +2,7 @@
 // ceremony offers as the safe default (docs/account.md — "generated password").
 // The words are just a normal password string — they flow through the SAME
 // password door as a typed one, so nothing in the derivation contract changes;
-// only the UI offers them. See docs/account.md ("a password-derived wallet").
+// only the UI offers them. See docs/account.md ("a password-unlocked wallet").
 //
 // Pure and platform-agnostic, so it lives in `shared` (the lowest layer): web
 // generates today, the future Expo/native client tomorrow, and both MUST pick

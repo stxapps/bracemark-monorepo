@@ -304,6 +304,27 @@ test. Check the linked doc before acting on any of these.
   permissive one. Only the third copy is pinned by a spec. Relatedly, no surface may
   claim a visitor can **verify** what they are running — public source proves what
   the code does, not which build was served. → `brand-assets.md`, _the source_.
+- **"A key derived from your password" is false, and it refutes itself one
+  clause later.** The root of an account is a **random DEK**; the password
+  derives only a KEK that **unwraps** a copy of it, which is exactly how a
+  recovery code opens the same library. So a key genuinely derived from the
+  password could not have a second door — every surface saying "derived" sits
+  beside a sentence promising the recovery code, and the wording still reads as
+  the more technical of the two. Nothing catches it: `bracemark-site` imports no
+  crypto package, so the sentence describing the model and the code implementing
+  it are in different projects with no link, and there is no lint error, type
+  error or failing test in either runner. It reached **eight** user-facing
+  surfaces out of one compressed heading in `account.md` — the landing hero,
+  /about twice, /privacy, /terms, /faq and both store listings — and survived an
+  earlier pass that corrected it in the landing page's `GUARANTEES` and nowhere
+  else. In user-facing copy the verb is **unlocks**: "a key your password
+  unlocks". Two nearby spellings that ARE right and must not be "corrected":
+  the wrapped blobs are "locked with a key derived from your password or
+  recovery code" (that IS the KEK), and "your password is put through Argon2id
+  to derive a key, and that key unlocks the one your library is encrypted with".
+  `password-derived` also stays correct for the KEK itself and as a name for the
+  account _model_ — say which you mean. → `account.md`, _the model_ (the callout
+  under the heading).
 - **"The server sees nothing" is false, and it reads like precision.**
   `bracemark-api` is ONE Worker serving auth, sync AND billing, over a username
   directory, an accounts shard, a sessions DB, a purchases table and R2

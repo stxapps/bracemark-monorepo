@@ -82,8 +82,8 @@ export const FAQ_GROUPS: FaqGroup[] = [
             A place to keep the links you want to come back to — articles, documentation, threads,
             products, videos — available on every device you use. What makes it different from most
             bookmark managers is where the encryption happens: each link is encrypted on your
-            device, with a key derived from your password, before any of it syncs. We store the
-            result and cannot open it.
+            device, with a key your password unlocks, before any of it syncs. We store the result
+            and cannot open it.
           </>
         ),
       },

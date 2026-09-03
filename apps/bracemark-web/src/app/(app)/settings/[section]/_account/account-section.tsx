@@ -9,8 +9,8 @@
 // Delete account is the FULL teardown — every synced object, every session, the
 // account itself — distinct from Data → "Delete all data" (data only, account
 // survives). It's guarded by a fresh password re-entry, not just the session:
-// the server refuses the call without a proof signed by the password-derived
-// key, so the form here collects the password and useDeleteAccount runs the
+// the server refuses the call without a proof signed by a key the password
+// unwraps, so the form here collects the password and useDeleteAccount runs the
 // door-fetch → unwrap → sign → POST sequence (docs/data-lifecycle.md). A live
 // (renewing or dunning) subscription blocks deletion server-side; the view
 // pre-warns from the same entitlements read and points at the Subscription
@@ -146,8 +146,8 @@ function DeleteAccountView({ onBack }: { onBack: () => void }) {
 
       <form onSubmit={onSubmit}>
         {/* Fresh proof, not just the session: the server only accepts this call
-            signed by the password-derived key, so the password is required here
-            even though you're signed in. */}
+            signed by a key the password unwraps, so the password is required
+            here even though you're signed in. */}
         <div className="flex max-w-sm flex-col gap-2">
           <Label htmlFor="delete-account-password">Confirm your password</Label>
           <PasswordInput

@@ -3,7 +3,7 @@
 Notes on the `bracemark-extension` (wxt) app and how its UI/logic relates to
 `bracemark-web`. See [architecture.md](./architecture.md) for the package layering
 and dependency rules, and [account.md](./account.md) for the
-password-derived account model the auth flows build on.
+password-unlocked account model the auth flows build on.
 
 ### wxt conventions
 
@@ -282,11 +282,11 @@ install consent screen. It has been mandatory for new extensions since
 `npm run dev:firefox` until it's set), and the honest list for this extension is
 three `required` types with no `optional` ones:
 
-| type                 | what leaves the device                                                                        |
-| -------------------- | --------------------------------------------------------------------------------------------- |
-| `authenticationInfo` | the username + password-derived proof of _the extension runs its own sign-in_ above           |
-| `browsingActivity`   | the saved link's specific URL                                                                 |
-| `websiteContent`     | title, `og:image` bytes, viewport screenshot, read-mode + page-copy HTML (`utils/capture.ts`) |
+| type                 | what leaves the device                                                                               |
+| -------------------- | ---------------------------------------------------------------------------------------------------- |
+| `authenticationInfo` | the username + the signed proof the password unlocks, per _the extension runs its own sign-in_ above |
+| `browsingActivity`   | the saved link's specific URL                                                                        |
+| `websiteContent`     | title, `og:image` bytes, viewport screenshot, read-mode + page-copy HTML (`utils/capture.ts`)        |
 
 Three things about that table are easy to get wrong later:
 

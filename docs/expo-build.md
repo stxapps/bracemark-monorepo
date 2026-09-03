@@ -229,7 +229,7 @@ automatically):
 | `com.facebook.hermes.unicode.**`               | that Java package no longer exists in RN 0.81 — dead rule                      |
 | okhttp `PublicSuffixDatabase`, conscrypt       | shipped in okhttp's own AAR consumer rules (4.x+)                              |
 | MMKV block                                     | not a dependency (expo-sqlite + expo-secure-store instead)                     |
-| bouncycastle, slf4j                            | Blockstack-only — gone with the password-derived account model                 |
+| bouncycastle, slf4j                            | Blockstack-only — gone with the password-unlocked account model                |
 
 Our own native code is covered the same way: `expo-modules-core`'s consumer
 rules keep every `expo.modules.kotlin.modules.Module` subclass, which is what

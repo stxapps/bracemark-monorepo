@@ -4,8 +4,8 @@ How bracemark keeps data on the device as the source of truth and syncs end-to-e
 encrypted files to the server. See [architecture.md](./architecture.md) for the
 package layering, [api-contracts.md](./api-contracts.md) for the contract-first
 endpoint pattern this builds on, and [account.md](./account.md) for the
-password-derived data key (`@stxapps/web-crypto`) that protects every blob
-described here.
+random data key (`@stxapps/web-crypto`) that the password door unwraps and that
+protects every blob described here.
 
 ### the shape of the problem
 

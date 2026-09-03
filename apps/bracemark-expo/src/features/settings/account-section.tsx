@@ -129,7 +129,7 @@ function DeleteAccountView({ onBack }: { onBack: () => void }) {
       )}
 
       {/* Fresh proof, not just the session: the server only accepts this call
-          signed by the password-derived key, so the password is required here
+          signed by a key the password unwraps, so the password is required here
           even though you're signed in. */}
       <View className="mt-6 max-w-sm gap-2">
         <Text className="text-sm font-medium">Confirm your password</Text>

@@ -140,9 +140,10 @@ function DecryptingScreen({ progress }: { progress: InitialSyncProgress | null }
         the empty seconds carry the sentence instead of a bigger spinner.
 
         "only you, with your password" — NOT "only this device", which this screen
-        is itself the counterexample to: the key derives from the password
+        is itself the counterexample to: the password unwraps the key
         (docs/account.md), so a first pull on a SECOND device is exactly what is
-        being narrated here. Matches BRAND's "Bookmarks only you can read"
+        being narrated here. The key is not held by the device, which is the
+        whole reason the second device can get at it at all. Matches BRAND's "Bookmarks only you can read"
         (brand/brand.ts), and the password clause is what makes the wait
         legible rather than just reassuring.
       */}

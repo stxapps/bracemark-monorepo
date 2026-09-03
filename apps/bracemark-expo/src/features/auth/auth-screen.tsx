@@ -107,7 +107,7 @@ export function AuthScreen({
           {/* Why the account behaves the way it does — no email field, no reset
               link, a password ceremony that insists you save something. Said once
               here, quietly, under both screens, so neither form has to re-argue
-              it. Both halves are literal (docs/account.md, "a password-derived
+              it. Both halves are literal (docs/account.md, "a password-unlocked
               wallet"): the DEK never leaves the device, and the server stores a
               wrapped key it cannot unwrap. Don't inflate this into a marketing
               line — it's load-bearing context for the next thing the user does. */}
