@@ -30,8 +30,16 @@ export const metadata: Metadata = {
 
 const FREE_LINKS = entitlementsOf('free').maxLinks;
 
-// What the architecture costs, stated by us rather than discovered later. Each
-// one is a direct consequence of the line above it in docs/local-first-sync.md.
+// What the architecture costs, stated by us rather than discovered later. Every
+// entry but the last is a direct consequence of the line above it in
+// docs/local-first-sync.md; the last one has its own note.
+//
+// NO COUNT, HERE OR IN THE LEDE ABOVE THE LIST. The lede read "Four things" for
+// as long as there were five, and the note below opened "The fourth" about an
+// entry that had since moved to the end. A number in prose beside a list is a
+// second copy of the list's length with nothing keeping the two in step — no
+// lint error, no type error, no failing test — so the copy is gone rather than
+// corrected. Add an entry here and nothing else needs touching.
 const TRADEOFFS: [string, string][] = [
   [
     'No password reset',
@@ -45,12 +53,28 @@ const TRADEOFFS: [string, string][] = [
     'No shared or public lists',
     'Sharing means handing someone the means to decrypt part of your library. It is real work rather than a button, and we would rather not fake it.',
   ],
-  // The fourth, and the only one that is not a consequence of the encryption —
-  // which is exactly why it was missing. This section's three costs were all
-  // architectural, so the boundary that actually decides fit for a read-it-later
-  // reader was left to /terms, where the people it disqualifies never reach it.
-  // A section whose stated purpose is "we would rather you knew now" does not
-  // get to leave out the one a whole category of visitor needs.
+  // The sync cost, which belongs in a list of things we would rather you knew
+  // now and had been left to docs/local-first-sync.md. It is the counterpart of
+  // the landing page's `One link, two devices` trade row and /faq `two-devices`;
+  // all three state the shipped last-writer-wins policy, and none of them
+  // mentions the deferred conditional-write upgrade, because a list whose
+  // standing rests on volunteering costs cannot start volunteering fixes.
+  //
+  // Phrased as NO VERSION HISTORY rather than "edits can be lost", because the
+  // absent feature is the durable fact and the lost edit is the symptom. It is
+  // also the one framing that stays true if the winner ever changes: whichever
+  // side wins a conflict, there is no readable copy at our end to have kept the
+  // other one in.
+  [
+    'No version history',
+    'Each link is its own encrypted file and the newest write is the one that survives. We hold no readable copy to keep earlier versions in, so an edit you regret cannot be rolled back from our side — a backup export is the answer if that matters to you.',
+  ],
+  // The one entry that is NOT a consequence of the encryption — which is exactly
+  // why it was missing. Every other cost in this list is architectural, so the
+  // boundary that actually decides fit for a read-it-later reader was left to
+  // /terms, where the people it disqualifies never reach it. A section whose
+  // stated purpose is "we would rather you knew now" does not get to leave out
+  // the one a whole category of visitor needs.
   //
   // Phrased as LINK ROT, not as "no copy of the page", and the difference is
   // load-bearing. The second is a promise about something we will never build,
@@ -74,22 +98,6 @@ const TRADEOFFS: [string, string][] = [
   // read of the page at the time" is open at the right end and closed at the one
   // that matters: however much a save captures, it is a capture, and the page it
   // came from is still somebody else's to change.
-  // The sync cost, which belongs in a list of things we would rather you knew
-  // now and had been left to docs/local-first-sync.md. It is the counterpart of
-  // the landing page's third trade row and /faq `two-devices`; all three state
-  // the shipped last-writer-wins policy, and none of them mentions the deferred
-  // conditional-write upgrade, because a list whose standing rests on
-  // volunteering costs cannot start volunteering fixes.
-  //
-  // Phrased as NO VERSION HISTORY rather than "edits can be lost", because the
-  // absent feature is the durable fact and the lost edit is the symptom. It is
-  // also the one framing that stays true if the winner ever changes: whichever
-  // side wins a conflict, there is no readable copy at our end to have kept the
-  // other one in.
-  [
-    'No version history',
-    'Each link is its own encrypted file and the newest write is the one that survives. We hold no readable copy to keep earlier versions in, so an edit you regret cannot be rolled back from our side — a backup export is the answer if that matters to you.',
-  ],
   [
     'A saved link can rot',
     'A save keeps the address and whatever Bracemark could read of the page at the time — its title, its preview image, and anything you write about it. The page itself is on someone else’s server: if it changes or goes away, what the library keeps is your record of the web, not the web.',
@@ -153,13 +161,15 @@ export default function Page() {
               What it costs to build it this way
             </h2>
             <p className={cn('mt-4 text-base leading-7 text-muted-foreground')}>
-              Four things you can do in an ordinary bookmark manager, you cannot do here. We would
-              rather you knew now.
+              Each of these is something you can do in an ordinary bookmark manager and cannot do
+              here. We would rather you knew now.
             </p>
-            {/* Two columns, not four: this shell is a max-w-3xl prose measure, so
-                a fourth column would leave each entry about 180px wide and break
-                every term across two lines. 2×2 keeps the entries at a readable
-                measure and reads as a list of costs rather than a feature grid. */}
+            {/* Two columns whatever the entry count, and no third: this shell is a
+                max-w-3xl prose measure, so a third column would leave each entry
+                about 180px wide and break every term across two lines. Two keeps
+                them at a readable measure and reads as a list of costs rather
+                than a feature grid — including on an odd count, where the last
+                entry sits alone on its row, which is what a list does. */}
             <dl className={cn('mt-8 grid gap-8 sm:grid-cols-2')}>
               {TRADEOFFS.map(([term, detail]) => (
                 <div key={term} className={cn('border-t border-border pt-5')}>
@@ -285,14 +295,26 @@ export default function Page() {
                   check against the repository, which is the register this page is
                   written in.
 
-                  {FREE_LINKS} and PLAN_USD_PER_YEAR stay interpolated. The whole
-                  method of this property is that it cannot quote a number the app
-                  does not enforce, and a typed "200 links" or "$48" ends that the
-                  first time either moves. */}
+                  PLAN_USD_PER_YEAR stays interpolated. The whole method of this
+                  property is that it cannot quote a number the app does not
+                  enforce, and a typed "$48" ends that the first time the price
+                  moves. FREE_LINKS is no longer in this paragraph and the closing
+                  CTA is now the page's only site for it — see the note there.
+
+                  THE FREE PLAN'S CLAIM IS ITS DURATION, NOT ITS SIZE. The
+                  no-time-limit claim is true, is pinned by the pricing card
+                  (page.tsx, "no time limit"), and needs no comparison to land.
+                  The cap's real justification is the sentence that follows — the
+                  software is what is not cheap — which is also why the cap was
+                  never a storage argument to make.
+
+                  DO NOT contrast against "a trial that expires": we ship a
+                  TRIAL_DAYS-day one that takes a card (page.tsx, the import card),
+                  so that version contradicts us two pages over. */}
               <p>
                 It works because the architecture that keeps us out of your library also keeps it
                 cheap to run: we store opaque blobs and do no work on their contents. That is why
-                the free plan can be {FREE_LINKS} links rather than a nag screen. What{' '}
+                the free plan has no time limit on it. What{' '}
                 <Link
                   className={cn(
                     'text-signal underline decoration-signal-line underline-offset-2 hover:decoration-signal',
@@ -423,6 +445,14 @@ export default function Page() {
           >
             The best way to judge it is to use it.
           </h2>
+          {/* THE PAGE'S ONLY FREE_LINKS SITE, since the pays-for-itself paragraph
+              stopped quoting the cap (see the note there for why). It belongs here
+              and nowhere else on /about: this is the one place the number is an
+              OFFER rather than an argument, so it states a fact the reader is
+              about to act on instead of standing as evidence for a claim about
+              our costs. Keep it interpolated — a typed "200 links" goes stale the
+              first time the entitlement moves, with no lint error, type error or
+              failing test to catch it. */}
           <p className={cn('mx-auto mt-4 max-w-lg text-lg leading-8 text-muted-foreground')}>
             {FREE_LINKS} links, no card, no email address.
           </p>

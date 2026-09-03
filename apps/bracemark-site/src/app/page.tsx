@@ -1714,7 +1714,22 @@ export default function Page() {
       <Band
         label="Pricing"
         title="Free until your library outgrows free."
-        lede={`Start with ${FREE_LINKS} links and no card. Upgrade when the cap starts to pinch — on day one if you are arriving with a library, later if you are starting fresh — with a ${TRIAL_DAYS}-day trial that takes a card, and the same encryption, sync and export on every plan.`}
+        // "WHEN YOU MEET THE CAP", not "when the cap starts to pinch". The lede
+        // branches for two readers and the metaphor only fits one of them: for
+        // someone starting fresh the cap tightens gradually, which is a pinch,
+        // but for someone arriving with a library it is a wall hit mid-import on
+        // day one. /faq `trial` had already split them — its note says "for them
+        // it pinches at minute one" and its answer drops the metaphor for that
+        // branch ("the cap is the first thing you will meet") — and this lede was
+        // the surface that put it back over both. "Meet the cap" is that answer's
+        // own phrase and is true of either door. "Pinch" stays in /faq, on the
+        // gradual case it describes accurately.
+        //
+        // The band TITLE's "outgrows" is not drift and should not be unified with
+        // this: repeating it one line under itself reads worse, and /pricing uses
+        // "outgrows" too. The one-idiom rule in the Free card's note below is
+        // about the NUMBER, not the metaphor.
+        lede={`Start with ${FREE_LINKS} links and no card. Upgrade when you meet the cap — on day one if you are arriving with a library, later if you are starting fresh — with a ${TRIAL_DAYS}-day trial that takes a card, and the same encryption, sync and export on every plan.`}
       >
         <div className={cn('flex flex-wrap items-end gap-x-16 gap-y-8')}>
           <div>
