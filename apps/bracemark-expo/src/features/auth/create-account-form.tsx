@@ -65,7 +65,8 @@ const STEPS: readonly Step[] = ['setup', 'confirm', 'recovery'];
 const STEP_HEADINGS: Record<Step, { title: string; description: string }> = {
   setup: {
     title: 'Create account',
-    description: 'No email address, no password reset — your password is the key to your links.',
+    description:
+      'No email address, no password reset — your password unlocks the key to your links.',
   },
   confirm: {
     title: 'Confirm your password',

@@ -101,8 +101,8 @@ export default function Page() {
         <h2>The short version</h2>
         <ul>
           <li>
-            We cannot read your saved links. They are encrypted on your device with a key derived
-            from your password, which never reaches us.
+            We cannot read your saved links. They are encrypted on your device with a key your
+            password unlocks, and the password never reaches us.
           </li>
           <li>
             We do not ask for your email address, and there is no advertising, no analytics product,
