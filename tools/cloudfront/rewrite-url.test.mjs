@@ -119,6 +119,11 @@ const CASES = [
     'pass:/settings/__next.!KGFwcCk.settings.txt',
   ],
   [SITE, '/robots.txt', '', 'pass:/robots.txt'],
+  // The dot that matters here is the one in the LAST segment; the leading dot on
+  // `.well-known` is incidental and must stay that way. RFC 9116 fixes this path
+  // exactly, so a rule that grew a dotfolder case would take security.txt off the
+  // air with a 404 that nobody on our side ever requests.
+  [SITE, '/.well-known/security.txt', '', 'pass:/.well-known/security.txt'],
 
   // 6. A page, nested or not. A path matching no key 404s at S3 and the
   // distribution's custom error response takes it from there.

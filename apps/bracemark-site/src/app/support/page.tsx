@@ -5,7 +5,7 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 import { ElsewhereList } from '../../components/elsewhere-list';
 import { PageShell } from '../../components/page-shell';
 import { type ElsewhereCard, PRICING_CARD } from '../../content/elsewhere';
-import { SECURITY_EMAIL, SUPPORT_EMAIL } from '../../lib/site';
+import { SECURITY_EMAIL, SOURCE, SUPPORT_EMAIL } from '../../lib/site';
 
 export const metadata: Metadata = {
   title: 'Support',
@@ -20,10 +20,12 @@ export const metadata: Metadata = {
 // and an obfuscated mailto is a worse experience for everybody including the
 // reviewer.
 //
-// Deliberately NOT promised here: a response time. We are one small team across a
-// single timezone, and an SLA on a marketing page is a commitment nobody
-// remembers making at 2am on a Sunday. What is promised is that a person reads
-// every message, which is true and is the part people actually want.
+// Deliberately NOT promised for SUPPORT mail: a response time. We are one small
+// team across a single timezone, and an SLA on a marketing page is a commitment
+// nobody remembers making at 2am on a Sunday. What is promised is that a person
+// reads every message, which is true and is the part people actually want. The
+// security block below DOES name two intervals, which is not an exception to this
+// so much as the paragraph after next applied: see the comment on that section.
 //
 // "Every message gets one" was the same SLA in a different coat, and it went the
 // same way. A reply to EVERY message is not a thing a team can hold: spam, abuse,
@@ -140,7 +142,24 @@ export default function Page() {
         </section>
 
         {/* Security reports get their own address so they don't queue behind
-            "how do I import from Raindrop". */}
+            "how do I import from Raindrop".
+
+            THE WINDOWS ARE NAMED HERE, and this is not the SLA the page comment
+            above refuses. "A reasonable window to fix it" asked a researcher to
+            wait an interval we would not state — which is the one audience that
+            reads an unstated interval as a stall, and the reason a coordinated
+            disclosure goes public early. The numbers are not new: SECURITY.md in
+            the repository has committed to three working days and ten since it
+            was written, along with the no-bounty statement, and they were simply
+            never published anywhere a researcher looks before they mail us. This
+            is the narrow, keepable kind of commitment the page comment allows —
+            a category we can answer every one of, made to someone who took the
+            trouble to tell us something first.
+
+            Three surfaces now carry the same commitment and must move together:
+            this block, SECURITY.md, and the `Policy:` line in
+            app/.well-known/security.txt/route.ts, which points a researcher's
+            tooling at SECURITY.md. Nothing checks that they agree. */}
         <section className={cn('rounded-2xl border border-border p-8')}>
           <h2 className={cn('font-display text-xl font-semibold tracking-tight')}>
             Reporting a security problem
@@ -155,9 +174,25 @@ export default function Page() {
             >
               {SECURITY_EMAIL}
             </a>{' '}
-            rather than posting publicly, and give us a reasonable window to fix it before you do.
-            Tell us what you did and what you saw; you will get a reply from a human, not an
-            auto-responder.
+            rather than posting publicly. Tell us what you did and what you saw; you will get a
+            reply from a human, not an auto-responder.
+          </p>
+          <p className={cn('mt-4 text-body text-muted-foreground')}>
+            We aim to acknowledge a report within three working days, and to tell you what we intend
+            to do about it within ten. We are a small team, so there is no bug bounty and we cannot
+            offer payment — we will credit you when a report leads to a fix, unless you would rather
+            we did not. The scope, the things we are most interested in, and the handful of
+            behaviours that are known and by design are in{' '}
+            <a
+              className={cn(
+                'rounded-sm text-signal underline decoration-signal-line underline-offset-2 hover:decoration-signal',
+              )}
+              href={`${SOURCE.url}/blob/main/SECURITY.md`}
+              rel="noreferrer"
+            >
+              our security policy
+            </a>
+            .
           </p>
         </section>
 

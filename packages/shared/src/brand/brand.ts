@@ -99,3 +99,36 @@ export const SOCIAL = {
   handle: '@bracemarkapp',
   url: 'https://x.com/bracemarkapp',
 } as const;
+
+// The predecessor product, named by two surfaces on the marketing site — the
+// landing page's `If we disappear` footnote and /about's _Where it came from_ —
+// and by nothing else. It is here rather than in bracemark-site's `lib/site.ts`
+// for the same reason SOURCE and SOCIAL are: a URL that two surfaces retype is a
+// URL one of them can be wrong about, and this one points off our own origins.
+//
+// ⚠ IT IS THE MOST CHECKABLE CLAIM ON THE PROPERTY, WHICH IS WHY IT MUST STAY
+// CHECKABLE. "A bookmark manager we have run for years" was the weakest form of
+// the strongest durability fact we own — three readers in a positioning test went
+// looking for something to click and found a bare product name, which reads as a
+// track record we would rather not have examined. A year and a link cost nothing
+// and are the entire difference between an assertion and a citation.
+//
+// `since` is the year it launched, printed as "since 2020" rather than as an age.
+// An age computed from `new Date()` would be a number that changes under a page
+// that was not rebuilt, and it re-opens the arithmetic every reader has to redo;
+// a year is stated once and stays true.
+//
+// ⚠ THE LINK IS A CLAIM THAT IT ANSWERS. Both surfaces sit inside copy that says
+// nothing here is retired or dead, so the link is load-bearing prose and not a
+// courtesy: a reader who clicks through to a domain that no longer answers has
+// been shown the opposite of the point. If brace.to ever stops serving, the link
+// comes out of BOTH surfaces and the sentences around it are re-read in the same
+// change — the tense of "we have run for years" is the part that goes stale
+// first. Nothing catches that: no lint rule, no type error, no test in either
+// runner can reach a third-party origin, and a dead link renders exactly as well
+// as a live one.
+export const PREDECESSOR = {
+  name: 'Brace.to',
+  url: 'https://brace.to',
+  since: 2020,
+} as const;

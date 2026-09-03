@@ -101,6 +101,44 @@ export const FAQ_GROUPS: FaqGroup[] = [
         ),
       },
       {
+        // `vs-others` above stops at the three hosted answers, which leaves out
+        // the reader whose current system is a folder of plain files and who is
+        // the closest thing this product has to a natural buyer: someone who has
+        // already decided that owning the bytes matters and has already paid the
+        // price of it. Nothing on the property was written to them.
+        //
+        // IT WINS BY CONCEDING, which is the only way this one can be won. The
+        // folder is not a worse idea — it is the same idea with the hard half
+        // still to do, and saying so is both true and more persuasive than a
+        // comparison would be. The answer's whole weight then falls on the
+        // export, because the concession is only credible if the folder is still
+        // there at the end: a reader who is told "you can leave with plain files"
+        // is being offered the thing they already have, plus the sync.
+        //
+        // The export sentence deliberately echoes DURABILITY's on the landing
+        // page (app/page.tsx, the export entry) rather than paraphrasing it. Two
+        // surfaces describing the same archive in two ways is how "four formats"
+        // came to be claimed five times and described once; if the archive's
+        // shape changes, both move together. No API is implied and none is
+        // promised — /about names its absence and that stays the only mention.
+        id: 'folder-of-files',
+        q: 'Why not just keep links in a folder of files?',
+        a: (
+          <>
+            It is a good instinct and we are not going to argue you out of it. But a folder is
+            either readable by anyone who reaches the disk — a backup, a synced drive, a borrowed
+            laptop — or it is encrypted, and the moment it is encrypted you have taken on the hard
+            half yourself: getting it onto a phone, opening it there, searching it without a server
+            to search for you, and never losing the key. That is the work Bracemark is. What you get
+            for handing it over is that the folder is still waiting at the end: the complete backup
+            is a zip of one JSON line per item, your preview images beside it as ordinary files,
+            decrypted, readable in a text editor with nothing of ours installed. Export as often as
+            you like, on every plan — if you would rather keep the folder and use this as the part
+            of it that runs on your phone, that is a reasonable way to use it.
+          </>
+        ),
+      },
+      {
         id: 'platforms',
         q: 'Where does it run?',
         a: (
@@ -172,15 +210,28 @@ export const FAQ_GROUPS: FaqGroup[] = [
         ),
       },
       {
+        // THE SESSIONS ROW BELONGS IN THE LIST. This answer named three of the
+        // four plaintext things we hold and stopped, while the landing page's
+        // `Our blindness` entry and /privacy both name the session record — so
+        // the FAQ, which is where a careful reader comes to check the landing
+        // page, was the least complete of the three. `compelled` below then
+        // inherited the gap by pointing back here ("the account record described
+        // above"), which is how one omission became two.
+        //
+        // It is not a closed enumeration either way — the last line points at the
+        // inventory rather than standing in for it, which is the shape the
+        // privacy claims were rewritten to — but "the full inventory is over
+        // there" is a weaker promise when the list in front of it is visibly
+        // short of a field the reader has already seen elsewhere on the site.
         id: 'what-we-see',
         q: 'What can your servers actually see?',
         a: (
           <>
-            The username you chose, a public key that lets us check a sign-in signature, and a set
-            of encrypted files — each with a path, a size, and the time it last changed. If you
-            subscribe, a subscription record too. Not one title, address, tag or note, and no search
-            index over any of it. The full inventory is in the{' '}
-            <PageLink href="/privacy">privacy policy</PageLink>.
+            The username you chose, a public key that lets us check a sign-in signature, a session
+            record for each device you are signed in on, and a set of encrypted files — each with a
+            path, a size, and the time it last changed. If you subscribe, a subscription record too.
+            Not one title, address, tag or note, and no search index over any of it. The full
+            inventory is in the <PageLink href="/privacy">privacy policy</PageLink>.
           </>
         ),
       },
@@ -224,14 +275,50 @@ export const FAQ_GROUPS: FaqGroup[] = [
         ),
       },
       {
+        // THE PAGE THAT EXISTS TO ANSWER THIS ONE WAS THE THINNEST ON IT. A
+        // reader who needs this answer needs to write something down — a risk
+        // assessment, a policy exception, a note to a client — and "ciphertext
+        // plus the account record described above" is not a thing anyone can
+        // transcribe. It could be assembled from the landing page's hero panel
+        // and `Our blindness` and /privacy's processor list, and every reader
+        // who wanted it went and did exactly that. Itemising it here costs
+        // nothing we have not already published and saves them the assembly.
+        //
+        // THREE THINGS IT MUST NOT DO. It must not close the enumeration — hence
+        // the pointer at /privacy carrying both the provider lines and our own
+        // fields, the `Our blindness` shape rather than "that is the whole of
+        // it". It must not promise conduct /terms does not carry: the notice
+        // sentence is the fact (no email address, so no private channel) plus
+        // the channel /terms already commits to (clause 445, "we give notice on
+        // this website"), and it stops there — it does NOT say we would tell you
+        // about a particular order, which is not ours to promise and is often
+        // not lawful to do. And it must not drift into a warrant canary: an
+        // absence-of-requests claim is a commitment to keep repeating it, which
+        // is a decision to take deliberately or not at all, not something to
+        // arrive at by writing one more clause.
+        //
+        // "Served independently" is the half that is actually load-bearing for a
+        // compliance reader and the half no surface said: our inability to
+        // decrypt is not a property of the whole supply chain, and pretending
+        // otherwise is the same error as narrowing "the server" to a sync server
+        // that does not exist.
         id: 'compelled',
         q: 'What if someone compels you to hand over my bookmarks?',
         a: (
           <>
-            We can only ever hand over what we hold, and what we hold is ciphertext plus the account
-            record described above. There is no key on our side to compel, because one was never
-            there. That is the point of the design: it removes a decision we would otherwise have to
-            be trusted to make.
+            We can only hand over what we hold. An order served on us reaches your encrypted files
+            and the metadata that rides with them — a path, a size, the time each last changed —
+            together with the account record: the username you chose, the public key your sign-ins
+            are checked against, the sessions that keep your devices signed in, and a subscription
+            record if you pay. It does not reach a link, a title, a tag or a note, and there is no
+            key on our side to compel, because one was never there. An order also does not have to
+            come to us at all: Cloudflare stores the encrypted files and the account databases,
+            Amazon Web Services serves this website and the app, and Paddle holds the payment
+            details we never see — each can be served for its own part, and the{' '}
+            <PageLink href="/privacy">privacy policy</PageLink> lists every provider, what it holds,
+            and every field we hold ourselves. One more thing worth saying plainly: we hold no email
+            address for you, so we have no private channel to warn anyone through, and the only
+            notice we can give is the notice we give on this website.
           </>
         ),
       },

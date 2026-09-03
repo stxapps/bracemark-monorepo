@@ -261,14 +261,15 @@ semantics, no clean URLs. `next build` writes the page for `/support` to the key
 `support.html`, which means that without a function the only URL that works is
 `/support.html`. Everything either app's URL space assumes is this one file:
 
-| request                                   | what happens                                                 |
-| ----------------------------------------- | ------------------------------------------------------------ |
-| `www.<domain>/x`                          | 301 to the apex (only the site has a `www.` alias)           |
-| `/support/`, `/support///`                | 301, trailing slashes stripped                               |
-| `/support.html`                           | 301 to `/support` — `/index.html` is exempt, see below       |
-| `/`                                       | rewritten to `/index.html`                                   |
-| `/favicon.ico`, `/_next/**`, `/links.txt` | passed through — a dot in the last segment means a real file |
-| `/settings/misc`                          | rewritten to the key `settings/misc.html`                    |
+| request                                   | what happens                                                       |
+| ----------------------------------------- | ------------------------------------------------------------------ |
+| `www.<domain>/x`                          | 301 to the apex (only the site has a `www.` alias)                 |
+| `/support/`, `/support///`                | 301, trailing slashes stripped                                     |
+| `/support.html`                           | 301 to `/support` — `/index.html` is exempt, see below             |
+| `/`                                       | rewritten to `/index.html`                                         |
+| `/favicon.ico`, `/_next/**`, `/links.txt` | passed through — a dot in the last segment means a real file       |
+| `/.well-known/security.txt`               | passed through by that same rule ([below](#well-knownsecuritytxt)) |
+| `/settings/misc`                          | rewritten to the key `settings/misc.html`                          |
 
 The redirect rules are evaluated together and emit **one** 301, so
 `https://www.bracemark.com/support/` is a single hop, and every redirect carries the
@@ -357,6 +358,60 @@ exemption and the absolute `Location`.
 can't be raised. It sits at roughly 7.5 KB, so a long new comment is a real budget
 question rather than a theoretical one; the test asserts the ceiling, so it fails in
 node rather than at `create-function`.
+
+### `/.well-known/security.txt`
+
+RFC 9116, served from the site only, and the first URL a security researcher
+fetches — it 404'd for the whole of this site's public life while `SECURITY.md` in
+the repository already carried every fact it needed.
+
+It is a **route handler** (`apps/bracemark-site/src/app/.well-known/security.txt/route.ts`,
+`export const dynamic = 'force-static'`, the same declaration `app/robots.ts`
+needs under `output: 'export'`), not a file in `public/`, for exactly one field.
+RFC 9116 makes `Expires` mandatory and recommends under a year, so a hand-written
+file dated the day it was added becomes an **invalid** document on a schedule
+nobody set — and an expired security.txt reads as an abandoned one, which is worse
+than none. Deriving it from the build date renews it on every deploy and bounds
+the failure at how long we go without shipping. Note this is the opposite call
+from `TERMS_UPDATED` / `PRIVACY_UPDATED` in `lib/site.ts`, which are typed by hand
+on purpose: those **date a claim** and must move only when a human decides the
+document changed. This dates nothing — it is a freshness marker on a contact
+address.
+
+Three things it depends on, none of which announces itself:
+
+- **The export writes the dotfolder and the deploy syncs it.** `next build` emits
+  `out/.well-known/security.txt`, and `deploy-static.sh`'s `aws s3 sync` of
+  `$OUT_DIR` carries hidden directories with no extra flag. Verified in the
+  export, not assumed.
+- **The CloudFront function passes it through on the dot in `security.txt`**, not
+  on anything about `.well-known` — the leading dot on the folder is incidental
+  and must stay that way. `rewrite-url.test.mjs` pins the case, because a rule
+  that grew a dotfolder branch would take the file off the air with a 404 nobody
+  on our side ever requests.
+- **`Canonical` takes `SITE_URL`**, which is hard-coded to production for the
+  reason `lib/site.ts` gives, so a staging build publishes production's canonical.
+  Same cosmetic mismatch as `og:url` there, and it costs nothing: staging is
+  `Disallow: /` and nobody fetches this from it. It is _not_ caught by
+  `verify_tier`, whose forbidden list is built from `NEXT_PUBLIC_*_URL` origins
+  only — the bare apex is not one of them, which is the same reason the
+  `/extractor` User-Agent survives a staging deploy
+  ([above](#deploying-the-static-sites--deploy-staticsh)).
+
+**`Policy:` points at `/security`, not at `SECURITY.md` on GitHub.** It pointed
+at the file first, because for a stretch the file was the only policy document
+there was. An on-origin target is better for the same reason `Canonical` exists: a
+researcher holding this file is holding a claim about `bracemark.com`, and
+resolving it should not depend on a link to a third-party host still pointing
+where it did. `/security` prints the windows itself and links the repository for
+the scope.
+
+**The disclosure windows are committed in FOUR places and nothing checks that they
+agree:** `SECURITY.md` (three working days to acknowledge, ten to say what we
+intend to do, no bounty), the "Reporting a security problem" block on /support,
+the reporting section on /security, and — indirectly — the `Policy:` line here,
+which decides which of them a researcher's tooling reads first. Move one, move all
+of them.
 
 ### previewing a production build locally — `nx start`
 

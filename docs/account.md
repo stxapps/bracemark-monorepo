@@ -850,6 +850,22 @@ Treat OPAQUE as the documented upgrade path for the password door, adopted only
 if online-only (or KMS-isolated breach-resistant) password protection becomes a
 requirement; skip the naive KEK-signature half-measure.
 
+> ⚠ **This section is published.** `bracemark-site`'s `/security` page states the
+> pre-auth blob and the offline attack on it in plain language — that a weak
+> password can be guessed at locally, with no round-trip to rate-limit — because
+> volunteering a residual a reader could derive from an AGPL repository is the
+> move the rest of the property is built on. Two consequences. The **decision**
+> above is now a public disclosure as well as an internal one, so revisiting it
+> (adopting OPAQUE for the password door, or gating the blob) means editing that
+> page in the same change; the page describes the build, not an eternal. And the
+> **argument** there rests entirely on the entropy gate — it says Argon2id buys
+> time and only entropy buys safety — so weakening the generated-passphrase
+> default, or letting a low-entropy password through, falsifies a public page as
+> well as a design decision. The `ARGON2_PARAMS` numbers on that page are
+> _imported_ from `crypto/params.ts`, so those cannot drift silently the way
+> /extractor's hand-written caps can ([hosting.md](./hosting.md), `/security`);
+> the prose around them can.
+
 ### storage durability — the most critical state in the system
 
 The DEK model introduces a hard new dependency that direct derivation did not

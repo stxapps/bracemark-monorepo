@@ -192,10 +192,56 @@ export default function Page() {
           rate limits against abuse, and we do not use it to build a profile of you or to track you
           between visits.
         </p>
+        {/* WHAT WE CONFIGURE, NOT HOW LONG THEY KEEP IT. A compliance reader asked
+            for a log-retention period and the tempting answer is a number. A
+            number is the one thing that must not go here: the windows belong to
+            Cloudflare and AWS, differ per product, and move without telling us, so
+            a figure published on this page would be a commitment that goes false
+            on someone else's release schedule — silently, with no lint error, type
+            error or test that could notice. "The short window our providers keep
+            them" (the retention list further down) is vague and stays TRUE, which
+            on this page is the better trade.
+
+            The facts that ARE ours are better than a number anyway, and they were
+            sitting in the repository unpublished: Logpush is deliberately off on
+            both Workers (it would ship the request line off Cloudflare into
+            third-party storage), and bracemark-extractor additionally runs with
+            `invocation_logs: false` because its request line is the one place a
+            saved address would appear. Both are in the two Workers' wrangler.jsonc
+            files with the reasoning written out, so this paragraph cites a
+            configuration a reader can open rather than an adjective they have to
+            accept. (A glob for those two paths is exactly the thing that cannot be
+            written in a JSX block comment: the star-slash closes it and the build
+            fails on the prose underneath.)
+
+            ⚠ SCOPE IT TO OUR SETTINGS AND STOP. "Two of those settings are ours"
+            deliberately does not say they are the only logging controls that
+            exist: zone-level Logpush is a third channel, configured in a
+            Cloudflare dashboard rather than in this repo, and the extractor's own
+            comment says plainly that nothing here can assert it is off. A widened
+            claim — "we do no request logging anywhere" — would be the same
+            enumeration-that-closes failure the privacy claims were rewritten to
+            avoid, one level down in the stack.
+
+            If either setting changes, this paragraph and /security move with it. */}
         <p>
-          That data lives in our infrastructure providers’ own logs, under their retention periods,
-          and we read it to diagnose a fault or an attack. We run no analytics over it, we do not
-          join it to your account, and we keep no separate copy of our own.
+          That data lives in <strong>Cloudflare</strong>’s and <strong>Amazon Web Services</strong>’
+          own logs, under their retention periods rather than any we set, and we read it to diagnose
+          a fault or an attack. We run no analytics over it, we do not join it to your account, and
+          we keep no separate copy of our own.
+        </p>
+        <p>
+          Two of the choices that decide what reaches those logs are ours rather than theirs, and we
+          have made both the same way. Our servers do not forward their request logs to any outside
+          destination, so there is no copy of that stream sitting in a third party’s storage under a
+          retention period of its own. And the link-preview service — the one part of Bracemark that
+          is ever handed a page address — runs with the log that would record its request line
+          switched off, because that line is where the address would appear. Both are settings in
+          the configuration files in{' '}
+          <a href={SOURCE.url} rel="noreferrer">
+            {SOURCE.label}
+          </a>
+          , with the reasoning written out beside them.
         </p>
 
         <h3>What Apple and Google tell us</h3>

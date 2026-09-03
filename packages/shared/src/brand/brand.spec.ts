@@ -1,5 +1,5 @@
 import * as BRAND_MODULE from './brand';
-import { SOCIAL, SOURCE } from './brand';
+import { PREDECESSOR, SOCIAL, SOURCE } from './brand';
 
 // The facts in brand.ts are repeated on more surfaces than anything else in the
 // workspace, and every one of them is a claim a reader is entitled to rely on.
@@ -36,6 +36,25 @@ describe('the X account', () => {
   // through untouched, so a bare one ships a meta tag no unfurler resolves.
   it('is the @-prefixed form the card metadata needs', () => {
     expect(SOCIAL.handle).toMatch(/^@[A-Za-z0-9_]{1,15}$/);
+  });
+});
+
+describe('the predecessor', () => {
+  // The product name IS its domain, which is the whole reason two strings can
+  // drift here at all: the surfaces use `name` as the anchor text and `url` as
+  // the href, so a reader sees one and follows the other. Pinning them together
+  // is what stops a rename on one side sending three readers somewhere else.
+  it('links the domain it is named after', () => {
+    expect(PREDECESSOR.url).toBe(`https://${PREDECESSOR.name.toLowerCase()}`);
+  });
+
+  // A four-digit year in the past, printed as "since {year}". The failure this
+  // catches is a typo rather than a rename — `2O20`, a two-digit year, or a
+  // future one — each of which renders as a confident sentence and turns the most
+  // checkable claim on the property into the least.
+  it('is a launch year that has already happened', () => {
+    expect(PREDECESSOR.since).toBeGreaterThanOrEqual(2000);
+    expect(PREDECESSOR.since).toBeLessThanOrEqual(new Date().getFullYear());
   });
 });
 

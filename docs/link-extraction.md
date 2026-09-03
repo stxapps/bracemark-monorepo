@@ -1444,6 +1444,17 @@ browser that can't fetch for itself. It is a **separate app**, not a route in
   which drops the automatic request-line log and keeps the deliberate ones (the
   error handler and `extractOne` are already written never to log the URL). The
   zone's Logpush setting is the other half and lives outside this repo.
+  ⚠ **This setting is now published.** /privacy's _Technical and security data_
+  section cites it — that the one service handed a page address runs with the log
+  that would record its request line switched off — as the answer to "how long do
+  you keep request logs", in place of a retention period we do not control and
+  could not keep true. So flipping `invocation_logs` back on, here or on
+  `bracemark-api`, falsifies a live sentence in the privacy policy, and nothing
+  connects the two: no lint rule, no type error, and no test in either runner
+  reads a `wrangler.jsonc` against a page. The claim on that page is scoped to
+  **our settings** on purpose and must stay that way — the zone-level channel
+  above is exactly what a widened "we do no request logging" would be wrong
+  about.
 - **It identifies itself, and the address it gives has to answer.** Every fetch
   carries `bracemark-extractor/1.0 (+https://bracemark.com/extractor)` — honest,
   never a spoofed browser (`lib/safe-fetch.ts`), because a service that fetches

@@ -20,7 +20,7 @@ import { Button } from '@stxapps/web-ui/components/ui/button';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { ArrowGlyph } from '../components/glyphs';
-import { CREATE_ACCOUNT_URL, SOURCE } from '../lib/site';
+import { CREATE_ACCOUNT_URL, PREDECESSOR, SOURCE } from '../lib/site';
 
 // Moved here from bracemark-web when the apex became this app. Two things changed
 // with the move, both consequences of the site being a different origin from the app:
@@ -1694,10 +1694,42 @@ export default function Page() {
             has no context at all, so it must not shrink to something like "drops
             the dependency", which reads as a claim of independence we do not have
             (this band's own third entry concedes the Cloudflare wiring). */}
+        {/* A YEAR AND A LINK, both from PREDECESSOR in @stxapps/shared — the same
+            constant /about reads, because two surfaces naming one product in one
+            breath is how a URL comes to be right on one of them.
+
+            "we have run for years" was the weakest form of the strongest
+            durability fact on the page: unverifiable by construction, on a
+            property whose entire method is that it does not ask to be taken at its
+            word. Three readers tried to check it and had nothing to click.
+
+            "AND STILL RUN TODAY" IS THE PART THAT CHANGES THE READING. Without it
+            the sentence is ambiguous in the one direction that hurts — a
+            predecessor named in the past tense reads as a product this team walked
+            away from, and one reader took it exactly that way, on the band whose
+            job is to argue we will still be here. A predecessor that is still
+            answering is the opposite of churn. Present tense, deliberately: it
+            reports what runs, and promises nothing about what will.
+
+            THE HEDGE STAYS. "For whatever a track record is worth" is not the
+            defect the link fixes — it is the register this band argues in, and the
+            comment above is the reason: the other three entries hold whether or
+            not a reader believes this one, and a footnote that starts asserting
+            its own weight is a footnote that has been promoted into a fourth
+            column it was deliberately kept out of. */}
         <p className={cn('mt-10 max-w-2xl text-sm leading-6 text-muted-foreground')}>
-          For whatever a track record is worth: Bracemark is the successor to Brace.to, a bookmark
-          manager we have run for years. Same team, same job — this one keeps the promise and
-          rebuilds what it rests on.{' '}
+          For whatever a track record is worth: Bracemark is the successor to{' '}
+          <a
+            className={cn(
+              'text-signal underline decoration-signal-line underline-offset-2 hover:decoration-signal',
+            )}
+            href={PREDECESSOR.url}
+            rel="noreferrer"
+          >
+            {PREDECESSOR.name}
+          </a>
+          , a bookmark manager we have run since {PREDECESSOR.since} and still run today. Same team,
+          same job — this one keeps the promise and rebuilds what it rests on.{' '}
           <Link
             className={cn(
               'text-signal underline decoration-signal-line underline-offset-2 hover:decoration-signal',

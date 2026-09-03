@@ -7,7 +7,7 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { ArrowGlyph } from '../../components/glyphs';
 import { PageShell } from '../../components/page-shell';
-import { COMPANY, CREATE_ACCOUNT_URL, SOURCE, SUPPORT_EMAIL } from '../../lib/site';
+import { COMPANY, CREATE_ACCOUNT_URL, PREDECESSOR, SOURCE, SUPPORT_EMAIL } from '../../lib/site';
 
 export const metadata: Metadata = {
   title: 'About',
@@ -52,6 +52,35 @@ const TRADEOFFS: [string, string][] = [
   [
     'No shared or public lists',
     'Sharing means handing someone the means to decrypt part of your library. It is real work rather than a button, and we would rather not fake it.',
+  ],
+  // Placed next to sharing because it is the same shape one step out: both are
+  // "get this to something that is not you", and both run into the fact that the
+  // only thing we hold is unreadable.
+  //
+  // WHY IT BELONGS IN THIS LIST AND NOT IN THE FAQ. Two readers evaluating the
+  // product went to the REPOSITORY to find out whether there was an API, because
+  // no page said. That is a failure of the list whose stated purpose is "we would
+  // rather you knew now" — a fit question answered nowhere is exactly what this
+  // section exists to prevent, and it is asked before an account exists, which is
+  // the wrong end of the funnel for a FAQ organised around using the product. One
+  // canonical statement, here; anything else that needs it links to it.
+  //
+  // THE REASON IS THE ENTRY. "We have not built one" is a status; the architecture
+  // is the durable half and it is genuinely interesting — a server-side API of
+  // ours can only ever serve ciphertext, so a useful one needs the key somewhere
+  // it currently never goes. That framing also survives the day an API ships in
+  // some form, because it names the constraint any such thing would have to answer
+  // rather than promising there will never be one.
+  //
+  // "TODAY", NEVER "YET" OR "NOT ANY MORE". Same rule as /faq `self-hosting`:
+  // today describes where things stand and carries no roadmap in it, while "yet"
+  // and "coming soon" are commitments nobody made — and this list's standing rests
+  // on volunteering costs, which a hedged cost is not. Do NOT attach a date or a
+  // plan here, and do not let it drift into an apology: the export is a real
+  // answer to most of what an API would be asked for, and it is already shipped.
+  [
+    'No public API',
+    'There is no public API today, and nothing to hang an integration or an automation off. Part of that is simply unbuilt, and part of it is the architecture: anything we could serve from our side is ciphertext, so a useful API would mean putting your key somewhere it currently never goes. The export is the seam that does work — a readable backup, free on every plan, as often as you like.',
   ],
   // The sync cost, which belongs in a list of things we would rather you knew
   // now and had been left to docs/local-first-sync.md. It is the counterpart of
@@ -259,12 +288,49 @@ export default function Page() {
                   It used to be "drops the prerequisite" on both, and that phrase
                   died with the prerequisite — the two surfaces have to agree
                   (docs/brand-assets.md, the successor row). */}
+              {/* THE YEAR AND THE LINK, added together because neither works
+                  alone: a date nobody can check is an assertion, and a link with
+                  no date makes the reader do the arithmetic we already know the
+                  answer to. Three readers in a positioning test went looking for
+                  something to click here and found a bare product name.
+
+                  "AND STILL RUN TODAY" IS THE LOAD-BEARING CLAUSE, and it is new
+                  rather than a rewording. This paragraph could be read as churn —
+                  a team that abandons a product every few years — and one reader
+                  did read it that way. A predecessor that is still answering is
+                  the exact opposite of churn, and it was true the whole time
+                  without being said. Present tense on purpose: it describes what
+                  is running, not a commitment about what will be.
+
+                  "Could have STAYED ON IT" replaces "could have kept it running
+                  forever", which only parsed while the page left it ambiguous
+                  whether the thing still ran. The point was never that we could
+                  have kept the lights on — it is that nothing forced the
+                  migration, which is what the replacement says without arguing
+                  with the sentence above it.
+
+                  Both facts come from PREDECESSOR in @stxapps/shared, shared with
+                  the landing page's footnote (page.tsx, _If we disappear_), which
+                  names the same product in the same breath. brand.spec.ts pins the
+                  name against the URL; nothing can pin that the domain still
+                  answers, which is why the constant carries the instruction to
+                  pull the link from BOTH surfaces if it ever stops. */}
               <p>
-                Bracemark is the successor to Brace.to, a bookmark manager we have run for years on
-                a decentralised identity stack. That one worked, and the people who used it were
+                Bracemark is the successor to{' '}
+                <a
+                  className={cn(
+                    'text-signal underline decoration-signal-line underline-offset-2 hover:decoration-signal',
+                  )}
+                  href={PREDECESSOR.url}
+                  rel="noreferrer"
+                >
+                  {PREDECESSOR.name}
+                </a>
+                , a bookmark manager we have run since {PREDECESSOR.since} and still run today, on a
+                decentralised identity stack. That one worked, and the people who used it were
                 generous with their patience — but it was named after a domain nobody could say out
                 loud, and better ways to do the same job arrived. Nothing forced the move: that
-                stack is open source and we could have kept it running forever. We would rather
+                stack is open source and we could have stayed on it indefinitely. We would rather
                 build on the best tools for the job than keep a stack going out of loyalty to it —
                 and a blockchain was never the part that kept those bookmarks private.
               </p>

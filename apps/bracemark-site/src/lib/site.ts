@@ -81,6 +81,14 @@ export { SOURCE };
 // living here would be a second definition of a string that names an account.
 export { SOCIAL };
 
+// The predecessor product. Same argument as COMPANY: it lives in @stxapps/shared
+// because it is a fact about who we are rather than about this site, and it is
+// re-exported here so a page still takes "who and where we are" from one import.
+// Two surfaces name it — the landing page's `If we disappear` footnote and
+// /about's _Where it came from_ — and brand.ts carries the rule about what
+// happens to the link if the domain ever stops answering.
+export { PREDECESSOR } from '@stxapps/shared';
+
 // The "last updated" line each policy carries. Dates live here rather than inline
 // so the two documents can never claim different vintages of the same rewrite —
 // and so bumping one after an edit is a deliberate act, not a forgotten one.
@@ -144,6 +152,17 @@ export const FOOTER_LINKS: { heading: string; links: FooterLink[] }[] = [
     links: [
       { href: '/terms', label: 'Terms' },
       { href: '/privacy', label: 'Privacy' },
+      // Under Legal rather than Company, and it is the weaker fit of the two on
+      // the merits: /security is a mechanism page, not a document anyone signed.
+      // It sits here because of who goes looking for it. The reader who wants the
+      // key hierarchy and the breach surface is the same reader who opens Terms
+      // and Privacy to see what is promised in writing, and they scan this column
+      // for exactly that; under Company it would sit beside About and the X
+      // handle, which is not a neighbourhood anyone searches for a threat model
+      // in. /extractor is deliberately NOT here for the mirror-image reason — its
+      // readers arrive from a User-Agent string in an access log, never from our
+      // footer.
+      { href: '/security', label: 'Security' },
     ],
   },
 ];
