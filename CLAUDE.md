@@ -61,6 +61,21 @@ responsibilities, and the reasoning: `docs/architecture.md`.
   it and it will read those files. Decline and re-run it bounded instead.
   `rg -uu` and `git grep --no-index` opt back out of that and are no safer
   than plain `grep`.
+- **Never prefix a search with `cd`.** This is the one thing that still
+  prompts on an otherwise-allowlisted `rg`, and the cause is not visible in
+  the command: the allow rule matches, but permission also has to prove the
+  command cannot reach a denied path, and a `cd` makes the working directory
+  indeterminate — so a relative argument after it can no longer be resolved
+  against the `deny` list. What comes back is "would search a directory that
+  cannot be determined here", on a command the allowlist covers. Search from
+  the primary working directory instead: it is where every Bash call starts
+  and it persists between calls, so the `cd` buys nothing.
+- **Everything else already works, so don't write around it.** All of these
+  run unprompted from the working directory: a bare repo-wide `rg -l pat`
+  with no path at all, a relative path, an absolute path, several paths at
+  once, `--glob` filters, and a pipe into `head` or `wc`. Reaching for a
+  bounded or hand-split search to avoid a prompt that isn't there costs a
+  turn and narrows the result.
 
 # Docs
 
