@@ -760,7 +760,7 @@ const TRADE: { aspect: string; hosted: string; ours: string }[] = [
     aspect: 'One link, two devices',
     hosted:
       'Their server holds the readable copy, so it can merge two edits, keep a version history, and give you back the one you wanted.',
-    ours: 'Each link is its own encrypted file, so edits to different links never collide. Edit the same link on two devices before they sync and the later edit is the one that survives — there is nothing readable at our end to merge, and no earlier version to restore.',
+    ours: 'Each link is its own encrypted file, so edits to different links never collide. Edit the same link on two devices before they sync and the later edit is the one that survives — we hold nothing readable from your links to merge, and no earlier version to restore.',
   },
   {
     // The row that does a second job. The no-reset fact and its answer used to

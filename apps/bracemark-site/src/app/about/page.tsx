@@ -63,11 +63,17 @@ const TRADEOFFS: [string, string][] = [
   // Phrased as NO VERSION HISTORY rather than "edits can be lost", because the
   // absent feature is the durable fact and the lost edit is the symptom. It is
   // also the one framing that stays true if the winner ever changes: whichever
-  // side wins a conflict, there is no readable copy at our end to have kept the
-  // other one in.
+  // side wins a conflict, there is no readable copy of your links at our end to
+  // have kept the other one in.
+  //
+  // A FOURTH surface carries the same fact without the conflict: /faq
+  // `undo-edit` answers it for one device (an edit you regret, nobody else
+  // involved) and is the only one of the four that names Trash and the export
+  // backstop. The three listed above all condition the loss on two devices,
+  // which is why it was worth adding rather than repeating.
   [
     'No version history',
-    'Each link is its own encrypted file and the newest write is the one that survives. We hold no readable copy to keep earlier versions in, so an edit you regret cannot be rolled back from our side — a backup export is the answer if that matters to you.',
+    'Each link is its own encrypted file and the newest write is the one that survives. We hold no readable copy of your links to keep earlier versions in, so an edit you regret cannot be rolled back from our side — a backup export is the answer if that matters to you.',
   ],
   // The one entry that is NOT a consequence of the encryption — which is exactly
   // why it was missing. Every other cost in this list is architectural, so the

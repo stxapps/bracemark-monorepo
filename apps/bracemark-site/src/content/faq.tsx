@@ -757,6 +757,26 @@ export const FAQ_GROUPS: FaqGroup[] = [
         //     `extractions/{id}.enc` machine-derived, same id — precisely so a
         //     background title fetch can never clobber a title you typed.
         //
+        // THE ONE-DEVICE HALF of the same fact — an edit you regret, with no
+        // second device in it — is `undo-edit` below, which carries Trash and the
+        // export backstop. This answer links there; that one does not link back.
+        // A reader here has just been told an edit can be lost and wants the way
+        // out, whereas one who arrived at `undo-edit` by asking about undo has
+        // their answer without the sync story.
+        //
+        // "NOTHING READABLE FROM YOUR LINKS", never "nothing readable at our
+        // end" — which is what this answer said until it was read against the
+        // schema. The bare form is "the server sees nothing" in a quieter voice:
+        // `bracemark-api` is ONE Worker over a username directory, an accounts
+        // shard, a sessions DB, a purchases table and R2 (wrangler.jsonc), so a
+        // great deal at our end is readable and only the LIBRARY is not. Naming
+        // the scope inside the noun phrase is what makes it true — a trailing
+        // "…to merge" restricts it too, but a reader takes the noun phrase as
+        // the claim and the rest as elaboration. The three sibling surfaces (the
+        // landing band's `One link, two devices`, /about's `No version history`,
+        // `undo-edit` below) are spelled the same way, and /privacy's "nothing
+        // readable from a link" is the form they all follow.
+        //
         // NOT MENTIONED, DELIBERATELY: R2 conditional writes (`If-Match` on the
         // etag) are the designed upgrade and are deferred, and the true-conflict
         // winner (local-wins vs server-wins) is an open product call. Neither is a
@@ -770,10 +790,11 @@ export const FAQ_GROUPS: FaqGroup[] = [
             Each link, list and tag is stored as its own encrypted file, so two devices working on
             different things never collide. If the same link is edited in both places before they
             sync, the later edit is the one that survives and the earlier one is replaced — we hold
-            nothing readable at our end, so there is no merge we could do for you and no older
-            version to restore. Anything you change offline queues up and goes out in order the next
-            time you have a network. Titles and preview images fetched in the background are kept in
-            a separate file from what you write, so one never overwrites the other.
+            nothing readable from your links, so there is no merge we could do for you and no older
+            version to restore (see <PageLink href="/faq#undo-edit">can I undo a change</PageLink>).
+            Anything you change offline queues up and goes out in order the next time you have a
+            network. Titles and preview images fetched in the background are kept in a separate file
+            from what you write, so one never overwrites the other.
           </>
         ),
       },
@@ -808,6 +829,55 @@ export const FAQ_GROUPS: FaqGroup[] = [
             which is real key-exchange work rather than a button, and public sharing would drag in
             moderation duties we would then have to act on. We would rather not ship a shallow
             version of it.
+          </>
+        ),
+      },
+      {
+        // The ONE-DEVICE half of `two-devices` above. The no-version-history fact
+        // already reaches three surfaces — /about's `No version history` trade
+        // row, the landing band's `One link, two devices`, and `two-devices`
+        // here — and all three state it as a CONFLICT, which a reader with one
+        // device never has. What they type is this question, and it wants a
+        // different answer, because the two halves come apart:
+        //
+        // REMOVING IS REVERSIBLE AND EDITING IS NOT. Remove is
+        // `update({ listId: TRASH_ID })` with **Restore** and **Delete
+        // permanently** waiting in the Trash view (docs/editors.md, the bulk
+        // toolbar); an edit re-puts `links/{id}.enc` over itself and there is
+        // nothing readable from your links to have kept the old one in. Do not blur
+        // the two into a single "we cannot recover things" line — the
+        // recoverable half is the good news, and it is what the reader came for.
+        //
+        // RESTORE LANDS IN My List, not in the list the link came from: the
+        // schema records no previous list (docs/editors.md). Said out loud,
+        // because a reader expecting the old list back and getting the inbox
+        // reads it as a second loss.
+        //
+        // NO PURGE WINDOW IS PROMISED, because none ships. system-lists.ts calls
+        // Trash "the deletion staging area (links pending the purge window)", but
+        // nothing in the repo purges anything on a timer — Trash holds until the
+        // user empties it by hand. A "for 30 days" here would be inventing a
+        // feature, and it is the kind a reader plans around.
+        //
+        // "TRASH" AND "My List" ARE DEFAULT LABELS, not fixed names. Both are
+        // real lists the user can rename, and `SYSTEM_LIST_NAMES`
+        // (`shared/src/sync/system-lists.ts`) graduates to the translation layer
+        // when i18n arrives — at which point an untouched list localizes and this
+        // sentence does not follow it. Named anyway: the in-app word is what
+        // makes the answer actionable, and this file already spells "Settings →
+        // Data" and the layout setting the same way. That file is where a rename
+        // would start, and nothing links it to this line.
+        id: 'undo-edit',
+        q: 'Can I undo a change, or get a deleted link back?',
+        a: (
+          <>
+            A deleted link, yes: removing a link puts it in Trash, and it stays there until you
+            delete it permanently. Restore brings it back — to My List, since nothing records which
+            list it came from. An edit is the half we cannot help with. Saving a title, a note or a
+            set of tags replaces what was there, and we hold nothing readable from your links to
+            have kept the earlier version in, so there is no history to roll back through and
+            nothing we could hand you. An export is the backstop worth having: the full backup
+            restores everything, and taking one before a big clean-up costs nothing.
           </>
         ),
       },
