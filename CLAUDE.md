@@ -50,6 +50,18 @@ responsibilities, and the reasoning: `docs/architecture.md`.
 - **Whole workspace vs. one project.** The root scripts above fan out to every project (`nx run-many`). To run a target on a single app/package after a change, scope it by the project's full Nx name: `npx nx <target> <project>`, e.g. `npx nx typecheck @stxapps/bracemark-web`, `npx nx test @stxapps/bracemark-api`, `npx nx build @stxapps/bracemark-web` (`npx nx show projects` lists them). To check only what a change affected across the graph, use `npx nx affected -t <target>`.
 - **After making changes, autofix before checking.** Run the fixer first so `lint`/`typecheck` only report what needs real attention: whole-workspace `npm run fix` (ESLint `--fix` + prettier), or scoped `npx nx lint @stxapps/<project> --fix` for a single project. Then run `npm run lint` and `npm run typecheck` (or their scoped forms).
 
+# Searching
+
+- Search with `rg` or `git grep`, not plain `grep`/`grep -r`. Both are
+  allowlisted in `.claude/settings.json`, and neither can reach that file's
+  `deny` list — `git grep` only reads tracked content and `rg` honours
+  `.gitignore`, while all three denied paths are gitignored. Plain `grep`
+  is not allowlisted, so it prompts; and because a recursive `grep` never
+  _names_ a denied path, the deny rules have nothing to match on — approve
+  it and it will read those files. Decline and re-run it bounded instead.
+  `rg -uu` and `git grep --no-index` opt back out of that and are no safer
+  than plain `grep`.
+
 # Docs
 
 `docs/` is the design record — read the relevant file **before** changing code in

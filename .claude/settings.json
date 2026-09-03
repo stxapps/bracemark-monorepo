@@ -9,6 +9,12 @@
     }
   },
   "permissions": {
+    "allow": [
+      "Bash(git grep:*)",
+      "Bash(git ls-files:*)",
+      "Bash(git log:*)",
+      "Bash(rg:*)"
+    ],
     "deny": [
       "Read(apps/bracemark-expo/credentials/**)",
       "Read(apps/bracemark-expo/.env.local)",
