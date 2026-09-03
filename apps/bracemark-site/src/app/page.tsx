@@ -671,7 +671,10 @@ const LIBRARY: [string, string][] = [
   // count and the round-trip claim go here; the four format names go in the
   // durability band below, where the export is load-bearing rather than a
   // feature bullet, so the list is stated once.
-  ['Export', 'Four formats, one a complete backup that restores everything. Free on every plan.'],
+  [
+    'Export',
+    'Several formats, one a complete backup that restores everything. Free on every plan.',
+  ],
 ];
 
 // --- the trade -------------------------------------------------------------
@@ -705,8 +708,8 @@ const LIBRARY: [string, string][] = [
 //
 // THE ORDER IS FREQUENCY, THEN WEIGHT — it read as "worst first" for as long as
 // there were three rows and it was never that. Search and previews are hit by
-// every reader on day one; the same link edited twice is hit by anyone with two
-// devices; a forgotten password is rare and total, and it goes last for a second
+// every reader on day one; one link edited on two devices is hit by anyone who
+// has two; a forgotten password is rare and total, and it goes last for a second
 // reason its own note gives. Insert by that rule, not by severity alone.
 const TRADE: { aspect: string; hosted: string; ours: string }[] = [
   {
@@ -737,7 +740,7 @@ const TRADE: { aspect: string; hosted: string; ours: string }[] = [
     // than strict severity — Search and Previews are hit by everyone, this is hit
     // by anyone with two devices, and a forgotten password is rare and total. The
     // forgotten-password row stays LAST because it is the heaviest and because it
-    // has a second job (see its own note): arriving three sections before the
+    // has a second job (see its own note): arriving one section before the
     // claim band's stark version. Insert anything new by that ordering.
     //
     // "The later edit is the one that survives" is the shipped LWW policy stated
@@ -745,7 +748,16 @@ const TRADE: { aspect: string; hosted: string; ours: string }[] = [
     // there is no version kept, which is the actual cost — and do not mention the
     // conditional-write upgrade, which is deferred. /faq `two-devices` carries the
     // long form, including the extraction split.
-    aspect: 'The same link, edited twice',
+    //
+    // THE TERM NAMES THE SCENARIO, not the feature — the same shape as "A
+    // forgotten password" one row down, and it lets a one-device reader skip the
+    // row, which is what the frequency ordering above is for. It was "The same
+    // link, edited twice", which set two lines in a ~240px column where every
+    // other term set one. Do not compress it to a noun pile ("Same link edits"):
+    // the collision IS the row, and without two devices in the term the reader
+    // has to reach the second column to find out there is a cost at all. The
+    // wording deliberately echoes /faq `two-devices`, which this row points at.
+    aspect: 'One link, two devices',
     hosted:
       'Their server holds the readable copy, so it can merge two edits, keep a version history, and give you back the one you wanted.',
     ours: 'Each link is its own encrypted file, so edits to different links never collide. Edit the same link on two devices before they sync and the later edit is the one that survives — there is nothing readable at our end to merge, and no earlier version to restore.',
@@ -776,8 +788,8 @@ const GUARANTEES: [string, string][] = [
   // this app had BEFORE the DEK/KEK doors: the root is now a random DEK that is
   // never derived from anything, and the password runs through Argon2id to a KEK
   // that UNWRAPS a copy of it (docs/account.md, _the DEK / KEK door model_).
-  // The distinction is not pedantry — it is load-bearing for the trade band three
-  // sections up, which promises a recovery code opens the account. A key that
+  // The distinction is not pedantry — it is load-bearing for the trade band in the
+  // section directly above, which promises a recovery code opens the account. A key that
   // really was derived from the password could not also be opened by a recovery
   // code, so the old wording had the claim band contradicting the mechanism the
   // trade band sells. Nothing catches that: `bracemark-site` imports PLAN_LABELS
@@ -892,7 +904,7 @@ const DURABILITY: [string, React.ReactNode][] = [
     'Bracemark is local-first: the copy you open, search and edit is held on the machine in front of you, and syncing is how your other devices catch up. The library does not need us to be reachable in order to open.',
   ],
   // THE CANONICAL STATEMENT OF WHAT COMES OUT, and the only one on the page: the
-  // LIBRARY band's Export bullet stays a bullet ("Four formats, one a complete
+  // LIBRARY band's Export bullet stays a bullet ("Several formats, one a complete
   // backup"), because a feature list is read by a scanner and this is read by
   // someone deciding whether they can leave.
   //
@@ -912,13 +924,27 @@ const DURABILITY: [string, React.ReactNode][] = [
   // that layout — it is why the format is jsonl and a folder rather than anything
   // that needs a reader.
   //
-  // COST, ACCEPTED: this entry now runs roughly twice its two siblings in a
-  // three-column grid. The ragged column is worth a purchase gate; if it is ever
-  // trimmed, trim the four-format clause and keep the archive sentence, never the
-  // other way round.
+  // NO COUNT, AND NO LIST OF FORMATS — that trim has been taken, and the reason
+  // is drift rather than length. `ExportFormat` is `'bracemark' | 'netscape' |
+  // 'csv' | 'text'`, declared in `web-react/src/data/export-all-data.ts` and
+  // again in `expo-react/src/data/export-all-data.ts`, and `bracemark-site`
+  // depends on NEITHER — it imports `shared` and nothing else. So a fifth format
+  // would leave a public commitment quietly false here with no lint error, type
+  // error or failing test, which is the /extractor-caps shape the tripwire list
+  // warns about. "Formats other apps read are there too" is count-free and stays
+  // true whatever lands; /faq `import-export` is the ONE surface that enumerates
+  // them, because it is where a reader goes for the list and where the next
+  // format will actually get written down.
+  //
+  // WHAT MUST NOT GO IS THE ARCHIVE SENTENCE. It is the whole reason the entry is
+  // longer than its two siblings (~239 against 211 and 245, six lines against
+  // five and six in the three-column grid), and it is the only part of the entry
+  // the FAQ does not carry. Trimming it back to "open formats, restores
+  // everything" returns the entry to the adjectives two paragraphs up — which is
+  // the failure this entry was written to fix, not a shortening of it.
   [
     'Export is free, on every plan',
-    'Four formats — a browser bookmarks file, a CSV, a plain list of URLs, and a complete backup that restores everything. The backup is a zip: one JSON line per item, your preview images beside it as ordinary files, decrypted, readable in a text editor with nothing of ours installed. Charging you to leave would undo the point of building it this way.',
+    'The complete backup is a zip: one JSON line per item, your preview images beside it as ordinary files, decrypted, readable in a text editor with nothing of ours installed. Formats other apps read are there too. Charging you to leave would undo the point of building it this way.',
   ],
   [
     'The code is public',
@@ -1072,35 +1098,32 @@ export default function Page() {
                 </Button>
               </div>
 
-              {/* Two doors, twice over, and both halves are repairs.
+              {/* Two doors, twice over, and every clause here is a repair.
 
-                  The offer half: the page courted the switcher in the Import
+                  THE OFFER HALF: the page courted the switcher in the Import
                   card and then addressed nobody but the empty-handed everywhere
                   else. "Start empty, or bring the library you already have" is
                   now the shape of both this line and the closer, so the two
                   ends of the scroll say the same thing.
 
-                  The account half: "no email address" is framed as a gift and
-                  reads as the announcement that there is no safety net. The
-                  mechanism stays — it is the honest reason — but the railing
-                  now arrives in the same breath as the cliff rather than four
-                  sections later in grey. The recovery code is named here, in
-                  the claim block's footnote and in the closer; those are the
-                  three places that used to state the risk with only one of the
-                  two secrets in view. */}
-              {/* Third pass on this line, and both changes are the same kind:
-                  the cliff was stated and the railing was somewhere else.
+                  THE ACCOUNT HALF: "no email address" alone is framed as a gift
+                  and reads as the announcement that there is no safety net. The
+                  railing has to arrive in the same breath as the cliff rather
+                  than four sections later in grey. The recovery code is named
+                  here, in the claim block's footnote and in the closer; those
+                  are the three places that used to state the risk with only one
+                  of the two secrets in view.
 
-                  THE INSTRUCTION IS NOW ATTACHED. Naming the two doors told a
-                  nervous reader what she stood to lose and not one thing to do
-                  about it, and she went looking for the escape hatch immediately
-                  — the instruction that answers her was in /faq `where-to-keep`,
-                  four items away, answering a different question about a
-                  different secret. It is one clause: the password where a
-                  password goes, the code somewhere else. Never both in the
-                  password manager, however tidy that sounds — the two failing
-                  together is the entire case the second door exists to survive,
-                  and advice that puts them in one place defeats it.
+                  THE INSTRUCTION IS ATTACHED. Naming the two doors told a
+                  nervous reader what they stood to lose and not one thing to do
+                  about it, and they went looking for the escape hatch
+                  immediately — the instruction that answers them was in /faq
+                  `where-to-keep`, four items away, answering a different
+                  question about a different secret. It is one clause: the
+                  password where a password goes, the code somewhere else. Never
+                  both in the password manager, however tidy that sounds — the
+                  two failing together is the entire case the second door exists
+                  to survive, and advice that puts them in one place defeats it.
 
                   "THE APP ASKS YOU TO SAVE BOTH", not "you save both". The
                   recovery step is skippable by design — its second submit reads
@@ -1109,14 +1132,25 @@ export default function Page() {
                   the product lets you decline, on the one page whose rule is to
                   describe what the system does. The steer is preserved (the app
                   does ask) without claiming the outcome. Same correction in the
-                  trade band's third row and /faq `recovery-code`; /terms had it
-                  right all along. */}
+                  trade band's last row and /faq `recovery-code`; /terms had it
+                  right all along.
+
+                  NO "BECAUSE THE ACCOUNT HAS NOWHERE TO PUT ONE". It was there to
+                  stop the missing email reading as a favour, but it explains
+                  nothing — "we don't ask because we built no field for it"
+                  restates the choice instead of giving the reason, and it put a
+                  second reason-marker in front of the clause carrying the real
+                  one, so the sentence ran "because X: Y" with all the weight on
+                  Y. The door sentence does that job on its own and does it
+                  better: what replaces the email is named, not merely denied.
+                  Note the antecedent if this is ever re-cut — the doors lead
+                  into "your account", spelled out, because the noun the old
+                  clause supplied for "it" left with it. */}
               <p className={cn('mt-5 max-w-md text-sm leading-6 text-muted-foreground')}>
                 Free for your first {FREE_LINKS} links — start empty, or bring the library you
-                already have. No card, and no email address, because the account has nowhere to put
-                one: the two doors into it are your password and a recovery code, and the app asks
-                you to save both at sign-up — the password in your password manager, the code
-                somewhere else.
+                already have. No card, and no email address. The two doors into your account are
+                your password and a recovery code, and the app asks you to save both at sign-up —
+                the password in your password manager, the code somewhere else.
               </p>
 
               <div className={cn('mt-10 flex items-center gap-5')}>
@@ -1562,25 +1596,35 @@ export default function Page() {
               </div>
             ))}
           </dl>
-          {/* Back to the stark version, deliberately, now that the trade band
-              exists. The reassurance was briefly bolted on here — the cost had
-              been landing with no hand held out, and this was the beat a nervous
-              reader stopped scrolling. The trade band's third row now does that
-              job three sections earlier and more gently, in the same breath as
-              the fact, which is where it belongs.
-
-              So this paragraph goes back to being what it is best at: the
-              concession, unhedged, at the moment the page is proudest. Softening
-              it twice would spend the one thing that makes the rest believable
+          {/* THE CONCESSION, UNHEDGED, at the moment the page is proudest
               (docs/brand-assets.md — _states its own costs, unprompted_: "the
-              concession is load-bearing"). It now reads as the reprise of a fact
-              the reader already met, which is the only reason the starker
-              wording is affordable here. */}
-          {/* The cost sentence is UNCHANGED and stays unhedged — see the note
-              above, and docs/brand-assets.md, _states its own costs, unprompted_.
-              What follows it is not a softening, it is a CHORE: the reader who
-              stops scrolling here does not want the cliff removed, she wants it
-              finished, and an instruction is the one addition that answers her
+              concession is load-bearing"). Softening the cost sentence spends the
+              one thing that makes every other claim on this page believable: the
+              costs are the only part of it a reader can check against their own
+              use, and every other claim is one they have to take from the party
+              who benefits.
+
+              SCOPED TO THE GUARANTEE, not to the architecture. It opened "The
+              honest cost of building it this way" — which is the heading /about
+              (_What it costs to build it this way_) and `FULL_DESCRIPTION` both
+              use to introduce the FOUR-item cost list. One item after that colon,
+              one section under a four-row trade band, read as a list that had lost
+              three entries. "That guarantee" points at the headline directly
+              above, which is what this is actually the cost of, and it is how
+              /faq `lost-password` already words it ("the honest cost of the
+              guarantee on the front page"). The two have to agree.
+
+              NO REASSURANCE HERE. It was briefly bolted on — the cost had been
+              landing with no hand held out, and this is the beat a nervous reader
+              stops scrolling. The trade band's LAST row now does that job in the
+              section directly above and more gently, in the same breath as the
+              fact, which is where it belongs; this one is the reprise of
+              something the reader has already met, which is the only reason the
+              starker wording is affordable here.
+
+              WHAT FOLLOWS THE COST IS A CHORE, not a softening: a reader who
+              stops scrolling here does not want the cliff removed, they want it
+              finished, and an instruction is the one addition that answers them
               without spending the starkness. Stated as the split rather than as
               "save them safely", because the split IS the mechanism — two doors
               kept in one place are one door — and because a reader already has a
@@ -1588,9 +1632,9 @@ export default function Page() {
               page and /faq `recovery-code` states it at the bottom; this is the
               beat between them where the fact is loudest. */}
           <p className={cn('mt-14 max-w-2xl text-sm leading-6 text-background/80')}>
-            The honest cost of building it this way: lose your password and your recovery code, and
-            nobody — us included — can get the library back. So keep them apart: the password in
-            your password manager, the code printed and filed somewhere else.{' '}
+            The honest cost of that guarantee: lose your password and your recovery code, and nobody
+            — us included — can get the library back. So keep them apart: the password in your
+            password manager, the code printed and filed somewhere else.{' '}
             <Link className={cn('text-background underline underline-offset-4')} href="/faq">
               How the account works
             </Link>
@@ -1685,10 +1729,9 @@ export default function Page() {
             </p>
             {/* "Advanced search" was the one overclaim on an otherwise literal
                 page. Every reader arriving from a competitor decoded it as
-                full-text search inside saved pages — which the band two
-                sections up has just told them it isn't ("Across titles,
-                addresses and hosts") — so the teaser was quietly contradicting
-                the product. These are the comparison table's own row labels,
+                full-text search inside saved pages — which the library band has
+                already told them it isn't ("Across titles, addresses and
+                hosts") — so the teaser was quietly contradicting the product. These are the comparison table's own row labels,
                 which were accurate all along, and they restore nested lists:
                 the one Plus feature a switcher with folders actually needs, and
                 the one the old line left out.
