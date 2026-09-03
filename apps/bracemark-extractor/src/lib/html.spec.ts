@@ -107,4 +107,66 @@ describe('extractTitleImage', () => {
     expect(title).toBeUndefined();
     expect(imageUrl).toBeUndefined();
   });
+  // --- what this file COLLECTS ---------------------------------------------
+  // WHICH candidate wins is selectTitleImage's job (covered in shared's
+  // select.spec.ts). What's asserted here is the collecting half html.ts owns:
+  // which attribute a tag is read from, and which occurrence of it counts.
+
+  it('reads a twitter:image declared with `name` rather than `property`', async () => {
+    // Twitter/legacy tags use `name`; OpenGraph uses `property`. Reading only one
+    // attribute silently loses a whole family of tags, with no parse error.
+    const { imageUrl } = await extractTitleImage(
+      bytes(
+        '<html><head><meta name="twitter:image" content="https://cdn.test/t.png"></head></html>',
+      ),
+      BASE,
+    );
+    expect(imageUrl).toBe('https://cdn.test/t.png');
+  });
+
+  it('reads the twitter:image:src spelling too', async () => {
+    const { imageUrl } = await extractTitleImage(
+      bytes(
+        '<html><head><meta name="twitter:image:src" content="https://cdn.test/s.png"></head></html>',
+      ),
+      BASE,
+    );
+    expect(imageUrl).toBe('https://cdn.test/s.png');
+  });
+
+  it('keeps the FIRST occurrence when a page repeats a tag', async () => {
+    // Head order ≈ page intent, and a repeated og:image is common (per-locale or
+    // per-platform blocks appended later in the head).
+    const { title, imageUrl } = await extractTitleImage(
+      bytes(
+        '<html><head><meta property="og:title" content="First">' +
+          '<meta property="og:title" content="Second">' +
+          '<meta property="og:image" content="https://cdn.test/1.png">' +
+          '<meta property="og:image" content="https://cdn.test/2.png"></head></html>',
+      ),
+      BASE,
+    );
+    expect(title).toBe('First');
+    expect(imageUrl).toBe('https://cdn.test/1.png');
+  });
+
+  it('skips a blank tag so the next candidate still wins', async () => {
+    // An empty og:title is common on templated sites. Collecting it would beat
+    // the real <title> and leave the link untitled.
+    const { title } = await extractTitleImage(
+      bytes(
+        '<html><head><meta property="og:title" content="   "><title>Doc title</title></head></html>',
+      ),
+      BASE,
+    );
+    expect(title).toBe('Doc title');
+  });
+
+  it('matches the tag key case-insensitively', async () => {
+    const { title } = await extractTitleImage(
+      bytes('<html><head><meta property="OG:Title" content="Shouty"></head></html>'),
+      BASE,
+    );
+    expect(title).toBe('Shouty');
+  });
 });

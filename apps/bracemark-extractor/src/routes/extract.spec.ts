@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { ExtractResponse } from '@stxapps/shared';
+import { type ExtractResponse, MAX_EXTRACT_URLS } from '@stxapps/shared';
 
 import { app } from '../app';
+import { MAX_INLINE_IMAGE_BYTES } from '../lib/safe-fetch';
 
 // The handler's outbound `fetch` (in lib/safe-fetch) is the global fetch, which we
 // stub per-test. `app.request()` itself doesn't go through global fetch (Hono calls
@@ -213,5 +214,151 @@ describe('POST /v1/extract', () => {
     const { body } = await postExtract(['https://example.com/post']);
     expect(body.results[0].imageUrl).toBe('https://cdn.example.com/i.png');
     expect(body.results[0].imageBase64).toBeUndefined();
+  });
+  it(`400s over the ${MAX_EXTRACT_URLS}-url cap, before any fetch runs`, async () => {
+    // The contract ceiling is an abuse gate: one request must never fan out to
+    // more than this many arbitrary-URL fetches.
+    const mock = stubFetch(() => new Response('nope'));
+    const urls = Array.from(
+      { length: MAX_EXTRACT_URLS + 1 },
+      (_unused, i) => `https://example.com/${i}`,
+    );
+
+    const res = await app.request('/v1/extract', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ urls }),
+    });
+    expect(res.status).toBe(400);
+    expect(mock).not.toHaveBeenCalled();
+  });
+
+  it('accepts a full batch at the cap and answers every url', async () => {
+    stubFetch(
+      () =>
+        new Response('<title>t</title>', {
+          status: 200,
+          headers: { 'content-type': 'text/html' },
+        }),
+    );
+    const urls = Array.from(
+      { length: MAX_EXTRACT_URLS },
+      (_unused, i) => `https://example.com/${i}`,
+    );
+
+    const { status, body } = await postExtract(urls);
+    expect(status).toBe(200);
+    // Echoed in request order, so a client can correlate without matching on url.
+    expect(body.results.map((result) => result.url)).toEqual(urls);
+  });
+
+  it('treats an image target as its own preview', async () => {
+    stubFetch(
+      () => new Response('bytes', { status: 200, headers: { 'content-type': 'image/png' } }),
+    );
+
+    const { body } = await postExtract(['https://cdn.example.com/photo.png']);
+    expect(body.results[0]).toEqual({
+      url: 'https://cdn.example.com/photo.png',
+      ok: true,
+      title: 'cdn.example.com',
+      imageUrl: 'https://cdn.example.com/photo.png',
+    });
+  });
+
+  it('reports a timeout as its own error, not a generic failure', async () => {
+    // The client's backoff branches on this: a timeout is transient, and lumping
+    // it into fetch_failed would lose that.
+    stubFetch(() => {
+      throw new DOMException('The operation timed out', 'TimeoutError');
+    });
+
+    const { body } = await postExtract(['https://slow.example.com/']);
+    expect(body.results[0]).toEqual({
+      url: 'https://slow.example.com/',
+      ok: false,
+      error: 'timeout',
+    });
+  });
+
+  it('resolves the title and image against the FINAL url after a redirect', async () => {
+    stubFetch((url) =>
+      url === 'https://example.com/old'
+        ? new Response(null, { status: 301, headers: { location: 'https://www.moved.com/new' } })
+        : new Response('<html><head><meta property="og:image" content="/i.png"></head></html>', {
+            status: 200,
+            headers: { 'content-type': 'text/html' },
+          }),
+    );
+
+    const { body } = await postExtract(['https://example.com/old']);
+    expect(body.results[0]).toEqual({
+      // The REQUESTED url is echoed, so the client can correlate it with the link
+      // it asked about...
+      url: 'https://example.com/old',
+      ok: true,
+      // ...while the title fallback and the relative og:image resolve against the
+      // page that actually answered.
+      title: 'moved.com',
+      imageUrl: 'https://www.moved.com/i.png',
+    });
+  });
+
+  it('does not inline a non-image og:image', async () => {
+    stubFetch((url) =>
+      url.includes('cdn.example.com')
+        ? new Response('<html>gotcha</html>', {
+            status: 200,
+            headers: { 'content-type': 'text/html' },
+          })
+        : new Response(
+            '<html><head><meta property="og:image" content="https://cdn.example.com/i.png"></head></html>',
+            { status: 200, headers: { 'content-type': 'text/html' } },
+          ),
+    );
+
+    const { body } = await postExtract(['https://example.com/post'], { inlineImage: true });
+    expect(body.results[0].imageUrl).toBe('https://cdn.example.com/i.png');
+    expect(body.results[0].imageBase64).toBeUndefined();
+  });
+
+  it('does not inline an og:image over the inline byte cap', async () => {
+    // The inline bytes are buffered whole and base64-inflated into the JSON, so
+    // an oversized preview degrades to the proxy rather than bloating the response.
+    stubFetch((url) =>
+      url.includes('cdn.example.com')
+        ? new Response(new Uint8Array(MAX_INLINE_IMAGE_BYTES + 1), {
+            status: 200,
+            headers: { 'content-type': 'image/png' },
+          })
+        : new Response(
+            '<html><head><meta property="og:image" content="https://cdn.example.com/big.png"></head></html>',
+            { status: 200, headers: { 'content-type': 'text/html' } },
+          ),
+    );
+
+    const { body } = await postExtract(['https://example.com/post'], { inlineImage: true });
+    expect(body.results[0].ok).toBe(true);
+    expect(body.results[0].imageUrl).toBe('https://cdn.example.com/big.png');
+    expect(body.results[0].imageBase64).toBeUndefined();
+  });
+
+  it('never fetches an og:image pointing into private space', async () => {
+    // The inline path reuses safeFetch, so the SSRF guard covers the SECOND fetch
+    // too — a page can otherwise aim the extractor at an internal address by
+    // declaring it as its preview image.
+    const mock = stubFetch(
+      () =>
+        new Response(
+          '<html><head><meta property="og:image" content="http://169.254.169.254/latest/"></head></html>',
+          { status: 200, headers: { 'content-type': 'text/html' } },
+        ),
+    );
+
+    const { body } = await postExtract(['https://example.com/post'], { inlineImage: true });
+    expect(body.results[0].imageBase64).toBeUndefined();
+    // Only the page itself was fetched.
+    expect(mock).toHaveBeenCalledTimes(1);
+    expect(String(mock.mock.calls[0][0])).toBe('https://example.com/post');
   });
 });

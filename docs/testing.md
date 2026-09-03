@@ -226,8 +226,23 @@ they invite reading a number as a verdict.
 `shared` is the best-covered project by a wide margin, and it is where most of
 this workspace's real logic lives, so that is the right shape. `bracemark-api`
 is next, exercising real D1/DO/R2 through the Workers pool (one of its specs is
-the workerd portability suite). The two expo projects and `bracemark-extractor`
-carry a working middle layer.
+the workerd portability suite). The two expo projects carry a working middle
+layer.
+
+`bracemark-extractor`'s suite is shaped by what that app is: the one component
+that fetches arbitrary user-supplied URLs. So it sits on the **caps and the
+guard** rather than on the happy path. The load-bearing half is per-hop SSRF
+re-validation — `lib/safe-fetch.spec.ts` drives a public URL that 30x's into
+private space, a relative `Location` after a cross-host hop, and the redirect
+ceiling, none of which `ssrf.spec.ts` can reach because it only ever sees the
+initial URL. Alongside it: each byte ceiling asserted at its own edge
+(truncate for HTML, throw for an inline image, abort mid-stream for the proxy —
+three different right answers), the CORS allow-list denying when its binding is
+absent, the `/v1/image` exemption from the baseline rate-limit tier, and the
+limiter's per-IP-per-path key, which is a **published** fact rather than an
+internal (`/privacy` and `/extractor` both name `cf-connecting-ip`). What the
+suite cannot check is the thing `wrangler.jsonc` decides — that no URL reaches a
+log.
 
 The gap worth naming is the **web app**. `bracemark-web` is the primary app and
 has a handful of specs, one of which is generated; `passWithNoTests` is what

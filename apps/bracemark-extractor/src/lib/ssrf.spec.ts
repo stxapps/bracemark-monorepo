@@ -79,4 +79,57 @@ describe('assertPublicHttpUrl', () => {
       expect(() => assertPublicHttpUrl(url)).toThrow(SsrfError);
     }
   });
+  // The inverse of every case above: over-blocking is a silent outage (a whole
+  // address family of legitimate sites stops extracting), and nothing else here
+  // would catch it — the IPv6 classifier fails CLOSED on anything it can't parse.
+  it('allows a public IPv6 literal', () => {
+    expect(assertPublicHttpUrl('https://[2606:4700:4700::1111]/').hostname).toBe(
+      '[2606:4700:4700::1111]',
+    );
+    expect(assertPublicHttpUrl('https://[2001:db8::1]/').hostname).toBe('[2001:db8::1]');
+  });
+
+  it('canonicalizes an ENCODED PUBLIC address rather than rejecting it', () => {
+    // Same normalization the private-IP cases rely on, proven not to be a blanket
+    // "encoded means hostile" rule.
+    expect(assertPublicHttpUrl('http://0x08080808/').hostname).toBe('8.8.8.8');
+    expect(assertPublicHttpUrl('http://134744072/').hostname).toBe('8.8.8.8');
+  });
+
+  it('rejects "this network", multicast and reserved ranges', () => {
+    for (const url of [
+      'http://0.0.0.0/',
+      'http://0.1.2.3/',
+      'http://224.0.0.1/', // multicast
+      'http://240.0.0.1/', // reserved
+      'http://255.255.255.255/', // broadcast
+    ]) {
+      expect(() => assertPublicHttpUrl(url)).toThrow(SsrfError);
+    }
+  });
+
+  it('rejects documentation/benchmarking ranges', () => {
+    for (const url of [
+      'http://192.0.2.5/', // TEST-NET-1
+      'http://198.51.100.5/', // TEST-NET-2
+      'http://203.0.113.5/', // TEST-NET-3
+      'http://198.18.0.5/', // benchmarking
+      'http://192.0.0.8/', // IETF protocol assignments
+    ]) {
+      expect(() => assertPublicHttpUrl(url)).toThrow(SsrfError);
+    }
+  });
+
+  it('rejects input that is not a URL at all', () => {
+    for (const url of ['', 'not a url', '//example.com/', 'example.com']) {
+      expect(() => assertPublicHttpUrl(url)).toThrow(SsrfError);
+    }
+  });
+
+  it('returns the parsed URL with its path and query intact', () => {
+    // The return value is what safeFetch actually requests and what an og:image is
+    // later resolved against, so it must be the whole URL, not just the host.
+    const url = assertPublicHttpUrl('https://Example.test/a/b?c=d#e');
+    expect(url.toString()).toBe('https://example.test/a/b?c=d#e');
+  });
 });
