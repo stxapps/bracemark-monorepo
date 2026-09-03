@@ -18,6 +18,15 @@ import { loadPasswordScorer } from './password-strength';
 // same phrases against its own loader — the two platforms must admit and reject
 // identically, or the same password is creatable on one and refused on the
 // other (docs/account.md, _password — rules and entropy_).
+//
+// The module's OTHER half — what the user is shown about the result, and the one
+// rule joining the two (the meter may never read "Strong" while submit is
+// blocked) — is `password-strength-meter.spec.tsx` beside this. Two files for one
+// source module is unique in this workspace and deliberate rather than untidy:
+// this one is the native twin's SAME-NAMED pair and stays pure policy, no jsdom
+// and no render, so a rename to `.tsx` would break the pairing that makes the two
+// platforms' gate specs findable from each other; the meter's is
+// testing-library over presentation, and has no native counterpart at all.
 describe('the create-account entropy gate dictionary', () => {
   let score: (password: string, userInputs: string[]) => number;
 
