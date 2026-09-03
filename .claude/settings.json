@@ -8,17 +8,17 @@
       }
     }
   },
-  "permissions": {
-    "allow": [
-      "Bash(git grep:*)",
-      "Bash(git ls-files:*)",
-      "Bash(git log:*)",
-      "Bash(rg:*)"
-    ],
-    "deny": [
-      "Read(apps/bracemark-expo/credentials/**)",
-      "Read(apps/bracemark-expo/.env.local)",
-      "Read(apps/bracemark-expo/android/gradle.properties)"
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Read|Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/tools/claude-hooks/pretooluse-guard.sh\""
+          }
+        ]
+      }
     ]
   }
 }

@@ -52,30 +52,34 @@ responsibilities, and the reasoning: `docs/architecture.md`.
 
 # Searching
 
-- Search with `rg` or `git grep`, not plain `grep`/`grep -r`. Both are
-  allowlisted in `.claude/settings.json`, and neither can reach that file's
-  `deny` list — `git grep` only reads tracked content and `rg` honours
-  `.gitignore`, while all three denied paths are gitignored. Plain `grep`
-  is not allowlisted, so it prompts; and because a recursive `grep` never
-  _names_ a denied path, the deny rules have nothing to match on — approve
-  it and it will read those files. Decline and re-run it bounded instead.
-  `rg -uu` and `git grep --no-index` opt back out of that and are no safer
-  than plain `grep`.
-- **Never prefix a search with `cd`.** This is the one thing that still
-  prompts on an otherwise-allowlisted `rg`, and the cause is not visible in
-  the command: the allow rule matches, but permission also has to prove the
-  command cannot reach a denied path, and a `cd` makes the working directory
-  indeterminate — so a relative argument after it can no longer be resolved
-  against the `deny` list. What comes back is "would search a directory that
-  cannot be determined here", on a command the allowlist covers. Search from
-  the primary working directory instead: it is where every Bash call starts
-  and it persists between calls, so the `cd` buys nothing.
-- **Everything else already works, so don't write around it.** All of these
-  run unprompted from the working directory: a bare repo-wide `rg -l pat`
-  with no path at all, a relative path, an absolute path, several paths at
-  once, `--glob` filters, and a pipe into `head` or `wc`. Reaching for a
-  bounded or hand-split search to avoid a prompt that isn't there costs a
-  turn and narrows the result.
+Three rules, all **enforced** by the `PreToolUse` guard wired in
+`.claude/settings.json` (`tools/claude-hooks/pretooluse-guard.sh`), which
+refuses the wrong spelling and names the substitute in its rejection — this
+section was prose alone for a while and was followed in 13 of 826 calls.
+
+- Search with `rg` or `git grep`, never a **recursive** `grep`. A recursive
+  grep does not honour `.gitignore`, so it reads the credentials the guard
+  protects, and it never _names_ them so nothing else can catch it; `git grep`
+  only reads tracked content and `rg` honours `.gitignore`. Non-recursive
+  `grep pattern file` on a named file is fine. `rg -u`, `rg -uu`,
+  `rg --no-ignore` and `git grep --no-index` opt back out of `.gitignore` and
+  are refused too — `rg --hidden` on its own does not, and is fine.
+- **Never prefix a search with `cd`.** It makes the working directory
+  indeterminate, so a relative argument after it cannot be resolved. Every Bash
+  call starts in the primary working directory and it persists between calls,
+  so the `cd` buys nothing: pass the path as an argument.
+- **Everything else already works, so don't write around it.** A bare repo-wide
+  `rg -l pat` with no path at all, a relative path, an absolute path, several
+  paths at once, `--glob` filters, and a pipe into `head` or `wc` all run
+  unprompted. Reaching for a bounded or hand-split search to avoid a prompt
+  that isn't there costs a turn and narrows the result.
+
+That last line is only true because `permissions.deny` is **empty**. A `Read()`
+deny rule pointing anywhere inside the repo makes the checker refuse every
+pathless search — it resolves a bare `rg` to `.`, sees `.` contains the denied
+path, and cannot model `.gitignore`; as of Claude Code 2.1.259 that fires even
+on an `rg` reading stdin in a pipeline, which touches no files at all. Don't
+re-add one; put the path in the guard instead.
 
 # Docs
 
@@ -133,6 +137,22 @@ test. Check the linked doc before acting on any of these.
   mirrors). Default search won't surface the folder either — ripgrep respects
   `.gitignore` — so the failure mode is writing the reference by hand. The folder
   carries its own instructions; nothing about its contents belongs in this file.
+- **`tools/claude-hooks/pretooluse-guard.sh` is the ONLY thing keeping tooling
+  out of the credentials.** `apps/bracemark-expo/credentials/`, any
+  `.env*.local` and `apps/bracemark-expo/android/gradle.properties` were
+  covered by `Read()` rules in `.claude/settings.json`'s `permissions.deny`
+  until those moved into that hook — because a deny rule pointing inside the
+  repo makes the permission checker refuse **every** pathless search (it
+  resolves a bare `rg` to `.` and cannot model `.gitignore`), and a hook cannot
+  re-grant it: `permissions.deny` outranks `permissionDecision:"allow"`. The
+  trade-off is assurance. A deny rule is enforced by the harness and cannot
+  fail; the guard is a shell script that **fails open** by design — no `jq` on
+  `PATH`, a lost `chmod +x`, a `settings.json` that drops the `matcher`, and
+  every one of those files becomes readable again with no error, no lint
+  failure and no test. Nothing here re-checks it. If you touch that script or
+  the `hooks` block, re-run its case matrix (deny: the three paths via `Read`
+  and via `head`; pass: `.env.example`, `app.config.ts`, a bare `rg -l pat`).
+  → `docs/` has no page for this; the reasoning lives in the script's header.
 - **Dependency versions on the Expo side.** Root `package.json` pins the
   version; `bracemark-expo` declares `*`; packages declare a peer `*` (a real floor
   only where it means something). Never declare `expo-modules-core` anywhere;
