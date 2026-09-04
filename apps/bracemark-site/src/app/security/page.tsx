@@ -120,7 +120,7 @@ const BREACH_HAS: [string, string][] = [
   ],
   [
     'Your sessions and your subscription row',
-    'A hashed token per signed-in device, and — if you pay — the payment provider’s identifier for your subscription. Both are plaintext on our side, which is why the sentence people want to write about us has to say “your library”, not “your data”.',
+    'A hashed token per signed-in device, and — if you pay — the payment provider’s identifier for your subscription. The hash cannot be turned back into a token, but neither row is encrypted with your key: we can see how many devices you are signed in on, when each was last used, and whether you pay. It is why we claim we cannot read your library, rather than that we hold nothing about you.',
   ],
   [
     'The wrapped keys themselves',
@@ -130,8 +130,8 @@ const BREACH_HAS: [string, string][] = [
 
 const BREACH_LACKS: [string, string][] = [
   [
-    'One address, title, tag or note',
-    'All of it is inside the ciphertext, including the references between a link and its preview image. The server never held a key to any of it, so there is no key in the dump.',
+    'A single address, title, tag or note',
+    'All of it is inside the ciphertext, including the references between a link and its preview image. The server never held a key to any of it, so there is no key to take.',
   ],
   [
     'Anything to search',
@@ -139,7 +139,7 @@ const BREACH_LACKS: [string, string][] = [
   ],
   [
     'A way to sign in as you',
-    'Signing in means signing a challenge with a private key derived on your device. We hold the public half.',
+    'Signing in means signing a short, time-stamped message with a private key derived on your device. We hold the public half.',
   ],
 ];
 
@@ -249,9 +249,14 @@ export default function Page() {
             >
               privacy policy
             </Link>{' '}
-            inventories every field we hold, field by field, including the ones a break-in is not
-            the interesting route to. What the same dump would <em>not</em> contain:
+            inventories every field we hold.
           </p>
+        </section>
+
+        <section>
+          <h2 className={cn('font-display text-2xl font-semibold tracking-tight')}>
+            What someone who took our server would not have
+          </h2>
           <dl className={cn('mt-8 space-y-6')}>
             {BREACH_LACKS.map(([term, detail]) => (
               <div key={term} className={cn('border-t border-border pt-5')}>
@@ -281,8 +286,8 @@ export default function Page() {
           </h2>
           <div className={cn('mt-4 space-y-4 text-base leading-7 text-muted-foreground')}>
             <p>
-              Your device cannot derive anything until it has the wrapped copy of your key, and it
-              has to get that before it can prove who it is. So we hand it to anyone who names a
+              Your device cannot unlock your key until it has the wrapped copy, and unlocking that
+              key is what lets it prove who it is. So we hand the copy to anyone who names a
               username. There is no way around that in this design, and pretending otherwise would
               be worse than saying it.
             </p>
@@ -292,7 +297,7 @@ export default function Page() {
               counter to trip. Argon2id is what makes each guess expensive — {ARGON2_MIB} MiB of
               memory and {ARGON2_PARAMS.iterations} passes per attempt, which is the difference
               between billions of guesses a second and a slow trickle. But a slow trickle still gets
-              there against a password a person invented.
+              there against most passwords people invent.
             </p>
             <p>
               <strong className={cn('font-semibold text-foreground')}>
@@ -300,9 +305,11 @@ export default function Page() {
               </strong>{' '}
               This is the reason the app offers to generate your password and the reason we suggest
               taking it: {PASSPHRASE_DEFAULT_WORDS} random words is about {PASSPHRASE_BITS} bits,
-              which is not a wall that takes a long time to climb — it is not a climbable wall. A
-              password you thought of is not in that category no matter how it looks, and the
-              recovery code is generated with {RECOVERY_CODE_BITS} bits for the same reason.
+              which is not a wall that takes a long time to climb — it is not a climbable wall.
+              What decides that is where a password came from, not how it looks: one a person
+              invented follows the patterns guessing software already models, so bringing your own
+              is safe only if it was generated randomly too. The recovery code is generated with{' '}
+              {RECOVERY_CODE_BITS} bits for the same reason.
             </p>
           </div>
         </section>
@@ -344,7 +351,7 @@ export default function Page() {
             <p>
               No third party has audited any of this, and we do not publish reproducible builds — so
               public source shows you what the code does, and not which build was served to your
-              browser. Neither of those is a gap we are describing on the way to closing it;{' '}
+              browser. We are not promising either one is coming.{' '}
               <Link
                 className={cn(
                   'text-signal underline decoration-signal-line underline-offset-2 hover:decoration-signal',
@@ -353,10 +360,10 @@ export default function Page() {
               >
                 /about
               </Link>{' '}
-              sets out both at length.
+              explains what each absence costs you.
             </p>
             <p>
-              What the design does instead is remove the decisions we would otherwise be asking you
+              What holding no key does instead is remove the decisions we would otherwise be asking you
               to trust us with. We cannot read a link, hand one over, or reset a password, and none
               of that is a policy we could quietly revise.
             </p>

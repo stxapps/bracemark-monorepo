@@ -478,7 +478,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
           <>
             A username and a password. That is the whole form — no email address, no phone number,
             no card. We suggest the password the app generates for you: seven random words, long
-            enough to be safe against an offline attack, which a memorable password is not.
+            enough to survive an offline attack in a way most typed passwords are not.
           </>
         ),
       },

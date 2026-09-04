@@ -18,7 +18,7 @@ export type CheckUsernameResponse = z.infer<typeof checkUsernameResponseSchema>;
 
 // GET /v1/auth/username-available?username=… → { available }
 // Cheap pre-submit check so the create-account form can flag a taken username
-// before the KDF + challenge-signing dance. Not authoritative — account creation
+// before the KDF + proof-signing dance. Not authoritative — account creation
 // still re-checks server-side to close the race.
 export const checkUsernameEndpoint = defineEndpoint({
   method: 'GET',
