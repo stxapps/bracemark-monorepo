@@ -54,12 +54,29 @@ appId: com.bracemark.app
     timeout: 20000
 
 # --- the real code ------------------------------------------------------------
-# `eraseText` clears 50 characters by default and the display form is 62 (52
-# chars + 10 hyphens), so the count is explicit — the default would leave a
-# prefix behind and the retry would fail for a reason that looks like the door.
+# The field is cleared by toggling the form out to the password door and back,
+# NOT with `eraseText`. `eraseText` deletes backwards from the caret, and after a
+# rejected submit the caret lands at index 0 — so it deletes nothing, the real
+# code is INSERTED IN FRONT of the wrong one, and the retry fails with the same
+# "that recovery code didn't work" the wrong-code half just asserted. The flow
+# then reads as a broken recovery door rather than a field that was never
+# cleared; raising the character count (it was 70, for a 62-character display
+# form) does not help, because the problem is the caret and not the count.
+#
+# The toggles unmount the form, so both fields come back empty — which is why the
+# username is retyped below. They are already part of the testID contract
+# (docs/e2e.md) and this uses them for what they are.
+- tapOn:
+    id: 'sign-in-use-password'
+- tapOn:
+    id: 'sign-in-use-recovery'
+
+- tapOn:
+    id: 'sign-in-recovery-username'
+- inputText: ${USERNAME}
+
 - tapOn:
     id: 'sign-in-recovery-code'
-- eraseText: 70
 - inputText: ${RECOVERY_CODE}
 - hideKeyboard
 - tapOn:

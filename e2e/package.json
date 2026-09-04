@@ -38,7 +38,7 @@
     "e2e-web:headed": "playwright test --headed",
     "e2e-web:report": "playwright show-report .artifacts/report",
     "e2e-mobile": "tsx runner/mobile.ts",
-    "e2e-contract": "tsx runner/web-to-mobile.ts && tsx runner/mobile-to-web.ts",
+    "e2e-contract": "tsx runner/vectors.ts && tsx runner/web-to-mobile.ts && tsx runner/mobile-to-web.ts",
     "seed": "tsx seed/seed.ts",
     "seed:fixtures": "tsx seed/generate.ts",
     "shot": "tsx seed/shot/capture.ts",

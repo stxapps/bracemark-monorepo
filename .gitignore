@@ -110,6 +110,10 @@ node_modules/
 /apps/bracemark-expo/modules/*/android/.cxx/
 /packages/*/android/build/
 /packages/*/android/.cxx/
+# Same reasoning one platform over: `swift test` (packages/expo-crypto/Package.swift,
+# which builds ios/BlobFrame.swift for the host so its suite needs no simulator)
+# drops its output beside the committed Swift sources.
+/packages/*/.build/
 .yarn/
 dist/
 npm-debug.*

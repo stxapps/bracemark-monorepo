@@ -1,0 +1,31 @@
+{
+  "username": "Alice_01",
+  "password": "correct horse battery staple",
+  "saltHex": "98e95dc7304a736ba531b62f6edb29669177b241eb41c0f2731009a78a292504",
+  "kekHex": "fc99df8a9f7a8af7e27d1b39ac6c3acb6cf3cf536166bbb670aa51ad09043491",
+  "dekHex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+  "authSeedHex": "ab08a88b64b1e0ddbfe8258859ca18f9027aa8465ac68be85933544743057df4",
+  "encryptionKeyHex": "fd85a72937230f58aa2a0d1ca1de765e4e3be7033197a6a5a003d80a0208cdae",
+  "publicKeyHex": "8e7819544a5f3a4b2f8917760b84f4b98b3ece1be024e20246ba8b1595c8fd5f",
+  "signPayload": "bracemark-contract-test-payload",
+  "signatureHex": "b7d383767d0d90fa9cd06090f840ef5155f366cbb21009b1b0fcc950b11ea2b470601d4fde3d76faa1dff3041a8f2c2b3b883e0c5edd922fb6edcf0ab0629a0f",
+  "passwordDoor": {
+    "ivHex": "a0a1a2a3a4a5a6a7a8a9aaab",
+    "wrappedDekHex": "24106632c4ca3a31b4a752f93e8319d55bd73618b39b6b6abac97e580351da24657548c5af7a0d27da7e16b836c2670b"
+  },
+  "recovery": {
+    "code": "40GJ48S44MK2EA1958NJRB9E5WR32CHK6GTKCDSR74X3PF1X7RZG",
+    "kekHex": "b4048426b46c824368479b47e4347f88e523efd4a1172ed1a564c128fc7051ae",
+    "ivHex": "c0c1c2c3c4c5c6c7c8c9caca",
+    "wrappedDekHex": "c48b882d891fa2eb7c2727ddc7bb94ebaf9640cf45fde1589fe18f2b2e57178c70b6d2ae4aa82f43a00ce4ac0fe9238d"
+  },
+  "wordlist": {
+    "length": 2048,
+    "sha256Hex": "187db04a869dd9bc7be80d21a86497d692c0db6abd3aa8cb6be5d618ff757fae"
+  },
+  "blob": {
+    "ivHex": "b0b1b2b3b4b5b6b7b8b9babb",
+    "plaintext": "Hello, bracemark! contract vector v1",
+    "packedHex": "01b0b1b2b3b4b5b6b7b8b9babbc39e5fb1cd31df39f560ba2ccb91c0b9f19a22ddbb4f3055fa4466d0a5e74eb1544ded59f6af512a36073c199c6c1a0208588be1"
+  }
+}

@@ -16,6 +16,7 @@ survives it.
 | **web**      | `@playwright/test` | Dexie survives a reload, cross-origin sign-out, real Argon2id in a real browser |
 | **native**   | Maestro            | real expo-sqlite, secure-store, cold-start session, per-platform navigation     |
 | **contract** | both, stitched     | one password → the same keys → the same blobs, **web ⇄ mobile**                 |
+| **vectors**  | Maestro, no stack  | the FROZEN table against real quick-crypto, on device                           |
 
 The third one is the reason this layer exists at all. `web-crypto` and
 `expo-crypto` each carry a `contract-vectors.spec.ts`, and those prove both
@@ -29,6 +30,17 @@ and drift in either is **silent** until a user with two devices finds it.
 Both directions are run, and they are not redundant: web→mobile proves
 expo-crypto can decrypt what web-crypto sealed, mobile→web proves the reverse. A
 packing bug on one side only shows up in one of the two.
+
+The **vectors** leg (`runner/vectors.ts` → `mobile/contract/vectors.yaml`) is the
+third, and it exists because a round trip has a blind spot that no amount of
+running it harder will fix: it proves the two platforms agree with **each other**,
+so a param changed on both in one release round-trips perfectly and locks every
+existing user out of their own data. That leg pins the frozen bytes themselves,
+against the real `react-native-quick-crypto` — the C++ Argon2id/HKDF/AES-GCM that
+`@stxapps/expo-crypto`'s jest suite replaces with a Node shim. It drives a
+dev-only screen (`/contract-vectors`) rather than asserting through the UI,
+because what it needs to compare is bytes, and it needs no account, no api and no
+`npm run dev` at all.
 
 ### why `e2e/` and not `apps/bracemark-web-e2e`
 
@@ -327,6 +339,14 @@ All of them are in the app:
 | `links-screen`              | `src/app/(app)/links/index.tsx` (a root marker) |
 | `add-link-url`              | `src/features/links/link-add-screen.tsx`        |
 | `add-link-save`             | ” — the submit, whose label flips Save→Confirm  |
+| `contract-vectors-pass`     | `src/app/contract-vectors.tsx` (dev-only)       |
+| `contract-vectors-fail`     | ” — carries the failing check names in its text |
+| `vector-<check>`            | ” — one per vector, `PASS`/`FAIL`/`RUNNING`     |
+
+The three `contract-vectors` ids are the one group NOT in the shipped app: the
+screen returns a `<Redirect>` in production. Exactly one of `-pass`/`-fail` ever
+renders, and neither renders while checks are still running, so a flow that
+asserts the pass marker cannot pass by catching the screen mid-run.
 
 The recovery-door ids are deliberately **distinct** from the password ones rather
 than shared. The two modes never mount together, so reuse would work — but the
@@ -359,17 +379,30 @@ alongside their ids, matching `new-password-field.tsx`.
 ### running it
 
 Everything needs the dev stack: **`npm run dev`** (api on 8787, web on 3000,
-extractor on 8788). `playwright test` boots and waits for it itself via
-`webServer` + `global-setup.ts`; the `runner/` scripts check and tell you to start
-it.
+extractor on 8788) — with one exception, the vectors leg, which talks to no
+server and needs no account. `playwright test` boots and waits for the stack
+itself via `webServer` + `global-setup.ts`; the `runner/` scripts check and tell
+you to start it.
 
 ```sh
 npx nx e2e-web @stxapps/e2e        # the web suite, headless, 2 workers
 npx nx e2e-web:headed @stxapps/e2e # the same, watchable
 npx nx e2e-web:report @stxapps/e2e # open the last HTML report
 npx nx e2e-mobile @stxapps/e2e     # provision an account, run mobile/flows
-npx nx e2e-contract @stxapps/e2e   # web → mobile, then mobile → web
+npx nx e2e-contract @stxapps/e2e   # vectors, then web → mobile, then mobile → web
 ```
+
+The vectors leg runs FIRST in that chain on purpose. It is the cheapest of the
+three (no stack, no account, ~40s) and the most fundamental: if the frozen table
+no longer holds on the device, the two round trips are going to fail too, and
+they would fail as a link that did not appear — which is a much longer walk back
+to the same answer. Run it alone with `npx tsx runner/vectors.ts` from `e2e/`.
+
+Its off-device siblings are not part of any Nx target, because neither is
+JavaScript — the native framers are covered by `swift test` in
+`packages/expo-crypto` and `./gradlew :stxapps-expo-crypto:test` from
+`apps/bracemark-expo/android`. Both read the same vector JSON and take seconds;
+see [testing.md](./testing.md).
 
 The three run-it targets also have root scripts — `npm run e2e:web`,
 `e2e:mobile`, `e2e:contract` — matching the `dev` / `dev:ext` / `dev:site`
@@ -655,17 +688,34 @@ because Show All is the view the figure's alt text describes.
 
 ### state today
 
-| surface  | status                                                                   |
-| -------- | ------------------------------------------------------------------------ |
-| web      | **5 specs, passing** — account (reload, sign-out), links, lists          |
-| native   | 4 flows written, YAML validated, **not yet executed** — no dev build yet |
-| contract | both runners written, **not yet executed** — same reason                 |
+| surface  | status                                                                    |
+| -------- | ------------------------------------------------------------------------- |
+| web      | **5 specs, passing** — account (reload, sign-out), links, lists           |
+| native   | 4 flows, **executed on an iOS dev build**; `add-link` fails on an app bug |
+| contract | web→mobile **passing**; mobile→web blocked by the same app bug            |
+| vectors  | **passing** on device                                                     |
 
-The honest reading of that table: the web half is real, and the native and
-contract halves are scaffolding whose first real run will find things. The
-contract runs are the highest-value part of this doc and the least proven part of
-the code — that gap is the next thing to close, and it needs an installed dev
-build before anything else.
+They have now been run, and the earlier note that "their first real run will find
+things" turned out to be the accurate part of this doc. It found four, and the
+split matters: **three were bugs in the harness, one is in the app.**
+
+The harness three are recorded where they bite — `subflows/sign-in.yaml`
+(iOS AutoFill's "Save Password?" sheet, which covers the app in a window the app
+does not own), the `.*…*` matchers in the three link flows (Maestro matches text
+as a regex against the WHOLE accessible name, and a link row's is a composite),
+and `recovery-sign-in.yaml` (`eraseText` deletes backwards from a caret that sits
+at index 0 after a rejected submit, so it cleared nothing and the real code was
+typed IN FRONT of the wrong one). All three presented as the app being broken,
+which is the reason each carries its reasoning inline rather than a fix.
+
+The app one is real and open: **a link saved on the device does not appear in the
+list until the app is relaunched.** The write itself is fine — the duplicate
+check sees the link immediately ("You've already saved this link"), and a cold
+start shows it — so this is the list not reacting to a local insert, not a lost
+write ([client-queries.md](./client-queries.md)). It fails `flows/add-link.yaml`
+and blocks the mobile→web contract leg, which cannot write its link on the phone
+and then read it in the browser. It is deliberately **not** worked around with a
+relaunch in the flow: the flow is asserting exactly what a user would see.
 
 Nothing here runs automatically. There is still no CI ([testing.md](./testing.md)),
 and the only git hook guards `internal/`.

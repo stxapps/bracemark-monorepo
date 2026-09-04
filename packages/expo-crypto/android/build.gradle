@@ -10,6 +10,15 @@ useCoreDependencies()
 useExpoPublishing()
 useDefaultAndroidSdkVersions()
 
+// BlobFrameTest is a plain JVM suite (`src/test`) — no emulator, no app, because
+// the framing it covers lives outside the expo Module class (BlobFrame.kt).
+// `org.json` ships with Android but is a throwing STUB in JVM unit tests, so the
+// real implementation has to be on the test classpath to read the vector JSON.
+dependencies {
+  testImplementation 'junit:junit:4.13.2'
+  testImplementation 'org.json:json:20240303'
+}
+
 android {
   namespace "com.bracemark.filecrypto"
   defaultConfig {

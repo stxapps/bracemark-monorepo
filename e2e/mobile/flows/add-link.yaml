@@ -25,6 +25,14 @@ env:
 
 # Untitled links fall back to the URL with the scheme stripped, so the host+path
 # is what renders in the row.
+# A link row's accessible name is a COMPOSITE — "E, <url>, <host>, now, Link
+# options" — and Maestro matches text as a regex against the WHOLE name, so the
+# bare url matches nothing. Unanchored, the assertion times out against a link
+# that is on screen the entire time, which reads as a sync that never landed or a
+# blob that would not decrypt; it cost two full contract runs to tell those
+# apart. The `.*` are what make it a substring match. (The urls here are
+# `unresolvableUrl()`s — host and path only, no regex metacharacters beyond `.`,
+# which is why they can go in raw.)
 - extendedWaitUntil:
-    visible: ${LINK_URL.replace('https://', '')}
+    visible: ".*${LINK_URL.replace('https://', '')}.*"
     timeout: 20000

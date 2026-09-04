@@ -9,7 +9,8 @@ that one before changing anything.
 
 ## running
 
-Everything needs the dev stack first:
+Everything needs the dev stack first — with one exception, the vectors leg,
+which talks to no server and needs no account:
 
 ```sh
 npm run dev        # api :8787, web :3000, extractor :8788
@@ -23,8 +24,14 @@ npx nx e2e-web @stxapps/e2e         # the web suite, headless, 2 workers
 npx nx e2e-web:headed @stxapps/e2e  # the same, watchable
 npx nx e2e-web:report @stxapps/e2e  # open the last HTML report
 npx nx e2e-mobile @stxapps/e2e      # provision an account, run mobile/flows
-npx nx e2e-contract @stxapps/e2e    # web → mobile, then mobile → web
+npx nx e2e-contract @stxapps/e2e    # vectors, then web → mobile, then mobile → web
 ```
+
+The vectors leg runs FIRST in that chain on purpose: it is the cheapest and the
+most fundamental. If the frozen crypto table no longer holds on the device the
+two round trips are going to fail too, and they would fail as a link that did not
+appear — a much longer walk back to the same answer. Run it alone with
+`npx tsx runner/vectors.ts`; it needs the dev build and Metro, and nothing else.
 
 The three run-it targets also have root scripts: `npm run e2e:web`, `e2e:mobile`,
 `e2e:contract`. There is no bare `npm run e2e` — see `docs/e2e.md`, _running_.
@@ -78,16 +85,16 @@ terminal.
 
 ## layout
 
-| path               | what                                                            |
-| ------------------ | --------------------------------------------------------------- |
-| `paths.ts`         | where a run writes — the only source of `.artifacts` paths      |
-| `web/`             | Playwright specs (`*.e2e.ts`) and their fixtures                |
-| `mobile/flows/`    | Maestro flows that run standalone                               |
-| `mobile/contract/` | Maestro legs of a contract run — parameterised, never run alone |
-| `runner/`          | orchestrators: mobile, web→mobile, mobile→web                   |
-| `seed/`            | the dev-account seed — not a test (above)                       |
-| `.artifacts/`      | gitignored — traces, reports, run manifests, browser profiles   |
-| `credentials/`     | gitignored — the accounts `npm run seed` created                |
+| path               | what                                                                  |
+| ------------------ | --------------------------------------------------------------------- |
+| `paths.ts`         | where a run writes — the only source of `.artifacts` paths            |
+| `web/`             | Playwright specs (`*.e2e.ts`) and their fixtures                      |
+| `mobile/flows/`    | Maestro flows that run standalone                                     |
+| `mobile/contract/` | Maestro legs of a contract run — driven by a `runner/`, never by hand |
+| `runner/`          | orchestrators: mobile, vectors, web→mobile, mobile→web                |
+| `seed/`            | the dev-account seed — not a test (above)                             |
+| `.artifacts/`      | gitignored — traces, reports, run manifests, browser profiles         |
+| `credentials/`     | gitignored — the accounts `npm run seed` created                      |
 
 ## four things that will surprise you
 
@@ -102,5 +109,6 @@ terminal.
 4. **The `testID`s the flows bind to are an interface.** They live in
    bracemark-expo, and renaming one fails a flow as a bare timeout on a missing
    element — never as anything that names the rename. The list is in
-   `docs/e2e.md`, _the testID contract_. What still blocks a native run is an
-   installed dev build, not a selector.
+   `docs/e2e.md`, _the testID contract_ — which now also lists three
+   `contract-vectors` ids that exist only in a dev build, because the screen
+   carrying them redirects away in production.

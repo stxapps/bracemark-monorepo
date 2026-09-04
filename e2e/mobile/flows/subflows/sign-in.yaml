@@ -39,7 +39,60 @@ appId: com.bracemark.app
 # Argon2id (64 MiB, t=3) runs here on the device — slower than the browser, and
 # much slower on a cold simulator. This is the one place in the mobile flows that
 # genuinely needs a long wait.
-- extendedWaitUntil:
-    visible:
-      id: 'links-screen'
-    timeout: 60000
+#
+# It is a poll rather than one `extendedWaitUntil` because of iOS AutoFill. On a
+# successful sign-in iOS offers to save the credentials in a SpringBoard sheet —
+# a window the app does not own, drawn OVER it, so while it is up the hierarchy
+# holds "Save Password?" and nothing else. Whether it lands before or after the
+# links screen paints is a race against Argon2 finishing (both orders observed on
+# consecutive runs of the same flow), and it does not go away on its own:
+#
+#   - lands FIRST  → a plain `extendedWaitUntil` for links-screen sits behind the
+#                    sheet until it times out.
+#   - lands SECOND → this subflow passes and the CALLER's first assertion fails,
+#                    against a link that is on screen the whole time. That is how
+#                    it presented on the first real contract run, and it reads
+#                    exactly like a sync that never arrived.
+#
+# So: dismiss, wait a beat, re-check — the optional `assertVisible` is what paces
+# the loop (it waits out its own lookup timeout before warning), and the optional
+# `tapOn` is a no-op on the passes where no sheet is up. The hard assert after the
+# loop is what actually fails the flow if the links screen never arrives, so a
+# broken sign-in still fails as a broken sign-in.
+#
+# Nothing in the app can suppress the sheet without also opting out of real
+# password managers, and the platform guard keeps Android — which never shows it —
+# from paying for the lookups.
+- repeat:
+    times: 5
+    while:
+      notVisible:
+        id: 'links-screen'
+    commands:
+      - runFlow:
+          when:
+            platform: iOS
+          commands:
+            - tapOn:
+                text: 'Not Now'
+                optional: true
+      - assertVisible:
+          id: 'links-screen'
+          optional: true
+
+- assertVisible:
+    id: 'links-screen'
+
+# The second half of the race: the sheet can still be on its way in when the
+# links screen is already up. This waits it out once — WARNED, not failed, when
+# it never comes — so the caller is handed a screen nothing is covering.
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - assertVisible:
+          text: 'Save Password?'
+          optional: true
+      - tapOn:
+          text: 'Not Now'
+          optional: true

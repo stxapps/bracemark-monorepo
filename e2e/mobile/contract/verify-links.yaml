@@ -15,7 +15,15 @@ appId: com.bracemark.app
 # Sign-in derives the keys and pulls the remote blob; decrypting it is the whole
 # assertion. The generous timeout covers the pull, not the derivation — the
 # subflow already waited that out.
+# A link row's accessible name is a COMPOSITE — "E, <url>, <host>, now, Link
+# options" — and Maestro matches text as a regex against the WHOLE name, so the
+# bare url matches nothing. Unanchored, the assertion times out against a link
+# that is on screen the entire time, which reads as a sync that never landed or a
+# blob that would not decrypt; it cost two full contract runs to tell those
+# apart. The `.*` are what make it a substring match. (The urls here are
+# `unresolvableUrl()`s — host and path only, no regex metacharacters beyond `.`,
+# which is why they can go in raw.)
 - extendedWaitUntil:
-    visible: ${LINK_1}
+    visible: '.*${LINK_1}.*'
     timeout: 60000
-- assertVisible: ${LINK_2}
+- assertVisible: '.*${LINK_2}.*'

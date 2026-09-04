@@ -8,6 +8,7 @@ to.
 | layer                | what it covers                                       | how it runs                         |
 | -------------------- | ---------------------------------------------------- | ----------------------------------- |
 | **unit / component** | pure logic, hooks, a rendered component's behaviour  | `npm run test` — jest or vitest     |
+| **native unit**      | Swift/Kotlin the JS suites cannot reach              | `swift test`, `gradlew … test`      |
 | **driving the app**  | a real build, a real browser or device, a whole flow | `e2e/`, by hand / by agent          |
 | **typecheck + lint** | boundaries, types, the module-boundary tags          | `npm run typecheck`, `npm run lint` |
 
@@ -17,8 +18,24 @@ belongs to_; [e2e.md](./e2e.md) is the record of how that layer is built — the
 three surfaces it drives, why the standard Playwright auth fixture can't work
 against a non-extractable `CryptoKey`, and what e2e is forbidden to assert.
 
-The third layer is easy to forget in a testing doc, but it is the one that
-catches the largest class of mistake here: `@nx/enforce-module-boundaries` turns
+The **native unit** row is small and easy to miss, and it is not part of
+`npm run test` — nothing in npm can run it. Today it is one suite per platform,
+both covering the `BracemarkFileCrypto` blob framer in `@stxapps/expo-crypto`:
+`swift test` from `packages/expo-crypto`, and
+`./gradlew :stxapps-expo-crypto:test` from `apps/bracemark-expo/android`. Neither
+needs a simulator, because the framing was deliberately split out of the expo
+`Module` class into `BlobFrame.{swift,kt}` — inside it, reaching the code meant
+booting an app, which is why it went untested for as long as it did. Both read
+`packages/shared/src/crypto/contract-vectors.json`, the generated twin of the
+golden vector, so they cannot drift from what the JS suites assert.
+
+The rule that generalizes: **if native code holds a value that a frozen contract
+also defines, the copy needs a test, because nothing else will ever compare
+them.** A Swift `let` and a TypeScript `const` holding the same byte have no
+relationship a compiler, a linter or a type can see.
+
+The typecheck+lint layer is easy to forget in a testing doc, but it is the one
+that catches the largest class of mistake here: `@nx/enforce-module-boundaries` turns
 an illegal cross-package import into a lint failure rather than a silent
 runtime surprise. See [architecture.md](./architecture.md).
 

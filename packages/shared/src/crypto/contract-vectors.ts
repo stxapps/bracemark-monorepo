@@ -4,19 +4,30 @@
 // (Expo/native) — asserts these same values in its specs, so "web and native
 // derive identical keys" is a test, not a review promise.
 //
-// TWO LIMITS on how far that goes — don't read these vectors as more than they
-// are:
-//   - NOTHING RUNS THEM AUTOMATICALLY. The workspace has no CI yet,
-//     so today they gate only what
-//     someone runs locally: `npx nx run-many -t test -p @stxapps/web-crypto
-//     @stxapps/expo-crypto`. Wire them into the first CI job.
-//   - THE EXPO SUITE DOESN'T EXERCISE THE NATIVE PRIMITIVES. Under jest,
-//     react-native-quick-crypto is shimmed onto Node/hash-wasm (expo-crypto
-//     src/testing/quick-crypto-node-shim.ts), so what's proven there is OUR
-//     param mapping, derivation order and wire framing — not that quick-crypto's
-//     C++ Argon2id/HKDF/AES-GCM emits these bytes on device. The Swift/Kotlin
-//     BracemarkFileCrypto framer (see `blob` below) has no test at all. Both gaps
-//     need a device/simulator harness.
+// FIVE suites assert this table, and they are not interchangeable — each one
+// reaches a runtime the others cannot:
+//   - `@stxapps/web-crypto` and `@stxapps/expo-crypto` (jest). The two JS
+//     implementations. Note that expo's runs against a SHIM:
+//     react-native-quick-crypto is mapped onto Node and hash-wasm
+//     (expo-crypto src/testing/quick-crypto-node-shim.ts), so what it proves is
+//     our param mapping, derivation order and framing — not the C++ that ships.
+//   - `@stxapps/shared` (jest). contract-vectors.spec.ts, which pins the
+//     generated JSON twin below against this file.
+//   - The NATIVE framers, against `blob` — Swift via `swift test` in
+//     packages/expo-crypto, Kotlin via `gradlew :stxapps-expo-crypto:test`. Both
+//     read the JSON, neither needs a device.
+//   - ON DEVICE, through `e2e/mobile/contract/vectors.yaml` — the dev-only
+//     /contract-vectors screen in bracemark-expo, which is the only place
+//     quick-crypto's real Argon2id/HKDF/AES-GCM ever meets these bytes.
+//
+// The device leg is also the only one that can catch a drift the web⇄mobile
+// contract runs cannot: those prove the two platforms agree with EACH OTHER, so
+// params changed on both in one release round-trip perfectly and still lock
+// every existing user out of their data.
+//
+// ONE LIMIT remains — NOTHING RUNS ANY OF THEM AUTOMATICALLY. They gate only
+// what someone runs locally. What runs on its own, if anything, is
+// docs/testing.md's record to keep, not this file's.
 //
 // TEST FIXTURE ONLY — nothing here is a secret and nothing here is used at
 // runtime. The values were produced by the real web-crypto pipeline
@@ -88,8 +99,9 @@ export const CRYPTO_CONTRACT_VECTOR = {
   // A packed v1 sync blob `[BLOB_FORMAT_V1 || iv || ciphertext+tag]` of
   // blobPlaintext (utf-8) under encryptionKeyHex, no AAD — exactly what a
   // client uploads to R2 and what the native file module must produce/consume.
-  // Both JS framers (web-crypto/expo-crypto blob.ts) assert this; the native
-  // Swift/Kotlin one does NOT yet — see the second limit in the header.
+  // Asserted by both JS framers (web-crypto/expo-crypto blob.ts) AND both native
+  // ones (packages/expo-crypto ios/BlobFrame.swift, android BlobFrame.kt, which
+  // read the JSON twin) — four implementations of one frame, one vector.
   blob: {
     ivHex: 'b0b1b2b3b4b5b6b7b8b9babb',
     plaintext: 'Hello, bracemark! contract vector v1',

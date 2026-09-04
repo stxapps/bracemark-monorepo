@@ -1,0 +1,41 @@
+# Contract leg: the FROZEN crypto vectors, on device, against the real native
+# primitives.
+#
+# Driven by `runner/vectors.ts`. It takes no parameters and needs no account —
+# the vectors carry their own — which is why it is the one contract leg that
+# does not run the sign-in subflow.
+#
+# What it adds over the other two legs: those prove web and native agree with
+# EACH OTHER, and would stay green if both drifted together — a param change
+# shipped to both in one release passes a round trip and locks every existing
+# user out. This pins the bytes themselves. What it adds over
+# expo-crypto's contract-vectors.spec.ts is the runtime: jest shims
+# react-native-quick-crypto onto Node, so only here does the C++ Argon2id /
+# HKDF / AES-GCM actually run.
+#
+# The screen is `/contract-vectors`, dev-only and outside both auth guards
+# (apps/bracemark-expo/src/app/contract-vectors.tsx). It renders `vector-*` rows
+# as they resolve and exactly one terminal marker, so there is no window in which
+# a half-finished run looks like a pass.
+appId: com.bracemark.app
+---
+- runFlow:
+    file: ../flows/subflows/cold-launch.yaml
+
+# The landing screen means the bundle is served and the app is mounted; deep
+# linking before that races Metro.
+- extendedWaitUntil:
+    visible: 'Sign in'
+    timeout: 60000
+
+- openLink:
+    link: 'bracemark://contract-vectors'
+    autoVerify: false
+
+# Argon2id at the frozen params (64 MiB, t=3) runs twice here — once for the KEK
+# vector, once inside the password door — and it is much slower on a simulator
+# than in a browser. This timeout covers both, not the navigation.
+- extendedWaitUntil:
+    visible:
+      id: 'contract-vectors-pass'
+    timeout: 180000
