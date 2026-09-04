@@ -139,6 +139,53 @@ export const FAQ_GROUPS: FaqGroup[] = [
         ),
       },
       {
+        // The other half of the audience gap `folder-of-files` opens, and the
+        // second reader `vs-others` leaves out: the one who buys privacy by the
+        // vendor rather than by the app, and whose real alternative is not
+        // another bookmark manager but WAITING for a suite he already pays for to
+        // ship one. Nothing on the property was written to him, and he is not a
+        // hard sell for the architecture — he is sold on it already, which is why
+        // he is shopping for a vendor rather than a feature.
+        //
+        // It concedes for the same reason `folder-of-files` does, and harder,
+        // because both of his reasons are good: one bill is cheaper than two, and
+        // one account is one recovery story to get right instead of two. Arguing
+        // either away would be the pitch-deck register this site does not use, and
+        // the concession is what makes the last line land — a reader told he can
+        // leave whenever he likes has no reason not to start now.
+        //
+        // The one thing it asserts about a product that does not exist yet is a
+        // CONSTRAINT, not a shortcoming: a server that cannot read your links
+        // cannot search them either, whoever runs it. That is this site's own
+        // argument pointed at a hypothetical competitor, and it stays true however
+        // good the competitor turns out to be. No company is named and no one's
+        // roadmap is guessed at — both would date, and one would be a claim about
+        // someone else we have no standing to make.
+        //
+        // The export is NOT re-described here. `folder-of-files` above and
+        // DURABILITY on the landing page already carry the bytes, and a third
+        // spelling of the same archive is how "four formats" came to be claimed
+        // five times and described once.
+        id: 'privacy-suite',
+        q: 'Why not wait for a privacy suite I already pay for to add this?',
+        a: (
+          <>
+            That may well be the right call, and nothing here punishes you for waiting: the free
+            plan is {FREE_LINKS} links with no time limit, and export is free on every plan, so
+            starting now costs you nothing you cannot walk back. A suite gives you two things we
+            cannot: one subscription instead of two, and one account to keep safe rather than
+            another password and another recovery code. What the second subscription buys is a
+            product that does only this: the lists, the tags, the search, the previews, the browser
+            extension, and sharing into the app from anywhere are the whole of what we work on,
+            rather than a feature fitted in beside the rest of a suite. And one thing does not
+            change with the size of the company behind it — a server that cannot read your links
+            cannot search them for you either, so anything encrypted the way this is inherits the
+            same trade we did: search that runs on your device, and no server-side features. If a
+            suite ships one that fits you better, take it. Your library leaves with you.
+          </>
+        ),
+      },
+      {
         id: 'platforms',
         q: 'Where does it run?',
         a: (
@@ -641,12 +688,45 @@ export const FAQ_GROUPS: FaqGroup[] = [
         ),
       },
       {
+        // The argument this replaced ("we would rather sell one honest plan than
+        // a monthly one you couldn't switch out of") lost the sale it was written
+        // to defend: annual IS the plan you cannot switch out of, so the sentence
+        // refuted itself in front of the reader least able to afford the bet, and
+        // read as the one piece of salesmanship on a property that otherwise
+        // refuses it. The answer now does what the rest of the site does — name
+        // the cost, then name the mechanisms that bound it, and let the reader do
+        // the arithmetic we would otherwise be doing at them.
+        //
+        // The third bound is the one the objection is actually about: prepaying a
+        // year to a company that has not launched. It is scoped exactly as
+        // terms/page.tsx scopes it — WE stop offering the plan, for reasons within
+        // our control — and not to a change of mind, which is Paddle's, Apple's or
+        // Google's policy rather than ours. Widening it here would promise conduct
+        // the Terms do not carry, which is the failure mode this file is most
+        // exposed to: marketing copy is where a commitment gets invented.
+        //
+        // The statutory withdrawal right is deliberately NOT restated here.
+        // `refunds` owns the refund position, and two answers stating it drift
+        // apart within a release or two (the header's whole argument for one
+        // file); this one points at it instead.
+        //
+        // No monthly plan is promised. "It is on the list" is what shipped before
+        // and is as far as it goes — a date here would be a roadmap commitment on
+        // the surface a buyer reads with a card in their hand.
         id: 'monthly',
         q: 'Do you have a monthly plan?',
         a: (
           <>
-            Not yet. Bracemark is annual-only for now, and we would rather sell one honest plan than
-            a monthly one you couldn’t switch out of. It is on the list.
+            Not yet — {PLAN_LABELS.plus} is annual only, and that carries a real cost for you: a
+            year up front is a larger commitment than a month, made before you know whether this
+            fits the way you work. What bounds it: the {TRIAL_DAYS}-day trial runs before the first
+            charge, so cancelling before it ends means you are never charged; cancelling after that
+            stops the renewal, and your library stays readable, searchable, and exportable on the
+            free plan either way; and if we stop offering the paid plan for reasons within our
+            control, our <PageLink href="/terms">Terms</PageLink> commit us to cancelling
+            subscriptions and refunding the unused part of any period already paid for. Refunds in
+            the ordinary case are <PageLink href="/faq#refunds">further down</PageLink>. A monthly
+            plan is on the list.
           </>
         ),
       },
