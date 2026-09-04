@@ -32,7 +32,7 @@ export default function NotFound() {
         <CardHeader>
           <CardEyebrow>Error 404</CardEyebrow>
           <CardTitle className={cn('text-xl font-semibold tracking-tight')}>
-            This page isn’t here
+            That page isn’t here
           </CardTitle>
         </CardHeader>
 

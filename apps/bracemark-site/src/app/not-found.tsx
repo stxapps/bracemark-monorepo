@@ -47,7 +47,18 @@ export default function NotFound() {
       title="That page isn’t here."
       lede="The address may be mistyped, or it may be from an older version of this site. Nothing is broken — this one just doesn’t exist."
     >
-      <ElsewhereList cards={ELSEWHERE} />
+      {/* The heading is not decoration. Without type here, the shell's `border-t`
+          (page-shell.tsx) and this list's `gap-px` hairlines are the same 1px of
+          `border-border` at the same width, so the rule stops reading as the end of
+          the header and starts reading as the list's own top edge, pushed off by
+          the shell's `pt-10`. Every other page using PageShell opens its body with
+          type. `mt-6` and the h2 step match /support, the list's other caller. */}
+      <section>
+        <h2 className={cn('font-display text-2xl font-semibold tracking-tight')}>
+          Where you were probably headed
+        </h2>
+        <ElsewhereList cards={ELSEWHERE} className={cn('mt-6')} />
+      </section>
 
       {/* A dead link on our own site is our bug, and this is the one page where
           someone has already proved they hit one. The address is the same
