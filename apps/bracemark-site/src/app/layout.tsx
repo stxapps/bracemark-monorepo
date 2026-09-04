@@ -133,17 +133,37 @@ const TITLE = `${BRAND.name} — ${BRAND.tagline}`;
 export const metadata: Metadata = {
   // This app serves the APEX (docs/hosting.md) — bracemark-web serves `app.` and
   // sets its own metadataBase. Card images, which must be absolute, resolve against
-  // this origin and live in this app's `public/`.
+  // this origin and live in this app's `src/app/` (see the note above `openGraph`).
   metadataBase: new URL(SITE_URL),
   title: {
     default: TITLE,
     template: '%s · Bracemark',
   },
   description: DESCRIPTION,
+  // The card image is a FILE CONVENTION, not a path in this object:
+  // `opengraph-image.png` and `twitter-image.png` sit beside this file, the way
+  // `icon*.png`, `apple-icon.png` and `favicon.ico` already do. Next emits
+  // `og:image`/`twitter:image` absolute against `metadataBase` and reads `width`,
+  // `height` and `type` off the PNG itself, so nothing here has to stay true to a
+  // file on disk.
+  //
+  // It WAS a literal — `/twitter-card-image-pattern1.png`, twice here and twice in
+  // bracemark-web's layout, over a byte-identical PNG in each app's `public/`. It
+  // is deliberately NOT hoisted into shared's brand/brand.ts beside `SOCIAL`: that
+  // file holds facts with exactly ONE truth (one handle, one repo, one company),
+  // and a second spelling is a wrong spelling. A card image is not that — it is two
+  // assets on two origins, and `platform:agnostic` shared can hold the string but
+  // can never hold the PNG. A shared constant would have pinned the PATH while
+  // pinning nothing about either FILE, and turned a rename into a three-place edit
+  // where getting two of them breaks the app you did not touch.
+  //
+  // `twitter-image.png` is a byte-identical copy of the og one, and not redundant:
+  // with only the og file Next emits no `twitter:image` tag at all. X does fall
+  // back to `og:image`, but that is X's behaviour to change and not ours, and this
+  // block published both tags before.
   openGraph: {
     title: TITLE,
     description: DESCRIPTION,
-    images: [{ url: '/twitter-card-image-pattern5.png' }],
     siteName: 'Bracemark',
     url: SITE_URL,
     type: 'website',
@@ -151,7 +171,6 @@ export const metadata: Metadata = {
   twitter: {
     title: TITLE,
     description: DESCRIPTION,
-    images: ['/twitter-card-image-pattern5.png'],
     card: 'summary_large_image',
     // The @-form, from `SOCIAL` in @stxapps/shared — never retyped here.
     site: SOCIAL.handle,

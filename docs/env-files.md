@@ -62,8 +62,9 @@ Current vars:
 - `NEXT_PUBLIC_EXTRACTOR_URL` → the matching bracemark-extractor URL.
 - `NEXT_PUBLIC_APP_URL` → **this app's own** origin (the `app.` host), read by
   `src/app/layout.tsx`. `metadataBase` and `og:url` have to be absolute — the
-  card images resolve against it and live in this app's `public/`, not on the
-  apex — and an absolute origin is per-tier like every other one here. Same var
+  card images resolve against it and live in this app's own `src/app/`, as the
+  `opengraph-image.png` / `twitter-image.png` file conventions, not on the apex —
+  and an absolute origin is per-tier like every other one here. Same var
   name bracemark-site uses for this same host, below. It was hard-coded to
   `https://app.bracemark.com` until the deploy script's tier check caught a
   staging bundle advertising production's URLs.

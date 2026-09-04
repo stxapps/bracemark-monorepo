@@ -116,14 +116,21 @@ export const metadata: Metadata = {
     template: '%s · Bracemark',
   },
   description: DESCRIPTION,
+  // The card image is a FILE CONVENTION (`opengraph-image.png` and
+  // `twitter-image.png` beside this file), the way `icon*.png`, `apple-icon.png`
+  // and `favicon.ico` already are here — not a path literal in this object. Next
+  // emits `og:image`/`twitter:image` absolute against `metadataBase` and reads the
+  // PNG's own `width`, `height` and `type`, so no string here has to stay true to a
+  // file on disk. bracemark-site's layout carries the long form of why the path is
+  // per-app rather than a constant in shared's brand/brand.ts next to `SOCIAL`;
+  // short version, the asset is two files on two origins and shared can hold the
+  // string but never the PNG.
+  //
+  // `twitter-image.png` is a byte-identical copy of the og one, not a redundancy:
+  // with only the og file Next emits no `twitter:image` tag at all.
   openGraph: {
     title: TITLE,
     description: DESCRIPTION,
-    images: [
-      {
-        url: '/twitter-card-image-pattern5.png',
-      },
-    ],
     siteName: 'Bracemark',
     url: appUrl,
     type: 'website',
@@ -131,7 +138,6 @@ export const metadata: Metadata = {
   twitter: {
     title: TITLE,
     description: DESCRIPTION,
-    images: ['/twitter-card-image-pattern5.png'],
     card: 'summary_large_image',
     // The @-form, from `SOCIAL` in @stxapps/shared — never retyped here.
     site: SOCIAL.handle,
