@@ -130,7 +130,7 @@ describe('rules that bind every exported string', () => {
   // The server claims. Nothing else in the workspace can catch these: the tables
   // that make them true or false live in bracemark-api, a different app, and the
   // wording sounds MORE rigorous the more wrong it gets. Each of these spellings
-  // reached shipped copy at least once (CLAUDE.md — tripwires), so they are
+  // reached shipped copy at least once (docs/local-first-sync.md), so they are
   // barred by name rather than by a rule someone has to re-derive.
   const BANNED: [RegExp, string][] = [
     [

@@ -261,6 +261,36 @@ resume from. An R2 timestamp always can: the newest `LastModified` in a listing
 _is_ the cursor. A DO rebuild or seq reset therefore can't invalidate a client
 cursor, and a wiped log is rebuildable from R2.
 
+### schema changes — the client is greenfield, the server is not
+
+Three shapes above can move, and they do **not** obey the same rule.
+
+**On a device nothing has shipped, so the client stores are edited in place.**
+Dexie's `version(1)` (`packages/web-react/src/data/db.ts`), the expo-sqlite DDL
+(`packages/expo-react/src/data/db.ts` — idempotent, per the greenfield
+no-migrations policy in [architecture.md](./architecture.md)) and the R2 payload
+shapes above (`packages/shared/src/sync/`) all change by **rewriting them**:
+change the shape, recreate the dev database (delete the app, clear its data), add
+no migration step. Compatibility with a past no user has is cost with no
+beneficiary — [share-sheet.md](./share-sheet.md) reaches the same answer about the
+outbox file, for the same reason.
+
+**`bracemark-api` is deployed, and nothing at the call site says so.** Its two
+SERVER schemas have left that regime:
+`apps/bracemark-api/src/db/migrations/<role>/0001_init.sql` is recorded as applied
+in every live D1 and `wrangler` will never re-run it, and a DO already past
+`schema_version` 1 never re-runs `MIGRATIONS[0]` in `src/do/user-data.ts`. Editing
+either in place is silent in the worst way — a fresh or local database gets the
+new shape, every deployed one keeps the old, and the apply still prints ✅.
+**Append**: a new `0002_*.sql`, folded into `db/schemas/<role>.sql` so a fresh DB
+matches a migrated one; or a new `MIGRATIONS` entry, never an edit to a shipped
+one. Folding a change back into the init is only correct if you also drop and
+re-provision every deployed database, deliberately. The two READMEs are the rule's
+home and carry the mechanics:
+[`src/db/migrations/README.md`](../apps/bracemark-api/src/db/migrations/README.md)
+and [`src/do/README.md`](../apps/bracemark-api/src/do/README.md); applying one to
+a real tier is [hosting.md](./hosting.md), _deploying the workers_.
+
 ### source of truth: R2 is truth, the op log is an accelerator
 
 **R2 is the source of truth. The op log is a derived accelerator that may be

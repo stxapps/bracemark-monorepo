@@ -24,8 +24,9 @@ and the single-axis view state (`selection`) are **derived** from it — never s
 separately — so search survives reload, the back button steps through views, and
 every view is deep-linkable. The param value is always an **opaque id** (a system
 constant or a random entity token) or a plain search word; never a plaintext list/tag
-name, which stays encrypted in the local store. That's what keeps the URL
-zero-knowledge.
+name, which stays encrypted in the local store. That's what keeps plaintext names
+out of the URL, and so out of browser history and anything that captures the
+address bar.
 
 `parseLinkQuery` maps the URL onto the grammar. Each filterable field carries its
 relation in the param **name**:

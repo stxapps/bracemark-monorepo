@@ -153,7 +153,7 @@ function CommandInput({
 // in web-ui/styles.css, in any app stylesheet, or in Tailwind core, so it emitted
 // nothing and these lists have always shown an ordinary scrollbar. Its position
 // at the head of the class list was the tell — prettier-plugin-tailwindcss hoists
-// classes it can't resolve (see CLAUDE.md's tripwire). Removing it changes no
+// classes it can't resolve (docs/theme.md, _the token shim_). Removing it changes no
 // rendered behaviour. If hiding the scrollbar was ever the intent, that wants a
 // real `@utility no-scrollbar` in styles.css — but a filterable list with no
 // scrollbar also loses its only "there is more below" cue, which is why this

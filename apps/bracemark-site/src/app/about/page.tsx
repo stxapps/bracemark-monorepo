@@ -420,7 +420,7 @@ export default function Page() {
           </section>
 
           {/* "The two servers behind them", never "the sync server" — the phrase this
-              list used to carry, and the one CLAUDE.md's tripwire bars. There is no
+              list used to carry, and the one docs/local-first-sync.md bars. There is no
               separate sync server to name: `bracemark-api` is ONE Worker serving
               auth, sync AND billing, so the name invents a component a reader
               cannot find and quietly narrows what is in the repository. Two is the

@@ -8,7 +8,8 @@
 // button works, and it's deep-linkable. The param value is always an OPAQUE id —
 // a system-list constant (`my-list`/`archive`/`trash`/`all`) or a user entity's
 // random token — NEVER the plaintext list/tag name, which stays encrypted in the
-// local store. That's what keeps the URL zero-knowledge. (The list/card/table
+// local store. That's what keeps plaintext names out of the URL, and so out of
+// browser history and anything that captures the address bar. (The list/card/table
 // layout used to live here as a localStorage preference; it moved to a real
 // setting — see `useSettings` / Settings → Misc.)
 //

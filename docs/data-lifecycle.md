@@ -437,8 +437,8 @@ Coverage, stated exactly, because the two halves are not equally testable:
   whole point of keeping both defences — so removing `'ending'` breaks nothing
   observable _right now_. It is prevention against the class: the next automatic
   navigation added under the gate, or a future exit that goes back through the
-  router, turns an unobservable ordering into a crash again. That is why this is a
-  tripwire in `CLAUDE.md` rather than an assertion somewhere.
+  router, turns an unobservable ordering into a crash again. That is why the rule is written
+  here, and flagged ⚠ in `CLAUDE.md`'s docs table, rather than asserted somewhere.
 
 **Both platforms run the same three steps**, and the `'ending'` phase means the
 same thing in each (`packages/{web,expo}-react/src/contexts/auth-provider.tsx`).
@@ -518,9 +518,9 @@ identity/device stores — the two teardowns are cross-referenced in
 
 `POST /v1/auth/delete-account` (contract beside the other auth endpoints,
 service in `services/account.ts` `deleteAccount`). "Deactivate" — a flag that
-keeps the ciphertext — was considered and rejected: in a zero-knowledge system
-an unused account is already inert (no email, no public surface, only the
-key-holder can ever touch the data), so a deactivation flag stops nothing,
+keeps the ciphertext — was considered and rejected: with no email and nothing of
+the library readable server-side, an unused account is already inert (no public
+surface, only the key-holder can ever touch the data), so a flag stops nothing,
 while retaining data the user asked to remove violates the privacy stance. And
 "no undo but data kept" is the worst combination of properties — can't come
 back, _and_ not deleted. So the account action is deletion, done properly.

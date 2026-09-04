@@ -159,9 +159,9 @@ const LABELS = ['Very weak', 'Weak', 'Fair', 'Strong'] as const;
 // meter had no success signal). Raw palette colours, not a new `--color-*` token:
 // a token would have to be declared under `@variant light`/`@variant dark` in
 // `global.css` AND mirrored into `tools/prettier/expo-tailwind.css`, and this needs
-// neither (see the tripwire in CLAUDE.md). The two label colours come from the shared
-// pairs above, so the top band and a passing message are one string, not two that
-// agree.
+// neither (docs/theme.md, _the token shim the formatter needs_). The two label
+// colours come from the shared pairs above, so the top band and a passing message
+// are one string, not two that agree.
 const TONES = [
   { bar: 'bg-destructive', text: 'text-destructive' },
   { bar: 'bg-destructive', text: 'text-destructive' },

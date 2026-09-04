@@ -26,7 +26,7 @@ license: MIT
   the **browser extension** (`bracemark-extension`, a separate app) and the iOS
   **share extension** (a native target inside `bracemark-expo`, provided by
   `expo-share-extension` — not a local Expo module). Never write it bare, in
-  code comments or prose. → CLAUDE.md tripwires, `docs/architecture.md`.
+  code comments or prose. → CLAUDE.md, _Workspace_; `docs/architecture.md`.
 - _(bracemark)_ **Don't point `create-expo-module` at this workspace blind.** It
   assumes a standalone package with its own tooling and example app; this is an
   npm-workspaces + Nx monorepo where packages are `@stxapps/*` raw source and a

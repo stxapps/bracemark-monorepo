@@ -157,7 +157,7 @@ Without it, none of the `safe-area` utilities or `useWindowInsets` do anything.
     jump re-truncates text. (The `no-scrollbar` class that used to lead that class
     list was dead — defined in no stylesheet and in no Tailwind core build, so it
     emitted nothing; its position at the head of the list was the hoisting tell
-    described in CLAUDE.md's tripwire.)
+    described in [theme.md](./theme.md), _the token shim the formatter needs_.)
   - `(app)/links/_components/search-bar.tsx` (`TriCheckList`) — a `max-h-32` box,
     roughly four rows, under a filter input that only appears past eight options:
     the box exists only on a checklist already scrolling, so typing reliably

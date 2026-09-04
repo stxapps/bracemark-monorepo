@@ -40,6 +40,50 @@ written as a browser check when it belongs in a component spec. Error
 announcement, labels, roles: all reachable from `@testing-library`'s queries.
 See [accessibility.md](./accessibility.md).
 
+### what earns a spec
+
+**Meaningful coverage, not a percentage.** The specs here are written as design
+records — each `it` names the silent failure it prevents, in the voice of `docs/`
+— so a spec that restates data or re-tests a dependency dilutes the suite and
+breaks on every legitimate edit. _coverage today_ below is that argument worked
+through project by project, including the files that have **no spec on purpose**;
+this is the rule it generalizes to. A declarative zod-schema file does not
+normally earn one — say so rather than writing it — unless the schema encodes a
+cross-file coupling nothing else pins (the IAP checkout contract enumerating
+`AVAILABLE_PAID_PLANS` rather than `PAID_PLANS` is the case that does). Derive a
+test table from the constants under test, so a catalog change moves the spec with
+it, and prefer relations — monotonic, subset, round-trip — over restating values.
+
+**Prove both halves by mutating the source.** A gap is only real if the suite
+stays green without the new assertion, and the assertion only earns its place if
+it then fails: flip a boundary (`<` → `<=`), delete a guard, swap an enum, re-run,
+put it back. One thing in this repo makes that check lie — **the doc-comment
+decoy.** Sources restate their load-bearing SQL and guards verbatim in the comment
+above them, so a mutation applied as "replace the first occurrence" patches the
+COMMENT and leaves the code intact: the suite stays green and a correct assertion
+looks worthless. `apps/bracemark-api/src/db/repositories/purchases.ts` is the
+specimen — the upsert's `WHERE excluded.event_occurred_at >= event_occurred_at`
+appears in its doc comment ~45 lines above the real SQL. Include the surrounding
+whitespace or backticks so the match can only hit code, and `grep -n` the mutated
+file to confirm which line moved before trusting a green run.
+
+#### tripwire: one dynamic import bans every static one
+
+`@nx/enforce-module-boundaries` classifies a workspace package as **lazy-loaded**
+the moment anything `import()`s it — a spec included — and then forbids every
+STATIC import of it across that project. One
+`await import('@stxapps/shared')` in
+`packages/web-react/src/lib/auth-api-client.spec.ts` made
+`npx nx lint @stxapps/web-react` fail with 51 errors reading _"Static imports of
+lazy-loaded libraries are forbidden"_, pointing at ~30 ordinary SOURCE files
+(`extraction-provider.tsx`, `lock-provider.tsx`, …) and never at the spec, which
+appears once, unlabelled, in the summary list at the bottom of the output. The
+error text names the victims and never the cause, and `--fix` cannot fix it. So
+**import workspace packages statically in a spec**; if a dynamic import is
+genuinely needed, expect this and read the summary list rather than the error
+lines. Baseline lint on a clean tree is green, so `git stash -u` + re-lint is what
+actually localizes it.
+
 ### which runner, and why
 
 Two runners, split by **the runtime the code has to execute in** — not by

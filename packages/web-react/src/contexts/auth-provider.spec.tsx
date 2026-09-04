@@ -10,7 +10,7 @@
 //    every effect that treats data DISAPPEARING as a deletion misfires on it — on
 //    bracemark-web that was the links page reading its own `?list=` as deleted and firing
 //    `router.replace` into AuthGuard's exit navigation, two navigators in one frame
-//    (docs/data-lifecycle.md, _the sign-out teardown_). CLAUDE.md records that the
+//    (docs/data-lifecycle.md, _the sign-out teardown_). That doc records that the
 //    ordering has no test at the app level, because `location.replace` absorbs the stray
 //    dispatch there: deleting the phase breaks nothing observable until the next
 //    auto-navigating effect lands. It IS observable here, at the provider, which is

@@ -2,8 +2,8 @@ import { render, screen } from '@testing-library/react';
 
 import { FieldError } from './field';
 
-// `FieldError` is the web carrier for the announced-error tripwire (CLAUDE.md;
-// docs/accessibility.md, _errors_): an error that MOUNTS must carry
+// `FieldError` is the web carrier for the announced-error tripwire
+// (docs/accessibility.md, _errors_): an error that MOUNTS must carry
 // `role="alert"`, or the button re-enables, a line of red text appears, and a
 // screen-reader user is told nothing. Nothing else catches its absence — no lint
 // rule, no type error — and every auth surface routes its errors through here

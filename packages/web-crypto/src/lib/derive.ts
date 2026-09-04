@@ -33,8 +33,8 @@ export interface Account {
 // One door's persisted record (an `account_keys` row): a wrapped copy of the DEK
 // plus the IV, tagged by `doorType`. `wrappedDek` is the AES-256-GCM
 // ciphertext+tag, `iv` its nonce; `doorType` selects which KEK unwraps it. The
-// wrapped DEK is ciphertext, so it is safe to send and store (zero-knowledge —
-// the server holds a locked box).
+// wrapped DEK is ciphertext, so it is safe to send and store — the server holds
+// a locked box.
 export interface Door {
   doorType: DoorType;
   wrappedDek: Uint8Array<ArrayBuffer>;

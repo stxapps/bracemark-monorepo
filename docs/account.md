@@ -29,8 +29,13 @@ parameters and validators live in `@stxapps/shared` (`crypto/params.ts`,
 > "Password-derived" remains correct for the KEK itself, and as a name for the
 > account _model_ — say which one you mean.
 
-bracemark is a **zero-knowledge** bookmark manager. The server stores only
-ciphertext and never sees the password, the data key, or any private key. That
+bracemark is an **end-to-end encrypted** bookmark manager: the server never sees
+the password, the data key or any private key, and never sees your library in
+plaintext. Not "the server stores only ciphertext" — `bracemark-api` also holds
+your username, your public key, your sessions and your subscription row in the
+clear ([local-first-sync.md](./local-first-sync.md), _the shape of the problem_,
+for why that shorthand is barred in every surface that repeats it). What is
+ciphertext-only is the library, plus the key material this file is about. That
 makes the account model structurally identical to a **crypto wallet**:
 
 - the secret **is** the account — no email, no server-side password reset;
@@ -98,11 +103,11 @@ revocable doors.** Data is encrypted under the DEK; each door wraps only the
 and **never touches the data**. Without it, every door would have to encrypt all
 the data and a password change would re-encrypt everything.
 
-The wrapped blobs are ciphertext, so storing them server-side stays
-**zero-knowledge** — the server holds locked boxes it can't open. It hands a
-door's blob to anyone who asks for a username (it's needed _before_ auth); that
-exposure is the same as today, where an attacker with the `publicKey` or any
-ciphertext can mount an offline Argon2id attack on a weak password.
+The wrapped blobs are ciphertext, so storing them server-side is safe — the
+server holds locked boxes it can't open. It hands a door's blob to anyone who
+asks for a username (it's needed _before_ auth); that exposure is the same as
+today, where an attacker with the `publicKey` or any ciphertext can mount an
+offline Argon2id attack on a weak password.
 
 ### the doors
 
@@ -1128,7 +1133,7 @@ Two things to **avoid**, as they would make sharding hard:
   is why the D1 backup discipline above is non-negotiable.
 - Optionally let the user **download their wrapped-DEK blob** as an explicit
   user-held backup file — a last-ditch copy that survives even total server loss
-  (still useless without a door's secret, so it stays zero-knowledge).
+  (still useless without a door's secret).
 
 > Cloudflare references: [D1 Time Travel](https://developers.cloudflare.com/d1/reference/time-travel/),
 > [D1 export](https://developers.cloudflare.com/d1/wrangler-commands/),
