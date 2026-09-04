@@ -357,6 +357,23 @@ copy that other projects already pin. What it does cover:
   (a truthiness check reads `"false"` as allow), and a sessionStorage value that
   goes straight into a `<Link href>` and so is validated on the way out.
 
+`bracemark-site` is copy, and copy is not what a spec is for — most of that tree
+has none on purpose. The two that exist sit on the same rule from opposite sides:
+a string that CLAIMS something another file decides. `lib/plans.spec.ts` holds the
+pricing copy to the entitlement table, and
+`app/security/reporting-terms.spec.tsx` holds the disclosure windows — a
+commitment made to a security researcher on four surfaces in three voices — to
+`SECURITY_ACK_WINDOW` / `SECURITY_TRIAGE_WINDOW` in `lib/site.ts`. Two of those
+four surfaces import the constants and cannot drift; the spec is there for
+`SECURITY.md`, which is markdown and imports nothing, and it reads the two pages
+as RENDERED text rather than as source so a prettier rewrap is not a failure.
+Beside it, `app/.well-known/security.txt/route.spec.ts` pins the `Contact` and
+`Policy` fields that decide where a report lands — the one spec in the site under
+`@jest-environment node`, because a route handler returns a `Response` and jsdom
+does not define one. Both are the derive-the-table-from-the-constants rule in
+_what earns a spec_, applied to a file that cannot import them
+([hosting.md](./hosting.md#wellknownsecuritytxt)).
+
 `web-ui` was that gap too and no longer is. Its suite is shaped by the same rule
 as `react`/`web-react` below rather than by a percentage — it covers the hooks
 whose contract is a RE-RENDER rather than a value (the window-metrics store's

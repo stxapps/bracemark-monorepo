@@ -56,6 +56,25 @@ export const SUPPORT_EMAIL = 'support@bracemark.com';
 // import from Raindrop".
 export const SECURITY_EMAIL = 'security@bracemark.com';
 
+// The two disclosure windows, and the only typed copy of them left on this site.
+// They are a COMMITMENT to a researcher rather than a description of anything, and
+// they were published on four surfaces at once with nothing checking that the four
+// agreed: SECURITY.md in the repository, the reporting block on /support, the
+// reporting section on /security, and — indirectly — the `Policy:` line in
+// app/.well-known/security.txt/route.ts, which decides which of the others a
+// researcher's tooling reads first. Moving one and missing another does not fail a
+// build; it publishes two different promises to the one audience that reads a
+// missed window as a stall and goes public.
+//
+// Word forms rather than numerals because that is how the surfaces render them and
+// a constant should not quietly restyle published copy. SECURITY.md cannot import
+// this file, so it stays typed and `app/security/reporting-terms.spec.tsx` holds it
+// against these values instead — the same move brand.spec.ts makes for the third
+// copy of the licence (docs/brand-assets.md, _the source — what we may claim_).
+// See docs/hosting.md, _/.well-known/security.txt_.
+export const SECURITY_ACK_WINDOW = 'three working days';
+export const SECURITY_TRIAGE_WINDOW = 'ten';
+
 // The inbound-only alias for network-abuse reports about bracemark-extractor, and
 // the reason that alias has to exist at all: the extractor names /extractor in the
 // User-Agent of every outbound fetch, so its contact page is read by operators of

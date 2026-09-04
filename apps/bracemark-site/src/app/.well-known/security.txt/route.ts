@@ -20,6 +20,9 @@ import { SECURITY_EMAIL, SITE_URL } from '../../../lib/site';
 // (/support, /faq `security-report`), and Policy points at /security, whose
 // reporting section prints the three-and-ten windows and the no-bounty statement
 // and links on to SECURITY.md for the scope. Nothing here is a new commitment.
+// `Contact` and `Policy` are the two fields that decide where a researcher lands,
+// so app/security/reporting-terms.spec.tsx asserts both against the constants
+// rather than trusting a string edit here to have been deliberate.
 //
 // POLICY POINTS AT OUR OWN ORIGIN, not straight at SECURITY.md on GitHub. It did
 // point at the file, because for a while the file was the only policy document

@@ -406,12 +406,29 @@ resolving it should not depend on a link to a third-party host still pointing
 where it did. `/security` prints the windows itself and links the repository for
 the scope.
 
-**The disclosure windows are committed in FOUR places and nothing checks that they
-agree:** `SECURITY.md` (three working days to acknowledge, ten to say what we
-intend to do, no bounty), the "Reporting a security problem" block on /support,
-the reporting section on /security, and — indirectly — the `Policy:` line here,
-which decides which of them a researcher's tooling reads first. Move one, move all
-of them.
+**The disclosure windows are committed in FOUR places**, and the values are no
+longer typed in any of them but one: `SECURITY.md`, the "Reporting a security
+problem" block on /support, the reporting section on /security, and — indirectly —
+the `Policy:` line here, which decides which of the other three a researcher's
+tooling reads first. Moving one and missing another is not a cosmetic slip: it
+publishes two different promises to the one audience that reads a missed window as
+a stall and goes public, and it fails no lint rule, no type check and no build.
+
+The windows themselves live in `SECURITY_ACK_WINDOW` / `SECURITY_TRIAGE_WINDOW`
+(`apps/bracemark-site/src/lib/site.ts`), so the two pages cannot disagree with each
+other. `SECURITY.md` is markdown and can import nothing, so its copy stays typed
+and `app/security/reporting-terms.spec.tsx` holds it — and the rendered text of
+both pages — against those constants, plus the no-bounty statement and the
+credit-you sentence, which are phrased per surface and so are asserted as present
+rather than verbatim. The two fields on this file that decide where a report lands,
+`Contact` and `Policy`, are pinned by `route.spec.ts` beside it (`@jest-environment
+node`: a route handler returns a `Response`, which jsdom does not define). Word
+forms rather than numerals in the constants, because a constant should not quietly
+restyle published copy — same instinct as `brand.spec.ts` pinning the third copy of
+the licence claim ([brand-assets.md](./brand-assets.md#the-source--what-we-may-claim)).
+So the windows are still a decision to make deliberately in four places; what
+changed is that forgetting one of them now fails `npm run test` rather than
+shipping.
 
 ### previewing a production build locally — `nx start`
 

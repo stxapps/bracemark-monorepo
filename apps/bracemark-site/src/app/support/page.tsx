@@ -5,7 +5,13 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 import { ElsewhereList } from '../../components/elsewhere-list';
 import { PageShell } from '../../components/page-shell';
 import { type ElsewhereCard, PRICING_CARD } from '../../content/elsewhere';
-import { SECURITY_EMAIL, SOURCE, SUPPORT_EMAIL } from '../../lib/site';
+import {
+  SECURITY_ACK_WINDOW,
+  SECURITY_EMAIL,
+  SECURITY_TRIAGE_WINDOW,
+  SOURCE,
+  SUPPORT_EMAIL,
+} from '../../lib/site';
 
 export const metadata: Metadata = {
   title: 'Support',
@@ -156,10 +162,17 @@ export default function Page() {
             a category we can answer every one of, made to someone who took the
             trouble to tell us something first.
 
-            Three surfaces now carry the same commitment and must move together:
-            this block, SECURITY.md, and the `Policy:` line in
-            app/.well-known/security.txt/route.ts, which points a researcher's
-            tooling at SECURITY.md. Nothing checks that they agree. */}
+            FOUR surfaces now carry the same commitment: this block, the
+            reporting section on /security, SECURITY.md, and — indirectly — the
+            `Policy:` line in app/.well-known/security.txt/route.ts, which decides
+            which of the others a researcher's tooling reads first and now points
+            at /security rather than at SECURITY.md, as it did when this block was
+            written. The windows are no longer typed here: both pages read
+            SECURITY_ACK_WINDOW / SECURITY_TRIAGE_WINDOW from lib/site.ts, and
+            app/security/reporting-terms.spec.tsx holds SECURITY.md and the
+            security.txt fields against those same constants — so a window that
+            moves on one surface and not the others fails the suite instead of
+            publishing two promises. */}
         <section className={cn('rounded-2xl border border-border p-8')}>
           <h2 className={cn('font-display text-xl font-semibold tracking-tight')}>
             Reporting a security problem
@@ -178,11 +191,11 @@ export default function Page() {
             reply from a human, not an auto-responder.
           </p>
           <p className={cn('mt-4 text-body text-muted-foreground')}>
-            We aim to acknowledge a report within three working days, and to tell you what we intend
-            to do about it within ten. We are a small team, so there is no bug bounty and we cannot
-            offer payment — we will credit you when a report leads to a fix, unless you would rather
-            we did not. The scope, the things we are most interested in, and the handful of
-            behaviours that are known and by design are in{' '}
+            We aim to acknowledge a report within {SECURITY_ACK_WINDOW}, and to tell you what we
+            intend to do about it within {SECURITY_TRIAGE_WINDOW}. We are a small team, so there is
+            no bug bounty and we cannot offer payment — we will credit you when a report leads to a
+            fix, unless you would rather we did not. The scope, the things we are most interested
+            in, and the handful of behaviours that are known and by design are in{' '}
             <a
               className={cn(
                 'rounded-sm text-signal underline decoration-signal-line underline-offset-2 hover:decoration-signal',

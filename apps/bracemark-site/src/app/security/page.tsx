@@ -11,7 +11,12 @@ import {
 import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { PageShell } from '../../components/page-shell';
-import { SECURITY_EMAIL, SOURCE } from '../../lib/site';
+import {
+  SECURITY_ACK_WINDOW,
+  SECURITY_EMAIL,
+  SECURITY_TRIAGE_WINDOW,
+  SOURCE,
+} from '../../lib/site';
 
 export const metadata: Metadata = {
   title: 'Security',
@@ -373,10 +378,10 @@ export default function Page() {
             >
               {SECURITY_EMAIL}
             </a>{' '}
-            rather than posting publicly. We aim to acknowledge within three working days and to
-            tell you what we intend to do about it within ten. There is no bug bounty and we cannot
-            offer payment; we will credit you when a report leads to a fix, unless you would rather
-            we did not.
+            rather than posting publicly. We aim to acknowledge within {SECURITY_ACK_WINDOW} and to
+            tell you what we intend to do about it within {SECURITY_TRIAGE_WINDOW}. There is no bug
+            bounty and we cannot offer payment; we will credit you when a report leads to a fix,
+            unless you would rather we did not.
           </p>
           <p className={cn('mt-4 text-body text-muted-foreground')}>
             The scope, the reports we most want, and the handful of behaviours that are known and by
