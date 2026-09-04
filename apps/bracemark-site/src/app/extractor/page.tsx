@@ -47,6 +47,28 @@ export const metadata: Metadata = {
 //     send a 429 when they want us gone would be advice that quietly fails.
 //     → packages/shared/src/extract/retry.ts.
 //
+//     THE SNIPPET STAYS 403, THE PROSE NAMES 410. 403 is the honest refusal and
+//     what Cloudflare's Block emits anyway, so it is what an operator should
+//     paste; but the ladder costs them NINE 403s across ~42h (BASE 10 min
+//     doubling to the 24h cap) where a 410 settles on the first response, and
+//     the closing line used to say "send the 403 if you want it gone" —
+//     backwards by the paragraph's own two preceding sentences. Do NOT print
+//     that arithmetic on the page: unlike the five caps above, it is DERIVED
+//     from two constants plus the ladder rule, so it rots three ways instead of
+//     one.
+//
+//     And do NOT "simplify" the app side by settling 403 permanent on the first
+//     response to match 404/410. The verdict is SYNCED and has no user-facing
+//     undo (per-link manual capture is still deferred — docs/link-extraction.md,
+//     _deferred / open_), and this service leaves from a SHARED Workers IP pool,
+//     where a 403 is frequently another tenant's reputation rather than a
+//     decision about us. The failure modes are not symmetric: a wrong
+//     `permanent` silently costs a user that link's preview on every device
+//     forever, a wrong `failed` costs an operator eight requests over two days
+//     and then settles itself. `Will retry` never gives up is also a property
+//     three other surfaces state (docs/link-extraction.md, and retry.spec.ts's
+//     `403 — the bot-wall ladder`), none of which would fail if you changed it.
+//
 //   - FACTS ARE BEHAVIOUR, `NEVER` IS INVARIANTS — and the line between them is
 //     the roadmap. FACTS describes the build that is running: it may change in a
 //     release, and changing it is a normal edit to this file. NEVER is the
@@ -72,13 +94,34 @@ export const metadata: Metadata = {
 //       the payload inside NEVER, however true it is today.
 //
 //       The REQUEST COUNT moves with it, and is the half this list used to miss.
-//       "It is a fetcher, not a crawler" prices a save at one document fetch plus
-//       an image fetch plus the relay; a second facet asked for later is another
+//       "It is a fetcher, not a crawler" prices a save at TWO requests to the
+//       reader's server — one document fetch, plus one image fetch if the markup
+//       names a preview image — and a second facet asked for later is another
 //       fetch of a page you already answered for. The three nevers in that
 //       paragraph survive — no link-following, no self-initiated second page, no
 //       revisiting to see what changed, all still true, because the second fetch
 //       is still one person's one save. The arithmetic beside them does not, so
 //       re-read BOTH paragraphs of that section in the same change.
+//
+//       COUNT ONLY THE HOPS THAT REACH THE READER'S SERVER, which is what that
+//       paragraph got wrong for a while: it added "one more again to relay that
+//       image to their browser" to the same additive series, billing an operator
+//       for a hop that never touches them — the relay is our Worker answering the
+//       person's browser. It is usually not a separate request at all: an
+//       interactive save sends `inlineImage`, so the extractor fetches the image
+//       and returns the bytes in the SAME extract response (routes/extract.ts);
+//       only a bulk import gets a URL string and makes the second GET /v1/image.
+//       Two is the number either way, and the clause that used to do the
+//       miscounting now spends itself on WHY the second one is ours — the
+//       cross-origin wall — which is the question an operator actually has.
+//
+//       Do NOT tighten that into "never more than two". If the inline fetch is
+//       attempted and fails, the client falls back to the proxy
+//       (packages/web-react/src/lib/server-extraction.ts, `loadImage`), and the
+//       live case is size: MAX_INLINE_IMAGE_BYTES is 2 MB against the proxy's
+//       10 MB ceiling, so a larger preview image is pulled from the operator
+//       twice. Narrow, but this page's own standard is that a published cap the
+//       code exceeds is a false statement, not a stale doc.
 //
 //       "IT RUNS NO JAVASCRIPT" IS ALSO ONLY A FACT. Eventual Browser-Rendering
 //       JS execution is an open scope call in that same doc, and a headless page
@@ -211,9 +254,9 @@ export default function Page() {
               There is no queue, no schedule and no index behind it. It never follows a link out of
               a page it fetched, never asks for a second page from your site on its own initiative,
               and never returns to see whether anything changed. One person saving one link is one
-              request — plus one more if your document names a preview image, and one more again to
-              relay that image to their browser, which cannot read it cross-origin any more than it
-              could read your page.
+              request to you, plus one for a preview image if your document names one. The person’s
+              browser cannot read that image cross-origin any more than it could read your page —
+              that’s why we need the second request.
             </p>
             {/* Deliberately NOT "once a title has come back it is never fetched
                 again". That was a never about BEHAVIOUR on the one page whose
@@ -222,13 +265,16 @@ export default function Page() {
                 link whose title already came back from a device tier, then
                 queued for server read-mode, is a second fetch of a page you
                 have already answered for. What survives read-mode is the
-                property this page is actually built on — an answer is KEPT, so
-                the same person saving the same address again costs you
-                nothing. Stated that way it is about the save, not the
-                request count. */}
+                property this page is actually built on — the person who asked
+                KEEPS the answer, so the same person saving the same address
+                again costs you nothing. Stated that way it is about the save,
+                not the request count. Keep that subject: the agentless "an
+                answer ... is kept" shipped for a stretch and reads as US
+                keeping it, one section above a NEVER row whose whole point is
+                that we keep nothing. */}
             <p>
-              An answer that comes back successfully is kept: it lives on that person’s devices from
-              then on, encrypted, so saving the same address again does not re-ask you for it.
+              The person who asked keeps what comes back: it lives on their own devices from then
+              on, encrypted, so saving the same address again does not re-ask you for it.
             </p>
             <p>
               It also only runs for people who turned it on. Fetching on someone’s behalf means
@@ -323,12 +369,11 @@ export default function Page() {
               away from.
             </p>
             <p>
-              That is an argument for why the file is not consulted, not a claim that it is — and it
-              is an argument we could lose. It rests entirely on the request being one person’s and
-              on there being exactly one of them. If this service ever fetches on its own
-              initiative, or at a volume that a single save cannot account for, the argument is gone
-              and this section gets rewritten rather than defended. Blocking by user agent works
-              either way, which is why that is documented above rather than here.
+              That is an argument, and one we could lose. It rests entirely on the request being one
+              person’s and on there being exactly one of them. If this service ever fetches on its
+              own initiative, or at a volume that a single save cannot account for, the argument is
+              gone and this section gets rewritten rather than defended. Blocking by user agent
+              works either way, which is why that is documented below.
             </p>
           </div>
         </section>
@@ -378,8 +423,10 @@ export default function Page() {
               <span className={cn('font-mono text-sm')}>410</span> settles it immediately, first
               time. A <span className={cn('font-mono text-sm')}>429</span> or a{' '}
               <span className={cn('font-mono text-sm')}>5xx</span> reads as temporary, so it will
-              come back — slowly, and at most once a day for that one link, but it will. Send the
-              403 if you want it gone.
+              come back — slowly, and at most once a day for that one link, but it will. The{' '}
+              <span className={cn('font-mono text-sm')}>403</span> in the rule above ends it; send a{' '}
+              <span className={cn('font-mono text-sm')}>410</span> instead if you would rather that
+              happened on the first request than at the top of the ladder.
             </p>
             <p>
               <strong className={cn('font-semibold text-foreground')}>

@@ -950,6 +950,17 @@ export const FAQ_GROUPS: FaqGroup[] = [
         // thing that ships, so neither belongs on a page whose rule is only what
         // ships — and "we plan to fix this" is the answer a sync-burned reader
         // trusts least of all.
+        //
+        // "LIVE IN A SEPARATE ENCRYPTED FILE", never the agentless "are kept in
+        // a separate file". A retention verb with no subject leaves the slot for
+        // the reader to fill, and here they fill it with US — in the one clause
+        // of this answer about the one facet a server of ours may actually have
+        // fetched, two sentences after "we hold nothing readable from your
+        // links". `extractions/{id}.enc` is the reader's own encrypted file
+        // (docs/local-first-sync.md, _the file layout_); saying `encrypted` is
+        // what settles whose it is, since the surrounding answer has already
+        // established that as the shape of their own library. Same repair as
+        // /extractor's "the person who asked keeps what comes back".
         id: 'two-devices',
         q: 'What happens if I change the same link on two devices?',
         a: (
@@ -960,8 +971,8 @@ export const FAQ_GROUPS: FaqGroup[] = [
             nothing readable from your links, so there is no merge we could do for you and no older
             version to restore (see <PageLink href="/faq#undo-edit">can I undo a change</PageLink>).
             Anything you change offline queues up and goes out in order the next time you have a
-            network. Titles and preview images fetched in the background are kept in a separate file
-            from what you write, so one never overwrites the other.
+            network. Titles and preview images fetched in the background live in a separate
+            encrypted file from what you write, so one never overwrites the other.
           </>
         ),
       },
