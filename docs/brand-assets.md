@@ -764,9 +764,10 @@ on this page survives: **a picture has nothing to lint.** No type error, no test
 no failing build, and a wrong one renders exactly as well as a right one.
 
 **So the pictures are stamped, and the stamp is what is checked.**
-`tools/assets.stamp.json` records, for each file, the strings and tokens it was
-drawn from and the hash of the file itself; `npm run check:assets` recomputes
-those inputs from the live constants and fails when they have moved:
+`assets.stamp.json` — at the workspace root, beside the other files that describe
+the tree rather than live in it — records, for each file, the strings and tokens
+it was drawn from and the hash of the file itself; `npm run check:assets`
+recomputes those inputs from the live constants and fails when they have moved:
 
 | part                 | must equal                                       | or the picture            |
 | -------------------- | ------------------------------------------------ | ------------------------- |

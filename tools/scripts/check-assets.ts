@@ -35,7 +35,7 @@ import { fileURLToPath } from 'node:url';
 import { BRAND } from '@stxapps/shared';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const STAMP = 'tools/assets.stamp.json';
+const STAMP = 'assets.stamp.json';
 
 const read = (rel: string) => readFileSync(path.join(REPO_ROOT, rel), 'utf8');
 
@@ -279,7 +279,7 @@ function main(): void {
 
   console.error(`BLOCKED: ${failures.length} committed picture(s) no longer match the repo.\n`);
   for (const failure of failures) console.error(`  ${failure}\n`);
-  console.error('Regenerate the affected pictures, then update tools/assets.stamp.json.');
+  console.error('Regenerate the affected pictures, then update assets.stamp.json.');
   console.error('docs/brand-assets.md, _the generated pictures_, has the contract.');
   process.exit(1);
 }
