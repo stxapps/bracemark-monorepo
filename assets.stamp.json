@@ -2,7 +2,7 @@
   "assets": {
     "apps/bracemark-site/src/app/opengraph-image.png": {
       "pixels": "1200x630",
-      "sha256": "a7876d393d0079c473c9001959bacb5220444071c8a9b657161f257dfc246799",
+      "sha256": "bd1dd98cd93a804e692f330460b5e9efded79de52e7492f22852efa9a324ed99",
       "variant": "library",
       "inputs": {
         "brand.name": "Bracemark",
@@ -15,7 +15,7 @@
     },
     "apps/bracemark-site/src/app/twitter-image.png": {
       "pixels": "1200x630",
-      "sha256": "a7876d393d0079c473c9001959bacb5220444071c8a9b657161f257dfc246799",
+      "sha256": "bd1dd98cd93a804e692f330460b5e9efded79de52e7492f22852efa9a324ed99",
       "variant": "library",
       "inputs": {
         "brand.name": "Bracemark",
@@ -116,7 +116,7 @@
     },
     "apps/bracemark-web/src/app/opengraph-image.png": {
       "pixels": "1200x630",
-      "sha256": "a7876d393d0079c473c9001959bacb5220444071c8a9b657161f257dfc246799",
+      "sha256": "bd1dd98cd93a804e692f330460b5e9efded79de52e7492f22852efa9a324ed99",
       "variant": "library",
       "inputs": {
         "brand.name": "Bracemark",
@@ -129,7 +129,7 @@
     },
     "apps/bracemark-web/src/app/twitter-image.png": {
       "pixels": "1200x630",
-      "sha256": "a7876d393d0079c473c9001959bacb5220444071c8a9b657161f257dfc246799",
+      "sha256": "bd1dd98cd93a804e692f330460b5e9efded79de52e7492f22852efa9a324ed99",
       "variant": "library",
       "inputs": {
         "brand.name": "Bracemark",
