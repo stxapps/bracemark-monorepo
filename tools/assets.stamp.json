@@ -1,0 +1,144 @@
+{
+  "assets": {
+    "apps/bracemark-site/src/app/opengraph-image.png": {
+      "pixels": "1200x630",
+      "sha256": "a7876d393d0079c473c9001959bacb5220444071c8a9b657161f257dfc246799",
+      "variant": "library",
+      "inputs": {
+        "brand.name": "Bracemark",
+        "brand.tagline": "The bookmark manager that can’t read your bookmarks",
+        "icon.d": "M254.101 0L382.101 128C385.101 168 360.1 223.5 324.101 241C458.6 248.001 466.6 502.499 324.101 512H48C21.4903 512 0 490.51 0 464V48C0 21.4903 21.4903 0 48 0H254.101ZM103.101 443H286.101C328.074 443 362.101 408.973 362.101 367C362.101 325.027 328.074 291 286.101 291H103.101V443ZM103.101 198H245.101C280.447 198 309.101 169.346 309.101 134C309.101 98.6539 280.447 70.0003 245.101 70H103.101V198Z",
+        "token.foreground": "oklch(0.145 0 0)",
+        "token.mutedForeground": "oklch(0.54 0 0)",
+        "token.border": "oklch(0.922 0 0)"
+      }
+    },
+    "apps/bracemark-site/src/app/twitter-image.png": {
+      "pixels": "1200x630",
+      "sha256": "a7876d393d0079c473c9001959bacb5220444071c8a9b657161f257dfc246799",
+      "variant": "library",
+      "inputs": {
+        "brand.name": "Bracemark",
+        "brand.tagline": "The bookmark manager that can’t read your bookmarks",
+        "icon.d": "M254.101 0L382.101 128C385.101 168 360.1 223.5 324.101 241C458.6 248.001 466.6 502.499 324.101 512H48C21.4903 512 0 490.51 0 464V48C0 21.4903 21.4903 0 48 0H254.101ZM103.101 443H286.101C328.074 443 362.101 408.973 362.101 367C362.101 325.027 328.074 291 286.101 291H103.101V443ZM103.101 198H245.101C280.447 198 309.101 169.346 309.101 134C309.101 98.6539 280.447 70.0003 245.101 70H103.101V198Z",
+        "token.foreground": "oklch(0.145 0 0)",
+        "token.mutedForeground": "oklch(0.54 0 0)",
+        "token.border": "oklch(0.922 0 0)"
+      }
+    },
+    "apps/bracemark-web/public/ss-mobile-1.png": {
+      "pixels": "1242x2688",
+      "sha256": "e1e3528e0efaf36b29a4ff12cf72028b4d7a4b25490fc59a13ebac8efb736387",
+      "inputs": {
+        "brand.name": "Bracemark",
+        "brand.tagline": "The bookmark manager that can’t read your bookmarks",
+        "brand.subtitle": "Bookmarks only you can read",
+        "icon.d": "M254.101 0L382.101 128C385.101 168 360.1 223.5 324.101 241C458.6 248.001 466.6 502.499 324.101 512H48C21.4903 512 0 490.51 0 464V48C0 21.4903 21.4903 0 48 0H254.101ZM103.101 443H286.101C328.074 443 362.101 408.973 362.101 367C362.101 325.027 328.074 291 286.101 291H103.101V443ZM103.101 198H245.101C280.447 198 309.101 169.346 309.101 134C309.101 98.6539 280.447 70.0003 245.101 70H103.101V198Z"
+      },
+      "stale": "Brace.to v1 — the old mark, \"Save links to visit later\", the Stacks claim, and eleven third-party wordmarks"
+    },
+    "apps/bracemark-web/public/ss-mobile-2.png": {
+      "pixels": "1242x2688",
+      "sha256": "46af55a56b9a9049ad90bddd014abc102b33a97b87b622f4ff30b115fa690385",
+      "inputs": {
+        "brand.name": "Bracemark",
+        "brand.tagline": "The bookmark manager that can’t read your bookmarks",
+        "brand.subtitle": "Bookmarks only you can read",
+        "icon.d": "M254.101 0L382.101 128C385.101 168 360.1 223.5 324.101 241C458.6 248.001 466.6 502.499 324.101 512H48C21.4903 512 0 490.51 0 464V48C0 21.4903 21.4903 0 48 0H254.101ZM103.101 443H286.101C328.074 443 362.101 408.973 362.101 367C362.101 325.027 328.074 291 286.101 291H103.101V443ZM103.101 198H245.101C280.447 198 309.101 169.346 309.101 134C309.101 98.6539 280.447 70.0003 245.101 70H103.101V198Z"
+      },
+      "stale": "Brace.to v1 — the old mark, \"Save links to visit later\", the Stacks claim, and eleven third-party wordmarks — and manifest.json references it from nowhere, so it ships for no reader"
+    },
+    "apps/bracemark-web/public/ss-mobile-3.png": {
+      "pixels": "1242x2688",
+      "sha256": "025fe824ad8fb6d02970c30272e0195798519c03ac38fe3ac8a7995eb656e24d",
+      "inputs": {
+        "brand.name": "Bracemark",
+        "brand.tagline": "The bookmark manager that can’t read your bookmarks",
+        "brand.subtitle": "Bookmarks only you can read",
+        "icon.d": "M254.101 0L382.101 128C385.101 168 360.1 223.5 324.101 241C458.6 248.001 466.6 502.499 324.101 512H48C21.4903 512 0 490.51 0 464V48C0 21.4903 21.4903 0 48 0H254.101ZM103.101 443H286.101C328.074 443 362.101 408.973 362.101 367C362.101 325.027 328.074 291 286.101 291H103.101V443ZM103.101 198H245.101C280.447 198 309.101 169.346 309.101 134C309.101 98.6539 280.447 70.0003 245.101 70H103.101V198Z"
+      },
+      "stale": "Brace.to v1 — the old mark, \"Save links to visit later\", the Stacks claim, and eleven third-party wordmarks"
+    },
+    "apps/bracemark-web/public/ss-mobile-4.png": {
+      "pixels": "1242x2688",
+      "sha256": "cafd8dc83ab04c669cbf466d18a0998d61376f33797282db5e723c434dab0bf0",
+      "inputs": {
+        "brand.name": "Bracemark",
+        "brand.tagline": "The bookmark manager that can’t read your bookmarks",
+        "brand.subtitle": "Bookmarks only you can read",
+        "icon.d": "M254.101 0L382.101 128C385.101 168 360.1 223.5 324.101 241C458.6 248.001 466.6 502.499 324.101 512H48C21.4903 512 0 490.51 0 464V48C0 21.4903 21.4903 0 48 0H254.101ZM103.101 443H286.101C328.074 443 362.101 408.973 362.101 367C362.101 325.027 328.074 291 286.101 291H103.101V443ZM103.101 198H245.101C280.447 198 309.101 169.346 309.101 134C309.101 98.6539 280.447 70.0003 245.101 70H103.101V198Z"
+      },
+      "stale": "Brace.to v1 — the old mark, \"Save links to visit later\", the Stacks claim, and eleven third-party wordmarks"
+    },
+    "apps/bracemark-web/public/ss-wide-1.png": {
+      "pixels": "2732x2048",
+      "sha256": "4ece46251a38b2fe09bd9467bc51576a177a24b73ea5e1d13940615d370ddd05",
+      "inputs": {
+        "brand.name": "Bracemark",
+        "brand.tagline": "The bookmark manager that can’t read your bookmarks",
+        "brand.subtitle": "Bookmarks only you can read",
+        "icon.d": "M254.101 0L382.101 128C385.101 168 360.1 223.5 324.101 241C458.6 248.001 466.6 502.499 324.101 512H48C21.4903 512 0 490.51 0 464V48C0 21.4903 21.4903 0 48 0H254.101ZM103.101 443H286.101C328.074 443 362.101 408.973 362.101 367C362.101 325.027 328.074 291 286.101 291H103.101V443ZM103.101 198H245.101C280.447 198 309.101 169.346 309.101 134C309.101 98.6539 280.447 70.0003 245.101 70H103.101V198Z"
+      },
+      "stale": "Brace.to v1 — the old mark, \"Save links to visit later\", the Stacks claim, and eleven third-party wordmarks"
+    },
+    "apps/bracemark-web/public/ss-wide-2.png": {
+      "pixels": "2732x2048",
+      "sha256": "ba05abb16f5aeaf84e0355b2e77ba75316c14476c52aa3b32925bb13a00a225e",
+      "inputs": {
+        "brand.name": "Bracemark",
+        "brand.tagline": "The bookmark manager that can’t read your bookmarks",
+        "brand.subtitle": "Bookmarks only you can read",
+        "icon.d": "M254.101 0L382.101 128C385.101 168 360.1 223.5 324.101 241C458.6 248.001 466.6 502.499 324.101 512H48C21.4903 512 0 490.51 0 464V48C0 21.4903 21.4903 0 48 0H254.101ZM103.101 443H286.101C328.074 443 362.101 408.973 362.101 367C362.101 325.027 328.074 291 286.101 291H103.101V443ZM103.101 198H245.101C280.447 198 309.101 169.346 309.101 134C309.101 98.6539 280.447 70.0003 245.101 70H103.101V198Z"
+      },
+      "stale": "Brace.to v1 — the old mark, \"Save links to visit later\", the Stacks claim, and eleven third-party wordmarks — and manifest.json references it from nowhere, so it ships for no reader"
+    },
+    "apps/bracemark-web/public/ss-wide-3.png": {
+      "pixels": "2732x2048",
+      "sha256": "ab9ac460ddfe33cb1b0c3598352cbf6fda197e3a5748a9e9ca51bffe42d0505c",
+      "inputs": {
+        "brand.name": "Bracemark",
+        "brand.tagline": "The bookmark manager that can’t read your bookmarks",
+        "brand.subtitle": "Bookmarks only you can read",
+        "icon.d": "M254.101 0L382.101 128C385.101 168 360.1 223.5 324.101 241C458.6 248.001 466.6 502.499 324.101 512H48C21.4903 512 0 490.51 0 464V48C0 21.4903 21.4903 0 48 0H254.101ZM103.101 443H286.101C328.074 443 362.101 408.973 362.101 367C362.101 325.027 328.074 291 286.101 291H103.101V443ZM103.101 198H245.101C280.447 198 309.101 169.346 309.101 134C309.101 98.6539 280.447 70.0003 245.101 70H103.101V198Z"
+      },
+      "stale": "Brace.to v1 — the old mark, \"Save links to visit later\", the Stacks claim, and eleven third-party wordmarks"
+    },
+    "apps/bracemark-web/public/ss-wide-4.png": {
+      "pixels": "2732x2048",
+      "sha256": "6d30199e8dab84cf17dff82aa2be5ec5fb15c3f1da1d029562c37964d2bc263b",
+      "inputs": {
+        "brand.name": "Bracemark",
+        "brand.tagline": "The bookmark manager that can’t read your bookmarks",
+        "brand.subtitle": "Bookmarks only you can read",
+        "icon.d": "M254.101 0L382.101 128C385.101 168 360.1 223.5 324.101 241C458.6 248.001 466.6 502.499 324.101 512H48C21.4903 512 0 490.51 0 464V48C0 21.4903 21.4903 0 48 0H254.101ZM103.101 443H286.101C328.074 443 362.101 408.973 362.101 367C362.101 325.027 328.074 291 286.101 291H103.101V443ZM103.101 198H245.101C280.447 198 309.101 169.346 309.101 134C309.101 98.6539 280.447 70.0003 245.101 70H103.101V198Z"
+      },
+      "stale": "Brace.to v1 — the old mark, \"Save links to visit later\", the Stacks claim, and eleven third-party wordmarks"
+    },
+    "apps/bracemark-web/src/app/opengraph-image.png": {
+      "pixels": "1200x630",
+      "sha256": "a7876d393d0079c473c9001959bacb5220444071c8a9b657161f257dfc246799",
+      "variant": "library",
+      "inputs": {
+        "brand.name": "Bracemark",
+        "brand.tagline": "The bookmark manager that can’t read your bookmarks",
+        "icon.d": "M254.101 0L382.101 128C385.101 168 360.1 223.5 324.101 241C458.6 248.001 466.6 502.499 324.101 512H48C21.4903 512 0 490.51 0 464V48C0 21.4903 21.4903 0 48 0H254.101ZM103.101 443H286.101C328.074 443 362.101 408.973 362.101 367C362.101 325.027 328.074 291 286.101 291H103.101V443ZM103.101 198H245.101C280.447 198 309.101 169.346 309.101 134C309.101 98.6539 280.447 70.0003 245.101 70H103.101V198Z",
+        "token.foreground": "oklch(0.145 0 0)",
+        "token.mutedForeground": "oklch(0.54 0 0)",
+        "token.border": "oklch(0.922 0 0)"
+      }
+    },
+    "apps/bracemark-web/src/app/twitter-image.png": {
+      "pixels": "1200x630",
+      "sha256": "a7876d393d0079c473c9001959bacb5220444071c8a9b657161f257dfc246799",
+      "variant": "library",
+      "inputs": {
+        "brand.name": "Bracemark",
+        "brand.tagline": "The bookmark manager that can’t read your bookmarks",
+        "icon.d": "M254.101 0L382.101 128C385.101 168 360.1 223.5 324.101 241C458.6 248.001 466.6 502.499 324.101 512H48C21.4903 512 0 490.51 0 464V48C0 21.4903 21.4903 0 48 0H254.101ZM103.101 443H286.101C328.074 443 362.101 408.973 362.101 367C362.101 325.027 328.074 291 286.101 291H103.101V443ZM103.101 198H245.101C280.447 198 309.101 169.346 309.101 134C309.101 98.6539 280.447 70.0003 245.101 70H103.101V198Z",
+        "token.foreground": "oklch(0.145 0 0)",
+        "token.mutedForeground": "oklch(0.54 0 0)",
+        "token.border": "oklch(0.922 0 0)"
+      }
+    }
+  }
+}

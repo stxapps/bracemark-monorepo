@@ -6,6 +6,7 @@
     "postinstall": "node tools/scripts/fix-jest-bin.mjs",
     "prepare": "git config core.hooksPath tools/git-hooks || true",
     "check:private": "node tools/scripts/check-private.mjs",
+    "check:assets": "tsx tools/scripts/check-assets.ts",
     "reset": "nx reset",
     "lint": "nx run-many -t lint --output-style=stream",
     "lint:fix": "nx run-many -t lint --output-style=stream -- --fix",

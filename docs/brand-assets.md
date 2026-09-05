@@ -79,9 +79,11 @@ a re-render of every raster.
   `app.config.ts` change, not a re-render — and `adaptive-icon.png` is a
   **maskable** foreground, so it is bound by the 65.2% ceiling below.
 
-Only mark rasters are counted above. `apps/bracemark-web/public/` also holds
-store screenshots (`ss-*`) and an OG image, which are not brand assets and are
-not governed here.
+Only mark rasters are counted above. `apps/bracemark-web/public/` also holds the
+PWA screenshots (`ss-*`), and the two apps' `src/app/` hold the social card —
+governed further down under _the generated pictures_, which exists because that
+sentence used to end "which are not brand assets and are not governed here" and
+they stayed on the predecessor's branding for the product's whole life.
 
 **Maskable padding is a measured number: 65.2%.** The mark fits Android's 80%
 safe circle at that ink height and no larger — a property of the 0.836 aspect
@@ -738,6 +740,95 @@ the same failure the privacy claims were rewritten to avoid
 FAQ answer must NOT become: a how-to (a half-followed attempt is a support thread
 we have just declined to take), or a roadmap entry — "today" describes where
 things stand, and this band makes no promises about our future.
+
+### the generated pictures — the card and the store screenshots
+
+**Six committed PNGs the build reads, and none of them can be checked by
+looking.** Four are the social card (`opengraph-image.png` + `twitter-image.png`
+in `apps/bracemark-site/src/app/` and `apps/bracemark-web/src/app/`, 1200x630,
+with an `.alt.txt` beside each); the rest are the PWA screenshots in
+`apps/bracemark-web/public/` that `manifest.json` lists. They are **artifacts**:
+produced deliberately, out of the build, committed, and governed by the contract
+below rather than by a generator this repo runs.
+
+⚠ **BOTH FAMILIES SHIPPED BRACE.TO v1 FOR THE PRODUCT'S WHOLE LIFE, AND NOTHING
+SAID SO.** The card this repo shipped from `Initial commit` read "Save links to
+visit later", named the _predecessor_ in its body copy, claimed "Powered by
+Stacks technology", drew the old dotted-square mark, and carried **eleven
+third-party wordmarks** — the same smear the hero panel refuses to draw even once
+(`page.tsx`, the note above its preview slot, on the endorsement test). The eight
+`ss-*.png` were the same picture with a caption on it, and they outlived the card
+because this page said in as many words that they were "not brand assets and are
+not governed here". Both survived the entire rename for the reason every failure
+on this page survives: **a picture has nothing to lint.** No type error, no test,
+no failing build, and a wrong one renders exactly as well as a right one.
+
+**So the pictures are stamped, and the stamp is what is checked.**
+`tools/assets.stamp.json` records, for each file, the strings and tokens it was
+drawn from and the hash of the file itself; `npm run check:assets` recomputes
+those inputs from the live constants and fails when they have moved:
+
+| part                 | must equal                                       | or the picture            |
+| -------------------- | ------------------------------------------------ | ------------------------- |
+| the headline         | `BRAND.tagline`                                  | says a sentence we do not |
+| the wordmark         | `BRAND.name`                                     | drifts from the lockup    |
+| a screenshot caption | `SUBTITLE` / the listing lines                   | promises what we do not   |
+| the mark             | the `d` in `web-ui`'s `BracemarkIcon`            | is a **third** copy of it |
+| the colours          | `--foreground`/`--muted-foreground`/`--signal`   | invents a second palette  |
+| the pixel size       | what `manifest.json` and the card format declare | is silently mis-declared  |
+
+It checks **inputs, not pixels**, and that is deliberate rather than a shortcut:
+a re-render is never a byte-clean diff (see the antialiasing note under _the
+mark_), so comparing pictures would fail on every regeneration and comparing
+inputs fails only when something actually moved. Run it beside
+`npm run check:private`; a failure names the file, the string it was drawn from
+and the string that constant says now.
+
+**Regenerate and re-stamp when:** the tagline, subtitle or a listing line
+changes; the mark changes; a `--color-*` token moves; the links list layout
+changes shape; or a screenshot shows a screen that no longer exists. Nothing else
+will tell you — that list _is_ the tripwire.
+
+**The card has two designs and the stamp records which one is committed.**
+`slab` is type on white over an inverted ciphertext band — the page's own
+inverted-slab rhetoric, where dark is what the server sees. `library` is the
+seeded capture from `e2e/seed/shot` cropped to the list pane, which shows the
+real product and pays for it by cropping a 25:19 object into 1.91:1 and carrying
+other people's cover art.
+
+**1200x630, and the twin file is not redundant.** Every unfurler sizes a
+`summary_large_image` at 1.91:1 and upsamples from that step; the card this
+replaced was 800x418, inside the floor and soft on any retina timeline. With only
+the og file Next emits no `twitter:image` tag at all, so `twitter-image.png` is a
+byte-identical copy rather than a duplicate.
+
+⚠ **The PWA screenshots are bare captures — no device bezel, no caption.** Chrome
+draws them inside its own install dialog at a few hundred pixels, where a frame
+inside a frame reads as a mistake and a caption is illegible. Bezels and captions
+belong on a store listing, which is a different consumer of the same capture. And
+the set `manifest.json` lists is the set that ships: two of the v1 files sat in
+`public/` referenced by nothing, deploying 2MB per release for no reader.
+
+**They are `1170x2532` narrow and `2560x1600` wide** — 390x844 CSS at DPR 3, and
+1280x800 CSS at DPR 2. Both are chosen rather than inherited; the v1 files were
+1242x2688 and 2732x2048, legal but arbitrary, and the committed set still predates
+this. A `wide` screenshot is a **desktop** one and 4:3 is not a desktop — 2732x2048
+read as a landscape tablet — so it is the median laptop viewport. `narrow` is the
+median modern phone (iPhone 12–16; Pixel is 412 CSS) rather than the widest,
+because the dialog scales a screenshot to a fixed width: a narrower CSS viewport
+makes the app's own type **bigger** in the result. Both sit under Tailwind's `sm`,
+so the mobile layout is the same either way.
+
+⚠ **Chrome applies three rules to `manifest.json`'s screenshots and reports none
+of them.** Every dimension in 320–3840; the long side at most **2.3x** the short
+side; and every screenshot of one `form_factor` must share **one aspect ratio**.
+Break any of them and the set is dropped from the install dialog — which still
+opens, so the symptom is a picture that is simply not there. `npm run check:assets`
+enforces all three, because nothing else does. The number to watch is the narrow
+ratio, **2.164:1**: it is deliberate headroom, and phones keep getting taller — a
+20:9 screen is 2.22 and a 21:9 is 2.33, over the ceiling. Pick a phone by its
+ratio, not its name. Format is **PNG or JPEG only**; WebP is not accepted here,
+whatever `make-image-variants.sh` argues for the site's own figures.
 
 ### the X account — @bracemarkapp
 
