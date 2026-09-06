@@ -816,8 +816,8 @@ inputs fails only when something actually moved. Run it beside
 and the string that constant says now.
 
 **Regenerate and re-stamp when:** the tagline, subtitle or a listing line
-changes; **a screenshot caption changes**; the mark changes; a `--color-*` token
-moves; the links list layout changes shape; the browser extension's popup changes
+changes; **a screenshot caption changes**; **the slogan changes** (the promo tile
+below is set in it); the mark changes; a `--color-*` token moves; the links list layout changes shape; the browser extension's popup changes
 shape; or a screenshot shows a screen that no longer exists. Nothing else will
 tell you — that list _is_ the tripwire, and for the store pictures further down it
 is the _only_ thing there is, since those are not stamped.
@@ -917,8 +917,15 @@ at ten — so there is one set of art, at Chrome's size, for both.** Four of the
 five slots are used, for the same reason the install dialog gets two per form
 factor rather than four: a carousel is swiped once, and every extra picture is
 another capture to re-take when a screen changes shape. Chrome also **requires a
-440x280 promo tile**, which is art rather than a screenshot and is the one thing
-still outstanding before a submission.
+440x280 promo tile**, which is art rather than a screenshot: the lockup and
+`BRAND.slogan` on an inverted ground, with the tile's own top-right corner turned
+down. That is the fold's _identity_ meaning from the table above, on the one
+surface in a store grid with nothing else to carry the brand — and the polarity
+is what makes the cut the mark's own gesture rather than its inverse, since a
+light tile would have to reveal ink to be visible at all. It is not in this repo
+either, for the reason the four screenshots are not, and it is not stamped
+either: **`BRAND.slogan` changing is one more line on the regenerate list that
+nothing will enforce.**
 
 ⚠ **The one third-party thing in a store picture is the page being saved**, and it
 is chosen under the rule `e2e/seed/shot/library.ts` already argues: our own pages,
