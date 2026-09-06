@@ -46,9 +46,26 @@ const TRADEOFFS: [string, string][] = [
     'No password reset',
     'We hold no key, so there is nothing on our side to reset with. A recovery code is the second door, and saving it is genuinely on you.',
   ],
+  // "AND WHY WE CANNOT OFFER TO SEARCH FOR YOU" was the closing clause, and the
+  // negative attaches to the wrong noun: read quickly it says there is no search
+  // in this product, which would be the one sentence on the property talking a
+  // reader out of a feature that ships on every plan. The intended subject was
+  // OUR SERVERS, and the sentence never named them.
+  //
+  // CUTTING THE CLAUSE IS THE WORSE FIX, tempting as it is. What is left is a
+  // headline that names a cost and a body that states only a benefit — "that is
+  // why it is instant" — inside the one section whose standing rests on
+  // volunteering costs. An entry that reads as a boast is worth less here than
+  // no entry at all. So the clause is replaced by what the local copy actually
+  // bounds rather than removed: coverage stops where that copy does, and a
+  // device that has not finished its first sync has nothing to search yet
+  // (`InitialSyncGate`, docs/client-queries.md).
+  //
+  // "Our servers have nothing readable to search" is also the checkable half —
+  // it is the same fact /privacy inventories, said from the search end.
   [
     'No server-side search',
-    'Search runs on your device, over the copy of the library it already holds. That is why it is instant, and why we cannot offer to search for you.',
+    'Search runs on your device, over the copy of the library it already holds. That is why it is instant, and why it reaches only as far as that copy: our servers have nothing readable to search, so a device that has not finished syncing has nothing to search either.',
   ],
   [
     'No shared or public lists',
@@ -81,7 +98,7 @@ const TRADEOFFS: [string, string][] = [
   // answer to most of what an API would be asked for, and it is already shipped.
   [
     'No public API',
-    'There is no public API today, and nothing to hang an integration or an automation off. Part of that is simply unbuilt, and part of it is the architecture: anything we could serve from our side is ciphertext, so a useful API would mean putting your key somewhere it currently never goes. The export is the seam that does work — a readable backup, free on every plan, as often as you like.',
+    'There is no public API today, and nothing for another app or a script to connect to. Part of that is simply unbuilt, and part of it is the architecture: anything we could serve from our side is ciphertext, so a useful API would mean putting your key somewhere it currently never goes. The export is the seam that does work — a readable backup, free on every plan, as often as you like.',
   ],
   // The sync cost, which belongs in a list of things we would rather you knew
   // now and had been left to docs/local-first-sync.md. It is the counterpart of
@@ -114,12 +131,26 @@ const TRADEOFFS: [string, string][] = [
   // readings. It is the cost that makes the entry's own headline true: no
   // version history means none, including the copy you took yourself.
   //
+  // SAY WHAT RESTORING DOES; "fills gaps rather than overwriting" is the
+  // mechanism's name, not an explanation of it. The clause read "restoring the
+  // file fills gaps rather than overwriting, so putting it back is a
+  // copy-and-paste rather than an undo" — two abstractions and a pronoun whose
+  // nearest antecedent is THE FILE, which lands the reader on "restoring the
+  // file puts the old version back": the exact reading this note exists to
+  // prevent. Both halves are spelled out instead, in the reader's terms —
+  // deleted links come back, links you still have are left alone.
+  //
+  // AND IT NO LONGER ENDS ON "NOT AN UNDO", which was a third negative in a row:
+  // the entry's second sentence has already said the edit cannot be rolled back
+  // from our side, so repeating it there read as hedging and crowded out the one
+  // NEW fact — the old text is in the file, readable, for you to put back.
+  //
   // /faq `undo-edit` carries the same mechanism at length ("fills gaps rather
   // than overwriting"), and the two must agree — if the import ever gains an
   // overwrite mode, both are wrong rather than stale.
   [
     'No version history',
-    'Each link is its own encrypted file and the newest write is the one that survives. We hold no readable copy of your links to keep earlier versions in, so an edit you regret cannot be rolled back from our side. A backup export taken beforehand keeps the old version where you can read it — restoring the file fills gaps rather than overwriting, so putting it back is a copy-and-paste rather than an undo.',
+    'Each link is its own encrypted file and the newest write is the one that survives. We hold no readable copy of your links to keep earlier versions in, so an edit you regret cannot be rolled back from our side. A backup export taken beforehand keeps the old version where you can read it. Restoring that backup brings back links you deleted and leaves the ones you still have untouched, so an old title or note is yours to copy back in.',
   ],
   // The one entry that is NOT a consequence of the encryption — which is exactly
   // why it was missing. Every other cost in this list is architectural, so the
