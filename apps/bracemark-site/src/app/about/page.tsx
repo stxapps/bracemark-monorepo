@@ -41,31 +41,31 @@ const FREE_LINKS = entitlementsOf('free').maxLinks;
 // second copy of the list's length with nothing keeping the two in step — no
 // lint error, no type error, no failing test — so the copy is gone rather than
 // corrected. Add an entry here and nothing else needs touching.
+//
+// ORDER IS ALSO PAIRING, because the list renders two-up (`sm:grid-cols-2`,
+// below) and a grid row is as tall as its longer entry. Ordered on meaning
+// alone every row came out lopsided — three lines beside six, then three
+// beside nine — and the short entry in each pair sat above a column of blank
+// space deep enough to read as a missing entry rather than a finished one. The
+// rows are now paired by LENGTH inside what the meaning had already fixed:
+// password reset with sharing, the API with version history, search with rot.
+// That cost exactly one move — search left the second slot — and both
+// placements the notes below claim still hold: the API is still next to
+// sharing, rot is still last.
+//
+// So the tallest row sits in the MIDDLE, which is the one thing here that
+// isn't free — entries growing steadily down the page would read better than a
+// bulge in the middle. It loses to those two placements, which are about what
+// the entries mean rather than how they measure.
+//
+// None of this is enforced and nothing breaks if it drifts; it is typography,
+// and the paragraph above still holds — no prose anywhere counts these entries.
+// But a seventh re-pairs every row after it, so an addition is the one case
+// where the rendered page is worth a look and not just the array.
 const TRADEOFFS: [string, string][] = [
   [
     'No password reset',
     'We hold no key, so there is nothing on our side to reset with. A recovery code is the second door, and saving it is genuinely on you.',
-  ],
-  // "AND WHY WE CANNOT OFFER TO SEARCH FOR YOU" was the closing clause, and the
-  // negative attaches to the wrong noun: read quickly it says there is no search
-  // in this product, which would be the one sentence on the property talking a
-  // reader out of a feature that ships on every plan. The intended subject was
-  // OUR SERVERS, and the sentence never named them.
-  //
-  // CUTTING THE CLAUSE IS THE WORSE FIX, tempting as it is. What is left is a
-  // headline that names a cost and a body that states only a benefit — "that is
-  // why it is instant" — inside the one section whose standing rests on
-  // volunteering costs. An entry that reads as a boast is worth less here than
-  // no entry at all. So the clause is replaced by what the local copy actually
-  // bounds rather than removed: coverage stops where that copy does, and a
-  // device that has not finished its first sync has nothing to search yet
-  // (`InitialSyncGate`, docs/client-queries.md).
-  //
-  // "Our servers have nothing readable to search" is also the checkable half —
-  // it is the same fact /privacy inventories, said from the search end.
-  [
-    'No server-side search',
-    'Search runs on your device, over the copy of the library it already holds. That is why it is instant, and why it reaches only as far as that copy: our servers have nothing readable to search, so a device that has not finished syncing has nothing to search either.',
   ],
   [
     'No shared or public lists',
@@ -151,6 +151,27 @@ const TRADEOFFS: [string, string][] = [
   [
     'No version history',
     'Each link is its own encrypted file and the newest write is the one that survives. We hold no readable copy of your links to keep earlier versions in, so an edit you regret cannot be rolled back from our side. A backup export taken beforehand keeps the old version where you can read it. Restoring that backup brings back links you deleted and leaves the ones you still have untouched, so an old title or note is yours to copy back in.',
+  ],
+  // "AND WHY WE CANNOT OFFER TO SEARCH FOR YOU" was the closing clause, and the
+  // negative attaches to the wrong noun: read quickly it says there is no search
+  // in this product, which would be the one sentence on the property talking a
+  // reader out of a feature that ships on every plan. The intended subject was
+  // OUR SERVERS, and the sentence never named them.
+  //
+  // CUTTING THE CLAUSE IS THE WORSE FIX, tempting as it is. What is left is a
+  // headline that names a cost and a body that states only a benefit — "that is
+  // why it is instant" — inside the one section whose standing rests on
+  // volunteering costs. An entry that reads as a boast is worth less here than
+  // no entry at all. So the clause is replaced by what the local copy actually
+  // bounds rather than removed: coverage stops where that copy does, and a
+  // device that has not finished its first sync has nothing to search yet
+  // (`InitialSyncGate`, docs/client-queries.md).
+  //
+  // "Our servers have nothing readable to search" is also the checkable half —
+  // it is the same fact /privacy inventories, said from the search end.
+  [
+    'No server-side search',
+    'Search runs on your device, over the copy of the library it already holds. That is why it is instant, and why it reaches only as far as that copy: our servers have nothing readable to search, so a device that has not finished syncing has nothing to search either.',
   ],
   // The one entry that is NOT a consequence of the encryption — which is exactly
   // why it was missing. Every other cost in this list is architectural, so the
