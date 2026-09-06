@@ -101,9 +101,25 @@ const TRADEOFFS: [string, string][] = [
   // involved) and is the only one of the four that names Trash and the export
   // backstop. The three listed above all condition the loss on two devices,
   // which is why it was worth adding rather than repeating.
+  //
+  // WHAT THE BACKUP IS AND IS NOT, spelled out even at this altitude. "A backup
+  // export is the answer" was the clause here, and it is the shape of thing a
+  // reader completes for themselves in the wrong direction: they hear restore,
+  // and the restore does not do that. The bracemark import merges
+  // SKIP-EXISTING BY PATH (`import-all-data.ts`, POLICY), so re-importing into
+  // the same account never overwrites a link that is still there — the old
+  // title survives in `items.jsonl`, readable, and getting it back into the app
+  // is a retype. That is a perfectly good answer; it is just not an undo, and
+  // this is the list that does not get to let a reader assume the better of two
+  // readings. It is the cost that makes the entry's own headline true: no
+  // version history means none, including the copy you took yourself.
+  //
+  // /faq `undo-edit` carries the same mechanism at length ("fills gaps rather
+  // than overwriting"), and the two must agree — if the import ever gains an
+  // overwrite mode, both are wrong rather than stale.
   [
     'No version history',
-    'Each link is its own encrypted file and the newest write is the one that survives. We hold no readable copy of your links to keep earlier versions in, so an edit you regret cannot be rolled back from our side — a backup export is the answer if that matters to you.',
+    'Each link is its own encrypted file and the newest write is the one that survives. We hold no readable copy of your links to keep earlier versions in, so an edit you regret cannot be rolled back from our side. A backup export taken beforehand keeps the old version where you can read it — restoring the file fills gaps rather than overwriting, so putting it back is a copy-and-paste rather than an undo.',
   ],
   // The one entry that is NOT a consequence of the encryption — which is exactly
   // why it was missing. Every other cost in this list is architectural, so the

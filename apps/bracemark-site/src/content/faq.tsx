@@ -1027,6 +1027,21 @@ export const FAQ_GROUPS: FaqGroup[] = [
         // user empties it by hand. A "for 30 days" here would be inventing a
         // feature, and it is the kind a reader plans around.
         //
+        // ⚠ THE EXPORT BACKSTOP IS NOT AN UNDO FOR THE EDIT THIS ANSWER IS
+        // ABOUT, and "the full backup restores everything" said it was. The
+        // bracemark import merges SKIP-EXISTING BY PATH (`import-all-data.ts`,
+        // POLICY): a path already in the local store is never touched, so
+        // restoring into the same account cannot put an old title back —
+        // `links/{id}.enc` is still there and the line is skipped. The
+        // deletion half DOES work, because `destroy` removes the path and its
+        // satellites (`use-link-mutations.ts`), which is why "before a big
+        // clean-up" was the true part of the old sentence. Sitting one clause
+        // after "an edit is the half we cannot help with", the adjective read
+        // as the way out of exactly the case it does not cover — a reader
+        // takes a backup believing a retitle is now reversible, and finds out
+        // when it matters. The mechanism is stated instead, and it is short
+        // enough to be worth the words: fills gaps, never overwrites.
+        //
         // "TRASH" AND "My List" ARE DEFAULT LABELS, not fixed names. Both are
         // real lists the user can rename, and `SYSTEM_LIST_NAMES`
         // (`shared/src/sync/system-lists.ts`) graduates to the translation layer
@@ -1044,8 +1059,10 @@ export const FAQ_GROUPS: FaqGroup[] = [
             list it came from. An edit is the half we cannot help with. Saving a title, a note or a
             set of tags replaces what was there, and we hold nothing readable from your links to
             have kept the earlier version in, so there is no history to roll back through and
-            nothing we could hand you. An export is the backstop worth having: the full backup
-            restores everything, and taking one before a big clean-up costs nothing.
+            nothing we could hand you. An export is the backstop worth having, with one thing to
+            know about it: restoring a backup fills gaps rather than overwriting, so a link you
+            deleted comes back and a link you still have keeps the version on your device. It covers
+            the clean-up you regret rather than the edit, and taking one first costs nothing.
           </>
         ),
       },
@@ -1062,6 +1079,20 @@ export const FAQ_GROUPS: FaqGroup[] = [
         // says "Formats other apps read are there too"; the LIBRARY bullet says
         // "Several formats"), so a new format is a one-line edit HERE and only
         // here. Keep it that way rather than re-seeding a number upstream.
+        //
+        // THE LOCKED-LIST EXCEPTION IS STATED HERE AND ONLY HERE. The export
+        // policy excludes a locked list with its links, pins, extractions and
+        // files, and the list entity too — a hidden list's NAME is as sensitive
+        // as its contents (`export-all-data.ts`, POLICY, both platforms). So
+        // "the whole library" is an absolute the one reader who cares can
+        // disprove from their own screen: the receipt they get says "2 locked
+        // lists were not included". The condition is theirs and one unlock
+        // away, which is why it is a clause rather than a caveat paragraph, and
+        // why `free-cap` and `stop-paying` do NOT repeat it — those answers are
+        // about the free/paid boundary, and a fact stated on three surfaces is
+        // a fact that drifts on two of them. /privacy's portability bullet is
+        // the deliberate second copy: it answers a legal right, where an
+        // unstated omission costs more.
         //
         // The CSV columns are the shipped header, not a paraphrase:
         // `shared/src/export/csv.ts` writes `url, folder, title, note, tags,
@@ -1082,18 +1113,29 @@ export const FAQ_GROUPS: FaqGroup[] = [
             ). Export gives you the whole library on every plan: a full backup that restores
             everything, or one of three formats other apps read — a browser bookmarks file, a CSV
             carrying the address, list, title, note, tags and date of every link, and a plain list
-            of URLs.
+            of URLs. A list you have locked is left out of the file until you unlock it.
           </>
         ),
       },
       {
+        // "How do I delete everything?" was the question until the username
+        // answered it: the handle is tombstoned at teardown and occupied
+        // forever, so "everything" is the one word this answer cannot support
+        // (docs/data-lifecycle.md, _what's deliberately kept_ — the purchases
+        // row and /privacy's tax-law retention are two more). The heading now
+        // names the two actions instead, which is also the pair a reader is
+        // choosing between, and the retirement is stated here rather than left
+        // to /terms — a reader told "everything" who later finds their name
+        // taken learns we round up.
         id: 'delete-account',
-        q: 'How do I delete everything?',
+        q: 'How do I delete my library, or my whole account?',
         a: (
           <>
             Settings → Data wipes your library and keeps the account; Settings → Account deletes the
             account itself, which also destroys the keys that could ever have opened it. Neither can
-            be undone, so both ask you to confirm first.
+            be undone, so both ask you to confirm first. Your username is the one thing that stays:
+            it is retired rather than released, so nobody can register it later and be mistaken for
+            you.
           </>
         ),
       },

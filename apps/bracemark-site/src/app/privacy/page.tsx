@@ -112,7 +112,19 @@ export default function Page() {
             The only way we make money is the optional subscription — which is why our incentives
             and yours point the same way.
           </li>
-          <li>You can export everything, and delete everything, from inside the app.</li>
+          {/* NOT "delete everything", which this page disproves twice below it —
+              a deleted username is retired rather than released (the last line
+              of _How long we keep it_) and the subscription record outlives the
+              account for as long as tax law says. Same failure as the lede's
+              old "and nothing else": an absolute the reader disproves without
+              leaving the document, in a summary bullet where it buys nothing,
+              since the two actions named plainly are what the reader came for.
+              So it does what the lede does — states the pair, then points at the
+              section carrying the residual. */}
+          <li>
+            You can export your library, and delete it — or the whole account — from inside the app.
+            What outlives a deletion is listed under <em>How long we keep it</em>.
+          </li>
         </ul>
 
         <h2>What we collect</h2>
@@ -432,9 +444,17 @@ export default function Page() {
           yourself, immediately, without asking us:
         </p>
         <ul>
+          {/* The lock clause is here because this bullet answers a RIGHT rather
+              than describing a feature: the export policy excludes a locked
+              list with everything under it (`export-all-data.ts`, POLICY), and
+              a portability answer that quietly drops the user's own hidden
+              content is the one place that omission costs something. The
+              exclusion is stated in full once, in /faq `import-export`; this is
+              the deliberate second copy and the only one. */}
           <li>
             <strong>Access and portability</strong> — Settings → Data → Export, which gives you your
-            whole library in open formats.
+            whole library in open formats. A list you have locked is left out of the file until you
+            unlock it.
           </li>
           <li>
             <strong>Correction</strong> — edit anything in the app; it is your data on your device.
