@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { ElsewhereList } from '../../components/elsewhere-list';
+import { MailLink } from '../../components/mail-link';
 import { PageShell } from '../../components/page-shell';
 import { type ElsewhereCard, PRICING_CARD } from '../../content/elsewhere';
 import {
@@ -81,14 +82,13 @@ export default function Page() {
         {/* The primary route, given the weight it deserves. */}
         <section className={cn('rounded-2xl border border-signal-line bg-signal-soft/60 p-8')}>
           <p className={cn('eyebrow text-signal')}>Support</p>
-          <a
+          <MailLink
+            address={SUPPORT_EMAIL}
+            variant="specimen"
             className={cn(
-              'mt-3 block rounded-sm font-mono text-xl break-all text-signal-strong underline decoration-signal-line underline-offset-8 hover:decoration-signal focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none sm:text-2xl',
+              'mt-3 block text-xl break-all text-signal-strong underline-offset-8 sm:text-2xl',
             )}
-            href={`mailto:${SUPPORT_EMAIL}`}
-          >
-            {SUPPORT_EMAIL}
-          </a>
+          />
           <p className={cn('mt-5 text-body text-muted-foreground')}>
             Bugs, billing, imports, exports, anything at all. We are a small team in one timezone,
             so a reply can take a day or two. A person reads every message, and anything that needs
@@ -178,17 +178,9 @@ export default function Page() {
             Reporting a security problem
           </h2>
           <p className={cn('mt-3 text-body text-muted-foreground')}>
-            Please write to{' '}
-            <a
-              className={cn(
-                'rounded-sm font-mono text-signal underline decoration-signal-line underline-offset-2 hover:decoration-signal',
-              )}
-              href={`mailto:${SECURITY_EMAIL}`}
-            >
-              {SECURITY_EMAIL}
-            </a>{' '}
-            rather than posting publicly. Tell us what you did and what you saw; you will get a
-            reply from a human, not an auto-responder.
+            Please write to <MailLink address={SECURITY_EMAIL} variant="specimen" /> rather than
+            posting publicly. Tell us what you did and what you saw; you will get a reply from a
+            human, not an auto-responder.
           </p>
           <p className={cn('mt-4 text-body text-muted-foreground')}>
             We aim to acknowledge a report within {SECURITY_ACK_WINDOW}, and to tell you what we

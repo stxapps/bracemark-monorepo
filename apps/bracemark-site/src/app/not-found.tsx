@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { ElsewhereList } from '../components/elsewhere-list';
+import { MailLink } from '../components/mail-link';
 import { PageShell } from '../components/page-shell';
 import { type ElsewhereCard, PRICING_CARD } from '../content/elsewhere';
 import { SUPPORT_EMAIL } from '../lib/site';
@@ -65,15 +66,7 @@ export default function NotFound() {
           published support mailbox /support gives, styled the same way. */}
       <p className={cn('mt-10 text-body text-muted-foreground')}>
         If a link on this site sent you here, we’d like to know:{' '}
-        <a
-          className={cn(
-            'rounded-sm font-mono text-signal underline decoration-signal-line underline-offset-2 hover:decoration-signal focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none',
-          )}
-          href={`mailto:${SUPPORT_EMAIL}`}
-        >
-          {SUPPORT_EMAIL}
-        </a>
-        .
+        <MailLink address={SUPPORT_EMAIL} variant="specimen" />.
       </p>
     </PageShell>
   );

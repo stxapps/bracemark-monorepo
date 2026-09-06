@@ -241,7 +241,7 @@ export default function Page() {
             for store purchases by Apple or Google, under their respective policies. If you are a
             consumer in the EU or the UK you may also have a statutory right to withdraw within
             fourteen days of the contract being formed. If something has gone wrong with a payment,
-            write to us at {SUPPORT_EMAIL} and we will help.
+            write to us at <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a> and we will help.
           </li>
         </ol>
         <p>
@@ -360,7 +360,8 @@ export default function Page() {
         <h2>Disputes</h2>
         <p>
           If a dispute arises out of or relating to these Terms, please contact us first at{' '}
-          {SUPPORT_EMAIL} — most things are resolved that way. If we cannot resolve it:
+          <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a> — most things are resolved that
+          way. If we cannot resolve it:
         </p>
         <ol>
           <li>

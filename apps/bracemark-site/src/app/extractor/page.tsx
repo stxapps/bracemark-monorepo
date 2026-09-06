@@ -3,6 +3,7 @@ import Link from 'next/link';
 
 import { cn } from '@stxapps/web-ui/lib/utils';
 
+import { MailLink } from '../../components/mail-link';
 import { PageShell } from '../../components/page-shell';
 import { ABUSE_EMAIL, SOURCE } from '../../lib/site';
 
@@ -452,19 +453,11 @@ export default function Page() {
             If it misbehaved
           </h2>
           <p className={cn('mt-3 text-body text-muted-foreground')}>
-            Write to{' '}
-            <a
-              className={cn(
-                'rounded-sm font-mono text-signal underline decoration-signal-line underline-offset-2 hover:decoration-signal',
-              )}
-              href={`mailto:${ABUSE_EMAIL}`}
-            >
-              {ABUSE_EMAIL}
-            </a>
-            . If it arrived more often than this page says it can, exceeded one of the caps above,
-            or reached something it had no business reaching, that is a bug and we want it. The
-            user-agent line, a few timestamps and the paths are enough to find it at our end. A
-            person reads that address, not an auto-responder.
+            Write to <MailLink address={ABUSE_EMAIL} variant="specimen" />. If it arrived more often
+            than this page says it can, exceeded one of the caps above, or reached something it had
+            no business reaching, that is a bug and we want it. The user-agent line, a few
+            timestamps and the paths are enough to find it at our end. A person reads that address,
+            not an auto-responder.
           </p>
         </section>
       </div>

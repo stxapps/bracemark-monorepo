@@ -7,6 +7,7 @@ import { Button } from '@stxapps/web-ui/components/ui/button';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { ArrowGlyph } from '../components/glyphs';
+import { MailLink } from '../components/mail-link';
 import { PageShell } from '../components/page-shell';
 import { SUPPORT_EMAIL } from '../lib/site';
 
@@ -63,15 +64,7 @@ export default function Error({
 
       <p className={cn('mt-4 text-body text-muted-foreground')}>
         If it keeps happening, tell us what you were opening:{' '}
-        <a
-          className={cn(
-            'rounded-sm font-mono text-signal underline decoration-signal-line underline-offset-2 hover:decoration-signal focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none',
-          )}
-          href={`mailto:${SUPPORT_EMAIL}`}
-        >
-          {SUPPORT_EMAIL}
-        </a>
-        .
+        <MailLink address={SUPPORT_EMAIL} variant="specimen" />.
       </p>
     </PageShell>
   );

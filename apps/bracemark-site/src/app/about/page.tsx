@@ -6,13 +6,14 @@ import { Button } from '@stxapps/web-ui/components/ui/button';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { ArrowGlyph } from '../../components/glyphs';
+import { MailLink } from '../../components/mail-link';
 import { PageShell } from '../../components/page-shell';
 import { COMPANY, CREATE_ACCOUNT_URL, PREDECESSOR, SOURCE, SUPPORT_EMAIL } from '../../lib/site';
 
 export const metadata: Metadata = {
   title: 'About',
   description:
-    'Who makes Bracemark, why it encrypts everything on your device, and how a bookmark manager pays for itself without selling anything.',
+    'Who makes Bracemark, why it encrypts your library on your device, and how a bookmark manager pays for itself on subscriptions alone.',
 };
 
 // Two rules held throughout, because an About page is where marketing copy
@@ -157,8 +158,8 @@ export default function Page() {
     <>
       <PageShell
         eyebrow="About"
-        title="We built a bookmark manager we can’t be trusted with."
-        lede="Not because we plan to misbehave. Because a promise is only as good as the people making it, and an architecture doesn’t change its mind."
+        title="We built a bookmark manager we don’t need to be trusted with."
+        lede="A promise is only as good as the people making it. What reaches our servers is already encrypted: even if we changed our minds tomorrow, we still could not open it."
       >
         <div className={cn('space-y-16')}>
           <section>
@@ -331,8 +332,8 @@ export default function Page() {
                 generous with their patience — but it was named after a domain nobody could say out
                 loud, and better ways to do the same job arrived. Nothing forced the move: that
                 stack is open source and we could have stayed on it indefinitely. We would rather
-                build on the best tools for the job than keep a stack going out of loyalty to it —
-                and a blockchain was never the part that kept those bookmarks private.
+                build on the best tools for the job than stay on that stack out of loyalty — and a
+                blockchain was never the part that kept those bookmarks private.
               </p>
               <p>
                 This one keeps the promise and rebuilds what it rests on. The encryption is now ours
@@ -410,11 +411,24 @@ export default function Page() {
               Who makes it
             </h2>
             <div className={cn('mt-4 space-y-4 text-base leading-7 text-muted-foreground')}>
+              {/* MailLink in its default `prose` register — components/mail-link.tsx
+                  carries the rule and the reasoning. What belongs here is why the
+                  address is a LINK at all: it spent a while as a styled <span>,
+                  mono and a size down, which is this page's metadata register (the
+                  eyebrow, the colophon values below), so it read as a caption that
+                  had fallen into the paragraph and carried a link's salience with
+                  nothing behind the click.
+
+                  The sentence is not asking anyone to write in — it is making a
+                  point about team size — so the mailto is a small invitation the
+                  prose did not intend. Worth it over an address a reader has to
+                  select and copy. If it ever goes back to non-interactive, strip it
+                  to plain body text; do not restore the styling without the href. */}
               <p>
                 A small team at {COMPANY.legalName} in Bangkok. Small enough that the person who
-                answers <span className={cn('font-mono text-sm')}>{SUPPORT_EMAIL}</span> is the
-                person who wrote the code you are asking about — which is a support model with
-                obvious limits and one real advantage.
+                answers <MailLink address={SUPPORT_EMAIL} /> is the person who wrote the code you
+                are asking about — which is a support model with obvious limits and one real
+                advantage.
               </p>
             </div>
           </section>

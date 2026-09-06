@@ -678,6 +678,34 @@ placement states the limit rather than leaving a reader to discover it. If
 reproducible builds ever ship, this paragraph is what changes, and the surfaces
 below move with it.
 
+**A network inspector is a third thing, and it sits inside the boundary.** Both
+halves above are about the SOURCE — what a reader can read, and what reading
+cannot settle. A browser's own network inspector is neither: it observes the
+behaviour of the build that is actually running, which is precisely what the
+source cannot speak to. So it is admissible, and /security carries it once
+(_what this page does not prove_), as an OBSERVATION rather than a check that
+anything matches anything. Three limits travel with it, and the sentence has to
+hold all three at once:
+
+- **It shows what a request contained, not what a key is doing.** Opaque request
+  bodies are equally consistent with a key that never leaves and with one
+  exfiltrated in a field nobody looked at. Nothing stronger than "you can watch
+  your links leave as bytes nobody at our end can read" survives, which is why
+  the words _verifiable_ and _transparent_ stay out of it — they are the
+  vocabulary this boundary exists to refuse.
+- ⚠ **Scope it to the library payload.** The same tab shows the username at
+  sign-up, a session token and the R2 host, all readable and all inventoried in
+  /privacy — plus the plaintext URL handed to `bracemark-extractor` by anyone who
+  turned the `serverExtraction` opt-in on
+  ([link-extraction.md](./link-extraction.md), _server extraction_). "Nothing
+  readable leaves" is therefore false, and falsifiable in the one place we just
+  sent the reader to look, which is the worst available way to lose the argument
+  this page is making.
+- **Name no tool and no request.** "Your browser's network inspector", never
+  Chrome's DevTools: naming a vendor dates the copy and reads Chrome-first for a
+  product with four clients. No endpoint, method or request shape either — those
+  rot exactly the way a published cap does.
+
 **Why AGPL and not MIT.** A hosted fork is the only real competitive risk, and
 the AGPL's network clause is the one that addresses it: run a modified version as
 a service, publish the modifications. It does not restrict a user, which is the

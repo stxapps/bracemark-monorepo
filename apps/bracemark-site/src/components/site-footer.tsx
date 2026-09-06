@@ -4,6 +4,7 @@ import { BracemarkIcon } from '@stxapps/web-ui/components/icons/bracemark-icon';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { COMPANY, FOOTER_LINKS, SUPPORT_EMAIL } from '../lib/site';
+import { MailLink } from './mail-link';
 
 // The company's legal name sits here as well as in /terms and /privacy, and all
 // three read it from `COMPANY` — a footer that names a different entity than the
@@ -31,14 +32,13 @@ export function SiteFooter() {
               An end-to-end encrypted bookmark manager. Your links are encrypted on your device
               before they sync — we hold the ciphertext, and no key that opens it.
             </p>
-            <a
+            <MailLink
+              address={SUPPORT_EMAIL}
+              variant="specimen"
               className={cn(
-                'mt-4 inline-block rounded-sm font-mono text-sm text-signal underline decoration-signal-line underline-offset-4 hover:decoration-signal focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-offset-2 focus-visible:outline-none',
+                'mt-4 inline-block text-sm underline-offset-4 focus-visible:ring-offset-2',
               )}
-              href={`mailto:${SUPPORT_EMAIL}`}
-            >
-              {SUPPORT_EMAIL}
-            </a>
+            />
           </div>
 
           {FOOTER_LINKS.map((group) => (

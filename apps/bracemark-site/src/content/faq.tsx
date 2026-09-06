@@ -12,6 +12,7 @@ import {
   TRIAL_DAYS,
 } from '@stxapps/shared';
 
+import { MailLink } from '../components/mail-link';
 import { SECURITY_EMAIL, SOURCE, SUPPORT_EMAIL } from '../lib/site';
 
 // The site's questions and answers, in ONE place, because two surfaces render
@@ -31,17 +32,6 @@ const FREE_LINKS = entitlementsOf('free').maxLinks;
 
 export type FaqItem = { id: string; q: string; a: React.ReactNode };
 export type FaqGroup = { id: string; title: string; blurb: string; items: FaqItem[] };
-
-function MailLink({ address }: { address: string }) {
-  return (
-    <a
-      className="rounded-sm text-signal underline decoration-signal-line underline-offset-2 hover:decoration-signal"
-      href={`mailto:${address}`}
-    >
-      {address}
-    </a>
-  );
-}
 
 // The off-origin sibling of PageLink — a plain <a>, since next/link has no route
 // to prefetch on another host.

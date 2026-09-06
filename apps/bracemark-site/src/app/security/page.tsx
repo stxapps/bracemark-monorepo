@@ -10,6 +10,7 @@ import {
 } from '@stxapps/shared';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
+import { MailLink } from '../../components/mail-link';
 import { PageShell } from '../../components/page-shell';
 import {
   SECURITY_ACK_WINDOW,
@@ -305,10 +306,10 @@ export default function Page() {
               </strong>{' '}
               This is the reason the app offers to generate your password and the reason we suggest
               taking it: {PASSPHRASE_DEFAULT_WORDS} random words is about {PASSPHRASE_BITS} bits,
-              which is not a wall that takes a long time to climb — it is not a climbable wall.
-              What decides that is where a password came from, not how it looks: one a person
-              invented follows the patterns guessing software already models, so bringing your own
-              is safe only if it was generated randomly too. The recovery code is generated with{' '}
+              which is not a wall that takes a long time to climb — it is not a climbable wall. What
+              decides that is where a password came from, not how it looks: one a person invented
+              follows the patterns guessing software already models, so bringing your own is safe
+              only if it was generated randomly too. The recovery code is generated with{' '}
               {RECOVERY_CODE_BITS} bits for the same reason.
             </p>
           </div>
@@ -362,10 +363,39 @@ export default function Page() {
               </Link>{' '}
               explains what each absence costs you.
             </p>
+            {/* AN OBSERVATION, NEVER A VERIFICATION, and the distinction is the
+                site's claim boundary rather than a hedge — docs/brand-assets.md,
+                _the claim boundary_, which this paragraph is the only surface to
+                carry. Public source is about the CODE; a network inspector is
+                about the BUILD THAT IS RUNNING, which is the one thing the
+                paragraph above concedes the source cannot speak to. That is why
+                it earns a place here and why it cannot be sold as proof: a
+                request log shows what was sent, not what a key is doing.
+
+                THE SECOND HALF OF THE SENTENCE IS LOAD-BEARING. A reader who
+                opens that tab sees the username at sign-up, a session token and
+                the R2 host, all readable — and the plaintext URL going to
+                `bracemark-extractor` if they turned the `serverExtraction`
+                opt-in on (docs/link-extraction.md). So the claim is scoped to
+                the LIBRARY PAYLOAD; "nothing readable leaves" would be false and
+                falsifiable in the place we just sent them, which is the worst
+                available way to lose this page's argument.
+
+                No tool is named — every browser ships one, and naming Chrome's
+                dates the copy and reads Chrome-first for a product with four
+                clients — and no endpoint, method or request shape either: those
+                rot the way a published cap does. */}
             <p>
-              What holding no key does instead is remove the decisions we would otherwise be asking you
-              to trust us with. We cannot read a link, hand one over, or reset a password, and none
-              of that is a policy we could quietly revise.
+              One check does survive all that, and it needs nothing from us: your browser’s own
+              network inspector shows every request this app makes, and your links leave as bytes
+              nobody at our end can read. That is an observation about the build you are actually
+              running, not a proof — a request log shows what was sent, not what a key is doing —
+              and the account traffic beside it is readable exactly as the privacy policy says.
+            </p>
+            <p>
+              What holding no key does instead is remove the decisions we would otherwise be asking
+              you to trust us with. We cannot read a link, hand one over, or reset a password, and
+              none of that is a policy we could quietly revise.
             </p>
           </div>
         </section>
@@ -376,19 +406,11 @@ export default function Page() {
             If you find something, tell us first
           </h2>
           <p className={cn('mt-3 text-body text-muted-foreground')}>
-            Write to{' '}
-            <a
-              className={cn(
-                'rounded-sm font-mono text-signal underline decoration-signal-line underline-offset-2 hover:decoration-signal',
-              )}
-              href={`mailto:${SECURITY_EMAIL}`}
-            >
-              {SECURITY_EMAIL}
-            </a>{' '}
-            rather than posting publicly. We aim to acknowledge within {SECURITY_ACK_WINDOW} and to
-            tell you what we intend to do about it within {SECURITY_TRIAGE_WINDOW}. There is no bug
-            bounty and we cannot offer payment; we will credit you when a report leads to a fix,
-            unless you would rather we did not.
+            Write to <MailLink address={SECURITY_EMAIL} variant="specimen" /> rather than posting
+            publicly. We aim to acknowledge within {SECURITY_ACK_WINDOW} and to tell you what we
+            intend to do about it within {SECURITY_TRIAGE_WINDOW}. There is no bug bounty and we
+            cannot offer payment; we will credit you when a report leads to a fix, unless you would
+            rather we did not.
           </p>
           <p className={cn('mt-4 text-body text-muted-foreground')}>
             The scope, the reports we most want, and the handful of behaviours that are known and by
