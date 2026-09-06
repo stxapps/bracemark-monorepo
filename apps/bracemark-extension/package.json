@@ -20,6 +20,16 @@
           "{projectRoot}/.output/chrome-mv3"
         ]
       },
+      "build:development": {
+        "cache": true,
+        "inputs": [
+          "production",
+          "^production"
+        ],
+        "outputs": [
+          "{projectRoot}/.output/chrome-mv3-dev"
+        ]
+      },
       "build:staging": {
         "cache": true,
         "inputs": [
@@ -77,6 +87,7 @@
     "dev": "wxt",
     "dev:firefox": "wxt -b firefox",
     "build": "wxt build",
+    "build:development": "wxt build --mode development",
     "build:staging": "wxt build --mode staging",
     "build:firefox": "wxt build -b firefox",
     "build:firefox:staging": "wxt build -b firefox --mode staging",

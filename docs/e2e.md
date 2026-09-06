@@ -131,7 +131,12 @@ Google Chrome will not load an unpacked extension from the command line and says
 nothing when it declines, so driving the popup needs Playwright's own Chromium
 (`npx playwright install chromium`) — see `docs/testing.md`, _driving
 bracemark-web_, and the extension section of `.claude/skills/verify/SKILL.md`.
-Nothing in `e2e/` uses it: every spec here still goes through `CHROME_PATH`.
+
+**Exactly one thing in `e2e/` uses it**, and it is not a spec: `seed/shot/extension.ts`,
+the store-screenshot leg (_the published screenshots_, below). Every **spec** here
+still goes through `CHROME_PATH`, and that is the line to hold — a spec that needs
+the bundled browser has stopped testing what users run. The leg is exempt because
+its subject IS the unpacked extension, which system Chrome cannot load at all.
 
 **No suppression is needed to keep it that way, and none is configured.** At
 1.62.1 none of `@playwright/test`, `playwright`, or `playwright-core` declares an
@@ -555,10 +560,19 @@ backup format is exercised at all.
 ### the published screenshots
 
 `e2e/seed/shot/` is the seed's odd cousin: a fifth account whose only job is to be
-photographed. Everything this project publishes a picture of bracemark-web for is
+photographed. Everything this project publishes a picture of the product for is
 made here — the marketing site's one figure (the links page under "A private
-library is still a library") and the screenshots `apps/bracemark-web`'s
-`manifest.json` hands Chrome's install dialog.
+library is still a library"), the screenshots `apps/bracemark-web`'s
+`manifest.json` hands Chrome's install dialog, and the browser extension's Chrome
+Web Store and AMO listings.
+
+**Two legs, two entry points, and they do not share a browser.** `capture.ts`
+drives bracemark-web through `launchApp` and system Chrome; `extension.ts` drives
+the browser extension's popup, and has to launch Playwright's own Chromium with an
+unpacked build (_the browser this repo drives_, above). They share the account and
+nothing else — which is a prerequisite rather than a coupling: **`npm run shot`
+first, then `npm run shot:ext`**, because the second one only signs in and refuses
+to run against an account the first has not filled.
 
 ```sh
 npm run dev              # api + web + extractor (the extractor is the point)
@@ -566,6 +580,8 @@ npm run shot:preflight   # check the URL list — seconds, no browser
 npm run shot             # every scene: account → import → extract → capture
 npm run shot -- library-narrow search-narrow   # …only these
 npm run shot -- --fresh  # …after wiping the account's data first
+npm run shot:ext         # the browser extension's popup — needs the above first
+npm run shot:ext -- ext-sync                   # …only this PNG (the flow still runs whole)
 ```
 
 Out comes one PNG per scene in `e2e/.artifacts/shot/`, and for `library-list` the
@@ -596,12 +612,19 @@ a design number: `make-image-variants.sh` refuses to upscale and the site ships 
 2200px variant, so a 1000px-wide capture has to be rastered at 3x to feed it. That
 is why `launchApp` takes a `deviceScaleFactor` at all.
 
-The `library-*` and `search-*` scenes answer to the **install dialog** instead,
-and their contract is stricter: each is exactly one of the two PWA sizes
+The `library-{narrow,wide}` and `search-*` scenes answer to the **install dialog**
+instead, and their contract is stricter: each is exactly one of the two PWA sizes
 (1170x2532 narrow, 2560x1600 wide), the compositor refuses a capture whose pixels
 disagree with the size it expects, and `npm run check:assets` refuses a
 `manifest.json` that declares a size the file does not have. What each size is and
 why is `docs/brand-assets.md`, _the generated pictures_.
+
+`library-window` answers to a **store listing**, and its width is the contract:
+1152 CSS px is the content width of the browser window the compositor draws
+around it, so the capture lands at 1:1 and the app's own type is never resampled.
+Its height is deliberately more than the frame shows — the window runs off the
+bottom of the picture the way the card's pane does. DPR 2 rather than 3, because
+this one is composed into a 1x canvas and a third raster would be thrown away.
 
 ⚠ **One launch per DPR.** `deviceScaleFactor` is a **browser-context** option, not
 a page one, so scenes at different `scale` cannot share a launch — `capture.ts`
@@ -612,6 +635,63 @@ viewport is the thing that varies freely and the scale is not. The account setup
 runs on the first group only; later groups sign back in and wait for the pull,
 which is why `prepareAccount` ends on a `waitForSync` — a half-pushed library is a
 partial one to the next context.
+
+#### the browser extension leg
+
+`seed/shot/extension.ts` photographs the popup for the two store listings. Three
+of its rules are silent ones — each is a way to get a picture that renders
+perfectly and shows the wrong thing.
+
+⚠ **The popup is photographed as a TAB, and a tab cannot see the tab behind it.**
+The real popup window is not attachable: `chrome.action.openPopup()` opens
+something that never enters `context.pages()` and fires no `page` event, and the
+OS route needs a screen-recording grant. A tab at 360 CSS px lays out identically
+(the browser sizes that window to the document, so 360 is the whole viewport
+either way), which is what makes the leg possible. But `SaveFlow` reads
+`tabs.query({ active: true, currentWindow: true })`, and the manifest is
+`activeTab`-only **by design** — the grant is created by the user's click on the
+toolbar action, which no harness can perform. Without it the query returns a tab
+with its `url` and `title` stripped, `SaveFlow` finds no saveable page, and what
+gets photographed is **"Nothing to save here"**.
+
+So the leg **stages a copy** of the build with `tabs` added to its permissions and
+loads that. It is a copy, in `.artifacts/`, rebuilt every run; `.output/` and the
+source are untouched and no store sees it. The alternative — faking `tabs.query`
+with `addInitScript` — was refused on the same principle the rest of this
+directory runs on: it would make the harness author the one thing the picture is
+of. Here every string in the specimen is the browser's real answer about a page
+that is genuinely open.
+
+⚠ **It is the DEVELOPMENT build or it is pointed at production.** `nx build` is
+`wxt build`, i.e. `api.bracemark.com`, which knows nothing about the local seeded
+account. `nx build:development` is the same bundle with
+`WXT_PUBLIC_API_URL=localhost:8787`; only that value differs, so the pixels are the
+production build's. The leg runs it itself.
+
+⚠ **Nothing is saved, and that is what makes the run repeatable.** The obvious
+script — open the editor, press Save, photograph the receipt — works exactly once:
+the save writes a link, so the next run opens on the "already saved" screen and
+scene one silently becomes scene two. Instead the leg opens **two** tabs: a page
+the library does not hold (the editor) and one it does (the receipt, by the
+revisit path — the same component with the same content). Undoing a save would
+otherwise mean deleting the link _and_ emptying the trash through bracemark-web,
+in a second browser, to leave the account as it was found.
+
+One consequence, worth knowing before trying to "fix" it: on the revisit path the
+specimen's tile is the live tab's **favicon**, never the extracted cover. The
+upgrade `Complete.tsx` describes belongs to the save path, where the extension
+extracts the active tab itself; a link saved elsewhere carries an `imageId` whose
+bytes the extension has not pulled (`sync-runner.ts` materializes `files/`
+lazily). The leg asserts the tile is _an image_ rather than a host monogram, which
+is the outcome that would actually look broken.
+
+**It also drives the real pickers**, so the list and the tags in the picture are
+chosen the way a person chooses them — and it waits for those popovers to
+**detach**, not merely to close. They are Radix popovers with an exit animation:
+`Escape` returns immediately, and a capture on the next line catches the panel
+mid-fade, printing a ghost of the tag list straight through the Note field and the
+Save button. Invisible in the diff and in the log; obvious in the picture, which
+is how it was found.
 
 **It photographs the LIST layout, and that is a step the card grid did not need.**
 The swap is argued at the top of `capture.ts` and in `SCREENSHOT`'s own comment,

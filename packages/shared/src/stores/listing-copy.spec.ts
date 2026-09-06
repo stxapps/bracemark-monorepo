@@ -6,6 +6,7 @@ import {
   FIREFOX_ADDONS_SUMMARY,
   FULL_DESCRIPTION,
   PLAY,
+  SCREENSHOT_CAPTIONS,
   STORE_LIMITS,
 } from './listing-copy';
 
@@ -56,8 +57,19 @@ describe('store listing copy — character budgets', () => {
       STORE_LIMITS.browserExtension.description,
     ],
     ['Firefox Add-ons summary', FIREFOX_ADDONS_SUMMARY, STORE_LIMITS.firefoxAddons.summary],
+    // Every caption, found by walking the object rather than listed — a fifth
+    // screenshot must not be able to arrive without its line being measured.
+    ...Object.entries(SCREENSHOT_CAPTIONS).map(([slug, caption]): [string, string, number] => [
+      `screenshot caption \`${slug}\``,
+      caption,
+      STORE_LIMITS.screenshotCaption.caption,
+    ]),
   ];
 
+  // The caption cases are the odd ones out and it is worth knowing which way:
+  // every other limit here is a console's and lands as a rejection, while a long
+  // caption is accepted by both stores and simply spends the picture's room on
+  // itself. This is the only place that number is enforced at all.
   it.each(cases)('%s fits its field', (_label, value, limit) => {
     // Stores count UTF-16 code units, which is what .length gives — the copy is
     // BMP-only (curly quotes and em dashes are single units), so no surrogate

@@ -235,6 +235,31 @@ export const SCENES: Scene[] = [
     goto: `/links?text=${SEARCH_WORD}`,
     settle: searchCommitted,
   },
+  {
+    // ⚠ THE STORE LEG'S ONE bracemark-web SCENE, and its width is a contract with
+    // a canvas rather than a design choice. The browser-extension listings show
+    // where a saved tab lands, drawn inside a browser window the compositor
+    // draws; 1152 is that window's content width — the 1280 canvas less its two
+    // 64px gutters — so the capture lands at 1:1 and nothing resamples the app's
+    // type. Retune it there and here together or the picture is rescaled
+    // silently.
+    //
+    // 720 tall is deliberately MORE than the frame shows: the window runs off the
+    // bottom of the canvas, the way the card's pane does, so the list reads as
+    // continuing past the picture rather than stopping in it. What the extra
+    // rows buy is room for that cut to land wherever the caption above leaves it.
+    //
+    // DPR 2 and not 3: this one is composed at 1:1 into a 1x canvas, so a third
+    // raster would be thrown away. (`library-list` asks for 3 because
+    // make-image-variants.sh refuses to upscale — a different constraint, one
+    // step further downstream.)
+    id: 'library-window',
+    what: 'the library in a laptop window — the source for the store listings',
+    viewport: { width: 1152, height: 720 },
+    scale: 2,
+    goto: '/links?list=all',
+    settle: settleList,
+  },
 ];
 
 /**

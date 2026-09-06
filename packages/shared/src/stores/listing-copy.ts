@@ -69,6 +69,14 @@ export const STORE_LIMITS = {
   /** One manifest serves both browsers, so each budget is the smaller of the two. */
   browserExtension: { name: 45, description: 132 },
   firefoxAddons: { summary: 250 },
+  /**
+   * ⚠ THE ONE LIMIT NO CONSOLE ENFORCES. A screenshot caption is drawn INTO the
+   * picture, so nothing rejects a long one — it just sets smaller, wraps to three
+   * lines, and eats the room the product was going to have. 40 is where a line
+   * still holds at the size a store carousel renders it, and the canvas that draws
+   * these asserts on the space it has left rather than trusting this number.
+   */
+  screenshotCaption: { caption: 40 },
 } as const;
 
 // --- the App Store -----------------------------------------------------------
@@ -188,6 +196,57 @@ export const BROWSER_EXTENSION_LISTING = {
   name: APP_STORE.name,
   description:
     'Save the tab you’re reading in two clicks. Bracemark encrypts every link in your browser before it syncs — only you can read it.',
+} as const;
+
+// --- the store screenshots ---------------------------------------------------
+//
+// One line per published screenshot, drawn INTO the picture by the compositor.
+// They are here, and not beside the pictures, for the reason the whole file
+// exists: a caption is a user-facing claim, and a claim typed next to the art
+// would be the one piece of public copy in the product that nothing reviews —
+// no budget spec, no bare-"extension" rule, no banned-claim list. Everything in
+// this module gets all three by being in it.
+//
+// WHAT IS NOT HERE, deliberately: WHICH caption goes on WHICH screen, and in what
+// order they appear in a listing. That is the listing strategy, it changes without
+// the copy changing, and it belongs with the compositor's catalog rather than in
+// the public repo. What this file owns is the sentences themselves.
+//
+// The keys are slugs rather than positions for the same reason — `chrome-2` would
+// bake an order into the public half, and re-ordering a carousel would then be a
+// two-repo change that also invalidates a stamp.
+//
+// Each names what the SURFACE under it does, in the mechanical voice
+// (docs/brand-assets.md, _the voice_) — a fact about the machine, not a mood.
+// "Private by design" and friends are the failure mode: a claim about intent,
+// spent over a picture that could have carried a claim about the software.
+export const SCREENSHOT_CAPTIONS = {
+  /** The popup open on a page, list and tags chosen, Save unpressed. */
+  saveTab: 'Save the tab you’re reading',
+  /**
+   * The receipt: the page still on screen, its corner turned down, its list
+   * named. NOT "…with tags" — that line was written for the editor beside it,
+   * and this screen shows the list only.
+   */
+  intoAList: 'Filed into the list you chose',
+  /**
+   * The sync panel. "before it syncs", never "before it leaves your browser" —
+   * `bracemark-extractor` is handed a plaintext URL by construction when the
+   * opt-in is on, and the spec beside this file bars the other spelling by name.
+   */
+  encrypted: 'Encrypted here, before it syncs',
+  /**
+   * bracemark-web's links page — where the tab you just saved turns up.
+   *
+   * NOT "Your library, on every device", which is what this said first.
+   * `docs/brand-assets.md`, _the two nouns_: the collection gets no noun, and
+   * "library" is serviceable as a mass noun in PROSE ("bring the library you
+   * already have") and barred as a LABEL, on the same ground as "vault". A
+   * caption is a label — it names the thing in the picture — so the container
+   * word had to go. What replaces it is the object noun the whole app already
+   * uses, which is also what the picture shows: rows of links.
+   */
+  everyLink: 'Every link, on every device',
 } as const;
 
 // --- the PWA install dialog --------------------------------------------------

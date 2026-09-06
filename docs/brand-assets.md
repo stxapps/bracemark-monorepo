@@ -816,9 +816,11 @@ inputs fails only when something actually moved. Run it beside
 and the string that constant says now.
 
 **Regenerate and re-stamp when:** the tagline, subtitle or a listing line
-changes; the mark changes; a `--color-*` token moves; the links list layout
-changes shape; or a screenshot shows a screen that no longer exists. Nothing else
-will tell you — that list _is_ the tripwire.
+changes; **a screenshot caption changes**; the mark changes; a `--color-*` token
+moves; the links list layout changes shape; the browser extension's popup changes
+shape; or a screenshot shows a screen that no longer exists. Nothing else will
+tell you — that list _is_ the tripwire, and for the store pictures further down it
+is the _only_ thing there is, since those are not stamped.
 
 **The card has two designs and the stamp records which one is committed.**
 `slab` is type on white over an inverted ciphertext band — the page's own
@@ -879,6 +881,53 @@ leave air under them — about 70% of the narrow frame and 60% of the wide one a
 used. On wide the rail carries the full height, so the empty pane reads as a
 narrowed view; if it ever stops reading that way the fix is a longer `library.ts`,
 not a broader search word.
+
+#### the store screenshots — public copy, private pictures
+
+**The browser extension's Chrome Web Store and AMO listings are four 1280x800
+pictures, and none of them is in this repo.** That is the same rule the eight
+above obey, read the other way: the repo tracks an image **when a build reads
+one**, and nothing here reads a store screenshot — a person uploads it to a
+console. What IS here is the half that can go wrong silently.
+
+**The captions are public, and that is the point of them being here at all.**
+`SCREENSHOT_CAPTIONS` in `packages/shared/src/stores/listing-copy.ts` holds one
+line per published screenshot. A caption is a user-facing claim drawn into a
+picture, so a caption typed beside the art would be the one piece of public copy
+in the product that nothing reviews — where in that file it gets the character
+budget, the bare-"extension" rule, the banned-claim list and the typographic
+apostrophe check for free, exactly like the store descriptions beside it. They are
+keyed by slug rather than by position: **which caption goes on which screen, and
+in what order, is listing strategy** and is not decided here.
+
+⚠ **No console enforces a caption length, so `STORE_LIMITS.screenshotCaption`
+is the only thing that does.** A long caption is accepted everywhere and simply
+sets smaller, wraps to three lines and spends the room the product was going to
+have. 40 characters is what the layout holds.
+
+⚠ **These four are NOT stamped, and the gap is real.** `assets.stamp.json` covers
+files in this tree; a store picture has no destination in it, so `check:assets`
+cannot see that a caption edit has made one wrong. The regenerate list above
+therefore gains a line that nothing will enforce: **a caption changes → redraw the
+store screenshots.** They declare their inputs anyway, so the contract is already
+written the day a store family becomes a tracked asset.
+
+**Chrome requires 1280x800 and caps a listing at five; AMO sets no size and caps
+at ten — so there is one set of art, at Chrome's size, for both.** Four of the
+five slots are used, for the same reason the install dialog gets two per form
+factor rather than four: a carousel is swiped once, and every extra picture is
+another capture to re-take when a screen changes shape. Chrome also **requires a
+440x280 promo tile**, which is art rather than a screenshot and is the one thing
+still outstanding before a submission.
+
+⚠ **The one third-party thing in a store picture is the page being saved**, and it
+is chosen under the rule `e2e/seed/shot/library.ts` already argues: our own pages,
+public-domain or openly-licensed material, cover art that is a photograph rather
+than a masthead. The seeded library's own accepted exception — one logo-card cover,
+on the argument that one wordmark tile in a wall of photographs is what a real
+library looks like — **does not carry to a store submission**, where third-party
+marks are something a reviewer looks for. A frame decides that question, not a
+library, and a store screenshot crops harder than any figure on the site.
 
 **When there is nothing fit to ship, the key comes out.** The eight v1 files were
 deleted outright rather than left in place until replacements existed: a manifest

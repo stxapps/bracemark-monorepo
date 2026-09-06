@@ -32,7 +32,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { BRAND, PWA_INSTALL_DESCRIPTION } from '@stxapps/shared';
+import { BRAND, PWA_INSTALL_DESCRIPTION, SCREENSHOT_CAPTIONS } from '@stxapps/shared';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const STAMP = 'assets.stamp.json';
@@ -109,6 +109,18 @@ function collectInputs(): Record<string, string> {
     // is what makes an edit here demand a look at them. The exact check below is
     // the other half — it pins the manifest to this constant.
     'listing.pwaDescription': PWA_INSTALL_DESCRIPTION,
+    // One key per store-screenshot caption. Unlike the line above, these ARE
+    // drawn — the compositor lays each one into its picture — so they are inputs
+    // in the ordinary sense and a caption edit correctly demands that picture be
+    // redrawn. Spread rather than listed so a fifth caption reaches the seam
+    // without anyone remembering this line; the pictures themselves are the store
+    // families, which live outside this repo, so nothing here stamps them yet.
+    ...Object.fromEntries(
+      Object.entries(SCREENSHOT_CAPTIONS).map(([slug, caption]) => [
+        `listing.caption.${slug}`,
+        caption,
+      ]),
+    ),
     'icon.d': iconPath(),
     'token.foreground': token(ui, ':root', '--foreground'),
     'token.mutedForeground': token(ui, ':root', '--muted-foreground'),
