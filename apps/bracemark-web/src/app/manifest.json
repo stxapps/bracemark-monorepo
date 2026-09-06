@@ -1,6 +1,7 @@
 {
   "short_name": "Bracemark",
   "name": "Bracemark",
+  "description": "Bookmarks only you can read. Encrypted on your device before they ever sync.",
   "icons": [
     {
       "src": "logo512-maskable.png",
@@ -46,39 +47,27 @@
   "background_color": "#ffffff",
   "screenshots": [
     {
-      "src": "ss-mobile-1.png",
+      "src": "ss-narrow-1.png",
       "type": "image/png",
-      "sizes": "1242x2688",
+      "sizes": "1170x2532",
       "form_factor": "narrow"
     },
     {
-      "src": "ss-mobile-3.png",
+      "src": "ss-narrow-2.png",
       "type": "image/png",
-      "sizes": "1242x2688",
-      "form_factor": "narrow"
-    },
-    {
-      "src": "ss-mobile-4.png",
-      "type": "image/png",
-      "sizes": "1242x2688",
+      "sizes": "1170x2532",
       "form_factor": "narrow"
     },
     {
       "src": "ss-wide-1.png",
       "type": "image/png",
-      "sizes": "2732x2048",
+      "sizes": "2560x1600",
       "form_factor": "wide"
     },
     {
-      "src": "ss-wide-3.png",
+      "src": "ss-wide-2.png",
       "type": "image/png",
-      "sizes": "2732x2048",
-      "form_factor": "wide"
-    },
-    {
-      "src": "ss-wide-4.png",
-      "type": "image/png",
-      "sizes": "2732x2048",
+      "sizes": "2560x1600",
       "form_factor": "wide"
     }
   ]

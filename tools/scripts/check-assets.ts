@@ -32,7 +32,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { BRAND } from '@stxapps/shared';
+import { BRAND, PWA_INSTALL_DESCRIPTION } from '@stxapps/shared';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const STAMP = 'assets.stamp.json';
@@ -79,8 +79,18 @@ interface ManifestScreenshot {
   form_factor?: string;
 }
 
-function manifest(): { screenshots: ManifestScreenshot[] } {
-  return JSON.parse(read('apps/bracemark-web/src/app/manifest.json'));
+/**
+ * `screenshots` is OPTIONAL and its absence is a legitimate state, not a hole to
+ * guard against: the key is dropped entirely whenever no screenshot is fit to
+ * ship, which is better than listing pictures that are wrong (the v1 set was
+ * listed and wrong for the product's whole life). Defaulting to `[]` keeps every
+ * check below meaningful — both directions between the manifest and the tree
+ * still run, and with nothing declared the second one is what fires: a stamped
+ * `public/ss-*.png` that no manifest entry references.
+ */
+function manifest(): { description?: string; screenshots: ManifestScreenshot[] } {
+  const parsed = JSON.parse(read('apps/bracemark-web/src/app/manifest.json'));
+  return { ...parsed, screenshots: parsed.screenshots ?? [] };
 }
 
 function collectInputs(): Record<string, string> {
@@ -92,6 +102,13 @@ function collectInputs(): Record<string, string> {
     'brand.tagline': BRAND.tagline,
     'brand.slogan': BRAND.slogan,
     'brand.subtitle': BRAND.subtitle,
+    // The copy Chrome draws immediately ABOVE the install-dialog screenshots.
+    // It is an input rather than only an assertion because the description and
+    // the pictures under it are one composition: a screenshot set that supported
+    // the old line does not automatically support a new one, and a stamped input
+    // is what makes an edit here demand a look at them. The exact check below is
+    // the other half — it pins the manifest to this constant.
+    'listing.pwaDescription': PWA_INSTALL_DESCRIPTION,
     'icon.d': iconPath(),
     'token.foreground': token(ui, ':root', '--foreground'),
     'token.mutedForeground': token(ui, ':root', '--muted-foreground'),
@@ -196,6 +213,29 @@ function main(): void {
     if (text.trim() !== alt) {
       fail(sidecar, `reads ${JSON.stringify(text.trim())}\n    expected ${JSON.stringify(alt)}`);
     }
+  }
+
+  // ⚠ The manifest's `description`, checked exactly rather than stamped — the same
+  // treatment and the same reasoning as the sidecars above: it is TEXT, it is a
+  // user-facing claim, and `manifest.json` is a static file nobody opens. Two
+  // failures ride on it. It is REQUIRED for Chrome's richer install UI, so an
+  // absent one means the screenshots below are never drawn at all — committed,
+  // correct and invisible. And a present-but-stale one is the v1 failure over
+  // again, in the one file that ships a sentence about the product with no
+  // review path.
+  const description = manifest().description;
+  if (description === undefined) {
+    fail(
+      'apps/bracemark-web/src/app/manifest.json',
+      'has no `description` — Chrome needs one to show `screenshots` at all\n' +
+        `    Expected ${JSON.stringify(PWA_INSTALL_DESCRIPTION)}`,
+    );
+  } else if (description !== PWA_INSTALL_DESCRIPTION) {
+    fail(
+      'apps/bracemark-web/src/app/manifest.json',
+      `\`description\` reads ${JSON.stringify(description)}\n` +
+        `    but PWA_INSTALL_DESCRIPTION says ${JSON.stringify(PWA_INSTALL_DESCRIPTION)}`,
+    );
   }
 
   // Both directions between manifest.json and the files on disk. The second one is

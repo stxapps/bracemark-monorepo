@@ -12,18 +12,29 @@ import { seedPassword } from '../catalog';
 import { findUserId, grantPlan, readGrantedPlan } from '../plan';
 import { importArchive, waitForSync } from '../seed';
 import { buildShotLibrary, SHOT_USER } from './library';
+import { groupByScale, type Scene, selectScenes } from './scenes';
 
-// The marketing site's one screenshot, made by driving the product.
+// Every screenshot we publish of bracemark-web, made by driving the product.
 //
 //   npm run dev              # api + web + extractor
 //   npm run shot:preflight   # check the URL list first — see ./preflight.ts
-//   npm run shot
+//   npm run shot             # every scene
+//   npm run shot -- library-narrow search-narrow   # some
 //   npm run shot -- --fresh  # wipe the account's data first (see below)
 //
-// What comes out: `e2e/.artifacts/shot/library-list.png`, a 3000x2280 capture of
-// the LIST layout, which is then handed to `tools/scripts/make-image-variants.sh`
-// (the last lines below print the exact command). The site's `SCREENSHOT` const in
-// apps/bracemark-site/src/app/page.tsx carries the rest of the hand-off.
+// What comes out: one PNG per scene in `e2e/.artifacts/shot/`. WHAT the scenes
+// are — viewport, URL, and what "finished" means on that screen — is `scenes.ts`;
+// this file is the apparatus every one of them needs. `library-list` is the
+// marketing site's figure and is handed to `tools/scripts/make-image-variants.sh`
+// (the run prints the exact command); the rest are consumed by the compositor
+// that places the PWA install-dialog screenshots.
+//
+// ⚠ ONE LAUNCH PER DPR, and it is the trap this file exists to hold shut.
+// `deviceScaleFactor` is a browser-CONTEXT option, so scenes at different scales
+// cannot share a launch — and setting it per page does not fail, it just
+// photographs everything at the first context's density. `groupByScale` is what
+// the loop below iterates, and the account setup happens on the FIRST group only;
+// later groups sign back into the same account and let it sync.
 //
 // WHY THE LIST AND NOT THE CARD GRID. It photographed the cards first, and the
 // argument for the swap is two-sided. It is the DEFAULT — `_panes/main.tsx`
@@ -52,53 +63,6 @@ import { buildShotLibrary, SHOT_USER } from './library';
 // list rather than the generator, and — unlike every other thing in e2e/ — it
 // deliberately fetches real, public URLs off the machine it runs on.
 
-// The capture geometry, and every number in it is load-bearing. It is also the
-// figure's own ratio — `aspect-[25/19]` on the frame and the `width`/`height` on
-// the <img> — so `object-cover` crops nothing and what is framed here is exactly
-// what ships.
-//
-// THE WIDTH SETS THE TYPE SIZE. The figure is 1088 CSS px at the desktop cap
-// (make-image-variants.sh derives that from `Band`'s max-w-6xl inside lg:px-8), so
-// a capture W CSS px wide is displayed at 1088/W. At 1000 that is 1.09x — the
-// app's 14px row title lands at ~15px, which is the site's own `text-body`, and
-// the screenshot reads as continuous with the prose around it rather than as a
-// thumbnail of a different document. The card grid was captured at 1600 and
-// therefore displayed at 0.68x, which a grid of photographs survives and a list of
-// 14px type does not.
-//
-// THE WIDTH ALSO SETS THE DEAD SPACE. The row is `flex`: the text column takes
-// `flex-1` and the date column is `shrink-0` against the right edge, so every
-// pixel of pane width past the title's own ink becomes air between the two. The
-// sidebar is a fixed 240 and the date column's right edge sits ~121 in, so the gap
-// after a short title ("Belém Tower - Wikipedia" is ~166px of ink) grows straight
-// with W: ~38% of the frame at 1000, ~44% at 1100, ~52% at 1280. 1000 is the
-// narrowest setting that still keeps the date column at all — it is gated on the
-// PANE reaching `@xl` (576px), and 1000 - 240 = 760 clears it with room. Below
-// ~816 the column vanishes and the picture stops showing the sorted field.
-//
-// THE HEIGHT IS COUNTED, NOT CHOSEN. The header is 56 and every row in this
-// library measures exactly 107 (14 + title 20 + 2 + host 20 + 12 + one chip line
-// 24 + 14 + 1 — the four shapes are enumerated in list-layout.tsx; these links all
-// have tags and none wraps to a second title line at this width). So
-//
-//   56 + 6*107 + 62 = 760
-//
-// puts six whole rows in the frame and cuts the seventh 62px in — past its
-// thumbnail (40, ending at 56), its title and its host line, and before its tag
-// strip. A partial row is wanted: it is what says the library continues. WHERE it
-// is cut is the part worth keeping — land in the first 14 and the frame ends on an
-// empty sliver of padding, land at 20-34 and it slices a line of type in half.
-// Re-derive this if the row ever changes shape.
-const SHOT_WIDTH = 1000;
-const SHOT_HEIGHT = 760;
-
-// Raster density, and NOT a design choice — see `deviceScaleFactor` in
-// web/fixtures/launch.ts. make-image-variants.sh never upscales and the site's
-// widest variant is 2200, so at the default 2 a 1000px-wide capture (2000 device
-// px) could not produce one. 3 hands it 3000x2280 and every variant is a
-// downscale.
-const SHOT_SCALE = 3;
-
 // The first pass over 26 links: one batched extract request (the server fans the
 // URLs out), then an image per link pulled through the proxy at a small
 // concurrency. Minutes, not seconds, and it is bounded by real sites.
@@ -109,13 +73,16 @@ const DRAIN_TIMEOUT_MS = 10 * 60 * 1000;
 // minutes on the first failure, doubling, capped at a day (shared
 // `sync/extraction.ts`) — so fifteen minutes buys the first retry and no more.
 // Waiting for the second and third rounds was tried and is not worth it: the
-// links still missing at that point are, by construction, below the fold of a
-// six-and-a-bit-row frame, and `capture()` is what decides whether the picture is
-// good.
+// links still missing at that point are, by construction, below the fold of every
+// frame we photograph, and a scene's own `settle` is what decides whether the
+// picture is good.
 const RETRY_TIMEOUT_MS = 15 * 60 * 1000;
 
 async function main(): Promise<void> {
-  const fresh = process.argv.slice(2).includes('--fresh');
+  const argv = process.argv.slice(2);
+  const fresh = argv.includes('--fresh');
+  const scenes = selectScenes(argv.filter((arg) => !arg.startsWith('--')));
+  const groups = groupByScale(scenes);
   await waitForApi();
 
   const now = Date.now();
@@ -135,69 +102,141 @@ async function main(): Promise<void> {
   const existingId = await findUserId(SHOT_USER.username);
   console.log(existingId ? 'account exists — signing in' : 'creating account (Argon2id, ~seconds)');
 
-  const app = await launchApp(profileDir('shot'), {
-    ...(existingId ? { existing: credentials } : { create: credentials }),
-    deviceScaleFactor: SHOT_SCALE,
-  });
+  console.log(
+    `scenes: ${scenes.map((scene) => scene.id).join(', ')} — ` +
+      `${groups.length} launch(es), one per DPR`,
+  );
 
-  try {
-    const { page } = app;
+  // The account is set up ONCE, on the first group, and every later group signs
+  // back into it. The setup is the expensive half — an import, a real-network
+  // extraction drain, minutes of it — and none of it is DPR-dependent, so paying
+  // it per density would double a ten-minute run for nothing.
+  let prepared = false;
+  const captured: string[] = [];
 
-    const userId = existingId ?? (await findUserId(SHOT_USER.username));
-    if (!userId) throw new Error(`no user id for ${SHOT_USER.username} after create-account`);
-    await grantPlan(userId, SHOT_USER.plan);
-    if ((await readGrantedPlan(userId)) !== SHOT_USER.plan) {
-      throw new Error('plan grant did not land');
+  for (const group of groups) {
+    // A profile dir PER DPR, because `launchApp` wipes the one it is given (a
+    // profile left by an earlier run holds a session for an account nobody has
+    // the password for). Sharing one dir across groups would work — each launch
+    // would just re-sign-in — but naming them apart keeps a failed run's state
+    // readable afterwards.
+    const app = await launchApp(profileDir(`shot-${group.scale}x`), {
+      ...(existingId || prepared ? { existing: credentials } : { create: credentials }),
+      deviceScaleFactor: group.scale,
+    });
+
+    try {
+      const { page } = app;
+
+      if (!prepared) {
+        await prepareAccount(page, { existingId, archivePath, fresh });
+        prepared = true;
+      } else {
+        // A fresh profile has an empty local store, so this launch is waiting for
+        // the PULL rather than for a push: the links, the extraction records and
+        // the preview blobs all come back down from the server before anything is
+        // worth photographing. The scene's own `settle` is the real gate — it
+        // fails loudly if the covers never arrive — but waiting here first turns
+        // "the pictures are empty" into "the sync did not finish".
+        await waitForSync(page);
+      }
+
+      for (const scene of group.scenes) captured.push(await shoot(page, scene));
+    } finally {
+      await app.close();
     }
-    await page.reload();
+  }
 
-    // `--fresh` — wipe the account's data before importing, and reach for it
-    // whenever the fixture itself has changed.
-    //
-    // A Bracemark backup merges SKIP-EXISTING BY PATH (docs/data-lifecycle.md),
-    // so re-running against an account that already has these ids imports
-    // nothing: edit a URL in shot/library.ts, re-run, and you photograph the OLD
-    // library while the log cheerfully reports a clean import. The big seed
-    // carries the same caveat and answers it with "delete all data by hand
-    // first"; this run does it through the same two controls, because it is the
-    // difference between a screenshot that reflects the list and one that does
-    // not.
-    //
-    // It is also the way out of a stuck drain. A link that keeps failing
-    // transiently climbs `backoff(attempts)` — 10 minutes, then 20, then 40 —
-    // and the ladder is stored on the facet, so it survives re-runs and a run
-    // started late in it can spend its whole budget waiting for a single retry
-    // window. A wipe drops the facets with everything else and the next import
-    // starts the ladder from zero.
-    if (fresh) await deleteAllData(page);
+  console.log(`\ncaptured ${captured.length} scene(s):`);
+  for (const path of captured) console.log(`  ${path}`);
 
-    await importArchive(page, archivePath);
-    await waitForSync(page);
-
-    await enableServerExtraction(page);
-    await fillPreviews(page);
-    await useListLayout(page);
-    // The drain wrote an `extractions/` record and a `files/` blob per link, all
-    // of which are pending ops. Not strictly needed for the photograph — the
-    // rendering reads Dexie, not the server — but this account is meant to be
-    // signed back into, and leaving it half-pushed is the failure seed.ts's own
-    // wait exists to prevent.
-    await waitForSync(page);
-
-    const path = await capture(page);
-    console.log(`\ncaptured ${path}`);
-    console.log('\nNext:');
+  // The site's figure is the one capture with a downstream step attached; the
+  // rest are read by the compositor, which is told where to look rather than
+  // being handed a path here.
+  const figure = captured.find((path) => path.endsWith('library-list.png'));
+  if (figure) {
+    console.log('\nNext, for the marketing site’s figure:');
     console.log(
-      `  tools/scripts/make-image-variants.sh ${path} \\\n` +
+      `  tools/scripts/make-image-variants.sh ${figure} \\\n` +
         `    apps/bracemark-site/public/screenshots/library-list`,
     );
     console.log(
       '  then check SCREENSHOT in apps/bracemark-site/src/app/page.tsx: `widths` is what\n' +
-        '  the script prints, and the frame ratio must still match SHOT_WIDTH/SHOT_HEIGHT.',
+        '  the script prints, and the frame ratio must still match the scene’s viewport.',
     );
-  } finally {
-    await app.close();
   }
+}
+
+/**
+ * Everything that has to be true of the ACCOUNT before any scene is worth
+ * photographing. Runs on one launch only — every step it takes is either
+ * server-side (the plan grant, the import) or a synced setting, so a second
+ * context sees all of it after a sync.
+ */
+async function prepareAccount(
+  page: Page,
+  options: { existingId: string | null; archivePath: string; fresh: boolean },
+): Promise<void> {
+  const userId = options.existingId ?? (await findUserId(SHOT_USER.username));
+  if (!userId) throw new Error(`no user id for ${SHOT_USER.username} after create-account`);
+  await grantPlan(userId, SHOT_USER.plan);
+  if ((await readGrantedPlan(userId)) !== SHOT_USER.plan) {
+    throw new Error('plan grant did not land');
+  }
+  await page.reload();
+
+  // `--fresh` — wipe the account's data before importing, and reach for it
+  // whenever the fixture itself has changed.
+  //
+  // A Bracemark backup merges SKIP-EXISTING BY PATH (docs/data-lifecycle.md),
+  // so re-running against an account that already has these ids imports
+  // nothing: edit a URL in shot/library.ts, re-run, and you photograph the OLD
+  // library while the log cheerfully reports a clean import. The big seed
+  // carries the same caveat and answers it with "delete all data by hand
+  // first"; this run does it through the same two controls, because it is the
+  // difference between a screenshot that reflects the list and one that does
+  // not.
+  //
+  // It is also the way out of a stuck drain. A link that keeps failing
+  // transiently climbs `backoff(attempts)` — 10 minutes, then 20, then 40 —
+  // and the ladder is stored on the facet, so it survives re-runs and a run
+  // started late in it can spend its whole budget waiting for a single retry
+  // window. A wipe drops the facets with everything else and the next import
+  // starts the ladder from zero.
+  if (options.fresh) await deleteAllData(page);
+
+  await importArchive(page, options.archivePath);
+  await waitForSync(page);
+
+  await enableServerExtraction(page);
+  await fillPreviews(page);
+  await useListLayout(page);
+  // The drain wrote an `extractions/` record and a `files/` blob per link, all
+  // of which are pending ops. Not strictly needed for the photograph — the
+  // rendering reads Dexie, not the server — but this account is meant to be
+  // signed back into, and the NEXT DPR group reads its library back off the
+  // server, so leaving it half-pushed would photograph a partial library.
+  await waitForSync(page);
+}
+
+/**
+ * One scene, one PNG. The viewport is set per scene (fine — only the DPR is fixed
+ * per context), and `scale: 'device'` is what makes the output `viewport × scale`
+ * rather than CSS pixels.
+ */
+async function shoot(page: Page, scene: Scene): Promise<string> {
+  console.log(`\nscene ${scene.id} — ${scene.what}`);
+  await page.setViewportSize(scene.viewport);
+  await page.goto(scene.goto);
+  if (scene.prepare) await scene.prepare(page);
+  await scene.settle(page);
+
+  await mkdir(SHOT_OUTPUT, { recursive: true });
+  const path = join(SHOT_OUTPUT, `${scene.id}.png`);
+  await page.screenshot({ path, scale: 'device' });
+  const { width, height } = scene.viewport;
+  console.log(`  ${width * scene.scale}x${height * scene.scale} → ${path}`);
+  return path;
 }
 
 // Settings → Data → Delete all data, through the checkbox gate and the button it
@@ -475,101 +514,6 @@ function isComplete(progress: PreviewProgress | null, links: number): boolean {
 
 function report(progress: PreviewProgress | null, links: number): string {
   return progress ? `${progress.done}/${progress.total}` : `?/${links}`;
-}
-
-// The photograph. Show All (`?list=all`) rather than the default My List: every
-// link in this library is filed in one of the ten named lists, so the default
-// view is genuinely empty, and Show All is the only view that spans them — which
-// is also the one the figure's alt text describes ("one row per link … beside a
-// sidebar of lists and tags").
-async function capture(page: Page): Promise<string> {
-  await page.setViewportSize({ width: SHOT_WIDTH, height: SHOT_HEIGHT });
-  await page.goto('/links?list=all');
-
-  // The two things that have to be true of the picture, and neither is what
-  // "wait for the images" first looks like.
-  //
-  // FIRST: no row may be wearing a MONOGRAM. `LinkPreviewImage` renders an
-  // `<img>` only once the bytes are in hand; with no image it renders
-  // `PreviewFallbackIcon`/`PreviewFallbackPanel`, a `<div>` — so "every img has
-  // loaded" is satisfied vacuously by a column of monograms, the exact picture
-  // this run exists to avoid, passing the check meant to catch it. Every branch
-  // takes the SLOT's own `h-10 w-16` (list-layout.tsx sizes the box and
-  // link-media.tsx passes that className straight through all three), so counting
-  // the slots and counting the `<img>`s among them is the reading that means
-  // something.
-  //
-  // Matching on the two size classes rather than on one distinctive one, because
-  // there isn't one: the card grid had `aspect-12/7`, which nothing else on the
-  // page wore, where `h-10` and `w-16` are ordinary utilities that are only this
-  // slot IN COMBINATION. `PreviewFallbackIcon` nests a second `<img>` inside the
-  // slot for the favicon it escalates through — that one is `size-4`, so it is not
-  // caught here, and a row showing it is correctly counted as a slot with no
-  // cover.
-  //
-  // SECOND: every one of those images DECODED. The list pulls each preview out of
-  // `files/` as its row mounts (rows are virtualized, so mounted = displayed),
-  // which means an `<img>` can be attached and on screen with nothing in it yet.
-  // `naturalWidth` is the only reading that says the bytes arrived.
-  //
-  // Both are scoped to what is MOUNTED rather than to all 26 links, and that is
-  // correct rather than a compromise: the virtualizer only builds the rows near
-  // the viewport, and the rows near the viewport are precisely what gets
-  // photographed.
-  const slots = page.getByRole('main').locator('[class~="h-10"][class~="w-16"]');
-  const covers = page.getByRole('main').locator('img[class~="h-10"][class~="w-16"]');
-  await expect(covers.first()).toBeVisible();
-
-  await expect
-    .poll(
-      async () => {
-        const [slotCount, coverCount, decoded] = await Promise.all([
-          slots.count(),
-          covers.count(),
-          covers.evaluateAll((images) =>
-            images.every((image) => (image as HTMLImageElement).naturalWidth > 0),
-          ),
-        ]);
-        return slotCount > 0 && slotCount === coverCount && decoded;
-      },
-      { timeout: 60_000 },
-    )
-    .toBe(true);
-
-  // THIRD: let the FAVICONS land. They are fetched per host through the same
-  // extractor, one `GET /v1/image` each, bounded to `MAX_IN_FLIGHT` with a
-  // stagger so they never compete with the previews (web-react's
-  // FaviconProvider) — which means they are still arriving for several seconds
-  // after every cover has decoded. Capturing on the covers alone caught the page
-  // mid-fill: every row correct, and a column of empty grey plates where the site
-  // marks go, which reads as a half-loaded page rather than as a product. The
-  // list layout prints the host as TEXT beside each one, so a missing mark is more
-  // conspicuous here than it was in the grid, not less.
-  //
-  // Located positively, on the host line's own `size-3.5`, rather than as "every
-  // img that is not a cover" — that negation was written when the cover carried a
-  // class nothing else did, and against `h-10 w-16` it would also sweep in
-  // `PreviewFallbackIcon`'s nested favicon and count it twice.
-  //
-  // This waits for the count to STOP CHANGING rather than for some number of
-  // them, and that is deliberate: a host that serves no `/favicon.ico` records
-  // `none` and `Favicon` renders its quiet plate forever, which is a correct final
-  // state and not something to wait out. Quiescence is the only condition that is
-  // true of both outcomes. Three of this library's hosts land there.
-  const favicons = page.getByRole('main').locator('img[class~="size-3.5"]');
-  let settled = 0;
-  let previous = -1;
-  while (settled < 3) {
-    await page.waitForTimeout(2_000);
-    const count = await favicons.count();
-    settled = count === previous ? settled + 1 : 0;
-    previous = count;
-  }
-
-  await mkdir(SHOT_OUTPUT, { recursive: true });
-  const path = join(SHOT_OUTPUT, 'library-list.png');
-  await page.screenshot({ path, scale: 'device' });
-  return path;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

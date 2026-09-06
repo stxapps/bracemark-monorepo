@@ -33,13 +33,15 @@ export function profileDir(name: string): string {
 // profiles and traces already sit behind.
 export const SEED_ARCHIVES = join(ARTIFACTS, 'seed');
 
-// Where the marketing screenshot lands (seed/shot/). Run output like the archives
-// — regenerate it by re-running the capture — and it belongs under `.artifacts`
-// rather than beside the site's `public/screenshots/` for the same reason: what
-// this writes is a 3200px raw capture, and what the site ships is the three
-// `.webp` variants `tools/scripts/make-image-variants.sh` derives from it. Only
-// the derived files are committed, and putting the source here keeps the
-// undersized, unoptimized original from being the one someone points an <img> at.
+// Where the published screenshots land (seed/shot/) — one PNG per scene. Run
+// output like the archives — regenerate it by re-running the capture — and it
+// belongs under `.artifacts` rather than beside the site's `public/screenshots/`
+// for the same reason: what this writes is the raw device-pixel capture, and what
+// a consumer ships is derived from it (the site's three `.webp` variants, via
+// `tools/scripts/make-image-variants.sh`; the PWA screenshots, placed and stamped
+// by the compositor). Only the derived files are committed, and putting the
+// source here keeps the unoptimized original from being the one someone points an
+// <img> at.
 export const SHOT_OUTPUT = join(ARTIFACTS, 'shot');
 
 // The credentials are NOT run output. They are working sign-ins for accounts that

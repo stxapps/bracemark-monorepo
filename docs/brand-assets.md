@@ -79,11 +79,12 @@ a re-render of every raster.
   `app.config.ts` change, not a re-render — and `adaptive-icon.png` is a
   **maskable** foreground, so it is bound by the 65.2% ceiling below.
 
-Only mark rasters are counted above. `apps/bracemark-web/public/` also holds the
-PWA screenshots (`ss-*`), and the two apps' `src/app/` hold the social card —
-governed further down under _the generated pictures_, which exists because that
-sentence used to end "which are not brand assets and are not governed here" and
-they stayed on the predecessor's branding for the product's whole life.
+Only mark rasters are counted above. The two apps' `src/app/` also hold the social
+card, and `apps/bracemark-web/public/` is where the PWA screenshots (`ss-*`) go
+when there are any — both governed further down under _the generated pictures_,
+which exists because that sentence used to end "which are not brand assets and are
+not governed here" and they stayed on the predecessor's branding for the product's
+whole life.
 
 **Maskable padding is a measured number: 65.2%.** The mark fits Android's 80%
 safe circle at that ink height and no larger — a property of the 0.836 aspect
@@ -771,13 +772,14 @@ things stand, and this band makes no promises about our future.
 
 ### the generated pictures — the card and the store screenshots
 
-**Six committed PNGs the build reads, and none of them can be checked by
+**Eight committed PNGs the build reads, and none of them can be checked by
 looking.** Four are the social card (`opengraph-image.png` + `twitter-image.png`
 in `apps/bracemark-site/src/app/` and `apps/bracemark-web/src/app/`, 1200x630,
-with an `.alt.txt` beside each); the rest are the PWA screenshots in
-`apps/bracemark-web/public/` that `manifest.json` lists. They are **artifacts**:
-produced deliberately, out of the build, committed, and governed by the contract
-below rather than by a generator this repo runs.
+with an `.alt.txt` beside each); four are the PWA screenshots in
+`apps/bracemark-web/public/` that `manifest.json` lists — `ss-narrow-1/2.png` and
+`ss-wide-1/2.png`. They are **artifacts**: produced deliberately, out of the
+build, committed, and governed by the contract below rather than by a generator
+this repo runs.
 
 ⚠ **BOTH FAMILIES SHIPPED BRACE.TO v1 FOR THE PRODUCT'S WHOLE LIFE, AND NOTHING
 SAID SO.** The card this repo shipped from `Initial commit` read "Save links to
@@ -840,13 +842,14 @@ the set `manifest.json` lists is the set that ships: two of the v1 files sat in
 
 **They are `1170x2532` narrow and `2560x1600` wide** — 390x844 CSS at DPR 3, and
 1280x800 CSS at DPR 2. Both are chosen rather than inherited; the v1 files were
-1242x2688 and 2732x2048, legal but arbitrary, and the committed set still predates
-this. A `wide` screenshot is a **desktop** one and 4:3 is not a desktop — 2732x2048
-read as a landscape tablet — so it is the median laptop viewport. `narrow` is the
-median modern phone (iPhone 12–16; Pixel is 412 CSS) rather than the widest,
-because the dialog scales a screenshot to a fixed width: a narrower CSS viewport
-makes the app's own type **bigger** in the result. Both sit under Tailwind's `sm`,
-so the mobile layout is the same either way.
+1242x2688 and 2732x2048, legal but arbitrary. A `wide` screenshot is a **desktop**
+one and 4:3 is not a desktop — 2732x2048 read as a landscape tablet — so it is the
+median laptop viewport. `narrow` is the median modern phone (iPhone 12–16; Pixel
+is 412 CSS) rather than the widest, because the dialog scales a screenshot to a
+fixed width: a narrower CSS viewport makes the app's own type **bigger** in the
+result. Both sit under Tailwind's `sm`, so the mobile layout is the same either
+way. The captures that fill these are scenes in `e2e/seed/shot/scenes.ts` —
+`docs/e2e.md`, _the published screenshots_.
 
 ⚠ **Chrome applies three rules to `manifest.json`'s screenshots and reports none
 of them.** Every dimension in 320–3840; the long side at most **2.3x** the short
@@ -858,6 +861,49 @@ ratio, **2.164:1**: it is deliberate headroom, and phones keep getting taller �
 20:9 screen is 2.22 and a 21:9 is 2.33, over the ceiling. Pick a phone by its
 ratio, not its name. Format is **PNG or JPEG only**; WebP is not accepted here,
 whatever `make-image-variants.sh` argues for the site's own figures.
+
+**Two per form factor, not four**, and the count is a decision. Chrome takes up to
+5 narrow and 8 wide, but the dialog shows about one and a half at a time; and every
+extra file is another PNG the regenerate list above invalidates, another stamp
+entry, another capture run against real sites. Two is where the set stops being a
+still life and starts making a claim — **the library** (`?list=all`, filled) and
+**the library doing something** (a committed `?text=` search, which on a phone also
+shows the summoned search row and on a laptop shows the rail with nothing
+highlighted, because a text search projects to no single axis). A third can be
+added later provided it comes from the **same profile**, since one form factor must
+share one aspect ratio. The captures are scenes in `e2e/seed/shot/scenes.ts`.
+
+⚠ **A filtered view is short, and that is the fixture rather than a defect.** The
+shot library is 26 links across 10 lists, so the search shots land four rows and
+leave air under them — about 70% of the narrow frame and 60% of the wide one are
+used. On wide the rail carries the full height, so the empty pane reads as a
+narrowed view; if it ever stops reading that way the fix is a longer `library.ts`,
+not a broader search word.
+
+**When there is nothing fit to ship, the key comes out.** The eight v1 files were
+deleted outright rather than left in place until replacements existed: a manifest
+that declares no screenshots degrades to Chrome's plain install prompt, which is
+strictly better than a dialog showing the predecessor's mark, a tagline we do not
+use and eleven third-party wordmarks. `screenshots` is therefore **optional** to
+`check:assets`, which treats its absence as legitimate while keeping both of its
+manifest⇄tree directions live — a stamped `public/ss-*.png` that nothing
+references still fails.
+
+⚠ **Chrome's richer install UI needs a `description` too, and without one the
+screenshots are never drawn at all** — committed, correct and invisible. The
+manifest carries one, and it is **not typed there**: it is
+`PWA_INSTALL_DESCRIPTION` in `packages/shared/src/stores/listing-copy.ts` (the
+same string as Play's short description — same job, one line a person reads while
+deciding to install), and `check:assets` fails when the two disagree. That is the
+same treatment the cards' `.alt.txt` sidecars get, for the same reason: it is
+TEXT, it is a user-facing claim, and `manifest.json` is a file nobody opens. It is
+also a stamped input of all four screenshots — the one input a bare capture
+depends on without drawing, because Chrome renders the sentence immediately above
+the carousel and the two are one composition.
+
+**Optional and not taken yet:** screenshot entries also accept a `label`, which
+Chrome can show. Those are user-facing copy and belong in `listing-copy.ts` beside
+the description rather than typed into the manifest.
 
 ### the X account — @bracemarkapp
 

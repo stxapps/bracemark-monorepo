@@ -552,43 +552,72 @@ extracted title, notes, pins spread through the library rather than sitting on
 top, and a generated preview image on every third link so the `files/` half of the
 backup format is exercised at all.
 
-### the marketing screenshot
+### the published screenshots
 
 `e2e/seed/shot/` is the seed's odd cousin: a fifth account whose only job is to be
-photographed. The marketing site has exactly one screenshot on it — the links page
-under "A private library is still a library" — and this is what makes it.
+photographed. Everything this project publishes a picture of bracemark-web for is
+made here — the marketing site's one figure (the links page under "A private
+library is still a library") and the screenshots `apps/bracemark-web`'s
+`manifest.json` hands Chrome's install dialog.
 
 ```sh
 npm run dev              # api + web + extractor (the extractor is the point)
 npm run shot:preflight   # check the URL list — seconds, no browser
-npm run shot             # account → import → extract → capture
+npm run shot             # every scene: account → import → extract → capture
+npm run shot -- library-narrow search-narrow   # …only these
 npm run shot -- --fresh  # …after wiping the account's data first
 ```
 
-Out comes `e2e/.artifacts/shot/library-list.png` at 3000x2280, and the run prints
-the `tools/scripts/make-image-variants.sh` line that turns it into the `.webp`
-variants `SCREENSHOT` in `apps/bracemark-site/src/app/page.tsx` points at.
+Out comes one PNG per scene in `e2e/.artifacts/shot/`, and for `library-list` the
+run also prints the `tools/scripts/make-image-variants.sh` line that turns it into
+the `.webp` variants `SCREENSHOT` in `apps/bracemark-site/src/app/page.tsx` points
+at.
 
-**It photographs the LIST layout, and the geometry is derived rather than picked.**
-It was the card grid first; the swap is argued at the top of `capture.ts` and in
-`SCREENSHOT`'s own comment, and it costs a step the grid did not need —
-`useListLayout()` clicks the Settings → Misc radio before capturing, because
-`linksLayout` **syncs** and this account is reused, so one manual click in the app
-would otherwise silently photograph cards on the next run. Three numbers hang
-together and nothing checks them against each other:
+**`scenes.ts` is WHAT, `capture.ts` is HOW, and the split is the point.** The
+account, the import, the extraction drain and the waits are one apparatus every
+picture needs; the only things that vary are a viewport, a URL and what "finished"
+means on that screen. A scene declares `viewport`, `scale`, `goto`, an optional
+`prepare` and a `settle`; the file it produces is `<id>.png` at `viewport × scale`
+device pixels. Nothing in `e2e/` knows where a picture ends up.
 
-| where               | what                    | why                                                                                                                                       |
-| ------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `SHOT_WIDTH` = 1000 | the capture's CSS width | sets the type size in the figure (1088/1000 ≈ 1.09x) **and** the air between a title and the date column, which grows straight with width |
-| `SHOT_HEIGHT` = 760 | `56 + 6*107 + 62`       | six whole rows, the seventh cut past its host line and before its tags                                                                    |
-| `aspect-[25/19]`    | the frame, in page.tsx  | the capture's own ratio, so `object-cover` crops nothing                                                                                  |
+⚠ **A scene's geometry is a contract with something off-stage, and nothing in this
+repo checks both ends.** `library-list` answers to the marketing site:
+
+| where                   | what                    | why                                                                                                                                       |
+| ----------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `viewport.width` = 1000 | the capture's CSS width | sets the type size in the figure (1088/1000 ≈ 1.09x) **and** the air between a title and the date column, which grows straight with width |
+| `viewport.height` = 760 | `56 + 6*107 + 62`       | six whole rows, the seventh cut past its host line and before its tags                                                                    |
+| `aspect-[25/19]`        | the frame, in page.tsx  | the capture's own ratio, so `object-cover` crops nothing                                                                                  |
 
 Move one and the other two are wrong — silently. A frame that no longer matches
 the capture just starts slicing the bottom row somewhere ugly, and a width change
-re-scales every glyph in the picture. `SHOT_SCALE` = 3 is the odd one out and is
-**not** a design number: `make-image-variants.sh` refuses to upscale and the site
-ships a 2200px variant, so a 1000px-wide capture has to be rastered at 3x to feed
-it. That is why `launchApp` takes a `deviceScaleFactor` at all.
+re-scales every glyph in the picture. `scale: 3` is the odd one out and is **not**
+a design number: `make-image-variants.sh` refuses to upscale and the site ships a
+2200px variant, so a 1000px-wide capture has to be rastered at 3x to feed it. That
+is why `launchApp` takes a `deviceScaleFactor` at all.
+
+The `library-*` and `search-*` scenes answer to the **install dialog** instead,
+and their contract is stricter: each is exactly one of the two PWA sizes
+(1170x2532 narrow, 2560x1600 wide), the compositor refuses a capture whose pixels
+disagree with the size it expects, and `npm run check:assets` refuses a
+`manifest.json` that declares a size the file does not have. What each size is and
+why is `docs/brand-assets.md`, _the generated pictures_.
+
+⚠ **One launch per DPR.** `deviceScaleFactor` is a **browser-context** option, not
+a page one, so scenes at different `scale` cannot share a launch — `capture.ts`
+groups on it and calls `launchApp` once per group. Setting it per page does not
+fail; it silently photographs everything at the first context's density.
+`page.setViewportSize()` per scene _within_ a group is fine, which is why the
+viewport is the thing that varies freely and the scale is not. The account setup
+runs on the first group only; later groups sign back in and wait for the pull,
+which is why `prepareAccount` ends on a `waitForSync` — a half-pushed library is a
+partial one to the next context.
+
+**It photographs the LIST layout, and that is a step the card grid did not need.**
+The swap is argued at the top of `capture.ts` and in `SCREENSHOT`'s own comment,
+and it costs `useListLayout()` — a click on the Settings → Misc radio before any
+capture, because `linksLayout` **syncs** and this account is reused, so one manual
+click in the app would otherwise silently photograph cards on the next run.
 
 One consequence of sharing `seed.ts`'s helpers is worth knowing, because it
 failed silently in exactly the way this repo's tripwires do: `seed/seed.ts` and

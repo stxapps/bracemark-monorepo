@@ -83,7 +83,7 @@ const SPECIMEN_HOST = 'askamanager.org';
 // Explicit `width`/`height` reserve the box so the band below it doesn't jump.
 //
 // THE FRAME'S RATIO IS THE CAPTURE'S, exactly — `aspect-[25/19]` here and
-// 1000x760 in `e2e/seed/shot/capture.ts` (SHOT_WIDTH/SHOT_HEIGHT), which is why
+// 1000x760 on the `library-list` scene in `e2e/seed/shot/scenes.ts`, which is why
 // `object-cover` has nothing to crop. That is a change from the card grid's
 // 16:10, and it is the layout swap's real cost: the list is a TALL object where
 // the grid was a wide one, and at 16:10 this capture held five rows, which reads
@@ -103,7 +103,7 @@ const SPECIMEN_HOST = 'askamanager.org';
 // HOW THIS ONE WAS MADE, and how to remake it: `e2e/seed/shot/` — a Plus account
 // seeded with twenty-six real, checked URLs and nothing else, which then turns on
 // server extraction and lets the PRODUCT fetch every title and every cover before
-// the frame is taken (`npm run shot`; docs/e2e.md, _the marketing screenshot_).
+// the frame is taken (`npm run shot`; docs/e2e.md, _the published screenshots_).
 // Nothing in the image is authored, which is the point: this band's argument is
 // what the library looks like, and a hand-built mock of it is the same mistake as
 // the hero's hand-typed ciphertext, one screen further down.

@@ -190,6 +190,28 @@ export const BROWSER_EXTENSION_LISTING = {
     'Save the tab you’re reading in two clicks. Bracemark encrypts every link in your browser before it syncs — only you can read it.',
 } as const;
 
+// --- the PWA install dialog --------------------------------------------------
+//
+// ⚠ Chrome's richer install UI needs a description ALONGSIDE the screenshots. With
+// no `description` in the manifest it falls back to the plain install prompt and
+// the screenshots are never shown — a silent failure of exactly the shape this
+// file exists for, since the pictures are committed, correct, and simply never
+// rendered.
+//
+// It is the same job as Play's short description — the one line a person reads
+// while deciding to install — so it is the same string rather than a second one to
+// keep true. It gets its own name because bracemark-web's manifest reading a
+// constant called `PLAY.shortDescription` would be a lie about which surface it
+// serves, and because the day the two need to diverge, this is the seam.
+//
+// COPIED, not imported, and that is the one difference from
+// BROWSER_EXTENSION_LISTING above: `apps/bracemark-web/src/app/manifest.json` is a
+// static file Next serves verbatim, so the string is duplicated there. What closes
+// the gap is `npm run check:assets`, which fails when the manifest and this
+// constant disagree — the same treatment the cards' `.alt.txt` sidecars get, for
+// the same reason (a claim in a file nobody opens).
+export const PWA_INSTALL_DESCRIPTION = PLAY.shortDescription;
+
 /**
  * Firefox Add-ons takes a longer summary than the Chrome Web Store, and AMO lets
  * it be set on the listing rather than in the manifest — so this is a paste field,
