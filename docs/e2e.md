@@ -605,7 +605,7 @@ for one asset, its library is a hand-typed list rather than the generator, and �
 alone in `e2e/` — it fetches real, public URLs off the machine it runs on. It has
 its own entry point for all three reasons.
 
-**Nothing in the picture is authored.** The archive carries two dozen bare URLs,
+**Nothing in the picture is authored.** The archive carries twenty-six bare URLs,
 their list membership and their tags, and no `extractions/` entities at all — absence
 counts as pending, so every link lands in the drain's queue. The run then turns on
 the `serverExtraction` opt-in through the real Switch, presses **Generate all**,
@@ -617,7 +617,23 @@ about what the product looks like, and the placeholder it replaces is a labelled
 box precisely because a convincing mock grid is the trap this site has fallen into
 once already (the hero's hand-typed ciphertext).
 
-**Three things that are load-bearing and look like details:**
+**What is IN the library is decided by the hero paragraph, not by taste.** That
+paragraph names the four things a saved library is a picture of — "what you are
+reading, buying, worrying about and working on" — and the figure four screens
+below it is the only place the site can show that being true. So the lists answer
+it one for one: `Reading`, `Interview prep`, `Health`, `Shopping`, with everything
+else as texture. It is a deliberately narrow test, because the loose version of it
+("more personal categories, so the privacy point lands") admits `Invest` as
+happily as `Health` and ends up arguing a different product. Two boundaries come
+with it. `Health` goes as far as blood pressure, sleep and walking — what a person
+reads after a routine checkup — and no further: a symptom, a diagnosis or a drug
+name is a confession, and a confession makes a reader think the picture was
+staged. And a **video** is not a candidate however far below the fold it sits,
+because `shot:preflight` gates every URL in the file rather than the seven in
+frame: an item that can be deleted, made private or fronted by a consent wall is
+an item that can block every future capture.
+
+**Four things that are load-bearing and look like details:**
 
 - **The library is not `seed/library.ts`'s.** That generator speaks rust,
   Postgres, Kubernetes and WASM over `example.com` hosts, with a failed extraction
@@ -625,8 +641,8 @@ once already (the hero's hand-typed ciphertext).
   fake hosts have no covers, a column two-thirds monograms argues against the band
   it sits in, and the vocabulary casts the user as a distributed-systems engineer —
   the exact repair `HeroPanel`'s comment records making, twice. The shot library is
-  the hero's persona: an interview on Thursday, a trip, a tenancy, dinner, a bike,
-  something to read.
+  the hero's persona: an interview on Thursday, a checkup, a trip, a tenancy,
+  dinner, a bike, a chair to replace, something to read.
 - **The URL list is checked, not trusted.** `shot:preflight` asks the local
   extractor about every URL and fails on any that is not `ok` _with an
   `imageUrl`_ — a title-only result is a fine saved link and a bad row. It goes
@@ -672,6 +688,24 @@ once already (the hero's hand-typed ciphertext).
   something by the time it is read. With the click actually landing, a clean run
   previews the whole library in one pass and finishes in under a minute.
 
+- **The rail is a height budget, and adding a list spends it.** The frame is
+  760px tall: the lockup takes 56 and the filter box 40, the Lists header 34, and
+  every row after that is 32 with a 2px gap. The system three (My List / Archive /
+  Trash) plus ten of ours make 13 rows and fill it to about 604, which leaves
+  **four whole tag rows** and a fifth cut through — where the eight-list library
+  before it showed six. So a list added to `LISTS` is a tag removed from the
+  picture's rail, and both arrays are ordered on that basis. Nothing checks this:
+  the arithmetic is read off `sidebar.tsx`'s Tailwind classes, and those are free
+  to move under it. Re-count it against the capture. Note also that the system
+  three are **interleaved** among the user's, not stacked above them (`use-lists`
+  merges one tree ordered by `rank`), so `LISTS` order decides a list's
+  neighbours rather than its row number. The tags do not vanish with the rail rows — every row in the main
+  column prints its own chips — but the rail is where a scanning eye reads them.
+  The same budget is why the tree is **one pair deep** (`Weekends > Lisbon`): the
+  nest costs no row, since both lists already existed, and it puts the first item
+  of the Plus footnote under the figure ("Nested lists, hidden lists, the app
+  lock…") into the picture that footnote sits under.
+
 **Reach for `--fresh` whenever you edit the URL list.** A Bracemark backup merges
 skip-existing **by path**, so re-running against the account that already holds
 these ids imports nothing — you would photograph the old library while the log
@@ -683,7 +717,7 @@ can spend its whole budget waiting for one retry window. A wipe drops the facets
 and the next import starts the ladder at zero.
 
 The capture is the **Show All** view (`?list=all`), because every link is filed in
-one of the eight named lists and the default My List is genuinely empty — and
+one of the ten named lists and the default My List is genuinely empty — and
 because Show All is the view the figure's alt text describes.
 
 ### state today

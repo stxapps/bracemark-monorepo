@@ -99,7 +99,7 @@ const SHOT_HEIGHT = 760;
 // downscale.
 const SHOT_SCALE = 3;
 
-// The first pass over 24 links: one batched extract request (the server fans the
+// The first pass over 26 links: one batched extract request (the server fans the
 // URLs out), then an image per link pulled through the proxy at a small
 // concurrency. Minutes, not seconds, and it is bounded by real sites.
 const DRAIN_TIMEOUT_MS = 10 * 60 * 1000;
@@ -478,7 +478,7 @@ function report(progress: PreviewProgress | null, links: number): string {
 }
 
 // The photograph. Show All (`?list=all`) rather than the default My List: every
-// link in this library is filed in one of the eight named lists, so the default
+// link in this library is filed in one of the ten named lists, so the default
 // view is genuinely empty, and Show All is the only view that spans them — which
 // is also the one the figure's alt text describes ("one row per link … beside a
 // sidebar of lists and tags").
@@ -512,7 +512,7 @@ async function capture(page: Page): Promise<string> {
   // which means an `<img>` can be attached and on screen with nothing in it yet.
   // `naturalWidth` is the only reading that says the bytes arrived.
   //
-  // Both are scoped to what is MOUNTED rather than to all 24 links, and that is
+  // Both are scoped to what is MOUNTED rather than to all 26 links, and that is
   // correct rather than a compromise: the virtualizer only builds the rows near
   // the viewport, and the rows near the viewport are precisely what gets
   // photographed.

@@ -101,7 +101,7 @@ const SPECIMEN_HOST = 'askamanager.org';
 // screenshot on it.
 //
 // HOW THIS ONE WAS MADE, and how to remake it: `e2e/seed/shot/` — a Plus account
-// seeded with two dozen real, checked URLs and nothing else, which then turns on
+// seeded with twenty-six real, checked URLs and nothing else, which then turns on
 // server extraction and lets the PRODUCT fetch every title and every cover before
 // the frame is taken (`npm run shot`; docs/e2e.md, _the marketing screenshot_).
 // Nothing in the image is authored, which is the point: this band's argument is
@@ -157,9 +157,17 @@ const SCREENSHOT = {
   // product from the one on screen. Nothing catches that — no lint rule, no type
   // error, no test — because the string and the bytes are checked by different
   // people at different times. docs/accessibility.md.
+  //
+  // The nest is named for the same reason, and it is the re-read working: the
+  // capture that added `Health` and `Shopping` also put one list UNDER another in
+  // the rail (`Weekends > Lisbon`, e2e/seed/shot/library.ts), and nested lists are
+  // the first thing the Plus footnote under this band names. A sighted visitor can
+  // see the indent; a clause is what hands the same fact to AT. Drop it the moment
+  // the tree goes flat again.
   alt:
     'The list layout in Bracemark: saved links one per row, each with a small preview image, ' +
-    'its title, its site and its tags, beside a sidebar of lists and tags.',
+    'its title, its site and its tags, beside a sidebar of lists — one nested under another — ' +
+    'and tags.',
   // The caption has to cover the picture ABOVE it, and an earlier one did not: it
   // said previews come from the device that saved the link, full stop, over
   // covers that were fetched by our server. Both halves are true of the product
