@@ -328,16 +328,16 @@ export const FAQ_GROUPS: FaqGroup[] = [
       },
       {
         id: 'trackers',
-        q: 'Do you use cookies, trackers or analytics?',
+        q: 'Do you use cookies, trackers, or analytics?',
         a: (
           <>
-            This website sets no cookies and loads no third-party scripts — even the fonts are
-            served from this domain. There is no analytics product, no advertising SDK and no
-            fingerprinting in the site or the apps. The one script the app loads from anyone else is
-            Paddle’s, and only on one screen: opening Settings → Subscription loads it to look up
-            your local price, and it runs the checkout if you go on to subscribe. Paddle sets its
-            own cookies to do that. The app does store data in your browser, but it is your library,
-            kept there so it works offline.
+            No analytics, no advertising SDK, no fingerprinting, and no cookies of ours, anywhere in
+            Bracemark. One screen is the exception: opening Settings → Subscription loads Paddle’s
+            script, to show your price in your own currency and to run the checkout if you
+            subscribe. The cookies Paddle sets there are the only cookies in Bracemark, and its
+            script is the only third-party code we load — down to the fonts, which come from us
+            rather than from a font provider. Bracemark does keep data in your browser, but it is
+            your library, kept there so it works offline.
           </>
         ),
       },
@@ -834,8 +834,8 @@ export const FAQ_GROUPS: FaqGroup[] = [
         q: 'What happens to my data if I stop paying?',
         a: (
           <>
-            You keep it, and you keep using it. The whole library stays readable, searchable and
-            exportable on the free plan, and you can still edit, retag and delete anything in it —
+            You keep it, and you keep using it. The whole library stays readable, searchable, and
+            exportable on the free plan, and you can still edit, tag, and delete anything in it —
             which is also how you get back under the free cap if you are above it. What stops is
             adding new links past that cap and creating new {PLAN_LABELS.plus} structure; nothing
             you already made is taken away or stranded, so nested lists stay nested and can always

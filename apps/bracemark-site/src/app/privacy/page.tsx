@@ -49,6 +49,26 @@ export const metadata: Metadata = {
 //     up the buyer's local price on mount (Paddle.PricePreview), so the script
 //     arrives with the screen rather than with the checkout. Narrowing that back
 //     — or widening it to another screen — falsifies the paragraph below.
+//     THE COOKIE HALF SPANS BOTH PROPERTIES TOO, and it was the half left unsaid:
+//     neither property sets a cookie of ours — nothing in bracemark-web or
+//     bracemark-api touches `document.cookie` or `Set-Cookie`, the session being a
+//     local-storage row — so Paddle's are the only cookies in Bracemark, on that
+//     one screen. Saying it only of the website left the app's paragraph admitting
+//     Paddle's cookies with no way to tell whether they were the first of ours or
+//     the only ones anywhere. If a cookie is ever set on either property, this is
+//     the sentence that falsifies first.
+//     THE PUBLISHED SENTENCES NOW STATE ALL OF THIS AS ONE ENTITY — "Bracemark",
+//     not this-website-then-the-app — and the per-property fact above is kept here
+//     because it is what makes the published form true, not because a reader is
+//     given it. Nobody arrives knowing app.bracemark.com is a second origin, so
+//     the split made them hold two subjects and count separately, and the count
+//     then read as a retraction of the absolute before it ("no third-party
+//     scripts… one script"). The one-entity form is also the stronger claim. What
+//     it costs: docs/iap.md (_currency_) and the /pricing note justify the
+//     dollars-only marketing site by citing THIS claim, and the constraint now
+//     hangs on the SCREEN rather than on the property — loading Paddle.js on
+//     /pricing would make a second place the exception, which is still falsified,
+//     but the sentence no longer says "this site loads none" for them to quote.
 //
 //   - THE NOTICE CHANNEL IS THIS WEBSITE, and only this website. The paragraph
 //     under _Changes to this policy_ used to promise we would highlight a material
@@ -301,16 +321,16 @@ export default function Page() {
 
         <h2>Cookies and on-device storage</h2>
         <p>
-          This website sets <strong>no cookies</strong> and loads no third-party scripts; the fonts
-          are served from this domain rather than fetched from a font provider. There is no cookie
-          banner here because there is nothing to ask you about — we set nothing that needs your
-          consent.
+          Bracemark sets <strong>no cookies</strong> of its own, and loads no third-party code
+          except in one place, described below; the fonts come from us rather than from a font
+          provider. There is no cookie banner on this website because there is nothing to ask you
+          about — we set nothing that needs your consent.
         </p>
         <p>
-          The app loads one script from anyone else, and only on one screen: <strong>Paddle</strong>
-          ’s, fetched when you open Settings → Subscription so it can look up the price in your
-          local currency, and used again to run the checkout if you go on to subscribe. Paddle sets
-          its own cookies to do that, under its privacy policy. Nothing else in Bracemark loads code
+          That one place: opening Settings → Subscription loads <strong>Paddle</strong>’s script, so
+          it can look up the price in your local currency, and again to run the checkout if you go
+          on to subscribe. Paddle sets its own cookies to do that, under its privacy policy — they
+          are the only cookies you will get from Bracemark. Nothing else in Bracemark loads code
           from another origin.
         </p>
         <p>

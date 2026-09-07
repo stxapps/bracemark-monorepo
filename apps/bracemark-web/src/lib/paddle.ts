@@ -6,7 +6,7 @@ import { CheckoutEventNames, initializePaddle, type Paddle } from '@paddle/paddl
 //  - a lazy singleton: Paddle.js is a third-party script, loaded only when the
 //    subscription section actually needs it, never on app boot. WHEN that is has
 //    a published answer: bracemark-site's /privacy and its FAQ _trackers_ entry
-//    both say this is the one script the app loads from anyone else, and that it
+//    both say this is the one third-party script the app loads, and that it
 //    arrives when you open Settings → Subscription — which is now true via
 //    previewPaddlePrices below, not only at checkout. Loading it anywhere else
 //    falsifies those pages;

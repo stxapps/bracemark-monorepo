@@ -1352,14 +1352,14 @@ export default function Page() {
               // checkout nobody would have objected to.
               //
               // "No ad networks" came out of the list, and not because the term
-              // above already says "No ads": an ad network's pixel is an OUTSIDE
+              // above already says "No ads": an ad network's pixel is a THIRD-PARTY
               // SCRIPT, so the sentence that follows denies it absolutely and by
               // construction, where the enumeration only denied it by name. It
               // was the one item earning nothing, in the cell that ran a line
               // longer than either of its neighbours.
               [
                 'No trackers',
-                'No analytics, no fingerprinting. The only outside script we load is our payment provider’s, on the one screen where you subscribe.',
+                'No analytics, no fingerprinting. The only third-party script we load is our payment provider’s, on the one screen where you subscribe.',
               ],
               // The local copy, not the format list. Lock-in is answered hardest
               // by the data already being on the machine — an export is a copy
