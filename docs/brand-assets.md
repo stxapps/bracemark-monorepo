@@ -354,6 +354,33 @@ into corporate.
   reader invert the clause to find the claim in it.
 - **Does not sound like**: "Your bookmarks are private and secure."
 
+**The mirror of that rule is naming an enemy, and it fails the same way.**
+"Bracemark exists to prevent the exploitation of your behaviour and interests" is
+"privacy-focused" with the intent moved to the other party — a purpose we assert,
+in a product whose case is that a purpose is worth nothing beside an
+architecture. It also claims more than the machine does: we can keep
+`api.bracemark.com` out of your library, and we cannot stop the sites you visit,
+your browser or your ISP from assembling the same picture — `bracemark-extractor`
+is handed a plaintext URL whenever the opt-in is on
+([link-extraction.md](./link-extraction.md), _server extraction_). That makes
+"prevent" the true-subset-as-the-whole error the privacy claims were rewritten to
+avoid, in the one direction a reader can falsify from their own browsing. And it
+buys a category the property has otherwise stayed out of, for the same reason two
+words of set dressing came out of the hero specimen
+(`apps/bracemark-site/src/app/page.tsx`, the tag row): the name of an -ism
+recruits a whole genre, and the argument moves from what our server holds, which
+is checkable, to a critique of an industry, which is not.
+
+**The harm underneath it is real, and is already stated three times — each time
+as a fact rather than as a cause.** /about opens on it ("what you are reading,
+buying, worrying about and working on"); the hero specimen assembles that picture
+in front of the reader out of two topic tags and a weekday; the landing band's
+"No ads, ever" carries the investor clause that says why the policy can hold.
+There is no fourth surface missing. If one is ever wanted it is descriptive and
+bounded to our own server — "a list of what you save is a list of what you want;
+we hold bytes we have no key to open" — and it is never a sentence about why we
+exist.
+
 **States its own costs, unprompted.** The distinctive one, and the one most
 easily edited out by someone tidying.
 
