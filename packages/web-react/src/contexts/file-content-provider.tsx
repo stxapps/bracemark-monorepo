@@ -85,8 +85,26 @@ export function FileContentProvider({ children }: { children: ReactNode }) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const drainingRef = useRef(false);
 
+  // The account the session memory above belongs to. The reset below COMPARES it
+  // rather than trusting the dependency array alone, because a bare `[username]`
+  // effect also fires on MOUNT — and a parent's effect runs after its children's, so
+  // it would wipe whatever a child asked for inside this provider's own first commit,
+  // dropping everything the first flush hadn't already taken. Nothing asks that early
+  // today (use-image-file-url defers behind a settle timer) and AuthGuard unmounts this
+  // subtree before `username` can change under it — 'ending' closes the gate ahead of
+  // the flip to 'unauthenticated' — so the mount-time wipe has never had anything to
+  // drop. The comparison is what keeps that true for the next caller.
+  //
+  // A first-run FLAG would not: bracemark-web's app router runs under StrictMode (Next
+  // enables it unless next.config.js opts out), and its double mount preserves refs, so
+  // the flag is spent on the first pass and the second pass wipes — the one case the
+  // flag was added for. A value comparison is the version that survives it.
+  const memoryUsernameRef = useRef(username);
+
   // A different account's ids mean nothing here — drop the session-scoped memory.
   useEffect(() => {
+    if (memoryUsernameRef.current === username) return;
+    memoryUsernameRef.current = username;
     queueRef.current = [];
     handledRef.current.clear();
     missingRef.current.clear();

@@ -84,6 +84,27 @@ appears in its doc comment ~45 lines above the real SQL. Include the surrounding
 whitespace or backticks so the match can only hit code, and `grep -n` the mutated
 file to confirm which line moved before trusting a green run.
 
+**A mutation that changes nothing is the other half of that check**, and it
+usually means the assertion's PATH never ran rather than that the assertion is
+worthless. The specimen: jsdom ships no `TextDecoder`, and the SVG half of the
+icon sniff decodes text (`@stxapps/shared` image/sniff.ts) — so under
+`@jest-environment jsdom` `isRenderableIconBytes` throws, `FaviconProvider`'s
+catch records `none` for everything, and a spec asserting `none` for a non-icon
+passes through the FAILURE path while asserting nothing about the verdict.
+Inverting the verdict in the source left it green, which is how it was found; the
+fix is one assignment from `node:util` at the top of the spec.
+
+**A cluster of negative assertions needs one positive control**, which is the
+same failure arriving by a different route: `not.toHaveBeenCalled()` is
+satisfied just as well by a provider that never reached the call at all.
+`expo-react`'s `contexts/favicon-provider.spec.tsx` had three cases asserting
+that a dropped host writes no `none` row, and deleting BOTH store writes from
+the drain left the file green — a provider that fetched every host correctly
+and then stored nothing passed every one of them. A single case pinning the
+write that SHOULD happen fails that mutation. Generally: where a spec's subject
+is "X does not happen under condition C", something in the file has to pin that
+X happens without C, or the whole cluster is measuring an absent path.
+
 #### tripwire: one dynamic import bans every static one
 
 `@nx/enforce-module-boundaries` classifies a workspace package as **lazy-loaded**
@@ -434,6 +455,29 @@ that exist there sit on the three things that fail SILENTLY:
   half has no other cover anywhere — every `bracemark-web` env file sets
   `NEXT_PUBLIC_EXTRACTOR_URL`, so no dev run, e2e run or deployed tier reaches
   it.
+- **A policy no row and no lint rule can report.** `web-react`'s
+  `contexts/favicon-provider.spec.tsx` pins what SURROUNDS the favicon fetch —
+  one fetch per host (the economics an icon-per-site rests on), a bounded
+  fan-out, and the drain's switch-off guard. That last one is the queue's
+  privacy TAIL, and the gate spec above cannot reach it: it proves nothing
+  STARTS through a closed gate, not that a queue already draining stops. Its
+  expo sibling covers the divergence, on the ported-pair rule below — expo's
+  guard carries a gestured exemption (`!gestured &&`) web has no equivalent of,
+  and on the DEFAULT mode that branch is not a race but steady state, since a
+  share of more than `MAX_IN_FLIGHT` links queues gestured hosts whose drain
+  reads an `enabled` that stays false. Neither file hardcodes the cap or the
+  stagger; the first burst's size is read off the run, which is also what stops
+  "nothing more went out" from passing against a provider that simply stopped
+  pumping. Writing them also surfaced a hazard in the SOURCE, and it generalized
+  to every provider here that resets on account change: a child's effect runs
+  BEFORE its parent's, so a reset keyed on `[username]` alone — which also fires
+  on mount — wiped anything asked inside the provider's own first commit. Both
+  favicon providers and both file-content ones now compare the account their
+  session memory belongs to rather than resetting on every mount (web's
+  `file-content-provider.tsx` carries the reasoning, including why a first-run
+  flag is not the fix: bracemark-web runs under StrictMode, whose double mount
+  spends the flag on the first pass and wipes on the second). The specs still
+  mount their askers a commit later, because that is the order the app has.
 
 The corollary, and it is the more useful half: several files in those packages
 have **no spec on purpose**. The two client-context providers are `createContext`

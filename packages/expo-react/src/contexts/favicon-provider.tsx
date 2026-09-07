@@ -116,9 +116,18 @@ export function FaviconProvider({ children }: { children: ReactNode }) {
   const handledRef = useRef(new Set<string>());
   const inFlightRef = useRef(0);
 
+  // The account the session memory above belongs to; the reset below COMPARES it
+  // rather than trusting `[username]` alone. Web's file-content-provider carries the
+  // reasoning: a bare dependency also fires on mount, and a parent's effect runs after
+  // its children's, so the wipe would take anything asked inside this provider's own
+  // first commit — and a first-run flag doesn't survive StrictMode's double mount.
+  const memoryUsernameRef = useRef(username);
+
   // A different account's hosts mean nothing here — drop the session memory.
   // (The ROWS are dropped separately, by clearData on sign-out.)
   useEffect(() => {
+    if (memoryUsernameRef.current === username) return;
+    memoryUsernameRef.current = username;
     queueRef.current = [];
     handledRef.current.clear();
   }, [username]);
