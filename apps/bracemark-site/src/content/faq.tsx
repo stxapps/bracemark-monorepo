@@ -47,6 +47,36 @@ function ExternalLink({ href, children }: { href: string; children: React.ReactN
   );
 }
 
+// The same-surface sibling of PageLink, and a plain <a> for the same reason
+// ExternalLink is one: a fragment has no route to prefetch either. It exists
+// because WHERE a sibling answer sits is a property of the page rendering it,
+// not of the answer — this file is content, shared by /faq and /pricing, and an
+// answer that hard-codes `/faq#…` is asserting a surface it cannot see. On /faq
+// the fragment lands on that question's <details>; on /pricing, where the same
+// answer is one of `PRICING_FAQ_IDS`, it lands on the target's grid cell.
+//
+// ⚠ THE FAILURE IS SILENT. A fragment whose target is not on the page scrolls
+// nowhere at all — no error in the console, no lint rule, no type error, no
+// failing build, and the reader gets a link that does nothing. Nothing links
+// this component to `PRICING_FAQ_IDS` below, so dropping an id from that list
+// can strand a link inside an answer that stayed. `faq-cross-links.spec.tsx`
+// beside this file is what holds the two together; read its header before
+// changing either list.
+//
+// USE IT ONLY BETWEEN FAQ ANSWERS. A surface that is not the FAQ — /security's
+// pointer at `compelled`, say — has no such fragment on it and must keep the
+// absolute `/faq#…` form.
+function HashLink({ id, children }: { id: string; children: React.ReactNode }) {
+  return (
+    <a
+      className="rounded-sm text-signal underline decoration-signal-line underline-offset-2 hover:decoration-signal"
+      href={`#${id}`}
+    >
+      {children}
+    </a>
+  );
+}
+
 function PageLink({ href, children }: { href: string; children: React.ReactNode }) {
   return (
     <Link
@@ -700,10 +730,9 @@ export const FAQ_GROUPS: FaqGroup[] = [
             Starting it goes through checkout, so it takes a payment method, but nothing is charged
             if you cancel before the {TRIAL_DAYS} days are up. There is no rush to start: the free
             plan has no time limit, and the {TRIAL_DAYS} days only begin when you begin them — so
-            start the trial when there is something for it to do. If you are importing a library of
-            more than {FREE_LINKS} links, that is day one — the cap is the first thing you will
-            meet. Otherwise start it when you want one of the {PLAN_LABELS.plus} features; nothing
-            is gained by starting sooner.
+            you can start the trial whenever you have something for it to do. If you are importing a
+            library of more than {FREE_LINKS} links, that is day one — the cap is the first thing
+            you will meet. Otherwise start it when you want one of the {PLAN_LABELS.plus} features.
           </>
         ),
       },
@@ -745,8 +774,8 @@ export const FAQ_GROUPS: FaqGroup[] = [
             free plan either way; and if we stop offering the paid plan for reasons within our
             control, our <PageLink href="/terms">Terms</PageLink> commit us to cancelling
             subscriptions and refunding the unused part of any period already paid for. Refunds in
-            the ordinary case are <PageLink href="/faq#refunds">further down</PageLink>. A monthly
-            plan is on the list.
+            the ordinary case are <HashLink id="refunds">further down</HashLink>. A monthly plan is
+            on the list.
           </>
         ),
       },
@@ -989,7 +1018,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
             different things never collide. If the same link is edited in both places before they
             sync, the later edit is the one that survives and the earlier one is replaced — we hold
             nothing readable from your links, so there is no merge we could do for you and no older
-            version to restore (see <PageLink href="/faq#undo-edit">can I undo a change</PageLink>).
+            version to restore (see <HashLink id="undo-edit">can I undo a change</HashLink>).
             Anything you change offline queues up and goes out in order the next time you have a
             network. Titles and preview images fetched in the background live in a separate
             encrypted file from what you write, so one never overwrites the other.
@@ -1137,9 +1166,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
             Both. Import a browser bookmarks export, a Raindrop CSV or a plain list of URLs — the
             file is read on your device and never uploaded. If it holds more links than your plan
             has room for, you are asked before anything is saved (see{' '}
-            <PageLink href="/faq#import-over-cap">
-              what if I import more than {FREE_LINKS} links
-            </PageLink>
+            <HashLink id="import-over-cap">what if I import more than {FREE_LINKS} links</HashLink>
             ). Export gives you the whole library on every plan: a full backup that restores
             everything, or one of three formats other apps read — a browser bookmarks file, a CSV
             carrying the address, list, title, note, tags and date of every link, and a plain list

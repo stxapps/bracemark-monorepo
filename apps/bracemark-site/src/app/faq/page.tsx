@@ -86,11 +86,41 @@ export default function Page() {
 
                 <div className={cn('mt-6 border-t border-border')}>
                   {group.items.map((item) => (
-                    <details
-                      key={item.id}
-                      id={item.id}
-                      className={cn('group border-b border-border')}
-                    >
+                    <details key={item.id} className={cn('group border-b border-border')}>
+                      {/* ⚠ THE ID BELONGS ON THE ANSWER BODY, NOT ON THE
+                          <details> AND NOT ON THE <summary>, and the difference
+                          is whether a jump link opens anything. A browser reveals
+                          a closed <details> only when the fragment lands on
+                          something inside the COLLAPSED part of it — the
+                          ancestor-details-revealing step of "scroll to the
+                          fragment". A summary is never collapsed, so it has
+                          nothing to reveal; the <details> itself has no closed
+                          ancestor at all. Both scroll to the row and leave it
+                          SHUT, and the reader who followed a link to an answer
+                          arrives at a question. Measured in Chromium and WebKit,
+                          which agree exactly — id on <details>: shut; on
+                          <summary>: shut; on this div: open.
+
+                          Nothing catches it. It renders, type-checks and lints,
+                          and jsdom has no fragment navigation to fail on, so the
+                          spec beside content/faq.tsx pins the part it can see:
+                          that the id sits on a node the <summary> does not
+                          contain, and that the node carries a scroll margin.
+
+                          `scroll-mt-48` is larger than the sections'
+                          `scroll-mt-24` on purpose, and the size is measured
+                          rather than picked: this element starts BELOW the
+                          question, so its margin has to clear the sticky header
+                          (65px, site-header.tsx) *and* the whole summary above
+                          it, or the jump lands on an answer with its own question
+                          scrolled off the top. The binding case is the narrowest
+                          phone against the longest question — `vs-others` wraps
+                          to 116px at 320px wide, so 65 + 116 = 181px is the floor
+                          and 12rem clears it by 11. It is one wrapped line from
+                          being wrong: a longer question, a bigger base font or a
+                          taller header eats the margin silently, since nothing
+                          here can fail a test. Re-measure at 320px before letting
+                          a question grow. */}
                       <summary
                         className={cn(
                           'flex cursor-pointer list-none items-start justify-between gap-6 rounded-sm py-4 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none [&::-webkit-details-marker]:hidden',
@@ -105,7 +135,12 @@ export default function Page() {
                           )}
                         />
                       </summary>
-                      <div className={cn('max-w-2xl pb-6 text-body text-muted-foreground')}>
+                      <div
+                        id={item.id}
+                        className={cn(
+                          'max-w-2xl scroll-mt-48 pb-6 text-body text-muted-foreground',
+                        )}
+                      >
                         {item.a}
                       </div>
                     </details>

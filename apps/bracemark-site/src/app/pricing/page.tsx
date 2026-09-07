@@ -502,7 +502,19 @@ export default function Page() {
               const item = faqById(id);
               if (!item) return null;
               return (
-                <div key={id} className={cn('border-t border-border pt-5')}>
+                /* `id` is what makes a cross-answer link inside one of these
+                   answers resolve HERE rather than throwing the reader back to
+                   /faq: `monthly` points at `refunds` with a bare fragment (see
+                   HashLink in content/faq.tsx), and both are in the list above,
+                   so on this page "further down" is two cells down and stays on
+                   the page the buyer is deciding on. Dropping an id from
+                   PRICING_FAQ_IDS while an answer that stayed still links to it
+                   leaves a link that scrolls nowhere and says nothing —
+                   faq-cross-links.spec.tsx is the only thing that catches it.
+
+                   `scroll-mt` clears the sticky site header when the jump lands,
+                   the same value and the same reason as /faq's sections. */
+                <div key={id} id={id} className={cn('scroll-mt-24 border-t border-border pt-5')}>
                   <dt className={cn('text-base leading-7 font-semibold text-balance')}>{item.q}</dt>
                   <dd className={cn('mt-2 text-body text-muted-foreground')}>{item.a}</dd>
                 </div>
