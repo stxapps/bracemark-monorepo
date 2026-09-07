@@ -1,5 +1,6 @@
 import {
   clearDecodeCache,
+  DECODE_CACHE_MAX,
   dropCachedExtraction,
   dropCachedLink,
   dropCachedPath,
@@ -147,5 +148,40 @@ describe('clearDecodeCache — the sign-out wipe', () => {
     clearDecodeCache();
     setCachedLink('links/a.enc', 1, 1, link('second user'));
     expect(getCachedLink('links/a.enc', 1, 1)?.customTitle).toBe('second user');
+  });
+});
+
+describe('the bound — the one path that almost never runs', () => {
+  // The only assertions here NOT about a stale decode. Eviction cannot serve a stale
+  // hit; it can only cause a miss, and a miss costs one re-decode. What it prevents is
+  // the cache growing without limit for the life of the tab, so the failure mode is
+  // memory, not one user's plaintext. The loops run the REAL DECODE_CACHE_MAX (~15ms
+  // for the pair) rather than a test-sized cache built through an exported factory:
+  // what ships is a module-level singleton, and that is the thing worth pinning.
+
+  it('does not evict at exactly DECODE_CACHE_MAX, so the resident set is not thrashed', () => {
+    // The boundary is load-bearing in this direction too. The bound sits above the
+    // largest plausible working set precisely so a fully-scrolled library keeps every
+    // on-screen entry; evicting one entry early would re-decode it on the very next
+    // reactive tick, which is the thrash the sizing exists to avoid.
+    for (let i = 0; i < DECODE_CACHE_MAX; i++) {
+      setCachedLink(`links/${i}.enc`, 1, 1, link(`t${i}`));
+    }
+    expect(getCachedLink('links/0.enc', 1, 1)?.customTitle).toBe('t0');
+  });
+
+  it('evicts the oldest-inserted, and only it, once past DECODE_CACHE_MAX', () => {
+    for (let i = 0; i <= DECODE_CACHE_MAX; i++) {
+      setCachedLink(`links/${i}.enc`, 1, 1, link(`t${i}`));
+    }
+    expect(getCachedLink('links/0.enc', 1, 1)).toBeUndefined();
+    // Only the oldest goes: the entry behind it and the write that triggered the
+    // eviction are both still resident. Insertion order, not recency — a re-`set` does
+    // not move a key's position, so a hot entry can be evicted before a cold one. That
+    // is the trade the sizing pays for: a HIT stays one bare Map lookup, with no
+    // delete+set on the all-hits hot path.
+    expect(getCachedLink('links/1.enc', 1, 1)?.customTitle).toBe('t1');
+    const newest = getCachedLink(`links/${DECODE_CACHE_MAX}.enc`, 1, 1);
+    expect(newest?.customTitle).toBe(`t${DECODE_CACHE_MAX}`);
   });
 });

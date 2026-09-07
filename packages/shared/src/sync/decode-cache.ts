@@ -51,21 +51,26 @@
 
 import type { ExtractionItem, LinkItem } from './items';
 
-// Bounded so the cache can't grow without limit, but MAX sits WELL ABOVE the
-// largest plausible loaded working set (a fully-scrolled large library), so for
-// normal libraries eviction never fires — the cache effectively holds the whole
-// resident set, and only an outlier library past MAX distinct links ever evicts.
-// Sizing it under the working set would be self-defeating: a fully-expanded 10k
-// list re-reads all 10k each reactive tick, and a too-small cache would evict
-// on-screen entries and re-decode them on the very next tick (thrash).
+// Bounded so the cache can't grow without limit, but the bound sits WELL ABOVE the
+// largest plausible loaded working set (a fully-scrolled large library), so for normal
+// libraries eviction never fires — the cache effectively holds the whole resident set,
+// and only an outlier library past DECODE_CACHE_MAX distinct links ever evicts. Sizing
+// it under the working set would be self-defeating: a fully-expanded 10k list re-reads
+// all 10k each reactive tick, and a too-small cache would evict on-screen entries and
+// re-decode them on the very next tick (thrash).
 //
-// Eviction is INSERTION (FIFO) order, not true LRU. Recency tracking would cost a
-// Map delete+set on every cache HIT — and a hit happens for ~every resident link
-// on every tick, i.e. tens of thousands of Map ops per refresh on a big list. The
-// hot path here is all-hits, so that bookkeeping is pure overhead; and since MAX
-// is above the working set, eviction almost never runs, so FIFO behaves the same
-// as LRU in practice while costing nothing on reads.
-const MAX = 50000;
+// Eviction is INSERTION (FIFO) order, not true LRU. Recency tracking would cost a Map
+// delete+set on every cache HIT — and a hit happens for ~every resident link on every
+// tick, i.e. tens of thousands of Map ops per refresh on a big list. The hot path here
+// is all-hits, so that bookkeeping is pure overhead; and since the bound is above the
+// working set, eviction almost never runs, so FIFO behaves the same as LRU in practice
+// while costing nothing on reads.
+//
+// Exported so decode-cache.spec.ts can derive its eviction loop from this value instead
+// of hardcoding it, and so a resize moves the spec with it. Named in full because
+// index.ts re-exports this module with `export *` — a bare `MAX` would land in the
+// package's public surface beside MAX_COMMIT_OPS and LINK_TITLE_MAX.
+export const DECODE_CACHE_MAX = 50000;
 
 interface Entry<T> {
   updatedAt: number;
@@ -88,7 +93,7 @@ function makeCache<T>() {
     },
     set(path: string, updatedAt: number, itemUpdatedAt: number, value: T): void {
       cache.set(path, { updatedAt, itemUpdatedAt, value });
-      if (cache.size > MAX) {
+      if (cache.size > DECODE_CACHE_MAX) {
         cache.delete(cache.keys().next().value as string); // evict oldest-inserted (FIFO)
       }
     },
