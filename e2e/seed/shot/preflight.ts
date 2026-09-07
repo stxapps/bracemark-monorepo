@@ -18,14 +18,25 @@ import { shotLinkUrls } from './library';
 // on its own, in seconds.
 //
 // WHY THROUGH THE EXTRACTOR AND NOT `curl`/`fetch`. Because the extractor's answer
-// is the only one that decides the picture, and the two genuinely disagree. The
-// site's landing page records the standing example: askamanager.org answers
-// Cloudflare's interstitial with a 403 to curl and to any server-side fetcher off
-// Cloudflare, and returns a 200 to `bracemark-extractor`, which is itself a
-// Worker. A preflight built on `curl` would report a live URL as dead and send
-// someone off to "fix" a list that was correct. Going through the extractor also
-// means this checks the real caps — the timeout, the redirect limit, the HTML
-// ceiling, the content-type allowlist — rather than a second opinion about them.
+// is the only one that decides the picture, and the two genuinely disagree. Two
+// specimens, and the second is the nastier of the pair:
+//
+//   askamanager.org  answered Cloudflare's interstitial with a 403 to curl and to
+//                    any server-side fetcher off Cloudflare, and a 200 to
+//                    `bracemark-extractor`, which is itself a Worker. It is no
+//                    longer in the list — it left on its og:image, not on this —
+//                    but it is the example the site's landing page still records.
+//   wikihow.com      serves a ~3KB bot-challenge document AT STATUS 200. No error,
+//                    no redirect: just a page with no og:title and no og:image in
+//                    it, and only after the first few requests, so a batch check
+//                    "discovers" that live pages have lost their metadata partway
+//                    down the list. Three wikiHow URLs are in the list below.
+//
+// A 403 announces itself and a 200 does not, which is why neither belongs in a
+// preflight built on `curl` — it would report live URLs as dead and send someone
+// off to "fix" a list that was correct. Going through the extractor also means
+// this checks the real caps — the timeout, the redirect limit, the HTML ceiling,
+// the content-type allowlist — rather than a second opinion about them.
 //
 // It asserts on three things, and the third one was learned the expensive way.
 //

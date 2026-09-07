@@ -224,21 +224,38 @@ interface ShotLink {
 // THE FIRST ROW IS THE HERO PANEL'S OWN SPECIMEN, which is what makes "aligned
 // with the hero" a fact about this library rather than a resemblance: it is the
 // same person's same act, under the same three tags, and the extractor returns
-// the same headline the panel prints. Its URL is now recorded beside the panel
-// too (apps/bracemark-site/src/app/page.tsx) — for a while it was written down
-// nowhere, and a slug reconstructed from the headline 404s, because the path is
-// the post id and not the words.
+// the same headline the panel prints. Its URL is recorded beside the panel too
+// (apps/bracemark-site/src/app/page.tsx), because a slug reconstructed from a
+// headline is how that link got lost once already.
 //
-// It is also the one card here whose cover is a LOGO rather than a photograph:
-// askamanager.org serves a site-wide social card on every post, so this tile is
-// the Ask a Manager wordmark where its neighbours are pictures. That is a real
-// property of the page and it is left alone. The hero panel declines the same
-// image for a reason that does not apply at this size — a 480x480 card
-// centre-cropped into a 64x40 slot is a smear of somebody else's brand colour,
-// which is why that slot draws the monogram instead — whereas a card banner is
-// wide enough to render it as what it is. One wordmark tile in a wall of
-// photographs is also what a real library looks like. If it ever reads as an
-// endorsement rather than as a bookmark, dropping this row is a one-line change.
+// ⚠ EVERY COVER HERE IS A PHOTOGRAPH OR A SUBJECT ILLUSTRATION, AND THAT IS A
+// SUBMISSION CONSTRAINT, NOT A TASTE. This library is now the one library — the
+// marketing site's figure, the social card, the PWA screenshots and all four
+// store listings draw from it — so it is built for the HARDEST frame rather than
+// the kindest, and a store screenshot crops harder than anything on the site.
+// Third-party marks in store art are something an Apple or Google reviewer looks
+// for, so the rule is: no host whose og:image is a site-wide LOGO CARD, and no
+// mark rendered as artwork. Five links were dropped to get here and each one
+// failed on its picture rather than its topic —
+//
+//   askamanager.org       a 480x480 site-wide masthead on every post
+//   nationalcareers…gov   govuk-opengraph-image.png, the GOV.UK crest card
+//   citizensadvice.org.uk a flat house-palette brand illustration
+//   bbcgoodfood.com  x2   photographs, but the BBC mark is one nobody argues with
+//
+// What CANNOT be removed, and is not the target: a hostname and a 16px favicon in
+// every row. An all-Wikipedia library still prints `en.wikipedia.org` and the
+// Wikimedia W twenty-six times. That is nominative use and it is what every
+// bookmark manager's store screenshots show. The line is drawn at artwork.
+//
+// ⚠ AND THE PICKS ARE VERIFIED BY LOOKING, because a passing preflight does not
+// mean a usable cover. `en.wikipedia.org/wiki/Slow_cooker` was proposed for the
+// Shopping row and declined: its og:image is a Crock-Pot with the wordmark
+// legible on the lid — a trademark arriving inside a photograph, which is the
+// one route the "photograph, not a masthead" rule does not catch by itself.
+// `Résumé` and `Standing_desk` went the other way and failed the same test as
+// `Nail (anatomy)` did before them: a scanned PDF page and an SVG rendered to
+// PNG are both near-white tiles where a cover should be.
 const SHOT_LINKS: ShotLink[] = [
   // ORDERING IS A DESIGN DECISION HERE, not the order these were collected in,
   // and three rules shape it — the first two learned from looking at the first
@@ -247,31 +264,38 @@ const SHOT_LINKS: ShotLink[] = [
   // ALTERNATE THE HOSTS. Wikipedia is the single largest supplier below, and left
   // in topic order it clustered: rows reading `en.wikipedia.org` four times under
   // four different photographs, which is the one thing in the frame that looks
-  // generated. It is now exactly half the list — 13 of 26 — and it sits on every
-  // ODD index, which is the only arrangement that holds: n other hosts can
-  // separate at most n+1 Wikipedia ones, so the two counts have to stay level, and
-  // a Wikipedia URL added without a host to go with it breaks the pattern
-  // somewhere below where anyone is still looking. Interleaving also happens to be
-  // MORE truthful about how a library fills up — nobody saves all their recipes on
-  // Tuesday and all their holiday reading on Wednesday.
+  // generated. It is exactly half the list — 13 of 26 — and it sits on every ODD
+  // index, which is the only arrangement that holds: n other hosts can separate at
+  // most n+1 Wikipedia ones, so the two counts have to stay level, and a Wikipedia
+  // URL added without a host to go with it breaks the pattern somewhere below
+  // where anyone is still looking. Interleaving also happens to be MORE truthful
+  // about how a library fills up — nobody saves all their recipes on Tuesday and
+  // all their holiday reading on Wednesday.
   //
-  // KEEP THE LOGO CARDS OUT OF THE FIRST ROWS. A handful of these hosts serve a
-  // site-wide social card rather than art for the piece, so those cards render as
-  // a wordmark on a flat field. One is fine and honest. Two near the top of the
-  // frame is the first thing a visitor sees, and it reads as a page about other
-  // people's brands. The Ask a Manager card stays first because it is the hero's
-  // own link; GOV.UK's is below the fold of the frame.
+  // THE OTHER HALF IS FIVE HOSTS, and that count is a floor rather than a
+  // coincidence. The safe pool is small — open-licensed, photographic covers, no
+  // vendor and no advocacy org — and the two obvious ways to fill it are both
+  // traps. Wikibooks reads `Cookbook:Lasagne - Wikibooks, open books for an open
+  // world` in a row that has space for about half of it, and `Cookbook:Sourdough
+  // _Bread` silently redirects to `Cookbook:Bread`; a third book from Standard
+  // Ebooks or Gutenberg would make this a reading list, which is the category the
+  // hero panel's tags were rewritten to stay out of. Wikivoyage carries five
+  // because a person planning one trip genuinely does that.
+  //
+  // THE FIRST SEVEN ROWS ARE THE FOLD, and every family crops at or above it: the
+  // site's figure shows seven, the store screenshot six, the card two. So the top
+  // of this array is composed rather than sorted — work, health, something being
+  // cooked, something being bought, something being read, a checkup, a weekend
+  // away. That is the ordinary month the privacy claim is ABOUT: no one row of it
+  // is sensitive and the aggregate is a profile, which is the argument the hero
+  // paragraph makes in prose and this list has to make in pictures.
   //
   // THE SECOND ROW IS THE HEALTH ROW, and the pick was made on the COVER as much
   // as on the topic: it is the tile directly under the hero's own link, so it is
   // the second thing looked at in the whole figure. `Blood pressure` earns it with
-  // a photograph of a monitor on an arm. `Nail (anatomy)` was proposed for this
-  // slot and declined on the same test — its og:image is an SVG diagram rendered
-  // to PNG, i.e. a near-white line drawing, which is the logo card's defect
-  // arriving by a different route. A cover in the top rows is a photograph or it
-  // is somebody else's page.
+  // a photograph of a monitor on an arm.
   {
-    url: 'https://www.askamanager.org/2018/09/15838.html',
+    url: 'https://www.wikihow.com/Prepare-for-a-Job-Interview',
     list: 'Interview prep',
     tags: ['work', 'interview', 'thursday'],
   },
@@ -281,9 +305,15 @@ const SHOT_LINKS: ShotLink[] = [
     tags: ['health', 'checkup'],
   },
   {
-    url: 'https://www.bbcgoodfood.com/recipes/classic-lasagne',
-    list: 'Recipes',
-    tags: ['recipe'],
+    url: 'https://standardebooks.org/ebooks/jane-austen/persuasion',
+    list: 'Reading',
+    tags: ['to-read', 'classic'],
+  },
+  { url: 'https://en.wikipedia.org/wiki/Lasagne', list: 'Recipes', tags: ['recipe'] },
+  {
+    url: 'https://www.english-heritage.org.uk/visit/places/stonehenge/',
+    list: 'Weekends',
+    tags: ['weekend'],
   },
   // The one row that is in two threads at once: a chair is a purchase and it is
   // also the desk you would be interviewing from. Tags cross lists — that is what
@@ -293,70 +323,40 @@ const SHOT_LINKS: ShotLink[] = [
     list: 'Shopping',
     tags: ['budget', 'work'],
   },
-  {
-    url: 'https://www.wikihow.com/Prepare-for-a-Job-Interview',
-    list: 'Interview prep',
-    tags: ['interview', 'thursday'],
-  },
-  { url: 'https://en.wikipedia.org/wiki/Sleep', list: 'Health', tags: ['health'] },
   // The seventh row, cut 62px in: its cover, title and host are in frame and its
   // tags are not (capture.ts derives the number).
-  {
-    url: 'https://standardebooks.org/ebooks/jane-austen/persuasion',
-    list: 'Reading',
-    tags: ['to-read', 'classic'],
-  },
-  {
-    url: 'https://en.wikipedia.org/wiki/Bel%C3%A9m_Tower',
-    list: 'Lisbon',
-    tags: ['lisbon', 'weekend'],
-  },
-  {
-    url: 'https://www.english-heritage.org.uk/visit/places/stonehenge/',
-    list: 'Weekends',
-    tags: ['weekend'],
-  },
+  { url: 'https://en.wikivoyage.org/wiki/Sintra', list: 'Lisbon', tags: ['lisbon'] },
+  { url: 'https://en.wikipedia.org/wiki/Sleep', list: 'Health', tags: ['health'] },
+  { url: 'https://www.gutenberg.org/ebooks/1342', list: 'Reading', tags: ['classic'] },
   { url: 'https://en.wikipedia.org/wiki/Electric_kettle', list: 'Shopping', tags: ['budget'] },
-  {
-    url: 'https://www.bbcgoodfood.com/recipes/best-ever-chocolate-brownies-recipe',
-    list: 'Recipes',
-    tags: ['recipe', 'weekend'],
-  },
+  { url: 'https://en.wikivoyage.org/wiki/Porto', list: 'Lisbon', tags: ['lisbon'] },
   {
     url: 'https://en.wikipedia.org/wiki/Job_interview',
     list: 'Interview prep',
     tags: ['work', 'interview'],
   },
-  { url: 'https://www.gutenberg.org/ebooks/1342', list: 'Reading', tags: ['classic'] },
-  { url: 'https://en.wikipedia.org/wiki/Walking', list: 'Health', tags: ['health', 'checkup'] },
-  {
-    url: 'https://nationalcareers.service.gov.uk/careers-advice/interview-advice',
-    list: 'Interview prep',
-    tags: ['work', 'interview'],
-  },
-  { url: 'https://en.wikipedia.org/wiki/Lisbon', list: 'Lisbon', tags: ['lisbon'] },
   { url: 'https://www.wikihow.com/Change-a-Bike-Tire', list: 'Bike', tags: ['bike'] },
-  { url: 'https://en.wikipedia.org/wiki/Damp_(structural)', list: 'Renting', tags: ['rented'] },
-  {
-    url: 'https://www.citizensadvice.org.uk/housing/renting-privately/',
-    list: 'Renting',
-    tags: ['rented'],
-  },
-  {
-    url: 'https://en.wikipedia.org/wiki/Pastel_de_nata',
-    list: 'Lisbon',
-    tags: ['lisbon', 'recipe'],
-  },
+  { url: 'https://en.wikipedia.org/wiki/Walking', list: 'Health', tags: ['health', 'checkup'] },
   {
     url: 'https://standardebooks.org/ebooks/f-scott-fitzgerald/the-great-gatsby',
     list: 'Reading',
     tags: ['to-read', 'classic'],
   },
-  { url: 'https://en.wikipedia.org/wiki/Compost', list: 'Garden', tags: ['garden'] },
+  { url: 'https://en.wikipedia.org/wiki/Damp_(structural)', list: 'Renting', tags: ['rented'] },
+  { url: 'https://en.wikivoyage.org/wiki/%C3%93bidos', list: 'Lisbon', tags: ['lisbon'] },
+  {
+    url: 'https://en.wikipedia.org/wiki/Pastel_de_nata',
+    list: 'Recipes',
+    tags: ['lisbon', 'recipe'],
+  },
   { url: 'https://www.gutenberg.org/ebooks/2701', list: 'Reading', tags: ['to-read'] },
-  { url: 'https://en.wikipedia.org/wiki/Bicycle_lighting', list: 'Bike', tags: ['bike', 'budget'] },
+  { url: 'https://en.wikipedia.org/wiki/Compost', list: 'Garden', tags: ['garden'] },
   { url: 'https://www.wikihow.com/Repot-a-Plant', list: 'Garden', tags: ['garden', 'weekend'] },
+  { url: 'https://en.wikipedia.org/wiki/Bicycle_lighting', list: 'Bike', tags: ['bike', 'budget'] },
+  { url: 'https://en.wikivoyage.org/wiki/Bath_(England)', list: 'Weekends', tags: ['weekend'] },
   { url: 'https://en.wikipedia.org/wiki/Sourdough', list: 'Recipes', tags: ['recipe', 'bread'] },
+  { url: 'https://en.wikivoyage.org/wiki/Whitstable', list: 'Weekends', tags: ['weekend'] },
+  { url: 'https://en.wikipedia.org/wiki/Apartment', list: 'Renting', tags: ['rented'] },
 ];
 
 // The catalog entry. It sits BELOW the array because it counts it: `SHOT_LINKS`

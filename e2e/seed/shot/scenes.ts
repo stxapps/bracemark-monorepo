@@ -131,11 +131,26 @@ async function settleList(page: Page): Promise<void> {
 // driving the box would only be re-typing what the address bar already says, and
 // it would photograph a component mid-debounce.
 //
-// "interview" is chosen for what it demonstrates, not for the count: it lands in
-// the URL of three links and in the fetched TITLE of a fourth, which is the
-// combined `url ⊕ title` haystack doing the thing that makes `text` the basic
-// rung. A person with an "Interview prep" list is the person who types it.
-const SEARCH_WORD = 'interview';
+// "travel" is chosen for what it demonstrates: it lands in the fetched TITLE of
+// all five Wikivoyage guides and in the URL of none of them, so every row on
+// screen is there because of a word the EXTRACTOR supplied. That is the half of
+// the combined `url ⊕ title` haystack a reader cannot otherwise account for — a
+// hit on the url explains itself, a hit on the title only makes sense once you
+// know the title was fetched. A person with a `Lisbon` list under `Weekends` is
+// the person who types it. It also happens to fill the frame, which is the one
+// thing the note below is about.
+//
+// ⚠ IT USED TO BE "interview", and what retired it was the listing-safe swap in
+// `library.ts`, not a view about the word. "interview" landed in three URLs and in
+// the fetched title of a fourth — askamanager's — showing BOTH halves of the union
+// in one frame. Two of those four links left (a masthead cover and a crest card),
+// and the title-only match went with them. The whole vocabulary was searched
+// afterwards: NO word in this library now matches 3-5 links with a url hit and a
+// title-only hit at the same time, so the union cannot be shown in one picture and
+// this scene shows the half that needs showing. If a future library restores a
+// link whose title and url disagree, that word is worth having back — Gutenberg is
+// the structural candidate, since its urls are numeric and its titles are not.
+const SEARCH_WORD = 'travel';
 
 // ⚠ A FILTERED VIEW IS SHORT, AND THAT IS THE FIXTURE, NOT THE QUERY. The library
 // is 26 links across 10 lists, so every filter lands 2–5 rows and leaves air

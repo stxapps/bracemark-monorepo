@@ -2,7 +2,7 @@
   "assets": {
     "apps/bracemark-site/src/app/opengraph-image.png": {
       "pixels": "1200x630",
-      "sha256": "49858b4e4ccb0d9c8c2afa20508c8c8d65b7ca99d06f885f9a939f0d9416c64e",
+      "sha256": "ecaa9c67cef1b9d2c2dc7ad06bdb4318d78fbf7c7788da2a5247aa4582f0bcc0",
       "variant": "library",
       "inputs": {
         "brand.name": "Bracemark",
@@ -15,7 +15,7 @@
     },
     "apps/bracemark-site/src/app/twitter-image.png": {
       "pixels": "1200x630",
-      "sha256": "49858b4e4ccb0d9c8c2afa20508c8c8d65b7ca99d06f885f9a939f0d9416c64e",
+      "sha256": "ecaa9c67cef1b9d2c2dc7ad06bdb4318d78fbf7c7788da2a5247aa4582f0bcc0",
       "variant": "library",
       "inputs": {
         "brand.name": "Bracemark",
@@ -28,21 +28,21 @@
     },
     "apps/bracemark-web/public/ss-narrow-1.png": {
       "pixels": "1170x2532",
-      "sha256": "070d132061d1e0b266c6657977723ca32f0238cb94bcb7e538832e914c538f84",
+      "sha256": "637ccca8b4718ed069695f38cde15463ea0aec56c2cbf78ae9afbe68ece6096b",
       "inputs": {
         "listing.pwaDescription": "Bookmarks only you can read. Encrypted on your device before they ever sync."
       }
     },
     "apps/bracemark-web/public/ss-narrow-2.png": {
       "pixels": "1170x2532",
-      "sha256": "a2129d2beb0100951ac11782269f082e1768333968faf12c8a14555b906e1b2e",
+      "sha256": "977fb6e2f9d498c3fec95325d4b45428f73e819ecf12fdb229f5e3bc410a33f2",
       "inputs": {
         "listing.pwaDescription": "Bookmarks only you can read. Encrypted on your device before they ever sync."
       }
     },
     "apps/bracemark-web/public/ss-wide-1.png": {
       "pixels": "2560x1600",
-      "sha256": "9fdab9e56c8d699465f73cbf445dad1a22c39f05d20f10f2b9c35f386fee44d9",
+      "sha256": "f1ca0aa9c65e9cc50d09f49fcc7159544237981be66d6c6e5202e36bad36dbe6",
       "inputs": {
         "brand.name": "Bracemark",
         "icon.d": "M254.101 0L382.101 128C385.101 168 360.1 223.5 324.101 241C458.6 248.001 466.6 502.499 324.101 512H48C21.4903 512 0 490.51 0 464V48C0 21.4903 21.4903 0 48 0H254.101ZM103.101 443H286.101C328.074 443 362.101 408.973 362.101 367C362.101 325.027 328.074 291 286.101 291H103.101V443ZM103.101 198H245.101C280.447 198 309.101 169.346 309.101 134C309.101 98.6539 280.447 70.0003 245.101 70H103.101V198Z",
@@ -51,7 +51,7 @@
     },
     "apps/bracemark-web/public/ss-wide-2.png": {
       "pixels": "2560x1600",
-      "sha256": "740e76a1aae61a158e03d9349f532779b7aed086630ec8c871404ee2efef2b51",
+      "sha256": "f07b2ccde9eb8ba3b54c5e48a801e9a4636fc4b4bc5729a4944e3c14e4337eff",
       "inputs": {
         "brand.name": "Bracemark",
         "icon.d": "M254.101 0L382.101 128C385.101 168 360.1 223.5 324.101 241C458.6 248.001 466.6 502.499 324.101 512H48C21.4903 512 0 490.51 0 464V48C0 21.4903 21.4903 0 48 0H254.101ZM103.101 443H286.101C328.074 443 362.101 408.973 362.101 367C362.101 325.027 328.074 291 286.101 291H103.101V443ZM103.101 198H245.101C280.447 198 309.101 169.346 309.101 134C309.101 98.6539 280.447 70.0003 245.101 70H103.101V198Z",
@@ -60,7 +60,7 @@
     },
     "apps/bracemark-web/src/app/opengraph-image.png": {
       "pixels": "1200x630",
-      "sha256": "49858b4e4ccb0d9c8c2afa20508c8c8d65b7ca99d06f885f9a939f0d9416c64e",
+      "sha256": "ecaa9c67cef1b9d2c2dc7ad06bdb4318d78fbf7c7788da2a5247aa4582f0bcc0",
       "variant": "library",
       "inputs": {
         "brand.name": "Bracemark",
@@ -73,7 +73,7 @@
     },
     "apps/bracemark-web/src/app/twitter-image.png": {
       "pixels": "1200x630",
-      "sha256": "49858b4e4ccb0d9c8c2afa20508c8c8d65b7ca99d06f885f9a939f0d9416c64e",
+      "sha256": "ecaa9c67cef1b9d2c2dc7ad06bdb4318d78fbf7c7788da2a5247aa4582f0bcc0",
       "variant": "library",
       "inputs": {
         "brand.name": "Bracemark",

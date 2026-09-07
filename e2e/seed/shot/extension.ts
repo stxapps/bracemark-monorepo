@@ -119,8 +119,9 @@ const SCALE = 2;
 //
 // The rule `library.ts` follows is "our own pages, public-domain and
 // openly-licensed material, things whose cover art is a photograph rather than a
-// masthead". A Wikipedia article is all three, and it is the kind of page a
-// bookmark manager is photographed saving.
+// masthead". A Wikipedia article is all three, and so is a Wikivoyage one (same
+// CC BY-SA, same absence of a house style to infringe) — and both are the kind of
+// page a bookmark manager is photographed saving.
 //
 // Neither is one of OURS. The temptation is to save bracemark.com and dodge the
 // question entirely — but `library.ts`'s persona note rules that out for a reason
@@ -174,8 +175,15 @@ const SCALE = 2;
 // The way to a real cover, if one is ever wanted, is the save path plus
 // `<all_urls>` on the staged copy (the click grants that too) plus deleting the
 // link and emptying the trash afterwards — three moving parts to change one tile.
+// ⚠ `SAVED_URL` MUST BE A URL `library.ts` STILL HOLDS, and nothing here checks
+// it. When the library was made listing-safe this pointed at
+// `en.wikipedia.org/wiki/Lisbon`, which left the list — and the failure is not a
+// missing link but a WRONG PICTURE waiting 60s to become an error: the revisit
+// path never triggers, `Complete` never renders, and the run dies on a
+// `getByText('Saved')` that describes a popup showing "Save this page". If this
+// throws there, check this constant against the list before anything else.
 const UNSAVED_URL = 'https://en.wikipedia.org/wiki/Alfama';
-const SAVED_URL = 'https://en.wikipedia.org/wiki/Lisbon';
+const SAVED_URL = 'https://en.wikivoyage.org/wiki/Sintra';
 
 // What the person does to the unsaved one, driven through the real controls
 // rather than prefilled: the list the trip is already filed under, and two tags

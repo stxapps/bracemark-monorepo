@@ -68,7 +68,7 @@ const CIPHERTEXT =
 // them would let the tile drift from the host printed beside it — "same site,
 // same mark" is the whole point of that tile, and this panel is where a visitor
 // meets it first.
-const SPECIMEN_HOST = 'askamanager.org';
+const SPECIMEN_HOST = 'wikihow.com';
 
 // --- the one picture of the product ---------------------------------------
 // There was no screenshot on any page of this site. The only depiction of a
@@ -212,29 +212,52 @@ function HeroPanel() {
               read as was a hole, in the one artefact a visitor studies, exactly
               where the product's own subject belongs.
 
-              WHY THE MONOGRAM AND NOT A REAL PREVIEW IMAGE. This was tried with
-              a genuine og:image and the answer is measurement, not taste: the
-              slot is 64x40 and every social card is ~1200x630, so any of them
-              centre-cropped in here is a colour swatch — a smear of somebody
-              else's brand colour, sometimes landing a few degrees off
-              `--color-signal` and reading as our own accent misprinted. The
-              tile is a VECTOR sized to the box, so it is the one thing that
-              stays legible at this size.
+              WHY THE MONOGRAM AND NOT A REAL PREVIEW IMAGE — and the honest
+              answer is NOT the one this comment used to give. It said the slot is
+              64x40 and a social card is ~1200x630, so any cover centre-cropped
+              into it is a colour swatch. That is true of a LOGO CARD and false in
+              general, and the product's own pictures are the refutation: the
+              figure below this band renders seven covers at exactly this size —
+              a handshake, a blood-pressure monitor, a Friedrich painting, a tray
+              of lasagne, Stonehenge, an office chair, a palace interior — and
+              every one of them reads. A photograph survives this crop. Do not
+              re-derive the old claim from the old wording.
 
-              THIS specimen's own og:image makes the case twice over, and it is
-              the one thing here that is NOT a faithful drawing — a real
-              browser-extension save of this link would show a picture, because
-              the extension reads the live DOM and this page has an og:image.
-              What that image IS: a 480x480 site-wide Ask a Manager logo card,
-              the same one on every post, not art for this article. Cropped to
-              16:10 it is a band of olive and orange with a third party's
-              wordmark sliced through the middle — a smear by the measurement
-              above, and by the endorsement test below (which is what rules out
-              vendors and advocacy orgs) somebody else's mark in our hero. So
-              the slot draws the FALLBACK deliberately, not this link's real
-              preview. That is the same reason the browser
+              TWO REASONS SURVIVE, and they are about what this panel IS.
+              First, it draws the FREE-PLAN DEFAULT. Previews come from the device
+              that saved the link, so a visitor who signs up on the web and saves
+              from the web sees monograms, not covers — the figure below shows a
+              filled library and its caption carries exactly that split. The two
+              pictures show two states and both are true; the hero shows the one a
+              new visitor will actually meet.
+
+              Second, and decisively: this panel is a DRAWING, not a capture. Every
+              cover in the screenshots is there because a camera was pointed at the
+              running product — nominative use, the same as the hostname beside it.
+              Putting one HERE means either hotlinking a third party's CDN from our
+              apex or committing their artwork into this repo, and for this
+              specimen that artwork is CC BY-NC-SA: attribution required, and a
+              non-commercial clause on a page that sells a subscription. The
+              monogram is ours, it is a VECTOR sized to the box, and it costs
+              nobody's licence.
+
+              THIS specimen's own og:image is the one thing on this panel that is
+              NOT a faithful drawing — a real browser-extension save of this link
+              would show a picture, because the extension reads the live DOM and
+              this page has one. What that image IS: a 3200x2400 step illustration
+              of two people shaking hands, drawn for this article. It would crop
+              into this slot perfectly well; the figure below proves it, since the
+              same illustration is the first row down there. So the slot is NOT
+              drawing the fallback because a cover would fail here. It is drawing
+              it for the two reasons above — the free-plan default, and whose
+              asset it would be.
+
+              What this image is NO LONGER is somebody else's mark. The previous
+              specimen was a site-wide masthead, and it failed the endorsement test
+              below on top of everything else; the library behind every published
+              picture is now picked so that no row fails that way. That the browser
               extension's popup and the expo share sheet both END their fallback
-              chains on it rather than beginning there.
+              chains on this tile rather than beginning there is unchanged.
 
               64x40, because this panel is a DRAWING of a real component and has
               to measure the same as it: bracemark-web's list row
@@ -302,42 +325,44 @@ function HeroPanel() {
                 therapy candidate sits on a host selling therapy.
 
                 THE PAGE IS
-                https://www.askamanager.org/2018/09/15838.html, and the URL is
-                written down here because for a long stretch it was not written
+                https://www.wikihow.com/Prepare-for-a-Job-Interview, and the URL
+                is written down here because for a long stretch it was not written
                 down anywhere. The panel stores the HOST and the TITLE — which is
                 all it renders — so the citation could be read but not checked,
                 and the one thing this slot has already been wrong about is a
-                citation. Reconstructing the URL from the headline does not work:
-                the slug is the post id, not the words, and a guessed
-                `/2018/03/heres-a-step-by-step-guide-…` returns a 404 that looks
-                exactly like the piece having been taken down.
+                citation.
 
-                THE LOWERCASE IS THEIRS. Ask a Manager styles every headline
-                lowercase; this is the title as published, minus the
-                " - Ask a Manager" suffix a person trims. Sentence-casing it
-                falsifies the citation. Re-verifying it does NOT work from an
-                ordinary shell: the zone answers Cloudflare's interstitial with a
-                403 to curl and to any server-side fetcher off Cloudflare, so a
-                script reads as though the page were gone. Two routes that do
-                work — `bracemark-extractor`, which is itself a Worker and gets a
-                200 out of the same zone (POST /v1/extract on
-                extractor.bracemark.com), and the Wayback `id_` snapshot, which
-                serves the raw markup. Don't record the 403 as the page's own
-                verdict: our extractor reads this URL fine, and returns this
-                headline verbatim.
+                THIS SLOT USED TO CITE askamanager.org, and what moved it was not
+                the copy but the PICTURES. One library now feeds every published
+                image — the figure below, the social card, the PWA screenshots and
+                four store listings — so it is built for a store reviewer rather
+                than for this page, and that host serves a site-wide masthead as
+                its og:image on every post. Which this panel had already worked
+                out for itself, at this size, for the reason two paragraphs up;
+                the store frame is where the same fact stopped being a question
+                about a 64x40 slot. e2e/seed/shot/library.ts carries the rule.
 
-                THE APOSTROPHE IS `’` ON PURPOSE, and the page publishes it BOTH
-                ways — the rendered headline (`.entry-title`) carries `&#8217;`,
-                while `<title>` and `og:title` carry `&#039;`, so an extraction
-                (and the extension's `document.title`) yields the straight one.
-                This slot quotes the HEADLINE a reader sees, not the metadata,
-                and the root eslint.config.mjs `no-restricted-syntax` rule
-                requires `’` in JSXText regardless — matching the extractor byte
-                for byte would need a disable comment for no gain, and the string
-                is already a drawing rather than a capture (the suffix above is
-                trimmed the way a person trims it). */}
+                RE-VERIFYING IT DOES NOT WORK FROM AN ORDINARY SHELL, and the trap
+                is worse than the one it replaces. wikiHow answers a plain `curl`
+                with a 3KB bot-challenge page AT STATUS 200 — not a 403, not an
+                error, just a document with no og:title and no og:image in it — so
+                a script reads a live page as one that has lost its metadata, and
+                reads it that way intermittently, because the challenge engages
+                after the first few requests. A 403 announces itself; this does
+                not. Two routes that do work: `bracemark-extractor`, which is
+                itself a Worker (POST /v1/extract on extractor.bracemark.com), and
+                the Wayback `id_` snapshot, which serves the raw markup.
+
+                THE AMPERSAND AND THE CAPITALISATION ARE THEIRS, and this string
+                is the extractor's answer BYTE FOR BYTE — checked, not assumed.
+                There is no suffix trimmed off it, which is worth saying because
+                the neighbouring wikiHow rows do carry one ("How to Repot a Plant:
+                14 Steps (with Pictures) - wikiHow"): this page's `<title>` and its
+                og:title happen to agree and neither is branded. So unlike the
+                specimen before it, the panel and a real save print the same
+                characters, and `npm run shot:preflight` is what re-checks that. */}
             <p className={cn('text-[0.9375rem] leading-snug font-medium')}>
-              here’s a step-by-step guide to preparing for a job interview
+              How to Prepare for a Job Interview & Answer Common Questions
             </p>
             <p className={cn('mt-1 font-mono text-xs text-muted-foreground')}>{SPECIMEN_HOST}</p>
             <div className={cn('mt-2.5 flex flex-wrap gap-1.5')}>

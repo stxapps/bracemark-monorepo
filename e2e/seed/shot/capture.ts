@@ -345,25 +345,55 @@ async function fillPreviews(page: Page): Promise<void> {
   // button's state means something by the time it is read.
   let progress = await readSettledCount(page);
 
+  // ⚠ A DISABLED `Generate all` IS NOT A FAILURE HERE — it is PHASE TWO'S CASE
+  // ARRIVING EARLY, and this used to throw on it. The button is
+  // `disabled={pendingCount === 0}`, and a link whose fetch failed transiently
+  // leaves the pending bucket at once (phase two's comment below has the whole
+  // mechanism), so an account that is part-way previewed shows Pending 0 with the
+  // button dead and rows still uncovered. `expect(...).toBeEnabled()` then spent
+  // 60s and threw — killing the run BEFORE phase two, which is the code written to
+  // handle exactly this. It cost three separate runs before it was worth fixing.
+  //
+  // The wait itself has to stay generous rather than sampling `isEnabled()`, for
+  // the reason recorded above: right after an import the button is disabled
+  // because `pendingCount` is UNKNOWN, and falling through then would skip
+  // extract-all and let phase two drag the whole library in by scrolling — which
+  // still finishes, which is why nobody would look. So: wait the full minute, and
+  // treat the timeout as a branch rather than an error.
   if (!isComplete(progress, total)) {
-    await expect(generateAll).toBeEnabled({ timeout: 60_000 });
-    await generateAll.click();
-    await page.getByRole('button', { name: 'Confirm' }).click();
-    // Both halves, in this order, and the first one is not redundant.
-    // `toBeHidden` is satisfied by the very first poll, and right after Confirm
-    // that poll can land before React has swapped the button slot — so waiting
-    // only for Pause to GO AWAY returns instantly, before the job has started.
-    // Waiting for Pause to appear first is safe because the job cannot finish
-    // inside the window — it is a fetch per link against real sites — so a Pause
-    // that never shows means the press did not take, which is worth failing on.
-    const pause = page.getByRole('button', { name: /Pause/ });
-    await expect(pause).toBeVisible({ timeout: 30_000 });
-    await expect(pause).toBeHidden({ timeout: DRAIN_TIMEOUT_MS });
+    const startable = await generateAll
+      .waitFor({ state: 'visible' })
+      .then(() => expect(generateAll).toBeEnabled({ timeout: 60_000 }))
+      .then(
+        () => true,
+        () => false,
+      );
 
-    // Let the counts SETTLE before reporting them. They are still being written
-    // as the job ends, so the reading available the instant Pause disappears is
-    // a stale one.
-    progress = await readSettledCount(page);
+    if (!startable) {
+      console.log(
+        `previewed ${report(progress, total)} — \`Generate all\` is disabled with the ` +
+          `library incomplete, so the pending bucket is empty and the stragglers are ` +
+          `sitting on a backoff. Nothing to press; falling through to the auto-drain.`,
+      );
+    } else {
+      await generateAll.click();
+      await page.getByRole('button', { name: 'Confirm' }).click();
+      // Both halves, in this order, and the first one is not redundant.
+      // `toBeHidden` is satisfied by the very first poll, and right after Confirm
+      // that poll can land before React has swapped the button slot — so waiting
+      // only for Pause to GO AWAY returns instantly, before the job has started.
+      // Waiting for Pause to appear first is safe because the job cannot finish
+      // inside the window — it is a fetch per link against real sites — so a Pause
+      // that never shows means the press did not take, which is worth failing on.
+      const pause = page.getByRole('button', { name: /Pause/ });
+      await expect(pause).toBeVisible({ timeout: 30_000 });
+      await expect(pause).toBeHidden({ timeout: DRAIN_TIMEOUT_MS });
+
+      // Let the counts SETTLE before reporting them. They are still being written
+      // as the job ends, so the reading available the instant Pause disappears is
+      // a stale one.
+      progress = await readSettledCount(page);
+    }
   }
 
   let lastReport = report(progress, total);
