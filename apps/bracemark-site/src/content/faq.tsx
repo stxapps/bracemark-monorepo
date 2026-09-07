@@ -625,11 +625,11 @@ export const FAQ_GROUPS: FaqGroup[] = [
         q: `What happens when I reach ${FREE_LINKS} links?`,
         a: (
           <>
-            Nothing is deleted and nothing is locked away. You keep reading, searching, editing,
-            deleting and exporting the whole library; new links stop saving until you upgrade or
-            make room. Upgrading lifts the cap straight away. That is also what happens if a trial
-            ends with more than {FREE_LINKS} links in your library — they all stay, and stay
-            exportable; you just cannot add new ones until you are back under the cap or on{' '}
+            Nothing is deleted and nothing is put out of reach. You keep reading, searching,
+            editing, deleting and exporting the whole library; new links stop saving until you
+            upgrade or make room. Upgrading lifts the cap straight away. That is also what happens
+            if a trial ends with more than {FREE_LINKS} links in your library — they all stay, and
+            stay exportable; you just cannot add new ones until you are back under the cap or on{' '}
             {PLAN_LABELS.plus}.
           </>
         ),
@@ -647,33 +647,63 @@ export const FAQ_GROUPS: FaqGroup[] = [
             The file is read on your device and counted before anything is saved, so you find out up
             front rather than halfway through. If it holds more new links than your plan has room
             for, Bracemark tells you both numbers and asks: bring in the ones that fit, or stop and
-            import the whole file once you have room. Nothing is written until you pick, and the
-            file on your device is never changed. If you take the ones that fit, importing the same
-            file again later brings in the rest — the links already saved are skipped as duplicates.
-            One exception: a Bracemark backup (.zip) is all-or-nothing, because a half-restored
-            backup is worse than none.
+            import the whole file once you have room for all of it. Nothing is written until you
+            pick, and the file on your device is never changed. If you take the ones that fit,
+            importing the same file again later brings in the rest — the links already saved are
+            skipped as duplicates. One exception: a Bracemark backup (.zip) is all-or-nothing,
+            because a half-restored backup is worse than none.
           </>
         ),
       },
       {
-        // The advice branches because the old single answer ("start it when the
-        // free plan begins to pinch") is right for someone starting fresh and
-        // wrong for everyone arriving with a library — for them it pinches at
-        // minute one, and the import is the decision. The card sentence is here
-        // because a trial that takes a payment method should say so on a site
-        // that makes a point of saying "no card" everywhere it is true.
+        // The card sentence is here because a trial that takes a payment method
+        // should say so on a site that makes a point of saying "no card"
+        // everywhere it is true.
+        //
+        // THE DAY-ONE ADVICE IS CONDITIONAL, and the flat version of it ("if you
+        // are bringing a library with you, start on day one") was wrong for most
+        // of the people it addressed. A switcher whose file fits under the cap
+        // gets nothing from the trial on day one, and telling them to start it
+        // anyway is the salesmanship this property otherwise refuses — with a
+        // real cost attached, since the trial takes a payment method and renews
+        // into a charge. The cap is the ONE condition, and `import-over-cap`
+        // above is its mechanism; this answer only says when to have upgraded by.
+        //
+        // A second condition stood here for one revision — nested folders, which
+        // the import used to flatten on the free plan — and it is gone because
+        // the build changed under it rather than because the sentence was wrong.
+        // The import now builds the tree its folder paths name on every plan
+        // (`shared/src/import/project.ts`, the header; docs/data-lifecycle.md,
+        // _the shapes_), so there is no longer a structural decision taken at
+        // import time to be day-one about. NOTHING replaces it here: a reader
+        // whose only question is nesting is answered by `nested-lists` in the
+        // using group, and this answer is about when to spend the trial.
+        //
+        // "THERE IS NO RUSH" IS THE MECHANISM, not modesty: the free plan has no
+        // time limit and the clock starts on demand, so a trial started before
+        // there are links to try it on spends {TRIAL_DAYS} days on nothing. The
+        // replaced clause ("wait until the free plan begins to pinch") said the
+        // same thing as a feeling rather than as a fact, and left the reader with
+        // no way to tell when that was.
+        //
+        // The cap is FREE_LINKS in both branches, never a written-out number.
+        // This answer ended on "a twelve-link library" for a while, which is the
+        // header's rule failing in the way it fails — the cap moved to 200 in
+        // `iap/plans`, every interpolated mention followed it, and the one spelled
+        // in words stayed behind, wrong by an order of magnitude and readable as
+        // a plan detail rather than as a typo.
         id: 'trial',
         q: 'Is there a free trial?',
         a: (
           <>
-            Yes — {PLAN_LABELS.plus} starts with {TRIAL_DAYS} days free, on the annual plan, and
-            cancelling before the end means no charge. Starting it goes through checkout, so it
-            takes a payment method; nothing is charged unless the trial runs to the end. When to
-            start it depends on which door you came in: if you are arriving with a library to
-            import, day one — the cap is the first thing you will meet, and whether the structure
-            suits your links is a question your own library answers. If you are starting fresh, wait
-            until the free plan begins to pinch, because the trial demos things a twelve-link
-            library cannot feel yet.
+            Yes — {PLAN_LABELS.plus} starts with {TRIAL_DAYS} days free, on the annual plan.
+            Starting it goes through checkout, so it takes a payment method, but nothing is charged
+            if you cancel before the {TRIAL_DAYS} days are up. There is no rush to start: the free
+            plan has no time limit, and the {TRIAL_DAYS} days only begin when you begin them — so
+            start the trial when there is something for it to do. If you are importing a library of
+            more than {FREE_LINKS} links, that is day one — the cap is the first thing you will
+            meet. Otherwise start it when you want one of the {PLAN_LABELS.plus} features; nothing
+            is gained by starting sooner.
           </>
         ),
       },
@@ -1148,10 +1178,22 @@ export const FAQ_GROUPS: FaqGroup[] = [
 // `import-over-cap` earns its place here: on the pricing page the cap is the
 // number a switcher is reading, and "what happens to my 1,200 links" is the
 // question it raises.
+//
+// `monthly` earns its place the same way, off a different number: the Plus card's
+// price note reads "$4 a month, billed annually", and that qualifier is there
+// precisely because there is no monthly plan — so the page raises the question in
+// three words and, without this id, answered it nowhere. The answer's own note
+// says it is written to be read "with a card in hand"; this is that surface.
+//
+// Read in pairs, which is how the two-column grid on /pricing renders them: the
+// free tier and its cap, then how you buy, then how you stop. That is the order a
+// buyer moves through, and it survives a plan being added because none of the six
+// is about a specific plan.
 export const PRICING_FAQ_IDS = [
   'free-cap',
   'import-over-cap',
   'trial',
+  'monthly',
   'stop-paying',
   'refunds',
 ] as const;

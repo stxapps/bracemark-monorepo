@@ -27,7 +27,7 @@ export const metadata: Metadata = {
   // Derived like everything else on the page: a search snippet that promises a
   // cap or a trial length the product doesn't have is the same drift, just
   // harder to notice because nobody reads it in review.
-  description: `Bracemark is free for your first ${entitlementsOf('free').maxLinks} links. ${PLAN_LABELS.plus} adds unlimited links, app lock and hidden lists, and the search editor — with a ${TRIAL_DAYS}-day free trial.`,
+  description: `Bracemark is free for your first ${entitlementsOf('free').maxLinks} links. ${PLAN_LABELS.plus} adds unlimited links, nested and hidden lists, the app lock and the search editor — with a ${TRIAL_DAYS}-day free trial.`,
 };
 
 // The public pricing page. Every NUMBER on it — the prices, the link caps, the
@@ -60,8 +60,8 @@ export const metadata: Metadata = {
 // so there is nothing to derive them from). plans.ts holds card copy for the PAID
 // plans only, since both storefronts render upgrade cards and never a free one.
 //
-// The FAQ below is NOT site-owned copy any more: it is four entries pulled by id
-// from `content/faq.tsx`, the same source /faq renders in full. Two hand-kept
+// The FAQ below is NOT site-owned copy any more: it is a handful of entries pulled
+// by id from `content/faq.tsx`, the same source /faq renders in full. Two hand-kept
 // copies of the refund position is exactly the drift the rest of this file exists
 // to prevent.
 //
@@ -108,7 +108,11 @@ type PricingCard = {
   price: string;
   cadence: string | null;
   priceNote: string;
-  trialNote: string | null;
+  // Not `trialNote`, and not nullable any more. Every card states what it costs
+  // you to START — the free one by saying there is nothing to start — so the slot
+  // is an invariant of the grid rather than a paid-card decoration, and the two
+  // cards read as a mirror clause for clause. See the pair of notes below.
+  conditions: string;
   blurb: string;
   features: readonly string[];
   inherits: string | null;
@@ -142,8 +146,19 @@ const CARDS: PricingCard[] = [
     // it cheap to keep, and export in particular runs on the device over data the
     // user already holds, so it is not a promise we could be tempted to break. A
     // promise about a PRICE is the one that had a contract contradicting it.
-    priceNote: 'No time limit, no card required',
-    trialNote: null,
+    priceNote: 'No time limit',
+    // The mirror of the paid card's line, clause for clause — no trial ↔ a
+    // 14-day one, no card ↔ takes a card, nothing to cancel ↔ cancel any time —
+    // which is the whole reason "no card required" moved down here out of the
+    // price note above. Two cards side by side are READ as a comparison, and the
+    // three facts a buyer actually weighs before clicking were stated in
+    // parallel on one card and folded into a price aside on the other.
+    //
+    // Three negations in a row, deliberately. Each one is a fact about the
+    // machine, not a reassurance about us, and the register is the same flat
+    // register the paid line uses; softening any of them ("just sign up and
+    // start saving") would trade a checkable fact for a mood.
+    conditions: 'No trial needed · no card required · nothing to cancel',
     blurb: 'A private library, from your very first link',
     features: FREE_FEATURES,
     inherits: null,
@@ -152,17 +167,22 @@ const CARDS: PricingCard[] = [
   },
   // The plans actually on sale. `featured` marks the entry paid tier — the one a
   // visitor should land on — so a future Pro card slots in without restyling.
-  // Every card here is annual, which is also why every card gets the trial line:
-  // the trial rides on the yearly price only (TRIAL_CADENCES).
+  // Every card here is annual, which is also why every card's conditions line
+  // names a trial: the trial rides on the yearly price only (TRIAL_CADENCES).
   ...PLAN_CARDS.map(({ plan, blurb, features }, i) => ({
     plan,
     price: `$${PLAN_USD_PER_YEAR[plan]}`,
     cadence: '/year',
     priceNote: `${monthlyEquivalent(PLAN_USD_PER_YEAR[plan])} a month, billed annually`,
-    // Names the payment method. The Free card two columns left says "no card
-    // required" and means it, which is exactly why this one cannot stay silent:
-    // read together, the omission would be doing work the truth doesn't.
-    trialNote: `${TRIAL_DAYS}-day free trial · takes a card · cancel any time`,
+    // Names the payment method. The Free card's line in this same band says "no
+    // card required" and means it, which is exactly why this one cannot stay
+    // silent: read together, the omission would be doing work the truth doesn't.
+    //
+    // It wraps to two lines in a max-w-sm column and is meant to — see the slot's
+    // note in the card below. Dropping a clause to buy a one-liner would cost one
+    // of the three facts, and the only removable word is "free", which the CTA
+    // under it already carries.
+    conditions: `${TRIAL_DAYS}-day free trial · takes a card · cancel any time`,
     blurb,
     features,
     // Only the entry paid tier needs this line: every card above it already says
@@ -315,9 +335,37 @@ export default function Page() {
                 )}
               </p>
               <p className={cn('mt-1.5 text-sm text-muted-foreground')}>{card.priceNote}</p>
-              {card.trialNote && (
-                <p className={cn('mt-2 font-mono text-xs text-signal')}>{card.trialNote}</p>
-              )}
+              {/* What it costs you to start, on every card. A card grid is READ as
+                  a comparison, so its bands have to line up across columns: with
+                  this slot present on Plus and absent on Free, everything below it
+                  — the border-t limit line, the feature list, the button — sat a
+                  line and a half higher in the Free column, and the reader was left
+                  doing the alignment.
+
+                  `min-h-8` is TWO LINES of text-xs (its line-height is 1rem), and
+                  it is the load-bearing half: the Plus line is 50 characters, the
+                  column inside p-7 is 328px, and IBM Plex Mono at 12px runs 7.2px
+                  per character — so it wraps, and no amount of editing gets three
+                  clauses onto one line here. Both cards are written to fill the two
+                  lines rather than tuned to fit one, because a one-liner would sit
+                  ~1 character from the wrap and the next copy edit would silently
+                  put the band back out of true. Everything here is rem-based —
+                  max-w-sm, text-xs — so the wrap point does not move under browser
+                  font scaling, and below ~800px the cards stack and alignment stops
+                  being a question at all.
+
+                  The accent follows `featured`, the same rule as the check glyphs
+                  below: on this page signal means "the entry paid tier", and a Free
+                  card that borrowed it would spend the one colour that carries
+                  meaning on the column it is meant to distinguish from. */}
+              <p
+                className={cn(
+                  'mt-2 min-h-8 font-mono text-xs text-pretty',
+                  card.featured ? 'text-signal' : 'text-muted-foreground',
+                )}
+              >
+                {card.conditions}
+              </p>
 
               {/* The one line of hard limits under each card, straight from the
                   entitlements table — the number a buyer would otherwise have to
@@ -327,6 +375,21 @@ export default function Page() {
               <p className={cn('mt-7 border-t border-border pt-5 text-sm font-medium')}>
                 {linksLimitLabel(card.plan)}
               </p>
+              {/* Conditional, NOT a reserved slot like the conditions line above,
+                  and the difference is what the band is for. That one is a shared
+                  fact every card states, so its columns line up clause for clause
+                  and alignment carries meaning. This is a HEADING for the list
+                  under it, and only a list that inherits needs one — Free's seven
+                  bullets stand on their own. Reserving the space would put a blank
+                  line directly under a horizontal rule, which reads as a sentence
+                  that failed to render rather than as spacing, and it would buy no
+                  comparison: the two lists are 7 items and 5, of different things,
+                  so there is no row to scan across. Reading the plans row by row is
+                  what the table below is for.
+
+                  Nothing below moves either way. The cards stretch to equal height,
+                  `flex-1` on the list absorbs the difference, and the buttons stay
+                  on the same baseline. */}
               {card.inherits && (
                 <p className={cn('mt-4 text-sm text-muted-foreground')}>{card.inherits}</p>
               )}
@@ -426,7 +489,9 @@ export default function Page() {
           </div>
         </section>
 
-        {/* The four billing questions, pulled by id from the shared FAQ. */}
+        {/* The billing questions, pulled by id from the shared FAQ. Deliberately
+            not counted here — it said "four" while PRICING_FAQ_IDS held five, which
+            is the whole failure mode this page is built to avoid, in a comment. */}
         <section className={cn('mx-auto mt-24 max-w-3xl')}>
           <p className={cn('eyebrow text-center')}>Before you decide</p>
           <h2 className={cn('mt-3 text-center font-display text-3xl font-semibold tracking-tight')}>

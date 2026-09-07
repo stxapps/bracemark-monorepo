@@ -128,12 +128,36 @@ export default function Page() {
                 override, no support escalation, and no exception.
               </dd>
             </div>
+            {/* NOT "send us an export". The clause here read "an export is the
+                fastest way to show us the shape of the problem without sending
+                us your contents", and it is false in the one direction that
+                matters: there is no shape-only format. netscape / csv / text
+                carry URLs, titles, tags and notes, and `bracemark` is the whole
+                library in the clear — Trash included, plus the decrypted file
+                bytes (data-lifecycle.md, EXPORT). The sentence therefore invited
+                the reader to mail us their library, two lines under a heading
+                that promises we never see it, over ordinary mail, where it then
+                sits. What we can act on is their description of the problem,
+                which the "Worth including" list above already asks for — hence no
+                third "tell us what you saw" here; the security block below has
+                the second.
+
+                The export stays, as the precaution it is on every other surface:
+                a copy of what is on THEIR device, taken before anything else
+                changes. Do not let it drift into a remedy. Restoring fills gaps
+                rather than overwriting (/faq `undo-edit`, /about's
+                no-version-history entry, both of which spell that out at
+                length), so it covers what goes missing NEXT and never the bug
+                itself — and "a copy of whatever is going wrong" is the version
+                of this line that says nothing, because nobody wants the fault
+                backed up. */}
             <div className={cn('border-t border-border pt-5')}>
               <dt className={cn('text-base font-semibold')}>See or fix your data for you</dt>
               <dd className={cn('mt-2 text-body text-muted-foreground')}>
                 We can’t read a link, restore one you deleted, or look at your library to debug it.
-                If something looks wrong, an export is the fastest way to show us the shape of the
-                problem without sending us your contents.
+                What we have to work from is your description of it. If something looks wrong, take
+                an export first: it costs nothing, and it leaves you a copy of what is on your
+                device before anything else changes.
               </dd>
             </div>
             <div className={cn('border-t border-border pt-5')}>
