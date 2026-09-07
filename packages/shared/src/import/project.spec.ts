@@ -34,7 +34,6 @@ function project(over: Partial<ProjectImportOptions> = {}): ProjectedImport {
     tags: [],
     existingPinRanks: [],
     images: new Map(),
-    nestedLists: true,
     newId: idMinter(),
     now: NOW,
     ...over,
@@ -115,33 +114,27 @@ describe('projectImportedLinks', () => {
     expect(result.listCount).toBe(0);
   });
 
-  it('flattens a folder chain to ONE list when nested lists are not entitled', () => {
-    // The `nestedLists` gate, expressed as data rather than a disabled feature: an
-    // unentitled account still gets every row filed somewhere it can find, in a list
-    // named for the whole path — the CSV `folder` column's own shape.
+  it('builds the whole folder chain as a tree, on every plan', () => {
+    // The projection takes NO entitlement: a path is the tree it describes, and the
+    // `nestedLists` paywall lives on the reparent affordances instead (see the
+    // header). This used to flatten to one root list named "Work/Specs" for an
+    // unentitled account, so the assertion is the regression guard for a gate that
+    // was removed on purpose — it is not a substitute for one that is missing.
     const rows = [row({ url: 'https://example.com/a', folderPath: ['Work', 'Specs'] })];
 
-    const flat = project({ rows, nestedLists: false });
-    expect(flat.listCount).toBe(1);
-    expect(under(flat, 'lists/').map((entry) => entry.data)).toEqual([
-      expect.objectContaining({ name: 'Work/Specs', parentId: null }),
+    const result = project({ rows });
+
+    expect(result.listCount).toBe(2);
+    expect(under(result, 'lists/').map((entry) => entry.data)).toEqual([
+      expect.objectContaining({ name: 'Work', parentId: null }),
+      expect.objectContaining({ name: 'Specs' }),
     ]);
-
-    const nested = project({ rows, nestedLists: true });
-    expect(nested.listCount).toBe(2);
-    expect(under(nested, 'lists/').map((entry) => (entry.data as { name: string }).name)).toEqual([
-      'Work',
-      'Specs',
-    ]);
-  });
-
-  it('still sends an unfoldered row to the default list when flattening', () => {
-    // `[].join('/')` is `''`, so the flattening branch must not turn "no folder"
-    // into a list named after the empty string.
-    const flat = project({ rows: [row({ url: 'https://example.com/a' })], nestedLists: false });
-
-    expect(linksOf(flat)[0].listId).toBe(MY_LIST_ID);
-    expect(flat.listCount).toBe(0);
+    // The deeper segment hangs off the shallower one, not off the root.
+    const [work, specs] = under(result, 'lists/').map(
+      (entry) => entry.data as { id: string; parentId: string | null },
+    );
+    expect(specs.parentId).toBe(work.id);
+    expect(linksOf(result)[0].listId).toBe(specs.id);
   });
 
   it('files a system-list row by ID, ignoring any folder name it carries', () => {

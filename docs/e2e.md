@@ -536,9 +536,12 @@ throwaway ones, because these accounts are meant to be signed back into tomorrow
   Free holds 200 and a backup over the cap is refused **whole** (the
   take-what-fits prompt is the interop path only), so the fixture is sized under
   it with room to add a few by hand and watch the create surfaces refuse.
-- **The free trees are flat.** A backup restores `parentId` verbatim on any plan,
-  so nesting a free account would hand you a state `nestedLists` means the
-  product cannot produce.
+- **The free trees are flat**, because that is what a free account that never
+  imported looks like, and the fixture is for exercising the create surfaces. It
+  is not the only reachable shape: a backup restores `parentId` verbatim on any
+  plan and an import builds the tree its folder paths name, so a nested free
+  account is a state the product does produce — the one a downgrade or a
+  migration leaves behind. Seed that deliberately if it is what you are testing.
 
 #### what the generator guarantees
 

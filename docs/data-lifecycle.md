@@ -214,9 +214,25 @@ The policy, decided once:
   decoding it would be the double-decode `cleanTitle` is forbidden from doing.
   A Brace.to export is JSON, likewise not HTML-escaped.
 
-- Folder paths **find-or-create lists** by case-insensitive name walk; without
-  the `nestedLists` entitlement a nested path flattens to one root-level list.
-  Trash never matches a folder name.
+- Folder paths **find-or-create lists** by case-insensitive name walk, at the
+  POSITION the path names: each segment is matched among the children of the one
+  before it, so `Work/Specs` reuses a `Specs` that already sits under `Work`, and
+  a `Specs` anywhere else in the tree is a different list. Trash never matches a
+  folder name. Tags are the other shape — matched by name ALONE, wherever they
+  sit, and minted at the root, which is what tag hierarchy not being a shipped
+  entitlement looks like from here ([iap.md](./iap.md), the planned levers).
+
+  **The tree is built on every plan, and `nestedLists` is not consulted.** It
+  used to be: an unentitled account got the path joined into one root-level list
+  named `Work/Specs`. That was silent, effectively permanent — the interop dedupe
+  skips by canonical URL, so re-importing after an upgrade brings back nothing to
+  re-nest — and inconsistent with the two other doors into the same state, since
+  a backup restores `parentId` verbatim on any plan and a lapsed subscription
+  keeps every nested list it made. The entitlement gates the CREATE affordances
+  instead (the reparent gate in the lists editor, [editors.md](./editors.md)),
+  which is where an action-triggered paywall belongs. A free account can hold a
+  nested tree, cannot deepen it by hand, and can always flatten it — the same
+  state a downgrade produces.
 
 Only the platform-bound half of that lives in each orchestrator (the store
 reads, the zip library, the file API). The rest is shared, so the two can't

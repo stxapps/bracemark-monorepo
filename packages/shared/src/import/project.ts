@@ -18,6 +18,19 @@
 // NOT here, deliberately: dedupe by canonical URL and the quota gate. Both need to
 // see the EXISTING library (a store read), and the quota gate must throw before any
 // of this runs — see the orchestrators.
+//
+// ALSO NOT HERE, AND THAT IS THE DECISION: the `nestedLists` entitlement. A folder
+// path builds the tree it describes on every plan, so an import is never the thing
+// that restructures someone's library. This used to flatten a path to ONE root-level
+// list named by the slash join ("Work/Specs") unless the account was entitled, which
+// was silent, effectively permanent — the interop dedupe skips by canonical URL, so
+// re-importing after an upgrade brings back nothing — and out of step with the two
+// other doors into the same state: `importBracemarkBackup` restores `parentId`
+// verbatim on any plan, and a lapsed subscription keeps every nested list it made
+// (docs/iap.md, _quota_). `nestedLists` gates the CREATE affordances, which is where
+// the paywall belongs: reparenting in the lists editor. A free account can hold a
+// nested tree, cannot deepen it by hand, and can always flatten it — the same state a
+// downgrade produces. See docs/data-lifecycle.md, _the shapes_.
 
 import {
   type Extraction,
@@ -79,16 +92,12 @@ export interface ProjectImportOptions {
   // Blobs the rows reference by `imageRef`; a row whose ref has no bytes simply
   // imports without its custom image.
   images: Map<string, Uint8Array>;
-  // Whether folder paths may create nested lists (the `nestedLists` entitlement).
-  // Without it a nested path flattens to ONE root-level list named by the
-  // slash-joined path — the CSV `folder` column's own shape.
-  nestedLists: boolean;
   newId: () => string;
   now: number;
 }
 
 export function projectImportedLinks(options: ProjectImportOptions): ProjectedImport {
-  const { rows, images, nestedLists, newId, now } = options;
+  const { rows, images, newId, now } = options;
 
   const lists = new ListResolver(options.lists, now, newId);
   const tags = new TagResolver(options.tags, now, newId);
@@ -117,12 +126,6 @@ export function projectImportedLinks(options: ProjectImportOptions): ProjectedIm
     // library's newest-first display order after import.
     const createdAt = row.createdAt ?? now - i;
     const updatedAt = Math.max(row.updatedAt ?? createdAt, createdAt);
-    const folderPath = nestedLists
-      ? row.folderPath
-      : row.folderPath.length > 0
-        ? [row.folderPath.join('/')]
-        : [];
-
     const id = newId();
     const link: Link = {
       url: row.url,
@@ -134,7 +137,7 @@ export function projectImportedLinks(options: ProjectImportOptions): ProjectedIm
           ? ARCHIVE_ID
           : row.systemList === 'trash'
             ? TRASH_ID
-            : lists.resolve(folderPath),
+            : lists.resolve(row.folderPath),
       tagIds: tags.resolve(row.tagNames),
       createdAt,
       updatedAt,

@@ -44,11 +44,13 @@
 //   - A file-carried title is PROVISIONAL, not deliberate: it seeds
 //     `extraction.title` (which extraction may later upgrade), never
 //     `customTitle` — see the contract note in @stxapps/shared sync/entities.ts.
-//   - Folder paths find-or-create lists by case-insensitive name walk; without
-//     the nestedLists entitlement a nested path flattens to ONE root-level list
-//     named by the slash-joined path (the CSV `folder` column's own shape).
-//     Trash never matches a folder name — importing live bookmarks as
-//     deleted-pending links is never wanted.
+//   - Folder paths find-or-create lists by case-insensitive name walk, at the
+//     POSITION the path names: each segment is matched among the children of the
+//     one before it, so "Work/Specs" reuses a Specs that already sits under Work
+//     and mints one otherwise. The tree is built on EVERY plan — `nestedLists`
+//     gates the reparent affordances, not the import (@stxapps/shared
+//     import/project.ts, the header). Trash never matches a folder name —
+//     importing live bookmarks as deleted-pending links is never wanted.
 //
 // What's NOT here, because both platforms need the same answer: the
 // bracemark-backup archive contract (entry names, manifest, items.jsonl
@@ -128,7 +130,6 @@ async function importInterop(
   username: string,
   bundle: ImportedBundle,
   maxLinks: number | null,
-  nestedLists: boolean,
   onProgress: (progress: ImportProgress) => void,
   onQuotaPrompt?: ImportQuotaResolver,
 ): Promise<Omit<ImportOutcome, 'syncFailed'>> {
@@ -165,7 +166,6 @@ async function importInterop(
     tags: await readTags(),
     existingPinRanks: (await readPins()).map((pin) => pin.rank),
     images: bundle.images,
-    nestedLists,
     newId,
     now: Date.now(),
   });
@@ -353,7 +353,6 @@ async function importZip(
   username: string,
   file: File,
   maxLinks: number | null,
-  nestedLists: boolean,
   onProgress: (progress: ImportProgress) => void,
   onQuotaPrompt?: ImportQuotaResolver,
 ): Promise<Omit<ImportOutcome, 'syncFailed'>> {
@@ -372,7 +371,7 @@ async function importZip(
       return await importBracemarkBackup(username, byName, maxLinks, onProgress);
     }
     const parsed = await parseInteropZip(byName);
-    return await importInterop(username, parsed, maxLinks, nestedLists, onProgress, onQuotaPrompt);
+    return await importInterop(username, parsed, maxLinks, onProgress, onQuotaPrompt);
   } finally {
     await zipReader.close();
   }
@@ -385,14 +384,12 @@ export async function importAllData(options: {
   deps: SyncDeps;
   // The plan's link cap (entitlementsOf(plan).maxLinks); null = unlimited.
   maxLinks: number | null;
-  // Whether folder paths may create nested lists (entitlements.nestedLists).
-  nestedLists: boolean;
   onProgress?: (progress: ImportProgress) => void;
   // Asked when an INTEROP file would pass `maxLinks`: take what fits, or cancel.
   // Omitted (or a backup file) means the old behaviour — refuse the whole file.
   onQuotaPrompt?: ImportQuotaResolver;
 }): Promise<ImportOutcome> {
-  const { file, deps, maxLinks, nestedLists, onQuotaPrompt } = options;
+  const { file, deps, maxLinks, onQuotaPrompt } = options;
   const onProgress = options.onProgress ?? (() => undefined);
 
   // Refresh first so dedupe, skip-existing, and the quota gate see the account,
@@ -409,25 +406,11 @@ export async function importAllData(options: {
   onProgress({ step: 'parse' });
   const bytes = new Uint8Array(await file.arrayBuffer());
   if (isZipBytes(bytes)) {
-    const outcome = await importZip(
-      deps.username,
-      file,
-      maxLinks,
-      nestedLists,
-      onProgress,
-      onQuotaPrompt,
-    );
+    const outcome = await importZip(deps.username, file, maxLinks, onProgress, onQuotaPrompt);
     return { ...outcome, syncFailed };
   }
 
   const parsed = parseImportText(new TextDecoder().decode(bytes), file.name);
-  const outcome = await importInterop(
-    deps.username,
-    parsed,
-    maxLinks,
-    nestedLists,
-    onProgress,
-    onQuotaPrompt,
-  );
+  const outcome = await importInterop(deps.username, parsed, maxLinks, onProgress, onQuotaPrompt);
   return { ...outcome, syncFailed };
 }

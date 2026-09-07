@@ -97,7 +97,6 @@ export function useImportAllData(): UseImportAllDataResult {
         file,
         deps,
         maxLinks: entitlements.maxLinks,
-        nestedLists: entitlements.nestedLists,
         onProgress: (progress) => setState({ phase: 'running', ...progress }),
         onQuotaPrompt: (prompt) =>
           new Promise((resolve) => {
@@ -129,7 +128,7 @@ export function useImportAllData(): UseImportAllDataResult {
           quotaResolveRef.current = null;
         });
     },
-    [username, api, entitlements.maxLinks, entitlements.nestedLists, requestSync],
+    [username, api, entitlements.maxLinks, requestSync],
   );
 
   return { state, run, answerQuota };

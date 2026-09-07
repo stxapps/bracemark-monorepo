@@ -4,7 +4,7 @@
 // restored verbatim vs. interop/Brace.to rows becoming new links, and the POLICY —
 // dedupe by canonical URL, skip-existing by path, the upfront quota gate, a
 // file-carried title seeding the PROVISIONAL extraction title, folder paths
-// find-or-created with the nestedLists flatten). Everything lands through the
+// find-or-created at the position they name, on every plan). Everything lands through the
 // write edge (bulkWriteEntities), so the pending-ops queue carries the import
 // to the server exactly like any other local edit. Platform divergences only
 // here:
@@ -96,7 +96,6 @@ async function importInterop(
   username: string,
   bundle: ImportedBundle,
   maxLinks: number | null,
-  nestedLists: boolean,
   onProgress: (progress: ImportProgress) => void,
   onQuotaPrompt?: ImportQuotaResolver,
 ): Promise<Omit<ImportOutcome, 'syncFailed'>> {
@@ -133,7 +132,6 @@ async function importInterop(
     tags: await readTags(),
     existingPinRanks: (await readPins()).map((pin) => pin.rank),
     images: bundle.images,
-    nestedLists,
     newId,
     now: Date.now(),
   });
@@ -315,7 +313,6 @@ async function importZip(
   username: string,
   bytes: Uint8Array,
   maxLinks: number | null,
-  nestedLists: boolean,
   onProgress: (progress: ImportProgress) => void,
   onQuotaPrompt?: ImportQuotaResolver,
 ): Promise<Omit<ImportOutcome, 'syncFailed'>> {
@@ -332,7 +329,7 @@ async function importZip(
     return importBracemarkBackup(username, byName, maxLinks, onProgress);
   }
   const parsed = parseInteropZip(byName);
-  return importInterop(username, parsed, maxLinks, nestedLists, onProgress, onQuotaPrompt);
+  return importInterop(username, parsed, maxLinks, onProgress, onQuotaPrompt);
 }
 
 // --- the flow -----------------------------------------------------------------------
@@ -342,14 +339,12 @@ export async function importAllData(options: {
   deps: SyncDeps;
   // The plan's link cap (entitlementsOf(plan).maxLinks); null = unlimited.
   maxLinks: number | null;
-  // Whether folder paths may create nested lists (entitlements.nestedLists).
-  nestedLists: boolean;
   onProgress?: (progress: ImportProgress) => void;
   // Asked when an INTEROP file would pass `maxLinks`: take what fits, or cancel.
   // Omitted (or a backup file) means the old behaviour — refuse the whole file.
   onQuotaPrompt?: ImportQuotaResolver;
 }): Promise<ImportOutcome> {
-  const { file, deps, maxLinks, nestedLists, onQuotaPrompt } = options;
+  const { file, deps, maxLinks, onQuotaPrompt } = options;
   const onProgress = options.onProgress ?? (() => undefined);
 
   // Refresh first so dedupe, skip-existing, and the quota gate see the account,
@@ -366,25 +361,11 @@ export async function importAllData(options: {
   onProgress({ step: 'parse' });
   const bytes = await new File(file.uri).bytes();
   if (isZipBytes(bytes)) {
-    const outcome = await importZip(
-      deps.username,
-      bytes,
-      maxLinks,
-      nestedLists,
-      onProgress,
-      onQuotaPrompt,
-    );
+    const outcome = await importZip(deps.username, bytes, maxLinks, onProgress, onQuotaPrompt);
     return { ...outcome, syncFailed };
   }
 
   const parsed = parseImportText(new TextDecoder().decode(bytes), file.name);
-  const outcome = await importInterop(
-    deps.username,
-    parsed,
-    maxLinks,
-    nestedLists,
-    onProgress,
-    onQuotaPrompt,
-  );
+  const outcome = await importInterop(deps.username, parsed, maxLinks, onProgress, onQuotaPrompt);
   return { ...outcome, syncFailed };
 }
