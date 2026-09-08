@@ -372,6 +372,52 @@ is ~1s per package. Do **not** "fix" this by adding `node_modules` to
 `.watchmanconfig`'s `ignore_dirs` — Metro needs the symlinked `@stxapps/*`
 packages watched for expo HMR.
 
+#### the watch root and `.watchmanconfig`
+
+There is **one** `.watchmanconfig`, at the workspace root, and that is the only
+place it can be. Metro asks watchman to `watch-project` its own project root
+plus each `watchFolders` entry `withNxMetro` adds, and `watch-project` resolves
+every one of those to the **nearest** enclosing directory holding a root file
+(`.watchmanconfig`, `.git`, `.hg`, `.svn`) — which is this root, via `.git`,
+whichever directory you launched from. `npm run expo:ios` here and `npm run ios`
+from `apps/bracemark-expo` therefore produce the same single watch; the shell's
+cwd never enters into it.
+
+So the file is not what anchors the root — `.git` already does that. It exists
+to carry the ignore list, and that is why a second copy under
+`apps/bracemark-expo` would be a regression rather than a no-op: watchman would
+resolve the app directory as its own watch root, splitting the watch in two, and
+`ignore_dirs` paths are relative to the watch root, so every entry the root file
+holds for `apps/bracemark-expo/**` would **silently stop applying**.
+
+What belongs in `ignore_dirs` is anything gitignored that nothing here resolves
+through — build output (`.next`, `dist`, `out`, `out-tsc`, `.output`/`.wxt`,
+`.wrangler`, `ios/Pods`, `android/build`), the e2e artifacts, and the private
+root folder, whose nested `.git` the root's own `ignore_vcs` does not reach.
+The point is not the file count, which those barely move:
+`node_modules` is the bulk of the map and can never be ignored (above). It is
+that a build writing thousands of files while Metro watches is what overflows
+the fsevents queue, and that overflow is what produces `MustScanSubDirs
+UserDropped`, a full recrawl and the 60-second `syncToNow` timeouts.
+`fsevents_try_resync` is on so an overflow attempts a resync before falling back
+to the recrawl. Add a project's output directory in the same change that first
+creates it — nothing fails if you forget, the watch just gains one more storm
+source, and the list had drifted a whole app behind before anyone noticed.
+
+**An edit to `.watchmanconfig` does nothing until the root is re-watched.** The
+config is read when the watch is established, so a running daemon keeps the old
+list indefinitely — and every clone of this repo is a separate watch root that
+needs it separately:
+
+```sh
+ROOT=$(git rev-parse --show-toplevel)
+watchman watch-del "$ROOT" ; watchman watch-project "$ROOT"
+```
+
+Those same two lines are the recovery once a watch is already wedged;
+`.claude/skills/verify/SKILL.md` carries the symptom as it appears in Metro's
+log, and the reason a stale bundle survives `expo start --clear`.
+
 #### tripwire: the `jest` bin collision
 
 `jest` and `jest-expo` both claim `node_modules/.bin/jest`, and **which symlink
