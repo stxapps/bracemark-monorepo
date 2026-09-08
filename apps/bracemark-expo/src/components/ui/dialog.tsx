@@ -27,7 +27,9 @@ import { Text } from './text';
 // `leading-none` dropped from DialogTitle — a leading tighter than Inter's
 // natural 1.21 ratio is uncentrable on iOS, so the title sat 1.55pt high inside
 // its own box with nothing above it able to help (docs/theme.md, _extending_).
-// alert-dialog.tsx's title never carried one, so the two now agree.
+// alert-dialog.tsx's title never carried one, so the two now agree. The
+// content's radius is web-ui's `rounded-4xl`, not the registry's `rounded-lg`
+// (docs/theme.md, _the radius scale_).
 // Content renders through @rn-primitives/portal — the root `_layout.tsx` mounts
 // the default `<PortalHost />` it lands in.
 
@@ -237,7 +239,7 @@ function DialogContent({
             // correction as web-ui's DialogContent, which needs a `min()` to
             // reach it because Radix centres by transform and has no padded
             // parent to inherit a gutter from (docs/safe-area.md).
-            'z-50 mx-auto flex max-h-full w-full max-w-lg flex-col gap-6 rounded-lg border border-border bg-background p-6 shadow-lg shadow-black/5',
+            'z-50 mx-auto flex max-h-full w-full max-w-lg flex-col gap-6 rounded-4xl border border-border bg-background p-6 shadow-lg shadow-black/5',
             Platform.select({
               web: 'animate-in fade-in-0 zoom-in-95 duration-200 web:max-w-[calc(100%-2rem)]',
             }),

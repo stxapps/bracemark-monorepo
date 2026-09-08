@@ -9,7 +9,10 @@ import { TextClassContext } from './text';
 // see docs/setup.md for why the copy is manual (the CLI needs tsconfig path
 // aliases; this app uses relative imports). Local changes vs upstream: imports
 // rewritten to relative, plus an explicit `import * as React` (upstream leans
-// on the UMD global type for `React.ComponentProps`).
+// on the UMD global type for `React.ComponentProps`), plus the radii —
+// `rounded-4xl` on the list and `rounded-xl` on the trigger, web-ui's shape
+// system rather than the registry's `lg`/`md` (docs/theme.md, _the radius
+// scale_).
 
 function Tabs({ className, ...props }: React.ComponentProps<typeof TabsPrimitive.Root>) {
   return <TabsPrimitive.Root className={cn('flex flex-col gap-2', className)} {...props} />;
@@ -19,7 +22,7 @@ function TabsList({ className, ...props }: React.ComponentProps<typeof TabsPrimi
   return (
     <TabsPrimitive.List
       className={cn(
-        'flex h-9 flex-row items-center justify-center rounded-lg bg-muted p-[3px]',
+        'flex h-9 flex-row items-center justify-center rounded-4xl bg-muted p-[3px]',
         Platform.select({ web: 'inline-flex w-fit', native: 'mr-auto' }),
         className,
       )}
@@ -39,7 +42,7 @@ function TabsTrigger({ className, ...props }: React.ComponentProps<typeof TabsPr
     >
       <TabsPrimitive.Trigger
         className={cn(
-          'flex flex-row items-center justify-center gap-1.5 rounded-md border border-transparent px-2 py-1 shadow-none shadow-black/5',
+          'flex flex-row items-center justify-center gap-1.5 rounded-xl border border-transparent px-2 py-1 shadow-none shadow-black/5',
           Platform.select({
             web: 'inline-flex cursor-default whitespace-nowrap transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1 focus-visible:outline-ring disabled:pointer-events-none web:h-[calc(100%-1px)] [&_svg]:pointer-events-none [&_svg]:shrink-0',
           }),

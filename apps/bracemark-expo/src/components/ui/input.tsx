@@ -19,7 +19,9 @@ import { cn } from '../../lib/utils';
 // asked rather than left to RN's `true`, since scaling is BROKEN in the iOS
 // share-extension process and a typed character there renders at zero point
 // (lib/font-scale.ts owns that story — the pickers' fields are the sites it
-// saves); and `keyboardAppearance` bound to the active theme (below).
+// saves); `keyboardAppearance` bound to the active theme (below); and the
+// radius raised to `rounded-4xl` from the registry's `rounded-md`, which is
+// web-ui's shape system (docs/theme.md, _the radius scale_).
 
 // THE `md:text-sm` IN THE WEB BRANCH IS UPSTREAM'S CONTROL TYPE STEP, AND IT IS
 // DELIBERATELY NOT PORTED. The reason is PROVENANCE, not width. web-ui runs that
@@ -71,7 +73,7 @@ function Input({
   return (
     <TextInput
       className={cn(
-        'flex h-10 w-full min-w-0 flex-row items-center rounded-md border border-input bg-background px-3 py-1 font-sans text-base leading-5 text-foreground shadow-sm shadow-black/5 sm:h-9 dark:bg-input/30',
+        'flex h-10 w-full min-w-0 flex-row items-center rounded-4xl border border-input bg-background px-3 py-1 font-sans text-base leading-5 text-foreground shadow-sm shadow-black/5 sm:h-9 dark:bg-input/30',
         props.editable === false &&
           cn(
             'opacity-50',

@@ -11,7 +11,9 @@ import { TextClassContext } from './text';
 // aliases; this app uses relative imports). Local changes vs upstream: imports
 // rewritten to relative, plus an explicit `import * as React` (upstream leans
 // on the UMD global type for `React.ComponentProps`), plus the icon-edge padding
-// below.
+// below, plus THE RADIUS: `rounded-4xl` on the base and none on the sizes,
+// which is web-ui's shape system rather than the registry's `rounded-md`
+// (docs/theme.md, _the radius scale_ — the whole kit moved together).
 //
 // THE ICON-EDGE PADDING. The edge an icon sits against gets the smaller padding,
 // so a glyph at the rim doesn't read as heavier than the text at the other end;
@@ -46,7 +48,7 @@ import { TextClassContext } from './text';
 
 const buttonVariants = cva(
   cn(
-    'group shrink-0 flex-row items-center justify-center gap-2 rounded-md border border-transparent shadow-none',
+    'group shrink-0 flex-row items-center justify-center gap-2 rounded-4xl border border-transparent shadow-none',
     Platform.select({
       web: "focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive whitespace-nowrap outline-none transition-all focus-visible:ring-[3px] disabled:pointer-events-none [&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none [&_svg]:shrink-0",
     }),
@@ -82,8 +84,8 @@ const buttonVariants = cva(
       },
       size: {
         default: 'h-10 px-4 py-2 sm:h-9',
-        sm: 'h-9 gap-1.5 rounded-md px-3 sm:h-8',
-        lg: 'h-11 rounded-md px-6 sm:h-10',
+        sm: 'h-9 gap-1.5 px-3 sm:h-8',
+        lg: 'h-11 px-6 sm:h-10',
         icon: 'h-10 w-10 sm:h-9 sm:w-9',
       },
       // Derived by the component from its children, never passed by a caller —

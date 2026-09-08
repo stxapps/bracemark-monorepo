@@ -16,7 +16,9 @@ import { Text, TextClassContext } from './text';
 // tsconfig path aliases; this app uses relative imports). Local changes vs
 // upstream: imports rewritten to relative, plus AlertDialogAction accepts a
 // button `variant` (web-ui's alert-dialog does the same — the destroy
-// confirmation renders its action destructive). Content renders through
+// confirmation renders its action destructive), plus the content's radius —
+// web-ui's `rounded-4xl`, not the registry's `rounded-lg` (docs/theme.md,
+// _the radius scale_). Content renders through
 // @rn-primitives/portal — the root `_layout.tsx` mounts the default
 // `<PortalHost />` it lands in.
 
@@ -118,7 +120,7 @@ function AlertDialogContent({
             // same content on a 640dp one. No `w-full` here, deliberately: this
             // box stays content-sized inside the overlay's `items-center`, so a
             // one-line confirmation hugs its text instead of filling.
-            'z-50 flex max-h-full max-w-lg flex-col gap-6 rounded-lg border border-border bg-background p-6 shadow-lg shadow-black/5',
+            'z-50 flex max-h-full max-w-lg flex-col gap-6 rounded-4xl border border-border bg-background p-6 shadow-lg shadow-black/5',
             Platform.select({
               web: 'animate-in fade-in-0 zoom-in-95 duration-200 web:max-w-[calc(100%-2rem)]',
             }),

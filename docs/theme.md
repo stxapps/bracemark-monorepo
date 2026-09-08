@@ -596,6 +596,74 @@ This is why **expo needs no counterpart change**: React Native has no `ring`, so
 `apps/bracemark-expo` already draws every panel edge — its `dropdown-menu`
 popover included — with `border-border`, and inherits the fix from the token.
 
+### the radius scale — one shape system, two kits
+
+**The round shape is not a token, and raising `--radius` will not produce it.**
+`--radius: 0.625rem` is mirrored byte-for-byte in `packages/web-ui/src/styles.css`
+and `apps/bracemark-expo/global.css`, and both derive the same
+`--radius-sm/md/lg/xl` from it (6/8/10/14px). Neither sheet touches
+`--radius-2xl`, `--radius-3xl` or `--radius-4xl`, so those keep Tailwind's own
+defaults — 16px, 24px, 32px — on both sides. The kit's round look is written into
+the COMPONENTS as `rounded-4xl` / `rounded-2xl` / `rounded-xl`, which do not
+derive from `--radius` at all. Move `--radius` and you move the registry
+leftovers and nothing a user notices; the classes are the system.
+
+| role                                                    | class           | px  | components                                                                                                |
+| ------------------------------------------------------- | --------------- | --- | --------------------------------------------------------------------------------------------------------- |
+| single-line control                                     | `rounded-4xl`   | 32  | button, input, select trigger, command input, input-group, tabs list                                      |
+| dialog surface                                          | `rounded-4xl`   | 32  | dialog content, alert-dialog content                                                                      |
+| floating surface                                        | `rounded-2xl`   | 16  | dropdown-menu content (and sub-content), popover, select content, card, accordion                         |
+| row in a surface, and any control too tall to be a pill | `rounded-xl`    | 12  | menu items (item, checkbox-item, radio-item, sub-trigger), select item, tabs trigger, field, **textarea** |
+| box                                                     | `rounded-[6px]` | 6   | checkbox                                                                                                  |
+| circle                                                  | `rounded-full`  | —   | radio dot, switch, the alert-dialog media badge                                                           |
+
+**32px on a 36–40pt control is a pill, not a rounded rectangle**, and that is the
+point: CSS and React Native implement the SAME rule — css-backgrounds-3's
+corner-overlap clause, "proportionally reduce the used values of all border radii
+until none of them overlap", which RN spells out in
+`ReactCommon/react/renderer/components/view/BaseViewProps.cpp`'s
+`ensureNoOverlap` — so 32 on a 40pt-tall control resolves to 20 on both sides and
+the same class reads identically across the two runtimes, even though native's
+touch heights are taller (`h-10 sm:h-9` against web's `h-9`). The value is deliberately
+one number for both rather than a per-platform "pill" spelling, because a pill
+spelled as `rounded-full` would flatten the dialog surfaces — which are NOT pills
+and must keep 32px against a 400pt box.
+
+⚠ **The two kits are separate copies and this pairing drifted for months.** There
+is nothing to import across them (Uniwind and Tailwind are separate compilers
+over separate stylesheets, the same reason `brand-lockup.tsx` exists twice), so
+`packages/web-ui/src/components/ui/*` and
+`apps/bracemark-expo/src/components/ui/*` hold the numbers twice. web-ui was
+restyled to the scale above; the react-native-reusables copies kept the
+REGISTRY's defaults — `rounded-md` on button and input, `rounded-lg` on both
+dialogs and the tabs list, `rounded-md`/`rounded-sm` through the whole
+dropdown-menu, `rounded-[4px]` on the checkbox — and nothing said so. No lint
+error, no type error, no failing test; the two apps are never on one screen, and
+each looks internally consistent on its own. It surfaced only when someone put
+the two side by side. Each native file now records its radius in its own
+"local changes vs upstream" list, which is also what stops a re-copy from the
+registry from quietly undoing it.
+
+Before spending a native build on a radius, run the Uniwind probe in _extending_
+below: every class in the table above is confirmed to map (`rounded-*` resolve to
+their `--radius-*` var, `rounded-full` to 99999, arbitrary `rounded-[6px]` to a
+literal 6), but an unmapped class is silently absent on the device rather than an
+error.
+
+**Radius is the axis that is now in parity; the two kits are not otherwise
+identical.** The known open ones, all visible and none of them accidental in the
+same way — the overlay wash (`bg-black/50` native against `bg-black/80` web), the
+dialog surface token (`bg-background` against `bg-popover`), filled controls
+(web's `bg-input/30` in both themes against native's `bg-background` with a dark
+override), the destructive button (web tints, native fills), `ghost`/hover
+landing on `accent` against `muted`, control shadows the web kit dropped and the
+registry copies still carry, the radio's checked state (web fills the disc,
+native draws a dot in a ring), the dropdown's item padding, label step and
+indicator side, and the dialog title step. Some of those are platform-forced and
+some are simply un-ported; treat this list as the inventory rather than as a
+verdict, and settle them the way the radius was settled — one axis at a time,
+with the pair written down here.
+
 ### extending
 
 - **A new mode** — add it to `THEME_MODES` (`theme/theme.ts`), handle it in
