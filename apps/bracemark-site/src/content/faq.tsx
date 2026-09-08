@@ -327,15 +327,43 @@ export const FAQ_GROUPS: FaqGroup[] = [
         ),
       },
       {
+        // THE CARVE-OUT IS SCOPED TO THIRD-PARTY CODE, never to the four Nos in
+        // front of it. "One screen is the exception" pointed back at the whole
+        // list, so the answer read as though analytics, an ad SDK and
+        // fingerprinting all turn up on Settings → Subscription — an exception
+        // four times wider than the fact, in the answer a reader opens to check
+        // the landing page's `No trackers` cell against. Both sibling surfaces
+        // already name what the one screen is an exception TO (app/page.tsx,
+        // that cell: "the only third-party script we load"; /privacy: "loads no
+        // third-party code except in one place"), and this was the only one of
+        // the three that did not. Naming the scope is also what lets the
+        // sentence keep its own "only": one script, and no second screen.
+        //
+        // THE NOS ARE CLAIMS ABOUT US — we run, we ship, we set — and the verbs
+        // are what make them safe standing next to a third-party script. As
+        // absolutes about the product ("no fingerprinting, anywhere in
+        // Bracemark") they invite the one question we have no standing to
+        // answer: what Paddle's script does inside its own checkout. A tidying
+        // hand puts the shorter noun-phrase list back; it is shorter because it
+        // claims more than we can check.
+        //
+        // "MUST LOAD", not "loads": the script is a condition of the screen
+        // rather than something we chose to add, and it arrives WITH the screen
+        // — `Paddle.PricePreview` looks the local price up on mount, not at
+        // checkout. That is pinned by privacy/page.tsx's header (the
+        // third-party-script claim), which pins the rest of this answer too —
+        // one script, that screen, Paddle's the only cookies anywhere in
+        // Bracemark, fonts served by us — and says the two surfaces move
+        // together. Adding a script to either property falsifies both.
         id: 'trackers',
         q: 'Do you use cookies, trackers, or analytics?',
         a: (
           <>
-            No analytics, no advertising SDK, no fingerprinting, and no cookies of ours, anywhere in
-            Bracemark. One screen is the exception: opening Settings → Subscription loads Paddle’s
-            script, to show your price in your own currency and to run the checkout if you
-            subscribe. The cookies Paddle sets there are the only cookies in Bracemark, and its
-            script is the only third-party code we load — down to the fonts, which come from us
+            We run no analytics, ship no advertising SDK, fingerprint nothing and set no cookies of
+            our own, anywhere in Bracemark. One screen loads code that isn’t ours: opening Settings
+            → Subscription must load Paddle’s script, to show your price in your own currency and to
+            run the checkout if you subscribe. That script is the only third-party code in
+            Bracemark, and the cookies it sets are the only cookies. Even the fonts come from us
             rather than from a font provider. Bracemark does keep data in your browser, but it is
             your library, kept there so it works offline.
           </>
@@ -474,13 +502,12 @@ export const FAQ_GROUPS: FaqGroup[] = [
             Not today, and we would rather say so than let the licence imply otherwise. The builds
             we ship — web, mobile, and the browser extension — have our API’s address compiled in
             when they are built, so there is no setting that points one somewhere else, and the
-            mobile and extension builds reach you through stores that only we can publish to. Behind
-            that, the sync server is not a container you can run: it is a Cloudflare Worker wired to
-            Cloudflare’s own databases and object storage, and its subscriptions run through our
-            Paddle account. The {SOURCE.license}
-            does not stop you building your own from the repository, and the code being public is
-            what makes that possible at all — but it is not a path we document, and not one we can
-            help you debug.
+            mobile and browser extension builds reach you through stores that only we can publish
+            to. Behind that, the sync server is not a container you can run: it is a Cloudflare
+            Worker wired to Cloudflare’s own databases and object storage, and its subscriptions run
+            through our Paddle account. The {SOURCE.license} does not stop you building your own
+            from the repository, and the code being public is what makes that possible — but it is
+            not a path we document, and not one we can help you debug.
           </>
         ),
       },
@@ -496,9 +523,9 @@ export const FAQ_GROUPS: FaqGroup[] = [
         q: 'What do I need to sign up?',
         a: (
           <>
-            A username and a password. That is the whole form — no email address, no phone number,
-            no card. We suggest the password the app generates for you: seven random words, long
-            enough to survive an offline attack in a way most typed passwords are not.
+            A username and a password. That is all we ask for — no email address, no phone number,
+            no card. We suggest the password for you: seven random words, long enough to survive an
+            offline attack in a way most typed passwords are not. You can choose your own instead.
           </>
         ),
       },
@@ -538,11 +565,12 @@ export const FAQ_GROUPS: FaqGroup[] = [
         q: 'What is the recovery code?',
         a: (
           <>
-            A second way into your account: a random code the app offers you when you create it,
+            A second way into your account: a random code we offer you when you create your account,
             shown once. It opens the same library your password does, so it is what you use if the
             password is gone. Keep it somewhere different from your password — printed and filed, or
-            in a safe — because the two failing together is the case it exists to survive. You can
-            generate or replace one later in Settings, as long as you can still sign in.
+            in a safe — because if both are lost at once, there is no way back into your account and
+            nothing in it can be recovered. You can generate or replace the code later in Settings,
+            as long as you can still sign in.
           </>
         ),
       },
@@ -645,7 +673,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
             priced in their own currency instead — if yours is one of them, that is what you will be
             charged, at a price we set rather than a live exchange-rate conversion. Either way the
             web app shows your exact price, in your currency and with any tax, on the upgrade card
-            and again in the checkout before you pay. In the iOS and Android apps the App Store and
+            and again in the checkout before you pay. In the iOS and Android apps, the App Store and
             Play Store set the local price, and you see it in the store’s own purchase sheet.
           </>
         ),
@@ -759,14 +787,29 @@ export const FAQ_GROUPS: FaqGroup[] = [
         // apart within a release or two (the header's whole argument for one
         // file); this one points at it instead.
         //
-        // No monthly plan is promised. "It is on the list" is what shipped before
-        // and is as far as it goes — a date here would be a roadmap commitment on
-        // the surface a buyer reads with a card in their hand.
+        // NO ROADMAP ENTRY, AND "TODAY" RATHER THAN "YET". This answer closed on
+        // "A monthly plan is on the list" for several releases, which is the one
+        // construction every sibling surface refuses in as many words: /about's
+        // `No public API` ("today", never "yet" — a commitment nobody made),
+        // /security on the audit and on reproducible builds, /pricing's hidden
+        // lifetime strip, and `change-password` above on DEK rotation. It also
+        // inverted this answer's own method — the trial, the cancellation and the
+        // Terms clause are all bounds the reader can check, and the roadmap line
+        // sat LAST, closing an argued answer on its one unverifiable clause. On
+        // /pricing, where `monthly` is one of PRICING_FAQ_IDS and is read with a
+        // card in hand, the only act it suggested was to wait.
+        //
+        // The opening carries the same rule: "Not today" describes where things
+        // stand, "Not yet" is a promise in two words — which is why `self-hosting`
+        // above and `crypto-payment` below both say today. If a door ever needs
+        // leaving open, the house shape is the CONDITIONAL — `lifetime`'s off-sale
+        // branch, `crypto-payment`'s last line — never an assertion that a thing
+        // is planned.
         id: 'monthly',
         q: 'Do you have a monthly plan?',
         a: (
           <>
-            Not yet — {PLAN_LABELS.plus} is annual only, and that carries a real cost for you: a
+            Not today — {PLAN_LABELS.plus} is annual only, and that carries a real cost for you: a
             year up front is a larger commitment than a month, made before you know whether this
             fits the way you work. What bounds it: the {TRIAL_DAYS}-day trial runs before the first
             charge, so cancelling before it ends means you are never charged; cancelling after that
@@ -774,8 +817,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
             free plan either way; and if we stop offering the paid plan for reasons within our
             control, our <PageLink href="/terms">Terms</PageLink> commit us to cancelling
             subscriptions and refunding the unused part of any period already paid for. Refunds in
-            the ordinary case are <HashLink id="refunds">further down</HashLink>. A monthly plan is
-            on the list.
+            the ordinary case are <HashLink id="refunds">further down</HashLink>.
           </>
         ),
       },
@@ -905,13 +947,13 @@ export const FAQ_GROUPS: FaqGroup[] = [
             A preview comes from the device that saved the link, and it takes a moment to arrive.
             Links saved in the web app are the exception — the browser won’t let a web page fetch
             another site — so those show the bare address unless you turn on the opt-in{' '}
-            {PLAN_LABELS.plus} extraction. Installing the browser extension is the free fix, and the
-            better one. Some pages give nothing up whichever device asks, and no plan changes that:
-            anything behind a login or a paywall, a PDF or another file that isn’t a web page, a
-            site that turns away automated requests, and pages whose text is assembled by JavaScript
-            after they load. We stop retrying those, so they land in the failed count under Link
-            previews in Settings rather than a queue that is still working on them. The link is
-            saved either way, and you can give it a title of your own.
+            {PLAN_LABELS.plus} extraction. Installing the browser extension is the free fix. Some
+            pages give nothing up whichever device asks, and no plan changes that: anything behind a
+            login or a paywall, a PDF or another file that isn’t a web page, a site that turns away
+            automated requests, and pages whose text is assembled by JavaScript after they load. We
+            stop retrying those, so they land in the failed count under Link previews in Settings
+            rather than a queue that is still working on them. The link is saved either way, and you
+            can give it a title of your own.
           </>
         ),
       },
@@ -1121,7 +1163,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
             nothing we could hand you. An export is the backstop worth having, with one thing to
             know about it: restoring a backup fills gaps rather than overwriting, so a link you
             deleted comes back and a link you still have keeps the version on your device. It covers
-            the clean-up you regret rather than the edit, and taking one first costs nothing.
+            the clean-up you regret rather than the edit, and exporting first costs nothing.
           </>
         ),
       },
@@ -1159,13 +1201,34 @@ export const FAQ_GROUPS: FaqGroup[] = [
         // list, title, note, tags and date" is that row in the reader's words.
         // The landing page deliberately does NOT carry the row shape; DURABILITY
         // states the archive once and this answer carries the columns.
+        //
+        // "NEVER UPLOADED" CANNOT STAND ALONE, and it stood alone here for
+        // several releases. It is true of the FILE — import is client-only on
+        // both platforms (`web-react/src/data/import-all-data.ts` parses and
+        // writes through the local write edge; docs/data-lifecycle.md, the
+        // header: "the only server traffic is the ordinary sync plane") — and
+        // the reader takes it as a claim about the IMPORT, which then reads as
+        // a promise that nothing goes up at all. `e2e` above uses the same verb
+        // for the path everything actually takes ("encryption happens before
+        // anything is uploaded"), so the two answers contradicted each other on
+        // the word, and the one a switcher can falsify from their own second
+        // device was this one. The scope is now in the noun (the file) and the
+        // sequel is stated rather than left to be inferred — same repair as
+        // "nothing readable from your links" in `two-devices`. The reassurance
+        // is kept rather than dropped: a bookmarks export is the reader's whole
+        // browsing history, and nowhere else on the property says we do not
+        // ship that file to a parser. `import-over-cap` above owns the other
+        // half ("counted before anything is saved", "the file on your device is
+        // never changed") and deliberately makes no upload claim — one surface
+        // per fact.
         id: 'import-export',
         q: 'Can I bring my bookmarks in, and take them out again?',
         a: (
           <>
             Both. Import a browser bookmarks export, a Raindrop CSV or a plain list of URLs — the
-            file is read on your device and never uploaded. If it holds more links than your plan
-            has room for, you are asked before anything is saved (see{' '}
+            file is read on your device and never sent anywhere; the links it holds sync encrypted,
+            like every other link. If it holds more links than your plan has room for, you are asked
+            before anything is saved (see{' '}
             <HashLink id="import-over-cap">what if I import more than {FREE_LINKS} links</HashLink>
             ). Export gives you the whole library on every plan: a full backup that restores
             everything, or one of three formats other apps read — a browser bookmarks file, a CSV
@@ -1184,15 +1247,43 @@ export const FAQ_GROUPS: FaqGroup[] = [
         // choosing between, and the retirement is stated here rather than left
         // to /terms — a reader told "everything" who later finds their name
         // taken learns we round up.
+        //
+        // DELETE ACCOUNT IS A SUPERSET, and the answer has to say so, because the
+        // half it used to name for that branch was the KEYS ("the keys that could
+        // ever have opened it") and a reader completes the other half
+        // themselves — wrongly. Read against the Data branch beside it, naming
+        // only the cryptographic kill says the ciphertext survives unreadable,
+        // and the careful reader's conclusion is that the safe order is Data
+        // first, Account second. It is one call: `deleteAccount`
+        // (`bracemark-api/src/services/account.ts`) opens its teardown with the
+        // SAME `deleteAllUserData` that Settings → Data's endpoint calls
+        // (`routes/data.ts`) — DO op log + quota map, then every R2 object under
+        // the user's prefix — and only then tombstones, drops the doors and the
+        // user row, and revokes the sessions (docs/data-lifecycle.md, the header
+        // table: "wiped (same service)"). If that ordering ever changes, this
+        // answer is wrong rather than stale.
+        //
+        // Both halves are stated because bytes-gone AND keys-gone is a stronger
+        // claim than either alone, and the sequence is the mechanism the rest of
+        // this property argues from. "ALONG WITH THE KEYS", never "also
+        // destroying" or "including destroying": the doors are a CO-OBJECT of the
+        // delete, dropped in the same D1 batch as the user row
+        // (`accountKeysRepo(shard).deleteAllByUserIdStmt` beside
+        // `usersRepo(shard).deleteStmt`). "Also" makes them a third step a reader
+        // then wonders whether they must run, which is the counting error this
+        // answer exists to stop; "including" opens a set the sentence never
+        // closes. It does NOT widen into what teardown keeps
+        // beyond the username — the purchases row and /privacy's tax-law
+        // retention stay where they are, per the note above.
         id: 'delete-account',
         q: 'How do I delete my library, or my whole account?',
         a: (
           <>
-            Settings → Data wipes your library and keeps the account; Settings → Account deletes the
-            account itself, which also destroys the keys that could ever have opened it. Neither can
-            be undone, so both ask you to confirm first. Your username is the one thing that stays:
-            it is retired rather than released, so nobody can register it later and be mistaken for
-            you.
+            Settings → Data wipes your library and keeps the account. Settings → Account does that
+            same wipe and then deletes the account itself, along with the keys that could ever have
+            opened it — so there is no need to run both. Neither can be undone, so both ask you to
+            confirm first. Your username is the one thing that stays: it is retired rather than
+            released, so nobody can register it later and be mistaken for you.
           </>
         ),
       },
