@@ -3,9 +3,10 @@ import type { ExpoConfig } from 'expo/config';
 // The Expo app config. This is TS rather than the app.json it replaced for one
 // reason: `ios.appleTeamId` has to come from the environment. In JSON it was
 // the LITERAL string "process.env.APPLE_TEAM_ID" — JSON has no interpolation —
-// and @expo/config-plugins' withDevelopmentTeam writes that value verbatim into
-// DEVELOPMENT_TEAM for EVERY native target in the pbxproj, so signing was
-// broken in both the app and the share-extension target.
+// and @expo/config-plugins' withDevelopmentTeam wrote that value verbatim into
+// DEVELOPMENT_TEAM, so app signing was broken. (Reaching the iOS share
+// extension's target is a separate problem with a separate plugin below —
+// docs/expo-build.md, "ios share extension build settings".)
 //
 // APPLE_TEAM_ID is read from `.env.local` (gitignored; see docs/env-files.md).
 // It is NOT `EXPO_PUBLIC_`-prefixed on purpose — that prefix means "inline into
@@ -165,6 +166,15 @@ const config: ExpoConfig = {
     // outside the repo, and Gradle falls back to debug signing when they are
     // absent. See docs/expo-build.md — android release signing.
     './plugins/with-android-signing',
+    // DEVELOPMENT_TEAM and IPHONEOS_DEPLOYMENT_TARGET for the iOS SHARE
+    // EXTENSION target, neither of which reaches it: withDevelopmentTeam runs
+    // before expo-share-extension creates the target, and expo-build-properties
+    // skips it by product type. Without this, Xcode's Signing & Capabilities
+    // Team is empty on BracemarkShareExtension after every prebuild, and that
+    // target builds for iOS 15.1 against Pods built for the 18.0 set above.
+    // Position in this array does not matter: it is a `finalized` mod, which
+    // runs after the whole chain. See the plugin.
+    './plugins/with-share-extension-build-settings',
   ],
 };
 

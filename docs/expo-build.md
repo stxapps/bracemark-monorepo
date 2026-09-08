@@ -142,11 +142,13 @@ Two notes:
   deletes them every time, so **nothing hand-edited in Xcode survives**. Every
   native change belongs in `app.config.ts` or a config plugin. The one thing
   that isn't a file — signing — comes from `APPLE_TEAM_ID` in `.env.local`
-  (see the app config section below); with it set, `withDevelopmentTeam` writes
-  `DEVELOPMENT_TEAM` into every target (app **and** share extension) and Xcode's
-  automatic signing takes it from there, so the manual team-picking step should
-  not be needed. If Xcode still asks, that's the signal `.env.local` wasn't
-  loaded — fix the env, don't fix the pbxproj.
+  (see the app config section below), and it takes **two** plugins to reach both
+  targets: core config-plugins' `withDevelopmentTeam` for the app, and the local
+  `with-share-extension-build-settings` for the iOS share extension — see _ios
+  share extension build settings_ below. With both in place Xcode's automatic
+  signing takes it from there and no manual team pick is needed. If Xcode still
+  asks on the **app** target, that's the signal `.env.local` wasn't loaded — fix
+  the env, don't fix the pbxproj.
 
 **Why not commit `ios/`+`android/` for audit?** The tempting reason is diffing
 what an SDK bump or a config-plugin change does to the native projects — but
@@ -198,6 +200,81 @@ Two gotchas if you touch this:
   `npx expo config --type prebuild` is the check. Run the latter after editing.
 - **A config change needs `npx expo prebuild`** to reach the native projects,
   like any config-plugin change.
+
+#### ios share extension build settings ⚠
+
+**The `BracemarkShareExtension` target is born missing two build settings that
+are correct on the app target**, and nothing downstream reports either one:
+prebuild succeeds, the config is valid, and no lint, type or test reads a
+pbxproj. `expo-share-extension` creates the target from a hardcoded
+build-settings map (`plugin/build/xcode/addToXCConfigurationList.js`), and both
+gaps come from there:
+
+| setting                      | app target      | share extension, unfixed | symptom                                              |
+| ---------------------------- | --------------- | ------------------------ | ---------------------------------------------------- |
+| `DEVELOPMENT_TEAM`           | `APPLE_TEAM_ID` | absent                   | empty **Team** in Signing & Capabilities             |
+| `IPHONEOS_DEPLOYMENT_TARGET` | `18.0`          | literal `15.1`           | Pods built for a newer iOS than the target links for |
+
+The local `plugins/with-share-extension-build-settings.js` supplies both; the
+file carries the full reasoning, so this is the short version.
+
+**The two have different causes, and only one is about order.**
+
+- **`DEVELOPMENT_TEAM` — order.** Core config-plugins' `withDevelopmentTeam`
+  does walk _every_ native target, but it runs before this one exists. `withMod`
+  chains mods under the same key so the **last registered runs first**, and
+  `getPrebuildConfig` reads `app.config.ts` (registering every entry in
+  `plugins`, `expo-share-extension` included) _before_ it applies
+  `withIosExpoPlugins`, which is what registers `withDevelopmentTeam`. So it is
+  registered last, runs first, and walks a pbxproj that still has exactly one
+  native target.
+- **`IPHONEOS_DEPLOYMENT_TARGET` — product type.** `expo-build-properties`
+  filters its targets to `TargetType.APPLICATION` (`build/ios.js`,
+  `updateDeploymentTargetXcodeProject`), so a `com.apple.product-type.app-extension`
+  target is skipped **by design** and would still be skipped if it ran last.
+  Meanwhile `ios.deploymentTarget` also lands in `Podfile.properties.json`, so
+  every Pod _is_ built at 18.0.
+
+The consequence worth remembering: **reordering `plugins` fixes neither.** Nor
+does fixing it in Xcode — `ios/` is CNG output, so a hand-picked team or a
+retyped deployment target dies at the next `--clean`, with a clean working tree
+throughout. Left unnoticed, the signing half fails an archive after the wait.
+
+**The fix is a `finalized` mod, deliberately.** A `withXcodeProject` mod would
+work for the team, but only if the plugin were listed _before_
+`expo-share-extension` in `plugins` — reverse order, per the chaining above — so
+a later innocent reorder of that array would silently undo it. Mod **keys**,
+unlike mods within a key, have a fixed precedence (`mod-compiler.js`:
+`dangerous: -2`, `xcodeproj: -1`, `finalized: 1`), so `finalized` runs after the
+whole xcodeproj chain has run and written the file, wherever the array puts it.
+It re-reads the pbxproj from disk because by `finalized` there is no
+`modResults` to take.
+
+**Re-registering `withDevelopmentTeam` yourself is the tempting alternative —
+don't.** Putting `IOSConfig.DevelopmentTeam.withDevelopmentTeam` first in
+`plugins` would make a second copy of it run last, and that is a real one-liner.
+It buys a silent dependency on array position in exchange, covers only the
+signing half, and still leaves a local plugin entry to explain. Expo offers no
+knob to re-time its own registration; `finalized` is the supported way to say
+"after everything".
+
+**The deployment target is copied from the app target, not restated.** So the
+`expo-build-properties` value in `app.config.ts` stays the only place the number
+lives, and a bump can't leave the extension behind. The project-level build
+configurations keep the template's `15.1` and that is deliberate: target-level
+settings win, and upstream leaves the project level alone for the app target
+too.
+
+The plugin then asserts, for every `PBXNativeTarget` × build configuration, that
+`DEVELOPMENT_TEAM` is present and `IPHONEOS_DEPLOYMENT_TARGET` matches the app
+target's — throwing a loud prebuild failure in place of a silent empty dropdown.
+The assertions pass unchanged if either problem is fixed upstream, since the
+writes are idempotent; what they catch is a write that missed a target.
+
+Unset `APPLE_TEAM_ID` stays safe, matching `withDevelopmentTeam`: a falsy id is
+skipped and no team is written, so a fresh clone still prebuilds and you pick
+both teams by hand. → [env-files.md](./env-files.md), _the one
+non-`EXPO_PUBLIC_` var_.
 
 #### android release minification — R8
 

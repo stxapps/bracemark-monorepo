@@ -336,11 +336,14 @@ bullets below are about `APPLE_TEAM_ID`.
 
 `APPLE_TEAM_ID` is the reason this app's config is `app.config.ts` and not
 `app.json` — `ios.appleTeamId` has to come from the environment, and JSON has no
-interpolation. At prebuild,
-`@expo/config-plugins`' `withDevelopmentTeam` writes it into `DEVELOPMENT_TEAM`
-for **every** native target in the pbxproj — the app _and_ the share extension —
-which is what keeps local device signing from needing a manual team pick in
-Xcode after each regenerate of `ios/`. Three things follow:
+interpolation. At prebuild it is written into `DEVELOPMENT_TEAM`, which is what
+keeps local device signing from needing a manual team pick in Xcode after each
+regenerate of `ios/`. That takes **two** plugins, not one:
+`@expo/config-plugins`' `withDevelopmentTeam` covers the app target, and the
+local `plugins/with-share-extension-build-settings.js` covers the iOS **share
+extension** target, which the first one runs too early to see — see
+[expo-build.md](./expo-build.md), _ios share extension build settings_. Three
+things follow:
 
 - **It lives in `.env.local`**, not one of the committed files. `.env*.local` is
   gitignored, and the value is per-developer-account rather than per-tier.
@@ -352,8 +355,9 @@ Xcode after each regenerate of `ios/`. Three things follow:
 - **No `EXPO_PUBLIC_` prefix.** That prefix means "inline into the JS bundle";
   this is a config-time value and never belongs in shipped JS.
 
-Unset is safe: `withDevelopmentTeam` skips a falsy id and leaves the pbxproj
-alone, so a fresh clone still prebuilds — you just pick the team in Xcode.
+Unset is safe: both plugins skip a falsy id and leave the pbxproj alone, so a
+fresh clone still prebuilds — you just pick the team in Xcode, on each of the
+two targets.
 
 ### bracemark-api — Hono on Cloudflare Workers
 
