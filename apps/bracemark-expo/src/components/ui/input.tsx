@@ -22,7 +22,10 @@ import { cn } from '../../lib/utils';
 // saves); `keyboardAppearance` bound to the active theme (below); and the
 // radius raised to `rounded-4xl` from the registry's `rounded-md`, which is
 // web-ui's shape system (docs/theme.md, _the radius scale_).
-
+// The fill and the shadow moved with it: `bg-input/30` in BOTH themes, as web
+// has it, rather than `bg-background` with a dark-only override, and no
+// `shadow-sm shadow-black/5` — web-ui puts no shadow on any control
+// (docs/theme.md, _the two kits_).
 // THE `md:text-sm` IN THE WEB BRANCH IS UPSTREAM'S CONTROL TYPE STEP, AND IT IS
 // DELIBERATELY NOT PORTED. The reason is PROVENANCE, not width. web-ui runs that
 // step across five controls — Input, Textarea, both combobox triggers and
@@ -73,7 +76,7 @@ function Input({
   return (
     <TextInput
       className={cn(
-        'flex h-10 w-full min-w-0 flex-row items-center rounded-4xl border border-input bg-background px-3 py-1 font-sans text-base leading-5 text-foreground shadow-sm shadow-black/5 sm:h-9 dark:bg-input/30',
+        'flex h-10 w-full min-w-0 flex-row items-center rounded-4xl border border-input bg-input/30 px-3 py-1 font-sans text-base leading-5 text-foreground sm:h-9',
         props.editable === false &&
           cn(
             'opacity-50',

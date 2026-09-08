@@ -13,7 +13,10 @@ import { TextClassContext } from './text';
 // `rounded-4xl` on the list and `rounded-xl` on the trigger, web-ui's shape
 // system rather than the registry's `lg`/`md` (docs/theme.md, _the radius
 // scale_).
-
+// The inactive trigger is `text-foreground/60`, web-ui's value — the registry's
+// full-strength `text-foreground` made the unselected tabs read as selected
+// (docs/theme.md, _contrast — dark mode, where the ratio lies_, on why the
+// alpha form is the safe one).
 function Tabs({ className, ...props }: React.ComponentProps<typeof TabsPrimitive.Root>) {
   return <TabsPrimitive.Root className={cn('flex flex-col gap-2', className)} {...props} />;
 }
@@ -36,7 +39,7 @@ function TabsTrigger({ className, ...props }: React.ComponentProps<typeof TabsPr
   return (
     <TextClassContext.Provider
       value={cn(
-        'text-foreground dark:text-muted-foreground text-sm font-medium',
+        'text-foreground/60 dark:text-muted-foreground text-sm font-medium',
         value === props.value && 'dark:text-foreground',
       )}
     >

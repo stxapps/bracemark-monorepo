@@ -276,14 +276,15 @@ function LinkEditForm({ link, focus }: { link: LinkItem; focus?: EditFocus }) {
             {link.url}
           </Text>
         </View>
-        <Pressable
-          role="button"
+        <Button
+          variant="ghost"
+          size="icon"
           onPress={close}
           aria-label="Close edit link"
-          className="size-10 shrink-0 items-center justify-center rounded-md"
+          className="shrink-0"
         >
           <Icon as={X} className="size-5 text-muted-foreground" />
-        </Pressable>
+        </Button>
       </View>
       <StyledKeyboardAwareScrollView
         ref={scrollRef}

@@ -17,12 +17,13 @@
 // between the two sections.
 
 import { useMemo } from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 import { ChevronDown, ChevronUp, MoreHorizontal, Pencil, Tag, Trash2 } from 'lucide-react-native';
 
 import { useTagMutations, useTags } from '@stxapps/expo-react';
 import { arrayMove, sortedByName, type TagItem } from '@stxapps/shared';
 
+import { Button } from '../../components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -59,14 +60,10 @@ function RowActions({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Pressable
-          role="button"
-          aria-label="Tag actions"
-          className="size-9 items-center justify-center rounded-md"
-        >
+        <Button variant="ghost" size="icon-sm" aria-label="Tag actions">
           {/* 20, as every ⋯ trigger in both apps is — see link-row-menu.tsx. */}
           <Icon as={MoreHorizontal} className="size-5 text-muted-foreground" />
-        </Pressable>
+        </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">
         <DropdownMenuItem onPress={onFocusName}>

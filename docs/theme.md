@@ -650,19 +650,70 @@ their `--radius-*` var, `rounded-full` to 99999, arbitrary `rounded-[6px]` to a
 literal 6), but an unmapped class is silently absent on the device rather than an
 error.
 
-**Radius is the axis that is now in parity; the two kits are not otherwise
-identical.** The known open ones, all visible and none of them accidental in the
-same way — the overlay wash (`bg-black/50` native against `bg-black/80` web), the
-dialog surface token (`bg-background` against `bg-popover`), filled controls
-(web's `bg-input/30` in both themes against native's `bg-background` with a dark
-override), the destructive button (web tints, native fills), `ghost`/hover
-landing on `accent` against `muted`, control shadows the web kit dropped and the
-registry copies still carry, the radio's checked state (web fills the disc,
-native draws a dot in a ring), the dropdown's item padding, label step and
-indicator side, and the dialog title step. Some of those are platform-forced and
-some are simply un-ported; treat this list as the inventory rather than as a
-verdict, and settle them the way the radius was settled — one axis at a time,
-with the pair written down here.
+**Radius was the first axis brought into parity; the section below is the rest
+of that audit.**
+
+### the two kits — what is ported, what is platform, what is still open
+
+`packages/web-ui/src/components/ui/*` (shadcn, over Tailwind) and
+`apps/bracemark-expo/src/components/ui/*` (react-native-reusables, over Uniwind)
+are the same nine primitives written twice: alert-dialog, button, checkbox,
+dialog, dropdown-menu, input, radio-group, switch, tabs. Nothing can be imported
+across them, so every shared value is stated twice and the pair has to be held by
+this document and by each native file's "local changes vs upstream" list.
+
+**PORTED — web-ui is the source of truth for all of these.** The native copies
+sat at the registry's defaults until this pass; they now carry web's values:
+
+| axis                    | value                                                                                                                                                             |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| radius                  | the whole scale above                                                                                                                                             |
+| control shadows         | none. The registry puts `shadow-sm shadow-black/5` on button, input, checkbox and radio; web-ui carries no shadow on any control (only floating surfaces get one) |
+| `destructive` button    | a TINT — `bg-destructive/10 text-destructive`, pressing to `/20` — not a solid `bg-destructive` with white text                                                   |
+| `ghost` button          | presses to `muted`, not `accent`                                                                                                                                  |
+| `outline` button, input | `bg-input/30` in both themes, not `bg-background` with a dark-only override                                                                                       |
+| radio, checked          | the disc FILLS `bg-primary` under a `primary-foreground` dot                                                                                                      |
+| dialog overlay          | `bg-black/80`, not `/50`                                                                                                                                          |
+| dialog surface          | `bg-popover`, not `bg-background`                                                                                                                                 |
+| dialog title            | `text-base font-medium`; the alert-dialog's is `text-lg font-medium`                                                                                              |
+| dropdown row            | `px-3 gap-2.5`; the label is `text-xs text-muted-foreground`; the separator is `bg-border/50`                                                                     |
+| tabs, inactive trigger  | `text-foreground/60`                                                                                                                                              |
+
+**PLATFORM — these differ because the runtime differs, and they are correct.**
+`ring-*` becomes `border-*` (RN has no ring — see _elevation_ above); Radix
+`data-*` state selectors become props and rendered indicators; hover becomes
+press (`active:`), value for value; `hitSlop` does what web's `after:-inset-*`
+does; every size is one step taller than web's, because a phone target is not a
+pointer target; `Switch` is the platform control rather than the registry's
+`Pressable` (its own header argues that at length); text colour reaches children
+through `TextClassContext` rather than a cascade, which is why a call site that
+wants a non-default step restates it on its own `Text`.
+
+**STILL OPEN, deliberately.** Native `Button` has web's eight sizes but no
+per-size icon shrink (web's `[&_svg]:size-*` has no descendant-selector
+equivalent — call sites size their own glyph); the dropdown's state indicator
+stays on the LEADING edge where web's is trailing; the checkbox has no
+indeterminate; alert-dialog has no media badge and no `size` variants; both
+dialogs are `max-w-lg` against web's 28rem/20rem; and eleven web primitives have
+no native twin at all (accordion, card, command, field, input-group, label,
+popover, select, separator, sheet, textarea) — some by design, since the share
+pickers are screens rather than overlays ([share-sheet.md](./share-sheet.md)).
+
+⚠ **An icon button is `<Button variant="ghost" size="icon-sm">`, not a
+`Pressable` with classes on it.** Twenty call sites drew their own — a
+`size-9 rounded-md active:bg-muted` box — in the very screens whose web twins
+use the kit's Button, and the day the kit took web's radii every one of them
+became an 8px square beside a pill. (Two more controls were the same story at
+other sizes: the share sheet's back button, now `variant="ghost" size="sm"`, and
+the list picker's combobox trigger, now `variant="outline"` exactly as its web
+twin is.) Hand-rolled control chrome does not track the
+kit, and nothing reports that it has stopped matching: it is a valid box with
+valid classes. Two of them legitimately restate the BOX (`className="size-8"` on
+the link row's ⋯ trigger and the links rail's disclosure, whose web twins pin the
+same 32 for the same reason) — restating a box is fine, redrawing the control is
+not. Rows are the exception that proves it: a nav row or a list row is not a
+control, both apps hand-roll them, and both spell them `rounded-md` (a picker row
+inside a surface takes `rounded-xl`, the same role the kit's menu items have).
 
 ### extending
 

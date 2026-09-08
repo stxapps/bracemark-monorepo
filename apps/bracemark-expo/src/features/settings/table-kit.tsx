@@ -24,7 +24,7 @@
 // (sync/sort.ts), one copy for all four tables.
 
 import { useRef, useState } from 'react';
-import { Pressable, TextInput, View } from 'react-native';
+import { TextInput, View } from 'react-native';
 import { ArrowDownAZ, ArrowDownZA, ArrowUpDown, Check, Plus, X } from 'lucide-react-native';
 
 import type { SortDir } from '@stxapps/shared';
@@ -118,10 +118,10 @@ export function CreateRow({
 
   return (
     <View className="flex-row items-center gap-1 border-b border-border px-1 py-1.5">
-      <Pressable
-        role="button"
+      <Button
+        variant="ghost"
+        size="icon-sm"
         aria-label={active ? 'Cancel' : `New ${noun}`}
-        className="size-9 items-center justify-center rounded-md"
         // Whichever icon is showing, do what it says: cancel, or start an item by
         // focusing the field (which raises the keyboard and flips `active`, so
         // this button becomes the cancel). No mousedown/click split to worry
@@ -133,7 +133,7 @@ export function CreateRow({
         }}
       >
         <Icon as={active ? X : Plus} className="size-4 text-muted-foreground" />
-      </Pressable>
+      </Button>
       <Input
         ref={inputRef}
         value={value}
@@ -146,14 +146,14 @@ export function CreateRow({
         onSubmitEditing={() => void confirm()}
       />
       {active && (
-        <Pressable
-          role="button"
+        <Button
+          variant="ghost"
+          size="icon-sm"
           aria-label={`Create ${noun}`}
-          className="size-9 items-center justify-center rounded-md"
           onPress={() => void confirm()}
         >
           <Icon as={Check} className="size-4 text-muted-foreground" />
-        </Pressable>
+        </Button>
       )}
     </View>
   );

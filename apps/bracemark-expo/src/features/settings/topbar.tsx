@@ -30,11 +30,12 @@
 // reason. This bar leads with a drawer toggle instead, so its title never sat on
 // that edge to begin with.
 
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 import { DrawerActions } from '@react-navigation/native';
 import { useNavigation } from 'expo-router';
 import { Menu, X } from 'lucide-react-native';
 
+import { Button } from '../../components/ui/button';
 import { Icon } from '../../components/ui/icon';
 import { Text } from '../../components/ui/text';
 import { closeSettings } from './close';
@@ -46,30 +47,32 @@ export function Topbar({ section }: { section: SettingsSectionId }) {
 
   return (
     <View className="h-14 shrink-0 flex-row items-center gap-2 border-b border-border px-3">
-      <Pressable
-        role="button"
+      <Button
+        variant="ghost"
+        size="icon-sm"
         onPress={() => navigation.dispatch(DrawerActions.openDrawer())}
         aria-label="Open settings navigation"
         // 48x48 effective — see links/topbar.tsx for why the boxes stay 36 and
         // the slop makes up the difference. Neither button here has a pressable
         // neighbour (the label between them is a Text), so both take the full 6.
         hitSlop={6}
-        className="-ml-1 size-9 items-center justify-center rounded-md active:bg-muted"
+        className="-ml-1"
       >
         <Icon as={Menu} className="size-5 text-foreground" />
-      </Pressable>
+      </Button>
       <Text numberOfLines={1} className="min-w-0 flex-1 text-base font-medium">
         {label}
       </Text>
-      <Pressable
-        role="button"
+      <Button
+        variant="ghost"
+        size="icon-sm"
         onPress={closeSettings}
         aria-label="Close settings"
         hitSlop={6}
-        className="-mr-1 size-9 items-center justify-center rounded-md active:bg-muted"
+        className="-mr-1"
       >
         <Icon as={X} className="size-5 text-foreground" />
-      </Pressable>
+      </Button>
     </View>
   );
 }

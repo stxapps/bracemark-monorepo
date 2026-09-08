@@ -26,7 +26,7 @@
 // computes it from the selection at press time (web's useDefaultListId).
 
 import { useEffect, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { usePreventRemove } from '@react-navigation/native';
@@ -219,14 +219,9 @@ export function LinkAddScreen() {
     <StyledSafeAreaView className="flex-1 bg-background">
       <View className="h-14 shrink-0 flex-row items-center justify-between border-b border-border pr-2 pl-4">
         <Text className="text-lg font-semibold">Add a link</Text>
-        <Pressable
-          role="button"
-          onPress={close}
-          aria-label="Close add link"
-          className="size-10 items-center justify-center rounded-md"
-        >
+        <Button variant="ghost" size="icon" onPress={close} aria-label="Close add link">
           <Icon as={X} className="size-5 text-muted-foreground" />
-        </Pressable>
+        </Button>
       </View>
       <StyledKeyboardAwareScrollView
         className="flex-1"

@@ -3,6 +3,7 @@ import { render } from '@testing-library/react-native';
 import { Upload } from 'lucide-react-native';
 
 import { Button } from './button';
+import { DropdownMenu, DropdownMenuTrigger } from './dropdown-menu';
 import { Icon } from './icon';
 import { Text } from './text';
 
@@ -76,4 +77,32 @@ test('a conditional icon takes its padding with it', () => {
     </Button>,
   );
   expect(cls).not.toContain('pl-3');
+});
+
+// THE TRIGGER COMPOSITION. Every ⋯ menu in the app is
+// `<DropdownMenuTrigger asChild><Button …>`, which is how web spells it too. The
+// primitive clones its child with its own `onPress` and with the ref it measures
+// to place the menu, and both have to survive the hop through Button — a
+// composite component, where they land on the inner Pressable only because it
+// spreads its props. Nothing else renders that pair, and the failure is a menu
+// that never opens.
+test('a dropdown trigger reaches the Pressable inside Button', () => {
+  const { UNSAFE_root } = render(
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon-sm" aria-label="Link options">
+          <Icon as={Upload} />
+        </Button>
+      </DropdownMenuTrigger>
+    </DropdownMenu>,
+  );
+  // The chain is Slot → Button → Pressable; the last two nodes are the views
+  // Pressable itself renders, which carry the resolved classes but no handler.
+  const host = UNSAFE_root.findAllByProps({ role: 'button' }).find(
+    (node: { props: Record<string, unknown> }) =>
+      typeof node.props.onPress === 'function' && typeof node.props.className === 'string',
+  );
+  expect(host).toBeDefined();
+  expect(String(host?.props.className)).toContain('rounded-4xl');
+  expect(String(host?.props.className)).toContain('h-9');
 });

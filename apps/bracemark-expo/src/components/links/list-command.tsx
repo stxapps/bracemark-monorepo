@@ -156,7 +156,7 @@ export function ListCommand({
               onPress={() => root.onSelect()}
               accessibilityRole="menuitem"
               className={cn(
-                'flex-row items-center justify-between gap-2 rounded-md px-2 py-2.5 active:bg-muted',
+                'flex-row items-center justify-between gap-2 rounded-xl px-2 py-2.5 active:bg-muted',
                 root.selected && 'opacity-50',
               )}
             >
@@ -179,7 +179,7 @@ export function ListCommand({
               onPress={() => onSelect(item.id)}
               accessibilityRole="menuitem"
               className={cn(
-                'flex-row items-center justify-between gap-2 rounded-md px-2 py-2.5 active:bg-muted',
+                'flex-row items-center justify-between gap-2 rounded-xl px-2 py-2.5 active:bg-muted',
                 disabled && 'opacity-50',
               )}
               style={!filtering && depth > 0 ? { paddingLeft: depth * 12 + 8 } : undefined}
@@ -202,7 +202,7 @@ export function ListCommand({
             onPress={() => void create()}
             accessibilityRole="menuitem"
             className={cn(
-              'flex-row items-center gap-2 rounded-md px-2 py-2.5 active:bg-muted',
+              'flex-row items-center gap-2 rounded-xl px-2 py-2.5 active:bg-muted',
               creating && 'opacity-50',
             )}
           >

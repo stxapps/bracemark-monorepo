@@ -205,14 +205,9 @@ export function BulkEditBar({ links }: { links: LinkView[] }) {
     <View className="shrink-0 border-t border-border bg-background px-3 pt-2 pb-1">
       <View className="h-10 flex-row items-center justify-between">
         <View className="flex-row items-center gap-3">
-          <Pressable
-            role="button"
-            aria-label="Exit bulk edit"
-            onPress={exitBulkEdit}
-            className="size-10 items-center justify-center rounded-md"
-          >
+          <Button variant="ghost" size="icon" aria-label="Exit bulk edit" onPress={exitBulkEdit}>
             <Icon as={X} className="size-5 text-foreground" />
-          </Pressable>
+          </Button>
           <Text className="text-sm text-muted-foreground">{count} selected</Text>
         </View>
         <Pressable

@@ -179,7 +179,7 @@ export function ShareListPicker({
             testID="share-list-create"
             onPress={create}
             accessibilityRole="button"
-            className="flex-row items-center gap-2 rounded-md px-2 py-2.5 active:bg-muted"
+            className="flex-row items-center gap-2 rounded-xl px-2 py-2.5 active:bg-muted"
           >
             <Icon as={Plus} className="size-4 shrink-0 text-muted-foreground" />
             <Text numberOfLines={1} className="min-w-0 flex-1">
@@ -224,7 +224,7 @@ function ListRow({
       accessibilityRole="menuitem"
       accessibilityState={{ selected }}
       className={cn(
-        'flex-row items-center justify-between gap-2 rounded-md px-2 py-2.5 active:bg-muted',
+        'flex-row items-center justify-between gap-2 rounded-xl px-2 py-2.5 active:bg-muted',
       )}
       style={indent > 0 ? { paddingLeft: indent * 12 + 8 } : undefined}
     >

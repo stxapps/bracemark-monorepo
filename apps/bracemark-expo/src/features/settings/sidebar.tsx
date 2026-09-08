@@ -21,6 +21,7 @@ import { ArrowLeft } from 'lucide-react-native';
 import { withUniwind } from 'uniwind';
 
 import { BrandLockup } from '../../components/brand-lockup';
+import { Button } from '../../components/ui/button';
 import { Icon } from '../../components/ui/icon';
 import { Text } from '../../components/ui/text';
 import { cn } from '../../lib/utils';
@@ -86,14 +87,15 @@ export function Sidebar({ closeDrawer }: { closeDrawer: () => void }) {
       <View className="h-14 justify-center border-b border-border px-4">
         <BrandLockup
           action={
-            <Pressable
-              role="button"
+            <Button
+              variant="ghost"
+              size="icon-sm"
               onPress={closeSettings}
               aria-label="Back to links"
-              className="-mr-2 size-9 items-center justify-center rounded-md active:bg-muted"
+              className="-mr-2"
             >
               <Icon as={ArrowLeft} className="size-5 text-muted-foreground" />
-            </Pressable>
+            </Button>
           }
         />
       </View>

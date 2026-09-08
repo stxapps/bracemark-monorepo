@@ -13,7 +13,7 @@
 // entry carries the error/retry affordance.
 
 import { useCallback, useEffect } from 'react';
-import { BackHandler, Pressable, View } from 'react-native';
+import { BackHandler, View } from 'react-native';
 import { DrawerActions } from '@react-navigation/native';
 import { useNavigation } from 'expo-router';
 import { Menu, Search } from 'lucide-react-native';
@@ -21,9 +21,9 @@ import { Menu, Search } from 'lucide-react-native';
 import { useLists, useTags } from '@stxapps/expo-react';
 import { ALL_LABEL, DEFAULT_LIST_ID, flattenTree } from '@stxapps/shared';
 
+import { Button } from '../../components/ui/button';
 import { Icon } from '../../components/ui/icon';
 import { Text } from '../../components/ui/text';
-import { cn } from '../../lib/utils';
 import { MoreOptionsMenu } from './more-options-menu';
 import { useLinksPage } from './page-provider';
 import { type SimpleSelection, useLinksViewState } from './view-state-provider';
@@ -111,15 +111,16 @@ export function Topbar() {
           (the later sibling wins) and the loser's own visible box is what gets
           eaten. Nothing pressable sits beside this one — the title is a Text —
           so it takes the full 6. */}
-      <Pressable
-        role="button"
+      <Button
+        variant="ghost"
+        size="icon-sm"
         onPress={() => navigation.dispatch(DrawerActions.openDrawer())}
         aria-label="Open navigation"
         hitSlop={6}
-        className="-ml-1 size-9 items-center justify-center rounded-md active:bg-muted"
+        className="-ml-1"
       >
         <Icon as={Menu} className="size-5 text-foreground" />
-      </Pressable>
+      </Button>
       {/* THE TITLE IS THE VIEW'S NAME AND CARRIES THE WEIGHT — the opposite of
           the settings topbar's, whose label is a surface marker over a pane that
           has its own heading. Here there is no heading below: the list starts
@@ -149,8 +150,9 @@ export function Topbar() {
         {label}
       </Text>
       <View className="flex-row items-center gap-1">
-        <Pressable
-          role="button"
+        <Button
+          variant={searchVisible ? 'secondary' : 'ghost'}
+          size="icon-sm"
           onPress={toggleSearch}
           // The name states what pressing it DOES, which keeps every state
           // collision-free: closed it is the only "Search links" on screen; open,
@@ -161,19 +163,16 @@ export function Topbar() {
           // `right: 2` is half the `gap-1` to the ⋯ trigger — see the drawer
           // button's note. Left is free (the title Text takes no touches).
           hitSlop={{ top: 6, bottom: 6, left: 6, right: 2 }}
-          className={cn(
-            'size-9 items-center justify-center rounded-md active:bg-muted',
-            searchVisible && 'bg-muted',
-          )}
         >
           {/* Constant `text-foreground`, like every other icon button on this
               bar and like web's: the open state is already carried by the
-              `bg-muted` fill above (web spells the same thing as the Button's
-              `secondary` variant), and dimming the glyph on top of it made the
+              `secondary` variant above — the same spelling web uses, and the
+              same fill, since `--secondary` and `--muted` are one value in both
+              themes — and dimming the glyph on top of it made the
               INACTIVE state look disabled rather than the active one look
               picked. */}
           <Icon as={Search} className="size-5 text-foreground" />
-        </Pressable>
+        </Button>
         <MoreOptionsMenu />
       </View>
     </View>

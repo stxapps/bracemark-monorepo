@@ -15,6 +15,25 @@ import { TextClassContext } from './text';
 // which is web-ui's shape system rather than the registry's `rounded-md`
 // (docs/theme.md, _the radius scale_ — the whole kit moved together).
 //
+// THE PALETTE IS WEB-UI'S TOO, and it is not the registry's: `destructive` is a
+// TINT (`bg-destructive/10 text-destructive`) rather than a solid fill,
+// `outline` carries `bg-input/30` in both themes rather than `bg-background`
+// with a dark override, `ghost` presses to `muted` rather than `accent`, and no
+// variant carries a shadow — the registry puts `shadow-sm shadow-black/5` on
+// every filled control and web-ui deliberately has none (docs/theme.md, _the
+// two kits_). The press states are the ports of web's hover states, value for
+// value, since a press is what a touch surface has instead.
+//
+// THE SIZE SCALE IS WEB'S SET, one touch step taller. Web's `default/xs/sm/lg`
+// and `icon/icon-xs/icon-sm/icon-lg` all exist here, each at the height above
+// web's (h-10 against h-9, and so on) because a phone target is not a pointer
+// target — the pre-existing sizes already worked that way and the new ones
+// follow them, `sm:` shrink included. That `sm:` step is the registry's answer
+// to a web question and is still unsettled on a tablet, which is entirely touch
+// (`ui/input.tsx`'s header carries the argument); settle all of them together
+// with the tablet layout, not one size at a time. A call site that needs a box
+// the scale doesn't have restates it in `className` — `size-8` on the two dense
+// row affordances, whose web twins pin the same 32 for the same reason.//
 // THE ICON-EDGE PADDING. The edge an icon sits against gets the smaller padding,
 // so a glyph at the rim doesn't read as heavier than the text at the other end;
 // icon-only buttons stay symmetric. packages/web-ui/src/components/ui/button.tsx
@@ -57,36 +76,38 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default: cn(
-          'bg-primary active:bg-primary/90 shadow-sm shadow-black/5',
-          Platform.select({ web: 'hover:bg-primary/90' }),
+          'bg-primary active:bg-primary/80',
+          Platform.select({ web: 'hover:bg-primary/80' }),
         ),
         destructive: cn(
-          'bg-destructive active:bg-destructive/90 dark:bg-destructive/60 shadow-sm shadow-black/5',
+          'bg-destructive/10 active:bg-destructive/20 dark:bg-destructive/20 dark:active:bg-destructive/30',
           Platform.select({
-            web: 'hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40',
+            web: 'hover:bg-destructive/20 dark:hover:bg-destructive/30 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40',
           }),
         ),
         outline: cn(
-          'border-border bg-background active:bg-accent dark:bg-input/30 dark:border-input dark:active:bg-input/50 border shadow-sm shadow-black/5',
-          Platform.select({
-            web: 'hover:bg-accent dark:hover:bg-input/50',
-          }),
+          'border-border bg-input/30 active:bg-input/50 dark:border-input',
+          Platform.select({ web: 'hover:bg-input/50' }),
         ),
         secondary: cn(
-          'bg-secondary active:bg-secondary/80 shadow-sm shadow-black/5',
+          'bg-secondary active:bg-secondary/80',
           Platform.select({ web: 'hover:bg-secondary/80' }),
         ),
         ghost: cn(
-          'active:bg-accent dark:active:bg-accent/50',
-          Platform.select({ web: 'hover:bg-accent dark:hover:bg-accent/50' }),
+          'active:bg-muted dark:active:bg-muted/50',
+          Platform.select({ web: 'hover:bg-muted dark:hover:bg-muted/50' }),
         ),
         link: '',
       },
       size: {
         default: 'h-10 px-4 py-2 sm:h-9',
+        xs: 'h-7 gap-1 px-2.5 sm:h-6',
         sm: 'h-9 gap-1.5 px-3 sm:h-8',
         lg: 'h-11 px-6 sm:h-10',
         icon: 'h-10 w-10 sm:h-9 sm:w-9',
+        'icon-xs': 'h-7 w-7 sm:h-6 sm:w-6',
+        'icon-sm': 'h-9 w-9 sm:h-8 sm:w-8',
+        'icon-lg': 'h-11 w-11 sm:h-10 sm:w-10',
       },
       // Derived by the component from its children, never passed by a caller —
       // ButtonProps omits them for exactly that reason.
@@ -96,6 +117,8 @@ const buttonVariants = cva(
     // The trimmed value per size, next to the size it trims. `icon` is absent
     // on purpose: a square button has no padding to give back.
     compoundVariants: [
+      { size: 'xs', iconStart: true, class: 'pl-2' },
+      { size: 'xs', iconEnd: true, class: 'pr-2' },
       { size: 'default', iconStart: true, class: 'pl-3' },
       { size: 'default', iconEnd: true, class: 'pr-3' },
       { size: 'sm', iconStart: true, class: 'pl-2.5' },
@@ -128,13 +151,13 @@ const buttonTextVariants = cva(
     variants: {
       variant: {
         default: 'text-primary-foreground',
-        destructive: 'text-white',
+        destructive: 'text-destructive',
         outline: cn(
-          'group-active:text-accent-foreground',
-          Platform.select({ web: 'group-hover:text-accent-foreground' }),
+          'group-active:text-foreground',
+          Platform.select({ web: 'group-hover:text-foreground' }),
         ),
         secondary: 'text-secondary-foreground',
-        ghost: 'group-active:text-accent-foreground',
+        ghost: 'group-active:text-foreground',
         link: cn(
           'text-primary group-active:underline',
           Platform.select({ web: 'underline-offset-4 hover:underline group-hover:underline' }),
@@ -142,9 +165,13 @@ const buttonTextVariants = cva(
       },
       size: {
         default: '',
+        xs: 'text-xs',
         sm: '',
         lg: '',
         icon: '',
+        'icon-xs': '',
+        'icon-sm': '',
+        'icon-lg': '',
       },
     },
     defaultVariants: {

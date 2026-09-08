@@ -317,15 +317,18 @@ export function ShareHeader({
   if (back) {
     return (
       <View className="h-9 flex-row items-center">
-        <Pressable
+        <Button
           testID="share-back"
+          variant="ghost"
+          size="sm"
           onPress={back.onPress}
-          accessibilityRole="button"
-          className="-ml-2 h-9 flex-row items-center gap-1 rounded-md pr-3 pl-1 active:bg-muted"
+          className="-ml-2 gap-1 pr-3 pl-1"
         >
           <Icon as={ChevronLeft} className="size-5 text-muted-foreground" />
-          <Text className="font-medium">{back.title}</Text>
-        </Pressable>
+          {/* `text-base` restated: the kit's button label is `text-sm`, and this
+              one is a header title, not a control label. */}
+          <Text className="text-base font-medium">{back.title}</Text>
+        </Button>
       </View>
     );
   }
@@ -343,15 +346,16 @@ export function ShareHeader({
       <BrandLockup
         action={
           dismissible ? (
-            <Pressable
+            <Button
               testID="share-close"
+              variant="ghost"
+              size="icon-sm"
               onPress={closeShareSheet}
               aria-label="Close"
-              accessibilityRole="button"
-              className="-mr-2 size-9 items-center justify-center rounded-md active:bg-muted"
+              className="-mr-2"
             >
               <Icon as={X} className="size-5 text-muted-foreground" />
-            </Pressable>
+            </Button>
           ) : undefined
         }
       />

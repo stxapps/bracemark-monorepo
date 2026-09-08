@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { Pressable } from 'react-native';
 import { ChevronsUpDown } from 'lucide-react-native';
 
 import { useListMutations, useLists } from '@stxapps/expo-react';
 
+import { Button } from '../ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Icon } from '../ui/icon';
 import { Text } from '../ui/text';
@@ -69,27 +69,36 @@ export function ListSelect({
 
   return (
     <>
-      <Pressable
+      {/* The trigger is the kit's `outline` Button, as web's is
+          (web-ui/components/links/list-select.tsx) — same box, same fill, same
+          edge as the Input it sits beside in every editor. `px-3` is restated
+          because the native default size carries `px-4`, and the type is
+          restated on the Texts below: web puts `text-base font-normal` on the
+          button and lets it cascade, which native cannot do — the label would
+          otherwise take the kit's `text-sm font-medium` and sit 2px under the
+          Input beside it, the exact defect web's comment there records. */}
+      <Button
+        variant="outline"
         onPress={() => setOpen(true)}
         accessibilityRole="combobox"
         aria-expanded={open}
         aria-label="List"
-        className="h-10 flex-row items-center justify-between gap-2 rounded-md border border-input bg-background px-3 shadow-sm shadow-black/5 dark:bg-input/30"
+        className="justify-between px-3"
       >
         {selected ? (
-          <Text numberOfLines={1} className="min-w-0 flex-1">
+          <Text numberOfLines={1} className="min-w-0 flex-1 text-base font-normal">
             {selected.ancestors.length > 0 && (
               <Text className="text-muted-foreground">{`${selected.ancestors.join(' / ')} / `}</Text>
             )}
             {selected.item.name}
           </Text>
         ) : (
-          <Text numberOfLines={1} className="min-w-0 flex-1 text-muted-foreground">
+          <Text numberOfLines={1} className="min-w-0 flex-1 text-base font-normal text-muted-foreground">
             Choose a list
           </Text>
         )}
         <Icon as={ChevronsUpDown} className="size-4 shrink-0 text-muted-foreground" />
-      </Pressable>
+      </Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
           <DialogHeader>

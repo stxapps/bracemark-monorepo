@@ -30,7 +30,11 @@ import { Text } from './text';
 // alert-dialog.tsx's title never carried one, so the two now agree. The
 // content's radius is web-ui's `rounded-4xl`, not the registry's `rounded-lg`
 // (docs/theme.md, _the radius scale_).
-// Content renders through @rn-primitives/portal — the root `_layout.tsx` mounts
+// Three more values came over with it (docs/theme.md, _the two kits_): the
+// overlay is `bg-black/80` rather than `/50`, the surface is `bg-popover`
+// rather than `bg-background`, and DialogTitle is `text-base font-medium`
+// rather than `text-lg font-semibold`. DialogHeader also drops the registry's
+// `text-center sm:text-left`, which web-ui does not have.// Content renders through @rn-primitives/portal — the root `_layout.tsx` mounts
 // the default `<PortalHost />` it lands in.
 
 // Composite components need the wrapper to accept `className` (the note in
@@ -76,7 +80,7 @@ function DialogOverlay({
     <FullWindowOverlay>
       <DialogPrimitive.Overlay
         className={cn(
-          'absolute top-0 right-0 bottom-0 left-0 z-50 flex items-center justify-center bg-black/50',
+          'absolute top-0 right-0 bottom-0 left-0 z-50 flex items-center justify-center bg-black/80',
           Platform.select({
             web: 'animate-in fade-in-0 fixed cursor-default p-2 *:cursor-auto',
           }),
@@ -239,7 +243,7 @@ function DialogContent({
             // correction as web-ui's DialogContent, which needs a `min()` to
             // reach it because Radix centres by transform and has no padded
             // parent to inherit a gutter from (docs/safe-area.md).
-            'z-50 mx-auto flex max-h-full w-full max-w-lg flex-col gap-6 rounded-4xl border border-border bg-background p-6 shadow-lg shadow-black/5',
+            'z-50 mx-auto flex max-h-full w-full max-w-lg flex-col gap-6 rounded-4xl border border-border bg-popover p-6 shadow-lg shadow-black/5',
             Platform.select({
               web: 'animate-in fade-in-0 zoom-in-95 duration-200 web:max-w-[calc(100%-2rem)]',
             }),
@@ -256,9 +260,7 @@ function DialogContent({
 }
 
 function DialogHeader({ className, ...props }: ViewProps) {
-  return (
-    <View className={cn('flex flex-col gap-2 text-center sm:text-left', className)} {...props} />
-  );
+  return <View className={cn('flex flex-col gap-2', className)} {...props} />;
 }
 
 function DialogFooter({ className, ...props }: ViewProps) {
@@ -303,7 +305,7 @@ function DialogTitle({
 }: Omit<React.ComponentProps<typeof DialogPrimitive.Title>, 'asChild'>) {
   const title = (
     <Text
-      className={cn('text-lg font-semibold text-foreground', className)}
+      className={cn('text-base font-medium text-foreground', className)}
       role="heading"
       {...props}
     />

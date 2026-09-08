@@ -25,7 +25,13 @@ import { Text, TextClassContext } from './text';
 // (upstream leans on the UMD global type for `React.ComponentProps`), plus the
 // radii — `rounded-2xl` on both content surfaces and `rounded-xl` on every
 // row, which is web-ui's shape system rather than the registry's `md`/`sm`
-// (docs/theme.md, _the radius scale_). Content
+// (docs/theme.md, _the radius scale_). The row inset came with them — `px-3`
+// and `gap-2.5`, web-ui's values — as did the label's step (`text-xs
+// text-muted-foreground`, where the registry had a full-strength `text-sm
+// font-medium` that read as a row rather than a heading) and the separator's
+// `bg-border/50`. What is NOT ported is the state indicator's SIDE: web puts the
+// check at the trailing edge, this copy keeps the registry's leading gutter
+// (docs/theme.md, _the two kits_). Content
 // renders through @rn-primitives/portal — the root `_layout.tsx` mounts the
 // default `<PortalHost />` it lands in.
 
@@ -63,7 +69,7 @@ function DropdownMenuSubTrigger({
     >
       <DropdownMenuPrimitive.SubTrigger
         className={cn(
-          'group flex flex-row items-center justify-between rounded-xl px-2 py-2 active:bg-accent sm:py-1.5',
+          'group flex flex-row items-center justify-between gap-2.5 rounded-xl px-3 py-2 active:bg-accent sm:py-1.5',
           Platform.select({
             web: 'cursor-default outline-none focus:bg-accent focus:text-accent-foreground [&_svg]:pointer-events-none',
           }),
@@ -206,7 +212,7 @@ function DropdownMenuItem({
     >
       <DropdownMenuPrimitive.Item
         className={cn(
-          'group relative flex flex-row items-center gap-2 rounded-xl px-2 py-2 active:bg-accent sm:py-1.5',
+          'group relative flex flex-row items-center gap-2.5 rounded-xl px-3 py-2 active:bg-accent sm:py-1.5',
           Platform.select({
             web: cn(
               'cursor-default outline-none focus:bg-accent focus:text-accent-foreground data-disabled:pointer-events-none',
@@ -235,7 +241,7 @@ function DropdownMenuCheckboxItem({
     <TextClassContext.Provider value="text-sm text-popover-foreground select-none group-active:text-accent-foreground">
       <DropdownMenuPrimitive.CheckboxItem
         className={cn(
-          'group relative flex flex-row items-center gap-2 rounded-xl py-2 pr-2 pl-8 active:bg-accent sm:py-1.5',
+          'group relative flex flex-row items-center gap-2.5 rounded-xl py-2 pr-3 pl-8 active:bg-accent sm:py-1.5',
           Platform.select({
             web: 'cursor-default outline-none focus:bg-accent focus:text-accent-foreground data-disabled:pointer-events-none',
           }),
@@ -272,7 +278,7 @@ function DropdownMenuRadioItem({
     <TextClassContext.Provider value="text-sm text-popover-foreground select-none group-active:text-accent-foreground">
       <DropdownMenuPrimitive.RadioItem
         className={cn(
-          'group relative flex flex-row items-center gap-2 rounded-xl py-2 pr-2 pl-8 active:bg-accent sm:py-1.5',
+          'group relative flex flex-row items-center gap-2.5 rounded-xl py-2 pr-3 pl-8 active:bg-accent sm:py-1.5',
           Platform.select({
             web: 'cursor-default outline-none focus:bg-accent focus:text-accent-foreground data-disabled:pointer-events-none',
           }),
@@ -309,11 +315,7 @@ function DropdownMenuLabel({
   return (
     <DropdownMenuPrimitive.Label asChild>
       <Text
-        className={cn(
-          'px-2 py-2 text-sm font-medium text-foreground sm:py-1.5',
-          inset && 'pl-8',
-          className,
-        )}
+        className={cn('px-3 py-2.5 text-xs text-muted-foreground', inset && 'pl-8', className)}
         {...props}
       />
     </DropdownMenuPrimitive.Label>
@@ -326,7 +328,7 @@ function DropdownMenuSeparator({
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Separator>) {
   return (
     <DropdownMenuPrimitive.Separator
-      className={cn('-mx-1 my-1 h-px bg-border', className)}
+      className={cn('-mx-1 my-1 h-px bg-border/50', className)}
       {...props}
     />
   );

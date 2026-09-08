@@ -34,7 +34,6 @@
 // hands the touch to the innermost pressable, so opening the menu never fires
 // the item (web needed the trigger outside the row's <a> instead).
 
-import { Pressable } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
 import {
@@ -57,6 +56,7 @@ import {
 import { linkIdOf, type LinkView, useLinkMutations, usePinMutations } from '@stxapps/expo-react';
 import { ARCHIVE_ID, DEFAULT_LIST_ID, TRASH_ID } from '@stxapps/shared';
 
+import { Button } from '../../components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -109,17 +109,21 @@ export function LinkRowMenu({
     <>
       <DropdownMenu onOpenChange={onMenuOpenChange}>
         <DropdownMenuTrigger asChild>
-          <Pressable
-            role="button"
+          <Button
+            variant="ghost"
+            size="icon-sm"
             aria-label="Link options"
-            className="size-8 shrink-0 items-center justify-center rounded-md"
+            // 32, not the size's own 36 — the web twin pins the same box, and
+            // for the same reason: growing it would push the 44pt target past
+            // the gap into the row's title anchor.
+            className="size-8 shrink-0"
           >
             {/* 20, not 16 — three dots at the vertical centre carry a fraction of
                 a solid glyph's ink, so at a matching 16 they read smaller. The
                 optical correction web's topbar documents, applied to every ⋯ in
                 both apps; the BOX is unchanged. */}
             <Icon as={MoreHorizontal} className="size-5 text-muted-foreground" />
-          </Pressable>
+          </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-52">
           {inTrash ? (

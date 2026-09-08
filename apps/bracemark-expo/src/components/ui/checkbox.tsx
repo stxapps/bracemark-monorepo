@@ -11,7 +11,8 @@ import { Icon } from './icon';
 // rewritten to relative, plus the box's radius — `rounded-[6px]`, matching
 // web-ui rather than the registry's `rounded-[4px]` (docs/theme.md, _the
 // radius scale_).
-
+// The registry's `shadow-sm shadow-black/5` is dropped for the same reason as
+// every other control here: web-ui carries no shadow on one.
 const DEFAULT_HIT_SLOP = 24;
 
 function Checkbox({
@@ -28,7 +29,7 @@ function Checkbox({
   return (
     <CheckboxPrimitive.Root
       className={cn(
-        'size-4 shrink-0 rounded-[6px] border border-input shadow-sm shadow-black/5 dark:bg-input/30',
+        'size-4 shrink-0 rounded-[6px] border border-input dark:bg-input/30',
         Platform.select({
           web: 'peer cursor-default transition-shadow outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40',
           native: 'overflow-hidden',

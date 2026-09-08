@@ -26,7 +26,7 @@
 // to", locks. That's the whole difference between the two sections.
 
 import { useMemo, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 import {
   Archive,
   ArrowDownAZ,
@@ -67,6 +67,7 @@ import {
 
 import { ListCommand } from '../../components/links/list-command';
 import { LockPasswordDialog } from '../../components/lock-password-dialog';
+import { Button } from '../../components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog';
 import {
   DropdownMenu,
@@ -143,14 +144,10 @@ function RowActions({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Pressable
-          role="button"
-          aria-label="List actions"
-          className="size-9 items-center justify-center rounded-md"
-        >
+        <Button variant="ghost" size="icon-sm" aria-label="List actions">
           {/* 20, as every ⋯ trigger in both apps is — see link-row-menu.tsx. */}
           <Icon as={MoreHorizontal} className="size-5 text-muted-foreground" />
-        </Pressable>
+        </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-52">
         <DropdownMenuItem onPress={onFocusName}>
@@ -295,17 +292,17 @@ function Row({
       <DragHandle pan={pan} />
 
       {row.hasChildren ? (
-        <Pressable
-          role="button"
+        <Button
+          variant="ghost"
+          size="icon-sm"
           aria-label={collapsedIds.has(row.item.id) ? 'Expand' : 'Collapse'}
-          className="size-9 items-center justify-center rounded-md"
           onPress={onToggle}
         >
           <Icon
             as={collapsedIds.has(row.item.id) ? ChevronRight : ChevronDown}
             className="size-4 text-muted-foreground"
           />
-        </Pressable>
+        </Button>
       ) : (
         <View className="size-9 shrink-0" />
       )}

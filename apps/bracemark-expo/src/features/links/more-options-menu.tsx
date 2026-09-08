@@ -26,7 +26,7 @@
 //    which owns the origin (EXPO_PUBLIC_SITE_URL) for every off-app page; the
 //    full index of them is Settings → About.
 
-import { Linking, Pressable, View } from 'react-native';
+import { Linking, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
   CircleAlert,
@@ -42,6 +42,7 @@ import {
 import { useLocks, useSignOut, useSync } from '@stxapps/expo-react';
 import { getSyncPhase } from '@stxapps/shared';
 
+import { Button } from '../../components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -70,8 +71,9 @@ export function MoreOptionsMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Pressable
-          role="button"
+        <Button
+          variant="ghost"
+          size="icon-sm"
           aria-label={
             syncError
               ? 'More options (sync failed)'
@@ -84,10 +86,11 @@ export function MoreOptionsMenu() {
           // one's `-mr-1` leaves to the frame edge, so the slop stops at the
           // screen rather than spilling past it. 46x48 effective.
           hitSlop={{ top: 6, bottom: 6, left: 2, right: 8 }}
-          // `size-9` and pulled to the frame edge, matching every other icon
-          // button on both topbars (links and settings) — this is the last slot
-          // in the row, so it sets where the bar's right edge reads.
-          className="relative -mr-1 size-9 items-center justify-center rounded-md active:bg-muted"
+          // `icon-sm` (36 on a phone) and pulled to the frame edge, matching
+          // every other icon button on both topbars (links and settings) — this
+          // is the last slot in the row, so it sets where the bar's right edge
+          // reads.
+          className="relative -mr-1"
         >
           <Icon as={MoreHorizontal} className="size-5 text-foreground" />
           {(syncError || blocked) && (
@@ -102,8 +105,10 @@ export function MoreOptionsMenu() {
               // 1.25 from both sides: its triggers are round (`rounded-4xl` on a
               // 36px box clamps to a circle, which is what the ghost hover
               // fills), so 1 puts the dot's rim outside that circle while 1.5
-              // crowds the glyph. Here `rounded-md` means the corner never
-              // clips, so only the glyph bounds it and the extra 1px is free.
+              // crowds the glyph. This trigger is now the same circle — the kit
+              // took web's radii (docs/theme.md, _the radius scale_) — so it is
+              // forced from both sides in exactly the same way, which is one
+              // fewer reason for the four to drift apart.
               //
               // Colour is web's ladder, ranked by what the mark asks of the user:
               // `bg-destructive` (the cycle failed — act), `bg-foreground`
@@ -118,7 +123,7 @@ export function MoreOptionsMenu() {
               )}
             />
           )}
-        </Pressable>
+        </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">
         <DropdownMenuItem onPress={requestSync}>

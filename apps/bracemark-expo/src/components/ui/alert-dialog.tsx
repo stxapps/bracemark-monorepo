@@ -18,7 +18,11 @@ import { Text, TextClassContext } from './text';
 // button `variant` (web-ui's alert-dialog does the same — the destroy
 // confirmation renders its action destructive), plus the content's radius —
 // web-ui's `rounded-4xl`, not the registry's `rounded-lg` (docs/theme.md,
-// _the radius scale_). Content renders through
+// _the radius scale_), the `bg-black/80` overlay and `bg-popover` surface its
+// sibling dialog.tsx took at the same time, and a `text-lg font-medium` title —
+// web-ui's alert title is a step LARGER than its dialog title and a weight
+// lighter than the registry's (docs/theme.md, _the two kits_). Content renders
+// through
 // @rn-primitives/portal — the root `_layout.tsx` mounts the default
 // `<PortalHost />` it lands in.
 
@@ -59,7 +63,7 @@ function AlertDialogOverlay({
     <FullWindowOverlay>
       <AlertDialogPrimitive.Overlay
         className={cn(
-          'absolute top-0 right-0 bottom-0 left-0 z-50 flex items-center justify-center bg-black/50',
+          'absolute top-0 right-0 bottom-0 left-0 z-50 flex items-center justify-center bg-black/80',
           Platform.select({
             web: 'animate-in fade-in-0 fixed p-2',
           }),
@@ -120,7 +124,7 @@ function AlertDialogContent({
             // same content on a 640dp one. No `w-full` here, deliberately: this
             // box stays content-sized inside the overlay's `items-center`, so a
             // one-line confirmation hugs its text instead of filling.
-            'z-50 flex max-h-full max-w-lg flex-col gap-6 rounded-4xl border border-border bg-background p-6 shadow-lg shadow-black/5',
+            'z-50 flex max-h-full max-w-lg flex-col gap-6 rounded-4xl border border-border bg-popover p-6 shadow-lg shadow-black/5',
             Platform.select({
               web: 'animate-in fade-in-0 zoom-in-95 duration-200 web:max-w-[calc(100%-2rem)]',
             }),
@@ -185,7 +189,7 @@ function AlertDialogTitle({
 }: Omit<React.ComponentProps<typeof AlertDialogPrimitive.Title>, 'asChild'>) {
   return (
     <AlertDialogPrimitive.Title asChild>
-      <Text className={cn('text-lg font-semibold text-foreground', className)} {...props} />
+      <Text className={cn('text-lg font-medium text-foreground', className)} {...props} />
     </AlertDialogPrimitive.Title>
   );
 }

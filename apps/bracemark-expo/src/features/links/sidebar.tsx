@@ -53,6 +53,7 @@ import {
 } from '@stxapps/shared';
 
 import { BrandLockup } from '../../components/brand-lockup';
+import { Button } from '../../components/ui/button';
 import { Icon } from '../../components/ui/icon';
 import { Input } from '../../components/ui/input';
 import { Text } from '../../components/ui/text';
@@ -194,12 +195,15 @@ function NavItem({
       style={depth > 0 ? { paddingLeft: depth * 16 } : undefined}
     >
       {onToggle ? (
-        <Pressable
-          role="button"
+        <Button
+          variant="ghost"
+          size="icon-sm"
           onPress={onToggle}
           aria-expanded={expanded}
           aria-label={expanded ? 'Collapse' : 'Expand'}
-          className="size-8 shrink-0 items-center justify-center rounded-md"
+          // 32, not the size's own 36: this is a row affordance in a dense tree
+          // and its web twin pins the same box for the same reason.
+          className="size-8 shrink-0"
         >
           {/* The open state SWAPS THE GLYPH; it does NOT rotate one, which is
               what the web twin does (`rotate-90` on a ChevronRight). Uniwind
@@ -216,7 +220,7 @@ function NavItem({
             as={expanded ? ChevronDown : ChevronRight}
             className="size-4 text-muted-foreground"
           />
-        </Pressable>
+        </Button>
       ) : showSlot ? (
         <View className="size-8 shrink-0" />
       ) : null}
@@ -456,14 +460,15 @@ export function Sidebar({ closeDrawer }: { closeDrawer: () => void }) {
     const info = listLocks.get(id);
     if (!info || info.locked) return undefined;
     return (
-      <Pressable
-        role="button"
+      <Button
+        variant="ghost"
+        size="icon-sm"
         aria-label="Lock list"
         onPress={() => lockList(id)}
-        className="size-8 shrink-0 items-center justify-center rounded-md"
+        className="size-8 shrink-0"
       >
         <Icon as={LockOpen} className="size-3.5 text-muted-foreground" />
-      </Pressable>
+      </Button>
     );
   };
 

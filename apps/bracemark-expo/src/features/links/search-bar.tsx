@@ -423,12 +423,13 @@ function AdvancedSearch() {
           leave the corner dot ~1px off the top slider. 40/20 here against web's
           36/16 is the same 10px margin by a different route — links/topbar.tsx
           carries that rule, docs/accessibility.md the hitSlop one. */}
-      <Pressable
-        role="button"
+      <Button
+        variant="ghost"
+        size="icon"
         onPress={openSheet}
         aria-label="Advanced search"
         hitSlop={{ top: 4, bottom: 4, left: 2, right: 8 }}
-        className="relative size-10 items-center justify-center rounded-md active:bg-muted"
+        className="relative"
       >
         <Icon as={SlidersHorizontal} className="size-5 text-foreground" />
         {hasAdvancedFilters(query) && (
@@ -441,13 +442,13 @@ function AdvancedSearch() {
             // ladder because filters are a state the USER CHOSE where the sync
             // dots beside it mean something wants attention. 5px in rather than
             // 6 buys ~1.4px more air off the end of SlidersHorizontal's top
-            // slider; web is pinned there by its round trigger, which this
-            // `rounded-md` box isn't, but one value across all four dots is
-            // worth more than the pixel.
+            // slider. Web is pinned there by its round trigger, and this box is
+            // now the same circle (the kit took web's radii — docs/theme.md,
+            // _the radius scale_), so the two are pinned alike.
             className="absolute top-1.25 right-1.25 size-1.5 rounded-full bg-foreground/70"
           />
         )}
-      </Pressable>
+      </Button>
       {/* pageSheet on iOS (swipe-down fires onRequestClose too); Android gets a
           plain full-screen modal, where the SafeAreaView supplies the status-bar
           inset the sheet shape makes unnecessary on iOS. */}
@@ -501,14 +502,14 @@ function AdvancedSearch() {
           >
             <View className="h-14 flex-row items-center justify-between border-b border-border pr-2 pl-4">
               <Text className="text-lg font-semibold">Advanced search</Text>
-              <Pressable
-                role="button"
+              <Button
+                variant="ghost"
+                size="icon"
                 onPress={() => setOpen(false)}
                 aria-label="Close advanced search"
-                className="size-10 items-center justify-center rounded-md"
               >
                 <Icon as={X} className="size-5 text-foreground" />
-              </Pressable>
+              </Button>
             </View>
             <ScrollView
               keyboardShouldPersistTaps="handled"
