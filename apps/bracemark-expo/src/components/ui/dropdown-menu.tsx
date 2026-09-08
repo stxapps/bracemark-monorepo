@@ -29,11 +29,21 @@ import { Text, TextClassContext } from './text';
 // and `gap-2.5`, web-ui's values — as did the label's step (`text-xs
 // text-muted-foreground`, where the registry had a full-strength `text-sm
 // font-medium` that read as a row rather than a heading) and the separator's
-// `bg-border/50`. What is NOT ported is the state indicator's SIDE: web puts the
-// check at the trailing edge, this copy keeps the registry's leading gutter
-// (docs/theme.md, _the two kits_). Content
-// renders through @rn-primitives/portal — the root `_layout.tsx` mounts the
-// default `<PortalHost />` it lands in.
+// `bg-border/50`. The `inset` prop follows that row inset rather than the
+// registry's: `pl-9.5` is `px-3` + a `size-4` glyph + `gap-2.5` = 38, which is
+// where a leading-icon row puts its text. The registry's `pl-8` was 32 —
+// arithmetically right for the `px-2`/`gap-2` row it shipped with, and 6px short
+// the moment that row took web's values, which is exactly the kind of half-ported
+// number this header exists to catch. It reaches CheckboxItem and RadioItem here
+// as it does on web. The state indicator's SIDE is web's too — the check and the
+// radio dot sit at the TRAILING edge (`pr-8 pl-3`, `absolute right-2`), not the
+// registry's leading gutter (docs/theme.md, _the two kits_). Nothing imports
+// CheckboxItem or RadioItem today; ported anyway, for the reason
+// DropdownMenuLabel below carries, and because the two indicators this app
+// actually ships are already trailing and hand-rolled (the settings topbar's
+// "you are here" check on web, `features/share/share-list-picker.tsx` here).
+// Content renders through @rn-primitives/portal — the root `_layout.tsx` mounts
+// the default `<PortalHost />` it lands in.
 
 const DropdownMenu = DropdownMenuPrimitive.Root;
 
@@ -75,7 +85,7 @@ function DropdownMenuSubTrigger({
           }),
           className,
           open && 'bg-accent',
-          inset && 'pl-8',
+          inset && 'pl-9.5',
         )}
         {...props}
       >
@@ -221,7 +231,7 @@ function DropdownMenuItem({
           }),
           variant === 'destructive' && 'active:bg-destructive/10 dark:active:bg-destructive/20',
           props.disabled && 'opacity-50',
-          inset && 'pl-8',
+          inset && 'pl-9.5',
           className,
         )}
         {...props}
@@ -233,24 +243,27 @@ function DropdownMenuItem({
 function DropdownMenuCheckboxItem({
   className,
   children,
+  inset,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.CheckboxItem> & {
   children?: React.ReactNode;
+  inset?: boolean;
 }) {
   return (
     <TextClassContext.Provider value="text-sm text-popover-foreground select-none group-active:text-accent-foreground">
       <DropdownMenuPrimitive.CheckboxItem
         className={cn(
-          'group relative flex flex-row items-center gap-2.5 rounded-xl py-2 pr-3 pl-8 active:bg-accent sm:py-1.5',
+          'group relative flex flex-row items-center gap-2.5 rounded-xl py-2 pr-8 pl-3 active:bg-accent sm:py-1.5',
           Platform.select({
             web: 'cursor-default outline-none focus:bg-accent focus:text-accent-foreground data-disabled:pointer-events-none',
           }),
           props.disabled && 'opacity-50',
+          inset && 'pl-9.5',
           className,
         )}
         {...props}
       >
-        <View className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
+        <View className="absolute right-2 flex h-3.5 w-3.5 items-center justify-center">
           <DropdownMenuPrimitive.ItemIndicator>
             <Icon
               as={Check}
@@ -270,24 +283,27 @@ function DropdownMenuCheckboxItem({
 function DropdownMenuRadioItem({
   className,
   children,
+  inset,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.RadioItem> & {
   children?: React.ReactNode;
+  inset?: boolean;
 }) {
   return (
     <TextClassContext.Provider value="text-sm text-popover-foreground select-none group-active:text-accent-foreground">
       <DropdownMenuPrimitive.RadioItem
         className={cn(
-          'group relative flex flex-row items-center gap-2.5 rounded-xl py-2 pr-3 pl-8 active:bg-accent sm:py-1.5',
+          'group relative flex flex-row items-center gap-2.5 rounded-xl py-2 pr-8 pl-3 active:bg-accent sm:py-1.5',
           Platform.select({
             web: 'cursor-default outline-none focus:bg-accent focus:text-accent-foreground data-disabled:pointer-events-none',
           }),
           props.disabled && 'opacity-50',
+          inset && 'pl-9.5',
           className,
         )}
         {...props}
       >
-        <View className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
+        <View className="absolute right-2 flex h-3.5 w-3.5 items-center justify-center">
           <DropdownMenuPrimitive.ItemIndicator>
             <View className="h-2 w-2 rounded-full bg-foreground" />
           </DropdownMenuPrimitive.ItemIndicator>
@@ -315,7 +331,7 @@ function DropdownMenuLabel({
   return (
     <DropdownMenuPrimitive.Label asChild>
       <Text
-        className={cn('px-3 py-2.5 text-xs text-muted-foreground', inset && 'pl-8', className)}
+        className={cn('px-3 py-2.5 text-xs text-muted-foreground', inset && 'pl-9.5', className)}
         {...props}
       />
     </DropdownMenuPrimitive.Label>
