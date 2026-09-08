@@ -1,6 +1,6 @@
 import nx from '@nx/eslint-plugin';
 
-import baseConfig from '../../eslint.config.mjs';
+import baseConfig, { TYPOGRAPHY_IGNORES, TYPOGRAPHY_SYNTAX } from '../../eslint.config.mjs';
 
 export default [
   ...nx.configs['flat/react'],
@@ -12,6 +12,54 @@ export default [
       // expo-status-bar's <StatusBar style="auto" /> uses `style` as a string
       // enum, not a style object — allow-list it for this rule.
       'react/style-prop-object': ['warn', { allow: ['StatusBar'] }],
+    },
+  },
+  {
+    // `leading-none` DOES NOT PORT FROM WEB, mechanized. A line box tighter than
+    // the font's own is centred by CSS and by Android, and is NOT centred by
+    // iOS: RN's `RCTApplyBaselineOffsetForRange` compensates a box LARGER than
+    // the font and returns early otherwise, so TextKit takes the whole shortfall
+    // off the ascent and the glyphs ride high inside their own box — measured
+    // 1.96pt at the brand wordmark's 15px step, 1.55pt on a dialog title.
+    // `items-center` cannot reach it: the boxes ARE centred, the caps are not
+    // centred in theirs. `leading-none` is the only step in the scale that can
+    // never clear Inter's natural 1.21 ratio, which is what makes it a name
+    // worth banning rather than a number worth judging.
+    //
+    // The rule is here because the same class is CORRECT on web — web-ui's
+    // BrandLockup carries it — so every port from a web twin arrives holding it,
+    // and nothing downstream objects: no type error, no failing test (jest lays
+    // no text out), and on Android, where a layout usually gets eyeballed first,
+    // it is off by half a pixel. It reached three components that way.
+    //
+    // THE FIX IS ALMOST ALWAYS TO DELETE THE CLASS. Setting no leading is the
+    // native spelling of what `leading-none` buys on web — Inter's own box is
+    // already tight to the glyphs, and it self-centres (its ascender minus its
+    // cap height equals its descender to the unit). Reach for `leading-tight`
+    // only when a specific leading is wanted; below 1.25 nothing is safe.
+    // docs/theme.md, _extending_, carries the measurements for every pairing in
+    // this app.
+    //
+    // The typography selectors are SPREAD IN rather than assumed: flat config
+    // hands the last matching block's option list to the rule whole, so a bare
+    // `no-restricted-syntax` here would drop the apostrophe rule for this app.
+    files: ['**/*.ts', '**/*.tsx'],
+    ignores: TYPOGRAPHY_IGNORES,
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        ...TYPOGRAPHY_SYNTAX,
+        {
+          selector: 'Literal[value=/(^|\\s)leading-none(\\s|$)/]',
+          message:
+            "`leading-none` is not centred on iOS — the glyphs ride high inside their own box and no `items-*` can reach them. Delete the class (Inter’s own box is tight to the glyphs and self-centres), or use `leading-tight` if you need a number. docs/theme.md, _extending_.",
+        },
+        {
+          selector: 'TemplateElement[value.raw=/(^|\\s)leading-none(\\s|$)/]',
+          message:
+            "`leading-none` is not centred on iOS — the glyphs ride high inside their own box and no `items-*` can reach them. Delete the class (Inter’s own box is tight to the glyphs and self-centres), or use `leading-tight` if you need a number. docs/theme.md, _extending_.",
+        },
+      ],
     },
   },
   {

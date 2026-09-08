@@ -644,6 +644,60 @@ popover included — with `border-border`, and inherits the fix from the token.
   says `rotate-90`. For an angle with no glyph — the dog-eared card's 45° corner
   — write the RN `transform` array inline in `style`
   (`features/share/share-specimen.tsx`).
+- **A `leading-*` tighter than the font is not centred on iOS**, and nothing
+  about the class is broken. Uniwind resolves a unitless line-height against the
+  element's own font-size at style time (`core/native/store.js`, `lineHeight < 6`
+  → `× fontSize`), so `leading-none` on the 15px step reaches RN as a 15pt
+  lineHeight — the same number web computes. What differs is who pays for the
+  deficit against the font's natural box. Web splits the negative half-leading
+  evenly above and below the glyphs, and so does Android
+  (`CustomLineHeightSpan`, which implements the css-inline-3 rule); iOS's
+  `RCTApplyBaselineOffsetForRange` **returns early** whenever
+  `maximumLineHeight < font.lineHeight` — it only ever compensates a box LARGER
+  than the font — and TextKit then takes the whole shortfall off the ASCENT. So
+  the glyphs ride high by about half of it. Inter's natural box is 1.21× its
+  size, and at 15pt (measured through TextKit with this repo's own
+  `assets/fonts/InterVariable.ttf`) `leading-none` puts the baseline 11.0 from
+  the top of a 15pt box and the cap block's centre at 5.54 against the box's 7.5:
+  **~2px high**, which is what pulled the brand wordmark off the middle of its
+  16px mark ([brand-assets.md](./brand-assets.md), _the lockup_). `items-center`
+  is not the cause and no `items-*` value is the cure — the two boxes are centred
+  to the pixel; the caps are not centred inside theirs. Drop the leading and the
+  font's own box does it for free (for Inter, ascender − cap height = descender
+  exactly, 1984 − 1490 = 494 units, and its `win` metrics equal its `hhea` ones,
+  so Android's `includeFontPadding` adds nothing asymmetric either), or pick a
+  leading at or above 1.21 so the iOS compensation actually runs. Nothing about
+  it reports itself: it is a valid style on a valid tree, jest never lays text
+  out, and on Android — the cheap surface, where a layout usually gets eyeballed
+  first — the same class is off by half a pixel. **The NAME is now linted**
+  (`apps/bracemark-expo/eslint.config.mjs`, a `no-restricted-syntax` selector
+  over string literals, which is where this app's `leading-none`s came from: a
+  port of a web twin arrives holding a class that is correct there). What lint
+  cannot judge is a NUMBER — whether `leading-4` is tight against the size it is
+  paired with is arithmetic across two classes — so the rest of this bullet is
+  still the only thing standing between you and it.
+
+  **So on this side: `leading-none` never, and no leading under `leading-tight`.**
+  It is the only step in the scale that _cannot_ clear Inter's 1.21 — `1.0`
+  against `1.25`, which is the next step up and clears it by 0.04 — and what it
+  buys on web, a box tight to the glyphs, is what RN gives for free when no
+  leading is set at all. Setting none is therefore the port of `leading-none`,
+  not a loss of one. Every `leading-*` on the expo side has been measured against
+  its own font-size this way and the rest are fine (offsets in points, `+` = low):
+  `text-xs`+`leading-4` −0.11 and +`leading-5` −0.11, `text-base`+`leading-5`
+  (`ui/input.tsx`) −0.14, `text-base`+`leading-7` (`ui/text.tsx`'s `p`) −0.14,
+  the 15px specimen+`leading-snug` −0.38, `text-3xl`+`leading-tight`
+  (`components/landing.tsx`) +0.24. The three that were not are the three
+  `leading-none`s, all now gone: the brand wordmark (−1.96), `ui/text.tsx`'s
+  `small` variant (−1.09) and `ui/dialog.tsx`'s `DialogTitle` (−1.55, which also
+  put it 3.8pt tighter than `alert-dialog.tsx`'s title, its sibling, which never
+  had one). Both registry files carry the note in their own local-changes list.
+
+  Re-measure rather than re-derive if the family ever changes: 1.21 is **Inter's**
+  ratio (`assets/fonts/InterVariable.ttf`), and the self-centring that makes the
+  no-leading case exact is Inter's too — its ascender minus its cap height equals
+  its descender to the unit. Both are properties of the file, not of RN.
+
 - **A new type-scale token** — the bar is high, and it is not "this size repeats".
   Tailwind's `--text-*` names a size, but what usually has to hold is a size
   **paired** with a leading, and a role that shares a number with a different

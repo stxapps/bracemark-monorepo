@@ -135,6 +135,19 @@ Mark beside wordmark — **one set of measurements rendered on nine surfaces**: 
 `text-[0.9375rem] leading-none font-semibold tracking-tight`, `gap-2.5` between
 them.
 
+⚠ **The leading is web-only — the native wordmark carries no `leading-*`, on
+purpose.** `leading-none` computes to the same 15px line box on both platforms,
+but only web and Android split its negative half-leading evenly around the
+glyphs; iOS takes the whole shortfall off the ascent, so the caps sit ~2px above
+the middle of their own box while `items-center` centres the two boxes to the
+pixel — the name reads as if it had slipped up off the mark. So
+`apps/bracemark-expo/src/components/brand-lockup.tsx` states three of the four
+spellings and omits the fourth, letting Inter's own box centre the caps (it does,
+exactly). This is the one measurement the two components are allowed to differ
+on, and putting the class back is a silent regression: it is a valid style on a
+valid tree, no test lays text out, and Android is off by half a pixel rather than
+two. The mechanism is in [theme.md](./theme.md), _extending_.
+
 ⚠ **The invariant is the RATIO, and the pair is derived from it.** The mark's
 height is **1.6× the wordmark's cap height**. Inter's cap height is 0.6758em, so
 that is ≈1.08× the wordmark's font-size, and 15px of wordmark asks for 16.2px of

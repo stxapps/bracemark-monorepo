@@ -27,7 +27,35 @@ import { Text } from './ui/text';
 // web-ui's `BrandLockup` — it should be the same product wherever you entered it,
 // and this app is the fourth door into it. Those spellings are duplicated here
 // rather than imported because there is nothing to import: Uniwind and Tailwind
-// are separate compilers over separate stylesheets. Change one, change the other.
+// are separate compilers over separate stylesheets. Change one, change the other
+// — with the single exception the next paragraph is about.
+//
+// THE LEADING IS THE ONE SPELLING NOT PORTED. The wordmark below carries no
+// `leading-*`, and putting web's `leading-none` back is what pulls the name off
+// the mark's middle — `items-center` still centres the two BOXES to the pixel;
+// what moves is where the caps sit INSIDE the text's own box. Web's 15px line
+// box splits its (negative) half-leading evenly above and below the glyphs, so
+// the caps land dead centre in it. iOS does not split it. The class maps here
+// perfectly well — Uniwind resolves the unitless `1` against the element's own
+// font-size (`core/native/store.js`: `lineHeight < 6` → `× fontSize`), so RN
+// receives a 15pt lineHeight against Inter's natural 18.15pt at this size — and
+// `RCTApplyBaselineOffsetForRange` (react-native 0.81) returns EARLY rather than
+// compensating whenever `maximumLineHeight < font.lineHeight`, which leaves
+// TextKit to take the whole 3.15pt deficit off the ascent. Measured through
+// TextKit with this app's own `assets/fonts/InterVariable.ttf` at 15pt: baseline
+// 11.0 from the top of a 15pt box, cap block centred at 5.54 against the box's
+// 7.5 — the wordmark rides ~2px high beside a mark that fills its 16px box.
+// Android splits the deficit evenly (`CustomLineHeightSpan`) and drifts ~0.5px,
+// so what you see depends on the platform you looked at.
+//
+// With no leading at all the font's own box centres the caps for free, on both:
+// Inter's ascender minus its cap height is 3.62pt and its descender is 3.62pt
+// (1984 − 1490 = 494 units), and its `win` metrics equal its `hhea` ones, so
+// Android's `includeFontPadding` adds nothing asymmetric either. The cost is 3pt
+// of row height (18.15 vs 15), which no call site can see: the two rails and the
+// share sheet's header fix their own (`h-14`, `h-9`), the auth screen and the
+// landing space this row with `gap-*`. Nothing lints or tests any of it —
+// docs/theme.md, _extending_, and docs/brand-assets.md, _the lockup_.
 //
 // THE PAIR IS A RATIO, and the height below is the half of it that can't say so.
 // 16 against 15 is the mark at 1.6× the wordmark's cap height — the proportion
@@ -64,7 +92,9 @@ export function BrandLockup({
   return (
     <View className="flex-row items-center gap-2.5">
       <BracemarkIcon height={16} />
-      <Text testID={testID} className="text-[0.9375rem] leading-none font-semibold tracking-tight">
+      {/* No `leading-*` — see the leading paragraph above; web's `leading-none`
+          does not port. */}
+      <Text testID={testID} className="text-[0.9375rem] font-semibold tracking-tight">
         {BRAND.name}
       </Text>
       {action ? <View className="ml-auto flex-row items-center">{action}</View> : null}

@@ -22,6 +22,15 @@ import { cn } from '../../lib/utils';
 //     hands anyone; it went unnoticed while nothing passed a ref, and it blocks
 //     the `asChild` + `<Text>` composition the dialog primitives now use (their
 //     props carry the correct `Ref<Text>`, which the wrong one rejects).
+//   • `leading-none` dropped from the `small` variant. Any leading tighter than
+//     Inter's natural 1.21 ratio is uncentrable on iOS — RN compensates a line
+//     box LARGER than the font and returns early otherwise — so the glyphs ride
+//     high inside their own box (1.09pt at this step) and no `items-center`
+//     above them can pull them back. Web splits the same deficit evenly, which
+//     is why the class is right there and wrong here. Unsetting it is the native
+//     spelling of what `leading-none` BUYS on web, a box tight to the glyphs:
+//     Inter's own box already is one, and it self-centres (docs/theme.md,
+//     _extending_, which carries the measurements and the rule).
 //   • `allowFontScaling` asked rather than left to RN's `true` — scaling is
 //     BROKEN in the iOS share-extension process (multiplier 0 → every font size
 //     resolves to zero point → nothing paints, with a correct accessibility
@@ -55,7 +64,7 @@ const textVariants = cva(
         ),
         lead: 'text-muted-foreground text-xl',
         large: 'text-lg font-semibold',
-        small: 'text-sm font-medium leading-none',
+        small: 'text-sm font-medium',
         muted: 'text-muted-foreground text-sm',
       },
     },

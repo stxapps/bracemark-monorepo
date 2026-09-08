@@ -3,6 +3,34 @@ import jsoncParser from 'jsonc-eslint-parser';
 import simpleImportSort from 'eslint-plugin-simple-import-sort';
 import prettier from 'eslint-config-prettier/flat';
 
+// The typographic selectors and the files they skip, exported because
+// `no-restricted-syntax` does not MERGE across flat-config blocks — the last
+// block matching a file supplies the whole option list. A project config that
+// needs its own selector must therefore spread these into its block or it
+// silently drops the apostrophe rule for that project, which is the same class
+// of invisible loss the rule itself exists to stop. apps/bracemark-expo does
+// exactly that (its `leading-none` selector).
+export const TYPOGRAPHY_IGNORES = ['**/*.spec.ts', '**/*.spec.tsx', 'e2e/**'];
+
+export const TYPOGRAPHY_SYNTAX = [
+  {
+    selector: "Literal[value=/[A-Za-z]'[A-Za-z]/]",
+    message: "Use the typographic apostrophe ’ (U+2019), not '.",
+  },
+  {
+    selector: "TemplateElement[value.raw=/[A-Za-z]'[A-Za-z]/]",
+    message: "Use the typographic apostrophe ’ (U+2019), not '.",
+  },
+  {
+    selector: "JSXText[value=/[A-Za-z]'[A-Za-z]/]",
+    message: "Use the typographic apostrophe ’ (U+2019), not ' or &apos;.",
+  },
+  {
+    selector: 'JSXText[value=/"/]',
+    message: 'Use the typographic quotation marks “ ” (U+201C/U+201D), not " or &quot;.',
+  },
+];
+
 export default [
   ...nx.configs['flat/base'],
   ...nx.configs['flat/typescript'],
@@ -161,27 +189,9 @@ export default [
     // per-file disables forever. The single-quoted prose literal (`'the "Service"'`)
     // is the gap, and docs/brand-assets.md is what covers it.
     files: ['**/*.ts', '**/*.tsx'],
-    ignores: ['**/*.spec.ts', '**/*.spec.tsx', 'e2e/**'],
+    ignores: TYPOGRAPHY_IGNORES,
     rules: {
-      'no-restricted-syntax': [
-        'error',
-        {
-          selector: "Literal[value=/[A-Za-z]'[A-Za-z]/]",
-          message: "Use the typographic apostrophe ’ (U+2019), not '.",
-        },
-        {
-          selector: "TemplateElement[value.raw=/[A-Za-z]'[A-Za-z]/]",
-          message: "Use the typographic apostrophe ’ (U+2019), not '.",
-        },
-        {
-          selector: "JSXText[value=/[A-Za-z]'[A-Za-z]/]",
-          message: "Use the typographic apostrophe ’ (U+2019), not ' or &apos;.",
-        },
-        {
-          selector: 'JSXText[value=/"/]',
-          message: 'Use the typographic quotation marks “ ” (U+201C/U+201D), not " or &quot;.',
-        },
-      ],
+      'no-restricted-syntax': ['error', ...TYPOGRAPHY_SYNTAX],
     },
   },
   {

@@ -23,7 +23,11 @@ import { Text } from './text';
 // react-native-reusables `dialog` (uniwind variant), copied from the registry —
 // see docs/setup.md for why the copy is manual (the CLI needs tsconfig path
 // aliases; this app uses relative imports). Local changes vs upstream: imports
-// rewritten to relative, and the KeyboardAvoidingView in DialogOverlay below.
+// rewritten to relative, the KeyboardAvoidingView in DialogOverlay below, and
+// `leading-none` dropped from DialogTitle — a leading tighter than Inter's
+// natural 1.21 ratio is uncentrable on iOS, so the title sat 1.55pt high inside
+// its own box with nothing above it able to help (docs/theme.md, _extending_).
+// alert-dialog.tsx's title never carried one, so the two now agree.
 // Content renders through @rn-primitives/portal — the root `_layout.tsx` mounts
 // the default `<PortalHost />` it lands in.
 
@@ -297,7 +301,7 @@ function DialogTitle({
 }: Omit<React.ComponentProps<typeof DialogPrimitive.Title>, 'asChild'>) {
   const title = (
     <Text
-      className={cn('text-lg leading-none font-semibold text-foreground', className)}
+      className={cn('text-lg font-semibold text-foreground', className)}
       role="heading"
       {...props}
     />
