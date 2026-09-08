@@ -19,6 +19,8 @@
     "dev": "nx run-many -t dev -p @stxapps/bracemark-api @stxapps/bracemark-web @stxapps/bracemark-extractor --output-style=stream",
     "dev:ext": "nx dev @stxapps/bracemark-extension",
     "dev:site": "nx dev @stxapps/bracemark-site",
+    "expo:prebuild": "nx prebuild @stxapps/bracemark-expo",
+    "expo:start": "nx start @stxapps/bracemark-expo",
     "expo:android": "nx android @stxapps/bracemark-expo",
     "expo:android:reverse": "nx android:reverse @stxapps/bracemark-expo",
     "expo:android:open": "nx android:open @stxapps/bracemark-expo",
