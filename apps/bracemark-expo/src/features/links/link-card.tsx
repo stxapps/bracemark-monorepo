@@ -138,17 +138,22 @@ export function LinkCard({
             declared AFTER the banner so paint order alone lifts it — no zIndex
             needed, and none asked for.
 
-            The wrapper shrink-wraps the 16pt control rather than boxing it at
-            size-8: the checkbox already carries `hitSlop={24}` (ui/checkbox.tsx),
-            so the target is generous whatever the visible box says. It is opaque
-            `bg-background` at the checkbox's own 4pt radius because an unchecked
-            checkbox is a 1pt `border-input` outline over a transparent middle,
-            which disappears against a light photo; checked, `bg-primary` covers
-            it. Opacity would have done as well here, but `bg-background/80` is
-            what web pairs with `backdrop-blur-sm`, and blur has no RN equivalent
-            — a translucent plate with nothing behind it is just a weaker plate. */}
+            The wrapper shrink-wraps the control rather than boxing it at a
+            fixed size-8: the checkbox already carries `hitSlop={24}`
+            (ui/checkbox.tsx), so the target is generous whatever the visible box
+            says. It is opaque `bg-background` at the checkbox's own radius
+            because an unchecked checkbox is a 1pt `border-input` outline over a
+            transparent middle, which disappears against a light photo; checked,
+            `bg-primary` covers it. Neither that radius nor the control's size
+            is spelled as a NUMBER in this comment — each is stated once, in the
+            class below — because a number restated in prose is exactly how this
+            plate came to claim 4pt while the kit had moved to 6
+            (docs/theme.md, _the two kits_). Opacity would have done as well
+            here, but `bg-background/80` is what web pairs with
+            `backdrop-blur-sm`, and blur has no RN equivalent — a translucent
+            plate with nothing behind it is just a weaker plate. */}
         {selectMode && (
-          <View className="absolute top-2 left-2 rounded-[4px] bg-background">
+          <View className="absolute top-2 left-2 rounded-[6px] bg-background">
             {/* size-6, where the list row keeps the component's size-4: a corner
                 floating over a photograph has nothing beside it to set its scale
                 (web's card, same call — and there it also stops a `rounded-[6px]`

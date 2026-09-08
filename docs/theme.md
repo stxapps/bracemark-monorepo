@@ -708,12 +708,26 @@ other sizes: the share sheet's back button, now `variant="ghost" size="sm"`, and
 the list picker's combobox trigger, now `variant="outline"` exactly as its web
 twin is.) Hand-rolled control chrome does not track the
 kit, and nothing reports that it has stopped matching: it is a valid box with
-valid classes. Two of them legitimately restate the BOX (`className="size-8"` on
-the link row's ⋯ trigger and the links rail's disclosure, whose web twins pin the
-same 32 for the same reason) — restating a box is fine, redrawing the control is
-not. Rows are the exception that proves it: a nav row or a list row is not a
-control, both apps hand-roll them, and both spell them `rounded-md` (a picker row
-inside a surface takes `rounded-xl`, the same role the kit's menu items have).
+valid classes. **It is not only buttons**: the same rule caught two
+checkbox-shaped boxes a pass later, both still at the registry's `rounded-[4px]`
+after `ui/checkbox.tsx` took web-ui's 6 — the advanced-search editor's tri-state
+row (`features/links/search-bar.tsx`) and the opaque plate the card puts behind
+its selection checkbox so an unchecked outline survives a light photo
+(`features/links/link-card.tsx`, whose comment read "at the checkbox's own 4pt
+radius": the prose tracked the kit while the class did not, which is the failure
+in miniature). (The component itself spelled that radius `rounded-sm` — the same
+6px, but a spelling that rides `--radius`; it now says the `rounded-[6px]` the
+table above lists.) The tri-state row is the case this rule cannot dissolve into
+"use the component": `@rn-primitives/checkbox` types `checked` as a `boolean`, so
+a row with include/exclude/off has no kit component to reach for and must restate
+its values by hand. It now carries a note saying so and naming what to follow,
+which is the only thing holding it. Two of them legitimately restate the BOX
+(`className="size-8"` on the link row's ⋯ trigger and the links rail's
+disclosure, whose web twins pin the same 32 for the same reason) — restating a
+box is fine, redrawing the control is not. Rows are the exception that proves
+it: a nav row or a list row is not a control, both apps hand-roll them, and both
+spell them `rounded-md` (a picker row inside a surface takes `rounded-xl`, the
+same role the kit's menu items have).
 
 ### extending
 

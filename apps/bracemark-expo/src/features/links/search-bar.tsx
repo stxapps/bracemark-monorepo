@@ -266,9 +266,18 @@ function TriCheckList({
                 className="flex-row items-center gap-2 rounded px-1.5 py-2 active:bg-muted"
                 style={o.depth > 0 ? { paddingLeft: o.depth * 12 + 6 } : undefined}
               >
+                {/* Every value here is ui/checkbox.tsx's, restated because this
+                    box is hand-rolled rather than that component (the header's
+                    third divergence: the primitive is boolean-only, and this row
+                    needs a third state). Hand-rolled control chrome does not
+                    track the kit and nothing reports that it has stopped — this
+                    sat at the registry's `rounded-[4px]` after the kit took
+                    web-ui's 6, a valid box with valid classes two radii away
+                    from every other checkbox in the app. If ui/checkbox.tsx
+                    moves, move this with it. → docs/theme.md, _the two kits_. */}
                 <View
                   className={cn(
-                    'size-4 shrink-0 items-center justify-center rounded-[4px] border',
+                    'size-4 shrink-0 items-center justify-center rounded-[6px] border',
                     state === 'off' ? 'border-input' : 'border-primary bg-primary',
                   )}
                 >

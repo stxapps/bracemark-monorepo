@@ -10,7 +10,12 @@ import { Icon } from './icon';
 // aliases; this app uses relative imports). Local changes vs upstream: imports
 // rewritten to relative, plus the box's radius — `rounded-[6px]`, matching
 // web-ui rather than the registry's `rounded-[4px]` (docs/theme.md, _the
-// radius scale_).
+// radius scale_). The LITERAL, not `rounded-sm`: the two are the same 6px today
+// (`--radius-sm` is `calc(var(--radius) - 4px)` off a 0.625rem `--radius` in
+// global.css), but they couple differently — `rounded-sm` would ride `--radius`,
+// and the point of that section is that the classes are the shape system while
+// `--radius` moves only registry leftovers. This file said `rounded-sm` while
+// this comment said `rounded-[6px]`; the class is now what the comment claims.
 // The registry's `shadow-sm shadow-black/5` is dropped for the same reason as
 // every other control here: web-ui carries no shadow on one.
 const DEFAULT_HIT_SLOP = 24;
