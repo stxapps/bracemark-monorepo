@@ -9,7 +9,7 @@
 // branch.
 //
 // The return is an ImportedBundle (rows + any blobs they reference), not bare
-// rows: the three interop parsers never carry bytes and yield an empty map, but
+// rows: the four interop parsers never carry bytes and yield an empty map, but
 // a Brace.to export does. Widening the ONE dispatch keeps the alternative —
 // every caller special-casing the formats that have blobs — from coming back.
 
@@ -17,6 +17,7 @@ import { parseBraceExport } from './brace';
 import type { ImportedBundle, ImportedLink } from './bundle';
 import { parseRaindropCsv } from './csv';
 import { detectTextImportFormat } from './detect';
+import { parseLinkwardenExport } from './linkwarden';
 import { parseNetscapeHtml } from './netscape';
 import { parseUrlText } from './text';
 
@@ -27,7 +28,8 @@ export function parseImportText(text: string, filename = ''): ImportedBundle {
   if (format === 'brace') return parseBraceExport(text);
 
   let links: ImportedLink[];
-  if (format === 'netscape') links = parseNetscapeHtml(text);
+  if (format === 'linkwarden') links = parseLinkwardenExport(text);
+  else if (format === 'netscape') links = parseNetscapeHtml(text);
   else if (format === 'csv') links = parseRaindropCsv(text);
   else links = parseUrlText(text);
 

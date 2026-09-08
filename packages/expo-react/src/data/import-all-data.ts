@@ -272,7 +272,12 @@ async function importBracemarkBackup(
 
 // The text entries an interop zip can carry (Pocket's shutdown export is a zip
 // of part_*.csv files; other services zip an HTML bookmarks file the same way).
-const INTEROP_ZIP_ENTRY_RE = /\.(csv|html?|txt)$/i;
+// `.json` is here for the file a user zipped themselves — LinkWarden's backup
+// downloads bare — and it costs nothing to allow: an entry is DETECTED like any
+// other, so a .json that isn't a LinkWarden backup gets the same text-mining
+// degrade a stray .txt already got, rather than a zip-level error naming three
+// extensions and meaning four.
+const INTEROP_ZIP_ENTRY_RE = /\.(csv|html?|txt|json)$/i;
 
 // Parse every recognizable text entry and concatenate the rows — the zip-level
 // mirror of the text branch in importAllData. Archiver metadata (__MACOSX/…)
@@ -292,7 +297,7 @@ function parseInteropZip(byName: Map<string, Uint8Array>): ImportedBundle {
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
   if (candidates.length === 0) {
     throw new Error(
-      'This zip is neither a Bracemark backup nor a bookmarks export (no .html, .csv, or .txt files inside).',
+      'This zip is neither a Bracemark backup nor a bookmarks export (no .html, .csv, .json, or .txt files inside).',
     );
   }
 
@@ -306,6 +311,16 @@ function parseInteropZip(byName: Map<string, Uint8Array>): ImportedBundle {
   return { links, images };
 }
 
+// fflate stays lazy — it is settings-flow-only code — but spelled as a
+// `require()`, not `await import('fflate')`. Metro resolves both at build time,
+// so the app is identical either way; jest's CJS vm cannot service a real
+// `import()` at all ("A dynamic import callback was invoked without
+// --experimental-vm-modules"), and neither babel-preset-expo nor
+// @react-native/babel-preset lowers one to a require. An `import()` here made
+// this whole orchestrator unreachable from a spec. Same rule and same spelling
+// as the lazy requires in data/share-store.ts; see jest.expo-base.cjs.
+const fflate = (): typeof import('fflate') => require('fflate');
+
 // The zip dispatch: one unzip, one entry map. manifest.json marks a Bracemark
 // backup (restored verbatim); any other zip is treated as a zipped interop
 // export and its text entries become new links.
@@ -316,7 +331,7 @@ async function importZip(
   onProgress: (progress: ImportProgress) => void,
   onQuotaPrompt?: ImportQuotaResolver,
 ): Promise<Omit<ImportOutcome, 'syncFailed'>> {
-  const { unzipSync } = await import('fflate');
+  const { unzipSync } = fflate();
 
   // fflate keys entries by filename; directory entries end with '/' and carry
   // no bytes — drop them so the map mirrors zip.js's file-only view.

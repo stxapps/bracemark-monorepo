@@ -268,7 +268,13 @@ function ImportStatus({ state }: { state: ImportState }) {
 // What the picker offers. Types are advisory on both platforms (Android treats
 // them as a filter, iOS as UTI hints); the orchestrator sniffs the real format
 // from the bytes anyway, so a permissive list just keeps pickable files broad.
-const IMPORT_MIME_TYPES = ['application/zip', 'text/html', 'text/csv', 'text/plain'];
+const IMPORT_MIME_TYPES = [
+  'application/zip',
+  'text/html',
+  'text/csv',
+  'text/plain',
+  'application/json',
+];
 
 // The over-cap pre-flight — web's ImportQuotaChoice, verbatim in copy (see
 // there, and docs/data-lifecycle.md _the import's quota gate_). The file has
@@ -330,7 +336,7 @@ function ImportView({ onBack }: { onBack: () => void }) {
     <View>
       <SettingsHeader
         title="Import data"
-        description="Import from a file — a Bracemark backup (.zip), a Brace.to export (.txt), an HTML bookmarks file (web browsers, LinkWarden, Karakeep), a Pocket export (.zip or .csv), a Raindrop.io CSV, or a plain list of links. The format is detected automatically; links you already have are skipped. If the file holds more links than your plan has room for, we’ll count them and ask before importing anything. Large imports may take a few minutes."
+        description="Import from a file — a Bracemark backup (.zip), a Brace.to export (.txt), an HTML bookmarks file (web browsers, Karakeep), a LinkWarden backup (.json), a Pocket export (.zip or .csv), a Raindrop.io CSV, or a plain list of links. The format is detected automatically; links you already have are skipped. If the file holds more links than your plan has room for, we’ll count them and ask before importing anything. Large imports may take a few minutes."
         back={{ label: 'Data', onPress: onBack }}
       />
       <View className="mt-6 flex-row">

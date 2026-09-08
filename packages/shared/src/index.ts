@@ -36,6 +36,7 @@ export * from './import/brace';
 export * from './import/bundle';
 export * from './import/csv';
 export * from './import/detect';
+export * from './import/linkwarden';
 export * from './import/netscape';
 export * from './import/parse';
 export * from './import/project';

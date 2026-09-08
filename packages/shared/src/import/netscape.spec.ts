@@ -215,4 +215,65 @@ describe('parseNetscapeHtml', () => {
     expect(link.url).toBe('https://example.com/s?a=1&b=2');
     expect(link.tagNames).toEqual(['café', 'r&d']);
   });
+
+  // <DD> is the format's description element and the only construct with no
+  // closing tag — it runs to the next block tag, which is what makes the inline
+  // markup and the multi-line body below the interesting part rather than
+  // decoration. Read for the apps that write it (this exporter doesn't: notes
+  // ride the CSV instead), so what it must survive is a real file's soup.
+  it("reads a <DD> description as the link's note, markup and lines and all", () => {
+    const html = [
+      '<DL><p>',
+      '    <DT><A HREF="https://example.com/a">A</A>',
+      '    <DD>Kleppmann&rsquo;s <b>best</b> post',
+      'and a second line',
+      '    <DT><A HREF="https://example.com/b">B</A>',
+      '</DL><p>',
+    ].join('\n');
+
+    const [a, b] = parseNetscapeHtml(html);
+    expect(a.note).toBe('Kleppmann’s best post\nand a second line');
+    expect(b.note).toBeUndefined();
+  });
+
+  it('takes the last <DD> in a file, which no block tag follows', () => {
+    const html = '<DT><A HREF="https://example.com/a">A</A>\n<DD>trailing note';
+    expect(parseNetscapeHtml(html)[0].note).toBe('trailing note');
+  });
+
+  // The failure this guards is a note appearing on a link in ANOTHER folder: a
+  // folder's own description sits between the <H3> and the <DL> that opens it,
+  // with the last parsed link — from the previous folder — still on the stack.
+  it("attaches a description to the row before it, and to no other row's", () => {
+    const html = [
+      '<DL><p>',
+      '    <DT><H3>Work</H3>',
+      '    <DL><p>',
+      '        <DT><A HREF="https://example.com/w">W</A>',
+      '    </DL><p>',
+      '    <DT><H3>Personal</H3>',
+      '    <DD>Everything else',
+      '    <DL><p>',
+      '        <DT><A HREF="https://example.com/p">P</A>',
+      '    </DL><p>',
+      '</DL><p>',
+    ].join('\n');
+
+    expect(parseNetscapeHtml(html).map((link) => link.note)).toEqual([undefined, undefined]);
+  });
+
+  it("gives a dropped row's description to nobody", () => {
+    // The bookmarklet is not imported, but its <DD> is still ITS description —
+    // silently moving it onto the link above would invent a note the user never
+    // wrote for that link.
+    const html = [
+      '<DT><A HREF="https://example.com/a">A</A>',
+      '<DT><A HREF="javascript:void(0)">Bookmarklet</A>',
+      '<DD>Drag me to the bar',
+    ].join('\n');
+
+    const links = parseNetscapeHtml(html);
+    expect(links).toHaveLength(1);
+    expect(links[0].note).toBeUndefined();
+  });
 });

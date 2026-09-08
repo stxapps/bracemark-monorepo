@@ -4,7 +4,8 @@ import { parseEpoch } from './epoch';
 
 // CSV parser targeting Raindrop.io's export (and export/csv.ts's own output —
 // the two share the url/folder/title/note/tags/created columns) plus Pocket's
-// final shutdown export (title/url/time_added/tags/status). HEADER-DRIVEN,
+// final shutdown export (title/url/time_added/tags/status, whose `archive`
+// status lands as `systemList` rather than as a folder). HEADER-DRIVEN,
 // not positional: a real Raindrop export carries extra columns (id, excerpt,
 // cover, highlights, favorite) and may reorder them, so each field is looked up
 // by its lowercased header name and unknown columns are ignored. A file whose
@@ -76,6 +77,8 @@ export function parseRaindropCsv(text: string): ImportedLink[] {
   // `created` is Raindrop's/ours; `time_added` is Pocket's column for the same.
   const createdCol =
     header.indexOf('created') !== -1 ? header.indexOf('created') : header.indexOf('time_added');
+  // Pocket's `status`. Neither Raindrop's export nor ours has this column.
+  const statusCol = header.indexOf('status');
 
   // A missing column (col === -1) reads as '' — `at(-1)` semantics would grab
   // the last cell, so index guardedly.
@@ -113,6 +116,17 @@ export function parseRaindropCsv(text: string): ImportedLink[] {
     const createdRaw = cell(row, createdCol);
     const created = parseEpoch(createdRaw) ?? Date.parse(createdRaw);
     if (!Number.isNaN(created)) link.createdAt = created;
+
+    // Pocket's two statuses are `unread` and `archive`, and the second one is the
+    // same statement `systemList` makes (see bundle.ts) — a Pocket library is
+    // mostly archive, so reading the column as nothing put a decade of read items
+    // into the user's main list, in one indistinguishable heap with the unread
+    // ones. The value is matched, never the column's presence: an unknown status
+    // leaves the row a normal link rather than guessing a list for it. `trash` is
+    // deliberately NOT mapped — no exporter writes it, and a wrong guess there
+    // files a live link as deleted.
+    const status = cell(row, statusCol).toLowerCase();
+    if (status === 'archive' || status === 'archived') link.systemList = 'archive';
 
     links.push(link);
   }

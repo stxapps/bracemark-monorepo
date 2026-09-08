@@ -1,0 +1,107 @@
+{
+  "version": 1,
+  "entryNames": ["manifest.json", "items.jsonl", "files/img_a"],
+  "manifest": {
+    "format": "bracemark-backup",
+    "version": 1,
+    "exportedAt": 1788839557198,
+    "counts": {
+      "links": 2,
+      "lists": 2,
+      "tags": 1,
+      "pins": 1,
+      "extractions": 1,
+      "files": 1
+    }
+  },
+  "entities": [
+    {
+      "path": "lists/lst_work.enc",
+      "data": {
+        "id": "lst_work",
+        "name": "Wörk",
+        "parentId": null,
+        "rank": "a0",
+        "createdAt": 1700000000000,
+        "updatedAt": 1700000000000
+      }
+    },
+    {
+      "path": "lists/lst_specs.enc",
+      "data": {
+        "id": "lst_specs",
+        "name": "Specs",
+        "parentId": "lst_work",
+        "rank": "a1",
+        "createdAt": 1700000000000,
+        "updatedAt": 1700000000000
+      }
+    },
+    {
+      "path": "tags/tag_read.enc",
+      "data": {
+        "id": "tag_read",
+        "name": "reading",
+        "parentId": null,
+        "rank": "a0",
+        "createdAt": 1700000000000,
+        "updatedAt": 1700000000000
+      }
+    },
+    {
+      "path": "links/lnk_a.enc",
+      "data": {
+        "url": "https://a.invalid/spec",
+        "listId": "lst_specs",
+        "tagIds": ["tag_read"],
+        "customTitle": "Die Spezifikation — süß",
+        "customImageId": "img_a",
+        "createdAt": 1700000000002,
+        "updatedAt": 1700000000002
+      }
+    },
+    {
+      "path": "links/lnk_b.enc",
+      "data": {
+        "url": "https://b.invalid/gone",
+        "listId": "trash",
+        "tagIds": [],
+        "createdAt": 1700000000001,
+        "updatedAt": 1700000000001
+      }
+    },
+    {
+      "path": "extractions/lnk_a.enc",
+      "data": {
+        "id": "lnk_a",
+        "facets": {},
+        "title": "A spec",
+        "createdAt": 1700000000000,
+        "updatedAt": 1700000000000
+      }
+    },
+    {
+      "path": "pins/lnk_a.enc",
+      "data": {
+        "id": "lnk_a",
+        "rank": "a0",
+        "createdAt": 1700000000000,
+        "updatedAt": 1700000000000
+      }
+    },
+    {
+      "path": "settings/general.enc",
+      "data": {
+        "linksLayout": "list",
+        "createdAt": 1700000000000,
+        "updatedAt": 1700000000000
+      }
+    }
+  ],
+  "files": [
+    {
+      "id": "img_a",
+      "bytes": [137, 80, 78, 71, 13, 10, 26, 10, 255, 254, 0, 127]
+    }
+  ]
+}

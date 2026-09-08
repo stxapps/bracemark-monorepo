@@ -15,9 +15,12 @@
 //   netscape / csv / text — the interop formats: parsed rows (the pure parsers
 //               in @stxapps/shared import/) become NEW links, their folders and
 //               tag names resolved against — or created in — this library. A
-//               zip WITHOUT manifest.json routes here too — its .html/.csv/.txt
-//               entries are parsed and concatenated (Pocket's shutdown export
-//               is a zip of part_*.csv files).
+//               zip WITHOUT manifest.json routes here too — its
+//               .html/.csv/.txt/.json entries are parsed and concatenated
+//               (Pocket's shutdown export is a zip of part_*.csv files).
+//   linkwarden — a LinkWarden backup.json, the other foreign whole-backup
+//               format (LinkWarden has no bookmarks file to offer). Same
+//               interop path; it carries collections, tags, notes and pins.
 //   brace     — a Brace.to export (this project's predecessor): a foreign app's
 //               whole backup, so it carries more than a bookmarks file can —
 //               custom titles, Archive/Trash membership, pins, and the user's
@@ -308,7 +311,12 @@ async function importBracemarkBackup(
 
 // The text entries an interop zip can carry (Pocket's shutdown export is a zip
 // of part_*.csv files; other services zip an HTML bookmarks file the same way).
-const INTEROP_ZIP_ENTRY_RE = /\.(csv|html?|txt)$/i;
+// `.json` is here for the file a user zipped themselves — LinkWarden's backup
+// downloads bare — and it costs nothing to allow: an entry is DETECTED like any
+// other, so a .json that isn't a LinkWarden backup gets the same text-mining
+// degrade a stray .txt already got, rather than a zip-level error naming three
+// extensions and meaning four.
+const INTEROP_ZIP_ENTRY_RE = /\.(csv|html?|txt|json)$/i;
 
 // Parse every recognizable text entry and concatenate the rows — the zip-level
 // mirror of the text branch in importAllData. Archiver metadata (__MACOSX/…)
@@ -329,7 +337,7 @@ async function parseInteropZip(byName: Map<string, FileEntry>): Promise<Imported
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
   if (candidates.length === 0) {
     throw new Error(
-      'This zip is neither a Bracemark backup nor a bookmarks export (no .html, .csv, or .txt files inside).',
+      'This zip is neither a Bracemark backup nor a bookmarks export (no .html, .csv, .json, or .txt files inside).',
     );
   }
 

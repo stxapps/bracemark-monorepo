@@ -151,7 +151,13 @@ export class ExportTooLargeError extends Error {
 // running total (per entry: 76 + 2×name + payload, plus the 22-byte EOCD) —
 // using each payload's UNCOMPRESSED length, so the estimate is an upper bound
 // for the deflated entries and exact for the stored (`level: 0`) ones.
-function assertZipWritable(entries: [string, Uint8Array][]): void {
+//
+// Exported for its spec only, and deliberately: both ceilings are reachable
+// solely at a scale no test can build through the orchestrator — 65 536
+// MATERIALIZED blobs, each referenced by a link, or 4 GiB of them. Driving the
+// guard at its own edge is the same choice bracemark-extractor's suite makes for
+// its byte caps, and the alternative is the ceiling having no cover at all.
+export function assertZipWritable(entries: [string, Uint8Array][]): void {
   if (entries.length > ZIP32_MAX_ENTRIES) {
     throw new ExportTooLargeError('entries', entries.length);
   }
@@ -279,6 +285,16 @@ function referencedFilePaths(links: GatheredLink[]): string[] {
   return [...ids].map((id) => pathFromId(id, FILES_PREFIX));
 }
 
+// fflate stays lazy — it is settings-flow-only code — but spelled as a
+// `require()`, not `await import('fflate')`. Metro resolves both at build time,
+// so the app is identical either way; jest's CJS vm cannot service a real
+// `import()` at all ("A dynamic import callback was invoked without
+// --experimental-vm-modules"), and neither babel-preset-expo nor
+// @react-native/babel-preset lowers one to a require. An `import()` here made
+// this whole orchestrator unreachable from a spec. Same rule and same spelling
+// as the lazy requires in data/share-store.ts; see jest.expo-base.cjs.
+const fflate = (): typeof import('fflate') => require('fflate');
+
 // Assemble the backup zip in memory and write it to the cache file. A blob's
 // bytes come off disk (dataFileFor — materialized by the files phase, or
 // already local); a path that stayed unmaterialized is skipped here (already
@@ -293,7 +309,7 @@ async function assembleBracemarkZip(
   pins: { path: string; entity: Pin }[],
   filePaths: string[],
 ): Promise<{ fileCount: number }> {
-  const { zipSync } = await import('fflate');
+  const { zipSync } = fflate();
 
   const lines: string[] = [];
   for (const { path, entity } of lists) lines.push(jsonlLine(path, entity));

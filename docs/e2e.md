@@ -229,6 +229,25 @@ If an end-to-end extraction proof is ever wanted, it needs one real public URL i
 exactly one spec, tagged so it can be skipped offline — a deliberate network
 dependency, not the default.
 
+**The backup round trip.** Export ⇄ import looks like a whole-flow question and
+is not one, for a reason specific to this app: `exportAllData` claims its
+destination through `window.showSaveFilePicker`, which the system Chrome this
+repo drives really does implement — so the export opens a **native save dialog
+Playwright has no API for**. Stubbing it with `addInitScript` would leave the
+browser proving nothing about the save path, which is the only part of this the
+browser could prove. Beyond that, `e2e` may depend on `type:shared` alone and
+drives the apps over the wire, so it cannot call the orchestrators, and comparing
+two libraries entity-by-entity through the DOM is the worst available oracle.
+And a file-to-file comparison is wrong for three of the four formats anyway — the
+interop ones are lossy BY DESIGN ([data-lifecycle.md](./data-lifecycle.md)), so a
+golden file would encode today's lossiness as the contract.
+
+It lives at the unit layer instead, with a real zip container in both packages'
+`data/export-import.spec.ts` and golden cross-platform archives in `shared`
+([testing.md](./testing.md), _the ported pair_). What is left for this layer, if
+it is ever wanted, is thin: that the button produces a download with the right
+name and that the receipt announces the right counts.
+
 **Keyboard dismissal.** The flows reach for Maestro's `hideKeyboard`
 (`mobile/flows/add-link.yaml`, `subflows/sign-in.yaml`), which is a **native**
 command — it puts the keyboard away without touching the app's own affordances.

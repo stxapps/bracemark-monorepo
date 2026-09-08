@@ -27,3 +27,10 @@ package-lock.json
 # bury those edits on the first refresh.
 /.claude/skills/expo-animation
 /.claude/skills/expo-module
+
+# Real bookmark exports, kept byte-identical to what their producers wrote
+# (packages/shared/src/import/__fixtures__/netscape/README.md). Prettier would
+# reindent the tag soup that IS the thing under test — a browser's unclosed
+# <DT>s, a valueless FOLDED attribute, the indentation inside a <DD> — and the
+# specimens would quietly become our own HTML instead of theirs.
+/packages/shared/src/import/__fixtures__/netscape

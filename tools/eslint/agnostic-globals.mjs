@@ -93,11 +93,18 @@ const RESTRICTED = [
  * gotcha the root config's `**​/modules/**​/package.json` block documents).
  *
  * Specs are excluded: they run on node under jest and never ship, so a spec is
- * free to reach for `Buffer` or stub `globalThis.crypto`.
+ * free to reach for `Buffer` or stub `globalThis.crypto`. `src/testing` is
+ * excluded on the same ground and needs it more, because the exemption is less
+ * obvious there: a file named `*.spec.ts` announces what it is, while
+ * `src/testing/backup-fixtures.ts` looks like source. What keeps it honest is
+ * that the package's own tsconfig.lib.json excludes the directory too, so
+ * nothing shipped can import it — the deny list and the compiler agree, and a
+ * `src/testing` module that drifted into the shipped graph would fail to
+ * typecheck rather than reach Hermes.
  */
 export const agnosticGlobals = {
   files: ['**/src/**/*.ts', '**/src/**/*.tsx'],
-  ignores: ['**/*.spec.ts', '**/*.spec.tsx', '**/*.test.ts', '**/*.test.tsx'],
+  ignores: ['**/src/testing/**', '**/*.spec.ts', '**/*.spec.tsx', '**/*.test.ts', '**/*.test.tsx'],
   rules: {
     'no-restricted-globals': ['error', ...RESTRICTED],
     'no-restricted-properties': [

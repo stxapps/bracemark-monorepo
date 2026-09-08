@@ -17,6 +17,11 @@
       "import": "./src/index.ts",
       "default": "./src/index.ts"
     },
+    "./testing": {
+      "types": "./src/testing/backup-fixtures.ts",
+      "import": "./src/testing/backup-fixtures.ts",
+      "default": "./src/testing/backup-fixtures.ts"
+    },
     "./package.json": "./package.json"
   },
   "dependencies": {

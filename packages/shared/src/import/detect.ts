@@ -20,7 +20,7 @@ export function isZipBytes(bytes: Uint8Array): boolean {
   );
 }
 
-export type TextImportFormat = 'brace' | 'netscape' | 'csv' | 'text';
+export type TextImportFormat = 'brace' | 'linkwarden' | 'netscape' | 'csv' | 'text';
 
 // A Brace.to export: a JSON array whose first entry is `{ "path": "<namespace>…`
 // (the exporter always writes `path` before `data`, and always writes the link
@@ -36,8 +36,28 @@ export type TextImportFormat = 'brace' | 'netscape' | 'csv' | 'text';
 // an escape, not a literal — a bare BOM in source is invisible and lint-flagged).
 const BRACE_HEAD_RE = /^\uFEFF?\s*\[\s*\{\s*"path"\s*:\s*"(links|sslts|pins|tags|images|settings)/;
 
-// The doctype every browser/Karakeep/LinkWarden export opens with, ANCHORED to
-// the head of the file for the same reason BRACE_HEAD_RE is: unanchored, this
+// A LinkWarden backup: a JSON OBJECT carrying a `collections` array. Two parts,
+// because one is not enough. The ANCHOR is the opening brace, which on its own
+// separates this from every other format here — a Brace.to export is an array, a
+// bookmarks file opens with a tag, and neither a CSV header nor a list of URLs
+// starts with `{`. The KEY then has to be found by scanning rather than at a
+// fixed offset: LinkWarden exports the user's Prisma row (linkwarden's
+// `exportData.ts`), so its scalar columns come first and `collections` sits
+// after however many of them that schema has — a number we don't control and
+// can't anchor to. The scan is safe here precisely because the anchor already
+// did the excluding, which is the same bargain BRACE_HEAD_RE makes in the other
+// order.
+//
+// Without this probe the file is TEXT, and the URL-extracting parser mines the
+// raw JSON: a flat pile of links with every collection, tag, note and pin gone,
+// and no error anywhere. See import/linkwarden.ts.
+const LINKWARDEN_OBJECT_RE = /^\uFEFF?\s*\{/;
+const LINKWARDEN_COLLECTIONS_RE = /"collections"\s*:\s*\[/;
+
+// The doctype a browser, Karakeep, Delicious, Shaarli or Google Bookmarks export
+// opens with — verified against one file from each, in
+// __fixtures__/netscape (netscape-exports.spec.ts). ANCHORED to the head of the
+// file for the same reason BRACE_HEAD_RE is: unanchored, this
 // matched the string anywhere, so a saved page titled
 // `<!DOCTYPE NETSCAPE-Bookmark-file-1>` sent our own CSV export to the HTML
 // tokenizer. Same shape as the `</a>` bug below it, one rung less reachable.
@@ -69,6 +89,12 @@ export function detectTextImportFormat(text: string, filename = ''): TextImportF
   // A Brace link's stored title can contain any markup the page's <title> did,
   // so `</a>` is not the stronger signal here.
   if (BRACE_HEAD_RE.test(text.slice(0, 4096))) return 'brace';
+
+  // Structural, and ahead of every scan below for the same reason the Brace
+  // probe is: a LinkWarden link's `name` holds whatever the page's <title> did,
+  // so a saved page called `</a>` or one with a comma would otherwise route this
+  // file to the HTML tokenizer or the CSV reader.
+  if (LINKWARDEN_OBJECT_RE.test(text) && LINKWARDEN_COLLECTIONS_RE.test(text)) return 'linkwarden';
 
   // The one HTML signal strong enough to outrank a CSV header row.
   if (NETSCAPE_DOCTYPE_RE.test(text)) return 'netscape';

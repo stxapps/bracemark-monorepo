@@ -127,3 +127,12 @@ npm-debug.*
 web-build/
 cache/
 .gradle/
+
+# The two golden backup archives are CHECKED IN, and need saying so here because
+# a `*.zip` line in a personal core.excludesFile (~/.gitignore_global, a common
+# one to have) hides them: `git add` skips an ignored file in SILENCE — no error,
+# no untracked entry — and the loss only surfaces as two suites failing on a
+# fresh clone. A .gitignore in the repo outranks the global file, so this
+# negation is the whole fix. Why the bytes are committed rather than generated:
+# docs/testing.md, _the golden backup archives_.
+!/packages/shared/src/data/__fixtures__/*.zip

@@ -37,5 +37,14 @@
   },
   "include": ["src/**/*.ts"],
   "references": [],
-  "exclude": ["jest.config.ts", "jest.config.cts", "src/**/*.spec.ts", "src/**/*.test.ts"]
+  // `src/testing` is spec-only support (it reads node:fs and __dirname, which no
+  // shipped runtime here has) and is compiled by tsconfig.spec.json instead —
+  // the same split expo-react draws.
+  "exclude": [
+    "jest.config.ts",
+    "jest.config.cts",
+    "src/testing/**",
+    "src/**/*.spec.ts",
+    "src/**/*.test.ts"
+  ]
 }

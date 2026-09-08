@@ -19,11 +19,13 @@
 // from each format's convention — Netscape seconds, CSV ISO 8601).
 //
 // The four optional fields below the timestamps are the RICHER signal a structured
-// export carries and a bookmarks file doesn't. Only brace.ts fills them today, but
-// none of them is Brace-shaped — they name concepts several services have (Pocket's
-// CSV `status: archive` column is exactly `systemList`, and Raindrop has a Trash
-// collection), so a future importer sets the same fields and the orchestrators need
-// no new branch. A parser that has nothing to say simply leaves them undefined.
+// export carries and a bookmarks file doesn't. None of them is Brace-shaped —
+// they name concepts several services have, which is why csv.ts now sets
+// `systemList` from Pocket's `status: archive` column and netscape.ts fills
+// `note` from the format's <DD> element, with no new branch anywhere downstream.
+// `customTitle`, `pinRank` and `imageRef` are still brace.ts's alone, because no
+// other format we read distinguishes a typed title from a page title or carries
+// an order or bytes. A parser that has nothing to say leaves them undefined.
 export interface ImportedLink {
   url: string;
   title?: string;

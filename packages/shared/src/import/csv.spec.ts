@@ -97,8 +97,69 @@ describe('parseRaindropCsv', () => {
         tagNames: [],
         folderPath: [],
         createdAt: 1_500_000_000_000,
+        // `archive` is a LIST, not a tag and not a folder: a Pocket library is
+        // mostly archive, so reading this column as nothing tipped years of read
+        // items into the main list alongside the unread ones.
+        systemList: 'archive',
       },
     ]);
+  });
+
+  // A second real Pocket header, from the same exporter: some files carry a
+  // `cursor` column between `time_added` and `tags` (go-shiori/shiori keeps one
+  // of each in its testdata, which is how we know the variant exists). Nothing
+  // here reads `cursor`; the point is that a column we don't know about cannot
+  // shift the ones we do — the failure a positional parser has and a
+  // header-driven one is immune to, which is worth pinning rather than assuming.
+  it("ignores an unknown column between the ones it reads (Pocket's `cursor`)", () => {
+    const csv = [
+      'title,url,time_added,cursor,tags,status',
+      'Shiori,https://github.com/go-shiori/shiori,1541343937,,shiori,unread',
+    ].join('\n');
+
+    expect(parseRaindropCsv(csv)).toEqual([
+      {
+        url: 'https://github.com/go-shiori/shiori',
+        title: 'Shiori',
+        tagNames: ['shiori'],
+        folderPath: [],
+        createdAt: 1_541_343_937_000,
+      },
+    ]);
+  });
+
+  it('files an unknown status as a normal link rather than guessing a list', () => {
+    const csv = [
+      'title,url,time_added,tags,status',
+      'A,https://example.com/a,1700000000,,unread',
+      'B,https://example.com/b,1700000000,,some-future-value',
+      'C,https://example.com/c,1700000000,,trash',
+    ].join('\n');
+
+    // `trash` included on purpose: it is the value nobody writes and the one a
+    // wrong guess would be worst at — a live link filed as deleted.
+    expect(parseRaindropCsv(csv).map((link) => link.systemList)).toEqual([
+      undefined,
+      undefined,
+      undefined,
+    ]);
+  });
+
+  // Raindrop's own export spells a nested collection with spaces around the
+  // separator — `Archive / Job Search` — while its import docs spell the same
+  // thing `a/b/c`. Both have to read as the same two-segment path: a segment
+  // named ` Job Search` would find no existing list and mint a second one beside
+  // the real one, leading space and all.
+  it('reads a folder path whether or not its separator is padded', () => {
+    const csv = [
+      'url,folder',
+      'https://example.com/a,Archive / Job Search',
+      'https://example.com/b,Archive/Job Search',
+    ].join('\n');
+
+    const [padded, tight] = parseRaindropCsv(csv);
+    expect(padded.folderPath).toEqual(['Archive', 'Job Search']);
+    expect(tight.folderPath).toEqual(padded.folderPath);
   });
 
   it('handles quoted fields with embedded newlines, commas, and doubled quotes', () => {
