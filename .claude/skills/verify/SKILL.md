@@ -341,6 +341,15 @@ this watch 1 time, most recently because: MustScanSubDirs`. With the watch
   it begins at a root screen passes alone and fails in a directory run, because
   the previous flow left the app deep in a navigation stack. Reset with
   `clearState`. The failure looks like a driver bug and is not one.
+- **The iOS share-sheet tap lies.** `tapOn` the Bracemark entry in the system
+  share sheet returns COMPLETED **without launching the share extension** —
+  reproduced twice; the extension's `log stream` shows no `launched.` line and
+  the sheet just dismisses to Safari. Tap it by coordinate instead (read the
+  icon centre off `xcrun simctl io booted screenshot`), then assert on something
+  only the extension draws (`Close`, "Sign in to save links"). Also: its label
+  lives in `accessibilityText`, not `text`, so a `text:` selector finds nothing
+  and looks like the driver being blind. → `docs/share-sheet.md`, _driving it
+  from Safari_.
 - **Selectors are `testID`s, and they are an interface** — renaming one fails a
   flow as a bare timeout that names nothing. The list is in `docs/e2e.md`, _the
   testID contract_. Selectors otherwise bind to the a11y tree, so an unlabelled

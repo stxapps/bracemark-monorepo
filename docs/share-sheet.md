@@ -722,6 +722,53 @@ remains eager is irreducible without a bigger change: zod and the `@stxapps/shar
 barrel (its endpoint contracts are what the upload speaks), react-native-svg (the
 icons), and culori (uniwind's runtime).
 
+### driving it from Safari — the one tap that lies
+
+⚠ **`tapOn` the Bracemark entry in the iOS system share sheet reports COMPLETED
+and does not launch this extension.** Measured twice on Maestro 2.8.0 / Xcode
+26.6 / iOS 26.5 / iPhone 17 Pro, against a dev build, with the sheet open over
+Safari:
+
+```
+Assert that "^Bracemark$" is visible... COMPLETED
+Tap on "^Bracemark$"... COMPLETED
+```
+
+— while `xcrun simctl spawn booted log stream --predicate 'processImagePath
+CONTAINS[c] "BracemarkShareExtension"'` stays empty. No `launched.` line, no
+process; the sheet simply dismisses back to Safari. A **coordinate** tap on the
+same element of the same sheet launches it every time:
+
+```
+BracemarkShareExtension[…] [com.apple.extensionkit:default] Extension
+`…/Bracemark.app/PlugIns/BracemarkShareExtension.appex` … launched.
+```
+
+Nothing catches the difference. The assert before the tap is honest — the label
+really is on screen. The tap's own exit status is COMPLETED. The next step runs,
+against Safari, and a flow written to "verify the share path" stays green
+forever without once entering this process.
+
+**The workaround is a coordinate tap plus an assertion on the far side.** Read
+the icon's centre off `xcrun simctl io booted screenshot` (it was `(245, 646)`
+in 402×874 pt on the specimen above), tap that, then assert on something only
+this extension draws — `Close`, or the current state's own line ("Sign in to
+save links" for the no-session state). Never treat the tap's exit status as
+evidence that the boundary was crossed.
+
+Reading across the boundary was never the problem and still isn't: `maestro
+hierarchy` sees the sheet's target (as `accessibilityText`, **not** `text` — a
+selector written against `text:` finds nothing and reads like blindness), and
+sees this extension's own tree once it is running, which is exactly how _text
+renders at zero point_ above was diagnosed. Taps **inside** the sheet route
+correctly too. It is the one gesture that crosses from Safari's process into
+this one that fails silently.
+
+`agent-device` is no help here. Bound to its session app, it reports Safari's
+nodes as `[covered]` and nothing behind them — `snapshot --raw` included — so it
+can neither see the share sheet nor anything in this process. →
+[app-drivers.md](./app-drivers.md), _the agent-facing drivers_.
+
 ### file map
 
 | piece                                                                                                                | where                                                                                                                                                                                                                                                                                                               |

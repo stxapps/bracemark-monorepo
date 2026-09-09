@@ -201,7 +201,18 @@ this app play to XCUITest's strengths, and Appium wraps XCUITest:
 2. **Biometric unlock** ([locks.md](./locks.md), _biometric unlock
    (expo-only)_). Appium's XCUITest driver has `mobile: enrollBiometric` /
    `mobile: sendBiometricMatch` on the simulator. Maestro has no biometric
-   command.
+   command — and, measured, neither does anything else reachable here.
+   `agent-device` advertises `settings faceid <match|nonmatch|enroll|unenroll>`
+   and refuses it on this runtime (`UNSUPPORTED_OPERATION: Face ID simulation is
+not supported on this simulator runtime`); `xcrun simctl ui` offers only
+   `appearance`, `increase_contrast` and `content_size`, with no biometric
+   option at all; and `notifyutil` — the historic injection path — is not in the
+   iOS 26.5 runtime. Whether Appium's private-API route still reaches it on 26.5
+   was **not** established (only 26.5 is installed here, and reading
+   Simulator.app's Features menu needs an accessibility grant this machine has
+   not given). So the lever Appium is credited with may no longer exist. Do not
+   re-open this on the strength of a feature list; the simulator match was
+   synthetic anyway, and the real check is a manual pass on a real phone.
 
 Both are also where **the simulator is least representative and neither tool
 earns its cost.** The share extension's real risk surface is logic — the
@@ -250,9 +261,77 @@ the app deep in a navigation stack. The failure looks exactly like the batch-mod
 driver bug and is not one. Write flows to be state-independent, or reset with
 `clearState`.
 
-One caveat that remains untested: the claim that Maestro is weak at iOS
-cross-app flows comes from its design, not from a run against our share
-extension. If it ever matters enough, spike it rather than take it on faith.
+#### measured: the cross-app share flow
+
+The caveat that used to sit here — that "Maestro is weak at iOS cross-app flows"
+came from its design rather than from a run against our own share extension —
+has been spent. Driving Safari → Share → Bracemark against a dev build, same
+Maestro 2.8.0 / Xcode 26.6 / iOS 26.5 / iPhone 17 Pro:
+
+| check                                           | result                                                                       |
+| ----------------------------------------------- | ---------------------------------------------------------------------------- |
+| `maestro hierarchy` sees the system share sheet | yes — the target is `accessibilityText: "Bracemark"`, **not** `text`         |
+| … sees inside the extension's own process       | yes — `assertVisible` on `Close` and `Sign in to save links`, both COMPLETED |
+| `tapOn` the Bracemark target in the sheet       | **COMPLETED, and the extension never launches**                              |
+| a coordinate tap on that same element           | launches it — `BracemarkShareExtension … launched.`                          |
+
+So the assumption above is backwards: Maestro **reads** across both process
+boundaries perfectly well, and fails only at the one gesture that crosses them —
+silently, reporting success. That is tripwire-shaped, so the rule, the specimen
+and the workaround live in [share-sheet.md](./share-sheet.md), _driving it from
+Safari_, not here. Note the first row too: a selector written against `text:`
+finds nothing in that sheet, which reads as "Maestro can't see it" and is really
+"you asked for the wrong attribute."
+
+#### the agent-facing drivers — measured, not adopted
+
+A second family arrived after this decision was made: tools whose product is not
+a suite but an **agent's access** to a device — `mobile-next/mobile-mcp`
+(Apache-2.0), `callstack/agent-device` (MIT), and Maestro's own `maestro mcp`.
+They do not compete with the choice above and do not replace `e2e/mobile/`;
+agent-device says as much itself, and offers to export its runs _as_ Maestro
+YAML.
+
+**The token argument runs the wrong way.** An MCP server's tool schemas are
+resident in every request of every session — including the overwhelming majority
+that never touch a device. Measured over stdio `tools/list`, bytes ÷ 4 as a token
+estimate:
+
+| server             | tools | schema bytes | ≈ tokens, every request |
+| ------------------ | ----: | -----------: | ----------------------: |
+| `agent-device mcp` |    57 |      216,406 |                 ~54,000 |
+| `mobile-mcp`       |    32 |       27,369 |                  ~6,800 |
+| `maestro mcp`      |    10 |        9,957 |                  ~2,500 |
+
+Against that, the cost of reading one screen (bracemark-expo's welcome screen):
+
+| reader                        |  bytes |
+| ----------------------------- | -----: |
+| `agent-device snapshot` (CLI) |    535 |
+| `maestro mcp inspect_screen`  |  2,314 |
+| `maestro hierarchy` (raw)     | 34,081 |
+
+agent-device's CLI snapshot is the best read of the three by a wide margin — six
+named, `@ref`-annotated nodes where `maestro hierarchy` emits 34 KB of nested
+bounds, and `press --settle` prints only the resulting UI diff. But that saving
+is **per read** and the schema is **per request**: routed through its MCP it
+spends ~54k tokens to save ~33 KB a screen. **If any of these is used here it is
+`agent-device` as a CLI, and no MCP is registered.**
+
+Two limits found while measuring matter more than the byte counts:
+
+- **It cannot see the iOS share sheet, or the extension behind it.** Bound to the
+  session app, it reports Safari's own nodes as `[covered]` and nothing else —
+  `snapshot --raw` included. Maestro reads both. →
+  [share-sheet.md](./share-sheet.md)
+- **It cannot replay this repo's flows.** Its Maestro-compatibility engine
+  documents `repeat.while` as unsupported, and
+  `e2e/mobile/flows/subflows/sign-in.yaml` uses it — the subflow nearly
+  everything else runs through.
+
+`maestro mcp` is the cheapest and needs nothing new installed (it ships in the
+CLI already on PATH), but it prefixes **every** tool result with a fixed
+instruction to surface its viewer URL to the user.
 
 Remember that `apps/bracemark-expo/ios/` and `android/` are generated and
 gitignored — nothing a test setup needs may be hand-edited there.
