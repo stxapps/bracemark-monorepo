@@ -46,11 +46,15 @@ export async function listUserFiles(
 // additionally clears the per-user quota at issuance (the only place abuse is
 // boundable when content is opaque); `get` needs no quota (reading your own
 // data), so download URLs batch freely.
+// `requestUrl` is the caller's own request URL, carried down to the gateway for
+// the local-dev blob proxy alone: off `wrangler dev` the URL names R2's S3
+// endpoint and this is ignored. See r2/local.ts for why it can't be a constant.
 export async function signUserFileUrls(
   env: Bindings,
   userId: string,
   op: SignOp,
   paths: string[],
+  requestUrl: string,
 ): Promise<SignedUrl[]> {
   if (op === 'put') {
     // The put gate is a plan-aware COST BACKSTOP — byte and object ceilings from
@@ -75,7 +79,7 @@ export async function signUserFileUrls(
   const method = op === 'put' ? 'PUT' : 'GET';
   const expiresIn = op === 'put' ? PUT_URL_TTL_SECONDS : GET_URL_TTL_SECONDS;
 
-  return userFilesRepo(env).presignUrls(userId, paths, method, expiresIn);
+  return userFilesRepo(env).presignUrls(userId, paths, method, expiresIn, requestUrl);
 }
 
 // Record committed mutations (POST /v1/ops/commit) — the R2-first, log-last

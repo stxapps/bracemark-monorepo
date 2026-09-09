@@ -486,6 +486,28 @@ describe('sync control plane', () => {
       expect(await get.text()).toBe('ciphertext');
     });
 
+    it('points dev blob URLs at the origin the client reached the api on', async () => {
+      const { userId, auth } = await authFor('sync-sign-origin');
+      // The one caller that is NOT on loopback: a physical iPhone, which cannot be
+      // taught that localhost means the Mac (no `adb reverse` equivalent) and so
+      // addresses the Mac by LAN IP — `wrangler dev` binds 0.0.0.0 for exactly this.
+      // A hardcoded `http://localhost:8787` here would be handed back to the phone
+      // and resolve to the PHONE: sync mints URLs, every blob transfer then fails
+      // with a connection refused. Nothing else in this suite leaves loopback.
+      const res = await app.request(
+        `http://192.0.2.10:8787${filesSignEndpoint.path}`,
+        json(auth, { op: 'get', paths: ['links/a.enc'] }),
+        env,
+      );
+
+      expect(res.status).toBe(200);
+      const { urls } = (await res.json()) as { urls: { url: string }[] };
+      expect(new URL(urls[0].url).origin).toBe('http://192.0.2.10:8787');
+      expect(new URL(urls[0].url).pathname).toBe(
+        `/v1/files/blob/${userFileKey(userId, 'links/a.enc')}`,
+      );
+    });
+
     it('returns 404 for a missing blob through the dev proxy', async () => {
       const { userId } = await authFor('sync-sign-404');
       const get = await app.request(

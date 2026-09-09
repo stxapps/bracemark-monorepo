@@ -45,8 +45,23 @@ describe('the dev blob proxy', () => {
   // the key as one string and every blob URL becomes a single escaped segment
   // that no longer matches the route.
   it('mints proxy URLs whose key separators stay literal', () => {
-    const url = new URL(localBlobUrl('users/u1/links/a.enc'));
+    const url = new URL(
+      localBlobUrl('users/u1/links/a.enc', 'http://localhost:8787/v1/files/sign'),
+    );
 
+    expect(url.pathname).toBe(`${LOCAL_BLOB_PATH_PREFIX}users/u1/links/a.enc`);
+  });
+
+  // The origin is the CALLER'S, not a constant: `wrangler dev` binds 0.0.0.0, so a
+  // physical iPhone reaches the same Worker at the Mac's LAN IP and a URL naming
+  // `localhost` would send it back to the phone itself. Nothing else catches that —
+  // the whole suite, like the simulator, runs on loopback. See r2/local.ts.
+  it('echoes the origin the caller reached the Worker on', () => {
+    const url = new URL(
+      localBlobUrl('users/u1/links/a.enc', 'http://192.0.2.10:8787/v1/files/sign'),
+    );
+
+    expect(url.origin).toBe('http://192.0.2.10:8787');
     expect(url.pathname).toBe(`${LOCAL_BLOB_PATH_PREFIX}users/u1/links/a.enc`);
   });
 });

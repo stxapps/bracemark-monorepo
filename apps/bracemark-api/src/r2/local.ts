@@ -15,11 +15,6 @@ import type { Bindings } from '../lib/env';
 // Cloudflare account id.
 const LOCAL_R2_PLACEHOLDER_ACCOUNT = 'local-account-id';
 
-// Where the local Worker is reachable. wrangler dev pins port 8787 (wrangler.jsonc
-// `dev.port`), and bracemark-web hardcodes the API at this origin
-// (apps/bracemark-web/.env.development) — so it's also where the browser fetches blobs.
-const LOCAL_BLOB_ORIGIN = 'http://localhost:8787';
-
 // The URL path prefix the blob proxy serves under; the full namespaced R2 key
 // follows. Shared so the URL builder here and the route's path pattern
 // (routes/local-r2.ts) can't drift.
@@ -34,7 +29,26 @@ export function isLocalR2(env: Bindings | undefined): boolean {
 // instead of R2's S3 endpoint. Segments are percent-encoded individually so the
 // '/' key separators stay literal path separators (Hono decodes them back in the
 // route's `:key{.+}` param).
-export function localBlobUrl(key: string): string {
+//
+// ⚠ The origin is ECHOED FROM THE CALLER'S OWN REQUEST (`c.req.url`), never a
+// constant. `wrangler dev` binds 0.0.0.0 (wrangler.jsonc `dev.ip`), so ONE local
+// Worker answers on several origins at once — `http://localhost:8787` from this
+// Mac's browser and from an Android device via `adb reverse`, and
+// `http://<mac-lan-ip>:8787` from a physical iPhone, which has no way to be told
+// that localhost means the Mac (docs/device-testing.md, _the two ways in_).
+// A hardcoded `localhost` here is correct for every caller except that phone, and
+// on the phone it resolves to the PHONE: sync mints URLs happily, then every blob
+// PUT/GET fails with a connection refused that reads as "the api is down" — no
+// lint error, no type error, and every spec still passes, because the test runner
+// and the simulator are on loopback like everything else. Echoing the request
+// origin also keeps the Mac's LAN address in exactly ONE file, bracemark-expo's
+// gitignored `.env.development.local`, rather than needing a matching edit here.
+//
+// Trusting a caller-supplied Host would be host-header injection anywhere else;
+// here it is confined behind the isLocalR2 gate — the same gate that makes the
+// proxy an unauthenticated read/write of the whole bucket — so it never exists in
+// staging or production, where presigning names R2's endpoint and ignores this.
+export function localBlobUrl(key: string, requestUrl: string): string {
   const encoded = key.split('/').map(encodeURIComponent).join('/');
-  return `${LOCAL_BLOB_ORIGIN}${LOCAL_BLOB_PATH_PREFIX}${encoded}`;
+  return `${new URL(requestUrl).origin}${LOCAL_BLOB_PATH_PREFIX}${encoded}`;
 }

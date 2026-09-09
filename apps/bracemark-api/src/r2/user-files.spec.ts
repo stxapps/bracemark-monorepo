@@ -22,9 +22,20 @@ const signingEnv = {
   R2_USER_FILES_BUCKET: 'bracemark-user-files',
 } as Bindings;
 
+// Stands in for the incoming request's URL. Only the local-dev blob-proxy branch
+// reads it (r2/local.ts); on `signingEnv` the URL names R2's S3 endpoint instead,
+// so every expectation below is about the presign and not about this.
+const REQUEST_URL = 'https://api.example.com/v1/files/sign';
+
 describe('userFilesRepo.presignUrls', () => {
   it('signs each path under the caller’s own prefix', async () => {
-    const [signed] = await userFilesRepo(signingEnv).presignUrls('u1', ['links/a.enc'], 'PUT', 300);
+    const [signed] = await userFilesRepo(signingEnv).presignUrls(
+      'u1',
+      ['links/a.enc'],
+      'PUT',
+      300,
+      REQUEST_URL,
+    );
 
     expect(signed.path).toBe('links/a.enc'); // the wire path, unchanged
     const url = new URL(signed.url);
@@ -37,8 +48,8 @@ describe('userFilesRepo.presignUrls', () => {
   // two accounts can only ever resolve to two different objects.
   it('cannot be made to sign another account’s object', async () => {
     const repo = userFilesRepo(signingEnv);
-    const [mine] = await repo.presignUrls('u1', ['links/a.enc'], 'GET', 300);
-    const [theirs] = await repo.presignUrls('u2', ['links/a.enc'], 'GET', 300);
+    const [mine] = await repo.presignUrls('u1', ['links/a.enc'], 'GET', 300, REQUEST_URL);
+    const [theirs] = await repo.presignUrls('u2', ['links/a.enc'], 'GET', 300, REQUEST_URL);
 
     expect(new URL(mine.url).pathname).not.toBe(new URL(theirs.url).pathname);
     expect(new URL(theirs.url).pathname).toContain('/users/u2/');
@@ -56,7 +67,7 @@ describe('userFilesRepo.presignUrls', () => {
       const broken = { ...signingEnv, [missing]: '' } as Bindings;
 
       await expect(
-        userFilesRepo(broken).presignUrls('u1', ['links/a.enc'], 'PUT', 300),
+        userFilesRepo(broken).presignUrls('u1', ['links/a.enc'], 'PUT', 300, REQUEST_URL),
       ).rejects.toMatchObject({ status: 500, code: 'r2_unconfigured' });
     }
   });

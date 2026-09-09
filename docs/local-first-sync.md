@@ -168,9 +168,20 @@ The blob bytes themselves never touch the API — the client PUTs/GETs R2 direct
 over a `files/sign` URL. So `files/sign` is the **only** endpoint on the hot path
 of bulk data, and it's deliberately a thin envelope check (ownership + quota), not
 a content gateway. The signed URL is an **AWS SigV4 presign of R2's S3 endpoint**
-(`lib/r2-presign.ts`), because the Workers R2 _binding_ can read/write objects
+(`r2/presign.ts`), because the Workers R2 _binding_ can read/write objects
 from inside the Worker but can't mint a URL the browser can use directly; the S3
 access keys come from per-env secrets (`R2_*` in `wrangler.jsonc` / `lib/env.ts`).
+
+**Local dev is the one place the bytes do pass through the api.** miniflare's
+emulated R2 has no S3 endpoint to presign, so under `wrangler dev` `files/sign`
+returns URLs to an in-Worker blob proxy instead (`r2/local.ts` builds them,
+`routes/local-r2.ts` serves them), gated on the placeholder `R2_ACCOUNT_ID` that
+only the `development` env carries — staging and production presign R2 directly
+and the route 404s there. Those URLs take their **origin from the incoming
+request**, never a constant, because one `wrangler dev` answers on both
+`localhost:8787` and the Mac's LAN address at once; see
+[device-testing.md](./device-testing.md), _the LAN address is set in exactly one
+file_, for the failure a fixed origin produces on a physical phone.
 
 ### sync status: two fields, one phase (shared vocabulary)
 

@@ -105,18 +105,27 @@ export function userFilesRepo(env: Bindings) {
     // the caller's prefix here — so cross-user signing is structurally impossible
     // (the key can only resolve under `users/{userId}/`). Credentials are assembled
     // once for the whole batch; `method`/`expiresIn` are the caller's sync policy.
+    //
+    // `requestUrl` is the incoming request's own URL, and it is used ONLY by the
+    // local-dev branch below, which has to name an origin the caller can reach.
+    // It is required rather than defaulted precisely because the wrong default is
+    // invisible — see r2/local.ts.
     async presignUrls(
       userId: string,
       paths: string[],
       method: 'PUT' | 'GET',
       expiresIn: number,
+      requestUrl: string,
     ): Promise<SignedUrl[]> {
       // Local dev: miniflare's emulated R2 has no presignable S3 endpoint, so
       // mint URLs to the in-Worker blob proxy instead (r2/local.ts +
       // routes/local-r2.ts). No real R2 credentials needed — and `expiresIn` is
       // moot, the proxy doesn't enforce a TTL.
       if (isLocalR2(env)) {
-        return paths.map((path) => ({ path, url: localBlobUrl(userFileKey(userId, path)) }));
+        return paths.map((path) => ({
+          path,
+          url: localBlobUrl(userFileKey(userId, path), requestUrl),
+        }));
       }
 
       const creds = r2Credentials(env);

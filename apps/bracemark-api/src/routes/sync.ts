@@ -56,7 +56,10 @@ export const syncRoutes = new Hono<AppEnv>()
       // put: quota-checked at issuance, then short-lived PUT URLs. get: no quota,
       // longer-lived GET URLs minted in batch. signUserFileUrls namespaces every
       // path under the caller's prefix, so cross-user signing is structurally impossible.
-      const urls = await signUserFileUrls(c.env, userId, op, paths);
+      // `c.req.url` rides along for the local-dev blob proxy only, which mints URLs
+      // back to THIS Worker and so has to name the origin the caller just used —
+      // localhost from the Mac, the Mac's LAN IP from a physical iPhone (r2/local.ts).
+      const urls = await signUserFileUrls(c.env, userId, op, paths, c.req.url);
       const body: FilesSignResponse = { urls };
       return c.json(body);
     },

@@ -128,6 +128,30 @@ default to `0.0.0.0`, which is why a phone can load `:3000` and not `:8787`; bot
 `wrangler.jsonc` files set `"ip": "0.0.0.0"` in their `dev` block for this reason
 ([env-files.md](./env-files.md), _the local port map_).
 
+### the LAN address is set in exactly one file
+
+Because the Workers bind `0.0.0.0`, one local api answers on **several origins at
+once** — `http://localhost:8787` for the Mac's browser and for Android via
+`adb reverse`, `http://<lan-ip>:8787` for the iPhone. So a URL the api _mints_ for
+a client can't name a fixed origin: it has to echo whichever one that client just
+used. There is one such URL, the local blob proxy that stands in for R2 in dev
+(`apps/bracemark-api/src/r2/local.ts` — miniflare's emulated bucket has no
+presignable S3 endpoint, so `files/sign` hands out URLs back to the Worker itself).
+It builds its origin from the incoming request, which is what keeps the Mac's
+address out of the api entirely: **the only file that carries it is
+`apps/bracemark-expo/.env.development.local`**, the gitignored override in the
+table above.
+
+⚠ Hardcoding that origin instead is the silent failure this arrangement exists to
+prevent. It is right for every caller except the phone, and on the phone
+`http://localhost:8787` is the **phone**: `files/sign` returns 200 with URLs that
+look fine, and every blob upload and download then dies on a connection refused
+that reads as the api being down rather than as a wrong origin. No lint rule, no
+type error, and no test catches it — the vitest runner and the simulator are on
+loopback like everything else, so the hardcode is correct everywhere the suite
+looks. `routes/sync.spec.ts` now drives one `files/sign` at a non-loopback address
+for this reason alone.
+
 ### ⚠ one bundle, one set of origins — so it is a mode, not a mix
 
 Every frontend here bakes its origin vars in at **build** time — `NEXT_PUBLIC_*`
