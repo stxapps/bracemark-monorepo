@@ -138,12 +138,13 @@ to cover it isn't worth it.
 
 #### the local port map
 
-| dev server                              | port   | pinned in                                | consumed by                            |
-| --------------------------------------- | ------ | ---------------------------------------- | -------------------------------------- |
-| bracemark-web (`npm run dev`)           | `3000` | `apps/bracemark-web/package.json`        | site's `NEXT_PUBLIC_APP_URL`, api CORS |
-| bracemark-site (`npm run dev:site`)     | `3001` | `apps/bracemark-site/package.json`       | web + expo `*_SITE_URL`, api CORS      |
-| bracemark-extension (`npm run dev:ext`) | `3002` | `apps/bracemark-extension/wxt.config.ts` | nothing                                |
-| bracemark-api (`npm run dev`)           | `8787` | wrangler default                         | every frontend's `*_API_URL`           |
+| dev server                              | port   | pinned in                                 | consumed by                            |
+| --------------------------------------- | ------ | ----------------------------------------- | -------------------------------------- |
+| bracemark-web (`npm run dev`)           | `3000` | `apps/bracemark-web/package.json`         | site's `NEXT_PUBLIC_APP_URL`, api CORS |
+| bracemark-site (`npm run dev:site`)     | `3001` | `apps/bracemark-site/package.json`        | web + expo `*_SITE_URL`, api CORS      |
+| bracemark-extension (`npm run dev:ext`) | `3002` | `apps/bracemark-extension/wxt.config.ts`  | nothing                                |
+| bracemark-api (`npm run dev`)           | `8787` | `apps/bracemark-api/wrangler.jsonc`       | every frontend's `*_API_URL`           |
+| bracemark-extractor (`npm run dev`)     | `8788` | `apps/bracemark-extractor/wrangler.jsonc` | web's `NEXT_PUBLIC_EXTRACTOR_URL`      |
 
 **3000 and 3001 are contractual; 3002 is not.** The two Next ports are baked into
 `.env.development` files and into bracemark-api's dev `CORS_ORIGINS`, so moving
@@ -152,6 +153,17 @@ only — its pages load from `chrome-extension://` and its api calls are CORS-ex
 via `host_permissions`, so nothing references it. When a port clashes, **3002 is
 the one that moves.** (It started at 3001, which collided with `dev:site` — the
 one pairing that could not run side by side.)
+
+**The bind address is not uniform, and only one of the two defaults is
+reachable from another device.** Next binds `0.0.0.0`, so `localhost:3000` is
+also `<mac-lan-ip>:3000` with no flag. `wrangler dev` defaults to
+`--ip localhost` and binds loopback only, so the same phone that loads the web
+app gets a connection refused on `:8787` — a bind address presenting as a network
+fault. Both Worker configs therefore set `"ip": "0.0.0.0"` beside the pinned
+`port` in their top-level `dev` block; it is a dev-only field and never reaches a
+deployed env. The cost is real and bounded: while `npm run dev` is up, the local
+api and its local D1/R2 state answer anything on the current network, so it is
+worth knowing which network that is.
 
 The `nx start` / `serve-static` preview servers reuse 3000 and 3001, so run the
 preview or the dev server for a given app, not both — see
@@ -293,14 +305,20 @@ precedence over `.env.production`; `.env.staging` is committed as the single
 source of that URL to paste from. `.env.development` and `.env.production` are
 the two that work by auto-selection today.
 
-Files in `apps/bracemark-expo/` (committed except `.env.local`):
+Files in `apps/bracemark-expo/` (committed except the two `*.local`):
 
-| file               | used by                                        | loaded by   |
-| ------------------ | ---------------------------------------------- | ----------- |
-| `.env.development` | `npm run expo:start`, `npm run expo:prebuild`  | Expo (auto) |
-| `.env.production`  | release build / `expo export`                  | Expo (auto) |
-| `.env.staging`     | a staging build (var supplied inline)          | you         |
-| `.env.local`       | every mode — `APPLE_TEAM_ID` only (gitignored) | Expo (auto) |
+| file                     | used by                                        | loaded by   |
+| ------------------------ | ---------------------------------------------- | ----------- |
+| `.env.development`       | `npm run expo:start`, `npm run expo:prebuild`  | Expo (auto) |
+| `.env.production`        | release build / `expo export`                  | Expo (auto) |
+| `.env.staging`           | a staging build (var supplied inline)          | you         |
+| `.env.local`             | every mode — `APPLE_TEAM_ID` only (gitignored) | Expo (auto) |
+| `.env.development.local` | dev mode, per-machine overrides (gitignored)   | Expo (auto) |
+
+`@expo/env` resolves those in a fixed priority order — `.env.<mode>.local`,
+`.env.local`, `.env.<mode>`, `.env` — and the **first** file to define a key
+wins, so `.env.development.local` overrides `.env.development` and nothing
+overrides it but a var already exported in the shell.
 
 Current public vars:
 
@@ -314,6 +332,25 @@ Current public vars:
   origin: the pages a native app links out to (support, terms, privacy) live on
   the marketing site. (This var was `EXPO_PUBLIC_WEB_URL` and pointed at
   `app.*`, which was wrong — bracemark-web has no `/support` route.)
+
+**A physical phone is the one target `localhost` cannot serve, and
+`.env.development.local` is where that is fixed.** Both URLs above are
+`localhost` because one bundle has to serve the iOS simulator, which shares the
+host's loopback, and the Android emulator, which is taught the same by `adb
+reverse` (`npm run expo:android:reverse` — see [e2e.md](./e2e.md)). A real
+iPhone is a separate host: there is no `adb reverse` for iOS, so it has to
+address the Mac by LAN IP (`ipconfig getifaddr en0`) or by its Bonjour
+`<name>.local`, and the Worker has to be listening on more than loopback — see
+[_the local port map_](#the-local-port-map). Put the two rewritten URLs in the
+gitignored `.env.development.local` rather than editing the committed file: the
+IP is per-machine and per-network, and baking it in breaks the simulator, the
+emulator and the e2e runs for everyone. `EXPO_PUBLIC_*` is inlined by Metro at
+bundle time, so a change there needs `npm run expo:start -- --clear`, not a
+reload. The device also needs a dev build signed for its UDID
+(`npm run expo:ios -- --device`); Expo Go cannot load this app. The full
+device/app/environment matrix — including the secure-context rule that decides
+what `bracemark-web` can do from a phone — is
+[device-testing.md](./device-testing.md).
 
 Adding a new var = add the line to all three files, same deliberate symmetry as
 the other frontends.

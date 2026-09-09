@@ -815,7 +815,9 @@ installed on the phone for tap and query — which needs its own signing.
 Screenshots come through WDA, not simctl. Reserve it for what a simulator cannot
 do honestly: the real iOS share sheet from another app, StoreKit sandbox, push,
 real performance. See [share-sheet.md](./share-sheet.md) and
-[expo-build.md](./expo-build.md).
+[expo-build.md](./expo-build.md). What such a device can reach once it is
+running — and which apps work on which of the five devices — is
+[device-testing.md](./device-testing.md).
 
 #### the driver: Maestro, not Appium
 

@@ -40,7 +40,18 @@
   // even with distinct HTTP ports. Under `npm run dev` bracemark-api + bracemark-extractor
   // run side by side, so pin a distinct inspector_port per app too (9229/9230,
   // mirroring 8787/8788) to avoid "Address already in use (127.0.0.1:9229)".
+  //
+  // `ip` defaults to `localhost`, so wrangler binds 127.0.0.1/[::1] ONLY and is
+  // unreachable from another device on the LAN — while the Next dev servers bind
+  // `0.0.0.0` by default and are reachable, which makes the failure look like a
+  // network problem rather than a bind address ("the phone loads :3000 but not
+  // :8787"). A physical iOS device cannot be taught that localhost means the host
+  // the way `adb reverse` teaches the Android emulator, so the phone has to reach
+  // the Mac by LAN IP and this Worker has to be listening on it. Dev-only — it is
+  // in the top-level `dev` block, never in a deployed env — but it does mean the
+  // local api, with local D1/R2 state, answers anything on the current network.
   "dev": {
+    "ip": "0.0.0.0",
     "port": 8787,
     "inspector_port": 9229,
   },

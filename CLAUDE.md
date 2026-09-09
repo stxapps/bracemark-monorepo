@@ -93,6 +93,7 @@ that reading comes _before_ the edit; nothing downstream will tell you.
 | whole-flow e2e — `e2e/`, playwright, maestro, the contract runs                | `e2e.md`                        |
 | seeded dev accounts — a filled library, a paid plan, locally                   | `e2e.md`                        |
 | env vars, per app and per mode; where a credential goes instead                | `env-files.md` ⚠                |
+| **testing on a real phone/tablet** — what connects, secure contexts, HTTPS     | `device-testing.md` ⚠           |
 | **deploying a Worker; applying a D1 migration**                                | `hosting.md` ⚠                  |
 | which host each app answers, the CSP, `nx start` preview                       | `hosting.md`                    |
 | leaving an origin — cross-origin nav vs. the Next router                       | `hosting.md`                    |

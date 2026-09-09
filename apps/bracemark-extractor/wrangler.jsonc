@@ -66,7 +66,14 @@
   // V8 `inspector_port` (default 9229) is a SEPARATE socket not covered by
   // `port`, so pin a distinct one too — otherwise it collides with bracemark-api's
   // 9229 ("Address already in use (127.0.0.1:9229)").
+  //
+  // `ip` defaults to `localhost` — loopback only, so another device on the LAN
+  // (a phone loading bracemark-web off this Mac) gets a connection refused here
+  // while the Next dev server on 3000, which binds `0.0.0.0` by default, answers
+  // fine. Matches bracemark-api's dev block; dev-only, never a deployed env. See
+  // docs/env-files.md, _the local port map_.
   "dev": {
+    "ip": "0.0.0.0",
     "port": 8788,
     "inspector_port": 9230,
   },

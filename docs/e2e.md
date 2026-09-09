@@ -301,7 +301,9 @@ Four repo-specific gotchas:
   iOS simulator and the Android emulator both. Reversing the port teaches the
   emulator that localhost means the host; switching to `10.0.2.2` instead would
   fork the env per platform, which [env-files.md](./env-files.md) is shaped
-  specifically to avoid.
+  specifically to avoid. The same reversal is what lets a PHYSICAL Android device
+  run `bracemark-web` without a certificate —
+  [device-testing.md](./device-testing.md).
 - **Maestro's `PATH` entry is in `.zshenv`, not `.zshrc`.** `runner/lib.ts` falls
   back to `~/.maestro/bin/maestro` anyway, so a shell that lost it gets a working
   run instead of `ENOENT`.
