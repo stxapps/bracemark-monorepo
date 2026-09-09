@@ -82,7 +82,7 @@ export async function provisionAccount(
 // --- maestro ----------------------------------------------------------------
 
 // Maestro's PATH entry lives in `.zshenv`, not `.zshrc` — `.zshrc` is
-// interactive-only, so anything that shells out gets NOT FOUND (docs/testing.md).
+// interactive-only, so anything that shells out gets NOT FOUND (docs/app-drivers.md).
 // npm scripts usually inherit it correctly, but falling back to the known install
 // path turns a confusing ENOENT into a run that just works.
 function maestroBin(): string {

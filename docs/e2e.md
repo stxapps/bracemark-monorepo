@@ -129,7 +129,7 @@ what made the original root devDependency `playwright-core` rather than
 **The one sanctioned reason to fetch it deliberately is `bracemark-extension`.**
 Google Chrome will not load an unpacked extension from the command line and says
 nothing when it declines, so driving the popup needs Playwright's own Chromium
-(`npx playwright install chromium`) — see `docs/testing.md`, _driving
+(`npx playwright install chromium`) — see `docs/app-drivers.md`, _driving
 bracemark-web_, and the extension section of `.claude/skills/verify/SKILL.md`.
 
 **Exactly one thing in `e2e/` uses it**, and it is not a spec: `seed/shot/extension.ts`,
@@ -263,7 +263,7 @@ intercepting taps, and `appId` deciding what is addressable).
 
 ### driving the native apps
 
-Maestro, for the reasons in [testing.md](./testing.md) (_the driver: Maestro, not
+Maestro, for the reasons in [app-drivers.md](./app-drivers.md) (_the driver: Maestro, not
 Appium_) — one YAML flow across the iOS simulator, the Android emulator and a real
 device, no server, no session to hold, and `maestro hierarchy` as a text dump of
 the view tree.

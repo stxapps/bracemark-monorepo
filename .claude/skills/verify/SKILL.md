@@ -109,7 +109,7 @@ actually settles the question:
   (`InitialSyncGate`'s "Decrypting your links…") don't cover the frames you want.
 
 - Why this and not a browser test target, when to reach for claude-in-chrome
-  instead, and how the native apps get driven: `docs/testing.md`.
+  instead, and how the native apps get driven: `docs/app-drivers.md`.
 
 - Flows that worked headless: create account at `/create-account`
   (Username/Password labels, button /create/i — Argon2 makes this take a few
@@ -350,4 +350,4 @@ this watch 1 time, most recently because: MustScanSubDirs`. With the watch
 - `apps/bracemark-expo/ios/` and `android/` are generated and gitignored — never
   hand-edit them to make a run work. → `docs/expo-build.md`
 - Why Maestro and not Appium/Detox, what a real device buys, and the AVD's
-  config: `docs/testing.md`, _driving the native apps_.
+  config: `docs/app-drivers.md`, _driving the native apps_.

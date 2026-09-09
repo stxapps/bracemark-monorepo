@@ -9,8 +9,8 @@ a build. Everything below is about the local tier.
 The neighbours: [env-files.md](./env-files.md) owns the per-app env files and the
 local port map, [hosting.md](./hosting.md) owns the deployed origins,
 [e2e.md](./e2e.md) owns the scripted runs and the `adb reverse` the Android
-emulator needs, and [testing.md](./testing.md) owns why you'd drive a real device
-at all rather than a simulator. This doc is the one that answers "I have five
+emulator needs, and [app-drivers.md](./app-drivers.md) owns why you'd drive a real
+device at all rather than a simulator, and what drives it once you do. This doc is the one that answers "I have five
 devices on my wifi — what works?"
 
 ### the devices

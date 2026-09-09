@@ -223,7 +223,7 @@ Three things follow, and the last two are the ones that bite:
 - **Headless Chrome cannot answer this question.** The same page in headless
   reports 200 for the overflowing/`auto` row where headed reports 185 — it renders
   a zero-width scrollbar while still honouring `scrollbar-gutter`. Measure scrollbar
-  behaviour headed (`headless: false`, see `docs/testing.md`), or not at all.
+  behaviour headed (`headless: false`, see `docs/app-drivers.md`), or not at all.
 
 **Hiding the scrollbar was considered and rejected.** Since `scrollbar-width: none`
 cancels the gutter, it is the cheaper stabiliser — constant width at 0px on every

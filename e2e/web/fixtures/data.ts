@@ -12,7 +12,7 @@ import { randomBytes } from 'node:crypto';
 // Namespace anything a spec creates. Tests in a worker share an account, so two
 // specs both adding a list called "Reading" would each pass alone and collide in a
 // full run — the same shape of failure Maestro's `launchApp`-resumes gotcha
-// produces on the native side (docs/testing.md).
+// produces on the native side (docs/app-drivers.md).
 export function unique(prefix: string): string {
   return `${prefix}-${randomBytes(4).toString('hex')}`;
 }

@@ -5,7 +5,7 @@
 #   USERNAME, PASSWORD
 #
 # The wiped cold start is not optional. `launchApp` RESUMES an app rather than
-# cold-starting it (docs/testing.md, "verified against Xcode 26"), so a flow that
+# cold-starting it (docs/app-drivers.md, "verified against Xcode 26"), so a flow that
 # assumes it begins at the landing screen passes alone and fails in a directory
 # run, because the previous flow left the app deep in a navigation stack. That
 # failure looks exactly like the batch-mode driver bug and is not one. It goes
