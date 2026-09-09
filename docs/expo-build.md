@@ -34,20 +34,65 @@ scripts** in
 | `ios`             | `expo run:ios`                       | quick simulator run without opening Xcode            |
 | `ios:open`        | `simctl openurl` on the same link    | ” — the simulator twin                               |
 
-Run them either way — `npm run <script>` from `apps/bracemark-expo`, or
-`npx nx <target> @stxapps/bracemark-expo` from the root (nx delegates to the
-script). Root aliases the ones the native e2e legs need — `expo:ios`,
-`expo:ios:open`, `expo:android`, `expo:android:reverse`, `expo:android:open` —
-under an `expo:` prefix rather than the `dev:` one `dev:ext`/`dev:site` use: those
-start a server in seconds, where `expo:ios` is a multi-minute native build and
-install, and one prefix for both would hide that. The root spelling names the
-platform even where the app-level script could not be anything else
-(`adb reverse` is Android by construction), because at the root the five sit in
-one list and `expo:reverse` next to `expo:ios` read as if it applied to both.
-Metro on its own gets no root alias — it is `npx nx start @stxapps/bracemark-expo`,
-and in practice `expo:ios`/`expo:android` already leave it running. Extra flags
-pass straight through: `npm start -- --clear`,
-`npm run prebuild -- --platform ios`.
+Run them either way — `npm run <script>` from `apps/bracemark-expo`, or the
+root alias, one per script, under an `expo:` prefix rather than the `dev:` one
+`dev:ext`/`dev:site` use: those start a server in seconds, where `expo:ios` is a
+multi-minute native build and install, and one prefix for both would hide that.
+The root spelling names the platform even where the app-level script could not be
+anything else (`adb reverse` is Android by construction), because at the root
+they sit in one list and `expo:reverse` next to `expo:ios` would read as if it
+applied to both. Extra flags pass straight through at either level:
+`npm start -- --clear`, `npm run expo:prebuild -- --platform ios`.
+
+**The root aliases go through `npm run -w`, NOT `nx` — and that is the one place
+in this workspace where bypassing nx is the point.** `"expo:start": "npm run
+start -w @stxapps/bracemark-expo --"`, and the same shape for the other six. The
+tempting spelling is `nx start @stxapps/bracemark-expo`, and it half-works in the
+way that costs the most time to diagnose: Metro boots, the port is right, the app
+connects — and **there is no QR code and no key menu**, just
+`Waiting on http://localhost:8081`. Nothing errors, so it reads as a broken
+install rather than a wrapper artifact.
+
+The gate is one line in the Expo CLI — `isInteractive()` is
+`!env.CI && process.stdout.isTTY` ([`@expo/cli`,
+`src/utils/interactive.ts`](https://github.com/expo/expo/blob/main/packages/%40expo/cli/src/utils/interactive.ts)) —
+and everything interactive hangs off it: the QR code, `i`/`a`/`r`/`j`/`w`, the
+`s` toggle. Nx runs a task's executor in a **forked** process whose stdout is a
+pipe, so `isTTY` is false inside it however you invoke nx from the outside; the
+`nx:run-script` executor then checks `PseudoTerminal.isSupported()` — itself
+`process.stdout.isTTY && supportedPtyPlatform()` — sees false, and takes its
+`nodeProcess` branch, which `spawn`s the script and pipes stdout. Expo sees a
+pipe and prints the CI-shaped output. Attaching a real pty to the outer `nx`
+does not help, because the check that matters happens a process later.
+
+**Two workspace settings each independently force that path, and both are
+deliberate**, which is why this is worth fixing at the alias rather than at nx:
+
+- **`NX_NATIVE_COMMAND_RUNNER=false`**, committed in the workspace-root `.env`
+  to stop the Rust pty from sizing itself independently of your terminal (jest,
+  next and wrangler wrap at the wrong column when it does; `FORCE_COLOR=1` sits
+  beside it to buy the color back). It makes `runTaskInForkedProcess` choose
+  `forkProcessLegacy`, which pipes. **This applies to every nx task in the
+  workspace** — nothing run through nx here is interactive.
+- **`tui.enabled: false`** in `nx.json`, via
+  `disablePseudoTerminal = !tuiEnabled && (!initiatingProject || task.continuous)`.
+  `start` is `continuous`, so this is true regardless of the initiating project.
+
+Either alone is sufficient: running `NX_NATIVE_COMMAND_RUNNER=true npx nx start
+@stxapps/bracemark-expo` under a real pty still prints `Waiting on …` and no QR,
+because the second condition still holds. Only turning the TUI on as well would
+restore a pty — at the cost of every other task in the workspace rendering in
+panes, and of the terminal-width bug the first setting exists to avoid.
+
+It costs nothing here. These seven targets are `continuous` or fire-and-forget,
+none is cached, none has `dependsOn`, and each is already a thin passthrough to a
+real npm script — so nx contributes nothing but the lost TTY. **This is the
+exception to the workspace's "run tasks through nx" rule, and it is limited to
+`expo:*`.** `nx start @stxapps/bracemark-expo` still exists and still works for
+anything that doesn't need the terminal UI (a Debug run from Xcode never does);
+it is just not what the root alias should call. The same reasoning applies
+beyond Metro — under nx, `expo run:ios`/`run:android` lose their build spinners
+and leave a Metro with no `r`.
 
 **`android:reverse` is a separate script, NOT chained onto `android`.** The
 tempting spelling is `expo run:android && adb reverse …`, and it silently never

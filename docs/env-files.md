@@ -277,10 +277,10 @@ start` is `development`, `expo export` / a release build is `production`. Expo h
 **no `--mode` flag** — it only ever auto-selects `development` or `production` by
 `NODE_ENV`:
 
-| command                                         | mode          | env file           |
-| ----------------------------------------------- | ------------- | ------------------ |
-| `nx dev @stxapps/bracemark-expo` (`expo start`) | `development` | `.env.development` |
-| release build / `expo export`                   | `production`  | `.env.production`  |
+| command                             | mode          | env file           |
+| ----------------------------------- | ------------- | ------------------ |
+| `npm run expo:start` (`expo start`) | `development` | `.env.development` |
+| release build / `expo export`       | `production`  | `.env.production`  |
 
 `staging` is the same wrinkle it is for bracemark-web: a staging build is a
 _production-mode_ build (`NODE_ENV=production`), so Expo won't pick `.env.staging`
@@ -295,12 +295,12 @@ the two that work by auto-selection today.
 
 Files in `apps/bracemark-expo/` (committed except `.env.local`):
 
-| file               | used by                                           | loaded by   |
-| ------------------ | ------------------------------------------------- | ----------- |
-| `.env.development` | `nx dev @stxapps/bracemark-expo`, `expo prebuild` | Expo (auto) |
-| `.env.production`  | release build / `expo export`                     | Expo (auto) |
-| `.env.staging`     | a staging build (var supplied inline)             | you         |
-| `.env.local`       | every mode — `APPLE_TEAM_ID` only (gitignored)    | Expo (auto) |
+| file               | used by                                        | loaded by   |
+| ------------------ | ---------------------------------------------- | ----------- |
+| `.env.development` | `npm run expo:start`, `npm run expo:prebuild`  | Expo (auto) |
+| `.env.production`  | release build / `expo export`                  | Expo (auto) |
+| `.env.staging`     | a staging build (var supplied inline)          | you         |
+| `.env.local`       | every mode — `APPLE_TEAM_ID` only (gitignored) | Expo (auto) |
 
 Current public vars:
 
@@ -317,6 +317,33 @@ Current public vars:
 
 Adding a new var = add the line to all three files, same deliberate symmetry as
 the other frontends.
+
+**The `expo:*` root scripts call `npm run -w`, not `nx` — which also keeps this
+the only loader.** The visible reason is the terminal UI
+([expo-build.md](./expo-build.md), _the npm scripts_: under nx there is no QR
+code and no key menu). The env-shaped reason is that **nx is itself a dotenv
+loader**, and a different one from Expo. `loadDotEnvFilesForTask` reads, for a
+task named `start` on this project, `apps/bracemark-expo/.env.start.local`,
+`.env.start`, `.env.local`, `.env` — **and then the same variants at the
+workspace root**. So `nx start @stxapps/bracemark-expo` folded the root `.env`
+and `.env.local` into the Expo process, which `expo start` on its own never
+reads: it resolves `.env*` against the project root only. Both loaders skip a
+var already present, so nx's values would win.
+
+Today that is benign — the root files hold `NX_NATIVE_COMMAND_RUNNER`,
+`FORCE_COLOR` and the four `CLOUDFRONT_DISTRIBUTION_ID_*` ids, none of which
+Expo or the bundle looks at, and no name collides. The hazard is the shape, not
+the current contents: a var added to the root `.env` for some other project
+would silently enter the Expo build through the nx path and not through the
+direct one, so the two spellings of "start Metro" would bundle different values
+with nothing to flag it. Going through `npm run -w` leaves `@expo/env` as the
+only thing that reads a `.env` for this app, which is the model the rest of this
+document assumes.
+
+The visible tell, if you ever need it: `expo start` logs the files it loaded and
+the vars it exported. Under nx the export line is missing `APPLE_TEAM_ID` —
+because nx had already put it in `process.env` from
+`apps/bracemark-expo/.env.local`, so Expo found it set and said nothing.
 
 **The only non-`EXPO_PUBLIC_` var is `APPLE_TEAM_ID`**, read at
 config-evaluation time by `expo prebuild` rather than at runtime. It is an
