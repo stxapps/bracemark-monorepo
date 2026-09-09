@@ -23,6 +23,14 @@ One RN share screen, written once, hosted by two very different native shells:
   handed to the root as launch options in `onCreate`, so it can't get lost the
   way expo-share-intent's route-into-the-sleeping-main-activity flow lost it.
 
+**Both shells are labelled "Bracemark"**, and only one of them for free.
+Android's `ShareActivity` declares no `android:label`, so it inherits the app's;
+iOS shows the extension bundle's `CFBundleDisplayName`, which
+`expo-share-extension` hardcodes to `"$(PRODUCT_NAME) Share Extension"` —
+"BracemarkShareExtension Share Extension" under the icon, in front of the user,
+until a local config plugin overwrites it with the app's own.
+→ [expo-build.md](./expo-build.md), _ios share extension build settings_.
+
 The process split is the load-bearing difference, and everything below follows
 from it:
 

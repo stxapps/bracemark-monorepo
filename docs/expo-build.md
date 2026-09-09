@@ -246,24 +246,56 @@ Two gotchas if you touch this:
 - **A config change needs `npx expo prebuild`** to reach the native projects,
   like any config-plugin change.
 
+#### versions — one key, three consumers ⚠
+
+`app.config.ts` carries **one** version string, the top-level `version`, and the
+per-platform `ios.version` / `android.version` overrides are deliberately absent.
+The scaffold sets all three, which is the trap: they are read by different
+things and disagreeing costs nothing until late.
+
+| reads                                                        | takes                         |
+| ------------------------------------------------------------ | ----------------------------- |
+| the app's `Info.plist` / `versionName`                       | `ios.version`, else `version` |
+| `expo-share-extension` → the extension's `MARKETING_VERSION` | `version` only, always        |
+| `expo-constants` → Settings → **About**                      | `version` only, always        |
+
+Scaffolded, this repo had `version: '0.0.0'` with `1.0.0` on both platform
+blocks, so all three disagreed at once and **nothing local said so**: the app
+bundle shipped `1.0.0`, the iOS share extension shipped
+`CFBundleShortVersionString 0.0.0`, and the About screen read `0.0.0 (1)` to the
+user. The extension mismatch is the expensive one — the first thing that reports
+it is App Store validation rejecting the upload, because every bundle inside an
+app has to carry the containing app's version.
+
+So: **bump `version`, and nothing else.** `ios.buildNumber` and
+`android.versionCode` stay per-platform because they are genuinely different
+concepts (a string iOS increments per upload, an integer Play orders builds by),
+and About prints whichever the running platform has. Belt and braces:
+`plugins/with-share-extension-build-settings.js` copies the app target's shipped
+version onto the extension regardless, so re-adding `ios.version` can't
+resurrect the mismatch — see below.
+
 #### ios share extension build settings ⚠
 
-**The `BracemarkShareExtension` target is born missing two build settings that
-are correct on the app target**, and nothing downstream reports either one:
-prebuild succeeds, the config is valid, and no lint, type or test reads a
-pbxproj. `expo-share-extension` creates the target from a hardcoded
-build-settings map (`plugin/build/xcode/addToXCConfigurationList.js`), and both
-gaps come from there:
+**The `BracemarkShareExtension` target is born with four values wrong that are
+right on the app target**, and nothing downstream reports any of them: prebuild
+succeeds, the config is valid, and no lint, type or test reads a pbxproj or a
+plist. `expo-share-extension` creates the target from a hardcoded build-settings
+map (`plugin/build/xcode/addToXCConfigurationList.js`) and a hardcoded
+`Info.plist` (`plugin/build/withShareExtensionInfoPlist.js`), and all four gaps
+come from those two files:
 
-| setting                      | app target      | share extension, unfixed | symptom                                              |
-| ---------------------------- | --------------- | ------------------------ | ---------------------------------------------------- |
-| `DEVELOPMENT_TEAM`           | `APPLE_TEAM_ID` | absent                   | empty **Team** in Signing & Capabilities             |
-| `IPHONEOS_DEPLOYMENT_TARGET` | `18.0`          | literal `15.1`           | Pods built for a newer iOS than the target links for |
+| value                                          | app target      | share extension, unfixed          | symptom                                                       |
+| ---------------------------------------------- | --------------- | --------------------------------- | ------------------------------------------------------------- |
+| `DEVELOPMENT_TEAM`                             | `APPLE_TEAM_ID` | absent                            | empty **Team** in Signing & Capabilities                      |
+| `IPHONEOS_DEPLOYMENT_TARGET`                   | `18.0`          | literal `15.1`                    | Pods built for a newer iOS than the target links for          |
+| `MARKETING_VERSION`, `CURRENT_PROJECT_VERSION` | `ios.version`   | top-level `version`               | App Store rejects the upload on a version the app won't share |
+| `CFBundleDisplayName` (plist)                  | `Bracemark`     | `$(PRODUCT_NAME) Share Extension` | "BracemarkShareExtension Share Extension" in the share sheet  |
 
-The local `plugins/with-share-extension-build-settings.js` supplies both; the
-file carries the full reasoning, so this is the short version.
+The local `plugins/with-share-extension-build-settings.js` supplies all four;
+the file carries the full reasoning, so this is the short version.
 
-**The two have different causes, and only one is about order.**
+**They have different causes, and only one is about order.**
 
 - **`DEVELOPMENT_TEAM` — order.** Core config-plugins' `withDevelopmentTeam`
   does walk _every_ native target, but it runs before this one exists. `withMod`
@@ -279,6 +311,16 @@ file carries the full reasoning, so this is the short version.
   target is skipped **by design** and would still be skipped if it ran last.
   Meanwhile `ios.deploymentTarget` also lands in `Podfile.properties.json`, so
   every Pod _is_ built at 18.0.
+- **The versions — a second config key.** The extension's plist takes
+  `CFBundleShortVersionString` from `$(MARKETING_VERSION)`, which
+  `expo-share-extension` seeds from the **top-level** `config.version`, while the
+  app's plist is written from `ios.version`. Nothing is skipped or mistimed; the
+  two targets simply read different keys. → _versions_, above.
+- **The display name — a hardcoded string.** `"$(PRODUCT_NAME) Share Extension"`,
+  and `PRODUCT_NAME` is the target name, so it resolves to "BracemarkShareExtension
+  Share Extension" — the label under the icon in the **iOS share sheet**, which
+  the Android half of the feature renders as plain "Bracemark" (its
+  `ShareActivity` carries no `android:label`, so it inherits the app's).
 
 The consequence worth remembering: **reordering `plugins` fixes neither.** Nor
 does fixing it in Xcode — `ios/` is CNG output, so a hand-picked team or a
@@ -303,16 +345,25 @@ signing half, and still leaves a local plugin entry to explain. Expo offers no
 knob to re-time its own registration; `finalized` is the supported way to say
 "after everything".
 
-**The deployment target is copied from the app target, not restated.** So the
-`expo-build-properties` value in `app.config.ts` stays the only place the number
-lives, and a bump can't leave the extension behind. The project-level build
+**Everything is copied from the app target, not restated.** The deployment
+target from its build settings; the versions and the display name from the
+`Info.plist` it actually ships, which is the post-resolution truth — every
+earlier mod has had its say by `finalized`. So `app.config.ts` stays the only
+place any of these live, and a bump can't leave the extension behind. The
+versions are written to **every** target, the app included: on the app target
+they change nothing that ships (its plist carries literals), but the scaffold
+leaves `MARKETING_VERSION = 1.0` there forever and Xcode's target → General →
+Identity reads the build setting rather than the plist — so the app target
+displays a version it does not ship until they are aligned. The project-level build
 configurations keep the template's `15.1` and that is deliberate: target-level
 settings win, and upstream leaves the project level alone for the app target
 too.
 
 The plugin then asserts, for every `PBXNativeTarget` × build configuration, that
-`DEVELOPMENT_TEAM` is present and `IPHONEOS_DEPLOYMENT_TARGET` matches the app
-target's — throwing a loud prebuild failure in place of a silent empty dropdown.
+`DEVELOPMENT_TEAM` is present, that `IPHONEOS_DEPLOYMENT_TARGET` matches the app
+target's, and that the target's plist — with its `$(BUILD_SETTING)` references
+resolved, which is what actually ships — carries the app's version, build and
+display name. A loud prebuild failure in place of a silent empty dropdown.
 The assertions pass unchanged if either problem is fixed upstream, since the
 writes are idempotent; what they catch is a write that missed a target.
 
@@ -509,8 +560,9 @@ knowing about because neither is signing and both fail confusingly:
 - **`android.versionCode` must be ≥ 1.** It was `0`, and that is not just a
   Play-upload rule — **AGP rejects it at configuration time** (_"versionCode is
   set to 0, but it should be a positive integer"_), failing every Android build
-  of every variant. The version _string_ stays `0.0.0`; only the code matters to
-  the build.
+  of every variant. The version _string_ is a different key (`version`, see
+  _versions_ above) and irrelevant to this failure; only the code matters to the
+  build.
 - **The two hand-written native modules called `useManagedAndroidSdkVersions()`**
   (`apps/bracemark-expo/modules/bracemark-share/android/build.gradle` and
   `packages/expo-crypto/android/build.gradle`), which `expo-modules-core@3.0.30`

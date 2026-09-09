@@ -89,7 +89,13 @@ Flag notes:
   real jest 30 deterministically (every project, including bracemark-expo with the
   jest-expo _preset_, runs fine on it; only the _bin_ is the trap).
 
-###### build
+###### build — superseded, kept as the record
+
+This was the manual procedure, and **none of it is a step any more**: config
+plugins now write every one of these values at prebuild, and `ios/` is CNG
+output, so typing them into Xcode buys a fix that dies at the next `--clean`
+with a clean working tree throughout. Reproduced because it is the only record
+of what the values were:
 
 - (generate a keystore for uploading)
 - npm run prebuild
@@ -99,6 +105,20 @@ Flag notes:
   - targets: SavetoBracemark, on General: update Version, Miminum iOS, Display Name: Save to Bracemark
 - cd android
   - ./gradlew bundleRelease
+
+What replaced each, all in [expo-build.md](./expo-build.md): the keystore and
+its four Gradle properties by `plugins/with-android-signing.js` (_android
+release signing_); the team, the minimum iOS, both versions and the display
+name by `plugins/with-share-extension-build-settings.js` (_ios share extension
+build settings_), which copies them from the app target so `app.config.ts` is
+the only place they live (_versions_). Two of the values above did not survive
+the move, deliberately: the share extension target is `BracemarkShareExtension`
+and its display name is now **Bracemark**, matching the app and matching
+Android's `ShareActivity`, which inherits the app label
+([share-sheet.md](./share-sheet.md) — _the shape_). **App Category** is the one
+thing still unset and that is not an omission: `LSApplicationCategoryType`
+is a macOS-surfacing key, the iOS store category is App Store Connect metadata,
+and Expo has no config key for it.
 
 #### bracemark-site (the marketing apex)
 

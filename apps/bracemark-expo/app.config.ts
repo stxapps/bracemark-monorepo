@@ -19,7 +19,18 @@ import type { ExpoConfig } from 'expo/config';
 const config: ExpoConfig = {
   name: 'Bracemark',
   slug: 'bracemark',
-  version: '0.0.0',
+  // ONE version string, and it has to be this key rather than `ios.version` /
+  // `android.version`: `expo-share-extension` reads the top-level `config.version`
+  // for the share extension target's MARKETING_VERSION, `expo-constants` hands
+  // that same value to Settings → About, and only the app target takes
+  // `ios.version`. Scaffolded as 0.0.0 here with 1.0.0 on both platform blocks,
+  // the three disagreed SILENTLY: the app bundle said 1.0.0, the iOS share
+  // extension shipped CFBundleShortVersionString 0.0.0 — which App Store
+  // validation rejects at upload, the first place it is reported — and About
+  // read "0.0.0 (1)" to the user. The platform overrides are gone so there is
+  // one number to bump. `buildNumber`/`versionCode` stay per-platform because
+  // they are genuinely different concepts. → docs/expo-build.md, _versions_.
+  version: '1.0.0',
   orientation: 'portrait',
   icon: './assets/images/icon.png',
   scheme: 'bracemark',
@@ -34,7 +45,6 @@ const config: ExpoConfig = {
     supportsTablet: false,
     bundleIdentifier: 'com.bracemark.app',
     appleTeamId: process.env.APPLE_TEAM_ID,
-    version: '0.0.0',
     buildNumber: '1',
   },
   android: {
@@ -45,7 +55,6 @@ const config: ExpoConfig = {
     edgeToEdgeEnabled: true,
     package: 'com.bracemark.app',
     versionCode: 1,
-    version: '0.0.0',
   },
   web: {
     bundler: 'metro',
