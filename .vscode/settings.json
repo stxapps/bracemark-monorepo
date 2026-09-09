@@ -3,6 +3,23 @@
   "files.associations": {
     "*.css": "tailwindcss"
   },
+  // Tailwind IntelliSense's `suggestCanonicalClasses` (on by default since 0.14)
+  // reports an arbitrary value that computes to a theme value as rewritable — here
+  // "`rounded-[6px]` can be written as `rounded-sm`". Two patterns trigger it in
+  // this tree and both are deliberate, ~42 sites:
+  //   - `rounded-[6px]` (checkbox, both kits). NOT the same commitment as
+  //     `rounded-sm`: that one rides `--radius` (`calc(var(--radius) - 4px)` off a
+  //     0.625rem base), and docs/theme.md, _the radius scale_, turns on the classes
+  //     being the shape system while `--radius` moves only registry leftovers. Equal
+  //     at 6px today, divergent the moment `--radius` moves — and that checkbox
+  //     radius is one of the values that drifted between the two kits for months.
+  //   - `ring-[3px]` (every focus ring). Identical CSS to `ring-3`, but it comes
+  //     from the shadcn registry verbatim; rewriting would diverge the copies from
+  //     upstream for nothing.
+  // The extension has no per-line suppression (no disable-next-line of any kind),
+  // so it is all 42 warnings or none. None are actionable, and a permanently noisy
+  // rule is what teaches you to ignore the Tailwind warnings that aren't.
+  "tailwindCSS.lint.suggestCanonicalClasses": "ignore",
   // Nothing in the editor needs Gradle to run: apps/bracemark-expo/android/ is
   // generated and gitignored, and every real Android build goes through the CLI
   // (`npm run -w @stxapps/bracemark-expo android`, prebuild, EAS). The failures
