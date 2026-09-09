@@ -27,12 +27,13 @@ writing `autoFocus`. Neighbours:
 Two mechanisms exist, and **the presentation container decides which, not the
 feature**:
 
-| surface                                                       | mechanism                                                               | examples                                    |
-| ------------------------------------------------------------- | ----------------------------------------------------------------------- | ------------------------------------------- |
-| regular expo-router screen                                    | keyboard-controller `KeyboardAwareScrollView` in the screen wrapper     | `auth-screen.tsx`, `settings/[section].tsx` |
-| portaled overlay content (`Dialog`)                           | keyboard-controller `KeyboardAvoidingView` in the CONTAINER             | `ui/dialog.tsx`'s `DialogOverlay`           |
-| RN `Modal`                                                    | keyboard-controller `KeyboardAvoidingView` — the lib handles the window | AdvancedSearch (`links/search-bar.tsx`)     |
-| share sheet (iOS extension process / Android `ShareActivity`) | plain `KeyboardAvoidingView` — keyboard-controller cannot work here     | `share/share-screen.tsx` `Sheet`            |
+| surface                                                       | mechanism                                                                      | examples                                            |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------ | --------------------------------------------------- |
+| regular expo-router screen                                    | keyboard-controller `KeyboardAwareScrollView` in the screen wrapper            | `auth-screen.tsx`, `settings/[section].tsx`         |
+| portaled overlay content (`Dialog`)                           | keyboard-controller `KeyboardAvoidingView` in the CONTAINER                    | `ui/dialog.tsx`'s `DialogOverlay`                   |
+| RN `Modal`                                                    | keyboard-controller `KeyboardAvoidingView` — the lib handles the window        | AdvancedSearch (`links/search-bar.tsx`)             |
+| share sheet (iOS extension process / Android `ShareActivity`) | plain `KeyboardAvoidingView` — keyboard-controller cannot work here            | `share/share-screen.tsx` `Sheet`                    |
+| iOS `formSheet` sized to its contents                         | **the sheet itself** — UIKit lifts it onto the keyboard; nothing in the screen | `/add-link` (`links/link-add-screen.tsx`), iOS only |
 
 - **The default is react-native-keyboard-controller.** Its `KeyboardProvider`
   mounts once at the root (`src/app/_layout.tsx`) and feeds
@@ -161,11 +162,60 @@ behavior="padding"` around the centring box in `DialogOverlay` — the container
   [share-sheet.md](./share-sheet.md), _what an app-extension process breaks in
   React Native itself_.
 - **For a new surface, decide the presentation first; the keyboard answer
-  follows.** A future link-add/link-edit built as a router screen inherits the
-  keyboard-controller path for free; built as a page-sheet `Modal` (like
-  AdvancedSearch), it carries its own keyboard-controller `KeyboardAvoidingView`
-  — and must copy the `keyboardVerticalOffset` measurement above with it, or
-  inherit the under-lift (invisible until its body is tall enough to scroll).
+  follows.** A router screen inherits the keyboard-controller path for free; a
+  page-sheet `Modal` (like AdvancedSearch) carries its own keyboard-controller
+  `KeyboardAvoidingView` — and must copy the `keyboardVerticalOffset`
+  measurement above with it, or inherit the under-lift (invisible until its body
+  is tall enough to scroll); a **form sheet sized to its contents** answers the
+  keyboard by itself and forbids the scroller the first answer is built on, the
+  next section.
+
+### the form sheet — the surface that answers the keyboard itself
+
+`/add-link` is presented on **iOS** as a `formSheet` sized to its own contents
+(`sheetAllowedDetents: 'fitToContents'`, `(app)/_layout.tsx`), because its
+collapsed body is one field and two buttons and a pageSheet spent two thirds of
+the screen on nothing. That one option decides all three mechanisms for the
+screen inside it. Read this before putting a scroller in that screen, and before
+giving a second surface the same presentation.
+
+- **The SHEET avoids, and nothing in the screen may.** UIKit lifts a form sheet
+  onto the top of the keyboard: measured on an iPhone 17 Pro, the collapsed form
+  (244pt of content) sits with its Save row exactly on a 308pt keyboard, with no
+  lift arithmetic anywhere in the tree. It can only do that while the sheet still
+  FITS above the keyboard — open the optional section (~538pt of content against
+  the 566pt the keyboard leaves) and the sheet clamps to its maximum detent with
+  the footer behind the keys instead. Hence the `Keyboard.dismiss()` on the
+  disclosure toggle: the tap that opens that section is the tap that leaves the
+  URL field, and dismissing there is what keeps the grown sheet whole.
+- **No ScrollView may appear in it.** react-native-screens hunts for a descendant
+  scroll view in a form sheet and forces its frame to the sheet's own
+  (`RNSScreen.mm` — `correctScrollViewFrame:`, `coerceChildScrollViewComponentSizeToSize:`,
+  which also warns that the content wrapper may hold at most a header and that
+  scroller). With the sheet sized FROM the content, that is circular, and it was
+  driven twice: the form painted CLIPPED at a stale frame — the accessibility
+  tree had every field at its right bounds while the screen showed white below
+  the third one, so the a11y tree is no help here — and the sheet INFLATED past
+  its content whatever height the scroller was given, a hard `height: 300`
+  included. There is no spelling that works. The body is a plain view, so
+  everything the scroller used to provide has to be re-provided (_dismissal_
+  below), and a form that outgrows the maximum detent now clips rather than
+  scrolls.
+- **Android does not get one, and that is not symmetry left undone.** The same
+  two props on the emulator produce a sheet that VANISHES the moment the keyboard
+  is up — the dimmed list, the keyboard, and nothing between them — on both entry
+  paths (the URL field's `autoFocus`, and a later tap into the field). It is
+  RNS's own code, not the tree: `SheetDelegate.kt`'s `KeyboardVisible` branch
+  never sizes a ONE-detent sheet, and its `KeyboardDidHide` branch re-derives the
+  height as `detents.first() * containerHeight`, where `fitToContents` puts a
+  sentinel rather than a fraction in `first()`. Both live in the count-of-1 path,
+  so a two-detent sheet is the only shape with a keyboard story there. `/add-link`
+  keeps its full-height `modal` on Android with the ordinary
+  `KeyboardAwareScrollView` — one screen, two containers, forked in
+  `link-add-screen.tsx`'s `Body`.
+- **All of it is pinned-version behaviour** (react-native-screens 4.16.0, driven
+  on iOS 26.5 / iPhone 17 Pro and on the Pixel 8 AVD). Re-drive rather than
+  re-reason after an RNS bump; the Android half is a bug and may simply go away.
 
 ## dismissal — how the user gets it back off
 
@@ -204,6 +254,17 @@ inputs are `submitBehavior="submit"`, and on iOS the host owns the space around
 it, so before `ShareSheet`'s dismiss layer (`share/share-kit.tsx`) there was
 **no gesture in the process that closed the keyboard**. Note Android's
 `share-backdrop` is not that gesture — it closes the whole sheet.
+
+**`/add-link` is the second surface with no scroller, and the one where the
+layer is verified.** Its iOS body cannot be a scroller (_the form sheet_ above),
+which takes both 2 and 3 away from the two fields that depend on them — the note
+(`multiline`, so return inserts a newline and never blurs) and the tags field
+(`submitBehavior="submit"`). It carries the same `Pressable accessible={false}
+onPress={Keyboard.dismiss}` wrapper the share sheet does, and unlike the share
+sheet's this one is driveable: on the simulator, with the optional section open
+and the keyboard up over the footer, a tap on the `Note` label dropped the
+keyboard and the sheet shrank back to its content. Android keeps its scroller and
+so keeps 2 and 3 unchanged.
 
 Spell that layer as a `Pressable` **wrapping** the panel's children, not as an
 absolute sibling behind them — and note this bullet prescribed the opposite

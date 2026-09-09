@@ -1,4 +1,6 @@
+import { Platform } from 'react-native';
 import { Stack } from 'expo-router';
+import { useCSSVariable } from 'uniwind';
 
 import {
   ExtractionProvider,
@@ -71,6 +73,17 @@ import { PaywallProvider } from '../../contexts/paywall-provider';
 // SyncProvider. (The Android share activity's inline sync kick lives in
 // saveSharedDraft itself, not here.)
 export default function AppLayout() {
+  // For the add-link form sheet below (iOS only): the colour of the strip the
+  // sheet keeps for the home indicator. That strip belongs to the NAVIGATOR's screen
+  // container rather than to the screen, so it paints react-navigation's own
+  // default theme background (a light grey) unless `contentStyle` says
+  // otherwise — a seam under the form that is only visible on the one screen
+  // whose content does not fill its container. Read from the token rather than
+  // spelled as a hex so it follows the theme (docs/theme.md): Uniwind resolves
+  // `--color-background` for the rendered light/dark, and this re-renders when
+  // ThemeProvider switches it.
+  const background = useCSSVariable('--color-background');
+
   return (
     <AuthGuard>
       <SyncProvider>
@@ -87,9 +100,54 @@ export default function AppLayout() {
                           slides up) — router screens, not RN Modals, so keyboard-
                           controller and portals work inside them (see
                           features/links/link-add-screen.tsx). */}
+                        {/* Add is the exception ON iOS: a `formSheet` sized to its
+                          own content rather than a pageSheet. Its collapsed body is
+                          one field and two buttons, and at pageSheet height that left
+                          two thirds of the screen empty between the form and the
+                          keyboard. `fitToContents` makes the SHEET the thing that
+                          measures — react-native-screens reads the laid-out content
+                          height and sets a custom detent from it, clamped to the
+                          sheet's maximum (iOS 16+; the deployment target is 18, so
+                          the "unsupported below 16" branch is unreachable here). The
+                          screen has to leave the height alone for that to work, and
+                          may hold no scroller: link-add-screen.tsx carries both rules
+                          and what they cost. No `animation` — a form sheet brings its
+                          own presentation.
+
+                          ANDROID KEEPS THE PLAIN MODAL, and that is not symmetry left
+                          undone. The same two props there produce a sheet that
+                          VANISHES the moment the keyboard is up — driven on the
+                          emulator, on both entry paths (the URL field's autoFocus,
+                          and a later tap into it), leaving the dimmed list and a
+                          keyboard with nothing between them. It is RNS's own code
+                          path, not this tree: `SheetDelegate.kt`'s KeyboardVisible
+                          branch never sizes a ONE-detent sheet, and its
+                          KeyboardDidHide branch re-derives the height as
+                          `detents.first() * containerHeight` — with `fitToContents`
+                          that first entry is a sentinel, not a fraction. Pinned-version
+                          behaviour: re-drive it after an RNS bump rather than assuming
+                          it still holds. → docs/soft-keyboard.md, _the form sheet_.
+
+                          `contentStyle` is for the sheet's own strip: iOS keeps ~31pt
+                          below the content for the home indicator, that strip belongs
+                          to the navigator's screen container rather than to the
+                          screen, and unset it paints react-navigation's default light
+                          grey — a seam under a white form, in the one place where the
+                          screen's content does not fill its container. */}
                         <Stack.Screen
                           name="add-link"
-                          options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
+                          options={
+                            Platform.OS === 'ios'
+                              ? {
+                                  presentation: 'formSheet',
+                                  sheetAllowedDetents: 'fitToContents',
+                                  contentStyle:
+                                    typeof background === 'string'
+                                      ? { backgroundColor: background }
+                                      : undefined,
+                                }
+                              : { presentation: 'modal', animation: 'slide_from_bottom' }
+                          }
                         />
                         <Stack.Screen
                           name="edit-link"

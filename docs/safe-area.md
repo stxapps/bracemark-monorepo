@@ -680,6 +680,20 @@ and both apps' surfaces are edge-to-edge by default (iOS always was; Android
   (`search-bar.tsx`), with no context reaching across the Modal's window
   boundary and no first-frame flash. Reach for `useSafeAreaInsets()` only when
   you need the numbers (e.g. as a prop, below).
+- **Inside an iOS `formSheet` the component and the hook DISAGREE, and the
+  component is right.** `/add-link` is such a sheet
+  ([soft-keyboard.md](./soft-keyboard.md), _the form sheet_): measured on an
+  iPhone 17 Pro, its `SafeAreaView` reports **0** on every edge — correctly, the
+  sheet is nowhere near a notch or the home indicator — while
+  `useSafeAreaInsets()` in the same tree still returns the window's `34`. The
+  sheet keeps its own ~31pt strip below the content for the indicator, so the
+  screen must add nothing; a `paddingBottom: insets.bottom` from the hook would
+  be 34pt of empty space stacked on top of the sheet's own. That strip belongs to the
+  NAVIGATOR's screen container, not to the screen, so it paints
+  react-navigation's default theme background (a light grey) and reads as a seam
+  under a white form — `(app)/_layout.tsx` sets the screen's `contentStyle`
+  background from the `--color-background` token to close it. A screenshot is
+  the only instrument that shows either half.
 - **Portaled content does NOT inherit screen insets.** `Dialog`/`AlertDialog`/
   `DropdownMenu` content portals to the root `PortalHost` (wrapped in
   react-native-screens' `FullWindowOverlay` on iOS) — outside every screen's

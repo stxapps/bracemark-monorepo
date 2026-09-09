@@ -10,14 +10,50 @@
 // screen summoned by the links screen's FAB (add-link-fab.tsx) — deliberately a
 // ROUTER screen, not an RN `Modal` like AdvancedSearch:
 //
-//  - It stays in the root view tree, so keyboard-controller's
-//    KeyboardAwareScrollView works (docs/safe-area.md — "decide the
-//    presentation first; the keyboard answer follows"), and the ListSelect
-//    Dialog portals layer normally on Android (no close-and-reopen dance).
+//  - It stays in the root view tree, so the screen's own keyboard handling
+//    works (docs/safe-area.md — "decide the presentation first; the keyboard
+//    answer follows"), and the ListSelect Dialog portals layer normally on
+//    Android (no close-and-reopen dance).
 //  - The close is guardable: usePreventRemove swallows the accidental close
 //    vectors (iOS swipe-down, Android back) while the optional section holds
 //    work — web's onOpenChange guard. Cancel/X/save set `closing`, which drops
 //    the guard and pops in an effect, so a deliberate discard stays one tap.
+//
+// THE TWO PRESENTATIONS, and why this file has a platform fork in it. On iOS
+// the screen is a `formSheet` whose height is its CONTENT's height
+// (`sheetAllowedDetents: 'fitToContents'`, set in `(app)/_layout.tsx`): the
+// collapsed form is one field and two buttons, and at pageSheet height that
+// left two thirds of the screen empty between the form and the keyboard.
+// Android keeps the full-height `modal` it always had, because fitToContents
+// there is broken in the pinned react-native-screens — driven on the emulator,
+// the sheet DISAPPEARS the moment the keyboard is up
+// (docs/soft-keyboard.md, _the form sheet_, carries the measurement and the
+// source lines). Everything below is one tree for both; the fork is `Body`, and
+// it is the keyboard that forces it:
+//
+//  - iOS (fitToContents): NO scroller may be in here. react-native-screens
+//    hunts for a descendant ScrollView in a form sheet and forces its frame to
+//    the sheet's (`RNSScreen.mm`, `correctScrollViewFrame:`); with the sheet
+//    sized FROM the content that is circular, and it was measured twice —
+//    content painting clipped at a stale frame, and the sheet inflating to its
+//    maximum detent whatever height the scroller was given. So the body is a
+//    plain `Pressable` — and it is a Pressable rather than a View because
+//    dropping the scroller drops two of the three dismissal paths
+//    (docs/soft-keyboard.md, _dismissal_): `onPress={Keyboard.dismiss}`
+//    wrapping the children is the share sheet's layer (share-kit.tsx), which
+//    the note field — `multiline`, so return never blurs — and the tags field
+//    — `submitBehavior="submit"` — both depend on. Unlike the share sheet's,
+//    this one IS verified on device.
+//  - Android (full-height modal): the ordinary screen answer, a
+//    keyboard-controller KeyboardAwareScrollView, exactly as before.
+//
+// The sheet does the AVOIDANCE on iOS: UIKit lifts a form sheet onto the top of
+// the keyboard, so nothing in here lifts anything. It can only do that while
+// the sheet still fits above the keyboard, though — open the optional section
+// AND raise the keyboard and the sheet clamps to its maximum detent with the
+// footer behind the keys. Hence the `Keyboard.dismiss()` on the disclosure
+// toggle: opening that section is the gesture of a user who has finished typing
+// the URL, and dismissing there is what keeps the grown sheet whole.
 //
 // The draft is local component state (never the URL — the ephemeral-action
 // rule from web's header): the screen unmounts on close, so every open starts
@@ -26,7 +62,7 @@
 // computes it from the selection at press time (web's useDefaultListId).
 
 import { useEffect, useState } from 'react';
-import { View } from 'react-native';
+import { Keyboard, Platform, Pressable, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { usePreventRemove } from '@react-navigation/native';
@@ -60,6 +96,37 @@ import { Text } from '../../components/ui/text';
 
 const StyledSafeAreaView = withUniwind(SafeAreaView);
 const StyledKeyboardAwareScrollView = withUniwind(KeyboardAwareScrollView);
+
+// The form's container, and the one thing the two presentations disagree about
+// (the header comment carries the reasoning; `gap-4 p-4` is the same padding on
+// both). iOS: a plain Pressable, because a form sheet sized to its contents
+// cannot hold a scroller — and the Pressable is what gives the keyboard a way
+// out that neither submits nor navigates. Android: the ordinary screen scroller.
+function Body({ children }: { children: React.ReactNode }) {
+  if (Platform.OS === 'ios') {
+    return (
+      // `accessible={false}` for share-kit.tsx's reason: as a focus stop this
+      // would announce as one enormous unlabelled control over the whole form.
+      // Child-first responder negotiation keeps it from eating taps — a press on
+      // a field or a button is claimed by that child, and this only fires on
+      // what reaches the form's own padding and its `gap-4` seams.
+      <Pressable accessible={false} onPress={Keyboard.dismiss} className="gap-4 p-4">
+        {children}
+      </Pressable>
+    );
+  }
+  return (
+    <StyledKeyboardAwareScrollView
+      className="flex-1"
+      contentContainerClassName="gap-4 p-4"
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="on-drag"
+      bottomOffset={16}
+    >
+      {children}
+    </StyledKeyboardAwareScrollView>
+  );
+}
 
 // A labeled field row (web's Label + control pairs; the SearchBar WordField
 // idiom).
@@ -216,20 +283,25 @@ export function LinkAddScreen() {
   };
 
   return (
-    <StyledSafeAreaView className="flex-1 bg-background">
+    // `flex-1` is the usual screen spelling and is exactly what a form sheet
+    // sized to its contents must NOT have — it would fill whatever height the
+    // sheet opened at and report that back as the content height, pinning the
+    // detent at the maximum. `max-h-full` in its place still bounds the screen
+    // (the percentage resolves against the sheet, which has a definite height),
+    // so an overlong form clamps instead of running off the top.
+    // The insets are all zero inside the iOS sheet — it keeps the home-indicator
+    // strip itself, in the screen container's colour (`contentStyle`, set beside
+    // the presentation in `(app)/_layout.tsx`) — and are the real status/gesture
+    // bars on Android's full-height modal, which is why this stays a
+    // SafeAreaView with the default edges on both.
+    <StyledSafeAreaView className="bg-background ios:max-h-full android:flex-1">
       <View className="h-14 shrink-0 flex-row items-center justify-between border-b border-border pr-2 pl-4">
         <Text className="text-lg font-semibold">Add a link</Text>
         <Button variant="ghost" size="icon" onPress={close} aria-label="Close add link">
           <Icon as={X} className="size-5 text-muted-foreground" />
         </Button>
       </View>
-      <StyledKeyboardAwareScrollView
-        className="flex-1"
-        contentContainerClassName="gap-4 p-4"
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-        bottomOffset={16}
-      >
+      <Body>
         {atLimit && max !== null ? (
           <LinkQuotaBanner
             count={count}
@@ -339,7 +411,16 @@ export function LinkAddScreen() {
             <Button
               variant="ghost"
               size="sm"
-              onPress={() => setOpenOptional((v) => !v)}
+              onPress={() => {
+                // Dismiss first: on iOS the sheet grows to fit whatever this
+                // opens, and it can only sit above the keyboard while it still
+                // fits there (header comment). The tap that opens this section is
+                // also the tap that leaves the URL field, so this is the
+                // tap-outside dismissal the Pressable body would have given it
+                // had the disclosure not claimed the press.
+                Keyboard.dismiss();
+                setOpenOptional((v) => !v);
+              }}
               aria-expanded={openOptional}
               aria-label={
                 !openOptional && optionalDirty
@@ -424,7 +505,7 @@ export function LinkAddScreen() {
             </View>
           </>
         )}
-      </StyledKeyboardAwareScrollView>
+      </Body>
     </StyledSafeAreaView>
   );
 }

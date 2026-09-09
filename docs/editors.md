@@ -785,7 +785,16 @@ sheet, which is its own narrow-width language. Don't port the container in eithe
 direction; expo has no sheet primitive, and buying one is a native dependency
 decision ([architecture.md](./architecture.md), _dependency versions_) — note
 that a phone-shaped sheet is available to expo without one, as a `formSheet`
-route presentation, which is what would answer a surface that outgrows a dialog.
+route presentation, and `/add-link` now uses it on iOS
+(`sheetAllowedDetents: 'fitToContents'`, so the sheet is exactly as tall as the
+form). Do NOT read that as the answer for a surface that outgrows a dialog,
+which is what this paragraph used to say: a form sheet sized to its contents
+cannot hold a scroller at all — react-native-screens seizes the first descendant
+one and forces its frame to the sheet's — and it has no Android half, because the
+sheet there disappears while the keyboard is up
+([soft-keyboard.md](./soft-keyboard.md), _the form sheet_, carries both
+measurements). It answers a surface that is SHORT and fixed, which the quick-add
+form is and a growable picker is not.
 What a dialog does NOT get for free is the keyboard, or the room the keyboard
 leaves: portaled content inherits nothing from the screen's scroll container, so
 `ui/dialog.tsx` carries its own avoider and bounds itself to what is left, and a

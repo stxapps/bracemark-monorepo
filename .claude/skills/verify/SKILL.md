@@ -333,6 +333,23 @@ this watch 1 time, most recently because: MustScanSubDirs`. With the watch
   (above) before trusting any behavioural result — a stale bundle makes a correct
   change look broken.
 
+- **The simulator may have no software keyboard at all.** With Simulator's
+  _Connect Hardware Keyboard_ on (the default here), a focused field shows a
+  caret and NO keyboard — so any keyboard-shaped change (avoidance, dismissal,
+  a sheet that sizes itself around the keys) photographs as if the keyboard did
+  not exist. Turn it off before driving one, and note it restarts Simulator:
+
+  ```sh
+  defaults write com.apple.iphonesimulator ConnectHardwareKeyboard -bool false
+  osascript -e 'quit app "Simulator"'; open -a Simulator
+  ```
+
+  Quitting Simulator SHUTS DOWN the booted device and boots its own default
+  (an iPhone 17, not the 17 Pro these notes and `docs/app-drivers.md` measure
+  against) — re-boot the right one and re-check `simctl list devices booted`
+  before reading a single pixel. Maestro's `inputText` works either way, which
+  is why the e2e flows never noticed.
+
 - **Boot ONE platform at a time.** `e2e/runner/lib.ts` passes Maestro no
   `--device`, so with both a simulator and an emulator up it picks
   non-deterministically or hangs on an interactive picker. Shut one down before
