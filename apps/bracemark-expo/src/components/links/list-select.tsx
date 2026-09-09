@@ -93,7 +93,10 @@ export function ListSelect({
             {selected.item.name}
           </Text>
         ) : (
-          <Text numberOfLines={1} className="min-w-0 flex-1 text-base font-normal text-muted-foreground">
+          <Text
+            numberOfLines={1}
+            className="min-w-0 flex-1 text-base font-normal text-muted-foreground"
+          >
             Choose a list
           </Text>
         )}

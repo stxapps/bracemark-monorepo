@@ -52,12 +52,12 @@ export default [
         {
           selector: 'Literal[value=/(^|\\s)leading-none(\\s|$)/]',
           message:
-            "`leading-none` is not centred on iOS — the glyphs ride high inside their own box and no `items-*` can reach them. Delete the class (Inter’s own box is tight to the glyphs and self-centres), or use `leading-tight` if you need a number. docs/theme.md, _extending_.",
+            '`leading-none` is not centred on iOS — the glyphs ride high inside their own box and no `items-*` can reach them. Delete the class (Inter’s own box is tight to the glyphs and self-centres), or use `leading-tight` if you need a number. docs/theme.md, _extending_.',
         },
         {
           selector: 'TemplateElement[value.raw=/(^|\\s)leading-none(\\s|$)/]',
           message:
-            "`leading-none` is not centred on iOS — the glyphs ride high inside their own box and no `items-*` can reach them. Delete the class (Inter’s own box is tight to the glyphs and self-centres), or use `leading-tight` if you need a number. docs/theme.md, _extending_.",
+            '`leading-none` is not centred on iOS — the glyphs ride high inside their own box and no `items-*` can reach them. Delete the class (Inter’s own box is tight to the glyphs and self-centres), or use `leading-tight` if you need a number. docs/theme.md, _extending_.',
         },
       ],
     },

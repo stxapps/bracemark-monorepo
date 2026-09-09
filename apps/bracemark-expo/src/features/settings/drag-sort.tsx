@@ -364,7 +364,10 @@ export const DragRow = Animated.View;
 export function DragHandle({ pan }: { pan: PanGesture }) {
   return (
     <GestureDetector gesture={pan}>
-      <View aria-label="Drag to reorder" className="size-9 items-center justify-center rounded-full">
+      <View
+        aria-label="Drag to reorder"
+        className="size-9 items-center justify-center rounded-full"
+      >
         <Icon as={GripVertical} className="size-4 text-muted-foreground" />
       </View>
     </GestureDetector>
