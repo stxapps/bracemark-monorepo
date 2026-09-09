@@ -116,15 +116,26 @@ function AlertDialogContent({
             // cannot reach. A caller whose body can grow pairs this with
             // `shrink` on its own scroller (link-destroy-confirm.tsx), since RN
             // children do not shrink by default.
-            // `max-w-lg` is UNPREFIXED for the reason the sibling dialog.tsx
+            // `max-w-md` is UNPREFIXED for the reason the sibling dialog.tsx
             // spells out — the overlay's `inset + 8` padding is the gutter, so
             // a `sm:` gate on the cap bought nothing and left a sub-640dp
             // tablet uncapped — reaching the full available width wherever the
             // description was long enough to get there, i.e. wider than the
-            // same content on a 640dp one. No `w-full` here, deliberately: this
-            // box stays content-sized inside the overlay's `items-center`, so a
-            // one-line confirmation hugs its text instead of filling.
-            'z-50 flex max-h-full max-w-lg flex-col gap-6 rounded-4xl border border-border bg-popover p-6 shadow-lg shadow-black/5',
+            // same content on a 640dp one.
+            // The 28rem is web-ui's value ABOVE `sm`, not its 20rem base, and
+            // the step between the two is what picks it: web widens 20 → 28 in
+            // lockstep with its header going centred → left-aligned, and this
+            // header is left-aligned ALWAYS (the centring is gone on both sides
+            // now — see AlertDialogHeader below). Native permanently renders
+            // web's ≥`sm` variant of the header, so it takes web's ≥`sm` width.
+            // Porting the 20rem base literally would have been the one change
+            // in this pass you could actually see: 20 binds on every phone,
+            // where 28 binds on none of them.
+            // No `w-full` here, deliberately: this box stays content-sized
+            // inside the overlay's `items-center`, so a one-line confirmation
+            // hugs its text instead of filling — which makes the 28rem a
+            // ceiling for a long description, not a target.
+            'z-50 flex max-h-full max-w-md flex-col gap-6 rounded-4xl border border-border bg-popover p-6 shadow-lg shadow-black/5',
             Platform.select({
               web: 'animate-in fade-in-0 zoom-in-95 duration-200 web:max-w-[calc(100%-2rem)]',
             }),

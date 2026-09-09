@@ -234,16 +234,35 @@ function DialogContent({
             // title. A caller whose body can grow pairs this with `shrink` on
             // its own scroller, which is what then absorbs the squeeze
             // (list-command.tsx, bulk-tags-dialog.tsx).
-            // `max-w-lg` is UNPREFIXED, unlike react-native-reusables' stock
-            // `sm:max-w-lg`. The gutter this side is structural — the overlay
-            // pads by `inset + 8` on every edge — so the cap has no gutter rule
-            // to trade against and gating it on a breakpoint only made the
+            // `max-w-md` is web-ui's 28rem, and it is UNPREFIXED — unlike
+            // react-native-reusables' stock `sm:max-w-lg`, whose 32 sat here
+            // until this pass. Only the NUMBER ports out of web's
+            // `max-w-[min(var(--dialog-max-w,28rem),calc(100%-2rem))]`; the
+            // other two thirds of that expression answer problems this side
+            // does not have, which is why the caps were allowed to drift apart
+            // in the first place. The `calc(100%-2rem)` is a GUTTER, and web
+            // needs it spelled into the cap because Radix centres by transform
+            // and has no padded parent to inherit one from (docs/safe-area.md),
+            // whereas the gutter here is structural — the overlay pads by
+            // `inset + 8` on every edge. That is also why the cap has no gutter
+            // rule to trade against, so gating it on a breakpoint only made the
             // width non-monotonic: a 600dp tablet (the common 7" portrait) sat
-            // below `sm` and got the full 584, while a 640dp one got 512. Same
-            // correction as web-ui's DialogContent, which needs a `min()` to
-            // reach it because Radix centres by transform and has no padded
-            // parent to inherit a gutter from (docs/safe-area.md).
-            'z-50 mx-auto flex max-h-full w-full max-w-lg flex-col gap-6 rounded-4xl border border-border bg-popover p-6 shadow-lg shadow-black/5',
+            // below `sm` and got the full 584, while a 640dp one got 512. And
+            // `--dialog-max-w` is a tailwind-merge workaround for web's
+            // breakpoints, by its own note there; a caller on this side narrows
+            // with a plain `max-w-sm`, which merges against this one cleanly —
+            // paywall-provider.tsx and lock-password-dialog.tsx do exactly
+            // that, landing on the same 24rem their web twins set through the
+            // token.
+            // The cap binds on nothing shipped: `app.config.ts` is
+            // portrait-only with `supportsTablet: false`, so the widest box is
+            // a ~440dp phone minus the gutter, and only an unfolded foldable or
+            // a freeform window reaches 448. It is stated anyway so the two
+            // kits cannot disagree where it does show. Note `rem` is baked at
+            // BUILD time to value * 16 (docs/theme.md, _extending_), so this is
+            // a hard 448 that does NOT grow with the OS font scale, while the
+            // text inside it does up to the app-wide 1.3 cap.
+            'z-50 mx-auto flex max-h-full w-full max-w-md flex-col gap-6 rounded-4xl border border-border bg-popover p-6 shadow-lg shadow-black/5',
             Platform.select({
               web: 'animate-in fade-in-0 zoom-in-95 duration-200 web:max-w-[calc(100%-2rem)]',
             }),
