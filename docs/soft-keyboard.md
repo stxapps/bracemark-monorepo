@@ -8,12 +8,15 @@ On native it is a different problem in both directions. The keyboard **overlays*
 the window on both platforms — with edge-to-edge (enforced on Android 15+)
 `adjustResize` no longer resizes, so Android behaves like iOS — which means
 content must move itself to stay visible (**avoidance**), and the user must be
-given a way to put the keyboard away again (**dismissal**). They are separate
-mechanisms with separate defaults, they are decided by different things, and
-almost every rule below is one whose violation is silent.
+given a way to put the keyboard away again (**dismissal**) — with a third
+question ahead of both, whether the keyboard should be up at all when a screen
+arrives (**arrival**). They are separate mechanisms with separate defaults, they
+are decided by different things, and almost every rule below is one whose
+violation is silent.
 
 Read the avoidance half before adding a surface that takes text; read the
-dismissal half before adding a text field to one. Neighbours:
+dismissal half before adding a text field to one; read the arrival half before
+writing `autoFocus`. Neighbours:
 [safe-area.md](./safe-area.md) (insets, the web viewport, popup positioning),
 [accessibility.md](./accessibility.md) (an error that mounts must announce),
 [share-sheet.md](./share-sheet.md) (the iOS extension process),
@@ -225,6 +228,45 @@ Android and the two hosts should render one tree. Programmatic scrolls don't
 trigger it, so it does not fight `KeyboardAwareScrollView`'s own scroll-to-focus
 or the settings drag-sort (which additionally calls `Keyboard.dismiss()` on
 drag start — `settings/drag-sort.tsx`).
+
+## arrival — what may take focus on mount
+
+`autoFocus` on native is not web's `autoFocus`. Focusing a `TextInput` **summons
+the keyboard**, so on a pushed screen it runs the keyboard's slide-up against the
+navigator's slide-in, and then has the screen's `KeyboardAwareScrollView` scroll
+the field clear — all before the screen has finished arriving. This is the same
+divergence [editors.md](./editors.md) records for `/edit-link`'s `focus` param,
+where native scrolls the field into view instead of focusing it.
+
+The rule is **not** "never on a pushed screen". It is what sits above the field,
+and whether the user arrived already committed to typing:
+
+- **Focus on mount** when the screen exists to receive the typing and carries
+  nothing to read first: `/add-link`'s URL field (`links/link-add-screen.tsx`),
+  the links search box (`links/search-bar.tsx`), `lock-pane.tsx`'s password when
+  there is no biometric to offer instead.
+- **Don't** when the screen opens with something the user has to read. `/sign-in`
+  and `/create-account` are pushed from the landing CTAs (`components/landing.tsx`)
+  and open with the lockup, the heading, and — on create-account — the step
+  description that says there is no email address and no password reset. That
+  sentence is the screen's disclosure ([account.md](./account.md)), and a keyboard
+  on mount scrolls it away at the moment it is meant to land. The cost of dropping
+  it is one tap on a field the user was going to type into anyway.
+- A field that swaps in **within** an already-visible screen keeps its focus: the
+  create-account confirm step, the sign-in recovery-code toggle. No transition to
+  fight, and the press that got there was the intent to type.
+- The **web twins keep their `autoFocus`** (`packages/web-ui/src/components/auth/`)
+  and should. A focus in a browser tab summons no keyboard on a desktop, and there
+  is no push animation for it to collide with.
+
+Deferring the focus instead (`InteractionManager` / a `transitionEnd` listener)
+fixes only the collision, not the reason: the keyboard still lands over copy the
+screen was pushed to show.
+
+Nothing lints any of this, and the Maestro flows cannot see it either way — every
+auth flow taps the field by `testID` before typing
+(`e2e/mobile/flows/subflows/sign-in.yaml`, `flows/recovery-sign-in.yaml`), so they
+pass with or without the focus.
 
 ## the traps
 

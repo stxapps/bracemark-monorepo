@@ -168,11 +168,24 @@ export function CreateAccountForm() {
         <StepHeader step="setup" />
         <View className="gap-2">
           <Text className="text-sm">Username</Text>
+          {/* NOT `autoFocus`, and neither is sign-in's first field. Both screens
+              are PUSHED from the landing CTAs, so focusing on mount runs the
+              keyboard's slide-up against the navigator's slide-in, and then has
+              AuthScreen's KeyboardAwareScrollView scroll this field clear of the
+              keyboard — taking the lockup and the step's own description up with
+              it, before the screen has finished arriving. That description is
+              this screen's disclosure ("no email address, no password reset" —
+              docs/account.md), i.e. the one line that has to land BEFORE anyone
+              starts typing. The cost is one tap. Same divergence docs/editors.md
+              records for /edit-link's `focus` param: on native a focus summons
+              the keyboard, which web's `focus()` never does, so the web twins
+              keep theirs. A field that swaps in WITHIN this screen still
+              focuses — see the confirm step below. docs/soft-keyboard.md,
+              _arrival_. */}
           <Input
             autoComplete="username-new"
             autoCapitalize="none"
             autoCorrect={false}
-            autoFocus
             className={cn(usernameInvalid && 'border-destructive')}
             value={username}
             onChangeText={(text) => {
@@ -206,7 +219,12 @@ export function CreateAccountForm() {
         <View className="gap-2">
           {/* The visible label for this input is the step's own title, up in the
               StepHeader — but a heading is not a label, so the field would reach
-              a screen reader unnamed. RN has no <label for>, so name it directly. */}
+              a screen reader unnamed. RN has no <label for>, so name it directly.
+
+              This one KEEPS `autoFocus` where the setup step's username dropped
+              it: the step swaps in place on a screen that is already here, with
+              no transition to fight, and the press that got you here was the
+              intent to type the password again. */}
           <PasswordInput
             aria-label="Confirm your password"
             autoComplete="new-password"

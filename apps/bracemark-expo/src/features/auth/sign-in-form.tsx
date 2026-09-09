@@ -93,6 +93,13 @@ function PasswordSignIn({ onUseRecovery }: { onUseRecovery: () => void }) {
     <View className="gap-6">
       <View className="gap-2">
         <Text className="text-sm">Username</Text>
+        {/* NO `autoFocus` on the first field of either door — this screen is
+            pushed from the landing CTA, and a keyboard raised during that
+            slide-in arrives over a card the user hasn't seen yet. The argument
+            in full is on create-account-form.tsx's username field;
+            docs/soft-keyboard.md, _arrival_, carries the rule. The recovery
+            door below keeps its `autoFocus`: it swaps in on a press, on a
+            screen already on the glass. */}
         <Controller
           control={control}
           name="username"
@@ -104,7 +111,6 @@ function PasswordSignIn({ onUseRecovery }: { onUseRecovery: () => void }) {
               autoComplete="username"
               autoCapitalize="none"
               autoCorrect={false}
-              autoFocus
               className={cn(errors.username && 'border-destructive')}
               value={field.value}
               onBlur={field.onBlur}
