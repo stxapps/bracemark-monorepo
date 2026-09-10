@@ -686,9 +686,13 @@ and both apps' surfaces are edge-to-edge by default (iOS always was; Android
   over the links screen, so it cannot inherit the screen's `SafeAreaView`: it
   pads its avoider by `insets.top + 8` — DialogOverlay's gutter, which is what
   keeps a maxed-out panel out of the notch — and its own bottom by
-  `max(insets.bottom - keyboardHeight, 0)`, the share sheet's formula, so the
-  home-indicator clearance disappears while the keyboard (whose frame already
-  contains it) is up. Two traps come with that shape and both are in
+  `max(insets.bottom + keyboardHeight, 0)`, where `keyboardHeight` is the
+  UI-thread shared value from `useReanimatedKeyboardAnimation` (0 while closed,
+  negative while opening). That is the share sheet's formula, so the
+  home-indicator clearance disappears in sync with the keyboard whose frame
+  already contains it; `useKeyboardState` is deliberately not used because its
+  `keyboardDidShow`/`keyboardDidHide` React updates arrive after the avoidance
+  movement. Two traps come with that shape and both are in
   soft-keyboard.md: `absolute inset-0` resolves against the parent's PADDING
   box, so the backdrop has to be a sibling of the padded avoider rather than a
   child; and the avoider needs `pointerEvents="box-none"` or it eats the taps

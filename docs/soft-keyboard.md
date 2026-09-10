@@ -226,7 +226,25 @@ lose. Its mechanisms are the ordinary ones, and they are `ui/dialog.tsx`'s three
   `shrink`; RN children do not shrink by default, and without it the cap pushes
   the header off the top instead (`bulk-tags-dialog.tsx` says the same).
 - **Dismissal** — the scroller's `keyboardShouldPersistTaps="handled"` and
-  `keyboardDismissMode="on-drag"`, both back now that a scroller is allowed.
+  `keyboardDismissMode="interactive"`, both back now that a scroller is allowed.
+  This panel is the exception to the app's usual `on-drag`: expanding the
+  optional fields can put Note below the keyboard-sized fold, and `on-drag`
+  dismisses the keyboard at the start of the upward scroll needed to reach it.
+  Interactive mode lets that upward drag scroll while keeping the keyboard;
+  Android maps it to `none`, which preserves the same essential ability there.
+  Tapping panel chrome still dismisses on both platforms.
+- **Focus visibility** — the plain scroller has no automatic focused-input
+  tracking. If Note summons the keyboard from closed, the avoider shrinks the
+  viewport but preserves the scroller's old offset, leaving Note below the new
+  fold. The panel records whether Note is focused and calls `scrollToEnd` on
+  keyboard-controller's cross-platform `keyboardDidShow`, when the avoider's
+  final bounds make the end offset real; if the keyboard is already open, the
+  focus event scrolls immediately. This is deliberately not RN ScrollView's
+  `automaticallyAdjustKeyboardInsets` (iOS only), and not a nested
+  `KeyboardAwareScrollView`: in the pinned version the latter adds a full
+  keyboard-height spacer while the outer avoider has already removed that
+  height, double-compensating this panel. The existing `pb-4` supplies the
+  clearance below the button row at the scroll end.
 
 Three details are load-bearing and none of them is visible from the code:
 
@@ -256,7 +274,12 @@ The bottom padding is the share sheet's formula (`share-kit.tsx`,
 down, and NOTHING while it is up. A keyboard's frame contains the home indicator
 and the avoider has already padded by its full height, so adding the inset on
 top of that is ~34pt of empty background between Save and the keys — it reads as
-a gap, not as a bug.
+a gap, not as a bug. The cancellation reads
+`useReanimatedKeyboardAnimation().height` in the panel's animated style, on the
+same UI-runtime clock as the avoider. `useKeyboardState` is not equivalent here:
+it updates React state on `keyboardDidShow`/`keyboardDidHide`, leaving the inset
+in place until the keyboard has finished moving and then visibly contracting the
+panel.
 
 **The editor stayed a route**, and should. `/edit-link` is a full-height form
 (title, list, tags, note, image) with no dead space to reclaim, it is opaque so
@@ -313,13 +336,22 @@ blank area, and on this surface the blank area is that backdrop — the flows th
 used it mid-form now close the panel instead, which is why `flows/add-link.yaml`
 and `contract/add-link.yaml` no longer carry the step.
 
-**3. Scroll — `keyboardDismissMode="on-drag"`.** Carry it alongside
-`keyboardShouldPersistTaps` on the same scrollers. `'on-drag'` rather than
-iOS's nicer `'interactive'`, because RN maps `'interactive'` to `'none'` on
-Android and the two hosts should render one tree. Programmatic scrolls don't
-trigger it, so it does not fight `KeyboardAwareScrollView`'s own scroll-to-focus
-or the settings drag-sort (which additionally calls `Keyboard.dismiss()` on
-drag start — `settings/drag-sort.tsx`).
+**3. Scroll — normally `keyboardDismissMode="on-drag"`.** Carry it alongside
+`keyboardShouldPersistTaps` on scrollers where scrolling is itself a dismissal
+gesture. Programmatic scrolls don't trigger it, so it does not fight
+`KeyboardAwareScrollView`'s own scroll-to-focus or the settings drag-sort (which
+additionally calls `Keyboard.dismiss()` on drag start —
+`settings/drag-sort.tsx`).
+
+The add panel is the deliberate exception. Its plain scroller does not
+auto-scroll a focused input, and expanding its optional fields can put Note
+below the keyboard-sized fold. With `on-drag`, the upward gesture needed to
+bring Note into view dismisses the keyboard first, expands the panel again and
+removes the stable viewport the user was trying to scroll within. It uses
+`interactive`: upward drags cancel dismissal and scroll on iOS; Android maps the
+value to `none`, so it also keeps the keyboard while scrolling. The two hosts
+still share the important behavior, and both retain tap-to-dismiss through
+`keyboardShouldPersistTaps="handled"` and the panel's pressable chrome.
 
 ## arrival — what may take focus on mount
 

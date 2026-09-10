@@ -67,13 +67,20 @@
 //     pushes the header off the top instead.
 //   dismissal — the scroller's `keyboardShouldPersistTaps="handled"` (a tap on
 //     a control still reaches it; a tap on padding drops the keyboard) and
-//     `keyboardDismissMode="on-drag"`.
+//     `keyboardDismissMode="interactive"` (an upward drag keeps the keyboard
+//     while scrolling the expanded form; a downward drag can dismiss on iOS,
+//     and Android maps it to `none`).
 // The backdrop is the fourth: it is web's outside-click, and it is guarded the
 // same way — swallowed while the optional section holds work.
 //
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { BackHandler, Keyboard, ScrollView, View } from 'react-native';
-import { KeyboardAvoidingView, useKeyboardState } from 'react-native-keyboard-controller';
+import {
+  KeyboardAvoidingView,
+  KeyboardController,
+  KeyboardEvents,
+  useReanimatedKeyboardAnimation,
+} from 'react-native-keyboard-controller';
 import {
   Easing,
   ReduceMotion,
@@ -155,7 +162,9 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 export function LinkAddPanel({ onClose }: { onClose: () => void }) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { height: keyboardHeight } = useKeyboardState();
+  const { height: keyboardHeight } = useReanimatedKeyboardAnimation();
+  const scrollRef = useRef<ScrollView>(null);
+  const noteFocused = useRef(false);
   const { selection } = useLinksPage();
   // 1 = parked below the bottom edge, 0 = home. Driven once on mount; the panel
   // is only mounted while it is open (links/index.tsx), so there is no "closed"
@@ -167,6 +176,10 @@ export function LinkAddPanel({ onClose }: { onClose: () => void }) {
     );
   }, [enter]);
   const panelStyle = useAnimatedStyle(() => ({
+    // `height` is 0 → negative keyboard height. Keeping this arithmetic on the
+    // UI runtime makes the inset disappear with the avoider's lift instead of
+    // one React render after `keyboardDidShow`.
+    paddingBottom: Math.max(insets.bottom + keyboardHeight.get(), 0),
     transform: [{ translateY: `${(1 - enter.get()) * 100}%` }],
   }));
   const dimStyle = useAnimatedStyle(() => ({
@@ -240,6 +253,19 @@ export function LinkAddPanel({ onClose }: { onClose: () => void }) {
     });
     return () => sub.remove();
   }, [optionalDirty, onClose]);
+
+  // The avoider owns the panel's final height; only then does this scroller
+  // know its real end offset. Reveal Note after that layout settles, or
+  // immediately when focus moves to it under an already-open keyboard.
+  const revealNote = useCallback(() => {
+    scrollRef.current?.scrollToEnd({ animated: true });
+  }, []);
+  useEffect(() => {
+    const sub = KeyboardEvents.addListener('keyboardDidShow', () => {
+      if (noteFocused.current) revealNote();
+    });
+    return () => sub.remove();
+  }, [revealNote]);
 
   const close = onClose;
 
@@ -406,7 +432,7 @@ export function LinkAddPanel({ onClose }: { onClose: () => void }) {
           accessible={false}
           onPress={Keyboard.dismiss}
           className="max-h-full rounded-t-2xl border-t border-border bg-background"
-          style={[{ paddingBottom: Math.max(insets.bottom - keyboardHeight, 0) }, panelStyle]}
+          style={panelStyle}
         >
           {/* A sheet header rather than an app bar: the top padding aligns the
               title with the 40pt close control (`top-3` puts both centres at
@@ -432,15 +458,18 @@ export function LinkAddPanel({ onClose }: { onClose: () => void }) {
             </Button>
           </View>
           {/* `shrink` is what lets the cap above reach this scroller instead of
-            pushing the header off the top (bulk-tags-dialog.tsx says the same);
-            the two keyboard props are dismissal paths 2 and 3, and are not
-            optional on any scroller that can be on screen under a keyboard
-            (docs/soft-keyboard.md). */}
+            pushing the header off the top (bulk-tags-dialog.tsx says the same).
+            `handled` preserves taps on controls while panel chrome still drops
+            the keyboard. This scroller deliberately uses `interactive`, not the
+            app's usual `on-drag`: the expanded form can put Note below the fold,
+            so an upward drag must scroll it clear without dismissing the keyboard
+            and expanding the panel again (docs/soft-keyboard.md). */}
           <ScrollView
+            ref={scrollRef}
             className="shrink"
             contentContainerClassName="gap-4 px-4 pb-4"
             keyboardShouldPersistTaps="handled"
-            keyboardDismissMode="on-drag"
+            keyboardDismissMode="interactive"
           >
             {atLimit && max !== null ? (
               <LinkQuotaBanner
@@ -595,6 +624,13 @@ export function LinkAddPanel({ onClose }: { onClose: () => void }) {
                       <Textarea
                         value={note}
                         onChangeText={setNote}
+                        onFocus={() => {
+                          noteFocused.current = true;
+                          if (KeyboardController.isVisible()) revealNote();
+                        }}
+                        onBlur={() => {
+                          noteFocused.current = false;
+                        }}
                         maxLength={LINK_NOTE_MAX}
                         placeholder="Optional note"
                         aria-label="Note"
