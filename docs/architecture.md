@@ -281,8 +281,9 @@ they are read by the same components, not because it is one of them.
     never calls `bracemark-extractor` and rides its own `deviceExtractionMode` ladder, see
     docs/link-extraction.md), and
     `useQueryManagers` (rewires TanStack Query's browser-only
-    online/focus managers to NetInfo and AppState). Native modules it builds on
-    (`expo-sqlite`, `expo-file-system`, `expo-secure-store`, NetInfo) are
+    online/focus managers to NetInfo and AppState). The Expo runtime it imports
+    (`expo`, for the native binary `expo/fetch` transport) and the native modules
+    it builds on (`expo-sqlite`, `expo-file-system`, `expo-secure-store`, NetInfo) are
     **peerDependencies** — the
     app owns them so Expo autolinking sees them (the same pattern `expo-crypto`
     uses for `react-native-quick-crypto`). See _dependency versions_ below for the

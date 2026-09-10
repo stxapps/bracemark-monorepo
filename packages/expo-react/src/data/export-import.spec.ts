@@ -76,6 +76,9 @@ jest.mock('expo-file-system/legacy', () => ({
   FileSystemUploadType: { BINARY_CONTENT: 'BINARY_CONTENT' },
   uploadAsync: jest.fn(),
 }));
+// The cycle below never transfers a blob, but importing the engine loads its
+// Expo-native entity transport, which has no native request module under Node.
+jest.mock('expo/fetch', () => ({ fetch: jest.fn() }));
 // The crypto boundary is not what this file is about. Every blob it touches is
 // already local and already plaintext, so the transforms are never called — but
 // the barrel lazily requires quick-crypto, which is native, so it has to be

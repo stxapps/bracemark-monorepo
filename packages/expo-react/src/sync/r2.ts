@@ -4,13 +4,19 @@
 // credential; the bytes are already AES-GCM ciphertext).
 //
 // Two transports, split by payload size (the same split as the crypto boundary,
-// sync/crypto.ts): small ENTITY blobs ride `fetch` as in-memory Uint8Arrays
-// (React Native's fetch takes typed-array bodies and hands back arrayBuffer());
-// `files/` CONTENT moves path-to-path in the native layer — download via the
-// new-API `File.downloadFileAsync`, upload via the legacy `uploadAsync` (the
-// new API has no upload yet; `expo/fetch` would buffer the whole file into the
-// JS heap, which is exactly what the file pipeline exists to avoid).
+// sync/crypto.ts): small ENTITY blobs ride Expo's native fetch as in-memory
+// Uint8Arrays; `files/` CONTENT moves path-to-path in the native layer —
+// download via the new-API `File.downloadFileAsync`, upload via the legacy
+// `uploadAsync` (the new API has no upload yet; `expo/fetch` would buffer the
+// whole file into the JS heap, which is exactly what the file pipeline exists
+// to avoid).
+//
+// ⚠ Do not replace `expoFetch` with React Native's global fetch. On Android,
+// RN 0.81 accepts `Uint8Array`/`ArrayBuffer` in its BodyInit type but rejects
+// either at runtime with "Network request failed" before sending a request.
+// The JSON API client is unaffected; this is the only in-memory binary PUT.
 
+import { fetch as expoFetch } from 'expo/fetch';
 import { File } from 'expo-file-system';
 import { FileSystemUploadType, uploadAsync } from 'expo-file-system/legacy';
 
@@ -28,7 +34,7 @@ export class BlobRequestError extends Error {
 }
 
 export async function putBlob(url: string, body: Uint8Array<ArrayBuffer>): Promise<void> {
-  const res = await fetch(url, { method: 'PUT', body });
+  const res = await expoFetch(url, { method: 'PUT', body });
   if (!res.ok) throw new BlobRequestError('PUT', res.status);
 }
 

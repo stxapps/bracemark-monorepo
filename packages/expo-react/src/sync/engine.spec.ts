@@ -81,6 +81,9 @@ jest.mock('expo-file-system/legacy', () => ({
   FileSystemUploadType: { BINARY_CONTENT: 'BINARY_CONTENT' },
   uploadAsync: jest.fn(),
 }));
+// The real native fetch is exercised on-device; Node has no Expo native request
+// module, and requireActual('./r2') below only needs the error class.
+jest.mock('expo/fetch', () => ({ fetch: jest.fn() }));
 
 // The crypto boundary is not what these specs are about: reversible stand-ins
 // keep the assertions on what the pipeline actually MOVED, so "the local copy
