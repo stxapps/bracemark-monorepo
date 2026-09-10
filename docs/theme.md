@@ -612,7 +612,7 @@ leftovers and nothing a user notices; the classes are the system.
 | ------------------------------------------------------- | --------------- | --- | --------------------------------------------------------------------------------------------------------- |
 | single-line control                                     | `rounded-4xl`   | 32  | button, input, select trigger, command input, input-group, tabs list                                      |
 | dialog surface                                          | `rounded-4xl`   | 32  | dialog content, alert-dialog content                                                                      |
-| floating surface                                        | `rounded-2xl`   | 16  | dropdown-menu content (and sub-content), popover, select content, card, accordion                         |
+| floating or edge-attached surface                       | `rounded-2xl`   | 16  | dropdown-menu content (and sub-content), popover, select content, card, accordion, bottom sheets          |
 | row in a surface, and any control too tall to be a pill | `rounded-xl`    | 12  | menu items (item, checkbox-item, radio-item, sub-trigger), select item, tabs trigger, field, **textarea** |
 | box                                                     | `rounded-[6px]` | 6   | checkbox                                                                                                  |
 | circle                                                  | `rounded-full`  | —   | radio dot, switch, the alert-dialog media badge                                                           |
@@ -628,6 +628,16 @@ touch heights are taller (`h-10 sm:h-9` against web's `h-9`). The value is delib
 one number for both rather than a per-platform "pill" spelling, because a pill
 spelled as `rounded-full` would flatten the dialog surfaces — which are NOT pills
 and must keep 32px against a 400pt box.
+
+**An edge-attached sheet takes the floating-surface radius on only its free
+corners: `rounded-t-2xl` for a bottom sheet.** Web quick-add is the same form as
+its wide popover, so changing containers must not change its shape; the native
+quick-add panel and share sheet follow that role too. `rounded-4xl` remains for a
+detached dialog with four visible corners. A system-presented modal route is the
+other case: the navigator owns the outer corners, so the app does not redraw
+them. Its inner spacing may still follow that presentation — the iOS edit-link
+page sheet has extra top padding beneath the system arc, while Android's
+full-screen modal keeps the ordinary app-bar inset.
 
 ⚠ **The two kits are separate copies and this pairing drifted for months.** There
 is nothing to import across them (Uniwind and Tailwind are separate compilers

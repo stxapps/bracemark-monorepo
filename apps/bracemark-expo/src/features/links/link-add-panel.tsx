@@ -379,9 +379,11 @@ export function LinkAddPanel({ onClose }: { onClose: () => void }) {
         style={{ paddingTop: insets.top + 8 }}
       >
         {/* The panel. `max-h-full` resolves against the avoider — "the window
-          minus the keyboard" — and `rounded-t-4xl` is the dialog-surface radius
-          (docs/theme.md, _the radius scale_), on the two corners this surface
-          does not press against an edge.
+          minus the keyboard" — and `rounded-t-2xl` is the edge-attached sheet
+          radius (docs/theme.md, _the radius scale_), matching both web quick-add
+          and the native share sheet. `rounded-4xl` belongs to detached dialog
+          surfaces; using it here made an attached sheet read like a clipped
+          dialog.
 
           The bottom padding is the share sheet's formula (share-kit.tsx,
           docs/share-sheet.md): the inset while the keyboard is down, and NOTHING
@@ -403,18 +405,29 @@ export function LinkAddPanel({ onClose }: { onClose: () => void }) {
           as="Pressable"
           accessible={false}
           onPress={Keyboard.dismiss}
-          className="max-h-full rounded-t-4xl border-t border-border bg-background"
+          className="max-h-full rounded-t-2xl border-t border-border bg-background"
           style={[{ paddingBottom: Math.max(insets.bottom - keyboardHeight, 0) }, panelStyle]}
         >
-          <View className="h-14 shrink-0 flex-row items-center justify-between border-b border-border pr-2 pl-4">
+          {/* A sheet header rather than an app bar: the top padding aligns the
+              title with the 40pt close control (`top-3` puts both centres at
+              32pt), and `pb-6` is the complete title-to-form gap. The scroller
+              therefore has no top padding. The divider went with the app-bar
+              geometry; this compact task is one continuous surface. */}
+          <View className="relative shrink-0 pr-14 pb-6 pl-4 pt-5">
             {/* Android/Fabric can retain a stale paint clip for intrinsically
                 measured text when the avoider's keyboard padding relays out
                 this transformed panel. The native/a11y bounds stay correct,
                 but only "Add a" paints after the keyboard closes and on the
                 next mount. Owning the row's remaining width keeps the text
                 paint extent definite across those relayouts. */}
-            <Text className="flex-1 text-lg font-semibold">Add a link</Text>
-            <Button variant="ghost" size="icon" onPress={close} aria-label="Close add link">
+            <Text className="flex-1 text-base font-medium">Add a link</Text>
+            <Button
+              variant="ghost"
+              size="icon"
+              onPress={close}
+              aria-label="Close add link"
+              className="absolute top-3 right-3"
+            >
               <Icon as={X} className="size-5 text-muted-foreground" />
             </Button>
           </View>
@@ -425,7 +438,7 @@ export function LinkAddPanel({ onClose }: { onClose: () => void }) {
             (docs/soft-keyboard.md). */}
           <ScrollView
             className="shrink"
-            contentContainerClassName="gap-4 p-4"
+            contentContainerClassName="gap-4 px-4 pb-4"
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="on-drag"
           >

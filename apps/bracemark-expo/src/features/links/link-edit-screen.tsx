@@ -270,7 +270,13 @@ function LinkEditForm({ link, focus }: { link: LinkItem; focus?: EditFocus }) {
 
   return (
     <>
-      <View className="shrink-0 flex-row items-center justify-between gap-2 border-b border-border py-2 pr-2 pl-4">
+      {/* The system owns this modal's outer shape: a rounded page sheet on iOS
+          and a full-screen slide-up on Android. SafeAreaView clears hardware,
+          but the iOS sheet reports almost no top inset and its arc still needs
+          optical clearance, so only that presentation gets the roomier `pt-5`.
+          `pb-2` stays shared: the title/URL stack and 40pt close control remain
+          centred together, and the header-to-form spacing does not drift. */}
+      <View className="shrink-0 flex-row items-center justify-between gap-2 border-b border-border pt-2 pr-2 pb-2 pl-4 ios:pt-5">
         <View className="min-w-0 flex-1">
           <Text className="text-lg font-semibold">Edit link</Text>
           <Text numberOfLines={1} className="text-xs text-muted-foreground">
