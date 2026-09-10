@@ -406,7 +406,15 @@ export function LinkAddPanel({ onClose }: { onClose: () => void }) {
           style={[{ paddingBottom: Math.max(insets.bottom - keyboardHeight, 0) }, panelStyle]}
         >
           <View className="h-14 shrink-0 flex-row items-center justify-between border-b border-border pr-2 pl-4">
-            <Text className="text-lg font-semibold">Add a link</Text>
+            {/* Android/Fabric can retain a stale paint clip for intrinsically
+                measured text when the avoider's keyboard padding relays out
+                this transformed panel. The native/a11y bounds stay correct,
+                but only "Add a" paints after the keyboard closes and on the
+                next mount. Owning the row's remaining width keeps the text
+                paint extent definite across those relayouts. */}
+            <Text style={{ flex: 1 }} className="text-lg font-semibold">
+              Add a link
+            </Text>
             <Button variant="ghost" size="icon" onPress={close} aria-label="Close add link">
               <Icon as={X} className="size-5 text-muted-foreground" />
             </Button>
