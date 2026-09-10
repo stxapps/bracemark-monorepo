@@ -63,6 +63,7 @@ import { Button } from '../../components/ui/button';
 import { Icon } from '../../components/ui/icon';
 import { Input } from '../../components/ui/input';
 import { Text } from '../../components/ui/text';
+import { Textarea } from '../../components/ui/textarea';
 
 const StyledSafeAreaView = withUniwind(SafeAreaView);
 const StyledKeyboardAwareScrollView = withUniwind(KeyboardAwareScrollView);
@@ -343,16 +344,12 @@ function LinkEditForm({ link, focus }: { link: LinkItem; focus?: EditFocus }) {
             can only badge it — and at LINK_NOTE_MAX this input reads as well as
             any viewer would, with the edit already in hand. */}
         <Field label="Note" onLayout={focus === 'note' ? onFocusFieldLayout : undefined}>
-          <Input
+          <Textarea
             value={note}
             onChangeText={setNote}
             maxLength={LINK_NOTE_MAX}
             placeholder="Optional note"
             aria-label="Note"
-            multiline
-            className="h-20 py-2"
-            // Android centers multiline text vertically by default.
-            style={{ textAlignVertical: 'top' }}
           />
         </Field>
 

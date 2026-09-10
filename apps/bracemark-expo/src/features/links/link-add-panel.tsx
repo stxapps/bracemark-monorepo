@@ -110,6 +110,7 @@ import { Icon } from '../../components/ui/icon';
 import { Input } from '../../components/ui/input';
 import { NativeOnlyAnimatedView } from '../../components/ui/native-only-animated-view';
 import { Text } from '../../components/ui/text';
+import { Textarea } from '../../components/ui/textarea';
 import { useLinksPage } from './page-provider';
 
 // Composite components need the wrapper to accept `className` (the note in
@@ -578,16 +579,12 @@ export function LinkAddPanel({ onClose }: { onClose: () => void }) {
                     </Field>
 
                     <Field label="Note">
-                      <Input
+                      <Textarea
                         value={note}
                         onChangeText={setNote}
                         maxLength={LINK_NOTE_MAX}
                         placeholder="Optional note"
                         aria-label="Note"
-                        multiline
-                        className="h-20 py-2"
-                        // Android centers multiline text vertically by default.
-                        style={{ textAlignVertical: 'top' }}
                       />
                     </Field>
                   </View>

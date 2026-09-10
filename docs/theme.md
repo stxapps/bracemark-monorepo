@@ -662,6 +662,23 @@ dialog, dropdown-menu, input, radio-group, switch, tabs. Nothing can be imported
 across them, so every shared value is stated twice and the pair has to be held by
 this document and by each native file's "local changes vs upstream" list.
 
+**`textarea` is a tenth pair and the one that is NOT written twice.** The
+registry ships no textarea, and on this platform there is nothing to copy: web
+has two elements, RN has one `TextInput`, and the native `ui/input.tsx` is where
+the font-scale cap ([accessibility.md](./accessibility.md), `lib/font-scale.ts`)
+and the `keyboardAppearance` theme lift live. So
+`apps/bracemark-expo/src/components/ui/textarea.tsx` COMPOSES that file — four
+overrides and nothing else (`rounded-xl`; `h-auto sm:h-auto min-h-16` for web's
+`field-sizing-content min-h-16`; `py-3`; `textAlignVertical: 'top'`, which
+Android needs and no utility class reaches) — rather than rendering a second
+TextInput that both of those single-site rules would then have to be taught
+about. Its header is its "local changes" list, against web-ui's `textarea.tsx`.
+The `sm:h-auto` half of that cancel is the load-bearing one: `cn` is
+tailwind-merge, so a conflicting `h-*` drops Input's `h-10` but leaves its
+`sm:h-9` standing — a different variant scope is not a conflict — and a note
+field that silently collapses to 36pt is waiting on the first screen wide enough
+to match `sm:`.
+
 **PORTED — web-ui is the source of truth for all of these.** The native copies
 sat at the registry's defaults until this pass; they now carry web's values:
 
@@ -696,8 +713,8 @@ wants a non-default step restates it on its own `Text`.
 per-size icon shrink (web's `[&_svg]:size-*` has no descendant-selector
 equivalent — call sites size their own glyph); the checkbox has no
 indeterminate; alert-dialog has no media badge and no `size` variants; and
-eleven web primitives have no native twin at all (accordion, card, command, field, input-group, label,
-popover, select, separator, sheet, textarea) — some by design, since the share
+ten web primitives have no native twin at all (accordion, card, command, field, input-group, label,
+popover, select, separator, sheet) — some by design, since the share
 pickers are screens rather than overlays ([share-sheet.md](./share-sheet.md)).
 
 ⚠ **An icon button is `<Button variant="ghost" size="icon-sm">`, not a
