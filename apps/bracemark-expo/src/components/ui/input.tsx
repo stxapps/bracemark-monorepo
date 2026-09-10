@@ -19,7 +19,8 @@ import { cn } from '../../lib/utils';
 // asked rather than left to RN's `true`, since scaling is BROKEN in the iOS
 // share-extension process and a typed character there renders at zero point
 // (lib/font-scale.ts owns that story — the pickers' fields are the sites it
-// saves); `keyboardAppearance` bound to the active theme (below); and the
+// saves); `keyboardAppearance` bound to the active theme (below); the line
+// height unset on an iOS single-line field (below); and the
 // radius raised to `rounded-4xl` from the registry's `rounded-md`, which is
 // web-ui's shape system (docs/theme.md, _the radius scale_).
 // The fill and the shadow moved with it: `bg-input/30` in BOTH themes, as web
@@ -61,8 +62,33 @@ import { cn } from '../../lib/utils';
 // (`h-8 text-base md:h-7 md:text-sm`), because there it is a field a phone can
 // zoom. Same 32px box on a phone either way; only the type differs, and only
 // because one runtime has a browser under it.
+// ON iOS A SINGLE-LINE FIELD GETS NO LINE HEIGHT, whatever it is passed.
+// RN hands a TextInput's lineHeight to UITextField as a bare paragraph style,
+// with none of the baseline compensation `Text` gets (RCTApplyBaselineOffset
+// runs only on the attributed-string path; `defaultTextAttributes` skip it), so
+// every point the line box has over the font's natural one (Inter: 1.21×)
+// pushes the glyphs down by that much. Measured on the iPhone 17 Pro sim, caps
+// against the 40pt border: `text-base leading-5` +0.50pt low; `text-sm`, which
+// tailwind-merge lets a call site swap in with its own 20pt leading (the
+// search-bar filter box) +3.17pt; `text-base` bare (24pt) +4.50pt; unset
+// +0.17pt, which is half a device pixel, the floor. Unsetting it in `style`
+// rather than in classes is what makes it hold at every call site: no Tailwind
+// size step comes without a leading, and `leading-[normal]` reaches RN as the
+// string "normal", which Fabric only survives by throwing. A later `undefined`
+// in the style array is RN's own spelling of "not set", and it goes LAST, after
+// the call site's `style` too: no lineHeight is right here — its only effect is
+// the drop — so the call site doesn't get to win this one (a nudge is padding's
+// job). It holds across re-renders (ReactNativeAttributePayload lets a later
+// `undefined` override an earlier key that changed) but not across a Fast
+// Refresh that ADDS it to a field already on screen, where there is nothing
+// to override yet — relaunch before measuring it. Android centres the
+// line box itself (docs/theme.md, _a leading tighter than the font_), and a
+// multiline field (`Textarea`) needs the leading to space its lines.
+const IOS_SINGLE_LINE_STYLE = { lineHeight: undefined };
+
 function Input({
   className,
+  style,
   ...props
 }: React.ComponentProps<typeof TextInput> & React.RefAttributes<TextInput>) {
   // iOS renders the system keyboard LIGHT regardless of the app's appearance
@@ -92,6 +118,7 @@ function Input({
         }),
         className,
       )}
+      style={[style, Platform.OS === 'ios' && !props.multiline && IOS_SINGLE_LINE_STYLE]}
       allowFontScaling={allowsFontScaling()}
       maxFontSizeMultiplier={MAX_FONT_SIZE_MULTIPLIER}
       keyboardAppearance={theme === 'dark' ? 'dark' : 'light'}

@@ -836,7 +836,8 @@ same role the kit's menu items have).
   not a loss of one. Every `leading-*` on the expo side has been measured against
   its own font-size this way and the rest are fine (offsets in points, `+` = low):
   `text-xs`+`leading-4` −0.11 and +`leading-5` −0.11, `text-base`+`leading-5`
-  (`ui/input.tsx`) −0.14, `text-base`+`leading-7` (`ui/text.tsx`'s `p`) −0.14,
+  −0.14 (as `Text` — not as `ui/input.tsx`, see below), `text-base`+`leading-7`
+  (`ui/text.tsx`'s `p`) −0.14,
   the 15px specimen+`leading-snug` −0.38, `text-3xl`+`leading-tight`
   (`components/landing.tsx`) +0.24. The three that were not are the three
   `leading-none`s, all now gone: the brand wordmark (−1.96), `ui/text.tsx`'s
@@ -848,6 +849,19 @@ same role the kit's menu items have).
   ratio (`assets/fonts/InterVariable.ttf`), and the self-centring that makes the
   no-leading case exact is Inter's too — its ascender minus its cap height equals
   its descender to the unit. Both are properties of the file, not of RN.
+
+  **A single-line `TextInput` on iOS is the OTHER direction, and gets no leading
+  at all.** Its lineHeight reaches UITextField as a bare paragraph style — the
+  `defaultTextAttributes` path, which `RCTApplyBaselineOffset` never runs on — so
+  a box LARGER than the font isn't compensated either, and the whole surplus goes
+  above the glyphs. Measured on the simulator, caps against a 40pt field:
+  `text-base`+`leading-5` +0.50 low, `text-sm` at its own 20pt leading +3.17
+  (the search-bar filter box, which tailwind-merge lets swap the size and the
+  leading together), unset +0.17 — half a device pixel, the floor. Android
+  splits it evenly and was never off. So `ui/input.tsx` unsets it on iOS for
+  single-line fields, in `style` rather than in classes, which is why it holds
+  at every call site whatever size it passes; its comment carries the rest,
+  including why `leading-[normal]` is not the spelling.
 
 - **A new type-scale token** — the bar is high, and it is not "this size repeats".
   Tailwind's `--text-*` names a size, but what usually has to hold is a size
