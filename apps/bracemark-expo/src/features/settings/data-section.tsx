@@ -140,12 +140,13 @@ function SyncStatus() {
               {pendingCount} {pendingCount === 1 ? 'change' : 'changes'} waiting to sync
             </Text>
           )}
-          {/* Qualifies what a settled sync means: the INDEX is what syncs, so
-              content downloads lazily on open (docs/local-first-sync.md).
-              Suppressed on an error, where it only competes with the failure. */}
+          {/* Qualifies what a settled sync means: link metadata is on this
+              device, while image blobs download on demand as virtualized rows
+              mount (docs/local-first-sync.md — metadata vs. content). Suppressed
+              on an error, where it only competes with the failure. */}
           {!isError && !isBlocked && (
             <Text className="mt-1 text-xs text-muted-foreground">
-              Saved page copies and images download when you open them.
+              Images download as links come into view.
             </Text>
           )}
         </View>
