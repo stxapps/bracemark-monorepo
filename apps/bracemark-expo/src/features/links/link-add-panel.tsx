@@ -413,7 +413,7 @@ export function LinkAddPanel({ onClose }: { onClose: () => void }) {
               32pt), and `pb-6` is the complete title-to-form gap. The scroller
               therefore has no top padding. The divider went with the app-bar
               geometry; this compact task is one continuous surface. */}
-          <View className="relative shrink-0 pr-14 pb-6 pl-4 pt-5">
+          <View className="relative shrink-0 pt-5 pr-14 pb-6 pl-4">
             {/* Android/Fabric can retain a stale paint clip for intrinsically
                 measured text when the avoider's keyboard padding relays out
                 this transformed panel. The native/a11y bounds stay correct,
