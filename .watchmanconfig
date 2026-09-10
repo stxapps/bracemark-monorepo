@@ -44,6 +44,5 @@
     "packages/expo-crypto/android/.gradle",
     "packages/expo-react/out-tsc",
     "packages/expo-react/dist"
-  ],
-  "fsevents_try_resync": true
+  ]
 }

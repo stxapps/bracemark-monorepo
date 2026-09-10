@@ -402,11 +402,22 @@ The point is not the file count, which those barely move:
 `node_modules` is the bulk of the map and can never be ignored (above). It is
 that a build writing thousands of files while Metro watches is what overflows
 the fsevents queue, and that overflow is what produces `MustScanSubDirs
-UserDropped`, a full recrawl and the 60-second `syncToNow` timeouts.
-`fsevents_try_resync` is on so an overflow attempts a resync before falling back
-to the recrawl. Add a project's output directory in the same change that first
-creates it — nothing fails if you forget, the watch just gains one more storm
-source, and the list had drifted a whole app behind before anyone noticed.
+UserDropped` and a full recrawl — a few seconds, and harmless on its own. Add a
+project's output directory in the same change that first creates it — nothing
+fails if you forget, the watch just gains one more storm source, and the list
+had drifted a whole app behind before anyone noticed.
+
+**Never set `fsevents_try_resync`.** It sounds like the cheaper path — on an
+overflow, rebuild the fsevents stream from the journal instead of recrawling —
+but on this machine the resync has never once succeeded (`Failed to rebuild
+fsevent stream (fsevents journal UUID is different) while trying to resync,
+falling back to a regular recrawl`), and that fallback leaves the watch with a
+dead stream: the recrawl completes, no event is ever delivered again, and every
+`syncToNow` times out until the root is re-watched. Nothing reports it except
+Metro's 60-second warning. The watchman log (`watchman get-log`) settles it: the
+flag was on from the first commit, and every wedged watch it records began
+within a minute of that fallback, while more than a hundred plain overflow
+recrawls, in repos without the flag, recovered on their own.
 
 **An edit to `.watchmanconfig` does nothing until the root is re-watched.** The
 config is read when the watch is established, so a running daemon keeps the old
