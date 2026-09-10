@@ -412,9 +412,7 @@ export function LinkAddPanel({ onClose }: { onClose: () => void }) {
                 but only "Add a" paints after the keyboard closes and on the
                 next mount. Owning the row's remaining width keeps the text
                 paint extent definite across those relayouts. */}
-            <Text style={{ flex: 1 }} className="text-lg font-semibold">
-              Add a link
-            </Text>
+            <Text className="flex-1 text-lg font-semibold">Add a link</Text>
             <Button variant="ghost" size="icon" onPress={close} aria-label="Close add link">
               <Icon as={X} className="size-5 text-muted-foreground" />
             </Button>
