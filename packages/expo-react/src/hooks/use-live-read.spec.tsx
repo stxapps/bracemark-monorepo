@@ -24,7 +24,12 @@ import { act, renderHook, waitFor } from '@testing-library/react-native';
 import { DB_NAME } from '../data/db';
 import { useLiveRead } from './use-live-read';
 
-type ChangeEvent = { databaseName: string; tableName: string; rowId?: number };
+type ChangeEvent = {
+  databaseName: string;
+  databaseFilePath: string;
+  tableName: string;
+  rowId?: number;
+};
 
 // Both carry the `mock` prefix because the jest.mock factory below closes over them.
 const mockListeners: ((event: ChangeEvent) => void)[] = [];
@@ -37,8 +42,14 @@ jest.mock('expo-sqlite', () => ({
   },
 }));
 
-function emit(tableName: string, databaseName = DB_NAME): void {
-  for (const listener of mockListeners) listener({ databaseName, tableName });
+function emit(
+  tableName: string,
+  databaseFilePath = `/data/user/0/com.bracemark.app/databases/${DB_NAME}`,
+): void {
+  // Native reports the attached SQLite schema here (`main`), not the file name.
+  for (const listener of mockListeners) {
+    listener({ databaseName: 'main', databaseFilePath, tableName });
+  }
 }
 
 // One macrotask, which is what the hook defers its re-run by.
@@ -67,7 +78,10 @@ describe('the first read', () => {
 });
 
 describe('change events', () => {
-  it('re-runs the read when a named table changes', async () => {
+  // THE NATIVE EVENT SHAPE. `databaseName` is `main`; `databaseFilePath` carries
+  // `bracemark-data.db`. Confusing the two silently drops every device event and
+  // leaves all live reads stale until remount/relaunch.
+  it('re-runs the read for the native main-schema event from the data database', async () => {
     const read = jest.fn(async () => 1);
     renderHook(() => useLiveRead(read, [], ['items']));
     await waitFor(() => expect(read).toHaveBeenCalledTimes(1));
@@ -105,15 +119,15 @@ describe('change events', () => {
     expect(read).toHaveBeenCalledTimes(2);
   });
 
-  // The share extension writes to its own database in the same process. A read that
-  // re-fired on those would run against tables it doesn't watch, for an account context it
+  // Another SQLite database can report the same `main` schema and table name. A read that
+  // re-fired on it would run against a store it doesn't watch, for an account context it
   // isn't in.
   it('ignores changes to another database', async () => {
     const read = jest.fn(async () => 1);
     renderHook(() => useLiveRead(read, [], ['items']));
     await waitFor(() => expect(read).toHaveBeenCalledTimes(1));
 
-    act(() => emit('items', 'some-other.db'));
+    act(() => emit('items', '/data/user/0/com.bracemark.app/databases/some-other.db'));
     await flush();
 
     expect(read).toHaveBeenCalledTimes(1);

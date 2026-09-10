@@ -72,7 +72,11 @@ export function useLiveRead<T>(
     void run();
 
     const subscription = addDatabaseChangeListener((event) => {
-      if (event.databaseName !== DB_NAME) return;
+      // `databaseName` is SQLite's attached-schema name (`main` for the
+      // connection opened in db.ts), NOT the database filename. Filtering that
+      // field against DB_NAME drops every real native event. The absolute file
+      // path is the event field that identifies which open database changed.
+      if (!event.databaseFilePath.endsWith(`/${DB_NAME}`)) return;
       if (!tables.includes(event.tableName)) return;
       // Defer to a macrotask so the many per-row events of one transaction
       // batch into a single re-run.
