@@ -27,13 +27,13 @@ writing `autoFocus`. Neighbours:
 Two mechanisms exist, and **the presentation container decides which, not the
 feature**:
 
-| surface                                                       | mechanism                                                                      | examples                                            |
-| ------------------------------------------------------------- | ------------------------------------------------------------------------------ | --------------------------------------------------- |
-| regular expo-router screen                                    | keyboard-controller `KeyboardAwareScrollView` in the screen wrapper            | `auth-screen.tsx`, `settings/[section].tsx`         |
-| portaled overlay content (`Dialog`)                           | keyboard-controller `KeyboardAvoidingView` in the CONTAINER                    | `ui/dialog.tsx`'s `DialogOverlay`                   |
-| RN `Modal`                                                    | keyboard-controller `KeyboardAvoidingView` — the lib handles the window        | AdvancedSearch (`links/search-bar.tsx`)             |
-| share sheet (iOS extension process / Android `ShareActivity`) | plain `KeyboardAvoidingView` — keyboard-controller cannot work here            | `share/share-screen.tsx` `Sheet`                    |
-| iOS `formSheet` sized to its contents                         | **the sheet itself** — UIKit lifts it onto the keyboard; nothing in the screen | `/add-link` (`links/link-add-screen.tsx`), iOS only |
+| surface                                                       | mechanism                                                                      | examples                                    |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------- |
+| regular expo-router screen                                    | keyboard-controller `KeyboardAwareScrollView` in the screen wrapper            | `auth-screen.tsx`, `settings/[section].tsx` |
+| portaled overlay content (`Dialog`)                           | keyboard-controller `KeyboardAvoidingView` in the CONTAINER                    | `ui/dialog.tsx`'s `DialogOverlay`           |
+| RN `Modal`                                                    | keyboard-controller `KeyboardAvoidingView` — the lib handles the window        | AdvancedSearch (`links/search-bar.tsx`)     |
+| share sheet (iOS extension process / Android `ShareActivity`) | plain `KeyboardAvoidingView` — keyboard-controller cannot work here            | `share/share-screen.tsx` `Sheet`            |
+| an in-tree overlay panel                                      | keyboard-controller `KeyboardAvoidingView` in the PANEL, which owns the window | the add panel (`links/link-add-panel.tsx`)  |
 
 - **The default is react-native-keyboard-controller.** Its `KeyboardProvider`
   mounts once at the root (`src/app/_layout.tsx`) and feeds
@@ -170,52 +170,92 @@ behavior="padding"` around the centring box in `DialogOverlay` — the container
   keyboard by itself and forbids the scroller the first answer is built on, the
   next section.
 
-### the form sheet — the surface that answers the keyboard itself
+### the add panel — and why it is not a sheet presentation
 
-`/add-link` is presented on **iOS** as a `formSheet` sized to its own contents
-(`sheetAllowedDetents: 'fitToContents'`, `(app)/_layout.tsx`), because its
-collapsed body is one field and two buttons and a pageSheet spent two thirds of
-the screen on nothing. That one option decides all three mechanisms for the
-screen inside it. Read this before putting a scroller in that screen, and before
-giving a second surface the same presentation.
+The add surface is a bottom panel the LINKS SCREEN draws over itself
+(`links/link-add-panel.tsx`, rendered by `(app)/links/index.tsx` while its
+`adding` state is true). It is not a route, and getting there cost three
+measured findings — all in react-native-screens 4.16, all silent, and all worth
+keeping because the presentation they rule out is the one the platform appears
+to offer (the expo-animation skill's tool table still names `formSheet`, and for
+a surface with no keyboard it would be right).
 
-- **The SHEET avoids, and nothing in the screen may.** UIKit lifts a form sheet
-  onto the top of the keyboard: measured on an iPhone 17 Pro, the collapsed form
-  (244pt of content) sits with its Save row exactly on a 308pt keyboard, with no
-  lift arithmetic anywhere in the tree. It can only do that while the sheet still
-  FITS above the keyboard — open the optional section (~538pt of content against
-  the 566pt the keyboard leaves) and the sheet clamps to its maximum detent with
-  the footer behind the keys instead. Hence the `Keyboard.dismiss()` on the
-  disclosure toggle: the tap that opens that section is the tap that leaves the
-  URL field, and dismissing there is what keeps the grown sheet whole.
-- **No ScrollView may appear in it.** react-native-screens hunts for a descendant
-  scroll view in a form sheet and forces its frame to the sheet's own
-  (`RNSScreen.mm` — `correctScrollViewFrame:`, `coerceChildScrollViewComponentSizeToSize:`,
+- **`sheetAllowedDetents: 'fitToContents'` has no Android half.** The sheet
+  DISAPPEARS there the moment the keyboard is up — the dimmed list, the
+  keyboard, and nothing between them — on both entry paths (the URL field's
+  `autoFocus`, and a later tap into it). It is RNS's own code:
+  `SheetDelegate.kt`'s `KeyboardVisible` branch never sizes a ONE-detent sheet,
+  and its `KeyboardDidHide` branch re-derives the height as
+  `detents.first() * containerHeight`, where `fitToContents` puts a sentinel
+  rather than a fraction in `first()`. Both live in the count-of-1 path, so a
+  two-detent sheet is the only shape with a keyboard story there.
+- **A fitted sheet may hold no scroller.** RNS hunts for a descendant scroll
+  view in a form sheet and forces its frame to the sheet's own (`RNSScreen.mm`
+  — `correctScrollViewFrame:`, `coerceChildScrollViewComponentSizeToSize:`,
   which also warns that the content wrapper may hold at most a header and that
-  scroller). With the sheet sized FROM the content, that is circular, and it was
+  scroller). Against a sheet sized FROM its content that is circular, and it was
   driven twice: the form painted CLIPPED at a stale frame — the accessibility
   tree had every field at its right bounds while the screen showed white below
   the third one, so the a11y tree is no help here — and the sheet INFLATED past
   its content whatever height the scroller was given, a hard `height: 300`
-  included. There is no spelling that works. The body is a plain view, so
-  everything the scroller used to provide has to be re-provided (_dismissal_
-  below), and a form that outgrows the maximum detent now clips rather than
-  scrolls.
-- **Android does not get one, and that is not symmetry left undone.** The same
-  two props on the emulator produce a sheet that VANISHES the moment the keyboard
-  is up — the dimmed list, the keyboard, and nothing between them — on both entry
-  paths (the URL field's `autoFocus`, and a later tap into the field). It is
-  RNS's own code, not the tree: `SheetDelegate.kt`'s `KeyboardVisible` branch
-  never sizes a ONE-detent sheet, and its `KeyboardDidHide` branch re-derives the
-  height as `detents.first() * containerHeight`, where `fitToContents` puts a
-  sentinel rather than a fraction in `first()`. Both live in the count-of-1 path,
-  so a two-detent sheet is the only shape with a keyboard story there. `/add-link`
-  keeps its full-height `modal` on Android with the ordinary
-  `KeyboardAwareScrollView` — one screen, two containers, forked in
-  `link-add-screen.tsx`'s `Body`.
-- **All of it is pinned-version behaviour** (react-native-screens 4.16.0, driven
-  on iOS 26.5 / iPhone 17 Pro and on the Pixel 8 AVD). Re-drive rather than
-  re-reason after an RNS bump; the Android half is a bug and may simply go away.
+  included. No scroller means no `keyboardShouldPersistTaps` and no
+  `keyboardDismissMode`: two of the three dismissal paths, gone.
+- **A transparent modal ROUTE drops the accessibility tree on the second
+  open.** This is the one that ended the route entirely. Present it, dismiss it,
+  present it again, and `maestro hierarchy` returns the app root and the status
+  bar — nothing else, not the panel and not the links screen behind it — and it
+  stays that way. VoiceOver finds nothing; every flow that opens the surface
+  twice fails against a screen that is plainly on display. Reproduced with
+  `transparentModal`, `containedTransparentModal`, and `containedModal` +
+  a transparent `contentStyle`, with `animation: 'none'` and with the entering
+  animation removed; NOT reproduced with an opaque `modal` (including with a
+  transparent `contentStyle`) or with the form sheet, three cycles each. The
+  line the failures fall on is the presentations that keep the screen below
+  ATTACHED — which is exactly the property that lets a dim show the live list.
+
+So the panel lives in the screen's own tree, where there is no presentation to
+measure the height, no sheet to seize the scroller, and no modal container to
+lose. Its mechanisms are the ordinary ones, and they are `ui/dialog.tsx`'s three
+(that file carries the canonical derivation):
+
+- **Avoidance** — keyboard-controller's `KeyboardAvoidingView` spans the window
+  and parks the panel on the keyboard's top edge (`justify-end`,
+  `behavior="padding"`), so `max-h-full` on the panel resolves against "the
+  window minus the keyboard" with nothing measured.
+- **The squeeze** — that cap only reaches the body if the scroller carries
+  `shrink`; RN children do not shrink by default, and without it the cap pushes
+  the header off the top instead (`bulk-tags-dialog.tsx` says the same).
+- **Dismissal** — the scroller's `keyboardShouldPersistTaps="handled"` and
+  `keyboardDismissMode="on-drag"`, both back now that a scroller is allowed.
+
+Three details are load-bearing and none of them is visible from the code:
+
+- **The backdrop must be a sibling of the avoider, not a child.** `absolute
+inset-0` resolves against the parent's PADDING box (_the traps_ below), and
+  the avoider is padded by `insets.top + 8` to keep a maxed-out panel out of the
+  notch — so inside it the backdrop stops below that strip, and a tap up there
+  falls through to the links screen instead of closing. Driven on the emulator:
+  the tap did nothing at all, which is indistinguishable from a swallowed one.
+- **The avoider needs `pointerEvents="box-none"`**, or it is the touch target
+  for the empty space above the panel and the backdrop never sees those taps.
+- **The panel itself is a `Pressable`.** A plain View is not a touch target, so
+  a tap on the panel's own chrome — the header's empty middle, a `gap-4` seam —
+  would fall through to the backdrop behind it and discard the draft. Claiming
+  those taps is the job; `Keyboard.dismiss` is what to do with them.
+
+The bottom padding is the share sheet's formula (`share-kit.tsx`,
+[share-sheet.md](./share-sheet.md)): the safe-area inset while the keyboard is
+down, and NOTHING while it is up. A keyboard's frame contains the home indicator
+and the avoider has already padded by its full height, so adding the inset on
+top of that is ~34pt of empty background between Save and the keys — it reads as
+a gap, not as a bug.
+
+**The editor stayed a route**, and should. `/edit-link` is a full-height form
+(title, list, tags, note, image) with no dead space to reclaim, it is opaque so
+none of the three findings above touch it, and a presented route is what gives
+it swipe-down, the back gesture and `usePreventRemove` for free. Driven on the
+emulator with the keyboard up: the ordinary screen answer
+(`KeyboardAwareScrollView`) is doing its job there.
 
 ## dismissal — how the user gets it back off
 
@@ -230,7 +270,7 @@ it. Nothing lints this; the symptom is only visible with a keyboard actually up.
 field (`TextInput.js`): a single-line input defaults to `'blurAndSubmit'`, so
 return dismisses whether or not `onSubmitEditing` is set. A **`multiline`** one
 defaults to `'newline'` and never blurs — correct, but it means the note fields
-in `link-add-screen.tsx` / `link-edit-screen.tsx` depend entirely on 2 and 3.
+in `link-add-panel.tsx` / `link-edit-screen.tsx` depend entirely on 2 and 3.
 So does any field that sets **`submitBehavior="submit"`** on purpose to keep the
 keyboard for the next entry: `components/links/tags-field.tsx`,
 `share/share-list-picker.tsx`, `share/share-tags-picker.tsx`. Those three are
@@ -255,32 +295,15 @@ it, so before `ShareSheet`'s dismiss layer (`share/share-kit.tsx`) there was
 **no gesture in the process that closed the keyboard**. Note Android's
 `share-backdrop` is not that gesture — it closes the whole sheet.
 
-**`/add-link` is the second surface with no scroller, and the one where the
-layer is verified.** Its iOS body cannot be a scroller (_the form sheet_ above),
-which takes both 2 and 3 away from the two fields that depend on them — the note
-(`multiline`, so return inserts a newline and never blurs) and the tags field
-(`submitBehavior="submit"`). It carries the same `Pressable accessible={false}
-onPress={Keyboard.dismiss}` wrapper the share sheet does, and unlike the share
-sheet's this one is driveable: on the simulator, with the optional section open
-and the keyboard up over the footer, a tap on the `Note` label dropped the
-keyboard and the sheet shrank back to its content. Android keeps its scroller and
-so keeps 2 and 3 unchanged.
-
-Spell that layer as a `Pressable` **wrapping** the panel's children, not as an
-absolute sibling behind them — and note this bullet prescribed the opposite
-until the absolute version was driven on the simulator with a debug tint.
-`absolute inset-0` resolves against the parent's **padding** box, and the panel
-was a native `SafeAreaView` then, which applies its insets outside Yoga: the
-layer laid out as a thin full-width band _above_ the panel instead of covering
-it. The panel is a plain `View` now, so that particular trap is gone, but the
-wrapper is also the simpler shape — an ordinary flex column covering exactly the
-panel, carrying the `gap-4` seams, keeping `shrink min-h-0` so the squeeze chain
-still reaches the picker's scroller. Child-first responder negotiation is what
-keeps it from eating taps: a press on a button or a row is claimed by that
-child, and the layer only sees what reaches the panel's own padding and seams.
-**It is unverified on device** and cannot be with the tools here — once the
-keyboard is up over the iOS extension the panel leaves the accessibility tree
-(bullet below), so Maestro can neither see nor address it.
+**The add panel adds a FOURTH vector, and it is the one that needs guarding.**
+Its backdrop closes on a tap — web's outside-click, and swallowed by the same
+rule while the optional section holds work (`link-add-panel.tsx`). Everything
+that reaches the panel's own chrome instead is claimed by the panel and drops
+the keyboard, so 2 and 3 keep working inside it. Note what this does to a
+driver: Maestro's `hideKeyboard` puts the keyboard away on iOS by tapping a
+blank area, and on this surface the blank area is that backdrop — the flows that
+used it mid-form now close the panel instead, which is why `flows/add-link.yaml`
+and `contract/add-link.yaml` no longer carry the step.
 
 **3. Scroll — `keyboardDismissMode="on-drag"`.** Carry it alongside
 `keyboardShouldPersistTaps` on the same scrollers. `'on-drag'` rather than
@@ -303,7 +326,7 @@ The rule is **not** "never on a pushed screen". It is what sits above the field,
 and whether the user arrived already committed to typing:
 
 - **Focus on mount** when the screen exists to receive the typing and carries
-  nothing to read first: `/add-link`'s URL field (`links/link-add-screen.tsx`),
+  nothing to read first: the add panel's URL field (`links/link-add-panel.tsx`),
   the links search box (`links/search-bar.tsx`), `lock-pane.tsx`'s password when
   there is no biometric to offer instead.
 - **Don't** when the screen opens with something the user has to read. `/sign-in`
@@ -387,6 +410,16 @@ into four separate blind spots, each of which reads exactly like a failing fix:
   `tapOn: "Longreads"` resolved to the suggestion strip floating over the row.
   Prefer a filter term the keyboard won't offer a correction for, or tap the row
   by coordinate below the bubble.
+- **`hideKeyboard` is a TAP on iOS.** It puts the keyboard away by pressing a
+  blank area, so on any surface with a tap-to-close backdrop it closes the
+  surface — the add flows lost their Save button to it mid-run, reported as a
+  missing element rather than as a dismissal.
+- **A stale accessibility tree survives a Fast Refresh.** Editing a file while a
+  modal or an overlay panel is on screen can leave `maestro hierarchy` returning
+  the app root and nothing else, on a screen that renders fine. Relaunch the app
+  before reading anything into an empty tree — and note this is also what a real
+  bug looks like (_the add panel_ above), so tell them apart by relaunching
+  first.
 - **`appId` decides what Maestro can see.** Driving the share extension works
   under the **host's** id (`com.apple.mobilesafari`); switching to
   `com.bracemark.app.ShareExtension` mid-flow loses the panel entirely.

@@ -29,7 +29,7 @@
 //
 // The split also lands narrow web on the shape bracemark-expo already uses: the
 // add form takes over the bottom of the screen rather than hanging from a corner
-// (its `/add-link` modal screen — link-add-screen.tsx). The TRIGGER doesn't move,
+// (the panel its links screen draws over itself — link-add-panel.tsx). The TRIGGER doesn't move,
 // though: it stays the topbar's Add button at every width, where web's desktop
 // layout also keeps it. expo's FAB is a different affordance for a different
 // frame, and the two clients agree on the form, not on where it's summoned from.
@@ -323,7 +323,7 @@ export function LinkAddSurface({
   // typed note or picked tags. The DELIBERATE doors (Cancel, the sheet's X)
   // call `onOpenChange(false)` directly, bypassing this, so discarding stays one
   // click. Same division bracemark-expo's add screen draws with usePreventRemove
-  // plus its own `closing` flag (link-add-screen.tsx).
+  // plus its own close guard (link-add-panel.tsx).
   const onGuardedOpenChange = (next: boolean) => {
     if (!next && optionalDirty) return;
     onOpenChange(next);
@@ -529,7 +529,7 @@ export function LinkAddSurface({
             STRETCHED button whose icon floats mid-row, which is what this was
             between dropping `justify-between` and adding `self-start`.)
             bracemark-expo derives the same trim from its children instead — see
-            the port in link-add-screen.tsx.
+            the port in link-add-panel.tsx.
 
             The DOT marks a collapsed section that holds something (optionalSet —
             which is also where the never-discard rule is written down). Without
@@ -553,7 +553,7 @@ export function LinkAddSurface({
             `hover:text-foreground` for free, since that resolves to this token;
             `bg-current` would track it more literally, but there is no
             currentColor in React Native, and this dot ports verbatim to
-            link-add-screen.tsx.
+            link-add-panel.tsx.
 
             `aria-label` is how the dot reaches a screen reader, since the dot
             itself is `aria-hidden` decoration. It carries the visible text first,

@@ -350,6 +350,15 @@ this watch 1 time, most recently because: MustScanSubDirs`. With the watch
   before reading a single pixel. Maestro's `inputText` works either way, which
   is why the e2e flows never noticed.
 
+- **An empty `maestro hierarchy` is not always a bug.** Editing a file while an
+  overlay or a modal is on screen can leave the accessibility tree holding the
+  app root and the status bar only, on a screen that renders perfectly —
+  relaunch the app before reading anything into it. (It is also what a real
+  a11y-modality bug looks like, which is why relaunching first is the way to
+  tell them apart → `docs/soft-keyboard.md`, _the add panel_.)
+- **`hideKeyboard` taps a blank area on iOS**, so on a surface with a
+  tap-to-close backdrop it closes the surface. If a flow loses its buttons right
+  after that step, this is why.
 - **Boot ONE platform at a time.** `e2e/runner/lib.ts` passes Maestro no
   `--device`, so with both a simulator and an emulator up it picks
   non-deterministically or hangs on an interactive picker. Shut one down before

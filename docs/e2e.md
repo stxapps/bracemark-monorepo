@@ -249,8 +249,13 @@ it is ever wanted, is thin: that the button produces a download with the right
 name and that the receipt announces the right counts.
 
 **Keyboard dismissal.** The flows reach for Maestro's `hideKeyboard`
-(`mobile/flows/add-link.yaml`, `subflows/sign-in.yaml`), which is a **native**
+(`subflows/sign-in.yaml`, `flows/recovery-sign-in.yaml`), which is a **native**
 command — it puts the keyboard away without touching the app's own affordances.
+On iOS it does that by TAPPING A BLANK AREA, which is why the two add-link flows
+no longer use it: the add panel's blank area is its backdrop, so the step closed
+the surface mid-form and the run failed on a Save button that was no longer
+there (docs/soft-keyboard.md, _the add panel_). Prefer leaving it out where the
+form is already above the keyboard.
 So every one of the app's dismissal paths (return/done, tap-outside,
 scroll-to-dismiss) can regress with the whole suite still green, and a field can
 end up with no way to close the keyboard at all. That is not a gap to close by
@@ -363,7 +368,7 @@ All of them are in the app:
 | `sign-in-recovery-error`    | ” — `RecoverySignIn`                            |
 | `sign-in-use-password`      | ” — the toggle back out                         |
 | `links-screen`              | `src/app/(app)/links/index.tsx` (a root marker) |
-| `add-link-url`              | `src/features/links/link-add-screen.tsx`        |
+| `add-link-url`              | `src/features/links/link-add-panel.tsx`         |
 | `add-link-save`             | ” — the submit, whose label flips Save→Confirm  |
 | `contract-vectors-pass`     | `src/app/contract-vectors.tsx` (dev-only)       |
 | `contract-vectors-fail`     | ” — carries the failing check names in its text |

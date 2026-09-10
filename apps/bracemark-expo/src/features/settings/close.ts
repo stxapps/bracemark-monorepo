@@ -17,7 +17,7 @@ import { router } from 'expo-router';
 // could carry back — scroll position most visibly.
 //
 // ONE card, not all of them (`dismiss()` over `dismissAll()`): settings is also
-// reachable from the add-link screen (its paywall row), and closing a screen
+// reachable from the add panel (its paywall row), and closing a screen
 // should uncover whatever it covered, not unwind the user's whole stack.
 //
 // The `canDismiss` branch is the cold entry: a deep link, or the paywall

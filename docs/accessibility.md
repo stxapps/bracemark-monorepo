@@ -475,6 +475,31 @@ The web side needs none of this: at 36 its pointer targets clear WCAG 2.5.8's
 24px floor with room, and the `h-9` band is set by the search input they sit
 beside.
 
+### modality — an overlay that covers the screen must also cover the a11y tree
+
+A surface drawn OVER the app rather than presented by the navigator has to say
+so, or a screen reader walks straight out of it into the content behind. The add
+panel (`links/link-add-panel.tsx`, [soft-keyboard.md](./soft-keyboard.md), _the
+add panel_) is the case that proves the two halves are not equal:
+
+- **iOS: `accessibilityViewIsModal` on the panel's root works.** Measured with
+  `maestro hierarchy` on an iPhone 17 Pro: with the panel up the tree holds the
+  panel's nodes and nothing of the links screen, on every open.
+- **Android: it does not.** `importantForAccessibility="no-hide-descendants"`
+  (and `aria-hidden`, and both plus `collapsable={false}`) on the covered
+  subtree left every node behind the panel in the tree — the topbar title, the
+  banner, the rows — read back by both `maestro hierarchy` and
+  `adb shell uiautomator dump`, and still reachable by an accessibility click.
+  Verified against a hardcoded flag, so it is not the state plumbing; RN 0.81 on
+  Fabric. **This is not new with the panel**: the same dump with a `Dialog`
+  open shows the whole screen behind it too, so every portaled dialog in this app
+  has the same gap. The panel keeps the props anyway — they cost nothing and they
+  are what will start working when RN fixes it — and the iOS half is real today.
+
+The rule for a new overlay: set `accessibilityViewIsModal` on its root and hide
+the covered subtree, then CHECK the tree rather than assuming — a dump is the
+only instrument that shows either half.
+
 ### web / expo parity
 
 The two platforms do **not** share component shapes here — web composes the Field
@@ -498,4 +523,5 @@ the place to say what the role came from. Both `create-account-form`s carry one.
 | `apps/bracemark-expo/src/lib/font-scale.ts`                              | the 1.3 ceiling and `useCappedFontScale`                                         |
 | `apps/bracemark-expo/src/components/ui/text.tsx`                         | heading roles + `aria-level`; one of the two font-scale chokepoints              |
 | `apps/bracemark-expo/src/features/links/topbar.tsx`                      | the `hitSlop` rule and the glyph-rung divergence the boxes are derived from      |
+| `apps/bracemark-expo/src/features/links/link-add-panel.tsx`              | modality on an in-tree overlay: what iOS honours and what Android drops          |
 | `packages/web-ui/src/components/auth/create-account-form.tsx`            | the live-verdict vs. error distinction, worked through in comments               |

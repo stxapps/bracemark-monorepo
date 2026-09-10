@@ -9,7 +9,7 @@
 // because virtualized rows repaint under the open dialog, but a pushed screen
 // isn't anchored to a row and its draft is a snapshot, so no `editing` state
 // (and no engagement signal) is needed in view-state-provider at all. Same
-// router-screen-over-RN-Modal reasons as link-add-screen.tsx (keyboard-
+// router-screen-over-RN-Modal reasons link-add-panel.tsx records (keyboard-
 // controller, portals, guardable close).
 //
 // Divergences from web:

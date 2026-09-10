@@ -39,7 +39,7 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 //     its 14px `PopupTitle`.
 //
 // bracemark-expo's own field labels are `text-xs text-muted-foreground` already
-// (link-add-screen.tsx's Field helper), so dense is also what puts the two
+// (link-add-panel.tsx's Field helper), so dense is also what puts the two
 // clients' add forms on the same footing.
 // The labelable elements — the only ones `htmlFor` reaches on its own. HTML's
 // label activation behaviour runs against the label's "labeled control", which is

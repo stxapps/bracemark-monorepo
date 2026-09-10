@@ -13,7 +13,13 @@ appId: com.bracemark.app
 - tapOn:
     id: 'add-link-url'
 - inputText: ${LINK_URL}
-- hideKeyboard
+# NO `hideKeyboard` between the URL and Save, and it is not an omission. On iOS
+# the command puts the keyboard away by TAPPING A BLANK AREA, and on this screen
+# the blank area is the add panel's backdrop — which closes it (a bare typed URL
+# is deliberately not "dirty", so the close guard lets that one through, and the
+# flow then fails on a Save button that is no longer there). The step is not
+# needed either: the panel parks itself on top of the keyboard, so Save is on
+# screen the whole time. → docs/soft-keyboard.md, _the add panel_.
 - tapOn:
     id: 'add-link-save'
 

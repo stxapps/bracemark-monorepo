@@ -7,37 +7,26 @@
 // bulk-edit mode: the bottom edge belongs to BulkEditBar, and "add a link"
 // mid-selection is the wrong affordance.
 //
-// Pressing it pushes the modal add-link route with the list to pre-select —
-// web's useDefaultListId, computed HERE because the route sits outside
-// LinksPageProvider: the list the user is viewing (so "add" lands where
-// they're looking), falling back to My List — the inbox — for the All view or
-// a tag view, neither of which names a single destination list. Trash falls
-// back too: it's the deletion staging area, never a place to add new links.
-
+// Pressing it asks the screen to open the add panel, and that is the whole job
+// now — the panel is a layer over this screen rather than a pushed route
+// (link-add-panel.tsx carries the three measured reasons), so there is no
+// navigation here and no list to pre-compute: the panel reads the viewing list
+// straight from LinksPageProvider, which it now sits inside.
 import { Pressable } from 'react-native';
-import { useRouter } from 'expo-router';
 import { Plus } from 'lucide-react-native';
 
-import { DEFAULT_LIST_ID, TRASH_ID } from '@stxapps/shared';
-
 import { Icon } from '../../components/ui/icon';
-import { useLinksPage } from './page-provider';
 import { useLinksViewState } from './view-state-provider';
 
-export function AddLinkFab() {
-  const router = useRouter();
-  const { selection } = useLinksPage();
+export function AddLinkFab({ onPress }: { onPress: () => void }) {
   const { bulkEditing } = useLinksViewState();
 
   if (bulkEditing) return null;
 
-  const listId =
-    selection.kind === 'list' && selection.id !== TRASH_ID ? selection.id : DEFAULT_LIST_ID;
-
   return (
     <Pressable
       role="button"
-      onPress={() => router.push({ pathname: '/add-link', params: { listId } })}
+      onPress={onPress}
       aria-label="Add link"
       className="absolute right-4 bottom-4 z-10 size-14 items-center justify-center rounded-full bg-primary shadow-lg shadow-black/20 active:opacity-90"
     >

@@ -161,10 +161,10 @@ const READ_KEYS = [...FILTER_KEYS, 'sort', 'order'];
 //
 // HELD WHILE ANOTHER SCREEN IS ON TOP. "Global" means it follows whatever route
 // is focused, including ones that are not this page: pushing `/settings/general`
-// or the add-link modal swings this hook onto THAT route's params, where the
+// or `/edit-link` swings this hook onto THAT route's params, where the
 // no-filter-keys default parses out as My List — resetting the list, the drawer
 // highlight, the FlashList offset and bulk-edit mode under a screen the user is
-// still looking past (the editors present modally) and expects to come back to.
+// still looking past (the editor presents modally) and expects to come back to.
 // That is the round trip settings/close.ts's `dismiss()` exists to preserve. So
 // a bag is only TAKEN while the focused route is this page, and the last one
 // taken holds until it is again.

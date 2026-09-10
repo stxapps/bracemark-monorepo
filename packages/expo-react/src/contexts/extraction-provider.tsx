@@ -130,7 +130,7 @@ interface ExtractionContextValue {
   // literally just handed it, so the save IS the consent — the same reason the browser
   // extension's active-tab capture has never carried a toggle (docs/link-extraction.md —
   // _the stance_: the axis is gestured vs. un-gestured, not client vs. server). Call it
-  // from the add-link screen after a successful create, and from ShareBridge after the
+  // from the add panel after a successful create, and from ShareBridge after the
   // outbox drain (share-extension saves reach the app only there).
   //
   // The rule that keeps this honest: ONE save is automatic, N-at-once is a prompt. An

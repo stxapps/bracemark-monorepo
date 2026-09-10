@@ -30,7 +30,7 @@ overrides). Create collects a strict subset of edit's fields.
 | extension save editor      | `apps/bracemark-extension/entrypoints/popup/Editor.tsx`         | create    | list, tags, note (URL is the tab's, read-only)     |
 | web quick-add              | `apps/bracemark-web/.../links/_components/link-add-surface.tsx` | create    | URL, then list/tags/note behind a disclosure       |
 | web edit dialog            | `apps/bracemark-web/.../links/_components/link-edit-dialog.tsx` | full edit | title, list, tags, note, image                     |
-| bracemark-expo quick-add   | `apps/bracemark-expo/src/features/links/link-add-screen.tsx`    | create    | URL, then list/tags/note behind a disclosure       |
+| bracemark-expo quick-add   | `apps/bracemark-expo/src/features/links/link-add-panel.tsx`     | create    | URL, then list/tags/note behind a disclosure       |
 | bracemark-expo edit screen | `apps/bracemark-expo/src/features/links/link-edit-screen.tsx`   | full edit | title, list, tags, note, image                     |
 | bracemark-expo share sheet | `apps/bracemark-expo/src/features/share/share-screen.tsx`       | create    | list, tags (URL/title arrive in the share payload) |
 
@@ -783,18 +783,18 @@ expo keeps a dialog at every width (a phone is the only width it has, and Dialog
 is already the idiom for every picker it renders), while web forks to a bottom
 sheet, which is its own narrow-width language. Don't port the container in either
 direction; expo has no sheet primitive, and buying one is a native dependency
-decision ([architecture.md](./architecture.md), _dependency versions_) — note
-that a phone-shaped sheet is available to expo without one, as a `formSheet`
-route presentation, and `/add-link` now uses it on iOS
-(`sheetAllowedDetents: 'fitToContents'`, so the sheet is exactly as tall as the
-form). Do NOT read that as the answer for a surface that outgrows a dialog,
-which is what this paragraph used to say: a form sheet sized to its contents
-cannot hold a scroller at all — react-native-screens seizes the first descendant
-one and forces its frame to the sheet's — and it has no Android half, because the
-sheet there disappears while the keyboard is up
-([soft-keyboard.md](./soft-keyboard.md), _the form sheet_, carries both
-measurements). It answers a surface that is SHORT and fixed, which the quick-add
-form is and a growable picker is not.
+decision ([architecture.md](./architecture.md), _dependency versions_) — and the
+one that looks free, a `formSheet` route presentation, is NOT the answer for a
+surface with a keyboard: it has no Android half and it forbids the scroller the
+keyboard rules are built on ([soft-keyboard.md](./soft-keyboard.md), _the add
+panel_, carries all three measurements). The quick-add is a bottom panel its own
+screen draws instead (`links/link-add-panel.tsx` over `links/index.tsx`), which
+is the shape web's narrow layout already uses — so the two clients agree on the
+container as well as the form. **The expo EDITOR stays a modal route**: it is a
+full-height form with nothing to reclaim, and a presented route is what gives it
+swipe-down, back and `usePreventRemove`. A growable picker that outgrows a dialog
+still has no sheet primitive to reach for; the panel is a one-caller shape, not a
+component, until a second surface needs it.
 What a dialog does NOT get for free is the keyboard, or the room the keyboard
 leaves: portaled content inherits nothing from the screen's scroll container, so
 `ui/dialog.tsx` carries its own avoider and bounds itself to what is left, and a

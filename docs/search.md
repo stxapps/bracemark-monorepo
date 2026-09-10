@@ -195,9 +195,11 @@ own navigation gives it, and the two fixes look nothing alike on purpose.
 **bracemark-expo pops.** `links` and `settings` are sibling cards in the `(app)`
 stack, so the links screen stays **mounted** underneath while Settings covers it.
 `features/settings/close.ts` (`closeSettings`, shared by the topbar's ✕ and the
-drawer's back arrow) calls `router.dismiss()` — one card, so a Settings opened from
-the add-link screen uncovers that instead — which reveals the original screen with
-its params, its scroll offset, and its view state intact. The old `push('/links')`
+drawer's back arrow) calls `router.dismiss()` — one card, so it uncovers whatever Settings
+covered rather than unwinding the stack (the add panel's paywall row closes the
+panel and pushes from the links screen, so that is what it lands back on) —
+which reveals the original screen with its params, its scroll offset, and its
+view state intact. The old `push('/links')`
 built a _second_ links card at the default view and left the real one buried below it.
 `canDismiss()` false means a cold entry (a deep link, or the paywall pushing
 `/settings/subscription` first), and then it's a real `replace('/links')`. Moving

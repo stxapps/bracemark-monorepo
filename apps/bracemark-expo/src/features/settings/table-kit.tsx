@@ -216,7 +216,7 @@ export function SortMenu({
               `font-normal` sits on the LABEL here because the weight lives in
               buttonTextVariants' `text-sm font-medium`, not on the Pressable —
               the same split the "Advanced" disclosure makes in
-              features/links/link-add-screen.tsx.
+              features/links/link-add-panel.tsx.
 
               `-mr-3` cancels the size variant's `px-3` exactly, as it does on
               web, so the word lands on the table's right border. The press
