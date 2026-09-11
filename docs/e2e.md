@@ -512,12 +512,12 @@ Credentials land in `e2e/credentials/accounts.json` (gitignored, and **not**
 under `.artifacts`: they outlive the run that made them, so clearing run output
 must not take them with it). The catalog:
 
-| key          | username          | plan | library                                      |
-| ------------ | ----------------- | ---- | -------------------------------------------- |
-| `free-empty` | `seed_free_empty` | Free | nothing — the first-run screens              |
-| `plus-empty` | `seed_plus_empty` | Plus | nothing — paid, and still empty              |
-| `free-full`  | `seed_free_full`  | Free | 190 links, 8 flat lists, 14 flat tags        |
-| `plus-full`  | `seed_plus_full`  | Plus | 1,000 links, 24 nested lists, 40 nested tags |
+| key          | username          | plan | library                                    |
+| ------------ | ----------------- | ---- | ------------------------------------------ |
+| `free-empty` | `seed_free_empty` | Free | nothing — the first-run screens            |
+| `plus-empty` | `seed_plus_empty` | Plus | nothing — paid, and still empty            |
+| `free-full`  | `seed_free_full`  | Free | 190 links, 8 flat lists, 14 flat tags      |
+| `plus-full`  | `seed_plus_full`  | Plus | 1,000 links, 24 nested lists, 40 flat tags |
 
 #### the split down the encryption boundary
 

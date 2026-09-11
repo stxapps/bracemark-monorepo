@@ -48,12 +48,12 @@ npm run seed -- free-full     # or just one
 npm run seed:fixtures         # the backup archives only — no browser, no api
 ```
 
-| key          | username          | plan | library                                      |
-| ------------ | ----------------- | ---- | -------------------------------------------- |
-| `free-empty` | `seed_free_empty` | Free | nothing                                      |
-| `plus-empty` | `seed_plus_empty` | Plus | nothing                                      |
-| `free-full`  | `seed_free_full`  | Free | 190 links, 8 flat lists, 14 flat tags        |
-| `plus-full`  | `seed_plus_full`  | Plus | 1,000 links, 24 nested lists, 40 nested tags |
+| key          | username          | plan | library                                    |
+| ------------ | ----------------- | ---- | ------------------------------------------ |
+| `free-empty` | `seed_free_empty` | Free | nothing                                    |
+| `plus-empty` | `seed_plus_empty` | Plus | nothing                                    |
+| `free-full`  | `seed_free_full`  | Free | 190 links, 8 flat lists, 14 flat tags      |
+| `plus-full`  | `seed_plus_full`  | Plus | 1,000 links, 24 nested lists, 40 flat tags |
 
 Passwords land in `credentials/accounts.json` (gitignored). The whole design —
 why the library is imported through the app while the plan is written straight to

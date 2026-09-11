@@ -30,10 +30,11 @@ export interface SeedUser {
   links: number;
   lists: number;
   tags: number;
-  // Nest the list and tag trees. Free accounts are deliberately FLAT: a backup
-  // restores `parentId` verbatim on any plan, so a nested free library is a state
-  // the product itself cannot produce (`nestedLists` gates creating one), and a
-  // seed that hands you an impossible account is worse than no seed.
+  // Nest the list tree. Free accounts are deliberately FLAT: a backup restores
+  // `parentId` verbatim on any plan, so a nested free library is a state the
+  // product itself cannot produce (`nestedLists` gates creating one), and a seed
+  // that hands you an impossible account is worse than no seed. Tags are flat on
+  // EVERY account, for the same reason — see TAG_NAMES in seed/library.ts.
   nested: boolean;
   pins: number;
 }

@@ -106,7 +106,7 @@ const SHAPES = [
   (topic: string) => `The case against ${topic}`,
 ];
 
-// The two trees, spelled out rather than derived.
+// The list tree, spelled out rather than derived.
 //
 // An earlier version took a flat list of names and picked each node's parent by
 // index, which is a fine way to produce a tree and a terrible way to produce a
@@ -115,12 +115,11 @@ const SHAPES = [
 // nothing is one you stop trusting: the first time a drag lands somewhere odd you
 // cannot tell the bug from the fixture. So the shape is the data.
 //
-// Both are sliced BREADTH-FIRST to whatever the catalog asks for, which is what
-// makes one literal serve both plans: a nested account takes the whole tree, and
-// a flat one takes the roots — the eight real categories, and six tag groups that
-// are ordinary tags in their own right. A flat slice forces every `parentId` to
-// null, because a free account cannot create nesting (`nestedLists`) and must not
-// be handed some.
+// It is sliced BREADTH-FIRST to whatever the catalog asks for, which is what makes
+// one literal serve both plans: a nested account takes the whole tree, and a flat
+// one takes the roots — the eight real categories. A flat slice forces every
+// `parentId` to null, because a free account cannot create nesting
+// (`nestedLists`) and must not be handed some.
 interface TreeSpec {
   name: string;
   children?: TreeSpec[];
@@ -148,64 +147,61 @@ const LIST_TREE: TreeSpec[] = [
   { name: 'Inbox triage' },
 ];
 
-const TAG_TREE: TreeSpec[] = [
-  {
-    name: 'reading',
-    children: [
-      { name: 'to-read' },
-      { name: 'to-watch' },
-      { name: 'quick-read' },
-      { name: 'deep-dive' },
-      { name: 'favourite' },
-      { name: 'archive-me' },
-    ],
-  },
-  { name: 'work', children: [{ name: 'personal' }, { name: 'research' }, { name: 'tutorial' }] },
-  {
-    name: 'languages',
-    children: [
-      { name: 'rust' },
-      { name: 'typescript' },
-      { name: 'python' },
-      { name: 'sql' },
-      { name: 'kotlin' },
-      { name: 'swift' },
-    ],
-  },
-  {
-    name: 'craft',
-    children: [
-      { name: 'design' },
-      { name: 'ux' },
-      { name: 'a11y' },
-      { name: 'perf' },
-      { name: 'security' },
-      { name: 'privacy' },
-      { name: 'testing' },
-    ],
-  },
-  {
-    name: 'tooling',
-    children: [
-      { name: 'tool' },
-      { name: 'library' },
-      { name: 'framework' },
-      { name: 'benchmark' },
-      { name: 'ci' },
-      { name: 'deploy' },
-    ],
-  },
-  {
-    name: 'media',
-    children: [
-      { name: 'video' },
-      { name: 'podcast' },
-      { name: 'paper' },
-      { name: 'thread' },
-      { name: 'postmortem' },
-      { name: 'longform' },
-    ],
-  },
+// Tags are FLAT, on every plan. The entity carries a `parentId` (it is the same
+// shape as a List), but tag hierarchy is a planned lever, not a shipped one
+// (plans.ts, _PLANNED, NOT YET GATED_): nothing in the product mints a tag
+// parent — the Tags settings section in both apps renders only the root group,
+// and the import mints every tag at the root (docs/data-lifecycle.md). So a nested
+// tag is the same impossible state a nested free list is, and worse to be handed:
+// the children vanish from Settings, and the parents there cannot be deleted
+// (destroy rejects a tag with sub-tags). When tag hierarchy ships, this becomes a
+// TreeSpec like LIST_TREE and `buildTags` passes `user.nested`.
+//
+// The slice is a prefix, so the order is the plan split: the first 14 are what a
+// free account gets, and they are the everyday labels — the ones a small library
+// actually uses — before the subject tags a big one accumulates.
+const TAG_NAMES: string[] = [
+  'to-read',
+  'to-watch',
+  'favourite',
+  'work',
+  'personal',
+  'research',
+  'reference',
+  'tutorial',
+  'deep-dive',
+  'quick-read',
+  'design',
+  'security',
+  'video',
+  'podcast',
+  // Free ends here.
+  'archive-me',
+  'inspiration',
+  'opinion',
+  'rust',
+  'typescript',
+  'python',
+  'sql',
+  'kotlin',
+  'swift',
+  'ux',
+  'a11y',
+  'perf',
+  'privacy',
+  'testing',
+  'tool',
+  'library',
+  'framework',
+  'benchmark',
+  'ci',
+  'deploy',
+  'paper',
+  'thread',
+  'postmortem',
+  'longform',
+  'news',
+  'side-project',
 ];
 
 export interface SeedLibrary {
@@ -364,8 +360,10 @@ function buildLists(user: SeedUser, now: number): List[] {
   return buildTree(LIST_TREE, 'seed-list', user.lists, user.nested, now);
 }
 
+// `nested: false` whatever the account — see TAG_NAMES.
 function buildTags(user: SeedUser, now: number): Tag[] {
-  return buildTree(TAG_TREE, 'seed-tag', user.tags, user.nested, now);
+  const spec = TAG_NAMES.map((name) => ({ name }));
+  return buildTree(spec, 'seed-tag', user.tags, false, now);
 }
 
 // Walk a TreeSpec breadth-first, take the first `count`, and stamp ids, parents
