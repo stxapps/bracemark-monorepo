@@ -136,12 +136,20 @@ export function ListCommand({
           dialog around this is bounded by what the keyboard leaves (dialog.tsx's
           `max-h-full`), and RN children don't shrink by default — without this
           the list keeps its 320 and pushes the title off the top of a short
-          phone instead of scrolling. */}
+          phone instead of scrolling.
+          `interactive`, not the app's usual `on-drag`: every host is a centred
+          Dialog, and dropping the keyboard re-centres it and regrows this list
+          from its squeezed height to 320 — mid-drag, so the rows jump under the
+          finger. Scrolling the matches is also part of filtering (type, scan,
+          type more), which wants the keyboard kept. iOS: a scroll keeps it and a
+          drag down into the keys pulls it away; Android maps the value to
+          `none`. The tap-outside exit is DialogContent's chrome tap plus
+          `"handled"` here (docs/soft-keyboard.md, _dismissal_). */}
       <ScrollView
         className="max-h-80 shrink"
         nestedScrollEnabled
         keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
+        keyboardDismissMode="interactive"
       >
         {/* Suppressed when there's a Create row: that row IS the next step. */}
         {visibleRows.length === 0 && !canCreate && (

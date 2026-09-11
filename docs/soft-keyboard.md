@@ -379,6 +379,29 @@ value to `none`, so it also keeps the keyboard while scrolling. The two hosts
 still share the important behavior, and both retain tap-to-dismiss through
 `keyboardShouldPersistTaps="handled"` and the panel's pressable chrome.
 
+**Choosing between the two: does the scroller move when the keyboard leaves?**
+On a screen-shaped surface — top-anchored, the keyboard only covering its foot —
+dropping the keyboard just lengthens the viewport, nothing moves under the
+finger, and `on-drag` is the right exit. On a surface the avoider **lifts** — a
+centred dialog, a bottom-parked panel — dropping it re-lays out the very scroller
+being dragged: a dialog re-centres and its list regrows from squeezed to its cap,
+so the rows jump under the finger. There, `interactive`, provided the surface
+has a tap-to-dismiss (above) so `interactive` is not the only way out — on
+Android it maps to `none`. The current map:
+
+| scroller                                                               | mode          | why                                                                                                                      |
+| ---------------------------------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| links `FlashList` (`main.tsx`), links drawer (`sidebar.tsx`)           | `on-drag`     | full-height, top-anchored; scrolling results is the dismissal already in hand                                            |
+| `auth-screen`, `lock-pane`, `link-edit-screen`, settings `scroll-host` | `on-drag`     | `KeyboardAwareScrollView` screens — it tracks the focused field, so no field is out of reach                             |
+| AdvancedSearch body + its checklists (`search-bar.tsx`)                | `on-drag`     | page sheet, top-anchored; the lift only pads its foot                                                                    |
+| `ListCommand`, `TagsCommand` (every host a `Dialog`)                   | `interactive` | the dialog re-centres; filtering is type-scan-type; chrome tap + `"handled"` are the tap exits                           |
+| add panel (`link-add-panel.tsx`)                                       | `interactive` | above                                                                                                                    |
+| share pickers (`share-list-picker.tsx`, `share-tags-picker.tsx`)       | `on-drag`     | lifted, so the jump applies — but the iOS tap layer is unverified (_verifying_), and `on-drag` is its only verified exit |
+| `link-destroy-confirm`, settings drawer, `contract-vectors`            | none          | no keyboard can be up: an alert drops it on open, the other two hold no field                                            |
+
+`"handled"` sits on every row above that carries a mode — the rule in 2 has no
+exception.
+
 ## arrival — what may take focus on mount
 
 `autoFocus` on native is not web's `autoFocus`. Focusing a `TextInput` **summons

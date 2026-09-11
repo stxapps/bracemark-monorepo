@@ -101,11 +101,17 @@ export function TagsCommand({
         autoCorrect={false}
         className="h-9"
       />
+      {/* `interactive` for list-command.tsx's reason: the host Dialog
+          re-centres and this cloud regrows when the keyboard leaves, so
+          `on-drag` jumped the chips under the finger. The input is
+          `submitBehavior="submit"`, so return never blurs — the exits are
+          DialogContent's chrome tap, `"handled"` here, and (iOS) a drag down
+          into the keys. */}
       <ScrollView
         className={cn('max-h-80 shrink', className)}
         nestedScrollEnabled
         keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
+        keyboardDismissMode="interactive"
       >
         {/* Only when there's nothing to pick AND nothing to create (blank query,
             no tags) — otherwise the Create chip is the next step. */}
