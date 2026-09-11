@@ -309,6 +309,18 @@ non-labelable `htmlFor` target by hand (focus + click, which is what the browser
 does for the labelable set). Any future picker built on a div inherits both
 halves; a picker built on a `Button` (`ListSelect`) needs neither.
 
+**Native has the same trigger and its own two traps.** bracemark-expo's
+`TagsField` is a `Pressable role="combobox"` with a `Pressable` ✕ nested in
+each chip. Touch is fine, since the innermost responder wins. VoiceOver is not:
+an `accessible` Pressable collapses its children into **one** element, so the
+✕s do not exist for it, and nothing says so. Each removal is therefore also a
+custom action on the trigger (`accessibilityActions`, `Remove <name>`, reached
+from the rotor). And the trigger declares **`activate`** itself: without it iOS
+activates an element by simulating a tap at its centre, which on a trigger
+holding chips can be a chip's ✕, so a double-tap meant to open the picker
+removes a tag. Its name carries the chosen tags ("Tags: reading, work"), the
+`ShareRow` idiom above. Any native control that nests pressables inherits both.
+
 Expo's `ui/text.tsx` maps its heading variants to `role="heading"` with the
 matching `aria-level`, so `<Text variant="h2">` is a real heading to TalkBack /
 VoiceOver rather than styled text. Use the variant instead of hand-styling a

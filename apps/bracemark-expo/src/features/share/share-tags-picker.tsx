@@ -1,5 +1,5 @@
 // "Add tags" — the share sheet's own screen for labelling the link, and the
-// share-sized RN cousin of components/links/tags-field.tsx (whose header, and
+// share-sized RN cousin of components/links/tags-command.tsx (whose header, and
 // web-ui's TagsField/TagsCommand pair above it, are canonical). Presentational
 // like the list picker: chips in, events out; the screen owns the reuse-or-mint
 // (findOrCreate) rule.
@@ -15,7 +15,7 @@
 // three times out of four. Done is the way out, at the bottom where the thumb
 // is.
 //
-// The chip vocabulary is tags-field.tsx's, exactly: `rounded-full px-3 py-1.5`,
+// The chip vocabulary is tags-command.tsx's, exactly: `rounded-full px-3 py-1.5`,
 // selected on `--primary`, unselected on `--muted`, and a dashed-outline
 // `Create "…"` chip suppressed on an exact case-insensitive match (submitting
 // selects the existing tag instead, which is what findOrCreate does). Someone

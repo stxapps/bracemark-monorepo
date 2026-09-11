@@ -379,7 +379,7 @@ by what the user picked. The pickers were previously a `max-h-40` peephole
 nested inside the sheet's own ScrollView plus a blind "New list…" field, which
 gave the 10% path most of a 520pt panel and still had nowhere to put a tree.
 As screens they get the height, and they borrow the app's own picker rules line
-for line (`components/links/list-command.tsx`, `tags-field.tsx`): one input that
+for line (`components/links/list-command.tsx`, `tags-command.tsx`): one input that
 filters as you type and doubles as the new entity's name field, ancestor paths on
 filtered rows, an explicit `Create "…"` affordance suppressed on an exact
 case-insensitive match. Someone who has picked a list in the app should not have

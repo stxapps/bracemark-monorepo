@@ -45,7 +45,7 @@ import { cn } from '../../lib/utils';
 // tablet is also as touch-only as a phone, which makes a step whose premise is
 // "this device is not touch" exactly backwards there. Hence a flat `text-base`,
 // which the counterpart controls inherit rather than restate: ListSelect's
-// trigger is a `Text` at that same default, and TagsField, ListCommand and both
+// trigger is a `Text` at that same default, and TagsCommand, ListCommand and both
 // share pickers open with this Input at the top of the panel.
 //
 // It would also not sit STILL. Uniwind resolves a breakpoint against the window

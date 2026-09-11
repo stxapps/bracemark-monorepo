@@ -329,7 +329,7 @@ return dismisses whether or not `onSubmitEditing` is set. A **`multiline`** one
 defaults to `'newline'` and never blurs — correct, but it means the note fields
 in `link-add-panel.tsx` / `link-edit-screen.tsx` depend entirely on 2 and 3.
 So does any field that sets **`submitBehavior="submit"`** on purpose to keep the
-keyboard for the next entry: `components/links/tags-field.tsx`,
+keyboard for the next entry: `components/links/tags-command.tsx`,
 `share/share-list-picker.tsx`, `share/share-tags-picker.tsx`. Those three are
 the ones to check first when this regresses.
 

@@ -129,9 +129,17 @@ end** (expo-image-picker → `resizeImage` uri→uri → `saveCustomImage` →
 platform's file-store doctrine. They can't render the web pickers (`web-ui` is
 `platform:web`), so they share **in-app native cousins** in
 `apps/bracemark-expo/src/components/links/` (`list-select.tsx` over the shared
-`list-command.tsx` body — the same shell/body split as web, with dialogs
-standing in for anchored popovers — plus `tags-field.tsx` /
-`link-quota-banner.tsx`) wired to `@stxapps/expo-react`'s live hooks. Unlike
+`list-command.tsx` body and `tags-field.tsx` over `tags-command.tsx` — the same
+two shell/body splits as web, with dialogs standing in for anchored popovers —
+plus `link-quota-banner.tsx`) wired to `@stxapps/expo-react`'s live hooks.
+**The tag cloud never renders inline in an editor.** It used to — every tag as
+a chip under the field, unbounded — and on an account with forty tags it pushed
+the add panel's Note and Save off its keyboard-shortened height, the same defect
+the share sheet's compose screen had (`share-tags-picker.tsx`). So `TagsField`
+is web's token combobox: the trigger shows only the chosen tags, which the user
+bounds, and the capped `TagsCommand` opens in a dialog that stays open across
+presses (tags are a set) until Done. `BulkTagsDialog` is the one host that
+renders `TagsCommand` directly, being a dialog that holds nothing else. Unlike
 the share sheet's snapshot-fed pickers, these run in-process and therefore
 follow the web rule: they create **immediately** (top-level, index 0,
 case-insensitive reuse) — see "web pickers create IMMEDIATELY; the share sheet
@@ -801,8 +809,8 @@ leaves: portaled content inherits nothing from the screen's scroll container, so
 picker whose body can grow pairs that with `shrink` on its own scroller — which
 is why the bulk tags editor stays a dialog rather than becoming a route screen
 ([soft-keyboard.md](./soft-keyboard.md), _avoidance_). And the
-bulk tags dialog seeds the same native `TagsField` cousin the in-app editors
-render (like web's seeds `TagsField` — filter input and reuse-or-mint Create
-included; the single-link case no longer rides this dialog anyway — the row
+bulk tags dialog renders the picker body the in-app editors' `TagsField` opens
+(`TagsCommand` — web's seeds the whole `TagsField`; here that would be a dialog
+opening a second one) — filter input and reuse-or-mint Create included; the single-link case no longer rides this dialog anyway — the row
 menu's Edit tags pushes `/edit-link` focused on tags, like web). Web's
 shift-click `selectRange` has no touch analogue and is not ported.

@@ -4,11 +4,13 @@
 // the selected links' tags, saved as a DIFF against that seed — added tags are
 // added to every link, removed seed tags removed from every link, and a tag
 // only SOME links carry is never shown as selected and never touched, so a
-// bulk edit can't silently strip tags the user couldn't see). Like web, the
-// field is one TagsField over the whole selection — the same native cousin the
-// add/edit screens render (components/links/tags-field), so bulk retag gets
-// its filter input and reuse-or-mint Create for free; the diff semantics live
-// entirely in the save below. Hoisted to the
+// bulk edit can't silently strip tags the user couldn't see). Web puts its
+// TagsField (trigger + popover) in here; this renders the picker BODY the
+// add/edit screens' TagsField opens (components/links/tags-command) directly,
+// because a dialog holding nothing but a tag field that opens a second dialog
+// would be one tap and one layer too many. So bulk retag gets the same filter
+// input and reuse-or-mint Create; the diff semantics live entirely in the save
+// below. Hoisted to the
 // screen level and driven by view-state-provider's `retagging`, like the
 // destroy confirm; while open it holds `engaged` so a background sync won't
 // repaint the list under the modal. The editor invariants (docs/editors.md)
@@ -19,11 +21,11 @@
 // guard (the ✕ via DialogContent's `onClose`).
 
 import { useState } from 'react';
-import { ScrollView, View } from 'react-native';
+import { View } from 'react-native';
 
-import { type LinkView, useLinkMutations } from '@stxapps/expo-react';
+import { type LinkView, useLinkMutations, useTagMutations } from '@stxapps/expo-react';
 
-import { TagsField } from '../../components/links/tags-field';
+import { TagsCommand } from '../../components/links/tags-command';
 import { Button } from '../../components/ui/button';
 import {
   Dialog,
@@ -51,6 +53,7 @@ function sameIds(a: string[], b: string[]): boolean {
 function BulkTagsForm({ links, onClose }: { links: LinkView[]; onClose: () => void }) {
   const { exitBulkEdit } = useLinksViewState();
   const { updateMany } = useLinkMutations();
+  const { findOrCreate } = useTagMutations();
 
   // The seed: tags EVERY selected link carries, in the first link's order (a
   // stable, user-recognizable chip order). Snapshotted once at mount — draft
@@ -62,6 +65,15 @@ function BulkTagsForm({ links, onClose }: { links: LinkView[]; onClose: () => vo
   const [saving, setSaving] = useState(false);
 
   const isDirty = !sameIds(tagIds, seed);
+
+  // TagsField's two handlers, which this host owns since it renders the body.
+  const toggle = (tagId: string) => {
+    setTagIds((ids) => (ids.includes(tagId) ? ids.filter((t) => t !== tagId) : [...ids, tagId]));
+  };
+  const create = async (name: string) => {
+    const tag = await findOrCreate(name);
+    if (tag) setTagIds((ids) => (ids.includes(tag.id) ? ids : [...ids, tag.id]));
+  };
 
   const onSave = async () => {
     if (saving) return;
@@ -101,16 +113,15 @@ function BulkTagsForm({ links, onClose }: { links: LinkView[]; onClose: () => vo
             {links.length === 1 ? 'link' : 'links'}; a removed tag is removed from all of them.
           </DialogDescription>
         </DialogHeader>
-        {/* The chip area can outgrow a dialog (unlike the edit screens' own
-            scrolling form), so the field sits in a capped scroll; taps must
-            land while the filter keyboard is still up. A tag minted here
-            persists even if the user then cancels — web's accepted
+        {/* The chip cloud can outgrow a dialog, so TagsCommand caps its own
+            scroller — `max-h-48` here rather than its default 320, so input
+            plus cloud keep the ~240 this block has always had. A tag minted
+            here persists even if the user then cancels — web's accepted
             mint-then-cancel cost — and lands selected in the draft, so the
-            dirty guard engages. `shrink` is what lets the 240 give way when the
-            keyboard leaves less than the whole form needs — this is the tallest
-            dialog in the app (~520 of the ~566pt an iPhone 17 Pro leaves), so it
-            is the one that would otherwise lose its title off the top rather
-            than scroll. */}
+            dirty guard engages. The cap `shrink`s when the keyboard leaves less
+            than the whole form needs — this is the tallest dialog in the app
+            (~520 of the ~566pt an iPhone 17 Pro leaves), so it is the one that
+            would otherwise lose its title off the top rather than scroll. */}
         {/* Field and caption are ONE block, at the 16 below the dialog's own
             24 — the caption is about the selection, so it belongs to the field
             rather than standing beside the header and footer as a third
@@ -123,15 +134,10 @@ function BulkTagsForm({ links, onClose }: { links: LinkView[]; onClose: () => vo
             (link-destroy-confirm.tsx says the same), so an unwrapped one would
             hold its content height and the squeeze below would never reach the
             ScrollView — the cap would push the title off the TOP instead, on
-            the one dialog where that actually bites. */}
+            the one dialog where that actually bites. TagsCommand's own wrapper
+            carries it too, for the same reason one level down. */}
         <View className="flex shrink flex-col gap-4">
-          <ScrollView
-            className="max-h-60 shrink"
-            nestedScrollEnabled
-            keyboardShouldPersistTaps="handled"
-          >
-            <TagsField value={tagIds} onChange={setTagIds} />
-          </ScrollView>
+          <TagsCommand value={tagIds} onToggle={toggle} onCreate={create} className="max-h-48" />
           <Text className="text-xs text-muted-foreground">
             Only tags shared by every selected link start selected; a tag on just some of them is
             left untouched.

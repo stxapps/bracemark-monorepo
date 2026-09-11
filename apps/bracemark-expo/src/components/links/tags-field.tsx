@@ -1,37 +1,36 @@
 import { useMemo, useState } from 'react';
-import { Pressable, View } from 'react-native';
-import { Plus } from 'lucide-react-native';
+import { Keyboard, Pressable, View } from 'react-native';
+import { ChevronsUpDown, X } from 'lucide-react-native';
 
 import { useTagMutations, useTags } from '@stxapps/expo-react';
-import { flattenTree } from '@stxapps/shared';
+import { treeNameMap } from '@stxapps/shared';
 
-import { cn } from '../../lib/utils';
+import { Button } from '../ui/button';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Icon } from '../ui/icon';
-import { Input } from '../ui/input';
 import { Text } from '../ui/text';
+import { TagsCommand } from './tags-command';
 
-// The tag editor shared by every link-tags surface — the add/edit screens and
-// BulkTagsDialog (which, like web's, seeds one TagsField and saves the diff) —
-// the native cousin of web-ui's TagsField + TagsCommand pair (those headers
-// are canonical: controlled value, reuse-or-mint by name via findOrCreate).
-// No popover shell here, so no shell/body split either (web's TagsCommand has
-// no expo counterpart — the popover body IS this whole inline field): every
-// tag renders as a chip, selected = in `value`, with the create affordance
-// folded in:
+// The tag field for the link editors — the add panel and the edit screen — and
+// the native cousin of web-ui's TagsField (that header is canonical): a token
+// combobox. Chosen tags render as removable chips in the trigger; pressing it
+// opens the searchable, multi-select TagsCommand, whose Create row mints by name
+// through useTagMutations.findOrCreate (case-insensitive reuse, top-level index
+// 0 — the immediate-create web rule; this runs in-process, so it does NOT copy
+// the share sheet's deferral, docs/editors.md). Web's popover is a Dialog here,
+// for ListSelect's reason: a phone has no anchored popover to drop the picker
+// into, least of all from a field inside a panel parked on the keyboard.
 //
-//  - The input filters the chips as you type (the searchable-command stand-in)
-//    and doubles as the new tag's name field.
-//  - Submitting — or pressing the Create row — mints via
-//    useTagMutations.findOrCreate: case-insensitive reuse, top-level index 0
-//    (the immediate-create web rule; this editor runs in-process, so it does
-//    NOT copy the share sheet's deferral — docs/editors.md). The Create row is
-//    suppressed on an exact case-insensitive match, where submit just selects.
-//  - A just-minted tag's chip surfaces a beat later, when the live useTags
-//    query catches up — selected, since its id is already in `value` (the same
-//    catch-up gap web's chips have).
+// The trigger shows only what the user CHOSE, which the user bounds — the whole
+// point of the split. The cloud used to render inline under an input and bounded
+// nothing (tags-command.tsx records what it did to the add panel).
 //
-// Controlled: the caller owns the chosen tag-id list; this owns only the
-// filter/name query.
+// The dialog does not close on a press, where ListSelect's does: tags are a set,
+// so Done is the way out (share-tags-picker.tsx makes the same call). Query
+// state resets on close for free: the Dialog unmounts its content.
+//
+// Controlled: the caller owns the chosen tag-id list; this owns only the open
+// state.
 
 export function TagsField({
   value,
@@ -41,93 +40,122 @@ export function TagsField({
   value: string[];
   onChange: (tagIds: string[]) => void;
 }) {
+  const [open, setOpen] = useState(false);
   const tags = useTags();
   const { findOrCreate } = useTagMutations();
-  const [query, setQuery] = useState('');
-  const [creating, setCreating] = useState(false);
 
-  const options = useMemo(
-    () => flattenTree(tags).map((n) => ({ id: n.item.id, name: n.item.name })),
-    [tags],
-  );
-
-  const trimmed = query.trim();
-  const q = trimmed.toLowerCase();
-  const visible = q ? options.filter((o) => o.name.toLowerCase().includes(q)) : options;
-  // Suppress Create on an exact case-insensitive match — submit selects the
-  // existing tag instead (findOrCreate's reuse), so a Create row above an
-  // identical chip would only read as a fork that isn't.
-  const canCreate = trimmed !== '' && !options.some((o) => o.name.toLowerCase() === q);
+  // Chosen chips: ids → names off the live tree. An id with no row yet (a
+  // just-minted tag useTags hasn't surfaced) is skipped until it catches up.
+  const nameById = useMemo(() => treeNameMap(tags), [tags]);
+  const chosen = value
+    .map((id) => ({ id, name: nameById.get(id) }))
+    .filter((t): t is { id: string; name: string } => t.name !== undefined);
 
   const toggle = (tagId: string) => {
     onChange(value.includes(tagId) ? value.filter((t) => t !== tagId) : [...value, tagId]);
   };
+  const remove = (tagId: string) => onChange(value.filter((t) => t !== tagId));
+  const create = async (name: string) => {
+    const tag = await findOrCreate(name);
+    if (tag && !value.includes(tag.id)) onChange([...value, tag.id]);
+  };
 
-  const submit = async () => {
-    if (creating || trimmed === '') return;
-    setCreating(true);
-    try {
-      const tag = await findOrCreate(trimmed);
-      if (tag && !value.includes(tag.id)) onChange([...value, tag.id]);
-      setQuery('');
-    } finally {
-      setCreating(false);
-    }
+  // Drop the keyboard on the way in. The editors' scrollers persist taps
+  // (`handled`), so pressing this leaves the field that was focused — the add
+  // panel's autofocused URL, most often — focused behind the dialog, and the
+  // first keystroke would land there, unseen. The picker is a list first and a
+  // search box second (docs/editors.md, the MoveToSurface note): the filter
+  // input is one tap away.
+  const openPicker = () => {
+    Keyboard.dismiss();
+    setOpen(true);
   };
 
   return (
-    <View className="gap-2">
-      <Input
-        value={query}
-        onChangeText={setQuery}
-        onSubmitEditing={() => void submit()}
-        submitBehavior="submit"
-        placeholder="Search or create tags…"
-        aria-label="Search or create tags"
-        autoCapitalize="none"
-        autoCorrect={false}
-        className="h-9"
-      />
-      {(visible.length > 0 || canCreate) && (
-        <View className="flex-row flex-wrap items-center gap-2">
-          {visible.map((o) => {
-            const selected = value.includes(o.id);
-            return (
-              <Pressable
-                key={o.id}
-                onPress={() => toggle(o.id)}
-                accessibilityRole="checkbox"
-                aria-label={`${o.name}: ${selected ? 'selected' : 'not selected'}`}
-                className={cn('rounded-full px-3 py-1.5', selected ? 'bg-primary' : 'bg-muted')}
+    <>
+      {/* A Pressable, not ListSelect's Button: the chips WRAP, so the box has a
+          minimum height rather than a fixed one — and Button's size variants
+          are fixed heights. The chrome is the Input's instead (`border-input
+          bg-input/30`, `min-h-10 sm:min-h-9` for its `h-10 sm:h-9`), plus
+          outline Button's press fill. `rounded-3xl` rather than the Input's
+          `rounded-4xl` or web's `rounded-2xl`: 24 on a one-row 40pt box
+          resolves to 20, the same pill as the Input above it, and stays a
+          rounded rectangle once the chips wrap (docs/theme.md, _the radius
+          scale_).
+
+          The ✕s are Pressables nested in this one. A touch lands on the
+          innermost responder, so a ✕ removes and the rest of the box opens —
+          but for VoiceOver this box is ONE element (`accessible` collapses its
+          children), so each removal is also a custom action on it, where the
+          rotor offers it. `activate` is declared for the same reason: without
+          it iOS activates by simulating a tap at the element's centre, which on
+          a wrapped trigger can be a chip's ✕. The name carries the chosen tags
+          ("Tags: reading, work"), the ShareRow idiom — say what the control is,
+          then its value (docs/accessibility.md). */}
+      <Pressable
+        onPress={openPicker}
+        role="combobox"
+        aria-expanded={open}
+        aria-label={chosen.length > 0 ? `Tags: ${chosen.map((t) => t.name).join(', ')}` : 'Tags'}
+        accessibilityActions={[
+          { name: 'activate' },
+          ...chosen.map((t) => ({ name: `remove:${t.id}`, label: `Remove ${t.name}` })),
+        ]}
+        onAccessibilityAction={(e) => {
+          const action = e.nativeEvent.actionName;
+          if (action === 'activate') openPicker();
+          else if (action.startsWith('remove:')) remove(action.slice('remove:'.length));
+        }}
+        className="min-h-10 w-full flex-row items-center gap-2 rounded-3xl border border-input bg-input/30 py-1.5 pr-3 pl-2 active:bg-input/50 sm:min-h-9"
+      >
+        <View className="min-w-0 flex-1 flex-row flex-wrap items-center gap-1.5">
+          {chosen.length > 0 ? (
+            chosen.map((t) => (
+              // `bg-input`, web's chip: it separates from the trigger's own
+              // `bg-input/30` in both themes (docs/theme.md, `--input` is three
+              // roles). `max-w-full` so one long name truncates instead of
+              // overflowing the box.
+              <View
+                key={t.id}
+                className="max-w-full flex-row items-center gap-1 rounded-full bg-input py-0.5 pr-1.5 pl-2.5"
               >
-                <Text
-                  className={cn(
-                    'text-sm',
-                    selected ? 'text-primary-foreground' : 'text-muted-foreground',
-                  )}
-                >
-                  {o.name}
+                <Text numberOfLines={1} className="shrink text-sm">
+                  {t.name}
                 </Text>
-              </Pressable>
-            );
-          })}
-          {canCreate && (
-            <Pressable
-              role="button"
-              disabled={creating}
-              onPress={() => void submit()}
-              aria-label={`Create tag ${trimmed}`}
-              className={cn(
-                'flex-row items-center gap-1 rounded-full border border-dashed border-input px-3 py-1.5',
-                creating && 'opacity-50',
-              )}
-            >
-              <Icon as={Plus} className="size-3.5 text-muted-foreground" />
-              <Text className="text-sm text-muted-foreground">Create “{trimmed}”</Text>
-            </Pressable>
+                <Pressable
+                  role="button"
+                  aria-label={`Remove ${t.name}`}
+                  onPress={() => remove(t.id)}
+                  hitSlop={8}
+                  className="rounded-full p-0.5 active:bg-muted"
+                >
+                  <Icon as={X} className="size-3.5 text-muted-foreground" />
+                </Pressable>
+              </View>
+            ))
+          ) : (
+            // `pl-1` puts the placeholder on the Input's `px-3` text edge — the
+            // box's own `pl-2` is the chips' inset, one step tighter.
+            <Text numberOfLines={1} className="pl-1 text-base text-muted-foreground">
+              Add tags
+            </Text>
           )}
         </View>
-      )}
-    </View>
+        <Icon as={ChevronsUpDown} className="size-4 shrink-0 text-muted-foreground" />
+      </Pressable>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Choose tags</DialogTitle>
+          </DialogHeader>
+          <TagsCommand value={value} onToggle={toggle} onCreate={create} />
+          <DialogFooter>
+            <Button size="sm" onPress={() => setOpen(false)}>
+              <Text>Done</Text>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
