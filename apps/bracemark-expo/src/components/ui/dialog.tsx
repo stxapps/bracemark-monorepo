@@ -1,6 +1,7 @@
 import * as React from 'react';
 import {
   type GestureResponderEvent,
+  Keyboard,
   Platform,
   Pressable,
   Text as RNText,
@@ -23,7 +24,8 @@ import { Text } from './text';
 // react-native-reusables `dialog` (uniwind variant), copied from the registry —
 // see docs/setup.md for why the copy is manual (the CLI needs tsconfig path
 // aliases; this app uses relative imports). Local changes vs upstream: imports
-// rewritten to relative, the KeyboardAvoidingView in DialogOverlay below, and
+// rewritten to relative, the KeyboardAvoidingView in DialogOverlay below, the
+// keyboard dismissal on DialogContent (on open, and on a chrome tap), and
 // `leading-none` dropped from DialogTitle — a leading tighter than Inter's
 // natural 1.21 ratio is uncentrable on iOS, so the title sat 1.55pt high inside
 // its own box with nothing above it able to help (docs/theme.md, _extending_).
@@ -139,9 +141,22 @@ function DialogOverlay({
               overflow off the TOP. The margin is thinner than it looks — an
               iPhone 17 Pro leaves ~566pt above the keyboard, and bulk "Edit
               tags" measures ~520 of it, so a shorter phone or a larger font is
-              already over. */}
+              already over.
+
+              `keyboardVerticalOffset` restores the BOTTOM gutter the keyboard
+              eats. The avoider pads only its overlap with the keyboard, and the
+              keyboard's frame already covers the overlay's `insets.bottom + 8`
+              (the home indicator is inside it), so at offset 0 a capped dialog
+              sat flush on the keys while the other three edges kept their 8 —
+              rounded corners pressed into the keyboard. 8 is that gutter: the
+              padding becomes `keyboardHeight − insets.bottom`, leaving exactly 8
+              above the keys. The library scales the whole lift by the
+              keyboard's progress, so with the keyboard down the offset does
+              nothing. The add panel stays flush on purpose — it is an
+              edge-attached panel, this is a floating card (docs/soft-keyboard.md). */}
           <StyledKeyboardAvoidingView
             behavior="padding"
+            keyboardVerticalOffset={8}
             enabled={Platform.OS !== 'web'}
             className="w-full flex-1 justify-center"
           >
@@ -214,6 +229,24 @@ function DialogContent({
   showCloseButton?: boolean;
   onClose?: () => void;
 }) {
+  // Drop the keyboard on the way in. Whatever field was focused before the
+  // press that opened this — the add panel's autofocused URL, the links search
+  // box — survives it (every such scroller persists taps, `"handled"`), stays
+  // focused BEHIND the dialog, and takes the next keystroke unseen. Once here,
+  // for every host, rather than in each trigger: ListSelect and TagsField did
+  // it themselves and the other hosts (Move to, bulk tags, …) simply didn't.
+  //
+  // A LAYOUT effect, and that is what makes it safe for a dialog that
+  // autofocuses its own field (lock-password-dialog.tsx). The content isn't in
+  // this commit at all — @rn-primitives/portal registers it from a passive
+  // effect and the PortalHost renders it in a later one — so this runs while
+  // the only focused input is the one behind, and can never blur the new one.
+  // Keyed on `open` because hosts like ListSelect keep this mounted while closed.
+  const { open } = DialogPrimitive.useRootContext();
+  React.useLayoutEffect(() => {
+    if (open && Platform.OS !== 'web') Keyboard.dismiss();
+  }, [open]);
+
   return (
     <DialogPortal hostName={portalHost}>
       <DialogOverlay>
@@ -268,6 +301,16 @@ function DialogContent({
             }),
             className,
           )}
+          // A tap on the dialog's own chrome — the header, the `p-6` padding, a
+          // `gap-6` seam — drops the keyboard (docs/soft-keyboard.md, _dismissal_).
+          // The native primitive's Content already claims every touch its
+          // children don't (`onStartShouldSetResponder` → true in
+          // @rn-primitives/dialog), which is why such a tap neither reached the
+          // overlay nor did anything at all; this gives the claimed tap the job
+          // the add panel's pressable chrome has. Children keep their own taps
+          // (child-first negotiation), so a row, an input or the X is unaffected.
+          // Before `{...props}` so a caller can still override it.
+          onResponderRelease={Platform.OS === 'web' ? undefined : () => Keyboard.dismiss()}
           {...props}
         >
           {children}

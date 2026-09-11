@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Keyboard, Pressable, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { ChevronsUpDown, X } from 'lucide-react-native';
 
 import { useTagMutations, useTags } from '@stxapps/expo-react';
@@ -60,16 +60,12 @@ export function TagsField({
     if (tag && !value.includes(tag.id)) onChange([...value, tag.id]);
   };
 
-  // Drop the keyboard on the way in. The editors' scrollers persist taps
-  // (`handled`), so pressing this leaves the field that was focused — the add
-  // panel's autofocused URL, most often — focused behind the dialog, and the
-  // first keystroke would land there, unseen. The picker is a list first and a
-  // search box second (docs/editors.md, the MoveToSurface note): the filter
-  // input is one tap away.
-  const openPicker = () => {
-    Keyboard.dismiss();
-    setOpen(true);
-  };
+  // No Keyboard.dismiss here: DialogContent drops the keyboard on open, which
+  // puts away the field the editors' `"handled"` scrollers leave focused behind
+  // the dialog (ui/dialog.tsx). The picker is a list first and a search box
+  // second (docs/editors.md, the MoveToSurface note): the filter input is one
+  // tap away.
+  const openPicker = () => setOpen(true);
 
   return (
     <>

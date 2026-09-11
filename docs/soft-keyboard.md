@@ -116,7 +116,14 @@ behavior="padding"` around the centring box in `DialogOverlay` — the container
   title off. The
   margin was thinner than it looked: an iPhone 17 Pro leaves ~566pt above the
   keyboard and bulk "Edit tags" wants ~520. Both halves were driven on a
-  simulator and an emulator against a deliberately oversized body. Related: this finding put the two plain-KAV
+  simulator and an emulator against a deliberately oversized body. A third,
+  cosmetic, half: the avoider pads only its OVERLAP with the keyboard, and the
+  keyboard's frame already covers the overlay's `insets.bottom + 8` gutter, so a
+  capped dialog sat flush on the keys while its other three edges kept 8.
+  `keyboardVerticalOffset={8}` on the avoider puts the gutter back (padding
+  becomes `keyboardHeight − insets.bottom`); the lift is scaled by the keyboard's
+  progress, so it is inert with the keyboard down. The add panel is flush on
+  purpose — an edge-attached panel, not a floating card. Related: this finding put the two plain-KAV
   surfaces in question on Android. AdvancedSearch has since been driven on both
   platforms and swapped to keyboard-controller (bullet above) — RN's KAV turned
   out to work there, so the swap is for consistency, not repair. The share sheet
@@ -351,6 +358,30 @@ inputs are `submitBehavior="submit"`, and on iOS the host owns the space around
 it, so before `ShareSheet`'s dismiss layer (`share/share-kit.tsx`) there was
 **no gesture in the process that closed the keyboard**. Note Android's
 `share-backdrop` is not that gesture — it closes the whole sheet.
+
+**A `Dialog`'s chrome is that tap target, once, in the container.** The native
+`@rn-primitives/dialog` Content claims every touch its children don't
+(`onStartShouldSetResponder` → `true`) and does nothing with it, so a tap on a
+dialog's header or padding neither closed it nor dropped the keyboard — dead
+space right above the input. `ui/dialog.tsx`'s `DialogContent` hangs
+`Keyboard.dismiss` on that claimed touch (`onResponderRelease`); children keep
+their own taps.
+
+**Both dialog kinds also drop the keyboard on OPEN, in the container.** The field
+focused before the opening press survives it — every scroller here persists taps
+(`"handled"`), and the links search box survives a row press — so it stays
+focused BEHIND the dialog and takes the next keystroke unseen; under an
+`AlertDialog`, which has no avoider, the keyboard also covers the footer. This
+used to be per trigger (`ListSelect`/`TagsField`'s `openPicker`), which left
+every other host without it. `DialogContent` does it in a **layout** effect on
+`open`, and the choice of effect is load-bearing: `@rn-primitives/portal`
+registers the content from a passive effect and the `PortalHost` renders it in a
+later commit, so the dismiss runs before any field inside the dialog exists and
+cannot blur one that autofocuses (`lock-password-dialog.tsx`). Moved into a
+passive effect, or into the portaled content itself, that ordering is gone and
+the password field's autofocus becomes a race — no error, just a dialog that
+sometimes opens without its keyboard. `AlertDialogContent` has no field to race,
+so a passive effect does there.
 
 **The add panel adds a FOURTH vector, and it is the one that needs guarding.**
 Its backdrop closes on a tap — web's outside-click, and swallowed by the same

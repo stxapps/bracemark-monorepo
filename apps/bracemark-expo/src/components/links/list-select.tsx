@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { Keyboard } from 'react-native';
 import { ChevronsUpDown } from 'lucide-react-native';
 
 import { useListMutations, useLists } from '@stxapps/expo-react';
@@ -53,14 +52,6 @@ export function ListSelect({
     setOpen(false);
   };
 
-  // Drop the keyboard on the way in, or the field focused before this press —
-  // the add panel's autofocused URL, most often — stays focused behind the
-  // dialog and takes the first keystroke unseen (tags-field.tsx, openPicker).
-  const openPicker = () => {
-    Keyboard.dismiss();
-    setOpen(true);
-  };
-
   // Prepend to the root group — `lists` IS that group (useLists returns the
   // top level), and index 0 matches the settings CreateRow. Select the new
   // list right away; its row reaches the trigger a beat later, when useLists
@@ -88,7 +79,10 @@ export function ListSelect({
           Input beside it, the exact defect web's comment there records. */}
       <Button
         variant="outline"
-        onPress={openPicker}
+        // No Keyboard.dismiss: DialogContent drops the keyboard on open, so
+        // the field focused before this press (the add panel's URL, most often)
+        // can't take keystrokes unseen behind the dialog (ui/dialog.tsx).
+        onPress={() => setOpen(true)}
         accessibilityRole="combobox"
         aria-expanded={open}
         aria-label="List"

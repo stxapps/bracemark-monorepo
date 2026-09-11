@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Platform, View, type ViewProps } from 'react-native';
+import { Keyboard, Platform, View, type ViewProps } from 'react-native';
 import { FadeIn, FadeOut, ReduceMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FullWindowOverlay as RNFullWindowOverlay } from 'react-native-screens';
@@ -56,7 +56,9 @@ function AlertDialogOverlay({
   //
   // No KeyboardAvoidingView, unlike dialog.tsx — an alert dialog has no input,
   // so it can't summon a keyboard, and the `max-h-full` below therefore resolves
-  // against this box directly rather than against an avoider inside it.
+  // against this box directly rather than against an avoider inside it. It can
+  // still OPEN over one left up by a field behind it; AlertDialogContent drops
+  // that keyboard on open rather than avoiding it (see the note there).
   const insets = useSafeAreaInsets();
 
   return (
@@ -99,6 +101,24 @@ function AlertDialogContent({
 }: React.ComponentProps<typeof AlertDialogPrimitive.Content> & {
   portalHost?: string;
 }) {
+  // Put away any keyboard left up behind the alert. It can only ever be a
+  // leftover — an alert has no field — e.g. the links search box, which the
+  // results list's `"handled"` keeps focused through a row press (main.tsx),
+  // long-press into bulk edit included. Left up it covers the footer
+  // (there is no avoider here) and the hidden field keeps taking keystrokes;
+  // dialog.tsx's DialogContent drops it on open for that second reason, and this
+  // is the same move. Here it also stands in for that file's other two keyboard
+  // answers: a decision needs no keyboard, so there is nothing to lift for (no
+  // avoider), and nothing left up to tap away (no chrome tap — this primitive's
+  // Content claims no touches anyway, so there'd be none to hook). A passive
+  // effect is enough: with no field inside, there is no autofocus to order it
+  // against. Keyed on `open` because this component can stay mounted while
+  // closed.
+  const { open } = AlertDialogPrimitive.useRootContext();
+  React.useEffect(() => {
+    if (open && Platform.OS !== 'web') Keyboard.dismiss();
+  }, [open]);
+
   return (
     <AlertDialogPortal hostName={portalHost}>
       <AlertDialogOverlay>
