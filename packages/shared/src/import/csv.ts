@@ -1,6 +1,13 @@
 import { normalizeUrl } from '../url/url';
 import type { ImportedLink } from './bundle';
 import { parseEpoch } from './epoch';
+import {
+  csvHighlights,
+  FAVORITES_TAG,
+  isRaindropCsvHeader,
+  withHighlights,
+  withoutUnsorted,
+} from './raindrop';
 
 // CSV parser targeting Raindrop.io's export (and export/csv.ts's own output —
 // the two share the url/folder/title/note/tags/created columns) plus Pocket's
@@ -9,11 +16,17 @@ import { parseEpoch } from './epoch';
 // not positional: a real Raindrop export carries extra columns (id, excerpt,
 // cover, highlights, favorite) and may reorder them, so each field is looked up
 // by its lowercased header name and unknown columns are ignored. A file whose
-// header has no `url` column parses to [] — it isn't a links CSV.
+// header has no `url` column parses to [] — it isn't a links CSV. Of Raindrop's
+// extras, `highlights` and `favorite` are read (raindrop.ts, shared with the
+// HTML side of the same export); id, excerpt and cover are not.
 //
 // The grammar is RFC 4180 (quoted fields, doubled inner quotes, CRLF rows) plus
 // the real-world relaxations: bare LF rows, a UTF-8 BOM, and newlines inside
 // quoted fields (Raindrop notes have them).
+//
+// The `title` column crosses as `customTitle`: Raindrop, Pocket and our own
+// export all write whatever title the user was looking at, renamed or not, and
+// none of them says which — see ImportedLink.customTitle (bundle.ts).
 
 // One pass, character-wise — small and total: every input yields SOME row
 // split, garbage never throws, and the header gate above decides relevance.
@@ -63,6 +76,20 @@ function parseCsv(text: string): string[][] {
   return rows.filter((r) => r.length > 1 || r[0].trim() !== '');
 }
 
+// A folder cell → the path it names. Our own export and the `a/b/c` shape
+// Raindrop's IMPORT docs describe join the chain with a bare `/`. Raindrop's
+// EXPORT joins it with ` / ` and writes each collection's name as-is, so there a
+// collection named `AEO/GEO` survives only if the split is on the padded form —
+// splitting on `/` would invent two lists. One named `SEO / AEO` is lost either
+// way: the CSV can't say it, and the same library's HTML export can.
+function folderPath(value: string, raindrop: boolean): string[] {
+  const path = value
+    .split(raindrop ? ' / ' : '/')
+    .map((name) => name.trim())
+    .filter((name) => name !== '');
+  return raindrop ? withoutUnsorted(path) : path;
+}
+
 export function parseRaindropCsv(text: string): ImportedLink[] {
   const rows = parseCsv(text);
   if (rows.length < 2) return [];
@@ -79,6 +106,11 @@ export function parseRaindropCsv(text: string): ImportedLink[] {
     header.indexOf('created') !== -1 ? header.indexOf('created') : header.indexOf('time_added');
   // Pocket's `status`. Neither Raindrop's export nor ours has this column.
   const statusCol = header.indexOf('status');
+  // Raindrop's own two, folded the same way netscape.ts folds the HTML's
+  // (raindrop.ts). Only its export writes them.
+  const highlightsCol = header.indexOf('highlights');
+  const favoriteCol = header.indexOf('favorite');
+  const raindrop = isRaindropCsvHeader(header);
 
   // A missing column (col === -1) reads as '' — `at(-1)` semantics would grab
   // the last cell, so index guardedly.
@@ -97,18 +129,16 @@ export function parseRaindropCsv(text: string): ImportedLink[] {
         .split(/[,|]/)
         .map((name) => name.trim())
         .filter((name) => name !== ''),
-      // The slash-joined list path our own export writes and Raindrop's nested
-      // collections use ("Parent/Child").
-      folderPath: cell(row, folderCol)
-        .split('/')
-        .map((name) => name.trim())
-        .filter((name) => name !== ''),
+      folderPath: folderPath(cell(row, folderCol), raindrop),
     };
 
     const title = cell(row, titleCol);
-    if (title !== '') link.title = title;
-    const note = cell(row, noteCol);
-    if (note !== '') link.note = note;
+    if (title !== '') link.customTitle = title;
+    const note = withHighlights(cell(row, noteCol), csvHighlights(cell(row, highlightsCol)));
+    if (note !== undefined) link.note = note;
+    if (cell(row, favoriteCol) === 'true' && !link.tagNames.includes(FAVORITES_TAG)) {
+      link.tagNames.push(FAVORITES_TAG);
+    }
 
     // ISO 8601 (what export/csv.ts and Raindrop both write) or a bare epoch
     // number (Pocket's time_added, unix seconds); anything neither reads is

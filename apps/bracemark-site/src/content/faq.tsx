@@ -1198,7 +1198,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
         // The CSV columns are the shipped header, not a paraphrase:
         // `shared/src/export/csv.ts` writes `url, folder, title, note, tags,
         // created`, which is Raindrop's documented import order — "the address,
-        // list, title, note, tags and date" is that row in the reader's words.
+        // list, title, note, tags, and date" is that row in the reader's words.
         // The landing page deliberately does NOT carry the row shape; DURABILITY
         // states the archive once and this answer carries the columns.
         //
@@ -1221,18 +1221,29 @@ export const FAQ_GROUPS: FaqGroup[] = [
         // half ("counted before anything is saved", "the file on your device is
         // never changed") and deliberately makes no upload claim — one surface
         // per fact.
+        //
+        // RAINDROP'S HTML, NOT ITS CSV. Both import, and the in-app Import
+        // description says so; this answer and the landing page's Import card
+        // name only the HTML export, because it is the one to bring. The CSV
+        // joins nested collections with " / " and writes each name as-is, so a
+        // collection called "Work / Clients" comes back as two lists, and
+        // nothing in that file can say otherwise (docs/data-lifecycle.md,
+        // _importing from Raindrop.io_). The example is a name a real person
+        // would type, not the separator spelled out, which reads as noise.
         id: 'import-export',
         q: 'Can I bring my bookmarks in, and take them out again?',
         a: (
           <>
-            Both. Import a browser bookmarks export, a Raindrop CSV or a plain list of URLs — the
-            file is read on your device and never sent anywhere; the links it holds sync encrypted,
-            like every other link. If it holds more links than your plan has room for, you are asked
-            before anything is saved (see{' '}
+            Both. Import a browser bookmarks export, a Raindrop HTML export, or a plain list of URLs
+            — the file is read on your device and never sent anywhere; the links it holds sync
+            encrypted, like every other link. From Raindrop, the HTML export is the one to use: its
+            CSV turns a collection named “Work / Clients” into a Clients list inside a Work list. If
+            the file holds more links than your plan has room for, you are asked before anything is
+            saved (see{' '}
             <HashLink id="import-over-cap">what if I import more than {FREE_LINKS} links</HashLink>
             ). Export gives you the whole library on every plan: a full backup that restores
             everything, or one of three formats other apps read — a browser bookmarks file, a CSV
-            carrying the address, list, title, note, tags and date of every link, and a plain list
+            carrying the address, list, title, note, tags, and date of every link, and a plain list
             of URLs. A list you have locked is left out of the file until you unlock it.
           </>
         ),

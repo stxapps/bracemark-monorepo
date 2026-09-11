@@ -120,7 +120,7 @@ describe('toRaindropCsv → parseImportText', () => {
       ]),
     );
 
-    expect(reimport(csv).map((row) => [row.url, row.title])).toEqual([
+    expect(reimport(csv).map((row) => [row.url, row.customTitle])).toEqual([
       ['https://example.com/1', 'Fixing a stray </a>'],
       ['https://example.com/2', 'A <b>bold</b> title'],
       ['https://example.com/3', '<!DOCTYPE NETSCAPE-Bookmark-file-1>'],
@@ -137,7 +137,7 @@ describe('toRaindropCsv → parseImportText', () => {
     expect(reimport(csv)).toEqual([
       {
         url: 'https://example.com/a',
-        title: 'Example',
+        customTitle: 'Example',
         note: 'a note',
         tagNames: ['x', 'y'],
         folderPath: ['Parent', 'Child'],

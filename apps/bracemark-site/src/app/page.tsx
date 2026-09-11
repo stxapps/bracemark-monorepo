@@ -641,7 +641,7 @@ const CAPTURE = [
     // that our disclosure has a floor. The same three words went into the pricing
     // band's lede below, which puts "no card" and "trial" in one sentence and so
     // carries the misreading harder than this card does.
-    body: `Bring the library you already have: a browser bookmarks export, a Raindrop CSV, or a plain list of URLs. Bringing more than ${FREE_LINKS} links? Take the first ${FREE_LINKS} now, or start the ${TRIAL_DAYS}-day trial, which takes a card, and bring it all.`,
+    body: `Bring the library you already have: a browser bookmarks export, a Raindrop HTML export, or a plain list of URLs. Bringing more than ${FREE_LINKS} links? Take the first ${FREE_LINKS} now, or start the ${TRIAL_DAYS}-day trial, which takes a card, and bring it all.`,
   },
 ];
 
@@ -715,9 +715,12 @@ const LIBRARY: [string, string][] = [
 // `content/faq.tsx`'s product group asks "How is this different from Raindrop,
 // Pocket or my browser's bookmarks?" and a visitor deciding between them never
 // gets there. The page's only acknowledgement that the competition exists was
-// two words inside the Import card ("a Raindrop CSV"), which is also the single
-// detail a switcher is most likely to notice — naming somebody's actual file
-// format is how you say "we thought about you".
+// three words inside the Import card ("a Raindrop HTML export"), which is also
+// the single detail a switcher is most likely to notice — naming somebody's
+// actual file format is how you say "we thought about you". It names the HTML
+// export rather than the CSV because that is the one to bring: the CSV can't
+// say a collection name containing " / " (docs/data-lifecycle.md, _importing
+// from Raindrop.io_).
 //
 // Three decisions, none of them cosmetic:
 //

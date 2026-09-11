@@ -3,7 +3,7 @@
 // (web's file is the canonical doc: format detection — Bracemark-backup zip
 // restored verbatim vs. interop/Brace.to rows becoming new links, and the POLICY —
 // dedupe by canonical URL, skip-existing by path, the upfront quota gate, a
-// file-carried title seeding the PROVISIONAL extraction title, folder paths
+// file-carried title landing as the link's own `customTitle`, folder paths
 // find-or-created at the position they name, on every plan). Everything lands through the
 // write edge (bulkWriteEntities), so the pending-ops queue carries the import
 // to the server exactly like any other local edit. Platform divergences only

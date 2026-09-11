@@ -100,7 +100,7 @@ describe('real Netscape exports, as their producers wrote them', () => {
     for (const path of paths) expect(path).not.toContain('true');
     for (const link of links) {
       expect(link.url).not.toContain('base64');
-      expect(link.title ?? '').not.toContain('base64');
+      expect(link.customTitle ?? '').not.toContain('base64');
     }
   });
 

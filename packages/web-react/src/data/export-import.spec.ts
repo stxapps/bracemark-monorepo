@@ -586,11 +586,14 @@ describe('the interop formats', () => {
     expect(lists.map((list) => list.id)).not.toContain(ARCHIVE_ID);
   });
 
-  // A file-carried title is PROVISIONAL: it seeds the extraction (which the
-  // extractor may upgrade later), never `customTitle`. The interop formats carry
-  // no such thing as "the user typed this", so a title crossing into customTitle
-  // would freeze someone else's <title> as the user's own deliberate one.
-  it("lands a file-carried title as provisional, never as the user's own", async () => {
+  // A file-carried title lands as the link's OWN title, `customTitle`, where the
+  // extractor can fill in under it but never replace it: an interop file can't
+  // say whether the user renamed a link, and overwriting a rename is the one
+  // unrecoverable outcome (@stxapps/shared import/bundle.ts, ImportedLink). The
+  // import writes no extraction, so every link is still pending for the
+  // extractor — and a title that only restates the address (what our export
+  // writes for an untitled link) is no title at all.
+  it("lands a file-carried title as the link's own, above extraction", async () => {
     await seed();
     const html = await exportedText('netscape');
     await db.items.clear();
@@ -602,14 +605,16 @@ describe('the interop formats', () => {
     });
 
     const stored = await storedEntities();
-    const links = Object.entries(stored).filter(([path]) => path.startsWith(LINKS_PREFIX));
-    for (const [, link] of links) {
-      expect((link as { customTitle?: string }).customTitle).toBeUndefined();
+    const links = Object.entries(stored)
+      .filter(([path]) => path.startsWith(LINKS_PREFIX))
+      .map(([, data]) => data as { url: string; customTitle?: string });
+    expect(links.length).toBeGreaterThan(1);
+    for (const link of links) {
+      expect(link.customTitle).toBe(
+        link.url === 'https://work.invalid/spec' ? 'The spec' : undefined,
+      );
     }
-    const titles = Object.entries(stored)
-      .filter(([path]) => path.startsWith(EXTRACTIONS_PREFIX))
-      .map(([, data]) => (data as { title?: string }).title);
-    expect(titles).toContain('The spec');
+    expect(Object.keys(stored).filter((path) => path.startsWith(EXTRACTIONS_PREFIX))).toEqual([]);
   });
 });
 

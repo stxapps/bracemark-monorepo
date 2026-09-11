@@ -2,6 +2,7 @@ import { decodeHtmlEntities } from '../html/entities';
 import { normalizeUrl } from '../url/url';
 import type { ImportedLink } from './bundle';
 import { parseEpoch } from './epoch';
+import { FAVORITES_TAG, isRaindropHtml, withHighlights, withoutUnsorted } from './raindrop';
 
 // Netscape Bookmark File parser — the read mirror of export/netscape.ts, and the
 // one importer that covers web browsers (Chrome/Firefox/Safari/IE "Export
@@ -27,7 +28,13 @@ import { parseEpoch } from './epoch';
 // exporter never writes it (export/netscape.ts sends notes to CSV instead — see
 // export/csv.ts), so it exists purely to read what other apps write, which is
 // the whole job of this file. Dropping it silently lost a note per link, and a
-// note is the one field a bookmarks file carries that the user TYPED.
+// note is the one field a bookmarks file carries that the user TYPED. Raindrop
+// writes a link's highlights as MORE <DD>s after the note, each holding one
+// <blockquote> — see raindrop.ts for where those go.
+//
+// The anchor text crosses as `customTitle`, not as a provisional title: a
+// browser lets its user rename a bookmark, and nothing in the file says whether
+// one did — see ImportedLink.customTitle (bundle.ts).
 
 // One scan, five alternatives: folder header, link anchor, list open, list close,
 // description. [\s\S]*? for inner text because titles can contain newlines; \b
@@ -101,12 +108,18 @@ export function parseNetscapeHtml(text: string): ImportedLink[] {
   // list). folderPath is the non-null names, root-first.
   const stack: (string | null)[] = [];
   let pendingFolder: string | null = null;
+  const raindrop = isRaindropHtml(text);
   // The link a <DD> would describe: set by the anchor arm and cleared by every
-  // other token, so a description attaches to the link IMMEDIATELY before it and
-  // to nothing else. Without that, `<DT><H3>F</H3><DD>folder note` would land a
-  // folder's description on whatever link happened to be parsed last — a note
-  // from one folder showing up on a link in another.
+  // other token except another <DD>, so a description attaches to the link
+  // IMMEDIATELY before it and to nothing else. Without that,
+  // `<DT><H3>F</H3><DD>folder note` would land a folder's description on whatever
+  // link happened to be parsed last — a note from one folder showing up on a link
+  // in another. A run of <DD>s is one link's: Raindrop writes the note and then
+  // one <DD> per highlight.
   let noteTarget: ImportedLink | undefined;
+  // Highlights per link, folded into the note once the scan is done — they can
+  // arrive before the whole run has been seen, and the note goes first.
+  const highlights = new Map<ImportedLink, string[]>();
 
   for (const match of text.matchAll(TOKEN_RE)) {
     const token = match[0];
@@ -114,9 +127,19 @@ export function parseNetscapeHtml(text: string): ImportedLink[] {
     // <dd>description. Checked FIRST, because the <dl> arm below dispatches on
     // the token's second character and `<dd` answers to that test too.
     if (match[5] !== undefined) {
+      if (noteTarget === undefined) continue;
+      if (/^\s*<blockquote\b/i.test(match[5])) {
+        // A <DD> that IS a <blockquote> is a highlight (Raindrop), not the note.
+        const quotes = [...match[5].matchAll(/<blockquote\b[^>]*>([\s\S]*?)<\/blockquote\s*>/gi)];
+        const list = highlights.get(noteTarget) ?? [];
+        for (const quote of quotes) list.push(descriptionText(quote[1]));
+        highlights.set(noteTarget, list);
+        continue;
+      }
+      // The first description is the note; no producer writes two, and a second
+      // one never replaces what the first said.
       const note = descriptionText(match[5]);
-      if (noteTarget !== undefined && note !== '') noteTarget.note = note;
-      noteTarget = undefined;
+      if (note !== '' && noteTarget.note === undefined) noteTarget.note = note;
       continue;
     }
 
@@ -155,14 +178,15 @@ export function parseNetscapeHtml(text: string): ImportedLink[] {
     // Non-web hrefs (bookmarklets, place:/mailto: rows) aren't storable links.
     if (url === null) continue;
 
+    const folderPath = stack.filter((name): name is string => name !== null);
     const link: ImportedLink = {
       url,
       tagNames: [],
-      folderPath: stack.filter((name): name is string => name !== null),
+      folderPath: raindrop ? withoutUnsorted(folderPath) : folderPath,
     };
 
     const title = innerText(match[4]);
-    if (title !== '') link.title = title;
+    if (title !== '') link.customTitle = title;
 
     // TAGS is the de-facto attribute Pocket/Pinboard write and LinkWarden reads
     // (export/netscape.ts writes it too), comma-joined names.
@@ -172,6 +196,10 @@ export function parseNetscapeHtml(text: string): ImportedLink[] {
         .split(',')
         .map((name) => name.trim())
         .filter((name) => name !== '');
+    }
+    // Raindrop's favorite flag — see FAVORITES_TAG.
+    if (attr(attrs, 'data-important') === 'true' && !link.tagNames.includes(FAVORITES_TAG)) {
+      link.tagNames.push(FAVORITES_TAG);
     }
 
     // ADD_DATE is the convention; TIME_ADDED is Pocket's spelling of the same.
@@ -184,5 +212,9 @@ export function parseNetscapeHtml(text: string): ImportedLink[] {
     noteTarget = link;
   }
 
+  for (const [link, quotes] of highlights) {
+    const note = withHighlights(link.note, quotes);
+    if (note !== undefined) link.note = note;
+  }
   return links;
 }

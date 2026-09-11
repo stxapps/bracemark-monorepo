@@ -80,7 +80,7 @@ describe('parseLinkwardenExport', () => {
     expect(links).toEqual([
       {
         url: 'https://example.com/fish',
-        title: 'The hunt for the fish pirates',
+        customTitle: 'The hunt for the fish pirates',
         note: 'A note the user typed',
         tagNames: ['oceans', 'story'],
         folderPath: ['Reading'],

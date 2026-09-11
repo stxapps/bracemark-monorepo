@@ -49,7 +49,7 @@ describe('parseImportText', () => {
     expect(parseImportText(NETSCAPE).links).toEqual([
       {
         url: 'https://example.com/a',
-        title: 'A',
+        customTitle: 'A',
         tagNames: ['dev'],
         folderPath: ['Work'],
         createdAt: 1_700_000_000_000,
@@ -59,7 +59,7 @@ describe('parseImportText', () => {
 
   it('routes a url-columned CSV to the csv parser', () => {
     expect(parseImportText(CSV).links).toEqual([
-      { url: 'https://example.com/a', title: 'A', tagNames: [], folderPath: ['Work'] },
+      { url: 'https://example.com/a', customTitle: 'A', tagNames: [], folderPath: ['Work'] },
     ]);
   });
 

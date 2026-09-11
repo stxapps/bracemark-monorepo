@@ -7,7 +7,7 @@ import { type ProjectedImport, projectImportedLinks, type ProjectImportOptions }
 
 // The pure half of an import: rows in, every blob the run will write out. It is
 // where an import's USER-VISIBLE behaviour is decided — which list a row lands in,
-// whether a title is deliberate or provisional, how a pin is ranked — and it has to
+// which title is held above extraction, how a pin is ranked — and it has to
 // decide it identically on web and expo, which is the whole reason it isn't in
 // either orchestrator.
 //
@@ -185,11 +185,11 @@ describe('projectImportedLinks', () => {
     expect(result.linkCount).toBe(3);
   });
 
-  it('keeps the file’s title provisional and the user’s own title deliberate', () => {
-    // The one exception to "an imported title is provisional": a title the user
-    // TYPED in the source app lands in `customTitle`, above the extraction the
-    // background extractor may still upgrade. Collapsing the two would either
-    // freeze a page title as a user edit or let extraction overwrite one.
+  it('keeps the source extractor’s title provisional and the user’s own title deliberate', () => {
+    // A source that keeps the two apart (Brace) hands over both: the title the
+    // user saw lands in `customTitle`, above the extraction our background
+    // extractor may still upgrade. Collapsing the two would either freeze a page
+    // title as a user edit or let extraction overwrite one.
     const result = project({
       rows: [
         row({
@@ -207,12 +207,11 @@ describe('projectImportedLinks', () => {
     expect(extraction.path).toBe('extractions/new-1.enc');
   });
 
-  it('leaves a ride-along title OUT of customTitle', () => {
-    // The other half of the same rule, and the one with no other witness: a title
-    // that merely came with a bulk import is not a user gesture. Promote it to
-    // `customTitle` and it outranks the extraction forever — the background
-    // extractor can never improve a single imported link's title again, on every
-    // row of every import, with nothing to see but titles that never change.
+  it('leaves a source extractor’s title OUT of customTitle', () => {
+    // The other half of the same rule: `title` is only ever what the SOURCE's
+    // extractor found, and a machine's title held as `customTitle` would outrank
+    // ours forever. (A format that can't tell the two apart sends its one title as
+    // `customTitle` instead — see ImportedLink.customTitle.)
     const result = project({ rows: [row({ url: 'https://example.com/a', title: 'Page title' })] });
 
     expect(linksOf(result)[0].customTitle).toBeUndefined();
@@ -231,6 +230,28 @@ describe('projectImportedLinks', () => {
 
     expect(under(result, EXTRACTIONS_PREFIX)).toEqual([]);
     expect(linksOf(result).every((link) => link.customTitle === undefined)).toBe(true);
+  });
+
+  // What a producer writes when it has no title is the address — Delicious names
+  // a bare-domain bookmark after its domain (__fixtures__/netscape). Held as
+  // `customTitle` it shows nothing the host fallback wouldn't, and blocks the
+  // page's real title for good; left out, the link waits for extraction.
+  it('drops a title that only restates the address', () => {
+    const result = project({
+      rows: [
+        row({ url: 'http://fontfamily.io/', customTitle: 'fontfamily.io' }),
+        row({ url: 'https://www.example.com/a/', customTitle: 'https://www.example.com/a' }),
+        row({ url: 'https://example.com/a', customTitle: 'Example.com' }),
+        row({ url: 'https://example.com/b', customTitle: 'example.com/b — notes' }),
+      ],
+    });
+
+    expect(linksOf(result).map((link) => link.customTitle)).toEqual([
+      undefined,
+      undefined,
+      undefined,
+      'example.com/b — notes',
+    ]);
   });
 
   it('truncates an over-long note instead of failing the row', () => {

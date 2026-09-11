@@ -158,7 +158,7 @@ describe('toNetscapeHtml → parseImportText', () => {
     expect(reimport(html)).toEqual([
       {
         url: 'https://example.com/a',
-        title: 'A <i>&</i> B',
+        customTitle: 'A <i>&</i> B',
         tagNames: ['work', 'read later'],
         folderPath: ['L'],
         createdAt: 1_700_000_000_000,
@@ -174,7 +174,7 @@ describe('toNetscapeHtml → parseImportText', () => {
     const html = toNetscapeHtml(bundle([folder('L', [link({ title: 'closing </A> tag' })])]));
 
     expect(reimport(html)).toHaveLength(1);
-    expect(reimport(html)[0]?.title).toBe('closing </A> tag');
+    expect(reimport(html)[0]?.customTitle).toBe('closing </A> tag');
   });
 
   it('drops an empty folder, which is the round trip’s one structural loss', () => {

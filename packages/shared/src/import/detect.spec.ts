@@ -51,7 +51,7 @@ describe('detectTextImportFormat', () => {
     it('reads our own CSV export as csv even when a title contains an anchor', () => {
       // The regression: a saved page titled `Fixing a stray </a>` used to send the
       // whole export to the Netscape tokenizer, which found no anchors and
-      // imported nothing. Titles are page-supplied (extraction.title), so this
+      // imported nothing. A title is usually the page's own <title>, so this
       // needs no malice to happen.
       const csv =
         'url,folder,title,note,tags,created\r\n' +

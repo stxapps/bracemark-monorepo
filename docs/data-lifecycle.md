@@ -213,7 +213,8 @@ every collection, tag, note, date and pin gone, and no error. Karakeep, which
 _does_ write Netscape HTML, always crossed fine.
 
 What crosses now: `collections` nest through `parentId` into a folder chain, a
-link's `name` is its (provisional) title, `description` is its note, `tags[].name`
+link's `name` is its title (as `customTitle`, like every interop title — below),
+`description` is its note, `tags[].name`
 are tags, `createdAt`/`updatedAt` are the timestamps, and the user's separate
 `pinnedLinks` relation marks pins by id — read as a SET, never as extra rows, or
 every pinned link would import twice. What does not: `rssSubscriptions` (feeds),
@@ -228,8 +229,8 @@ key.
 
 Both halves land through **one projection** — `import/project.ts`
 `projectImportedLinks` — which turns parsed rows into the entities to write:
-list/tag resolution, the deliberate-vs-provisional title split, custom-image
-blobs, pin ranks. It's pure and shared, taking `newId` as an argument like the
+list/tag resolution, which title is held above extraction, custom-image blobs,
+pin ranks. It's pure and shared, taking `newId` as an argument like the
 resolvers, because every one of those is a **user-visible behaviour that must be
 identical on web and mobile**; only the store reads, the chunked writes, and the
 progress ticks stay in the two orchestrators.
@@ -246,9 +247,18 @@ The policy, decided once:
   interop file and a backup. This is one of the places that enforce the cap at
   all — it is client-side (see [iap.md](./iap.md), _enforcement_), so
   `files/sign` would accept an over-cap import without complaint.
-- A file-carried title is **provisional**: it seeds `extraction.title` (which
-  extraction may later upgrade), never `customTitle` — unless the source marks it
-  user-authored, which only the Brace.to export does today (below).
+- **A file-carried title is the link's own title** — `customTitle`, which
+  extraction fills in under but never replaces. No interop format says whether
+  the user renamed a link in its source, every one of those sources lets them,
+  and a rename overwritten by a later fetch can't be recovered, whereas a page
+  title held there is one cleared field from the extracted one. A real Raindrop
+  export is where that was learned (below). It used to be the other way round — a
+  provisional `extraction.title` — which quietly handed every renamed bookmark
+  to the extractor to undo. Two edges: a title that only restates the address
+  (what Delicious writes for a bare domain) is dropped, not frozen; and a
+  Brace.to export, which keeps the user's title and its extractor's apart,
+  still sends the second to `extraction.title` (below). Rationale in full:
+  [link-extraction.md](./link-extraction.md), _manual overrides_.
 - **A note crosses whenever the format carries one.** The CSV `note` column, and
   Netscape's `<DD>` — the format's description element, and the only construct in
   it with no closing tag, so it runs to the next block tag. Our own HTML export
@@ -419,9 +429,10 @@ What crosses, and what deliberately doesn't:
 | `extractedResult.image`/`favicon`    | **dropped**                                   |
 | `decor`, every non-name setting      | **dropped**                                   |
 
-`custom.title` → `customTitle` is the **one exception** to "a file-carried title
-is provisional", and it earns it: Brace draws the deliberate/discovered line in
-exactly the same place we do, so the distinction survives instead of being
+Brace is the **one source that keeps both titles**, and it earns the split:
+it draws the deliberate/discovered line in exactly the same place we do, so
+`custom.title` joins every other format's title in `customTitle` while
+`extractedResult.title` stays provisional, instead of the two being
 flattened. `extractedResult.image` is dropped because it's a remote URL while
 our `extraction.imageId` is a _downloaded_ blob — and fetching at import would
 announce the user's whole library to every host in it. Writing no facets leaves
@@ -446,6 +457,62 @@ restore or migration keeps what it's given, and only a fresh pick in the editor
 goes through `resizeImage`. The whole export is one JSON string parsed at once —
 the same in-memory ceiling the bracemark backup has on mobile, failing loudly
 rather than guarded, so a very large library wants the desktop app.
+
+### importing from Raindrop.io
+
+Raindrop exports a library two ways, and both import: its **HTML** is a Netscape
+bookmarks file (`netscape.ts`, detected like any browser's) and its **CSV** is
+the header-driven one `csv.ts` reads. What each carries that neither format has
+a standard slot for is read by both parsers through one module,
+`import/raindrop.ts`, so the two files of one library import to the **same
+rows** — which is exactly what `import/raindrop-exports.spec.ts` asserts, over
+one real library exported both ways (`import/__fixtures__/raindrop`; see
+[testing.md](./testing.md), _import specimens_). Every rule below was read off
+that pair, not off Raindrop's docs, which disagree with its own export about
+the folder separator.
+
+| Raindrop.io                                   | Bracemark                                            |
+| --------------------------------------------- | ---------------------------------------------------- |
+| title                                         | **`customTitle`** — renamed or not, it can't be told |
+| note (HTML `<DD>`, CSV `note`)                | note                                                 |
+| highlights (`<DD><blockquote>`, `highlights`) | folded into the note as `> ` quotes, after the note  |
+| favorite (`DATA-IMPORTANT`, `favorite`)       | the tag **Favorites**                                |
+| collection, nested                            | folder path, find-or-created                         |
+| **Unsorted** (its inbox)                      | the default list — no folder                         |
+| tags, created, (HTML only) last modified      | tags, `createdAt`, `updatedAt`                       |
+| cover, excerpt, highlight colours             | **dropped**                                          |
+| Trash                                         | not in either file — Raindrop leaves it out of both  |
+
+- **The title is the user's.** The specimen holds a link the user renamed in
+  Raindrop; both files carry the new name exactly as they carry a fetched one,
+  with the page's real title visible only in the CSV's `excerpt`. As a
+  provisional title it would have been overwritten on the first extraction. This
+  is what moved the rule for every interop format (_import_, above).
+- **Highlights go into the note** because a link here has one note and a
+  highlight is text the user chose to keep. The typed note goes first, so the
+  `LINK_NOTE_MAX` truncation cuts the page's words before theirs. The HTML writes
+  the note's `<DD>` and then one `<DD>` per highlight; before these were read the
+  first `<DD>` won, so highlights vanished — and on a link with no note, the
+  first highlight became the note. A note _on_ a highlight is a paid Raindrop
+  feature the specimen doesn't have, so how either file writes one is unknown.
+- **A favorite is a tag, not a pin.** A pin is a short ordered shelf; a Raindrop
+  library can hold hundreds of favorites in no order. Tags resolve by name, so an
+  existing Favorites tag is joined, not duplicated.
+- **Unsorted is matched by name, only at the top, only in Raindrop's file** —
+  its `<TITLE>` in the HTML, its `excerpt` column in the CSV. A name match is
+  what `systemList` exists to avoid, and it is safe here only because nothing is
+  looked up by it: the target is the default list, which the empty path names by
+  position, so there is no renamed list to miss and none to duplicate. A
+  browser's folder called Unsorted is still the user's. The HTML also dates
+  Raindrop's `0`, but reading that would let the two files disagree, so neither
+  does — the cost is a collection the user named Unsorted landing in the
+  default list too.
+- **The CSV is the lossy one.** It joins a nested path with `/` and writes each
+  name as-is, so a Raindrop CSV is split on the padded separator only — a
+  collection named `AEO/GEO` survives — but one named `SEO / AEO` becomes two
+  lists, and nothing in the file can say otherwise. The HTML nests with `<DL>`s
+  and loses nothing; it is the better file to import. (Our own CSV and the `a/b/c`
+  shape Raindrop's import docs describe still split on a bare slash.)
 
 ### the sign-out teardown — close the gate, then wipe
 

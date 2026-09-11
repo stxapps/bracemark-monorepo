@@ -168,8 +168,9 @@ export type Pin = z.infer<typeof pinSchema>;
 //      refs). The UI resolves `customTitle ?? title ?? host(url)` and
 //      `customImageId ?? imageId` (the `custom*` halves live in `linkSchema`).
 //   2. the BOOKKEEPING — the per-facet who/when/quality/retry map (`facets`).
-// A bulk-imported title (not a deliberate user name) seeds the provisional `title` here,
-// where extraction may still upgrade it — it does NOT go in `customTitle`. Written by
+// A bulk import seeds the provisional `title` here only with what the SOURCE's own
+// extractor found (Brace); a title an interop file carries goes in `customTitle`, since
+// the file can't say whether the user renamed it (import/bundle.ts). Written by
 // client extractors (the extension, future Expo app, the web app orchestrating
 // bracemark-extractor or an import), NEVER by `bracemark-api`, which stays a blind sync broker.
 // The work loop is a QUERY, not a queue object: a link with no `done` `titleImage`

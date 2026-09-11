@@ -11,8 +11,8 @@
 // One parsed link. `url` is already normalized (url/normalizeUrl) — parsers emit
 // only storable http(s) URLs and silently drop what can't be one (bookmarklets,
 // `place:` rows, mailto:). Everything else is optional signal the source format
-// may or may not carry: `title` is the file's display title (PROVISIONAL — the
-// orchestrator seeds `extraction.title` with it, never `customTitle`; see
+// may or may not carry: `title` is a page title the SOURCE's extractor found
+// (PROVISIONAL — the orchestrator seeds `extraction.title` with it; see
 // sync/entities.ts), `folderPath` is the containing folder chain root-first
 // ([] → the importer's default list), `tagNames` are raw names to resolve/create,
 // timestamps are epoch ms like everywhere else in the sync system (converted
@@ -23,9 +23,9 @@
 // they name concepts several services have, which is why csv.ts now sets
 // `systemList` from Pocket's `status: archive` column and netscape.ts fills
 // `note` from the format's <DD> element, with no new branch anywhere downstream.
-// `customTitle`, `pinRank` and `imageRef` are still brace.ts's alone, because no
-// other format we read distinguishes a typed title from a page title or carries
-// an order or bytes. A parser that has nothing to say leaves them undefined.
+// `pinRank` and `imageRef` are still set by structured exports alone (Brace, and
+// LinkWarden's pins), because no bookmarks file carries an order or bytes. A
+// parser that has nothing to say leaves them undefined.
 export interface ImportedLink {
   url: string;
   title?: string;
@@ -34,11 +34,19 @@ export interface ImportedLink {
   folderPath: string[];
   createdAt?: number;
   updatedAt?: number;
-  // A DELIBERATE title the user typed in the source app (Brace's `custom.title`),
-  // as opposed to the page title that merely rode along in `title`. It lands in
-  // `link.customTitle`, above the provisional `extraction.title` in the display
-  // fold — the one exception to "an imported title is provisional", and only
-  // because the source distinguishes the two the same way we do.
+  // The title the user SAW in the source app — which may be one they typed. It
+  // lands in `link.customTitle`, above `extraction.title` in the display fold, so
+  // our extractor can fill in underneath it but never replace it. Every format
+  // that carries a title sets this one, because in all but one of them the user
+  // could have renamed the link and the file doesn't say: a browser bookmark, a
+  // Raindrop or Pocket row, a LinkWarden `name`. Overwriting a rename is
+  // unrecoverable, while a page title wrongly held here is one cleared field
+  // away from the extracted one — and the file's title is rarely the worse of the
+  // two: a browser captured it in a live tab and a service ran its own extractor,
+  // where an import only ever gets a background fetch (docs/link-extraction.md,
+  // _imported links_). Brace is the exception that keeps both fields: its
+  // `custom.title` comes here and its extractor's result goes to `title`. A title
+  // that only restates the address is dropped by the projection (project.ts).
   customTitle?: string;
   // The link belongs to a SYSTEM list rather than a folder — named, not
   // name-matched: `ListResolver` resolves folders by name, so a `['Archive']`

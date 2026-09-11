@@ -531,10 +531,35 @@ a suite that had only fragments in it, and two were live bugs:
 The standing rule this leaves: **a specimen comes from the producer, or there is
 no specimen.** A fixture composed from what we believe a format looks like is a
 hand-written fixture wearing a badge that says otherwise — worse than none,
-because the next reader trusts it. Pocket's CSV and Raindrop's are covered by
-rule cases in `csv.spec.ts` (including the `cursor` column variant that
-[go-shiori/shiori](https://github.com/go-shiori/shiori)'s testdata pins) and are
-still waiting on a real export from each.
+because the next reader trusts it. Pocket's CSV is covered by rule cases in
+`csv.spec.ts` (including the `cursor` column variant that
+[go-shiori/shiori](https://github.com/go-shiori/shiori)'s testdata pins) and is
+still waiting on a real export.
+
+Raindrop's is no longer waiting. `import/raindrop-exports.spec.ts` runs one real
+library exported **both** ways — HTML and CSV, from a throwaway account filled
+for coverage — kept verbatim in `import/__fixtures__/raindrop` (and
+`.prettierignore`d, like the browsers'). A pair buys the one claim no single file
+can make: two descriptions of one library must import to the same rows, so
+every Raindrop-ism that differs between them — `&quot;` against `""`, `a,b`
+against `a, b`, a `<DD>` against a quoted cell — is held by one relation instead
+of a case each, and the single place they _can't_ agree (a collection name
+containing the CSV's `/` separator) is pinned as the only one. What it taught
+that no rule case had:
+
+- **A renamed title is indistinguishable from a fetched one** in both files — so
+  every interop title now lands as `customTitle`
+  ([data-lifecycle.md](./data-lifecycle.md), _importing from Raindrop.io_).
+- **Highlights are extra `<DD>`s**, one `<blockquote>` each, after the note. The
+  first `<DD>` used to win: highlights vanished, and on a link with no note the
+  first highlight became the note.
+- **The CSV's nested-path separator is padded and unescaped** — `a / b`, never
+  `a/b` as Raindrop's import docs say — so a collection named `AEO/GEO` was split
+  into two lists.
+- **Unsorted is a folder in both files**, and **Trash is in neither.**
+
+Replacing it means exporting again and replacing both files, since the pair is
+the point.
 
 `import/linkwarden.spec.ts` is the same IOU, written where it can't be missed —
 its header states in the first paragraph that there is **no real specimen**, and

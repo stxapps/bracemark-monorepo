@@ -129,8 +129,8 @@ memory-constrained, short-lived share _extension_ — it can't reliably stand up
 WebView to render, fetch, or screenshot — so it captures only **host-provided
 metadata** (a title the originating app hands it) as a **provisional
 `extraction.title`** and leaves the actual extraction to the queue; it is a save
-context, not an extractor (the same provisional-seed pattern a bulk import uses —
-see _imported links_ — so it emits **no `extractedBy` tier of its own**, and the
+context, not an extractor (the same provisional-seed pattern a Brace.to import
+uses for its extractor's title — see _imported links_ — so it emits **no `extractedBy` tier of its own**, and the
 `extractedBy` enum stays `expo:fg | expo:bg`, no share-sheet value). The
 **foreground** (the full app open) is mobile's true active-context tier: native
 fetch / a controllable WebView give it title+image, read-mode, screenshot, and
@@ -253,8 +253,8 @@ The mobile **share sheet** is the one save context that **doesn't** extract inli
 — it's a constrained share _extension_, so it captures only host-provided metadata
 as a provisional `extraction.title`, leaves the `titleImage` facet **pending**, and
 lets the foreground/background queue do the real extraction later (the same
-provisional-seed pattern as a bulk import — see _imported links_, _capability
-tiers_).
+provisional-seed pattern as a Brace.to import's extracted title — see _imported
+links_, _capability tiers_).
 
 Note what the mobile/foreground row does **not** carry: an opt-in. The fetch is
 local, to a host the user just handed the app, in the gesture that asked for the
@@ -703,26 +703,39 @@ properties fall out for free:
 > **Save-time title is sticky.** Any title the user types — whether **at save** or in
 > a later edit — goes into `customTitle` and is **never** overwritten by extraction.
 > `extraction.title` holds only the **provisional** value, filled when `titleImage`
-> lands (or pre-seeded from a bulk import — see _imported links_). An unnamed link
+> lands (or pre-seeded from a Brace.to import — see _imported links_). An unnamed link
 > shows `host(url)`, derived at render, until extraction fills `extraction.title` (or
 > stays a bare host on a web-only client — the _web-only gap_). So a user-named link
 > keeps its name forever; an unnamed one upgrades from host → og:title when extraction
 > runs.
 >
-> **A _provided_ title (share-sheet host hint, bulk-import field) is provisional,
-> not sticky.** It seeds `extraction.title` and stays replaceable by a later
-> og:title or a higher tier — it is **not** auto-promoted to `customTitle`,
-> because most provided titles are machine-captured (a browser bookmark's
-> `<title>`, the source app's title), not names the user chose; freezing them
-> would defeat the refresh and over-apply the sticky rule. **Promote a provided
-> title to `customTitle` only when the source marks it user-authored** (e.g. a
-> Pocket/Raindrop user-edited title) — otherwise leave it provisional. The
-> asymmetry that makes this safe: a wrongly-frozen title is one edit away from
-> fixed, whereas overwriting a provisional that lived only in `extraction.title`
-> is **unrecoverable** — so when you _do_ have a user-authored signal, protect it
-> via sticky `customTitle` (preserved + revertable), **never** a "don't-replace"
-> flag on `extraction.title` (which can't tell a seed from a low-tier result and
-> would also block legitimate tier upgrades).
+> **A _provided_ title is sticky whenever the user could have typed it.** The
+> test is not whether a source _marks_ a title user-authored — almost none can —
+> but whether the user had the chance to rename it there:
+>
+> - **An imported title → `customTitle`**, from every interop format. A browser
+>   bookmark, a Raindrop or Pocket row and a LinkWarden `name` are all renamable
+>   in their source, and none of their files says whether that happened: a real
+>   Raindrop export carries a renamed title exactly as it carries a fetched one
+>   (see [data-lifecycle.md](./data-lifecycle.md), _importing from Raindrop.io_).
+>   Only a source that keeps both halves (Brace.to) splits them, the extractor's
+>   half going to `extraction.title`. A title that only restates the address is
+>   dropped rather than frozen — it is what a producer writes when it has none.
+> - **A share-sheet host hint → `extraction.title`**, provisional. The host app
+>   hands over the page's title at the moment of sharing; nobody named it, so a
+>   later og:title or a higher tier may replace it.
+>
+> The asymmetry that decides it: a wrongly-frozen title is one edit away from
+> fixed — clearing `customTitle` falls through to the extracted title, which
+> extraction still fills underneath — whereas overwriting a provisional that
+> lived only in `extraction.title` is **unrecoverable**. An imported title is also
+> rarely the worse one: a browser captured it in a live tab, often signed in, and
+> a service like Raindrop ran its own extractor, while an import is only ever
+> enriched by a background fetch, which can land on the sign-in page, the consent
+> wall or the bot check instead (_imported links_). What the sticky side costs is a bad title in the file ("Amazon") staying until someone
+> edits it. Protect a sticky title via `customTitle` (preserved + revertable),
+> **never** a "don't-replace" flag on `extraction.title` (which can't tell a seed
+> from a low-tier result and would also block legitimate tier upgrades).
 
 ### the extraction entity
 
@@ -763,7 +776,7 @@ export const extractionSchema = z.looseObject({
   id: z.string(), // = the link's id ({id} of links/{id}.enc)
   // display result — what the UI renders, the machine-written half of a link's
   // display (the user-written half, customTitle/customImageId, is on linkSchema):
-  title: z.string().max(LINK_TITLE_MAX).optional(), // discovered/provisional og:title (or imported)
+  title: z.string().max(LINK_TITLE_MAX).optional(), // discovered/provisional og:title (or a Brace.to import's)
   imageId: z.string().optional(), // og:image preview — a files/{id}.enc ref, never the remote URL
   pageCopyId: z.string().optional(), // saved page copy — files/{id}.enc, from the `pageCopy` facet
   screenshotId: z.string().optional(), // full-page screenshot — files/{id}.enc, from `screenshot`
@@ -791,8 +804,9 @@ export type Extraction = z.infer<typeof extractionSchema>;
 **A present display field never implies its facet ran.** The facet map is the
 **sole** authority for done/pending — never infer "`titleImage` is done" from a
 non-empty `title`. `extraction.title` may legitimately hold a value while
-`titleImage` is **absent** (= pending): a **provisional seed** from a bulk import
-or a share-sheet host hint (see _imported links_, _capability tiers_). This is
+`titleImage` is **absent** (= pending): a **provisional seed** from a Brace.to
+import's extracted title or a share-sheet host hint (see _imported links_,
+_capability tiers_). This is
 deliberate and load-bearing — the seed is left pending **on purpose** so the
 normal loop fetches the real og:title and replaces it. Two reasons it's a value
 _without_ a facet, not a facet:
@@ -1231,21 +1245,21 @@ devices draining the same thousands both fetch them (idempotent, so still
 correct, just wasteful). If that ever bites, **deterministic sharding** by `id`
 hash divides the work with zero coordination — deferred, because the device the
 import landed on usually drains it alone (see _the extraction entity_). A title
-carried in the export seeds **`extraction.title` (provisional)**, not
-`customTitle` — the user didn't deliberately name it, so extraction may still
-upgrade it to the real og:title; it's just a better placeholder than a bare host
-meanwhile (see _manual overrides_). The exception: when the export marks a title
-**user-edited**, route _that_ one to sticky `customTitle` instead, so a
-deliberate rename survives re-extraction — the default-provisional /
-sticky-only-with-a-user-authored-signal rule from _manual overrides_. The
-Brace.to importer is the live instance: its export carries `custom.title` (what
-the user typed) beside `extractedResult.title` (what its extractor found), so
-the two route to `customTitle` and `extraction.title` respectively —
-`ImportedLink` has a field for each, and any future importer with the same
-signal uses them (see [data-lifecycle.md](./data-lifecycle.md), _importing from
-Brace.to_). This is the one case an import writes an
-`extractions/` file up front — the pending signal then is the **absent `titleImage`
-facet**, not an absent file (the queue query already keys on the facet).
+carried in the export lands as sticky **`customTitle`**, not as a provisional
+`extraction.title`: the file can't say whether the user renamed the link, a
+rename overwritten is gone for good, and the title it carries came from a live
+tab or the source's own extractor — rarely worse than the bg-fetch tier this
+path is limited to (see _manual overrides_). Extraction still
+runs for every imported link: it is where the image comes from, and the
+extracted title it writes underneath is what clearing `customTitle` falls back
+to. The exception is a source that keeps the two halves apart — Brace.to, whose
+export carries `custom.title` (what the user typed) beside
+`extractedResult.title` (what its extractor found), so the two route to
+`customTitle` and `extraction.title` respectively (see
+[data-lifecycle.md](./data-lifecycle.md), _importing from Brace.to_). That is the
+one case an import writes an `extractions/` file up front — the pending signal
+then is the **absent `titleImage` facet**, not an absent file (the queue query
+already keys on the facet).
 
 **Imports are where `bracemark-extractor` stops being avoidable.** For a one-off web
 save it's a nicety; for a bulk import, client-only draining is genuinely weak. A

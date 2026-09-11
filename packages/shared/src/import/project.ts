@@ -7,8 +7,8 @@
 //
 // It lives here for the reason the resolvers next door do: this logic was about to
 // exist twice, once per platform, and the two copies could only agree by luck. The
-// import's user-visible behaviour (which list a row lands in, whether a title is
-// deliberate or provisional, how a pin is ranked, whether a custom image is kept)
+// import's user-visible behaviour (which list a row lands in, which title is held
+// above extraction, how a pin is ranked, whether a custom image is kept)
 // must be identical on web and mobile, so it is written once.
 //
 // `newId` is a constructor argument for the same reason ListResolver takes one:
@@ -51,6 +51,7 @@ import {
 } from '../sync/paths';
 import { ranksBetween } from '../sync/rank';
 import { ARCHIVE_ID, TRASH_ID } from '../sync/system-lists';
+import { hostFromText } from '../url/url';
 import type { ImportedLink } from './bundle';
 import { ListResolver, type ResolverNode, TagResolver } from './resolve';
 
@@ -94,6 +95,20 @@ export interface ProjectImportOptions {
   images: Map<string, Uint8Array>;
   newId: () => string;
   now: number;
+}
+
+// A title that says nothing but where the link points: the URL itself, or the
+// host `hostFromText` would display in its place — compared without scheme,
+// `www.`, trailing slash or case.
+function namesOnlyTheAddress(title: string, url: string): boolean {
+  const bare = (text: string) =>
+    text
+      .toLowerCase()
+      .replace(/^[a-z][a-z0-9+.-]*:\/\//, '')
+      .replace(/^www\./, '')
+      .replace(/\/+$/, '');
+  const candidate = bare(title);
+  return candidate === bare(url) || candidate === bare(hostFromText(url));
 }
 
 export function projectImportedLinks(options: ProjectImportOptions): ProjectedImport {
@@ -143,10 +158,17 @@ export function projectImportedLinks(options: ProjectImportOptions): ProjectedIm
       updatedAt,
     };
     if (row.note !== undefined) link.note = row.note.slice(0, LINK_NOTE_MAX);
-    // The user's own title in the source app — deliberate, so it outranks the
-    // provisional extraction title below, exactly like one typed here would.
+    // The title the user saw in the source app — possibly one they typed, so it
+    // outranks the provisional extraction title below, exactly like one typed
+    // here would (see ImportedLink.customTitle). Except when it is only the
+    // link's own address, which is what a producer writes when it has no title
+    // (Delicious names a bare-domain bookmark after the domain): held as
+    // customTitle it would block the real title forever and add nothing the
+    // display fallback doesn't already show.
     const customTitle = cleanTitle(row.customTitle);
-    if (customTitle !== undefined) link.customTitle = customTitle;
+    if (customTitle !== undefined && !namesOnlyTheAddress(customTitle, row.url)) {
+      link.customTitle = customTitle;
+    }
     if (row.imageRef !== undefined) {
       const fileId = fileIdByRef.get(row.imageRef);
       if (fileId !== undefined) link.customImageId = fileId;

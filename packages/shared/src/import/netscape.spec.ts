@@ -25,14 +25,14 @@ describe('parseNetscapeHtml', () => {
     expect(links).toEqual([
       {
         url: 'https://root.example.com/',
-        title: 'Root link',
+        customTitle: 'Root link',
         tagNames: [],
         folderPath: [],
         createdAt: 1_700_000_000_000,
       },
       {
         url: 'https://example.com/a',
-        title: 'A',
+        customTitle: 'A',
         tagNames: ['dev', 'read later'],
         folderPath: ['Work'],
         createdAt: 1_700_000_000_000,
@@ -40,7 +40,7 @@ describe('parseNetscapeHtml', () => {
       },
       {
         url: 'https://example.com/b',
-        title: 'B',
+        customTitle: 'B',
         tagNames: [],
         folderPath: ['Work', 'Projects'],
       },
@@ -84,7 +84,7 @@ describe('parseNetscapeHtml', () => {
     expect(parseNetscapeHtml(html)).toEqual([
       {
         url: 'https://example.com/?a=1&b="2"',
-        title: 'A <i>&</i> B',
+        customTitle: 'A <i>&</i> B',
         tagNames: ['<t>', 'plain'],
         folderPath: ['Parent'],
         createdAt: 1_700_000_000_000,
@@ -92,7 +92,7 @@ describe('parseNetscapeHtml', () => {
       },
       {
         url: 'https://example.com/c',
-        title: 'C',
+        customTitle: 'C',
         tagNames: [],
         folderPath: ['Parent', 'Child & Co'],
         createdAt: 1_700_000_002_000,
@@ -116,7 +116,7 @@ describe('parseNetscapeHtml', () => {
   it('tolerates missing doctype, unclosed lists, and case soup', () => {
     const html = '<dl><dt><h3>f</h3><dl><DT><a href="https://example.com/x">X</a>';
     expect(parseNetscapeHtml(html)).toEqual([
-      { url: 'https://example.com/x', title: 'X', tagNames: [], folderPath: ['f'] },
+      { url: 'https://example.com/x', customTitle: 'X', tagNames: [], folderPath: ['f'] },
     ]);
   });
 
@@ -188,7 +188,7 @@ describe('parseNetscapeHtml', () => {
       '</DL><p>',
     ].join('\n');
     const [link] = parseNetscapeHtml(html);
-    expect(link.title).toBe('Read this & that');
+    expect(link.customTitle).toBe('Read this & that');
     // Named and numeric spellings of the same character both decode — the table is
     // shared with the extraction parsers (html/entities.ts), so an exporter's
     // `&eacute;` lands as the character a browser would have shown.
@@ -201,12 +201,12 @@ describe('parseNetscapeHtml', () => {
     const html =
       '<DT><A HREF="https://example.com/a">' +
       'Please stop &mdash; Martin Kleppmann&rsquo;s blog&hellip;</A>';
-    expect(parseNetscapeHtml(html)[0].title).toBe('Please stop — Martin Kleppmann’s blog…');
+    expect(parseNetscapeHtml(html)[0].customTitle).toBe('Please stop — Martin Kleppmann’s blog…');
   });
 
   it('leaves an unknown named entity literal rather than dropping the title', () => {
     const html = '<DT><A HREF="https://example.com/a">a &bogus; b</A>';
-    expect(parseNetscapeHtml(html)[0].title).toBe('a &bogus; b');
+    expect(parseNetscapeHtml(html)[0].customTitle).toBe('a &bogus; b');
   });
 
   it('decodes entities in the href and TAGS attributes too', () => {
@@ -275,5 +275,57 @@ describe('parseNetscapeHtml', () => {
     const links = parseNetscapeHtml(html);
     expect(links).toHaveLength(1);
     expect(links[0].note).toBeUndefined();
+  });
+
+  // Raindrop writes a link's highlights as further <DD>s, one <blockquote> each,
+  // AFTER the note's (a real file: __fixtures__/raindrop). Before they were read,
+  // the first <DD> won — so the highlights vanished, and on a link with no note
+  // the first highlight became the note. Now they fold in as quotes, the typed
+  // note first, the same way csv.ts folds Raindrop's `highlights` column.
+  it('folds <blockquote> highlights into the note, after the typed note', () => {
+    const html = [
+      '<DT><A HREF="https://example.com/a">A</A>',
+      '<DD>my note',
+      '<DD><blockquote COLOR="yellow" ADD_DATE="1">first &amp; best</blockquote>',
+      '<DD><blockquote COLOR="green" ADD_DATE="1">second</blockquote>',
+      '<DT><A HREF="https://example.com/b">B</A>',
+      '<DD><blockquote COLOR="yellow" ADD_DATE="1">only</blockquote>',
+      '<DT><A HREF="https://example.com/c">C</A>',
+    ].join('\n');
+
+    expect(parseNetscapeHtml(html).map((link) => link.note)).toEqual([
+      'my note\n\n> first & best\n\n> second',
+      '> only',
+      undefined,
+    ]);
+  });
+
+  // Raindrop's favorite flag crosses as a tag; `false` (on every other row) is
+  // nothing.
+  it('tags a DATA-IMPORTANT link as a favorite', () => {
+    const html = [
+      '<DT><A HREF="https://example.com/a" TAGS="x" DATA-IMPORTANT="true">A</A>',
+      '<DT><A HREF="https://example.com/b" TAGS="" DATA-IMPORTANT="false">B</A>',
+    ].join('\n');
+
+    expect(parseNetscapeHtml(html).map((link) => link.tagNames)).toEqual([['x', 'Favorites'], []]);
+  });
+
+  // Unsorted is Raindrop's inbox, so in ITS file the folder crosses as the
+  // default list. The same folder name in a browser's file is one the user made.
+  it("lands Raindrop's Unsorted in the default list, and only Raindrop's", () => {
+    const body = [
+      '<DL><p>',
+      '<DT><H3 ADD_DATE="0" LAST_MODIFIED="0">Unsorted</H3>',
+      '<DL><p>',
+      '<DT><A HREF="https://example.com/a">A</A>',
+      '</DL><p>',
+      '</DL><p>',
+    ].join('\n');
+    const raindrop = `<TITLE>Raindrop.io Bookmarks</TITLE>\n${body}`;
+    const browser = `<TITLE>Bookmarks</TITLE>\n${body}`;
+
+    expect(parseNetscapeHtml(raindrop)[0].folderPath).toEqual([]);
+    expect(parseNetscapeHtml(browser)[0].folderPath).toEqual(['Unsorted']);
   });
 });

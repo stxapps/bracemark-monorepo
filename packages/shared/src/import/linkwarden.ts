@@ -163,11 +163,11 @@ export function parseLinkwardenExport(text: string): ImportedLink[] {
       const link: ImportedLink = { url, tagNames: tagNames(row.tags), folderPath: path };
 
       // LinkWarden's `name` is the row's display title and can be empty, in
-      // which case its UI shows the URL. Provisional either way — it seeds
-      // extraction.title, never customTitle (docs/data-lifecycle.md), because
-      // nothing in the file says whether a human typed it or a fetch did.
+      // which case its UI shows the URL. It crosses as customTitle
+      // (docs/data-lifecycle.md): nothing in the file says whether a human typed
+      // it or a fetch did, and only the second is safe to overwrite.
       const title = nonEmpty(row.name);
-      if (title !== undefined) link.title = title;
+      if (title !== undefined) link.customTitle = title;
 
       // `description` is the note the user typed under the link — the field our
       // own CSV column and the Netscape <DD> carry, one product over.

@@ -44,9 +44,11 @@
 //     still refused whole, because a half-restored backup is the corrupt-looking
 //     outcome the whole-file rule was written for. Why the two differ:
 //     @stxapps/shared data/import-run.ts.
-//   - A file-carried title is PROVISIONAL, not deliberate: it seeds
-//     `extraction.title` (which extraction may later upgrade), never
-//     `customTitle` — see the contract note in @stxapps/shared sync/entities.ts.
+//   - A file-carried title lands as `customTitle`, above anything extraction
+//     finds: no interop file says whether the user renamed a link, and
+//     overwriting a rename can't be undone (@stxapps/shared import/bundle.ts,
+//     ImportedLink.customTitle). Only a source extractor's own title (Brace's)
+//     seeds the provisional `extraction.title`.
 //   - Folder paths find-or-create lists by case-insensitive name walk, at the
 //     POSITION the path names: each segment is matched among the children of the
 //     one before it, so "Work/Specs" reuses a Specs that already sits under Work

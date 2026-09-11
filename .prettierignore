@@ -34,3 +34,6 @@ package-lock.json
 # <DT>s, a valueless FOLDED attribute, the indentation inside a <DD> — and the
 # specimens would quietly become our own HTML instead of theirs.
 /packages/shared/src/import/__fixtures__/netscape
+# The same, for one Raindrop.io library exported both ways
+# (packages/shared/src/import/__fixtures__/raindrop/README.md).
+/packages/shared/src/import/__fixtures__/raindrop
