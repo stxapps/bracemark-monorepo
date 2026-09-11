@@ -236,15 +236,41 @@ lose. Its mechanisms are the ordinary ones, and they are `ui/dialog.tsx`'s three
 - **Focus visibility** — the plain scroller has no automatic focused-input
   tracking. If Note summons the keyboard from closed, the avoider shrinks the
   viewport but preserves the scroller's old offset, leaving Note below the new
-  fold. The panel records whether Note is focused and calls `scrollToEnd` on
-  keyboard-controller's cross-platform `keyboardDidShow`, when the avoider's
-  final bounds make the end offset real; if the keyboard is already open, the
-  focus event scrolls immediately. This is deliberately not RN ScrollView's
-  `automaticallyAdjustKeyboardInsets` (iOS only), and not a nested
+  fold. The panel scrolls it back on keyboard-controller's `useKeyboardHandler`
+  `onMove` — the per-frame event on both platforms — measuring the scroller's
+  viewport height and scrolling, unanimated, to the absolute offset that puts
+  Note's bottom (its content position, from the optional section's `onLayout`)
+  16pt above the viewport's; `onEnd` re-checks one frame later, and a reaction
+  covers what the keyboard never announces (focus under an already-open
+  keyboard, the multiline field growing). Three traps sit under that, and all
+  fail silently — no error, just motion that is wrong:
+  - **`useReanimatedKeyboardAnimation().height` is not per-frame on iOS.** The
+    provider writes it once, in `onKeyboardMoveStart`, already holding the
+    final height (`animated.tsx`), so a reaction on it runs a single time,
+    before the avoider has moved, finds no overlap, and never runs again. The
+    first rewrite off `keyboardDidShow` did exactly that.
+  - **A measured `pageY` inside a scroller lags a `scrollTo`.** `measure`
+    reads the shadow tree, whose copy of the content offset native updates
+    asynchronously (`_updateStateWithContentOffset`), so a per-frame "scroll
+    by the overlap" re-adds an overlap it has already scrolled away. Scroll to
+    an absolute target computed from offset-independent numbers instead.
+  - **Gate the keyboard events on their `target`, not on a JS focus flag.**
+    Moving focus from Note to URL resizes the keyboard (Note shows the
+    suggestion bar, URL does not), so the move fires `onMove` frames — and
+    `onBlur` reaches the UI thread several frames after them. Gated on a flag
+    set from `onBlur`, those frames still saw Note focused and yanked the form
+    back down to it, away from the field just tapped. The event's `target` is
+    the input focused at that moment; Note's tag comes from its `onFocus`
+    event (`nativeEvent.target`, the same tag).
+
+  `measure` sees the layout committed last frame, so the scroll trails the
+  avoider by one frame; the 16pt gap absorbs it. This is deliberately not a JS
+  `keyboardDidShow` listener (it lands after the keyboard, then animates a
+  second time — the visible lag this replaced), RN ScrollView's
+  `automaticallyAdjustKeyboardInsets` (iOS only), or a nested
   `KeyboardAwareScrollView`: in the pinned version the latter adds a full
   keyboard-height spacer while the outer avoider has already removed that
-  height, double-compensating this panel. The existing `pb-4` supplies the
-  clearance below the button row at the scroll end.
+  height, double-compensating this panel.
 
 Three details are load-bearing and none of them is visible from the code:
 

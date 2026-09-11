@@ -73,18 +73,22 @@
 // The backdrop is the fourth: it is web's outside-click, and it is guarded the
 // same way — swallowed while the optional section holds work.
 //
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { BackHandler, Keyboard, ScrollView, View } from 'react-native';
+import { type ComponentRef, useEffect, useState } from 'react';
+import { BackHandler, Keyboard, View } from 'react-native';
 import {
   KeyboardAvoidingView,
-  KeyboardController,
-  KeyboardEvents,
+  useKeyboardHandler,
   useReanimatedKeyboardAnimation,
 } from 'react-native-keyboard-controller';
-import {
+import Animated, {
   Easing,
+  measure,
   ReduceMotion,
+  scrollTo,
+  useAnimatedReaction,
+  useAnimatedRef,
   useAnimatedStyle,
+  useScrollOffset,
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
@@ -124,6 +128,7 @@ import { useLinksPage } from './page-provider';
 // components/landing.tsx).
 const StyledKeyboardAvoidingView = withUniwind(KeyboardAvoidingView);
 const StyledAnimatedView = withUniwind(NativeOnlyAnimatedView);
+const StyledAnimatedScrollView = withUniwind(Animated.ScrollView);
 
 // The panel's arrival: it slides from the edge it is anchored to, which is also
 // the edge the FAB that summoned it sits on — spatial consistency, the one
@@ -147,6 +152,9 @@ const StyledAnimatedView = withUniwind(NativeOnlyAnimatedView);
 const SHEET_CURVE = Easing.bezier(0.32, 0.72, 0, 1);
 const SHEET_MS = 300;
 const DIM_MS = 200;
+// The same 16pt clearance the scroller's `pb-4` leaves at its end, applied to
+// Note itself when only part of the form needs revealing.
+const NOTE_REVEAL_GAP = 16;
 
 // A labeled field row (web's Label + control pairs; the SearchBar WordField
 // idiom).
@@ -163,8 +171,16 @@ export function LinkAddPanel({ onClose }: { onClose: () => void }) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { height: keyboardHeight } = useReanimatedKeyboardAnimation();
-  const scrollRef = useRef<ScrollView>(null);
-  const noteFocused = useRef(false);
+  const scrollRef = useAnimatedRef<ComponentRef<typeof Animated.ScrollView>>();
+  const scrollOffset = useScrollOffset(scrollRef);
+  const noteFocused = useSharedValue(false);
+  // Note's native tag, from its first focus — what keyboard events carry as
+  // `target` (see the keyboard handler below for why it, not `noteFocused`).
+  const noteTag = useSharedValue(-1);
+  // Note's bottom edge in the scroller's CONTENT coordinates. Note is the last
+  // child of the optional section, so it is that section's bottom (its
+  // onLayout, below) — and it re-fires as the multiline Textarea grows.
+  const noteBottom = useSharedValue(0);
   const { selection } = useLinksPage();
   // 1 = parked below the bottom edge, 0 = home. Driven once on mount; the panel
   // is only mounted while it is open (links/index.tsx), so there is no "closed"
@@ -254,18 +270,62 @@ export function LinkAddPanel({ onClose }: { onClose: () => void }) {
     return () => sub.remove();
   }, [optionalDirty, onClose]);
 
-  // The avoider owns the panel's final height; only then does this scroller
-  // know its real end offset. Reveal Note after that layout settles, or
-  // immediately when focus moves to it under an already-open keyboard.
-  const revealNote = useCallback(() => {
-    scrollRef.current?.scrollToEnd({ animated: true });
-  }, []);
-  useEffect(() => {
-    const sub = KeyboardEvents.addListener('keyboardDidShow', () => {
-      if (noteFocused.current) revealNote();
-    });
-    return () => sub.remove();
-  }, [revealNote]);
+  // Keep a focused Note above the fold. The outer avoider is the ONE keyboard
+  // owner: it shrinks this scroller's viewport frame by frame but keeps its
+  // offset, so a Note near the form's end sinks behind the keyboard. Each call
+  // scrolls to the ABSOLUTE offset that puts Note's bottom NOTE_REVEAL_GAP above
+  // the viewport's, and only ever downward. Absolute, not "offset + overlap":
+  // Note's measured pageY inside a scroller comes from the shadow tree's copy of
+  // the content offset, which native updates asynchronously, so an overlap
+  // measured right after a scrollTo is stale and would be added twice. The
+  // viewport's own height and Note's content position do not depend on it.
+  const revealNote = (animated: boolean) => {
+    'worklet';
+    const viewport = measure(scrollRef);
+    if (viewport === null) return;
+    const target = noteBottom.get() + NOTE_REVEAL_GAP - viewport.height;
+    if (target > scrollOffset.get()) scrollTo(scrollRef, 0, target, animated);
+  };
+  // The keyboard's own per-frame events, so the scroll moves WITH the keyboard.
+  // Not `useReanimatedKeyboardAnimation().height`: on iOS the provider writes it
+  // once, at the start, already holding the final height — a reaction on it runs
+  // a single time, before the avoider has moved, and never again. `measure` sees
+  // the layout committed last frame, so the scroll trails the avoider by one
+  // frame; the gap absorbs that, and `onEnd` re-checks after the last commit.
+  //
+  // Gated on the event's `target` — the input focused at that moment, read on
+  // the UI thread — and not on `noteFocused`, which JS clears in `onBlur`
+  // several frames late. Moving focus from Note to URL resizes the keyboard
+  // (Note has a suggestion bar, URL doesn't), and in those frames the flag
+  // still said Note: the reveal yanked the form back down to Note, away from
+  // the field just tapped.
+  useKeyboardHandler(
+    {
+      onMove: (e) => {
+        'worklet';
+        if (e.target === noteTag.get()) revealNote(false);
+      },
+      onEnd: (e) => {
+        'worklet';
+        if (e.target !== noteTag.get()) return;
+        requestAnimationFrame(() => {
+          'worklet';
+          revealNote(false);
+        });
+      },
+    },
+    [],
+  );
+  // What the keyboard does not announce: focus moving to Note under an
+  // already-open keyboard (animated — nothing else is moving), and Note growing
+  // a line as it is typed into (instant, as a native text view follows its
+  // caret).
+  useAnimatedReaction(
+    () => ({ focused: noteFocused.get(), bottom: noteBottom.get() }),
+    (now, prev) => {
+      if (now.focused) revealNote(prev !== null && !prev.focused);
+    },
+  );
 
   const close = onClose;
 
@@ -464,7 +524,7 @@ export function LinkAddPanel({ onClose }: { onClose: () => void }) {
             app's usual `on-drag`: the expanded form can put Note below the fold,
             so an upward drag must scroll it clear without dismissing the keyboard
             and expanding the panel again (docs/soft-keyboard.md). */}
-          <ScrollView
+          <StyledAnimatedScrollView
             ref={scrollRef}
             className="shrink"
             contentContainerClassName="gap-4 px-4 pb-4"
@@ -602,7 +662,14 @@ export function LinkAddPanel({ onClose }: { onClose: () => void }) {
                 </Button>
 
                 {openOptional && (
-                  <View className="gap-4">
+                  <View
+                    className="gap-4"
+                    // Note is the last child, so this bottom is Note's (revealNote).
+                    onLayout={(e) => {
+                      const { y, height } = e.nativeEvent.layout;
+                      noteBottom.set(y + height);
+                    }}
+                  >
                     {/* No Trash target: it's the deletion staging area, never a place
                     to add new links (same rule as the default-list fallback).
                     Locked/hidden lists stay pickable — hiding only declutters the
@@ -624,12 +691,12 @@ export function LinkAddPanel({ onClose }: { onClose: () => void }) {
                       <Textarea
                         value={note}
                         onChangeText={setNote}
-                        onFocus={() => {
-                          noteFocused.current = true;
-                          if (KeyboardController.isVisible()) revealNote();
+                        onFocus={(e) => {
+                          noteTag.set(e.nativeEvent.target);
+                          noteFocused.set(true);
                         }}
                         onBlur={() => {
-                          noteFocused.current = false;
+                          noteFocused.set(false);
                         }}
                         maxLength={LINK_NOTE_MAX}
                         placeholder="Optional note"
@@ -670,7 +737,7 @@ export function LinkAddPanel({ onClose }: { onClose: () => void }) {
                 </View>
               </>
             )}
-          </ScrollView>
+          </StyledAnimatedScrollView>
         </StyledAnimatedView>
       </StyledKeyboardAvoidingView>
     </View>
