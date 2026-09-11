@@ -9,7 +9,19 @@ import Animated from 'react-native-reanimated';
 // this workspace's stricter TS the union parameter type doesn't narrow on the
 // optional `as`, so each branch's incompatible `ref`/`key` shapes fail
 // typecheck when spread raw (runtime behavior unchanged; upstream also spreads
-// the whole props object, stray `as` included).
+// the whole props object, stray `as` included). Plus POPUP_FADE_MS below.
+
+// How long a portaled surface — dialog, alert dialog, dropdown menu — takes to
+// fade in or out on native, and it is web-ui's `duration-100`: each of those
+// three sets it on its overlay and its content alike, so tw-animate-css's own
+// 150ms default never applies there. One number for the three, so the kits
+// cannot drift apart surface by surface — which is how they did: a builder given
+// no `.duration()` runs Reanimated's default 300, so the menu took three times
+// web's time and the dialog's content, with the registry's 50ms delay on top,
+// three and a half. Only the duration ports: web's `zoom-in-95` (and the menu's
+// `slide-in-from-top-2`) have no counterpart here, and the curve is
+// Reanimated's default rather than CSS `ease`.
+const POPUP_FADE_MS = 100;
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -43,4 +55,4 @@ function NativeOnlyAnimatedView(
   }
 }
 
-export { NativeOnlyAnimatedView };
+export { NativeOnlyAnimatedView, POPUP_FADE_MS };

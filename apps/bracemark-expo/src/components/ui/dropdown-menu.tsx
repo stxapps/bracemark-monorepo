@@ -17,7 +17,7 @@ import { Check, ChevronDown, ChevronRight, ChevronUp } from 'lucide-react-native
 
 import { cn } from '../../lib/utils';
 import { Icon } from './icon';
-import { NativeOnlyAnimatedView } from './native-only-animated-view';
+import { NativeOnlyAnimatedView, POPUP_FADE_MS } from './native-only-animated-view';
 import { Text, TextClassContext } from './text';
 
 // react-native-reusables `dropdown-menu` (uniwind variant), copied from the
@@ -46,10 +46,32 @@ import { Text, TextClassContext } from './text';
 // "you are here" check on web, `features/share/share-list-picker.tsx` here).
 // And DropdownMenuTrigger is a wrapper rather than the bare primitive, so a
 // keyboard left up behind the menu goes away before the menu is placed (see
-// there). Content renders through @rn-primitives/portal — the root
-// `_layout.tsx` mounts the default `<PortalHost />` it lands in.
+// there) — which is also why DropdownMenu is a wrapper, carrying that hand-off
+// to the content's fade. The fade itself is web-ui's 100ms, not the
+// registry's undated FadeIn (Reanimated's 300) — POPUP_FADE_MS in
+// native-only-animated-view.tsx. Content renders through @rn-primitives/portal —
+// the root `_layout.tsx` mounts the default `<PortalHost />` it lands in.
 
-const DropdownMenu = DropdownMenuPrimitive.Root;
+const MENU_FADE_IN = FadeIn.duration(POPUP_FADE_MS).reduceMotion(ReduceMotion.System);
+
+// Whether the open in progress waited on a keyboard to go (DropdownMenuTrigger
+// below), for DropdownMenuContent to skip its fade — see the end of the
+// trigger's note. The default stands for a Content rendered under a bare
+// primitive Root: it fades, as it always did.
+const KeyboardHandOffContext = React.createContext<{
+  waitedOnKeyboard: boolean;
+  setWaitedOnKeyboard: (waited: boolean) => void;
+}>({ waitedOnKeyboard: false, setWaitedOnKeyboard: () => undefined });
+
+function DropdownMenu(props: React.ComponentProps<typeof DropdownMenuPrimitive.Root>) {
+  const [waitedOnKeyboard, setWaitedOnKeyboard] = React.useState(false);
+  const handOff = React.useMemo(() => ({ waitedOnKeyboard, setWaitedOnKeyboard }), [waitedOnKeyboard]);
+  return (
+    <KeyboardHandOffContext.Provider value={handOff}>
+      <DropdownMenuPrimitive.Root {...props} />
+    </KeyboardHandOffContext.Provider>
+  );
+}
 
 // How long to wait for `keyboardDidHide` before placing the menu anyway. A hide
 // takes ~250ms on iOS and a little more on Android; this only bounds the case
@@ -80,6 +102,15 @@ const KEYBOARD_SETTLE_TIMEOUT_MS = 1000;
 // keyboard's own animation, has finished. The cost is one keyboard animation
 // before the menu appears, and only when there was a keyboard to drop.
 //
+// That wait is not what made it feel slow; the fade stacked after it was. The
+// keyboard going down is already motion that answers the press, and a fade on
+// top only postpones the moment the menu is usable, so a menu opened this way
+// appears without one (`waitedOnKeyboard`, read by DropdownMenuContent). That
+// leaves the keyboard's ~250ms plus a layout pass. The wait itself cannot be
+// cut: keyboard-controller's `dismiss` takes no `animated` option, and the OS
+// owns the hide on both platforms (`resignFirstResponder`,
+// `hideSoftInputFromWindow`).
+//
 // Withholding is ordering-safe because Fabric's `measure` is SYNCHRONOUS
 // (UIManagerBinding.cpp calls the callback before returning): the primitive's
 // onPress has already stored the stale position by the time it calls ours, and
@@ -98,6 +129,7 @@ function DropdownMenuTrigger({
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Trigger>) {
   const { open, setTriggerPosition } = DropdownMenuPrimitive.useRootContext();
+  const { setWaitedOnKeyboard } = React.useContext(KeyboardHandOffContext);
   const triggerRef = React.useRef<DropdownMenuPrimitive.TriggerRef | null>(null);
   const composedRef = React.useCallback(
     (node: DropdownMenuPrimitive.TriggerRef | null) => {
@@ -110,7 +142,10 @@ function DropdownMenuTrigger({
 
   function onTriggerPress(ev: GestureResponderEvent) {
     onPress?.(ev);
-    if (open || Platform.OS === 'web' || !KeyboardController.isVisible()) return;
+    if (open || Platform.OS === 'web') return;
+    const keyboardUp = KeyboardController.isVisible();
+    setWaitedOnKeyboard(keyboardUp);
+    if (!keyboardUp) return;
     setTriggerPosition(null);
     void Promise.race([
       KeyboardController.dismiss(),
@@ -177,7 +212,7 @@ function DropdownMenuSubContent({
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.SubContent>) {
   return (
-    <NativeOnlyAnimatedView entering={FadeIn.reduceMotion(ReduceMotion.System)}>
+    <NativeOnlyAnimatedView entering={MENU_FADE_IN}>
       <DropdownMenuPrimitive.SubContent
         className={cn(
           'overflow-hidden rounded-2xl border border-border bg-popover p-1 shadow-lg shadow-black/5',
@@ -234,6 +269,7 @@ function DropdownMenuContent({
       },
     [insets, safeAreaInsets.top, safeAreaInsets.bottom, safeAreaInsets.left, safeAreaInsets.right],
   );
+  const { waitedOnKeyboard } = React.useContext(KeyboardHandOffContext);
 
   return (
     <DropdownMenuPrimitive.Portal hostName={portalHost}>
@@ -252,7 +288,7 @@ function DropdownMenuContent({
           asChild={Platform.OS !== 'web'}
         >
           <NativeOnlyAnimatedView
-            entering={FadeIn.reduceMotion(ReduceMotion.System)}
+            entering={waitedOnKeyboard ? undefined : MENU_FADE_IN}
             as="Pressable"
           >
             <TextClassContext.Provider value="text-popover-foreground">

@@ -18,7 +18,7 @@ import { withUniwind } from 'uniwind';
 
 import { cn } from '../../lib/utils';
 import { Icon } from './icon';
-import { NativeOnlyAnimatedView } from './native-only-animated-view';
+import { NativeOnlyAnimatedView, POPUP_FADE_MS } from './native-only-animated-view';
 import { Text } from './text';
 
 // react-native-reusables `dialog` (uniwind variant), copied from the registry —
@@ -36,8 +36,12 @@ import { Text } from './text';
 // overlay is `bg-black/80` rather than `/50`, the surface is `bg-popover`
 // rather than `bg-background`, and DialogTitle is `text-base font-medium`
 // rather than `text-lg font-semibold`. DialogHeader also drops the registry's
-// `text-center sm:text-left`, which web-ui does not have.// Content renders through @rn-primitives/portal — the root `_layout.tsx` mounts
-// the default `<PortalHost />` it lands in.
+// `text-center sm:text-left`, which web-ui does not have. And the fades are
+// web-ui's 100ms, in and out, on the overlay and the content alike — the
+// registry had 200 in / 150 out on the overlay, and on the content an undated
+// FadeIn (Reanimated's 300) behind a 50ms delay; POPUP_FADE_MS in
+// native-only-animated-view.tsx. Content renders through @rn-primitives/portal
+// — the root `_layout.tsx` mounts the default `<PortalHost />` it lands in.
 
 // Composite components need the wrapper to accept `className` (the note in
 // components/landing.tsx) — same as the screens' KeyboardAwareScrollView.
@@ -52,6 +56,9 @@ const DialogPortal = DialogPrimitive.Portal;
 const DialogClose = DialogPrimitive.Close;
 
 const FullWindowOverlay = Platform.OS === 'ios' ? RNFullWindowOverlay : React.Fragment;
+
+const FADE_IN = FadeIn.duration(POPUP_FADE_MS).reduceMotion(ReduceMotion.System);
+const FADE_OUT = FadeOut.duration(POPUP_FADE_MS).reduceMotion(ReduceMotion.System);
 
 function DialogOverlay({
   className,
@@ -100,11 +107,7 @@ function DialogOverlay({
         onPress={Platform.select({ web: onOverlayPress, native: onPress })}
         asChild={Platform.OS !== 'web'}
       >
-        <NativeOnlyAnimatedView
-          entering={FadeIn.duration(200).reduceMotion(ReduceMotion.System)}
-          exiting={FadeOut.duration(150).reduceMotion(ReduceMotion.System)}
-          as="Pressable"
-        >
+        <NativeOnlyAnimatedView entering={FADE_IN} exiting={FADE_OUT} as="Pressable">
           {/* THE DIALOG'S OWN KEYBOARD ANSWER, and it belongs here rather than
               in any caller. This subtree is PORTALED to the root PortalHost, so
               it sits outside every screen's KeyboardAwareScrollView and inherits
@@ -160,10 +163,7 @@ function DialogOverlay({
             enabled={Platform.OS !== 'web'}
             className="w-full flex-1 justify-center"
           >
-            <NativeOnlyAnimatedView
-              entering={FadeIn.delay(50).reduceMotion(ReduceMotion.System)}
-              exiting={FadeOut.duration(150).reduceMotion(ReduceMotion.System)}
-            >
+            <NativeOnlyAnimatedView entering={FADE_IN} exiting={FADE_OUT}>
               {children}
             </NativeOnlyAnimatedView>
           </StyledKeyboardAvoidingView>

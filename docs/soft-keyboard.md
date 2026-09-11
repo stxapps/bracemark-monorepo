@@ -398,8 +398,11 @@ measures again. The withhold is flash-free only because Fabric's `measure` calls
 back synchronously — the primitive's stale position is already stored when the
 wrapper's `onPress` clears it, in the same batch; the note on the wrapper has the
 detail, and `dropdown-menu.spec.tsx` pins the order. The cost is one keyboard
-animation before the menu appears, and only when there was a keyboard to drop.
-Dropping it also ends the rename, and `RenameField` commits on `onEndEditing` —
+animation before the menu appears, and only when there was a keyboard to drop —
+and a menu opened that way skips its fade, because the keyboard's slide already
+answered the press and a fade stacked after it is what read as slow. The wait
+itself is irreducible: keyboard-controller's `dismiss` has no `animated` option,
+and the hide animation belongs to the OS on both platforms. Dropping it also ends the rename, and `RenameField` commits on `onEndEditing` —
 the same save web makes when the click takes focus to the trigger.
 
 **The add panel adds a FOURTH vector, and it is the one that needs guarding.**

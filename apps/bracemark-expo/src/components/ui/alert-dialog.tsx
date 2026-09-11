@@ -8,7 +8,7 @@ import type { VariantProps } from 'class-variance-authority';
 
 import { cn } from '../../lib/utils';
 import { buttonTextVariants, buttonVariants } from './button';
-import { NativeOnlyAnimatedView } from './native-only-animated-view';
+import { NativeOnlyAnimatedView, POPUP_FADE_MS } from './native-only-animated-view';
 import { Text, TextClassContext } from './text';
 
 // react-native-reusables `alert-dialog` (uniwind variant), copied from the
@@ -21,10 +21,11 @@ import { Text, TextClassContext } from './text';
 // _the radius scale_), the `bg-black/80` overlay and `bg-popover` surface its
 // sibling dialog.tsx took at the same time, and a `text-lg font-medium` title —
 // web-ui's alert title is a step LARGER than its dialog title and a weight
-// lighter than the registry's (docs/theme.md, _the two kits_). Content renders
-// through
-// @rn-primitives/portal — the root `_layout.tsx` mounts the default
-// `<PortalHost />` it lands in.
+// lighter than the registry's (docs/theme.md, _the two kits_). The overlay's
+// fade is web-ui's 100ms both ways, not the registry's 200 (after a 50ms delay)
+// in and 150 out — POPUP_FADE_MS in native-only-animated-view.tsx. Content
+// renders through @rn-primitives/portal — the root `_layout.tsx` mounts the
+// default `<PortalHost />` it lands in.
 
 const AlertDialog = AlertDialogPrimitive.Root;
 
@@ -33,6 +34,9 @@ const AlertDialogTrigger = AlertDialogPrimitive.Trigger;
 const AlertDialogPortal = AlertDialogPrimitive.Portal;
 
 const FullWindowOverlay = Platform.OS === 'ios' ? RNFullWindowOverlay : React.Fragment;
+
+const FADE_IN = FadeIn.duration(POPUP_FADE_MS).reduceMotion(ReduceMotion.System);
+const FADE_OUT = FadeOut.duration(POPUP_FADE_MS).reduceMotion(ReduceMotion.System);
 
 function AlertDialogOverlay({
   className,
@@ -82,11 +86,7 @@ function AlertDialogOverlay({
         {...props}
         asChild={Platform.OS !== 'web'}
       >
-        <NativeOnlyAnimatedView
-          entering={FadeIn.duration(200).delay(50).reduceMotion(ReduceMotion.System)}
-          exiting={FadeOut.duration(150).reduceMotion(ReduceMotion.System)}
-          as="Pressable"
-        >
+        <NativeOnlyAnimatedView entering={FADE_IN} exiting={FADE_OUT} as="Pressable">
           {children}
         </NativeOnlyAnimatedView>
       </AlertDialogPrimitive.Overlay>

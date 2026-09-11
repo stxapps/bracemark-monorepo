@@ -11,6 +11,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from './dropdown-menu';
+import { NativeOnlyAnimatedView } from './native-only-animated-view';
 import { Text } from './text';
 
 // DropdownMenuTrigger's keyboard hand-off (its note in dropdown-menu.tsx;
@@ -64,6 +65,12 @@ function renderMenu() {
   );
 }
 
+// The menu's entrance, read off the one animated wrapper this harness mounts —
+// the content's (there is no sub-menu here). Undefined means no fade.
+function menuEntering(root: ReturnType<typeof render>['UNSAFE_root']) {
+  return root.findByType(NativeOnlyAnimatedView).props.entering;
+}
+
 function deferred() {
   let resolve!: () => void;
   const promise = new Promise<void>((r) => (resolve = r));
@@ -72,13 +79,14 @@ function deferred() {
 
 // The positive control for the two below: without it, "the menu is not there
 // yet" would pass just as well for a menu that never renders in this harness.
-test('with no keyboard up, the menu opens on the press and dismisses nothing', () => {
-  const { getByLabelText, getByTestId, queryByText } = renderMenu();
+test('with no keyboard up, the menu opens on the press, fades in and dismisses nothing', () => {
+  const { getByLabelText, getByTestId, queryByText, UNSAFE_root } = renderMenu();
 
   fireEvent.press(getByLabelText('List actions'));
 
   expect(queryByText('Rename')).not.toBeNull();
   expect(getByTestId('placed-at')).toHaveTextContent('400');
+  expect(menuEntering(UNSAFE_root)).toBeDefined();
   expect(KeyboardController.dismiss).not.toHaveBeenCalled();
 });
 
@@ -101,6 +109,29 @@ test('with a keyboard up, the menu waits for it to go and is placed from where t
 
   expect(queryByText('Rename')).not.toBeNull();
   expect(getByTestId('placed-at')).toHaveTextContent('120');
+});
+
+// The keyboard's slide already answered the press; a fade stacked after it is
+// what made this path feel slow. And the skip must not outlive the open that
+// earned it — a flag only ever SET would leave every later menu unfaded.
+test('a menu that waited on the keyboard appears without a fade, and the next open fades again', async () => {
+  const hidden = deferred();
+  jest.mocked(KeyboardController.isVisible).mockReturnValueOnce(true);
+  jest.mocked(KeyboardController.dismiss).mockReturnValueOnce(hidden.promise);
+  const { getByLabelText, queryByText, UNSAFE_root } = renderMenu();
+
+  fireEvent.press(getByLabelText('List actions'));
+  await act(async () => hidden.resolve());
+
+  expect(queryByText('Rename')).not.toBeNull();
+  expect(menuEntering(UNSAFE_root)).toBeUndefined();
+
+  fireEvent.press(getByLabelText('List actions')); // closes
+  expect(queryByText('Rename')).toBeNull();
+  fireEvent.press(getByLabelText('List actions')); // no keyboard this time
+
+  expect(queryByText('Rename')).not.toBeNull();
+  expect(menuEntering(UNSAFE_root)).toBeDefined();
 });
 
 test('a hide event that never arrives still places the menu, rather than leaving the ⋯ dead', async () => {
