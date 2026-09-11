@@ -1,0 +1,88 @@
+# Delete-all is a native E2E because its regression crosses every layer a unit
+# test replaces: expo-sqlite's real update hook, a links route that stays mounted
+# behind Settings, useLiveRead's explicit invalidation, and the staged links
+# repaint. The same flow runs on iOS and Android; run one platform at a time.
+appId: com.bracemark.app
+env:
+  LINK_URL: 'https://delete-all.invalid/saved-link'
+  LIST_NAME: 'Delete test list'
+  TAG_NAME: 'Delete test tag'
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+
+# Give all three sidebar-backed reads something user-created to remove.
+- tapOn: 'Add link'
+- tapOn:
+    id: 'add-link-url'
+- inputText: ${LINK_URL}
+- tapOn:
+    id: 'add-link-save'
+- extendedWaitUntil:
+    visible: ".*${LINK_URL.replace('https://', '')}.*"
+    timeout: 20000
+
+- tapOn:
+    id: 'links-more-options'
+- tapOn:
+    id: 'links-open-settings'
+
+- tapOn:
+    id: 'settings-open-navigation'
+- tapOn:
+    id: 'settings-nav-lists'
+- tapOn: 'New list'
+- tapOn: 'New list name'
+- inputText: ${LIST_NAME}
+- tapOn: 'Create list'
+- assertVisible: ${LIST_NAME}
+- hideKeyboard
+
+- tapOn:
+    id: 'settings-open-navigation'
+- tapOn:
+    id: 'settings-nav-tags'
+- tapOn: 'New tag'
+- tapOn: 'New tag name'
+- inputText: ${TAG_NAME}
+- tapOn: 'Create tag'
+- assertVisible: ${TAG_NAME}
+- hideKeyboard
+
+# Confirm the links drawer is live before the wipe. Re-enter Settings through
+# its Manage-lists affordance so the links route remains underneath the stack.
+- tapOn:
+    id: 'settings-close'
+- tapOn:
+    id: 'links-open-navigation'
+- assertVisible: ${LIST_NAME}
+- assertVisible: ${TAG_NAME}
+- tapOn: 'Manage lists'
+
+- tapOn:
+    id: 'settings-open-navigation'
+- tapOn:
+    id: 'settings-nav-data'
+- tapOn:
+    id: 'delete-all-open'
+- tapOn:
+    id: 'delete-all-confirm'
+- tapOn:
+    id: 'delete-all-submit'
+- extendedWaitUntil:
+    visible:
+      id: 'delete-all-complete'
+    timeout: 60000
+
+# No relaunch and no refresh: closing Settings must reveal the already-mounted
+# links route with its live snapshots replaced by the empty database result.
+- tapOn:
+    id: 'settings-close'
+- assertNotVisible: ".*${LINK_URL.replace('https://', '')}.*"
+- tapOn:
+    id: 'links-open-navigation'
+- assertNotVisible: ${LIST_NAME}
+- assertNotVisible: ${TAG_NAME}
+- assertVisible: 'My List'
+- assertVisible: 'Archive'
+- assertVisible: 'Trash'

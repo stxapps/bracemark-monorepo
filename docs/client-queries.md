@@ -547,7 +547,12 @@ changes is mechanical, and only the substrate forces it:
 - **liveQuery → `useLiveRead`, and no zone-echo.** Reactivity comes from
   expo-sqlite's `addDatabaseChangeListener` via the `useLiveRead` hook (which
   re-runs the whole read on any change to the tables it names, coarse-grained by
-  table), not from Dexie tracking which index ranges a querier touched. So the
+  table), not from Dexie tracking which index ranges a querier touched. One
+  native exception is load-bearing: SQLite's optimized bare `DELETE FROM table`
+  does not call the `sqlite3_update_hook` behind that listener. Whole-store
+  writers keep the fast truncate path and call `invalidateLiveReads` once after
+  commit; forcing a library-sized wipe through row-by-row deletes just to obtain
+  events would trade correctness for avoidable native/JS churn. So the
   **zone-echo constraint** the web `readLinks` carries — helper awaits reachable
   from a querier must be `Promise.resolve`-wrapped or writes silently stop
   re-firing the query — **does not exist here**; expo helpers await freely.

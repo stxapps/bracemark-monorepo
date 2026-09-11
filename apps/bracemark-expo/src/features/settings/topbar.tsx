@@ -50,6 +50,7 @@ export function Topbar({ section }: { section: SettingsSectionId }) {
       <Button
         variant="ghost"
         size="icon-sm"
+        testID="settings-open-navigation"
         onPress={() => navigation.dispatch(DrawerActions.openDrawer())}
         aria-label="Open settings navigation"
         // 48x48 effective — see links/topbar.tsx for why the boxes stay 36 and
@@ -66,6 +67,7 @@ export function Topbar({ section }: { section: SettingsSectionId }) {
       <Button
         variant="ghost"
         size="icon-sm"
+        testID="settings-close"
         onPress={closeSettings}
         aria-label="Close settings"
         hitSlop={6}

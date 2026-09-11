@@ -182,6 +182,7 @@ export function SettingsRow({
   external,
   destructive,
   className,
+  testID,
 }: {
   icon?: ReactNode;
   title: ReactNode;
@@ -195,6 +196,7 @@ export function SettingsRow({
   external?: boolean;
   destructive?: boolean;
   className?: string;
+  testID?: string;
 }) {
   const body = (
     <>
@@ -226,6 +228,7 @@ export function SettingsRow({
     return (
       <Pressable
         role="button"
+        testID={testID}
         onPress={onPress}
         className={cn(
           'w-full flex-row items-center gap-3 rounded-lg border border-border p-4 active:bg-muted/40',

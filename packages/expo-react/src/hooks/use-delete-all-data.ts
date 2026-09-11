@@ -9,6 +9,7 @@ import { useCallback, useRef, useState } from 'react';
 import { useApiClient } from '@stxapps/react';
 
 import { useAuth } from '../contexts/auth-provider';
+import { useSync } from '../contexts/sync-provider';
 import { deleteAllData, type DeleteAllOutcome } from '../data/delete-all-data';
 
 export type DeleteAllState =
@@ -26,6 +27,7 @@ export interface UseDeleteAllDataResult {
 
 export function useDeleteAllData(): UseDeleteAllDataResult {
   const { username } = useAuth();
+  const { requestSync } = useSync();
   const api = useApiClient();
   const [state, setState] = useState<DeleteAllState>({ phase: 'idle' });
   // Re-entrancy guard that doesn't wait for the state update to land.
@@ -43,7 +45,15 @@ export function useDeleteAllData(): UseDeleteAllDataResult {
     setState({ phase: 'running' });
     void deleteAllData({ username, api })
       .then(
-        (outcome) => setState({ phase: 'done', outcome }),
+        (outcome) => {
+          // Besides starting the now-empty follow-up cycle, requestSync marks
+          // this as a local write. The links screen can stay mounted (and
+          // scrolled) behind Settings, so its staged-repaint policy must apply
+          // this user-requested wipe immediately rather than hide it behind the
+          // background-update refresh pill.
+          requestSync();
+          setState({ phase: 'done', outcome });
+        },
         (err: unknown) =>
           setState({
             phase: 'error',
@@ -53,7 +63,7 @@ export function useDeleteAllData(): UseDeleteAllDataResult {
       .finally(() => {
         runningRef.current = false;
       });
-  }, [username, api]);
+  }, [username, api, requestSync]);
 
   return { state, run };
 }

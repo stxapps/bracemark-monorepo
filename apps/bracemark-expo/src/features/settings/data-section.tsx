@@ -598,7 +598,7 @@ function DeleteStatus({ state }: { state: DeleteAllState }) {
 
   const { deletedCount } = state.outcome;
   return (
-    <View className="mt-3 flex-row items-start gap-2">
+    <View testID="delete-all-complete" className="mt-3 flex-row items-start gap-2">
       <Icon as={CircleCheck} className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
       <Text className="min-w-0 flex-1 text-sm text-muted-foreground">
         {deletedCount === 0
@@ -657,6 +657,7 @@ function DeleteView({ onBack }: { onBack: () => void }) {
           account-section.tsx's delete confirmation. */}
       <Pressable
         role="checkbox"
+        testID="delete-all-confirm"
         aria-checked={confirmed}
         className="mt-6 flex-row items-start gap-3 rounded-lg border border-border p-3"
         onPress={() => {
@@ -682,7 +683,12 @@ function DeleteView({ onBack }: { onBack: () => void }) {
       {nudge && <ErrorText className="mt-2">Please tick the box above to confirm.</ErrorText>}
 
       <View className="mt-6 flex-row">
-        <Button variant="destructive" onPress={onDelete} disabled={running || done}>
+        <Button
+          variant="destructive"
+          testID="delete-all-submit"
+          onPress={onDelete}
+          disabled={running || done}
+        >
           <Icon as={Trash2} className="size-4" />
           <Text>Delete all data</Text>
         </Button>
@@ -724,6 +730,7 @@ export function DataSection() {
               icon={<Icon as={Trash2} className="size-5 text-destructive" />}
               title="Delete all data"
               description="Permanently remove all your data."
+              testID="delete-all-open"
               onPress={() => setView('delete')}
               destructive
             />

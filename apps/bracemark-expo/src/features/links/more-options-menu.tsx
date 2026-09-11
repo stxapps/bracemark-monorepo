@@ -74,6 +74,7 @@ export function MoreOptionsMenu() {
         <Button
           variant="ghost"
           size="icon-sm"
+          testID="links-more-options"
           aria-label={
             syncError
               ? 'More options (sync failed)'
@@ -159,7 +160,7 @@ export function MoreOptionsMenu() {
           <Icon as={SquareCheckBig} className="size-4" />
           <Text>Select links</Text>
         </DropdownMenuItem>
-        <DropdownMenuItem onPress={() => router.push('/settings')}>
+        <DropdownMenuItem testID="links-open-settings" onPress={() => router.push('/settings')}>
           <Icon as={Settings} className="size-4" />
           <Text>Settings</Text>
         </DropdownMenuItem>

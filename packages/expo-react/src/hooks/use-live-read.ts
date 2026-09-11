@@ -24,6 +24,7 @@ import { useEffect, useState } from 'react';
 import { addDatabaseChangeListener } from 'expo-sqlite';
 
 import { DB_NAME } from '../data/db';
+import { subscribeToLiveReadInvalidations } from '../data/live-read-invalidation';
 
 export function useLiveRead<T>(
   read: () => Promise<T>,
@@ -71,6 +72,16 @@ export function useLiveRead<T>(
 
     void run();
 
+    const scheduleRun = () => {
+      // Defer to a macrotask so the many per-row events of one transaction,
+      // or one explicit multi-table invalidation, batch into a single re-run.
+      if (timer !== null) return;
+      timer = setTimeout(() => {
+        timer = null;
+        void run();
+      }, 0);
+    };
+
     const subscription = addDatabaseChangeListener((event) => {
       // `databaseName` is SQLite's attached-schema name (`main` for the
       // connection opened in db.ts), NOT the database filename. Filtering that
@@ -78,18 +89,22 @@ export function useLiveRead<T>(
       // path is the event field that identifies which open database changed.
       if (!event.databaseFilePath.endsWith(`/${DB_NAME}`)) return;
       if (!tables.includes(event.tableName)) return;
-      // Defer to a macrotask so the many per-row events of one transaction
-      // batch into a single re-run.
-      if (timer !== null) return;
-      timer = setTimeout(() => {
-        timer = null;
-        void run();
-      }, 0);
+      scheduleRun();
     });
+    // sqlite3_update_hook deliberately skips whole-table deletes that SQLite
+    // services with its truncate optimization. Those writers explicitly
+    // invalidate here after committing rather than forcing a potentially huge
+    // library wipe through the slower row-by-row delete path.
+    const unsubscribeFromExplicitInvalidations = subscribeToLiveReadInvalidations(
+      (changedTables) => {
+        if (changedTables.some((table) => tables.includes(table))) scheduleRun();
+      },
+    );
 
     return () => {
       alive = false;
       subscription.remove();
+      unsubscribeFromExplicitInvalidations();
       if (timer !== null) clearTimeout(timer);
     };
     // The caller-supplied keys ARE the dependency list (dexie's useLiveQuery

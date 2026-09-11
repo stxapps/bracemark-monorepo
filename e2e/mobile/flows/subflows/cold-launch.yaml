@@ -30,8 +30,10 @@
 # (e2e/README.md). The hand-driven twins are `npm run expo:ios:open` and
 # `expo:android:open`.
 appId: com.bracemark.app
+env:
+  EXPO_DEV_CLIENT_LINK: 'bracemark://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081%2F%3FdisableOnboarding%3D1'
 ---
 - clearState
 - openLink:
-    link: 'bracemark://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081%2F%3FdisableOnboarding%3D1'
+    link: ${EXPO_DEV_CLIENT_LINK}
     autoVerify: false

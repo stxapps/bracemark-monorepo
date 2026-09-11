@@ -114,6 +114,7 @@ export function Topbar() {
       <Button
         variant="ghost"
         size="icon-sm"
+        testID="links-open-navigation"
         onPress={() => navigation.dispatch(DrawerActions.openDrawer())}
         aria-label="Open navigation"
         hitSlop={6}

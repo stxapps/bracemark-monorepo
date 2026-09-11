@@ -368,8 +368,18 @@ All of them are in the app:
 | `sign-in-recovery-error`    | ” — `RecoverySignIn`                            |
 | `sign-in-use-password`      | ” — the toggle back out                         |
 | `links-screen`              | `src/app/(app)/links/index.tsx` (a root marker) |
+| `links-open-navigation`     | `src/features/links/topbar.tsx`                 |
+| `links-more-options`        | `src/features/links/more-options-menu.tsx`      |
+| `links-open-settings`       | ” — the Settings menu item                      |
 | `add-link-url`              | `src/features/links/link-add-panel.tsx`         |
 | `add-link-save`             | ” — the submit, whose label flips Save→Confirm  |
+| `settings-open-navigation`  | `src/features/settings/topbar.tsx`              |
+| `settings-close`            | ” — returns to the links route                  |
+| `settings-nav-<section>`    | `src/features/settings/sidebar.tsx`             |
+| `delete-all-open`           | `src/features/settings/data-section.tsx`        |
+| `delete-all-confirm`        | ” — the confirmation checkbox row               |
+| `delete-all-submit`         | ” — the destructive action                      |
+| `delete-all-complete`       | ” — renders only after a successful wipe        |
 | `contract-vectors-pass`     | `src/app/contract-vectors.tsx` (dev-only)       |
 | `contract-vectors-fail`     | ” — carries the failing check names in its text |
 | `vector-<check>`            | ” — one per vector, `PASS`/`FAIL`/`RUNNING`     |

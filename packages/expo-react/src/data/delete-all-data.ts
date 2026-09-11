@@ -14,6 +14,7 @@ import { awaitInflightSync } from '../sync/engine';
 import { favicons, getDb, itemFacetStatuses, items, itemTagIds, locks } from './db';
 import { clearFaviconFiles } from './favicon-store';
 import { clearDataFiles } from './file-store';
+import { invalidateLiveReads } from './live-read-invalidation';
 import { clearPendingOps } from './pending-store';
 import { seedNewAccount } from './sync-store';
 
@@ -57,6 +58,13 @@ export async function deleteAllData(args: {
   clearDataFiles();
   clearFaviconFiles();
   clearDecodeCache();
+  // Bare whole-table deletes take SQLite's truncate optimization, which does
+  // not invoke the sqlite3_update_hook behind expo-sqlite's change listener.
+  // Newly mounted readers would see the empty tables while already-mounted
+  // links/sidebar/lock/favicon readers kept their old snapshots. Explicitly
+  // invalidate once after the transaction instead of turning a large wipe
+  // into one native event per deleted row.
+  invalidateLiveReads(['items', 'item_tag_ids', 'item_facet_statuses', 'locks', 'favicons']);
 
   // Reset the sync bookkeeping to the seeded-new-account state: cursor (0, '')
   // with firstSyncDoneAt now — semantically exact, because an empty local store

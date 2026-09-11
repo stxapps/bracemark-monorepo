@@ -22,6 +22,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 
 import { DB_NAME } from '../data/db';
+import { invalidateLiveReads } from '../data/live-read-invalidation';
 import { useLiveRead } from './use-live-read';
 
 type ChangeEvent = {
@@ -128,6 +129,31 @@ describe('change events', () => {
     await waitFor(() => expect(read).toHaveBeenCalledTimes(1));
 
     act(() => emit('items', '/data/user/0/com.bracemark.app/databases/some-other.db'));
+    await flush();
+
+    expect(read).toHaveBeenCalledTimes(1);
+  });
+
+  // A bare DELETE FROM table uses SQLite's truncate optimization. The native
+  // sqlite3_update_hook emits no row event for it, so bulk writers use the
+  // explicit table channel rather than making a large wipe delete row by row.
+  it('re-runs for an explicit invalidation of a named table', async () => {
+    const read = jest.fn(async () => 1);
+    renderHook(() => useLiveRead(read, [], ['items']));
+    await waitFor(() => expect(read).toHaveBeenCalledTimes(1));
+
+    act(() => invalidateLiveReads(['locks', 'items']));
+    await flush();
+
+    expect(read).toHaveBeenCalledTimes(2);
+  });
+
+  it('ignores an explicit invalidation of unrelated tables', async () => {
+    const read = jest.fn(async () => 1);
+    renderHook(() => useLiveRead(read, [], ['items']));
+    await waitFor(() => expect(read).toHaveBeenCalledTimes(1));
+
+    act(() => invalidateLiveReads(['locks', 'favicons']));
     await flush();
 
     expect(read).toHaveBeenCalledTimes(1);

@@ -45,11 +45,15 @@ jest.mock('@stxapps/expo-crypto', () => ({ newId: () => globalThis.crypto.random
 // Every call the module makes, in order — the only way to see that the quiesce and the
 // queue abandonment happened BEFORE the server was asked.
 const calls: string[] = [];
+const mockInvalidateLiveReads = jest.fn();
 const mockAwaitInflightSync = jest.fn(
   async (_username: string) => void calls.push('awaitInflightSync'),
 );
 jest.mock('../sync/engine', () => ({
   awaitInflightSync: (username: string) => mockAwaitInflightSync(username),
+}));
+jest.mock('./live-read-invalidation', () => ({
+  invalidateLiveReads: (tables: readonly string[]) => mockInvalidateLiveReads(tables),
 }));
 
 const { resetFileSystem, listFileUris } = require('../testing/memory-file-system') as {
@@ -109,6 +113,7 @@ const countOf = (table: string): number =>
 
 beforeEach(() => {
   calls.length = 0;
+  mockInvalidateLiveReads.mockClear();
   mockAwaitInflightSync.mockReset();
   mockAwaitInflightSync.mockImplementation(async () => void calls.push('awaitInflightSync'));
   resetFileSystem();
@@ -174,6 +179,24 @@ describe('deleteAllData', () => {
     // device.
     expect(countOf('locks')).toBe(0);
     expect(countOf('favicons')).toBe(0);
+  });
+
+  // SQLite's truncate optimization makes bare whole-table deletes invisible to
+  // expo-sqlite's update hook. The wipe must explicitly wake every live reader
+  // whose table it clears, or mounted links/sidebar/lock/favicon views stay stale.
+  it('invalidates every live-read table cleared by the optimized wipe', async () => {
+    await seedSignedInAccountWithData();
+
+    await deleteAllData({ username: USER, api: apiThat(async () => ({ deletedCount: 1 })) });
+
+    expect(mockInvalidateLiveReads).toHaveBeenCalledTimes(1);
+    expect(mockInvalidateLiveReads).toHaveBeenCalledWith([
+      'items',
+      'item_tag_ids',
+      'item_facet_statuses',
+      'locks',
+      'favicons',
+    ]);
   });
 
   // THE MEMBER NO DATABASE ASSERTION SEES. The decrypted preview images and the cached icon

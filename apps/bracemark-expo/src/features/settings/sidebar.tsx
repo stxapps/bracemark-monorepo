@@ -46,6 +46,7 @@ function NavItem({
   return (
     <Pressable
       role="button"
+      testID={`settings-nav-${section.id}`}
       onPress={() => {
         router.push(href);
         onSelected();

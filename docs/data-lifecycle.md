@@ -647,6 +647,11 @@ may sync back afterward").
 2. Call the endpoint. Nothing local is touched until the server confirms.
 3. Wipe the local **synced** stores: `items`, the decode cache, and `locks`
    (they guard lists that no longer exist — the same reset sign-out applies).
+   On expo, the bare whole-table deletes then explicitly invalidate the affected
+   `useLiveRead` tables: SQLite's truncate optimization does not emit the
+   `sqlite3_update_hook` events Expo observes. The successful hook also calls
+   `requestSync`, whose local-write nonce makes a links screen still mounted and
+   scrolled behind Settings promote the empty result immediately.
 4. `seedNewAccount` — cursor back to `(0, '')` with `firstSyncDoneAt` now.
    Semantically exact: an empty local store _is_ the complete snapshot of the
    wiped namespace, the same reasoning that lets create-account seed instead of
