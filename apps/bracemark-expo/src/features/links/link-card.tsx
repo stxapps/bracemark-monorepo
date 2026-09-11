@@ -21,6 +21,7 @@
 // simply grows and the whole apparatus (the budget, the split, useCappedFontScale
 // here) is gone. What's left as a number is the banner, and it isn't a budget:
 // it's the card's own width times a ratio.
+import { memo } from 'react';
 import { Linking, Pressable, View } from 'react-native';
 
 import { displayUrl, hostFromText } from '@stxapps/shared';
@@ -31,7 +32,7 @@ import { Favicon, LinkPreviewImage } from './link-media';
 import { LinkRowMenu } from './link-row-menu';
 import { LinkTagChips } from './link-tag-chips';
 import { type LinkItemProps, NoteBadge, PinnedBadge } from './shared';
-import { useLinksViewState } from './view-state-provider';
+import { useLinksViewActions } from './view-state-provider';
 
 // The banner is 12:7 — its height is 58.33% of the card's width — so it scales
 // with the column count instead of being pinned to one number (web's
@@ -60,7 +61,7 @@ const MAX_CARD_WIDTH = 420;
 // shares the strip's line.
 const CARD_CHIP_PADDING = 24;
 
-export function LinkCard({
+export const LinkCard = memo(function LinkCard({
   link,
   pinned,
   isFirst,
@@ -71,7 +72,7 @@ export function LinkCard({
   selected,
   onToggle,
 }: LinkItemProps) {
-  const { enterBulkEdit } = useLinksViewState();
+  const { enterBulkEdit } = useLinksViewActions();
   const host = hostFromText(link.url);
   const cardWidth = Math.min(itemWidth - CARD_H_CHROME, MAX_CARD_WIDTH);
   const previewHeight = Math.round(cardWidth * PREVIEW_ASPECT);
@@ -88,15 +89,13 @@ export function LinkCard({
       <Pressable
         role={selectMode ? 'checkbox' : 'link'}
         aria-checked={selectMode ? selected : undefined}
-        onPress={() => (selectMode ? onToggle() : void Linking.openURL(link.url))}
-        onLongPress={
-          selectMode
-            ? undefined
-            : () => {
-                enterBulkEdit();
-                onToggle();
-              }
-        }
+        onPress={() => (selectMode ? onToggle(link) : void Linking.openURL(link.url))}
+        // Set even while selecting — link-row.tsx's TRAP: without it the
+        // release that ends the entering long-press unpicks the card.
+        onLongPress={() => {
+          enterBulkEdit();
+          onToggle(link);
+        }}
         // No `grow`: the wrapper above fills the cell, this hugs its content.
         // `w-full max-w-105 self-center` is web's `mx-auto w-full max-w-105` —
         // the card takes the cell up to MAX_CARD_WIDTH, then centres in it.
@@ -164,7 +163,7 @@ export function LinkCard({
             <Checkbox
               aria-label={`Select ${link.title || displayUrl(link.url)}`}
               checked={selected}
-              onCheckedChange={onToggle}
+              onCheckedChange={() => onToggle(link)}
               className="size-6"
             />
           </View>
@@ -222,9 +221,10 @@ export function LinkCard({
           link={link}
           tagsById={tagsById}
           availableWidth={cardWidth - CARD_CHIP_PADDING}
+          selectMode={selectMode}
           className="px-3 pb-3"
         />
       </Pressable>
     </View>
   );
-}
+});

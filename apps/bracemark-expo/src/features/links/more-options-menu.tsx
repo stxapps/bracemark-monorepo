@@ -54,12 +54,12 @@ import { Icon } from '../../components/ui/icon';
 import { Text } from '../../components/ui/text';
 import { SUPPORT_URL } from '../../lib/site';
 import { cn } from '../../lib/utils';
-import { useLinksViewState } from './view-state-provider';
+import { useLinksViewActions } from './view-state-provider';
 
 export function MoreOptionsMenu() {
   const { storeStatus, bgSyncStatus, requestSync } = useSync();
   const { appLock, lockApp } = useLocks();
-  const { enterBulkEdit } = useLinksViewState();
+  const { enterBulkEdit } = useLinksViewActions();
   const signOut = useSignOut();
   const router = useRouter();
   const phase = getSyncPhase(storeStatus, bgSyncStatus);

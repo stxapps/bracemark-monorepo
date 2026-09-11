@@ -31,10 +31,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshControl, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { FlashList, type FlashListRef, type ViewToken } from '@shopify/flash-list';
+import {
+  FlashList,
+  type FlashListRef,
+  type ListRenderItemInfo,
+  type ViewToken,
+} from '@shopify/flash-list';
 
 import { type LinkView, useExtraction, useLocks, useSettings, useSync } from '@stxapps/expo-react';
 import { LOCK_COPY } from '@stxapps/react';
+import { type LinkSortOn } from '@stxapps/shared';
 
 import { LockPane } from '../../components/lock-pane';
 import { BulkEditBar } from './bulk-edit-bar';
@@ -43,7 +49,7 @@ import { hasKnownTags, LinkRow } from './link-row';
 import { useLinksPage } from './page-provider';
 import { EmptyState, type LinkItemProps, RefreshPill, useTagMap } from './shared';
 import { useLinks } from './use-links';
-import { useLinksViewState } from './view-state-provider';
+import { useLinksViewActions, useLinksViewState } from './view-state-provider';
 
 // Past this many pixels we treat the pane as "scrolled away from the top", so a
 // background sync is staged behind the refresh pill (see view-state-provider).
@@ -128,6 +134,19 @@ const LAYOUTS: Record<string, LayoutConfig | undefined> = {
   card: CARD_LAYOUT,
 };
 
+// The FlashList `extraData` — everything renderItem reads beyond the item
+// itself (UnlockedMain's itemExtra carries the why).
+type ItemExtra = {
+  links: readonly LinkView[];
+  pinnedCount: number;
+  bulkEditing: boolean;
+  selectedLinks: ReadonlyMap<string, LinkView>;
+  toggleSelected: (link: LinkView) => void;
+  tagsById: Map<string, string>;
+  sortOn: LinkSortOn;
+  itemWidth: number;
+};
+
 export function Main() {
   const { selection } = useLinksPage();
   const { isListLocked, unlockList, biometricForList, biometricLabel, unlockListWithBiometric } =
@@ -165,7 +184,8 @@ function UnlockedMain() {
   const { query } = useLinksPage();
   const { linksLayout } = useSettings();
   const { links, pinnedCount, hasMore, showMore, isLoading, hasPending, applyPending } = useLinks();
-  const { setScrolled, bulkEditing, selectedLinks, toggleSelected } = useLinksViewState();
+  const { bulkEditing, selectedLinks } = useLinksViewState();
+  const { setScrolled, toggleSelected } = useLinksViewActions();
   const { bgSyncStatus, requestSync } = useSync();
   const tagsById = useTagMap();
   const listRef = useRef<FlashListRef<LinkView>>(null);
@@ -174,11 +194,15 @@ function UnlockedMain() {
   // work tracks ATTENTION — a 30k-link import never extracts past what was
   // scrolled into view (extraction-provider, cost layer 2).
   //
-  // TRAP: FlashList captures `onViewableItemsChanged` once (changing its
-  // identity mid-list throws "Changing onViewableItemsChanged on the fly is not
-  // supported"), so the callback must be stable for the list's whole lifetime.
-  // Hence a `[]`-dep useCallback reading the latest reporter through a ref,
-  // rather than closing over it directly.
+  // FlashList wires viewability once, when the list is constructed: whether an
+  // `onViewableItemsChanged` exists at all, and `viewabilityConfig` (its own
+  // docs: "changing viewabilityConfig on the fly is not supported" — hence the
+  // module constant). The callback's IDENTITY is not captured: v2 calls it
+  // through its current props, so the "Changing onViewableItemsChanged on the
+  // fly" throw is React Native FlatList's (and FlashList v1's), not this list's.
+  // The `[]`-dep callback reading the reporter through a ref is therefore not
+  // load-bearing — it keeps one function for the list's lifetime, and the
+  // unmount cleanup below reads the same ref.
   const { reportDisplayedLinkPaths } = useExtraction();
   const reportRef = useRef(reportDisplayedLinkPaths);
   reportRef.current = reportDisplayedLinkPaths;
@@ -219,17 +243,77 @@ function UnlockedMain() {
   // list). Derived here because this is where the column math already lives.
   const itemWidth = paneWidth / numColumns;
 
-  // FlashList compares extraData by reference to decide whether items must
-  // re-render; memoized so scroll-flag renders of this pane don't force a
-  // re-render of every item, while a selection toggle (new map identity), a tag
-  // rename (tagsById — renames must repaint immediately, see useTagMap), a sort
-  // change (the row's date column), or a rotation (itemWidth, the tag strip's
-  // budget) does. Anything renderItem passes as a PROP has to be in here: the
-  // cells re-render off this reference, not off renderItem's identity, so a
-  // value left out would go stale in already-mounted cells.
-  const itemExtra = useMemo(
-    () => ({ bulkEditing, selectedLinks, tagsById, sortOn: query.sortOn, itemWidth }),
-    [bulkEditing, selectedLinks, tagsById, query.sortOn, itemWidth],
+  // Everything an item renders from beyond its own `link`, and so the ONLY
+  // thing that re-renders mounted items. A cell (FlashList v2's ViewHolder, a
+  // React.memo) re-renders when its item, index or layout moves, or when
+  // `extraData` or `renderItem` changes identity. renderItem below is stable and
+  // reads nothing but this object, so the pane's own renders — a scroll-flag
+  // flip, a menu opening (`engaged`, via useLinks), an extraction or sync status
+  // change — no longer reach the items; only a change in here does: a selection
+  // toggle (new map identity), a tag rename (tagsById — renames must repaint
+  // immediately, see useTagMap), a sort change (the row's date column), a
+  // rotation (itemWidth, the tag strip's budget). Even then only the items whose
+  // own props moved render: every cell re-runs renderItem, but the items are
+  // React.memo (LinkItemProps' header), so a selection tap renders the one item
+  // it toggled.
+  //
+  // The rule that keeps that correct: renderItem may read ONLY from here. A
+  // value it closed over instead would go stale in already-mounted cells.
+  //
+  // `links` rides along for the index-derived props (pinned, isFirst, isLast).
+  // The ViewHolder skips renderItem when only an item's INDEX moves (its
+  // children memo leaves index out), so a pin reorder would leave those stale
+  // if nothing in here changed with it. Today's reads build fresh LinkView
+  // objects anyway, so a new `links` already means every item changed and this
+  // costs nothing; it's here so a later structural-sharing read can't break it.
+  const itemExtra = useMemo<ItemExtra>(
+    () => ({
+      links,
+      pinnedCount,
+      bulkEditing,
+      selectedLinks,
+      toggleSelected,
+      tagsById,
+      sortOn: query.sortOn,
+      itemWidth,
+    }),
+    [
+      links,
+      pinnedCount,
+      bulkEditing,
+      selectedLinks,
+      toggleSelected,
+      tagsById,
+      query.sortOn,
+      itemWidth,
+    ],
+  );
+  // `Item` changes only on a layout switch, which remounts the list anyway
+  // (the FlashList `key`).
+  const renderItem = useCallback(
+    ({ item, index, extraData }: ListRenderItemInfo<LinkView>) => {
+      const x = extraData as ItemExtra;
+      return (
+        <Item
+          link={item}
+          pinned={index < x.pinnedCount}
+          // The pinned section's ends, for the row menu's Move up/down
+          // (meaningful only when pinned; pins sort first, so flat indexes
+          // 0..pinnedCount-1 are exactly the pinned section).
+          isFirst={index === 0}
+          isLast={index === x.pinnedCount - 1}
+          sortOn={x.sortOn}
+          tagsById={x.tagsById}
+          itemWidth={x.itemWidth}
+          selectMode={x.bulkEditing}
+          selected={x.selectedLinks.has(item.path)}
+          // Unwrapped, so the memo'd item sees the same function every render
+          // (LinkItemProps' header).
+          onToggle={x.toggleSelected}
+        />
+      );
+    },
+    [Item],
   );
 
   // Pull-to-refresh: the spinner is OUR gesture's, so it's local state armed on
@@ -310,23 +394,7 @@ function UnlockedMain() {
             contentContainerStyle={contentPadding ? { padding: contentPadding } : undefined}
             keyExtractor={(link) => link.path}
             getItemType={itemType ? (link) => itemType(link, tagsById) : undefined}
-            renderItem={({ item, index }) => (
-              <Item
-                link={item}
-                pinned={index < pinnedCount}
-                // The pinned section's ends, for the row menu's Move up/down
-                // (meaningful only when pinned; pins sort first, so flat
-                // indexes 0..pinnedCount-1 are exactly the pinned section).
-                isFirst={index === 0}
-                isLast={index === pinnedCount - 1}
-                sortOn={query.sortOn}
-                tagsById={tagsById}
-                itemWidth={itemWidth}
-                selectMode={bulkEditing}
-                selected={selectedLinks.has(item.path)}
-                onToggle={() => toggleSelected(item)}
-              />
-            )}
+            renderItem={renderItem}
             onScroll={(e) => setScrolled(e.nativeEvent.contentOffset.y > SCROLL_TOP_THRESHOLD)}
             onViewableItemsChanged={onViewableItemsChanged}
             viewabilityConfig={VIEWABILITY_CONFIG}
@@ -338,12 +406,22 @@ function UnlockedMain() {
             }}
             onEndReachedThreshold={0.5}
             // Suspended in bulk-edit mode (see the header), but NEVER unmounted:
-            // on Android, adding/removing a RefreshControl wraps/unwraps the
-            // native ScrollView in AndroidSwipeRefreshLayout. FlashList keeps
-            // recycler measurements across that host-tree swap, which can leave
-            // its cells blank until some later navigation forces a relayout.
-            // `enabled` blocks the gesture on Android; iOS ignores that prop, so
-            // the handler and controlled refreshing value guard it there too.
+            // the control's PRESENCE must hold for the list's lifetime (a fresh
+            // element each render is fine). React Native's ScrollView renders a
+            // different tree with and without one — on iOS its children go
+            // [control, content] ↔ [content], so React remounts the content
+            // container; on Android the native ScrollView moves in or out of
+            // AndroidSwipeRefreshLayout and remounts whole. Either way every
+            // FlashList cell remounts while FlashList's RecyclerView, which sits
+            // ABOVE the ScrollView, keeps its layouts and scroll offset — and
+            // the cells came back blank (seen on an iPhone) until a later
+            // relayout.
+            //
+            // `enabled` blocks the gesture on Android. iOS has no equivalent, so
+            // the handler and the controlled `refreshing` guard it there: a pull
+            // still starts the native spinner, and RefreshControl snaps it back
+            // at once because `refreshing` never went true — a brief flash,
+            // accepted.
             refreshControl={
               <RefreshControl
                 enabled={!bulkEditing}

@@ -34,7 +34,7 @@ import { Icon } from '../../components/ui/icon';
 import { Text } from '../../components/ui/text';
 import { cn } from '../../lib/utils';
 import { type Selection, useLinksPage } from './page-provider';
-import { useLinksViewState } from './view-state-provider';
+import { useLinksViewActions } from './view-state-provider';
 
 // The uniform contract between the main pane's FlashList and whichever item
 // renderer the `linksLayout` setting picks — web's LinkLayoutProps one level
@@ -43,6 +43,13 @@ import { useLinksViewState } from './view-state-provider';
 // is the ITEM. `sortOn` feeds the row's date column only — the card shows no
 // date (web parity) — but stays in the contract so the renderItem call site is
 // uniform across layouts.
+//
+// Both renderers are React.memo, and that is what makes a selection tap cheap:
+// the tap hands FlashList a new `extraData`, every mounted cell re-runs
+// renderItem, and each item then skips unless ITS props moved — so only the
+// toggled item renders. That holds only while every prop here is a primitive or
+// a reference that survives the tap; a fresh object or closure per render (an
+// `onToggle={() => …}`) quietly turns it back into every item, every tap.
 export type LinkItemProps = {
   link: LinkView;
   pinned: boolean;
@@ -62,7 +69,10 @@ export type LinkItemProps = {
   // opening the URL (web's selectable rows/cards).
   selectMode: boolean;
   selected: boolean;
-  onToggle: () => void;
+  // Toggles the given link's selection — view-state's `toggleSelected` itself,
+  // passed through unwrapped so it is the same function for every item on every
+  // render (see the memo note above); the item supplies its own link.
+  onToggle: (link: LinkView) => void;
 };
 
 export function PinnedBadge() {
@@ -331,7 +341,7 @@ export function RefreshPill({ show, onPress }: { show: boolean; onPress: () => v
 // menu callers pass only the handler to onOpenChange and ignore the returned
 // state — it still exists for the callers that do control (the Move-to dialog).
 export function useEngagedOpen(): [boolean, (open: boolean) => void] {
-  const { setMenuOpen } = useLinksViewState();
+  const { setMenuOpen } = useLinksViewActions();
   const [open, setOpen] = useState(false);
   const openRef = useRef(false);
   useEffect(

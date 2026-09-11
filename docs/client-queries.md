@@ -553,13 +553,48 @@ changes is mechanical, and only the substrate forces it:
   re-firing the query — **does not exist here**; expo helpers await freely.
   `react-virtual` likewise becomes `FlashList`.
 - **The FlashList scroll host stays structurally stable.** `main.tsx` always
-  supplies its `RefreshControl`, including while bulk edit suspends pull-to-refresh.
-  On Android, adding or removing that control wraps or unwraps the native
-  ScrollView in `AndroidSwipeRefreshLayout`; doing so while FlashList preserves
-  its recycler measurements can blank the cells until a later navigation forces
-  a relayout. Bulk edit therefore disables the mounted control (`enabled` on
-  Android, plus a guarded handler and controlled `refreshing` value for iOS)
-  instead of removing it. Any mode that suspends refresh inherits the same rule.
+  supplies its `RefreshControl`, including while bulk edit suspends
+  pull-to-refresh. The rule is about the control's _presence_, not its identity —
+  a new element every render is fine. React Native's ScrollView renders a
+  different tree with and without one: on iOS its children go
+  `[control, content]` ↔ `[content]`, so React remounts the content container; on
+  Android the native ScrollView moves in or out of `AndroidSwipeRefreshLayout`
+  and remounts whole. Either way every FlashList cell remounts while FlashList's
+  `RecyclerView` — which sits _above_ the ScrollView — keeps its layouts and
+  scroll offset, and the cells come back blank until a later relayout (seen on
+  an iPhone). Bulk edit therefore disables the mounted control instead of
+  removing it: `enabled` on Android; on iOS, which has no such prop, a guarded
+  handler plus a controlled `refreshing` that never goes true, so a pull only
+  flashes the native spinner. Any mode that suspends refresh inherits the same
+  rule, as does anything else that toggles what the ScrollView renders.
+  (Contrast the props FlashList v2 merely _reads_: `renderItem`,
+  `onViewableItemsChanged` and the like may change identity without breaking
+  anything — though a new `renderItem` costs a render of every mounted cell, see
+  the next rule; what it fixes at construction is `viewabilityConfig` and whether
+  a viewability callback exists at all.)
+- **Mounted items re-render off `extraData` and nothing else.** A FlashList v2
+  cell is a `React.memo` that re-renders when its item, index or layout moves, or
+  when `extraData` or `renderItem` changes identity. So `main.tsx`'s `renderItem`
+  is a stable callback that reads **only** the `extraData` FlashList passes it
+  (`itemExtra`) — a value it closed over instead would go stale in
+  already-mounted cells, and a `renderItem` rebuilt each render re-renders every
+  mounted cell on every render of the pane (a scroll-flag flip, a menu opening,
+  a sync or extraction status change). `itemExtra` also carries `links`, because
+  the cell skips `renderItem` when only an item's _index_ moves, and `pinned` /
+  `isFirst` / `isLast` are index-derived. The other half is context: an item, its
+  row menu and its chip strip read `useLinksViewActions` (the setters, a value
+  that never changes), never `useLinksViewState`, whose value moves with every
+  menu open and scroll flag — one subscription there re-renders every mounted
+  item at once. State an item needs arrives as a prop through `itemExtra`
+  (`selectMode` to the chip strip). Last, the item renderers (`LinkRow`,
+  `LinkCard`) are `React.memo`: a new `itemExtra` re-runs `renderItem` in every
+  cell, and the memo is what lets all but the changed items skip — a selection
+  tap renders only the item it toggled. That needs every `LinkItemProps` value to
+  survive the render, hence `onToggle` is `toggleSelected` itself, called with
+  the item's own link, never a per-item closure. Nothing flags a regression: it
+  shows only under React DevTools — every row flashing under _highlight updates_
+  when one row's menu opens, or, for the memo, in the Profiler, since the cell
+  wrapper still re-renders and outlines every row on a selection tap.
 
 **Ported so far:** the namespace reads (lists/tags/pins/settings), the
 link-library query (`readLinks` and its whole driver tree), the by-id / by-url

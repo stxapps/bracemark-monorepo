@@ -12,7 +12,6 @@ import { Text } from '../../components/ui/text';
 import { useCappedFontScale } from '../../lib/font-scale';
 import { useLinksPage } from './page-provider';
 import { useEngagedOpen } from './shared';
-import { useLinksViewState } from './view-state-provider';
 
 // 24pt tall exactly: py-1 (4+4) around the 16pt line box `leading-4` pins on the
 // chip's Text. The label is `text-foreground/80`, not `text-muted-foreground`:
@@ -135,6 +134,7 @@ export function LinkTagChips({
   link,
   tagsById,
   availableWidth,
+  selectMode,
   className = '',
 }: {
   link: LinkView;
@@ -142,10 +142,13 @@ export function LinkTagChips({
   // What the item can spare for the strip, in pt. The item computes it, since
   // only the item knows its own chrome.
   availableWidth: number;
+  // Bulk-edit mode, handed down by the item (its LinkItemProps.selectMode) rather
+  // than read off useLinksViewState: that value changes whenever any menu opens,
+  // and a subscription here would re-render the strip in every mounted item.
+  selectMode: boolean;
   className?: string;
 }) {
   const { setSimpleQuery } = useLinksPage();
-  const { bulkEditing } = useLinksViewState();
   const [, onOverflowOpenChange] = useEngagedOpen();
   // The chip's own text obeys the app-wide ceiling (components/ui/text.tsx), so
   // the fit has to reason at the capped scale, not the raw one. The helper's
@@ -170,7 +173,7 @@ export function LinkTagChips({
   return (
     <View className={`flex-row items-center gap-1 overflow-hidden ${className}`}>
       {chips.slice(0, visibleCount).map((chip) =>
-        bulkEditing ? (
+        selectMode ? (
           <View key={chip.id} className={`shrink ${TAG_CHIP_CLASS}`}>
             <Text numberOfLines={1} className="text-xs leading-4 text-foreground/80">
               {chip.name}
@@ -190,7 +193,7 @@ export function LinkTagChips({
         ),
       )}
       {overflow.length > 0 &&
-        (bulkEditing ? (
+        (selectMode ? (
           <View className={`shrink-0 ${TAG_CHIP_CLASS}`}>
             <Text className="text-xs leading-4 text-foreground/80">+{overflow.length}</Text>
           </View>

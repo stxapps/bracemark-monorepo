@@ -112,7 +112,32 @@ interface LinksViewStateValue {
   clearSelected: () => void;
 }
 
+// The setters alone — every one a useState setter or a `[]`-dep callback, so
+// this value is built once and never changes. It exists for the list ITEMS:
+// each mounted row/card (and its menu, its chip strip) needs only a setter, and
+// a consumer of the full value above re-renders on every state change in it —
+// a menu opening anywhere, the scroll flag — which re-rendered every mounted
+// item at once. A component that reads no state takes this one
+// (useLinksViewActions).
+type LinksViewActions = Pick<
+  LinksViewStateValue,
+  | 'setScrolled'
+  | 'setMenuOpen'
+  | 'setSearchOpen'
+  | 'setPreSearch'
+  | 'requestDestroy'
+  | 'closeDestroy'
+  | 'requestRetag'
+  | 'closeRetag'
+  | 'enterBulkEdit'
+  | 'exitBulkEdit'
+  | 'toggleSelected'
+  | 'selectAll'
+  | 'clearSelected'
+>;
+
 const LinksViewStateContext = createContext<LinksViewStateValue | null>(null);
+const LinksViewActionsContext = createContext<LinksViewActions | null>(null);
 
 export function LinksViewStateProvider({ children }: { children: React.ReactNode }) {
   const [scrolled, setScrolled] = useState(false);
@@ -171,61 +196,89 @@ export function LinksViewStateProvider({ children }: { children: React.ReactNode
     exitBulkEdit();
   }, [query, exitBulkEdit]);
 
-  const value = useMemo<LinksViewStateValue>(
+  const actions = useMemo<LinksViewActions>(
     () => ({
-      engaged:
-        scrolled || openMenus > 0 || destroying !== null || retagging !== null || bulkEditing,
       setScrolled,
       setMenuOpen,
-      searchOpen,
       setSearchOpen,
-      searchVisible,
-      preSearch,
       setPreSearch,
-      destroying,
       requestDestroy,
       closeDestroy,
-      retagging,
       requestRetag,
       closeRetag,
-      bulkEditing,
       enterBulkEdit,
       exitBulkEdit,
-      selectedLinks,
       toggleSelected,
       selectAll,
       clearSelected,
     }),
     [
-      scrolled,
-      openMenus,
       setMenuOpen,
-      searchOpen,
-      searchVisible,
-      preSearch,
-      destroying,
       requestDestroy,
       closeDestroy,
-      retagging,
       requestRetag,
       closeRetag,
-      bulkEditing,
       enterBulkEdit,
       exitBulkEdit,
-      selectedLinks,
       toggleSelected,
       selectAll,
       clearSelected,
     ],
   );
 
-  return <LinksViewStateContext.Provider value={value}>{children}</LinksViewStateContext.Provider>;
+  // Derived OUTSIDE the memo, so the value depends on the boolean rather than
+  // its inputs: a second menu opening, or one opening while already scrolled
+  // away, moves `openMenus`/`scrolled` but not `engaged`, and re-renders
+  // nothing.
+  const engaged =
+    scrolled || openMenus > 0 || destroying !== null || retagging !== null || bulkEditing;
+
+  const value = useMemo<LinksViewStateValue>(
+    () => ({
+      ...actions,
+      engaged,
+      searchOpen,
+      searchVisible,
+      preSearch,
+      destroying,
+      retagging,
+      bulkEditing,
+      selectedLinks,
+    }),
+    [
+      actions,
+      engaged,
+      searchOpen,
+      searchVisible,
+      preSearch,
+      destroying,
+      retagging,
+      bulkEditing,
+      selectedLinks,
+    ],
+  );
+
+  return (
+    <LinksViewActionsContext.Provider value={actions}>
+      <LinksViewStateContext.Provider value={value}>{children}</LinksViewStateContext.Provider>
+    </LinksViewActionsContext.Provider>
+  );
 }
 
 export function useLinksViewState(): LinksViewStateValue {
   const ctx = useContext(LinksViewStateContext);
   if (!ctx) {
     throw new Error('useLinksViewState must be used within a LinksViewStateProvider');
+  }
+  return ctx;
+}
+
+// The setters only, from a value that never changes — see LinksViewActions.
+// Anything rendered once per list item must read this, not useLinksViewState.
+export function useLinksViewActions(): LinksViewActions {
+  const ctx = useContext(LinksViewActionsContext);
+  if (!ctx) {
+    throw new Error('useLinksViewActions must be used within a LinksViewStateProvider');
   }
   return ctx;
 }

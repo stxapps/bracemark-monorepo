@@ -9,6 +9,7 @@
 // than Intl.RelativeTimeFormat — Hermes' Intl coverage is uneven across
 // platforms, and the compact "3d" style suits the narrow column anyway.
 
+import { memo } from 'react';
 import { Linking, Pressable, View } from 'react-native';
 
 import { type LinkView } from '@stxapps/expo-react';
@@ -20,7 +21,7 @@ import { Favicon, LinkPreviewImage } from './link-media';
 import { LinkRowMenu } from './link-row-menu';
 import { LinkTagChips } from './link-tag-chips';
 import { type LinkItemProps, NoteBadge, PinnedBadge } from './shared';
-import { useLinksViewState } from './view-state-provider';
+import { useLinksViewActions } from './view-state-provider';
 
 const MINUTE = 60 * 1000;
 const RELATIVE_UNITS: [string, number][] = [
@@ -65,7 +66,7 @@ const ROW_CHIP_CHROME = 190;
 export const hasKnownTags = (link: LinkView, tagsById: Map<string, string>) =>
   link.tagIds.some((id) => tagsById.has(id));
 
-export function LinkRow({
+export const LinkRow = memo(function LinkRow({
   link,
   pinned,
   isFirst,
@@ -77,7 +78,7 @@ export function LinkRow({
   selected,
   onToggle,
 }: LinkItemProps) {
-  const { enterBulkEdit } = useLinksViewState();
+  const { enterBulkEdit } = useLinksViewActions();
 
   // The role follows the press, because the press has two meanings. In bulk-edit
   // the whole row IS the checkbox — Pressable is `accessible`, so it collapses the
@@ -90,10 +91,19 @@ export function LinkRow({
   // idiom (Photos, Files, Mail), and the reason it's here rather than on web:
   // desktop binds click-and-hold to a drag, and a touch browser binds it to the
   // link context menu, so web keeps its visible topbar toggle instead.
-  // Deliberately ONLY the way in — once selecting, a long-press falls through
-  // to onPress and just toggles, since RN only skips onPress when onLongPress
-  // actually fires. The ⋯ menu's "Select" stays: a gesture has no AT
-  // equivalent, so it can enhance this entry point but never be the only one.
+  //
+  // TRAP: the handler stays set WHILE selecting, where it only toggles. RN
+  // decides at RELEASE whether a long-press swallows the press, and it asks the
+  // handlers the Pressable holds THEN (Pressability: `onLongPress != null` in the
+  // current config), not whether one fired. The entering long-press re-renders
+  // this row into select mode before the finger lifts, so with the handler gone
+  // the release fell through to onPress and unpicked the row it had just picked.
+  // (Unseen while toggling bulk-edit's RefreshControl remounted every cell
+  // mid-gesture — main.tsx — which dropped the release altogether.) So while
+  // selecting a long-press toggles once, at the delay rather than on release;
+  // enterBulkEdit is a no-op then. The ⋯ menu's "Select" stays: a gesture has
+  // no AT equivalent, so it can enhance this entry point but never be the only
+  // one.
   // No haptic tick on the pick-up, for the reason drag-sort.tsx records at its
   // own seam — expo-haptics is a native module and a prebuild, a dependency
   // decision rather than a code one.
@@ -101,15 +111,11 @@ export function LinkRow({
     <Pressable
       role={selectMode ? 'checkbox' : 'link'}
       aria-checked={selectMode ? selected : undefined}
-      onPress={() => (selectMode ? onToggle() : void Linking.openURL(link.url))}
-      onLongPress={
-        selectMode
-          ? undefined
-          : () => {
-              enterBulkEdit();
-              onToggle();
-            }
-      }
+      onPress={() => (selectMode ? onToggle(link) : void Linking.openURL(link.url))}
+      onLongPress={() => {
+        enterBulkEdit();
+        onToggle(link);
+      }}
       // The selected fill, `bg-muted`, is the same one link-card.tsx paints and the
       // same one both web layouts paint — the checkbox is the state's precise
       // readout, the fill is what makes a selection legible as a BLOCK while
@@ -125,7 +131,7 @@ export function LinkRow({
         <Checkbox
           aria-label={`Select ${link.title || displayUrl(link.url)}`}
           checked={selected}
-          onCheckedChange={onToggle}
+          onCheckedChange={() => onToggle(link)}
           className="shrink-0"
         />
       )}
@@ -187,6 +193,7 @@ export function LinkRow({
             link={link}
             tagsById={tagsById}
             availableWidth={itemWidth - ROW_CHIP_CHROME}
+            selectMode={selectMode}
             className="mt-3"
           />
         </View>
@@ -199,4 +206,4 @@ export function LinkRow({
       {!selectMode && <LinkRowMenu link={link} pinned={pinned} isFirst={isFirst} isLast={isLast} />}
     </Pressable>
   );
-}
+});

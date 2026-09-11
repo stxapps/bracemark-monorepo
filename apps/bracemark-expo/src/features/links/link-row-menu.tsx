@@ -68,7 +68,7 @@ import { Icon } from '../../components/ui/icon';
 import { Text } from '../../components/ui/text';
 import { MoveToDialog } from './move-to-dialog';
 import { useEngagedOpen } from './shared';
-import { useLinksViewState } from './view-state-provider';
+import { useLinksViewActions } from './view-state-provider';
 
 export function LinkRowMenu({
   link,
@@ -84,7 +84,7 @@ export function LinkRowMenu({
   const router = useRouter();
   const { pin, unpin, moveUp, moveDown } = usePinMutations();
   const { update } = useLinkMutations();
-  const { requestDestroy } = useLinksViewState();
+  const { requestDestroy } = useLinksViewActions();
   const [, onMenuOpenChange] = useEngagedOpen();
   const [moveOpen, setMoveOpen] = useEngagedOpen();
 
