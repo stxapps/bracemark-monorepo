@@ -746,7 +746,11 @@ and both apps' surfaces are edge-to-edge by default (iOS always was; Android
     Radix's `collisionPadding` (rule 1 in _popups & dialogs_ above).
     `DropdownMenuContent` **defaults it** to `useSafeAreaInsets()` + 8, matching
     both DialogOverlay's gutter and web's default; a caller may override, and
-    `insets={{}}` opts out.
+    `insets={{}}` opts out. The trigger is measured ONCE, in the press, so
+    anything that moves it while the menu is open strands the menu — which is
+    why `DropdownMenuTrigger`, finding a keyboard up behind it, drops it and
+    takes the measurement again once it is down
+    ([soft-keyboard.md](./soft-keyboard.md), _dismissal_).
 
     It used to pass nothing, on the reasoning that "current triggers all sit
     inside safe-area'd chrome". That reasoning is about the TRIGGER and the

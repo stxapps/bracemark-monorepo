@@ -1,5 +1,6 @@
 import * as React from 'react';
 import {
+  type GestureResponderEvent,
   Platform,
   type StyleProp,
   StyleSheet,
@@ -7,6 +8,7 @@ import {
   View,
   type ViewStyle,
 } from 'react-native';
+import { KeyboardController } from 'react-native-keyboard-controller';
 import { FadeIn, ReduceMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FullWindowOverlay as RNFullWindowOverlay } from 'react-native-screens';
@@ -42,12 +44,86 @@ import { Text, TextClassContext } from './text';
 // DropdownMenuLabel below carries, and because the two indicators this app
 // actually ships are already trailing and hand-rolled (the settings topbar's
 // "you are here" check on web, `features/share/share-list-picker.tsx` here).
-// Content renders through @rn-primitives/portal — the root `_layout.tsx` mounts
-// the default `<PortalHost />` it lands in.
+// And DropdownMenuTrigger is a wrapper rather than the bare primitive, so a
+// keyboard left up behind the menu goes away before the menu is placed (see
+// there). Content renders through @rn-primitives/portal — the root
+// `_layout.tsx` mounts the default `<PortalHost />` it lands in.
 
 const DropdownMenu = DropdownMenuPrimitive.Root;
 
-const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger;
+// How long to wait for `keyboardDidHide` before placing the menu anyway. A hide
+// takes ~250ms on iOS and a little more on Android; this only bounds the case
+// where the event never arrives, which would otherwise leave the menu open but
+// never drawn — a ⋯ that looks dead.
+const KEYBOARD_SETTLE_TIMEOUT_MS = 1000;
+
+// Drops a keyboard left up behind the menu, and places the menu only once it is
+// gone. The same job DialogContent does on open (dialog.tsx), and done here for
+// the same reason — once, for every host, rather than in each trigger: the
+// field focused before the press survives it (every scroller here persists taps,
+// `"handled"`), stays focused behind the menu and takes the next keystroke
+// unseen (docs/soft-keyboard.md, _dismissal_). A settings row's ⋯ pressed from
+// that row's own rename field is the specimen.
+//
+// It cannot be the dialog's one-line dismiss-on-open, because a dialog is
+// CENTRED and a menu is ANCHORED. The primitive measures its trigger exactly
+// once, in this press, and places the content from that stored
+// `triggerPosition` for as long as it is open — nothing re-measures. Dropping
+// the keyboard moves the trigger out from under it: the settings page's
+// KeyboardAwareScrollView (scroll-host.tsx) scrolls back to where it was before
+// the keyboard rose, so a row it had scrolled up to reveal slides back down by
+// up to the keyboard's height, and a menu opened from it is left hanging where
+// the ⋯ used to be. So when a keyboard is up, the press opens the menu (the
+// caller's `onOpenChange` sees one `true`, as always) but withholds its
+// position, and measures again once the keyboard is down — by which point the
+// scroll-back, which keyboard-controller drives frame by frame with the
+// keyboard's own animation, has finished. The cost is one keyboard animation
+// before the menu appears, and only when there was a keyboard to drop.
+//
+// Withholding is ordering-safe because Fabric's `measure` is SYNCHRONOUS
+// (UIManagerBinding.cpp calls the callback before returning): the primitive's
+// onPress has already stored the stale position by the time it calls ours, and
+// clearing it lands in the same batched update, so the primitive's Portal —
+// which renders nothing without a position — never mounts the stale placement,
+// not even for a frame. `open` here is the value that press read, so a press
+// that CLOSES the menu is left alone.
+//
+// Dropping the keyboard blurs the field, and RenameField (settings/table-kit.tsx)
+// commits on `onEndEditing` — so opening a row's ⋯ mid-rename saves the name.
+// That is web's behaviour too: the click moves focus to the trigger, and the
+// field commits on blur. The menu's Rename item focuses the field again.
+function DropdownMenuTrigger({
+  onPress,
+  ref,
+  ...props
+}: React.ComponentProps<typeof DropdownMenuPrimitive.Trigger>) {
+  const { open, setTriggerPosition } = DropdownMenuPrimitive.useRootContext();
+  const triggerRef = React.useRef<DropdownMenuPrimitive.TriggerRef | null>(null);
+  const composedRef = React.useCallback(
+    (node: DropdownMenuPrimitive.TriggerRef | null) => {
+      triggerRef.current = node;
+      if (typeof ref === 'function') ref(node);
+      else if (ref) ref.current = node;
+    },
+    [ref],
+  );
+
+  function onTriggerPress(ev: GestureResponderEvent) {
+    onPress?.(ev);
+    if (open || Platform.OS === 'web' || !KeyboardController.isVisible()) return;
+    setTriggerPosition(null);
+    void Promise.race([
+      KeyboardController.dismiss(),
+      new Promise((resolve) => setTimeout(resolve, KEYBOARD_SETTLE_TIMEOUT_MS)),
+    ]).then(() => {
+      triggerRef.current?.measure((_x, _y, width, height, pageX, pageY) => {
+        setTriggerPosition({ width, height, pageX, pageY });
+      });
+    });
+  }
+
+  return <DropdownMenuPrimitive.Trigger ref={composedRef} onPress={onTriggerPress} {...props} />;
+}
 
 const DropdownMenuGroup = DropdownMenuPrimitive.Group;
 

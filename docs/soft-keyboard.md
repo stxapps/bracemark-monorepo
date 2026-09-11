@@ -383,6 +383,25 @@ the password field's autofocus becomes a race — no error, just a dialog that
 sometimes opens without its keyboard. `AlertDialogContent` has no field to race,
 so a passive effect does there.
 
+**A dropdown menu drops it too, but at the TRIGGER, and it waits.** Same
+leftover, same container-not-caller rule — a settings row's ⋯ pressed from that
+row's own rename field is the specimen — but the dialog's one-liner does not port,
+because a dialog is centred and a menu is anchored. `@rn-primitives` measures the
+trigger once, in the press, and never again while the menu is open; dropping the
+keyboard then MOVES the trigger, since the settings `KeyboardAwareScrollView`
+scrolls back to its pre-keyboard offset on hide, and a menu placed from the press
+is left hanging up to a keyboard's height above its ⋯. So `ui/dropdown-menu.tsx`'s
+`DropdownMenuTrigger` opens the menu but withholds its position while a keyboard
+is up, awaits `KeyboardController.dismiss()` (it resolves on `keyboardDidHide`,
+after the scroll-back, which is driven frame by frame with the keyboard), and
+measures again. The withhold is flash-free only because Fabric's `measure` calls
+back synchronously — the primitive's stale position is already stored when the
+wrapper's `onPress` clears it, in the same batch; the note on the wrapper has the
+detail, and `dropdown-menu.spec.tsx` pins the order. The cost is one keyboard
+animation before the menu appears, and only when there was a keyboard to drop.
+Dropping it also ends the rename, and `RenameField` commits on `onEndEditing` —
+the same save web makes when the click takes focus to the trigger.
+
 **The add panel adds a FOURTH vector, and it is the one that needs guarding.**
 Its backdrop closes on a tap — web's outside-click, and swallowed by the same
 rule while the optional section holds work (`link-add-panel.tsx`). Everything
