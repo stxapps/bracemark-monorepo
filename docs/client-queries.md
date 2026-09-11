@@ -552,6 +552,14 @@ changes is mechanical, and only the substrate forces it:
   from a querier must be `Promise.resolve`-wrapped or writes silently stop
   re-firing the query — **does not exist here**; expo helpers await freely.
   `react-virtual` likewise becomes `FlashList`.
+- **The FlashList scroll host stays structurally stable.** `main.tsx` always
+  supplies its `RefreshControl`, including while bulk edit suspends pull-to-refresh.
+  On Android, adding or removing that control wraps or unwraps the native
+  ScrollView in `AndroidSwipeRefreshLayout`; doing so while FlashList preserves
+  its recycler measurements can blank the cells until a later navigation forces
+  a relayout. Bulk edit therefore disables the mounted control (`enabled` on
+  Android, plus a guarded handler and controlled `refreshing` value for iOS)
+  instead of removing it. Any mode that suspends refresh inherits the same rule.
 
 **Ported so far:** the namespace reads (lists/tags/pins/settings), the
 link-library query (`readLinks` and its whole driver tree), the by-id / by-url

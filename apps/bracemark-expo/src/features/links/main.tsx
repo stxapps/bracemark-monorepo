@@ -337,19 +337,24 @@ function UnlockedMain() {
               if (hasMore) showMore();
             }}
             onEndReachedThreshold={0.5}
-            // Suspended in bulk-edit mode (see the header); `enabled` is
-            // Android-only, so the control is omitted entirely instead.
+            // Suspended in bulk-edit mode (see the header), but NEVER unmounted:
+            // on Android, adding/removing a RefreshControl wraps/unwraps the
+            // native ScrollView in AndroidSwipeRefreshLayout. FlashList keeps
+            // recycler measurements across that host-tree swap, which can leave
+            // its cells blank until some later navigation forces a relayout.
+            // `enabled` blocks the gesture on Android; iOS ignores that prop, so
+            // the handler and controlled refreshing value guard it there too.
             refreshControl={
-              bulkEditing ? undefined : (
-                <RefreshControl
-                  refreshing={refreshing}
-                  onRefresh={() => {
-                    setRefreshing(true);
-                    applyPending();
-                    requestSync();
-                  }}
-                />
-              )
+              <RefreshControl
+                enabled={!bulkEditing}
+                refreshing={!bulkEditing && refreshing}
+                onRefresh={() => {
+                  if (bulkEditing) return;
+                  setRefreshing(true);
+                  applyPending();
+                  requestSync();
+                }}
+              />
             }
           />
         </View>
