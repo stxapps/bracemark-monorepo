@@ -19,7 +19,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 import type { ProductSubscription } from 'expo-iap';
-import { Check, ExternalLink, RefreshCw } from 'lucide-react-native';
+import { Check, ExternalLink, RefreshCw, RotateCcw } from 'lucide-react-native';
 
 import { useEntitlements, useSync } from '@stxapps/expo-react';
 import {
@@ -422,7 +422,44 @@ export function SubscriptionSection() {
 
       {plan === 'free' && (
         <View className="items-start">
-          <Button variant="ghost" size="sm" disabled={busy !== null} onPress={() => void restore()}>
+          {/* `outline`, not `ghost`, and the reason is the LEFT EDGE. A ghost
+              button is a label plus the size's 12 of padding and nothing else,
+              so sitting at the pane's inset it read as a line of TEXT pushed 12
+              past the note beneath it and past the hairline of every box above
+              — an indent with nothing to explain it. An outline button's own
+              border lands on that edge instead, so the padding is visibly the
+              button's and the block keeps the column's left rule.
+
+              It is also, to the class, the "Manage subscription" control above
+              — outline button, `mt-2 text-xs` note under it, in an `items-start`
+              column — which is right, because the two are the same control for
+              opposite plans: the store-facing action a plan leaves you needing.
+
+              WHAT IT IS NOT is a bordered block of its own. A border on this
+              surface means a status block or an offer (the current-plan box, the
+              upgrade cards, SettingsRow); a lone action is neither, and a fourth
+              box — last on the pane, straight after the cards' fine print — would
+              read as a fifth plan rather than as recovery. The border it needs is
+              the button's, not the block's. */}
+          {/* 40 tall is under the 44pt floor, so it takes slop rather than a
+              taller box (docs/accessibility.md, _a 36dp box is not a 44pt
+              target_). TOP IS THE SMALL SIDE, and not by symmetry-aversion: the
+              nearest pressable neighbour is the consent line 32 above, whose
+              links are inline `Text`s with `onPress` (legal-consent.tsx) — real
+              touch targets, only a `leading-5` line tall. This Button is the
+              LATER sibling, so any overlap resolves in ITS favour and what gets
+              eaten is the bottom strip of "Privacy Policy" — the one link App
+              Review 3.1.2 comes to this screen to press. 8 stays well inside the
+              half-the-gap rule; the other three sides have no pressable
+              neighbour at all (the note below is a plain Text, and left is the
+              pane's own inset). */}
+          <Button
+            variant="outline"
+            disabled={busy !== null}
+            hitSlop={{ top: 8, bottom: 12, left: 12, right: 12 }}
+            onPress={() => void restore()}
+          >
+            <Icon as={RotateCcw} className="size-4" />
             <Text>{busy === 'restore' ? 'Restoring…' : 'Restore purchases'}</Text>
           </Button>
           {/* Names the SITUATION, because the label only names the mechanism — and
