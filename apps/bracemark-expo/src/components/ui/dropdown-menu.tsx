@@ -65,7 +65,10 @@ const KeyboardHandOffContext = React.createContext<{
 
 function DropdownMenu(props: React.ComponentProps<typeof DropdownMenuPrimitive.Root>) {
   const [waitedOnKeyboard, setWaitedOnKeyboard] = React.useState(false);
-  const handOff = React.useMemo(() => ({ waitedOnKeyboard, setWaitedOnKeyboard }), [waitedOnKeyboard]);
+  const handOff = React.useMemo(
+    () => ({ waitedOnKeyboard, setWaitedOnKeyboard }),
+    [waitedOnKeyboard],
+  );
   return (
     <KeyboardHandOffContext.Provider value={handOff}>
       <DropdownMenuPrimitive.Root {...props} />

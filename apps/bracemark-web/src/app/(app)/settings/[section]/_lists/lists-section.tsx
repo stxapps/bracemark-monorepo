@@ -330,7 +330,7 @@ function SortableRow({
   excludeIds: readonly string[];
   lock: ListLockInfo | undefined;
   onToggle: () => void;
-  onRename: (name: string) => void;
+  onRename: (name: string) => Promise<unknown>;
   onMoveUp: () => void;
   onMoveDown: () => void;
   onMoveTo: (parentId: string | null) => void;
@@ -672,7 +672,7 @@ export function ListsSection() {
                       excludeIds={excludeIds}
                       lock={listLocks.get(row.item.id)}
                       onToggle={() => toggle(row.item.id)}
-                      onRename={(name) => run(rename(row.item, name))}
+                      onRename={(name) => runAwait(() => rename(row.item, name))}
                       onMoveUp={() =>
                         run(move(row.item, row.parentId, siblingsWithout(row), row.index - 1))
                       }

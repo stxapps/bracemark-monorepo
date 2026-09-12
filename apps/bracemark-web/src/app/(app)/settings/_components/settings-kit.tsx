@@ -1,3 +1,6 @@
+'use client';
+
+import { useEffect, useRef } from 'react';
 import { ArrowUpRight, ChevronLeft, ChevronRight } from 'lucide-react';
 
 import { cn } from '@stxapps/web-ui/lib/utils';
@@ -293,6 +296,31 @@ export function SettingsRow({
 // the result of a click with nothing else changing on screen, which leaves a
 // screen-reader user with a button that silently re-enables and no reason why.
 // The other two tones must NOT have it: they're standing text, not events.
+//
+// AN `error` ALSO SCROLLS ITSELF INTO VIEW, which is the same argument as the
+// role one paragraph up, for everyone who isn't using a screen reader. Every
+// section renders this at the TOP of its pane while the control that failed can
+// be anywhere below it: a rename or a move deep in the Lists table put the
+// message a screen above the row that asked, so the click read as doing nothing.
+// `block: 'nearest'` is what keeps that from being a nuisance — a notice already
+// on screen does not move the page at all, which is the common case on a short
+// pane — and it walks whatever ancestor actually scrolls, so this needs to know
+// nothing about the settings layout. Only `error` moves the page: `info` and
+// `pending` are standing text, and yanking the viewport for a banner nobody
+// asked for is the behaviour this would deserve to be blamed for. `smooth`
+// respects prefers-reduced-motion in every browser we target (the OS setting
+// disables the animation, not the scroll).
+//
+// Delete is the one op that does NOT arrive here — a refusal from deep in the
+// table carries a decision, so it gets the modal instead (table-kit.tsx's
+// useDestroyRequest, docs/editors.md).
+//
+// The hooks make THIS export client-only while the rest of the file stays dual
+// (no `'use client'` here, as in web-ui's own primitives — a module compiles into
+// whichever graph imports it). Every section that renders a notice is already
+// `'use client'`; `_about/about-section.tsx` is the one server importer of this
+// kit and uses Pane/Header/Group/Row only. If a server section ever wants a
+// notice, give the file the directive rather than dropping the effect.
 export function SettingsNotice({
   tone = 'info',
   icon,
@@ -304,8 +332,22 @@ export function SettingsNotice({
   className?: string;
   children: React.ReactNode;
 }) {
+  const ref = useRef<HTMLParagraphElement>(null);
+  // The message, when it is one, so a SECOND failure with different text scrolls
+  // again — this component stays mounted across errors, so mounting alone would
+  // only ever catch the first. A non-string child (the account section's linked
+  // sentences) has no stable identity to compare, so those scroll on mount only
+  // rather than on every render.
+  const message = typeof children === 'string' ? children : null;
+
+  useEffect(() => {
+    if (tone !== 'error') return;
+    ref.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [tone, message]);
+
   return (
     <p
+      ref={ref}
       role={tone === 'error' ? 'alert' : undefined}
       className={cn(
         'flex items-start gap-2 rounded-lg px-3 py-2.5 text-sm',

@@ -265,6 +265,38 @@ draft; each keystroke commits or reverts in place):
   on open and has no fallback, so without one focus opens stranded outside the
   dialog. Both kits carry a spec for the flow (`table-kit.spec.tsx`).
 
+  **Everything else stays in the notice — but the notice comes to the reader,
+  and a failed rename un-types itself.** The modal is for a REFUSAL THAT CARRIES
+  A DECISION, which is Delete and nothing else: what can otherwise reach the
+  runner is a local-store write failing, since every named throw in the
+  mutations (`Trash cannot contain lists`, `a list cannot be its own parent`,
+  an end-of-group move, a blank or unchanged rename) is a state the UI prevents
+  before the call. That is not a decision, there is nothing to put in a footer
+  but "OK", and rename commits on BLUR — four rows renamed against a broken
+  store would be four modals to dismiss, where one notice persists until the
+  next op. So two narrower changes instead, both in the kits:
+
+  - `SettingsNotice tone="error"` **scrolls itself into view** when it appears,
+    which is the sighted half of the `role="alert"` it already carried. Web
+    uses `scrollIntoView({ block: 'nearest' })`, so a notice already on screen
+    moves nothing; expo has no DOM to walk, so `scroll-host.tsx` grew
+    `scrollIntoView(node)` — measured in window coordinates against the same
+    viewport the drag layer compares a gesture against, animated, and skipped
+    when the notice is already visible. `info` and `pending` never move the
+    page: they are standing text, not events.
+  - `RenameField` **puts the stored name back when the commit doesn't land.**
+    The field is uncontrolled and the call site keys it on the STORED name, so
+    a failed write changes nothing and the row goes on displaying a name no
+    store holds — on every device, until the section is re-entered. A message a
+    screen away cannot fix that; the table has to stop asserting the rename
+    happened. Two commits revert: a blank name (which the mutations treat as
+    "no rename", so nothing throws) and a rejected write. Hence `onRename`
+    returns a promise and both sections pass `runAwait`, which records the
+    message for the notice AND re-throws — the same contract CreateRow already
+    used to keep its typed value on a failure. Web assigns `input.value`, expo
+    remounts the field (RN has no `.value`), and both spell the three cases in
+    `table-kit.spec.tsx`, positive control included.
+
   **Lists nest, tags are deliberately flat — and that's a UI decision, not a
   schema one.** Tags carry the _same_ `parentId`/`rank` fields as lists
   (`entities.ts` — both are the same ranked-tree entity), so the store could nest

@@ -1,7 +1,7 @@
 import React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 
-import { DestroyConfirm, useDestroyRequest } from './table-kit';
+import { DestroyConfirm, RenameField, useDestroyRequest } from './table-kit';
 
 // Pins the delete flow the Lists and Tags tables share. Each case is a failure
 // with no other symptom: a refusal a screen away from the row that asked (the bug
@@ -122,4 +122,63 @@ test('a check overtaken by a newer request never raises its dialog', async () =>
   });
 
   expect(screen.getByRole('alertdialog').textContent).toContain('Confirm b');
+});
+
+// The commit fires a promise the field only reacts to when it settles; this
+// flushes that microtask and the re-render it causes.
+const flush = () =>
+  act(async () => {
+    await Promise.resolve();
+  });
+
+// RenameField's revert. Same silent failure in all three: the field is
+// uncontrolled and the call site keys it on the STORED name, so a commit that
+// doesn't land leaves the row displaying a name nothing holds — no error on the
+// row, no re-render, nothing until the section is re-entered. The expo twin
+// asserts the same three facts through a remount, having no `value` to read.
+
+const renameField = () => screen.getByLabelText<HTMLInputElement>('List name');
+
+const commit = (text: string) => {
+  const input = renameField();
+  fireEvent.change(input, { target: { value: text } });
+  fireEvent.blur(input);
+};
+
+// The positive control for the two reverts below: without it, "the field shows
+// Reading" would be satisfied just as well by a field that reverts EVERY commit,
+// which would throw away a rename that did land.
+test('a rename that lands leaves the typed name in the field', async () => {
+  const onRename = jest.fn(() => Promise.resolve());
+  render(<RenameField name="Reading" label="List name" onRename={onRename} />);
+
+  commit('Reading later');
+  await flush();
+
+  expect(onRename).toHaveBeenCalledWith('Reading later');
+  expect(renameField().value).toBe('Reading later');
+});
+
+test('a rename the store rejects puts the stored name back', async () => {
+  const onRename = jest.fn(() => Promise.reject(new Error('Storage is full.')));
+  render(<RenameField name="Reading" label="List name" onRename={onRename} />);
+
+  commit('Reading later');
+  await flush();
+
+  expect(onRename).toHaveBeenCalledWith('Reading later');
+  expect(renameField().value).toBe('Reading');
+});
+
+test('a blank name is not a rename, and never reaches the mutation', async () => {
+  // The mutations treat a blank name as "no rename" rather than an error, so
+  // nothing throws and nothing else would take the empty field back.
+  const onRename = jest.fn(() => Promise.resolve());
+  render(<RenameField name="Reading" label="List name" onRename={onRename} />);
+
+  commit('   ');
+  await flush();
+
+  expect(onRename).not.toHaveBeenCalled();
+  expect(renameField().value).toBe('Reading');
 });

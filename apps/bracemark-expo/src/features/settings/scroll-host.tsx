@@ -55,8 +55,20 @@ export interface SettingsScrollHandle {
   // The viewport in window coordinates, for comparing against a gesture's
   // `absoluteY`. Height is 0 until the first layout.
   viewport: () => { top: number; height: number };
+  // Bring a node in the page into view, animated, and only if it isn't already
+  // — what something that can APPEAR off-screen needs (SettingsNotice; nothing
+  // else uses it yet). The node is measured against this host's own box rather
+  // than in window coordinates (see the implementation for why that distinction
+  // is load-bearing), so a caller passes its ref and nothing else. Animated,
+  // unlike `scrollBy`: that one runs per frame inside a drag loop, this one
+  // runs once and the movement is the point — a page that jumps has not told
+  // the user anything.
+  scrollIntoView: (node: View | null) => void;
   setScrollEnabled: (enabled: boolean) => void;
 }
+
+// The gap left above a node scrolled into view, and below one scrolled up to.
+const SCROLL_INTO_VIEW_MARGIN = 8;
 
 const SettingsScrollContext = createContext<SettingsScrollHandle | null>(null);
 
@@ -106,6 +118,51 @@ export function SettingsScrollHost({ children }: { children: ReactNode }) {
         return applied;
       },
       viewport: () => ({ top: viewportTop.current, height: viewportHeight.current }),
+      scrollIntoView: (node) => {
+        // Before the wrapper's first layout there is no viewport to scroll
+        // within, and measuring against a 0-height one would scroll to the top
+        // of the page for any node at all.
+        const wrapper = wrapperRef.current;
+        if (!node || !wrapper || viewportHeight.current === 0) return;
+        // MEASURED AGAINST THE WRAPPER, AND `y` COMES BACK IN CONTENT
+        // COORDINATES — the node's offset from the top of everything the
+        // scroller holds, which does NOT move as the user scrolls.
+        // `measureLayout` sums layout boxes up the tree and a scroll offset is
+        // not one of them. Driven on the simulator: with the page scrolled a
+        // screen down, the notice measured 156 either way, so comparing it
+        // against the viewport's own box said "already visible" every time and
+        // this method did nothing at all — silently, since there is no failure
+        // to see, only a page that stays put. Hence the comparison below is
+        // against the WINDOW OF CONTENT on screen (`offsetY` … `+ height`), and
+        // the target is an absolute offset rather than a delta.
+        //
+        // Window coordinates are the other road, and it is worse: this wrapper
+        // sits inside a `SafeAreaView`, which applies its insets as a NATIVE
+        // view outside Yoga (docs/soft-keyboard.md, _the traps_), so measuring
+        // the node one way and the viewport the other mixes two frames that
+        // differ by the top inset. Everything here is one tree and one frame.
+        node.measureLayout(wrapper, (_x, y, _width, height) => {
+          const visibleTop = offsetY.current + SCROLL_INTO_VIEW_MARGIN;
+          const visibleBottom = offsetY.current + viewportHeight.current - SCROLL_INTO_VIEW_MARGIN;
+          // A node TALLER than the viewport can never be "fully" in view, and
+          // its top is the end that has to be readable — so its top edge being
+          // in view is the whole test.
+          const fits = height <= viewportHeight.current - 2 * SCROLL_INTO_VIEW_MARGIN;
+          // Already in view: leave the page exactly where the user put it.
+          if (y >= visibleTop && (y + height <= visibleBottom || !fits)) return;
+          // Nearest edge, as the web twin's `block: 'nearest'` does: a node
+          // above the fold scrolls up to it, one below scrolls only as far as
+          // it takes to clear the bottom.
+          const target =
+            y < visibleTop || !fits
+              ? y - SCROLL_INTO_VIEW_MARGIN
+              : y + height + SCROLL_INTO_VIEW_MARGIN - viewportHeight.current;
+          const max = Math.max(0, contentHeight.current - viewportHeight.current);
+          const next = Math.min(max, Math.max(0, target));
+          if (next === offsetY.current) return;
+          scrollRef.current?.scrollTo({ y: next, animated: true });
+        });
+      },
       setScrollEnabled,
     }),
     [scrollY],

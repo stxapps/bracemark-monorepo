@@ -1,10 +1,10 @@
 import * as React from 'react';
-import { Pressable } from 'react-native';
+import { Pressable, type TextInput } from 'react-native';
 import { PortalHost } from '@rn-primitives/portal';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 
 import { Text } from '../../components/ui/text';
-import { DestroyConfirm, useDestroyRequest } from './table-kit';
+import { DestroyConfirm, RenameField, useDestroyRequest } from './table-kit';
 
 // Pins the delete flow the Lists and Tags tables share — web's peer
 // (settings/_components/table-kit.spec.tsx) names the failures. Its focus case
@@ -124,4 +124,82 @@ test('a check overtaken by a newer request never raises its dialog', async () =>
 
   expect(screen.getByText('Confirm b')).toBeTruthy();
   expect(screen.queryByText('Can’t delete this list')).toBeNull();
+});
+
+// The commit fires a promise the field only reacts to when it settles; this
+// flushes that microtask and the re-render it causes.
+const flush = () =>
+  act(async () => {
+    await Promise.resolve();
+  });
+
+// RenameField's revert. The failure each case prevents is the same one and it is
+// SILENT: the field is uncontrolled and the call site keys it on the STORED name,
+// so a commit that doesn't land leaves the row displaying a name nothing holds —
+// no error on the row, no re-render, nothing until the section is re-entered.
+//
+// WHAT THESE ASSERT, and why it isn't the text. An uncontrolled TextInput keeps
+// its text in the native layer, which does not exist under RNTL: `props.value` is
+// undefined and `props.defaultValue` is the STORED name in every case, passing
+// whether the field reverted or not. The revert IS the remount (the `key` bump),
+// so the ref is the observable — a remount detaches and reattaches it, a plain
+// re-render does not. The web twin has a real `input.value` and asserts on that.
+
+function RenameHarness({
+  onRename,
+  inputRef,
+}: {
+  onRename: (name: string) => Promise<unknown>;
+  inputRef: React.RefObject<TextInput | null>;
+}) {
+  return <RenameField name="Reading" label="List name" onRename={onRename} inputRef={inputRef} />;
+}
+
+function renameHarness(onRename: (name: string) => Promise<unknown>) {
+  const inputRef = React.createRef<TextInput>();
+  render(<RenameHarness onRename={onRename} inputRef={inputRef} />);
+  return { inputRef, mounted: inputRef.current };
+}
+
+const endEditing = (text: string) =>
+  fireEvent(screen.getByLabelText('List name'), 'endEditing', { nativeEvent: { text } });
+
+// The positive control for the two reverts below: without it, "the field
+// remounted" would be satisfied just as well by a field that remounts on every
+// commit, which would throw away a rename that DID land.
+test('a rename that lands leaves the field alone', async () => {
+  const onRename = jest.fn(() => Promise.resolve());
+  const { inputRef, mounted } = renameHarness(onRename);
+
+  endEditing('Reading later');
+  await flush();
+
+  expect(onRename).toHaveBeenCalledWith('Reading later');
+  expect(inputRef.current).toBe(mounted);
+});
+
+test('a rename the store rejects puts the stored name back', async () => {
+  const onRename = jest.fn(() => Promise.reject(new Error('Storage is full.')));
+  const { inputRef, mounted } = renameHarness(onRename);
+
+  endEditing('Reading later');
+  await flush();
+
+  // Remounted, so the field is a fresh uncontrolled one at `defaultValue` — the
+  // name the store still holds — instead of the text that failed to save.
+  expect(onRename).toHaveBeenCalledWith('Reading later');
+  expect(inputRef.current).not.toBe(mounted);
+});
+
+test('a blank name is not a rename, and never reaches the mutation', async () => {
+  // The mutations treat a blank name as "no rename" rather than an error, so
+  // nothing throws and nothing else would take the empty field back.
+  const onRename = jest.fn(() => Promise.resolve());
+  const { inputRef, mounted } = renameHarness(onRename);
+
+  endEditing('   ');
+  await flush();
+
+  expect(onRename).not.toHaveBeenCalled();
+  expect(inputRef.current).not.toBe(mounted);
 });

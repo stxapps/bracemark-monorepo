@@ -286,6 +286,30 @@ export function CreateRow({
 // Inline rename. Uncontrolled so typing never round-trips through the store;
 // commits when editing ends (blur or return). `key` it by the stored name at the
 // call site so an external rename (another device) refreshes the field.
+//
+// A COMMIT THAT DOESN'T LAND PUTS THE STORED NAME BACK, and the row lying is
+// why. Uncontrolled means the field holds what was typed until something
+// replaces it, and the call site's `key` is the STORED name — which a failed
+// write never changes — so nothing remounts this and the row goes on showing a
+// name no store holds, on every device, until the section is left and re-entered.
+// The section's notice says so a screen away (`useOpRunner`), and that is the
+// half of the problem a message cannot fix: the table itself has to stop
+// asserting the rename happened. Two commits never land, and both revert here:
+//
+//   - a BLANK name — the mutations treat it as "no rename", not as an error, so
+//     nothing throws and nothing would otherwise take the empty field back;
+//   - a REJECTED write, which is the local store failing (every other throw in
+//     `rename` is a state the UI prevents). `onRename` therefore returns the
+//     promise — call sites pass `runAwait`, which records the message for the
+//     notice AND re-throws, exactly as CreateRow keeps its typed value on
+//     failure.
+//
+// The revert is a REMOUNT (the key below), not a write through the ref: RN has
+// no `input.value = …` (the web twin's spelling), and `setNativeProps` is not a
+// road to go down on Fabric for something a key already does. Editing has ended
+// by the time either revert runs — `onEndEditing` fires on blur and on submit,
+// and `blurOnSubmit` is the single-line default — so nothing here can steal a
+// focus the user still has.
 export function RenameField({
   name,
   label,
@@ -296,16 +320,25 @@ export function RenameField({
   // The accessible name of the field itself — "List name", "Tag name". The
   // visible text is the value, so without this the field announces as unlabelled.
   label: string;
-  onRename: (name: string) => void;
+  // Resolves when the rename is stored, rejects when it isn't — the field reads
+  // the rejection, never the message (the notice's job).
+  onRename: (name: string) => Promise<unknown>;
   inputRef?: React.RefObject<TextInput | null>;
 }) {
+  const [revision, setRevision] = useState(0);
+  const revert = () => setRevision((r) => r + 1);
+
   return (
     <Input
+      key={revision}
       ref={inputRef}
       defaultValue={name}
       aria-label={label}
       className="h-9 border-transparent bg-transparent px-2 shadow-none"
-      onEndEditing={(e) => onRename(e.nativeEvent.text)}
+      onEndEditing={(e) => {
+        if (e.nativeEvent.text.trim() === '') return revert();
+        void onRename(e.nativeEvent.text).catch(revert);
+      }}
     />
   );
 }

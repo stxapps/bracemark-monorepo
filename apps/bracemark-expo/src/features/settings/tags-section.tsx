@@ -118,7 +118,7 @@ function Row({
   lifted: boolean;
   isFirst: boolean;
   isLast: boolean;
-  onRename: (name: string) => void;
+  onRename: (name: string) => Promise<unknown>;
   onMoveUp: () => void;
   onMoveDown: () => void;
   onDelete: () => void;
@@ -232,7 +232,7 @@ export function TagsSection() {
               lifted={drag.activeIndex === index}
               isFirst={index === 0}
               isLast={index === tags.length - 1}
-              onRename={(name) => run(rename(tag, name))}
+              onRename={(name) => runAwait(() => rename(tag, name))}
               onMoveUp={() => shift(tag, index, -1)}
               onMoveDown={() => shift(tag, index, 1)}
               onDelete={() => requestDestroy(tag)}

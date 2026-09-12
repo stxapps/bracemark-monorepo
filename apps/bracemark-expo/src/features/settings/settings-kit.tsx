@@ -1,10 +1,11 @@
-import { type ReactNode } from 'react';
+import { type ReactNode, useEffect, useRef } from 'react';
 import { Pressable, View } from 'react-native';
 import { ArrowUpRight, ChevronLeft, ChevronRight } from 'lucide-react-native';
 
 import { Icon } from '../../components/ui/icon';
 import { Text } from '../../components/ui/text';
 import { cn } from '../../lib/utils';
+import { useSettingsScroll } from './scroll-host';
 
 // The settings design system: the column, the headings, the row, the notice —
 // the RN port of bracemark-web's `(app)/settings/_components/settings-kit.tsx`,
@@ -276,6 +277,22 @@ export function SettingsRow({
 // other two tones must NOT have it: they're standing text, not events. The role
 // rides the message Text, so a NON-string child has to carry its own; every
 // current error caller passes a string.
+//
+// AN `error` ALSO SCROLLS ITSELF INTO VIEW, and that is not a flourish on a
+// presentational component — it is the other half of `role="alert"`. Every
+// section renders this at the TOP of its pane while the control that failed can
+// be anywhere below: a rename or a move deep in the Lists table put the message
+// a screen above the row that asked, so the press read as doing nothing at all.
+// A screen reader was already told (the role); this is the same event reaching
+// everyone else. Only `error` moves the page — `info` and `pending` are standing
+// text, and yanking the viewport for a banner the user did not ask for is the
+// behaviour this would deserve to be blamed for. It is also why the movement is
+// ANIMATED and skipped when the notice is already on screen (scroll-host.tsx):
+// the common case is a short pane where nothing should move at all.
+//
+// Delete is the one op that does NOT arrive here — a refusal from deep in the
+// table carries a decision, so it gets the modal instead (table-kit.tsx's
+// useDestroyRequest, docs/editors.md).
 export function SettingsNotice({
   tone = 'info',
   icon,
@@ -287,8 +304,29 @@ export function SettingsNotice({
   className?: string;
   children: ReactNode;
 }) {
+  const ref = useRef<View>(null);
+  const scroll = useSettingsScroll();
+  // The message, when it is one, so a SECOND failure with different text scrolls
+  // again — this component stays mounted across errors, so mounting alone would
+  // only ever catch the first. A non-string child (the account section's linked
+  // sentences) has no stable identity to compare, so those scroll on mount only
+  // rather than on every render.
+  const message = typeof children === 'string' ? children : null;
+
+  useEffect(() => {
+    if (tone !== 'error' || !scroll) return;
+    // A frame, so the measurement sees this notice laid out: the host measures
+    // the node against the shadow tree's committed layout, and on the mount
+    // that inserts the notice this effect can run before that commit lands —
+    // which measures as y=0 and scrolls the page to the top for a notice that
+    // may be nowhere near it.
+    const frame = requestAnimationFrame(() => scroll.scrollIntoView(ref.current));
+    return () => cancelAnimationFrame(frame);
+  }, [tone, message, scroll]);
+
   return (
     <View
+      ref={ref}
       className={cn(
         'flex-row items-start gap-2 rounded-lg px-3 py-2.5',
         tone === 'info' && 'border border-border',

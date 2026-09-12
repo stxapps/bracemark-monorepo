@@ -322,13 +322,35 @@ interface RenameFieldProps {
   // The accessible name of the field itself — "List name", "Tag name". The
   // visible text is the value, so without this the field announces as unlabelled.
   label: string;
-  onRename: (name: string) => void;
+  // Resolves when the rename is stored, rejects when it isn't — the field reads
+  // the rejection, never the message (the notice's job).
+  onRename: (name: string) => Promise<unknown>;
   ref?: React.Ref<HTMLInputElement>;
 }
 
 // Inline rename. Uncontrolled so typing never round-trips through the store;
 // commits on blur and Enter, reverts on Escape. `key` it by the stored name at
 // the call site so an external rename (another device) refreshes the field.
+//
+// A COMMIT THAT DOESN'T LAND PUTS THE STORED NAME BACK — the same revert Escape
+// already performs, for the two commits that silently don't happen. Uncontrolled
+// means the field holds what was typed until something replaces it, and the call
+// site's `key` is the STORED name, which a failed write never changes: nothing
+// remounts this, so the row goes on showing a name no store holds until the
+// section is left and re-entered. The notice above the table says so a screen
+// away (`useOpRunner`), and that is the half a message cannot fix — the table
+// itself has to stop asserting the rename happened. The two:
+//
+//   - a BLANK name — the mutations treat it as "no rename", not as an error, so
+//     nothing throws and nothing would otherwise take the empty field back;
+//   - a REJECTED write, which is the local store failing (every other throw in
+//     `rename` is a state the UI prevents). Hence the promise: call sites pass
+//     `runAwait`, which records the message for the notice AND re-throws,
+//     exactly as CreateRow keeps its typed value on failure.
+//
+// `input` is captured out of the event synchronously — React nulls
+// `currentTarget` once the handler returns, so reading it inside the `.catch`
+// would revert nothing. The expo twin remounts instead (RN has no `.value`).
 export function RenameField({ name, label, onRename, ref }: RenameFieldProps) {
   return (
     <Input
@@ -343,7 +365,14 @@ export function RenameField({ name, label, onRename, ref }: RenameFieldProps) {
           e.currentTarget.blur();
         }
       }}
-      onBlur={(e) => onRename(e.currentTarget.value)}
+      onBlur={(e) => {
+        const input = e.currentTarget;
+        const revert = () => {
+          input.value = name;
+        };
+        if (input.value.trim() === '') return revert();
+        void onRename(input.value).catch(revert);
+      }}
     />
   );
 }
