@@ -413,7 +413,7 @@ export function ListLayout({
                     <LinkTagChips link={link} tagsById={tagsById} className="mt-3" />
                   </span>
                 </div>
-                {/* Sorted-field date column — only when the PANE is wide enough (@lg
+                {/* Sorted-field date column — only when the PANE is wide enough (@xl
                     container width), so it never crowds the title on a narrow pane
                     or in the extension popup. Shows the createdAt/updatedAt value the
                     rows are ordered by (see dateVerb above). dateTime carries the exact

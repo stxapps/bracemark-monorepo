@@ -42,18 +42,28 @@ function formatRelativeTime(epochMs: number): string {
   return 'now';
 }
 
-// What the row can spare for the tag strip, off the item width main.tsx hands
-// down (link-tag-chips.tsx does the fitting). Left to right: pl-4 + pr-2 (24),
-// the two gap-3s bracketing the date column (24), the date column itself at its
-// widest ("12mo", font-scaled — 34), the ⋯ menu's size-8 (32), and inside the
-// text box the thumbnail's w-16 plus its gap-3 (76).
+// Web reveals its sorted-field date at the pane's `@xl` container query: 36rem,
+// or 576px at Tailwind's 16px root. Use the row width main.tsx hands down rather
+// than Uniwind's viewport `lg:` (64rem): the row is the thing whose title the
+// date competes with, and the two breakpoint scales do not mean the same width.
+// Today the app is phone-only and portrait-locked, so this hides the date on all
+// supported devices while keeping the rule correct for a future wider surface.
+const RELATIVE_TIME_MIN_ROW_WIDTH = 576;
+
+// What the row can spare for the tag strip, off that same item width
+// (link-tag-chips.tsx does the fitting). Without the optional date, left to
+// right: pl-4 + pr-2 (24), the gap-3 before the ⋯ menu (12), the menu's size-8
+// (32), and inside the text box the thumbnail's w-16 plus its gap-3 (76).
 //
 // One number for both modes, deliberately: bulk-edit drops the menu (32 + a
 // 12pt gap) and inserts a size-4 checkbox (16 + a 12pt gap), so a selecting row
 // is 16pt ROOMIER. Budgeting the tighter shape for both means entering the mode
 // can't reflow the chips under the user's thumb — 16pt buys a couple of
 // characters, not a chip.
-const ROW_CHIP_CHROME = 190;
+const ROW_CHIP_BASE_CHROME = 144;
+// When present, the date adds its widest value ("12mo", font-scaled — 34) and
+// another gap-3 (12) between it and the text box.
+const ROW_CHIP_DATE_CHROME = 46;
 
 // Whether this row renders a chip strip, and so which of its two shapes it
 // takes: exactly the test LinkTagChips applies before it renders anything, so
@@ -79,6 +89,7 @@ export const LinkRow = memo(function LinkRow({
   onToggle,
 }: LinkItemProps) {
   const { enterBulkEdit } = useLinksViewActions();
+  const showRelativeTime = itemWidth >= RELATIVE_TIME_MIN_ROW_WIDTH;
 
   // The role follows the press, because the press has two meanings. In bulk-edit
   // the whole row IS the checkbox — Pressable is `accessible`, so it collapses the
@@ -192,15 +203,19 @@ export const LinkRow = memo(function LinkRow({
           <LinkTagChips
             link={link}
             tagsById={tagsById}
-            availableWidth={itemWidth - ROW_CHIP_CHROME}
+            availableWidth={
+              itemWidth - ROW_CHIP_BASE_CHROME - (showRelativeTime ? ROW_CHIP_DATE_CHROME : 0)
+            }
             selectMode={selectMode}
             className="mt-3"
           />
         </View>
       </View>
-      <Text className="shrink-0 text-xs text-muted-foreground">
-        {formatRelativeTime(link[sortOn])}
-      </Text>
+      {showRelativeTime && (
+        <Text className="shrink-0 text-xs text-muted-foreground">
+          {formatRelativeTime(link[sortOn])}
+        </Text>
+      )}
       {/* Hidden while selecting — the checkbox column stands in (web's list
           layout, verbatim). */}
       {!selectMode && <LinkRowMenu link={link} pinned={pinned} isFirst={isFirst} isLast={isLast} />}
