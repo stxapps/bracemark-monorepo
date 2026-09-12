@@ -142,6 +142,22 @@ interface ExtractionContextValue {
   // opt-in off would get its title and preview image but a monogram where its icon goes,
   // which is not what the settings section and the previews prompt tell the user.
   extractNow: (linkPaths: string[]) => void;
+  // How many links the GESTURED path is fetching RIGHT NOW — `extractNow`'s runs only,
+  // never the drain's. It exists for the previews prompt, and the asymmetry it repairs is
+  // this platform's alone: on web nothing extracts until the opt-in flips, so a raw-pending
+  // link stays pending, while here a link saved on this device is fetched at `saves` by
+  // `extractNow` and is therefore raw-pending for the length of its own fetch (up to 15s
+  // page + 20s image, device-extraction.ts). Counting that link as "waiting for a preview"
+  // made the banner flash on every save of a single-device account and then retire itself —
+  // an offer to cover links this device will NEVER pick up, quoting one it was already
+  // picking up.
+  //
+  // Counted from the paths HANDED IN and incremented SYNCHRONOUSLY, before the async claim,
+  // so the gap between the link's row landing (which wakes the banner's read) and
+  // `extractNow` claiming it is covered too. The cost of counting paths rather than claims
+  // is that an already-settled path (a re-save) is counted for the length of one no-op run;
+  // that errs toward hiding a passive offer for a few seconds, which is the safe side.
+  gesturedInFlightCount: number;
 }
 
 const ExtractionContext = createContext<ExtractionContextValue | null>(null);
@@ -222,6 +238,12 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
   // here it costs a Set.
   const inFlightPathsRef = useRef(new Set<string>());
 
+  // The gestured in-flight tally the context exposes (see its entry on the type). STATE,
+  // not a ref, because the previews prompt has to re-render when it changes — and kept to
+  // the gestured path alone so the drain's per-step claims, which no consumer reads, don't
+  // churn the context value through the links list.
+  const [gesturedInFlightCount, setGesturedInFlightCount] = useState(0);
+
   // Take up to `limit` of these links that no other path is already fetching, marking them
   // in flight. The caller MUST hand the result to `releaseInFlight` in a `finally`.
   // Claiming (rather than filtering then slicing) is what keeps `limit` honest: a link
@@ -298,6 +320,8 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
       // contacts a site you save", and a save gesture is not an exception to it —
       // it's the exact thing being declined. `saves` and `all` both proceed.
       if (deviceExtractionMode === 'off') return;
+      // Before the first await, so nothing observes the save as un-owned (see the type).
+      setGesturedInFlightCount((n) => n + linkPaths.length);
       void (async () => {
         let links: LinkItem[] = [];
         try {
@@ -328,6 +352,7 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
           // no reason to surface anything at the save site.
         } finally {
           releaseInFlight(links);
+          setGesturedInFlightCount((n) => Math.max(0, n - linkPaths.length));
         }
       })();
     },
@@ -488,6 +513,7 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
       pause,
       reportDisplayedLinkPaths,
       extractNow,
+      gesturedInFlightCount,
     }),
     [
       enabled,
@@ -498,6 +524,7 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
       pause,
       reportDisplayedLinkPaths,
       extractNow,
+      gesturedInFlightCount,
     ],
   );
 

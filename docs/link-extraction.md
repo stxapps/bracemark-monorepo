@@ -1178,8 +1178,9 @@ extraction is free on every plan), no two-step confirm, and in place of a toggle
 renders `deviceExtractionMode` as three radios. The default is also **offered**
 rather than buried: the links screen shows a one-time, dismissible banner when the
 mode is still `saves` and links are actually waiting for a preview (the raw pending
-count, not the gated exact tally — the banner exists to ask the question the gate
-would otherwise silence). It arms on `saves` **specifically**, not on "anything
+count less what the save path is fetching right now, not the gated exact tally — the
+banner exists to ask the question the gate would otherwise silence; see _the
+links-page offer_). It arms on `saves` **specifically**, not on "anything
 below `all`": `saves` is the default nobody chose, which is what an offer is for,
 whereas `off` is a decision, and re-asking someone who picked "never contact these
 sites" is nagging. The dismissal is device-local while the setting it offers is
@@ -1187,18 +1188,24 @@ synced, so a second phone still gets its one offer.
 
 #### the links-page offer — same banner, two different asks
 
-Both apps put a one-time, dismissible banner on the links screen, armed on the
-same condition (previews still off, undismissed here, and the **raw** pending count
-above zero — `readRawPendingTitleImageCount`, the over-count, since the exact tally
-is gated on the very thing being asked about) and retired by the same device-local
-flag (`previewsPromptDismissed` in each app's `localSettings`, so a second browser
-or phone still gets its one offer). What each banner OFFERS is not the same thing,
-and bracemark-web's `_components/previews-prompt.tsx` is therefore a sibling of
+Both apps put a one-time, dismissible banner on the links screen, armed on nearly the
+same condition (previews still off, undismissed here, and a pending count above zero,
+from `readRawPendingTitleImageCount` — the over-count, since the exact tally is gated
+on the very thing being asked about) and retired by the same device-local flag
+(`previewsPromptDismissed` in each app's `localSettings`, so a second browser or phone
+still gets its one offer). What each banner OFFERS is not the same thing, and
+bracemark-web's `_components/previews-prompt.tsx` is therefore a sibling of
 bracemark-expo's, not a port of it:
 
 - **expo** offers `deviceExtractionMode: 'all'` — free, on-device, no new party — so
-  the banner flips it in place. One tap resolves the count it just quoted, because
-  the foreground drain then works the backlog.
+  the banner flips it in place: one tap puts the count it just quoted in reach of the
+  foreground drain, rather than sending the user on a settings expedition. It is
+  explicit about HOW that backlog gets worked, though, because the drain it arms is the
+  **displayed-scoped** one: the links fill in as they come into view, capped by
+  `AUTO_BUDGET` per session, and "Generate all" in Settings → Link previews is what does
+  the library in one go. That is the same truth-in-advertising point the Plus bullet
+  below makes; the difference is that nothing here is billed, so the banner can flip the
+  setting AND say what follows, where web's has to hand the user to the toggle instead.
 - **bracemark-web, Plus/Pro** offers `serverExtraction`, which admits `bracemark-extractor`
   to the URLs it fetches. The banner **does not flip it**: the button goes to
   Settings → Link previews. Two reasons, and either alone is sufficient. Consent —
@@ -1217,6 +1224,23 @@ bracemark-expo's, not a port of it:
   calls the right answer for this user. The copy is explicit that installing it
   previews links **as you save them** rather than back-filling these, since it's
   active-context only; Plus is named once, second, as what does the back-fill.
+
+**What the two banners COUNT parted company as well, and `extractNow` is why.** On
+bracemark-web nothing extracts until the opt-in flips, so the raw count is a fair proxy
+for "links waiting": a pending link stays pending until the user acts. On expo it is
+not — the gestured path fetches a link saved on this device at `saves`, outside the
+gate, so that link is raw-pending for the length of its own fetch (15s page + 20s image)
+and then settles itself. Counting it put the banner on screen for a few seconds after
+every save on a single-device account and then took it away again: an offer flashing in
+and out, quoting a link `all` was never needed for. So expo renders the **residual** —
+raw pending minus what the gestured path holds right now (`gesturedInFlightCount` on the
+extraction context: counted from the paths handed to `extractNow`, incremented before
+its first await so the window between the row landing and the claim is covered too),
+required to hold for a short settle window so the order the live read and the context
+update land in can't matter. What survives that subtraction is exactly the set `saves`
+will never touch — synced from another device, saved on the web app, imported — which is
+what the banner is offering to cover. bracemark-web needs none of it and keeps the raw
+count.
 
 An upgrade doesn't re-arm the banner (one flag, both variants). That's deliberate:
 by the time someone has upgraded they have been through Settings, which is where the

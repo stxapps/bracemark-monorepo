@@ -22,7 +22,26 @@
 // to ask about. Raw pending is a strict over-count, which is the right side to err
 // on for a "you have links without previews" prompt — and the read runs ONLY while
 // the banner could show, so it costs nothing in steady state.
+//
+// But raw pending is the wrong number HERE, which is bracemark-web's banner and this
+// one parting company (docs/link-extraction.md — _the links-page offer_). On web
+// nothing extracts until the opt-in flips, so a raw-pending link stays pending. On
+// this platform `extractNow` fetches a link saved on this device at `saves`, outside
+// the gate — so that link is raw-pending for the length of its own fetch (15s page +
+// 20s image) and then settles itself. Counting it made the banner appear for a few
+// seconds after every save on a single-device account and then retire, offering to
+// cover a link it was already covering. So the number rendered is the RESIDUAL:
+// raw pending minus what the gestured path is fetching right now
+// (`gesturedInFlightCount`), which at `saves` is exactly the set this device's own
+// save path owns. What's left is what `saves` will never touch — synced from another
+// device, saved on the web app, imported — which is what `all` actually buys.
+//
+// SETTLE_MS closes the last seam: the two numbers come from different sources (a
+// live read, a context re-render), so a save can in principle be observed pending
+// one commit before it is observed in flight. Requiring the residual to hold for a
+// beat costs a passive offer nothing and makes the ordering irrelevant.
 
+import { useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
 // ImageDown, not Sparkles — see the note in settings/extraction-section.tsx:
 // Sparkles is held for the parked `aiTier`, and previews involve no model.
@@ -30,6 +49,7 @@ import { ImageDown, X } from 'lucide-react-native';
 
 import {
   readRawPendingTitleImageCount,
+  useExtraction,
   useLiveRead,
   useSettingMutations,
   useSettings,
@@ -39,9 +59,15 @@ import { Button } from '../../components/ui/button';
 import { Icon } from '../../components/ui/icon';
 import { Text } from '../../components/ui/text';
 
+// How long the residual must hold before the banner appears — see the header. Short
+// enough that a link synced from another device shows up promptly, long enough that
+// the order two independent updates land in stops mattering.
+const SETTLE_MS = 2_000;
+
 export function PreviewsPrompt() {
   const { deviceExtractionMode, previewsPromptDismissed } = useSettings();
   const { setDeviceExtractionMode, dismissPreviewsPrompt } = useSettingMutations();
+  const { gesturedInFlightCount } = useExtraction();
 
   // Inert unless the offer could actually be shown — see the header.
   const armed = deviceExtractionMode === 'saves' && !previewsPromptDismissed;
@@ -52,7 +78,24 @@ export function PreviewsPrompt() {
       ['items', 'item_facet_statuses'],
     ) ?? 0;
 
-  if (!armed || pending === 0) return null;
+  // Clamped because the two terms are independent: `extractNow` counts the paths it was
+  // handed, some of which may already be settled and so absent from `pending`.
+  const residual = Math.max(0, pending - gesturedInFlightCount);
+  // The effect below keys on THIS, not on `residual` itself: a second link arriving must
+  // not restart the wait on a banner that has already earned its place.
+  const hasResidual = residual > 0;
+
+  const [settled, setSettled] = useState(false);
+  useEffect(() => {
+    if (!hasResidual) {
+      setSettled(false);
+      return;
+    }
+    const timer = setTimeout(() => setSettled(true), SETTLE_MS);
+    return () => clearTimeout(timer);
+  }, [hasResidual]);
+
+  if (!armed || !hasResidual || !settled) return null;
 
   // Both actions are one-way for this device: turning it on makes the banner's
   // condition false, and so does dismissing. A failed write just leaves the
@@ -67,11 +110,15 @@ export function PreviewsPrompt() {
       <Icon as={ImageDown} className="mt-0.5 size-4 text-muted-foreground" />
       <View className="min-w-0 flex-1 gap-2">
         <Text className="text-sm font-medium">
-          {pending} link{pending === 1 ? '' : 's'} without a preview
+          {residual} link{residual === 1 ? '' : 's'} without a preview
         </Text>
         <Text className="text-sm text-muted-foreground">
           Bracemark can fetch their titles and images on this device. Links you save here are always
           previewed; this covers the ones that arrived from your other devices or an import.
+        </Text>
+        <Text className="text-sm text-muted-foreground">
+          They fill in as they come into view while you browse. To do them all at once, use Generate
+          all in Settings, under Link previews.
         </Text>
         <View className="mt-1 flex-row">
           <Button size="sm" variant="outline" onPress={turnOn}>
