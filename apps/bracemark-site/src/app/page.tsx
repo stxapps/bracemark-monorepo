@@ -184,8 +184,15 @@ const SCREENSHOT = {
   // default list layout" lands at 648px + a 32px `Plus.`, worse. Any future edit
   // here is subject to the same budget: 672px at `text-sm`, which this sentence
   // fills to 634px. Adding a clause re-opens the widow the wrapper below guards.
+  //
+  // "Your own devices", not "the device that saved the link": the save-scoped
+  // phrasing was the shorter fact and not the true one — a phone whose Link
+  // previews setting covers all links fetches pages for links it never saved
+  // (docs/link-extraction.md, _expo drains in the foreground_). It is also two
+  // characters shorter than the line it replaces, so the width budget above is
+  // untouched.
   caption:
-    'The list layout. Previews come from the device that saved the link — or from ' +
+    'The list layout. Previews come from your own devices — or from ' +
     `our server, on ${PLAN_LABELS.plus}.`,
 };
 
@@ -697,7 +704,7 @@ const LIBRARY: [string, string][] = [
   // it names the two cases and stops.
   [
     'Previews',
-    `Titles and images, pulled by the device that saved it. Web saves and imports need ${PLAN_LABELS.plus}.`,
+    `Titles and images, pulled by the device that saved it. Web saves and imports need a phone set to fill them in, or ${PLAN_LABELS.plus}.`,
   ],
   // "In formats other apps read" appeared three times across the site and never
   // named one, which reads exactly like a company that doesn't export well. The
@@ -757,7 +764,7 @@ const TRADE: { aspect: string; hosted: string; ours: string }[] = [
   {
     aspect: 'Previews',
     hosted: 'Their servers fetch every page you save, and keep what they find.',
-    ours: `The device that saved the link pulls the title and image, so nothing fetches the page on your behalf. The links no device fetched — imports, and saves made in the web app — need a server, and that is an opt-in ${PLAN_LABELS.plus} feature.`,
+    ours: `The device that saved the link pulls the title and image, so nothing fetches the page on your behalf. The links no device fetched — imports, and saves made in the web app — stay bare until you ask something to fill them in: a phone whose previews cover all links does it for free, from your own address, and our server does it on ${PLAN_LABELS.plus}. Both are off until you turn them on.`,
   },
   {
     // The loss a hosted-manager user is actually buying against, and the one this

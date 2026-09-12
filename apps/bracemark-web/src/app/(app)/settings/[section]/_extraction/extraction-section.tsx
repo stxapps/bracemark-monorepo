@@ -175,7 +175,7 @@ export function ExtractionSection() {
     <SettingsPane>
       <SettingsHeader
         title="Link previews"
-        description="Bracemark fills in each saved link’s title and preview image automatically — you don’t need to do it by hand. Links you save from the Bracemark extension or mobile app are previewed right on your device, so the page never leaves it. For links saved on the web or added by import, turn on server-side previews below and Bracemark will fetch them for you."
+        description="Bracemark fills in each saved link’s title and preview image automatically — you don’t need to do it by hand. Links you save from the Bracemark extension or mobile app are previewed right on your device, so the page never leaves it. Links saved here on the web, and links you import, are the ones no device has fetched: the mobile app can cover those too if you set its previews to all links, or you can turn on server-side previews below and Bracemark will fetch them for you."
       />
 
       <SettingsRow

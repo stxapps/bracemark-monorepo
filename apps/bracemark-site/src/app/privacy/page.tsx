@@ -289,9 +289,14 @@ export default function Page() {
         <p>
           Titles and preview images are normally fetched by the device that saved the link — the
           browser extension reads the tab you are on, and the mobile apps fetch the page themselves.
-          Neither involves our servers. The browser extension asks for the narrowest permission that
-          does that job: it can read a tab only in the moment you click to save it, it holds no
-          standing access to your browsing, and the only site it talks to is our own API.
+          Neither involves our servers. The mobile apps can also cover links they did not save —
+          ones that arrived from another of your devices, or from an import — if you move their Link
+          previews setting up to all links. Those pages are then fetched from your phone, at your
+          address, as the links come into view while you browse. That position is not the default,
+          and it lives in the app’s own settings. The browser extension asks for the narrowest
+          permission that does that job: it can read a tab only in the moment you click to save it,
+          it holds no standing access to your browsing, and the only site it talks to is our own
+          API.
         </p>
         <p>
           For links saved in the web app, browsers do not allow a page to fetch another site, so

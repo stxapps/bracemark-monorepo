@@ -215,7 +215,16 @@ const COMPARISON: { label: string; cell: (plan: Plan) => Cell }[] = [
   // none. Neither is derivable from an entitlement — a preview image is not a
   // gate (every plan stores `files/` blobs), which is exactly why the copy has
   // to carry the distinction the data can't.
-  { label: 'Link previews when you save from the extension or app', cell: () => true },
+  //
+  // WHAT SEPARATES THE PAIR IS WHO FETCHES, NOT WHICH LINKS. The free row read
+  // "when you save from the extension or app", which drew the line at the save —
+  // and the mobile apps cross it for free: their Link previews setting has a
+  // position that covers links they did not save, imports included
+  // (docs/link-extraction.md, _expo drains in the foreground_). Drawn there, the
+  // paid row promised something free already did. Drawn at the server, both rows
+  // are true and the thing Plus sells — previews without a phone doing the work —
+  // is what the label now says.
+  { label: 'Link previews, fetched by your own devices', cell: () => true },
   { label: 'Lists, tags, pins, notes & layouts', cell: () => true },
   // The haystack is NAMED, and that is the whole of the change. "Search across
   // your whole library" was true about the SCOPE and silent about the FIELDS, and
@@ -241,7 +250,7 @@ const COMPARISON: { label: string; cell: (plan: Plan) => Cell }[] = [
   { label: 'App lock & hidden lists', cell: (p) => entitlementsOf(p).locks },
   { label: 'Search editor (fields, lists, tags)', cell: (p) => entitlementsOf(p).searchEditor },
   {
-    label: 'Link previews for web saves & imports',
+    label: 'Server previews for web saves & imports',
     cell: (p) => (entitlementsOf(p).serverExtraction ? 'Opt-in' : false),
   },
 ];

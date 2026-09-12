@@ -209,7 +209,7 @@ const NEVER: [string, string][] = [
   ],
   [
     'Come back for the rest of your site',
-    'One saved link is one document. It has no queue to add the rest of your pages to, no schedule to revisit this one on, and nothing that turns a link it found in your markup into a second request.',
+    'One saved link is one document. It has no queue of its own to add the rest of your pages to, no schedule to revisit this one on, and nothing that turns a link it found in your markup into a second request. The only thing that brings it back to your site is another person choosing another of your pages.',
   ],
   [
     'Feed a dataset or a model',
@@ -238,11 +238,11 @@ export default function Page() {
           </p>
           <p className={cn('mt-5 text-body text-muted-foreground')}>
             Bracemark is an end-to-end encrypted bookmark manager. When someone saves a link in the
-            web app, the browser will not let that page fetch yours, so this service fetches it
-            instead — reads the title and the preview image, hands both back to the person’s own
-            device, and forgets the address. It is the only server of ours that fetches a page at
-            all: every other way of saving a link reads it on the person’s own device, from their
-            own address.
+            web app — or asks us to fill in ones they saved or imported earlier — the browser will
+            not let that page fetch yours, so this service fetches it instead: reads the title and
+            the preview image, hands both back to the person’s own device, and forgets the address.
+            It is the only server of ours that fetches a page at all: every other way of saving a
+            link reads it on the person’s own device, from their own address.
           </p>
         </section>
 
@@ -251,13 +251,39 @@ export default function Page() {
             It is a fetcher, not a crawler
           </h2>
           <div className={cn('mt-4 space-y-4 text-base leading-7 text-muted-foreground')}>
+            {/* "There is no queue" came out, and the sentence that replaced it is
+                longer on purpose. The claim was written about the thing this
+                section is really denying — that we go looking for pages — and a
+                reader with an access log in front of them reads it as a promise
+                about VOLUME, which we cannot make: a person who imports a library
+                holds a backlog of links nothing has fetched, and draining it sends
+                us their addresses in batches (docs/link-extraction.md, _imported
+                links_). Two hundred saved pages of one site is two hundred requests
+                to it, arriving together, and an operator who was told there is no
+                queue would reasonably call that a crawl. The paragraph below says
+                it in the other voice instead — whose queue it is, and what decides
+                its size — which costs us nothing, because every one of those
+                addresses was still chosen by a person. This page's own rule
+                applies: a behaviour promoted to a never is a promise nobody agreed
+                to make. */}
             <p>
-              There is no queue, no schedule and no index behind it. It never follows a link out of
-              a page it fetched, never asks for a second page from your site on its own initiative,
-              and never returns to see whether anything changed. One person saving one link is one
-              request to you, plus one for a preview image if your document names one. The person’s
-              browser cannot read that image cross-origin any more than it could read your page —
-              that’s why we need the second request.
+              There is no schedule and no index behind it. It never follows a link out of a page it
+              fetched, never asks for a second page from your site on its own initiative, and never
+              returns to see whether anything changed. Every address it asks for is one a person
+              saved by hand or brought with them from another bookmark manager — nothing here
+              discovers a page. One person saving one link is one request to you, plus one for a
+              preview image if your document names one. The person’s browser cannot read that image
+              cross-origin any more than it could read your page — that’s why we need the second
+              request.
+            </p>
+            <p>
+              There is a backlog, though, and it is theirs rather than ours. Links saved before
+              previews were turned on, and anything brought in by an import, sit unfetched until
+              their owner asks for them — so a request can arrive long after the save, and several
+              can arrive together: a drain hands us addresses in batches — the cap on one
+              request is in the table below — and we fetch a batch in parallel. Someone importing two hundred of your
+              pages means two hundred requests, close together, once. What decides that is the size
+              of one person’s library, not a schedule of ours.
             </p>
             {/* Deliberately NOT "once a title has come back it is never fetched
                 again". That was a never about BEHAVIOUR on the one page whose

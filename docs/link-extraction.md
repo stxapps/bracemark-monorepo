@@ -1186,6 +1186,24 @@ whereas `off` is a decision, and re-asking someone who picked "never contact the
 sites" is nagging. The dismissal is device-local while the setting it offers is
 synced, so a second phone still gets its one offer.
 
+⚠ **"The device that saved the link" describes the DEFAULT, not the product, and
+nine public surfaces stated it as the product.** `all` is the position where a
+device fetches pages for links it never saved — synced, imported, saved in the web
+app — as they come into view, so a sentence scoped to the save is wrong in two
+directions at once: it under-describes what leaves the phone (a privacy claim), and
+it sells a paid server for work a free phone already does. Both halves had shipped.
+The corrected set, which is also the list to re-read before writing a tenth: /faq's
+`previews` and `no-title-image`, /privacy's _Link previews_, the home page's hero
+caption, its Previews feature bullet and its trade-band Previews row, the /pricing
+previews pair, /extractor's opening paragraph (which owed a site operator the fact
+that a request need not follow a save), the web settings pane's description, and
+expo's free-plan subscription line. The rule any of them can be rebuilt from:
+**previews are scoped by a device and its setting, never by the save** — and
+wherever a surface says what covers imports and web saves, the phone at `all` is the
+free answer beside the paid one. Nothing catches a regression: the copy type-checks,
+lints, renders, and reads plausibly, which is how it survived the first public
+stretch.
+
 #### the links-page offer — same banner, two different asks
 
 Both apps put a one-time, dismissible banner on the links screen, armed on nearly the
@@ -1512,6 +1530,18 @@ browser that can't fetch for itself. It is a **separate app**, not a route in
     answer `403` because that is what the retry ladder settles as `permanent`;
     `429`/`5xx` stay transient forever by design (`extract/retry.ts`). Change that
     mapping and the advice quietly stops working for the people who took it.
+  - **The backlog is disclosed too, and that disclosure depends on the CLIENT.**
+    _It is a fetcher, not a crawler_ used to open "there is no queue, no schedule
+    and no index behind it" — true of the service, and read by the audience it was
+    written for as a claim about volume, which it cannot carry: a drained import
+    sends one site as many requests as that person saved pages of it, together. The
+    page now says whose queue it is and what bounds a burst (`BATCH` =
+    `MAX_EXTRACT_URLS` per request, one request in flight per drain —
+    web-react `contexts/extraction-provider.tsx`), which pins it to the web drain's
+    SHAPE and not just to a constant: give the drain concurrent batches, or let a
+    second surface call the extractor on its own, and the page describes a politeness
+    the code no longer keeps. Nothing checks it — `bracemark-site` can't see either
+    file.
   - **robots.txt is disclosed, not obeyed.** The extractor does not fetch it —
     these are one-shot fetches a person asked for, the same posture as a chat
     app's link unfurl — and the page says so in those words rather than implying

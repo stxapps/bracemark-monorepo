@@ -254,7 +254,13 @@ export function SubscriptionSection() {
                 ? // "with previews" — this app extracts them itself, on-device and for
                   // free (it never calls bracemark-extractor; see docs/link-extraction.md).
                   // The cap comes from the entitlements table rather than the string.
-                  `Encrypted saving, sync, lists and tags — up to ${entitlementsOf('free').maxLinks} links, with previews for what you save here.`
+                  //
+                  // NOT "previews for what you save here": that was the default mode
+                  // described as the plan's limit, and the two are different things —
+                  // `all` covers synced and imported links on this device and is free on
+                  // every plan. Naming the device rather than the save keeps the line
+                  // true at whichever position the setting sits.
+                  `Encrypted saving, sync, lists and tags — up to ${entitlementsOf('free').maxLinks} links, with previews fetched on this device.`
                 : expiresAt === null
                   ? 'Never expires.'
                   : // A trial's period end is the FIRST CHARGE, not a renewal —

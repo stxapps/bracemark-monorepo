@@ -433,10 +433,13 @@ export const FAQ_GROUPS: FaqGroup[] = [
           <>
             The device that saves the link does the fetching. The browser extension reads the tab
             you are on; the mobile apps fetch the page themselves. Neither involves us, and both are
-            free. The exception is a link saved in the web app, where the browser blocks a page from
-            fetching another site — that one needs a server to fetch on your behalf, so it is an
-            opt-in {PLAN_LABELS.plus} feature, off until you turn it on. The service that does it
-            holds no key, never sees your account, and stores nothing it read — only the IP
+            free. A link saved in the web app is the one no device can cover as it is saved, because
+            the browser blocks a page from fetching another site — and an imported link arrives with
+            no device having seen it either. Two things can fill those in. The mobile apps have a
+            previews setting that covers links they did not save: your phone fetches those pages
+            itself, as the links come into view, and it is free. Our server can do it instead, which
+            is an opt-in {PLAN_LABELS.plus} feature, off until you turn it on. The service that does
+            it holds no key, never sees your account, and stores nothing it read — only the IP
             addresses its rate limiter needs to stop one source abusing it.
           </>
         ),
@@ -944,16 +947,18 @@ export const FAQ_GROUPS: FaqGroup[] = [
         q: 'Why don’t some of my links show a title or image?',
         a: (
           <>
-            A preview comes from the device that saved the link, and it takes a moment to arrive.
-            Links saved in the web app are the exception — the browser won’t let a web page fetch
-            another site — so those show the bare address unless you turn on the opt-in{' '}
-            {PLAN_LABELS.plus} extraction. Installing the browser extension is the free fix. Some
-            pages give nothing up whichever device asks, and no plan changes that: anything behind a
-            login or a paywall, a PDF or another file that isn’t a web page, a site that turns away
-            automated requests, and pages whose text is assembled by JavaScript after they load. We
-            stop retrying those, so they land in the failed count under Link previews in Settings
-            rather than a queue that is still working on them. The link is saved either way, and you
-            can give it a title of your own.
+            A preview comes from one of your own devices, and it takes a moment to arrive. Links
+            saved in the web app are the exception — the browser won’t let a web page fetch another
+            site — so those show the bare address until something else fetches them: the free fixes
+            are the browser extension, which previews what you save as you save it, and a phone with
+            Link previews set to cover all links, which fills in what is already there. The opt-in{' '}
+            {PLAN_LABELS.plus} extraction has our server do it instead. Some pages give nothing up
+            whichever device asks, and no plan changes that: anything behind a login or a paywall, a
+            PDF or another file that isn’t a web page, a site that turns away automated requests,
+            and pages whose text is assembled by JavaScript after they load. We stop retrying those,
+            so they land in the failed count under Link previews in Settings rather than a queue
+            that is still working on them. The link is saved either way, and you can give it a title
+            of your own.
           </>
         ),
       },
