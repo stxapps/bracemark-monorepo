@@ -242,6 +242,29 @@ draft; each keystroke commits or reverts in place):
   platform's business and goes one level further out — `sortedByName` / `SortDir`
   in `@stxapps/shared` (`sync/sort.ts`), one copy behind all four tables.
 
+  **Delete is checked, then confirmed or refused in a dialog — never in the
+  section's notice.** Every other op reports through `useOpRunner`'s
+  `SettingsNotice`, which sits above the table; that is fine for the create row
+  (also at the top) and for rename/move, whose guards the UI already prevents.
+  Delete is the one op that routinely fails from deep in the table — a list
+  with links or sub-lists can't go — and on a long table the refusal landed a
+  screen above the row that asked, so the click appeared to do nothing, and the
+  message ("Move or delete its links first") didn't say whose. So a row's
+  Delete calls the mutations' `destroyBlocker(item)` — the same guards `destroy`
+  enforces, which now names and counts: "“Reading” still has 12 links. Move or
+  delete them first." — and only then raises the kit's `DestroyConfirm`, a modal
+  that shows either that refusal with an OK, or a destructive confirm. The check
+  settles _before_ the dialog mounts, so it never opens as a confirm and turns
+  into a refusal (`useDestroyRequest` holds the request by id and drops a check
+  a newer one has overtaken). `destroy` still re-checks, since another device
+  can file a link into the list between the check and the click; that refusal
+  lands inside the dialog as a `role="alert"` line. The confirm is also new in
+  its own right: deleting a tag strips it from every link on every device, and
+  neither table asked before. On web the blocked face's OK is an
+  `AlertDialogCancel`, not an Action — Radix's alert dialog focuses its Cancel
+  on open and has no fallback, so without one focus opens stranded outside the
+  dialog. Both kits carry a spec for the flow (`table-kit.spec.tsx`).
+
   **Lists nest, tags are deliberately flat — and that's a UI decision, not a
   schema one.** Tags carry the _same_ `parentId`/`rank` fields as lists
   (`entities.ts` — both are the same ranked-tree entity), so the store could nest

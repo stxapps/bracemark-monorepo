@@ -12,8 +12,8 @@
 // entirely, so `useDragSort` gets no `indentWidth` and the drag never re-renders.
 //
 // What this file does NOT contain is everything it shares with the Lists table —
-// the create row, the rename field, the sort menu, the error runner — which live
-// in table-kit.tsx. What's left here is the flatness: that's the whole difference
+// the create row, the rename field, the sort menu, the error runner, the delete
+// confirm — which live in table-kit.tsx. What's left here is the flatness: that's the whole difference
 // between the two sections.
 
 import { useMemo } from 'react';
@@ -36,7 +36,15 @@ import { Text } from '../../components/ui/text';
 import { cn } from '../../lib/utils';
 import { DragHandle, DragRow, type DragSort, useDragSort } from './drag-sort';
 import { SettingsHeader, SettingsNotice, SettingsPane } from './settings-kit';
-import { CreateRow, RenameField, SortMenu, useOpRunner, useRenameFocus } from './table-kit';
+import {
+  CreateRow,
+  DestroyConfirm,
+  RenameField,
+  SortMenu,
+  useDestroyRequest,
+  useOpRunner,
+  useRenameFocus,
+} from './table-kit';
 
 // The per-row overflow menu: rename, reorder within the group, delete. No
 // "Move to" (flat taxonomy — nowhere to move to) and no system-tag guard
@@ -155,13 +163,18 @@ function Row({
 
 export function TagsSection() {
   const tree = useTags();
-  const { create, rename, move, destroy, reorder } = useTagMutations();
+  const { create, rename, move, destroy, destroyBlocker, reorder } = useTagMutations();
 
   const { error, run, runAwait } = useOpRunner();
+  // A row's Delete — checked first, then confirmed or refused in a dialog rather
+  // than in the notice above the table (table-kit's useDestroyRequest says why).
+  const { destroyRequest, requestDestroy, closeDestroy } = useDestroyRequest(destroyBlocker);
 
   // The flat, ordered tag list. `useTags` nests by `parentId`, but nothing
   // nests tags, so the top level is the whole set — take its items in rank order.
   const tags = useMemo(() => tree.map((node) => node.item), [tree]);
+  // Resolved against the live list, so a tag deleted elsewhere closes its dialog.
+  const destroyingTag = destroyRequest ? tags.find((t) => t.id === destroyRequest.id) : undefined;
 
   // Move `tag` from `index` to `index + delta` (±1). `siblings` is the group
   // minus the moved tag, as `move` expects.
@@ -222,11 +235,21 @@ export function TagsSection() {
               onRename={(name) => run(rename(tag, name))}
               onMoveUp={() => shift(tag, index, -1)}
               onMoveDown={() => shift(tag, index, 1)}
-              onDelete={() => run(destroy(tag))}
+              onDelete={() => requestDestroy(tag)}
             />
           ))
         )}
       </View>
+
+      {destroyRequest && destroyingTag && (
+        <DestroyConfirm
+          noun="tag"
+          blocker={destroyRequest.blocker}
+          description={`“${destroyingTag.name}” will be removed from every link that has it, on all your devices. This can’t be undone.`}
+          onDestroy={() => destroy(destroyingTag)}
+          onClose={closeDestroy}
+        />
+      )}
     </SettingsPane>
   );
 }

@@ -25,6 +25,16 @@ import { useRef, useState } from 'react';
 import { ArrowDownAZ, ArrowDownZA, ArrowUpDown, Check, GripVertical, Plus, X } from 'lucide-react';
 
 import type { SortDir } from '@stxapps/shared';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@stxapps/web-ui/components/ui/alert-dialog';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import {
   DropdownMenu,
@@ -44,7 +54,6 @@ import { Input } from '@stxapps/web-ui/components/ui/input';
 // try/catch did before it moved here.
 export function useOpRunner() {
   const [error, setError] = useState<string | null>(null);
-  const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
   // Fire-and-forget: surface a failure in the notice, that's all.
   const run = (op: Promise<unknown>) => {
@@ -65,6 +74,140 @@ export function useOpRunner() {
   };
 
   return { error, run, runAwait };
+}
+
+const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
+// DELETE DOES NOT GO THROUGH THE RUNNER ABOVE, and this pair is why. The runner's
+// notice sits at the top of the section, and Delete is the one op that fails from
+// deep in the table: on a long list the refusal ("still has links") landed a
+// screen above the row that asked, and the click appeared to do nothing. So a
+// row's Delete asks `blocker` first and only then raises DestroyConfirm, which is
+// a modal — on screen wherever the table is scrolled, focused, and announced on
+// open — carrying either the refusal or the confirm. That also puts a confirm in
+// front of an irreversible op that had none (deleting a tag strips it from every
+// link, on every device), as LinkDestroyConfirm already does for links.
+//
+// The request is held as an ID, as the Move-to picker's is: the section resolves
+// it against the live data each render, so a list deleted on another device
+// takes its dialog with it. The check settles BEFORE anything mounts, so the
+// dialog never opens as a confirm and then turns into a refusal. `latest` drops a
+// check that a newer request (or a close) has overtaken.
+export function useDestroyRequest<T extends { id: string }>(
+  blocker: (item: T) => Promise<string | null>,
+) {
+  const [destroyRequest, setDestroyRequest] = useState<{
+    id: string;
+    blocker: string | null;
+  } | null>(null);
+  const latest = useRef(0);
+
+  const requestDestroy = (item: T) => {
+    const token = ++latest.current;
+    const settle = (reason: string | null) => {
+      if (token === latest.current) setDestroyRequest({ id: item.id, blocker: reason });
+    };
+    blocker(item).then(settle, (e: unknown) => settle(message(e)));
+  };
+  const closeDestroy = () => {
+    latest.current++;
+    setDestroyRequest(null);
+  };
+
+  return { destroyRequest, requestDestroy, closeDestroy };
+}
+
+interface DestroyConfirmProps {
+  noun: string;
+  // useDestroyRequest's verdict: the refusal to show, or null to ask to confirm.
+  blocker: string | null;
+  // The confirm's body — what goes, and that it can't come back.
+  description: string;
+  onDestroy: () => Promise<void>;
+  onClose: () => void;
+}
+
+// The two faces of a row's Delete — see useDestroyRequest above.
+//
+//   - BLOCKED: the refusal, which names the item and says what to do, and one
+//     button to dismiss it. That button is a Cancel, not an Action: Radix's alert
+//     dialog focuses its Cancel on open and has no fallback, so a dialog without
+//     one opens with focus stranded outside it.
+//   - CLEAR: a destructive confirm. The action keeps the dialog up until destroy
+//     resolves (as LinkDestroyConfirm does), because destroy re-checks: another
+//     device can add a link after the check and before the click, and that
+//     refusal lands here, as a `role="alert"` line — it mounts as the result of
+//     the click, unlike the description, which is read as the dialog opens.
+//
+// The shape is LinkDestroyConfirm's (links/_components/link-destroy-confirm.tsx),
+// which carries the reasoning for both the scroller — an item NAME is interpolated
+// and names are unbounded — and the left alignment.
+export function DestroyConfirm({
+  noun,
+  blocker,
+  description,
+  onDestroy,
+  onClose,
+}: DestroyConfirmProps) {
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const onConfirm = async () => {
+    if (deleting) return;
+    setDeleting(true);
+    setError(null);
+    try {
+      await onDestroy();
+      onClose();
+    } catch (e) {
+      setError(message(e));
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <AlertDialog open onOpenChange={(open) => !open && !deleting && onClose()}>
+      <AlertDialogContent className="flex flex-col">
+        <div className="flex min-h-0 shrink flex-col gap-3 overflow-y-auto">
+          <AlertDialogHeader className="place-items-start text-left">
+            <AlertDialogTitle>
+              {blocker ? `Can’t delete this ${noun}` : `Delete ${noun}?`}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-pretty">
+              {blocker ?? description}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {error && (
+            <p role="alert" className="text-sm text-destructive">
+              {error}
+            </p>
+          )}
+        </div>
+        <AlertDialogFooter>
+          {blocker ? (
+            <AlertDialogCancel>OK</AlertDialogCancel>
+          ) : (
+            <>
+              <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                variant="destructive"
+                disabled={deleting}
+                onClick={(e) => {
+                  // Keep the dialog up until destroy resolves — the default
+                  // Action click would close it immediately.
+                  e.preventDefault();
+                  void onConfirm();
+                }}
+              >
+                {deleting ? 'Deleting…' : 'Delete'}
+              </AlertDialogAction>
+            </>
+          )}
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
 }
 
 interface CreateRowProps {

@@ -55,8 +55,14 @@ export interface TagMutations {
   // useLinkMutations.destroy). Rejected only for a tag that still has sub-tags —
   // deleting it would silently re-root them (buildTree promotes orphans), so the
   // UI must move them first. No system-tag guard (none exist) and no link guard
-  // (a dangling tagIds reference is normal). The thrown message surfaces to the user.
+  // (a dangling tagIds reference is normal). Throws `destroyBlocker`'s sentence,
+  // which surfaces to the user.
   destroy: (tag: TagItem) => Promise<void>;
+  // Why `destroy` would refuse `tag` right now, as the sentence to show — or
+  // null when it would go through. useListMutations' destroyBlocker, for the one
+  // guard tags have; the flat Tags table never makes a sub-tag, so in practice
+  // this is null unless an older client or another device nested one.
+  destroyBlocker: (tag: TagItem) => Promise<string | null>;
   // Re-rank a sibling group into a new order in one batch (e.g. sort A→Z). Only
   // the tags whose rank actually changes are written, each the same one-field
   // `{ rank }` write `move` makes — so an already-ordered group is a no-op.
@@ -143,23 +149,30 @@ export function useTagMutations(): TagMutations {
     [username, requestSync],
   );
 
+  const destroyBlocker = useCallback(async (tag: TagItem) => {
+    // Re-derive emptiness from the store rather than trusting the caller's
+    // view: a sub-tag could have been created on another device since the tree
+    // rendered. No link guard — a link's dangling tagIds is reconciled at read
+    // time (entities.ts), unlike a list that must shed its links first.
+    const tags = await readTags();
+    const subTags = tags.filter((other) => other.parentId === tag.id).length;
+    if (subTags === 0) return null;
+    return subTags === 1
+      ? `“${tag.name}” still has 1 sub-tag. Move or delete it first.`
+      : `“${tag.name}” still has ${subTags} sub-tags. Move or delete them first.`;
+  }, []);
+
   const destroy = useCallback(
     async (tag: TagItem) => {
       if (!username) throw new Error('useTagMutations: no active account');
 
-      // Re-derive emptiness from the store rather than trusting the caller's
-      // view: a sub-tag could have been created on another device since the tree
-      // rendered. No link guard — a link's dangling tagIds is reconciled at read
-      // time (entities.ts), unlike a list that must shed its links first.
-      const tags = await readTags();
-      if (tags.some((other) => other.parentId === tag.id)) {
-        throw new Error('Move or delete its sub-tags first');
-      }
+      const blocker = await destroyBlocker(tag);
+      if (blocker) throw new Error(blocker);
 
       await deleteTag(username, tag);
       requestSync();
     },
-    [username, requestSync],
+    [username, requestSync, destroyBlocker],
   );
 
   const reorder = useCallback(
@@ -184,7 +197,7 @@ export function useTagMutations(): TagMutations {
   );
 
   return useMemo<TagMutations>(
-    () => ({ create, findOrCreate, rename, move, destroy, reorder }),
-    [create, findOrCreate, rename, move, destroy, reorder],
+    () => ({ create, findOrCreate, rename, move, destroy, destroyBlocker, reorder }),
+    [create, findOrCreate, rename, move, destroy, destroyBlocker, reorder],
   );
 }

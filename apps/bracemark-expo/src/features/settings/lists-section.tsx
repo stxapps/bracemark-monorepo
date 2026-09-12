@@ -21,8 +21,8 @@
 //    onCloseAutoFocus on native).
 //
 // What this file does NOT contain is everything it shares with the Tags table —
-// the create row, the rename field, the sort menu, the error runner — which live
-// in table-kit.tsx. What's left here is the nesting: depth, projection, "Move
+// the create row, the rename field, the sort menu, the error runner, the delete
+// confirm — which live in table-kit.tsx. What's left here is the nesting: depth, projection, "Move
 // to", locks. That's the whole difference between the two sections.
 
 import { useMemo, useState } from 'react';
@@ -89,7 +89,15 @@ import {
 } from './dnd-helpers';
 import { DragHandle, DragRow, type DragSort, useDragSort } from './drag-sort';
 import { SettingsHeader, SettingsNotice, SettingsPane } from './settings-kit';
-import { CreateRow, RenameField, SortMenu, useOpRunner, useRenameFocus } from './table-kit';
+import {
+  CreateRow,
+  DestroyConfirm,
+  RenameField,
+  SortMenu,
+  useDestroyRequest,
+  useOpRunner,
+  useRenameFocus,
+} from './table-kit';
 import { childrenOf, flattenToRows, forbiddenParentIds, type ListRow } from './tree-helpers';
 
 const NO_COLLAPSED_IDS: ReadonlySet<string> = new Set();
@@ -403,11 +411,14 @@ export function ListsSection() {
   const lists = useLists();
   const { entitlements } = useEntitlements();
   const paywall = usePaywall();
-  const { create, rename, move, destroy, reorder } = useListMutations();
+  const { create, rename, move, destroy, destroyBlocker, reorder } = useListMutations();
   const { listLocks, unlockList, biometricAvailable, biometricLabel } = useLocks();
   const { addListLock, removeListLock, setListBiometric } = useLockMutations();
 
   const { error, run, runAwait } = useOpRunner();
+  // A row's Delete — checked first, then confirmed or refused in a dialog rather
+  // than in the notice above the table (table-kit's useDestroyRequest says why).
+  const { destroyRequest, requestDestroy, closeDestroy } = useDestroyRequest(destroyBlocker);
 
   const [collapsedIds, setCollapsedIds] = useState<ReadonlySet<string>>(NO_COLLAPSED_IDS);
   // The pending lock intent from a row's kebab — drives the single hoisted
@@ -431,6 +442,10 @@ export function ListsSection() {
   // ancestors may be collapsed); the picker's rows are ListCommand's own read.
   const allRows = useMemo(() => flattenToRows(lists, NO_COLLAPSED_IDS), [lists]);
   const movingRow = movingId ? allRows.find((r) => r.item.id === movingId) : undefined;
+  // The row being deleted, resolved the same collapse-free way.
+  const destroyingRow = destroyRequest
+    ? allRows.find((r) => r.item.id === destroyRequest.id)
+    : undefined;
 
   const toggle = (id: string) => {
     setCollapsedIds((prev) => {
@@ -600,7 +615,7 @@ export function ListsSection() {
               // the paywalled step), so no entitlement gate here.
               run(setListBiometric(row.item.id, !(listLocks.get(row.item.id)?.biometric ?? false)))
             }
-            onDelete={() => run(destroy(row.item))}
+            onDelete={() => requestDestroy(row.item)}
           />
         ))}
       </View>
@@ -611,6 +626,16 @@ export function ListsSection() {
           excludeIds={forbiddenParentIds(lists, movingRow.item.id)}
           onSelect={(parentId) => moveTo(movingRow, parentId)}
           onClose={() => setMovingId(null)}
+        />
+      )}
+
+      {destroyRequest && destroyingRow && (
+        <DestroyConfirm
+          noun="list"
+          blocker={destroyRequest.blocker}
+          description={`“${destroyingRow.item.name}” will be removed from all your devices. This can’t be undone.`}
+          onDestroy={() => destroy(destroyingRow.item)}
+          onClose={closeDestroy}
         />
       )}
 

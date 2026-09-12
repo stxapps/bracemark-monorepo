@@ -28,6 +28,7 @@ beforeEach(() => {
     rename: jest.fn(),
     move: jest.fn(),
     destroy: jest.fn(),
+    destroyBlocker: jest.fn(),
     reorder: jest.fn(),
   });
 });

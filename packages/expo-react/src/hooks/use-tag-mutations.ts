@@ -42,8 +42,12 @@ export interface TagMutations {
   ) => Promise<void>;
   // Permanently delete a tag. Rejected only for a tag that still has sub-tags —
   // deleting it would silently re-root them (buildTree promotes orphans), so the
-  // UI must move them first. The thrown message surfaces to the user.
+  // UI must move them first. Throws `destroyBlocker`'s sentence, which surfaces
+  // to the user.
   destroy: (tag: TagItem) => Promise<void>;
+  // Why `destroy` would refuse `tag` right now, or null — useListMutations'
+  // destroyBlocker, for the one guard tags have.
+  destroyBlocker: (tag: TagItem) => Promise<string | null>;
   // Re-rank a sibling group into a new order in one batch (e.g. sort A→Z). Only
   // the tags whose rank actually changes are written — so an already-ordered
   // group is a no-op.
@@ -127,23 +131,30 @@ export function useTagMutations(): TagMutations {
     [username, requestSync],
   );
 
+  const destroyBlocker = useCallback(async (tag: TagItem) => {
+    // Re-derive emptiness from the store rather than trusting the caller's
+    // view: a sub-tag could have been created on another device since the tree
+    // rendered. No link guard — a link's dangling tagIds is reconciled at read
+    // time, unlike a list that must shed its links first.
+    const tags = await readTags();
+    const subTags = tags.filter((other) => other.parentId === tag.id).length;
+    if (subTags === 0) return null;
+    return subTags === 1
+      ? `“${tag.name}” still has 1 sub-tag. Move or delete it first.`
+      : `“${tag.name}” still has ${subTags} sub-tags. Move or delete them first.`;
+  }, []);
+
   const destroy = useCallback(
     async (tag: TagItem) => {
       if (!username) throw new Error('useTagMutations: no active account');
 
-      // Re-derive emptiness from the store rather than trusting the caller's
-      // view: a sub-tag could have been created on another device since the tree
-      // rendered. No link guard — a link's dangling tagIds is reconciled at read
-      // time, unlike a list that must shed its links first.
-      const tags = await readTags();
-      if (tags.some((other) => other.parentId === tag.id)) {
-        throw new Error('Move or delete its sub-tags first');
-      }
+      const blocker = await destroyBlocker(tag);
+      if (blocker) throw new Error(blocker);
 
       await deleteTag(username, tag);
       requestSync();
     },
-    [username, requestSync],
+    [username, requestSync, destroyBlocker],
   );
 
   const reorder = useCallback(
@@ -166,7 +177,7 @@ export function useTagMutations(): TagMutations {
   );
 
   return useMemo<TagMutations>(
-    () => ({ create, findOrCreate, rename, move, destroy, reorder }),
-    [create, findOrCreate, rename, move, destroy, reorder],
+    () => ({ create, findOrCreate, rename, move, destroy, destroyBlocker, reorder }),
+    [create, findOrCreate, rename, move, destroy, destroyBlocker, reorder],
   );
 }

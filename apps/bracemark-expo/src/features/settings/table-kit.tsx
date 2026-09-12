@@ -24,11 +24,21 @@
 // (sync/sort.ts), one copy for all four tables.
 
 import { useRef, useState } from 'react';
-import { TextInput, View } from 'react-native';
+import { ScrollView, TextInput, View } from 'react-native';
 import { ArrowDownAZ, ArrowDownZA, ArrowUpDown, Check, Plus, X } from 'lucide-react-native';
 
 import type { SortDir } from '@stxapps/shared';
 
+import { ErrorText } from '../../components/error-text';
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../../components/ui/alert-dialog';
 import { Button } from '../../components/ui/button';
 import {
   DropdownMenu,
@@ -50,7 +60,6 @@ import { Text } from '../../components/ui/text';
 // try/catch did before it moved here.
 export function useOpRunner() {
   const [error, setError] = useState<string | null>(null);
-  const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
   // Fire-and-forget: surface a failure in the notice, that's all.
   const run = (op: Promise<unknown>) => {
@@ -71,6 +80,116 @@ export function useOpRunner() {
   };
 
   return { error, run, runAwait };
+}
+
+const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
+// A row's Delete: check first, then raise DestroyConfirm with the refusal or the
+// confirm — never the runner's notice, which sits above the table and so a
+// screen away from a row deep in it, in a page ScrollView that nothing scrolls
+// back up. Web's peer carries the full argument. The request is an ID, settled
+// before anything mounts; `latest` drops a check a newer request or a close has
+// overtaken.
+export function useDestroyRequest<T extends { id: string }>(
+  blocker: (item: T) => Promise<string | null>,
+) {
+  const [destroyRequest, setDestroyRequest] = useState<{
+    id: string;
+    blocker: string | null;
+  } | null>(null);
+  const latest = useRef(0);
+
+  const requestDestroy = (item: T) => {
+    const token = ++latest.current;
+    const settle = (reason: string | null) => {
+      if (token === latest.current) setDestroyRequest({ id: item.id, blocker: reason });
+    };
+    blocker(item).then(settle, (e: unknown) => settle(message(e)));
+  };
+  const closeDestroy = () => {
+    latest.current++;
+    setDestroyRequest(null);
+  };
+
+  return { destroyRequest, requestDestroy, closeDestroy };
+}
+
+// The two faces of a row's Delete — blocked (the refusal and an OK) or clear (a
+// destructive confirm that stays up until destroy resolves, since destroy
+// re-checks and a late refusal lands here as an ErrorText). Web's peer is the
+// canonical doc. Two mechanical divergences, both LinkDestroyConfirm's
+// (features/links/link-destroy-confirm.tsx), which also carries the scroller's
+// reasoning — an item NAME is interpolated, and names are unbounded:
+//
+//   - the confirm is a plain destructive Button, not AlertDialogAction — the
+//     rn-primitives Action closes the root before its press handler runs;
+//   - the header is left-aligned by ui/alert-dialog's own TextClassContext, so
+//     no override is needed.
+export function DestroyConfirm({
+  noun,
+  blocker,
+  description,
+  onDestroy,
+  onClose,
+}: {
+  noun: string;
+  // useDestroyRequest's verdict: the refusal to show, or null to ask to confirm.
+  blocker: string | null;
+  // The confirm's body — what goes, and that it can't come back.
+  description: string;
+  onDestroy: () => Promise<void>;
+  onClose: () => void;
+}) {
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const onConfirm = async () => {
+    if (deleting) return;
+    setDeleting(true);
+    setError(null);
+    try {
+      await onDestroy();
+      onClose();
+    } catch (e) {
+      setError(message(e));
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <AlertDialog open onOpenChange={(open) => !open && !deleting && onClose()}>
+      <AlertDialogContent>
+        <ScrollView className="shrink" nestedScrollEnabled>
+          <View className="gap-3">
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                {blocker ? `Can’t delete this ${noun}` : `Delete ${noun}?`}
+              </AlertDialogTitle>
+              <AlertDialogDescription>{blocker ?? description}</AlertDialogDescription>
+            </AlertDialogHeader>
+            {error && <ErrorText>{error}</ErrorText>}
+          </View>
+        </ScrollView>
+        <AlertDialogFooter>
+          {blocker ? (
+            <AlertDialogCancel>
+              <Text>OK</Text>
+            </AlertDialogCancel>
+          ) : (
+            <>
+              <AlertDialogCancel disabled={deleting}>
+                <Text>Cancel</Text>
+              </AlertDialogCancel>
+              <Button variant="destructive" disabled={deleting} onPress={() => void onConfirm()}>
+                <Text>{deleting ? 'Deleting…' : 'Delete'}</Text>
+              </Button>
+            </>
+          )}
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
 }
 
 // The create-an-item row pinned at the top of the table. The plus focuses the

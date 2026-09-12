@@ -56,8 +56,16 @@ export interface ListMutations {
   // Permanently delete a list (no trash for lists — irreversible, like
   // useLinkMutations.destroy). Rejected for system lists, and for any list that
   // still has sub-lists or links — deleting it would orphan them, so the UI must
-  // empty it first. The thrown message is meant to surface to the user.
+  // empty it first. Throws `destroyBlocker`'s sentence, which is meant to surface
+  // to the user.
   destroy: (list: ListItem) => Promise<void>;
+  // Why `destroy` would refuse `list` right now, as the sentence to show — or
+  // null when it would go through. The same guards, read fresh from the store,
+  // so a UI can ask BEFORE it offers a confirm instead of reporting the refusal
+  // after it. Advisory only: another device can add a link between this read and
+  // the delete, which is why `destroy` asks again rather than trusting a caller
+  // that checked.
+  destroyBlocker: (list: ListItem) => Promise<string | null>;
   // Re-rank a sibling group into a new order in one batch (e.g. sort A→Z).
   // `ordered` is the group as it should end up; only the lists whose rank
   // actually changes are written, each the same one-field `{ rank }` write
@@ -123,26 +131,35 @@ export function useListMutations(): ListMutations {
     [username, requestSync],
   );
 
+  const destroyBlocker = useCallback(async (list: ListItem) => {
+    if (isSystemListId(list.id)) return `“${list.name}” is built in, so it can’t be deleted.`;
+
+    // Re-derive emptiness from the store rather than trusting the caller's view:
+    // a sub-list could have been created on another device since the tree
+    // rendered. Children first (a cheap namespace read), then the link count.
+    //
+    // The sentence names the list and counts what's in it, because it is read
+    // in a dialog or a notice, not beside the row — "Move or delete its links
+    // first" left the reader to work out whose.
+    const lists = await readLists();
+    const subLists = lists.filter((other) => other.parentId === list.id).length;
+    if (subLists > 0) return stillHas(list.name, subLists, 'sub-list');
+    const links = await countLinksInList(list.id);
+    if (links > 0) return stillHas(list.name, links, 'link');
+    return null;
+  }, []);
+
   const destroy = useCallback(
     async (list: ListItem) => {
       if (!username) throw new Error('useListMutations: no active account');
-      if (isSystemListId(list.id)) throw new Error('System lists cannot be deleted');
 
-      // Re-derive emptiness from the store rather than trusting the caller's view:
-      // a sub-list could have been created on another device since the tree
-      // rendered. Children first (a cheap namespace read), then the link count.
-      const lists = await readLists();
-      if (lists.some((other) => other.parentId === list.id)) {
-        throw new Error('Move or delete its sub-lists first');
-      }
-      if ((await countLinksInList(list.id)) > 0) {
-        throw new Error('Move or delete its links first');
-      }
+      const blocker = await destroyBlocker(list);
+      if (blocker) throw new Error(blocker);
 
       await deleteList(username, list);
       requestSync();
     },
-    [username, requestSync],
+    [username, requestSync, destroyBlocker],
   );
 
   const reorder = useCallback(
@@ -167,7 +184,15 @@ export function useListMutations(): ListMutations {
   );
 
   return useMemo<ListMutations>(
-    () => ({ create, rename, move, destroy, reorder }),
-    [create, rename, move, destroy, reorder],
+    () => ({ create, rename, move, destroy, destroyBlocker, reorder }),
+    [create, rename, move, destroy, destroyBlocker, reorder],
   );
+}
+
+// "“Reading” still has 3 links. Move or delete them first." — what is wrong,
+// then the act (docs/brand-assets.md, _errors have a fixed shape_).
+function stillHas(name: string, count: number, noun: string): string {
+  return count === 1
+    ? `“${name}” still has 1 ${noun}. Move or delete it first.`
+    : `“${name}” still has ${count} ${noun}s. Move or delete them first.`;
 }

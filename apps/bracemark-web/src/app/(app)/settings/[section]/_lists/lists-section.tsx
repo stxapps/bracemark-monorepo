@@ -15,7 +15,7 @@
 //
 // What this file does NOT contain is everything it shares with the Tags table —
 // the create row, the rename field, the sort menu, the drag grip, the error
-// runner — which live in `_components/table-kit.tsx`. What's left here is the
+// runner, the delete confirm — which live in `_components/table-kit.tsx`. What's left here is the
 // nesting: depth, projection, "Move to", locks. That's the whole difference
 // between the two sections.
 
@@ -92,9 +92,11 @@ import { MD_QUERY, useMediaQuery } from '@stxapps/web-ui/hooks/use-media-query';
 import { SettingsHeader, SettingsNotice, SettingsPane } from '../../_components/settings-kit';
 import {
   CreateRow,
+  DestroyConfirm,
   DragGrip,
   RenameField,
   SortMenu,
+  useDestroyRequest,
   useOpRunner,
   useRenameFocus,
   useRenameOnClose,
@@ -435,11 +437,14 @@ export function ListsSection() {
   const lists = useLists();
   const { entitlements } = useEntitlements();
   const paywall = usePaywall();
-  const { create, rename, move, destroy, reorder } = useListMutations();
+  const { create, rename, move, destroy, destroyBlocker, reorder } = useListMutations();
   const { listLocks, unlockList } = useLocks();
   const { addListLock, removeListLock } = useLockMutations();
 
   const { error, run, runAwait } = useOpRunner();
+  // A row's Delete — checked first, then confirmed or refused in a dialog rather
+  // than in the notice above the table (table-kit's useDestroyRequest says why).
+  const { destroyRequest, requestDestroy, closeDestroy } = useDestroyRequest(destroyBlocker);
 
   const [collapsedIds, setCollapsedIds] = useState<ReadonlySet<string>>(NO_COLLAPSED_IDS);
   // The pending lock intent from a row's kebab — drives the single hoisted
@@ -486,6 +491,11 @@ export function ListsSection() {
   // bracemark-expo's twin does the same.
   const allRows = useMemo(() => flattenToRows(lists, NO_COLLAPSED_IDS), [lists]);
   const movingRow = movingId ? allRows.find((r) => r.item.id === movingId) : undefined;
+  // The row being deleted, resolved the same collapse-free way and for the same
+  // reason: the dialog outlives the render its kebab opened in.
+  const destroyingRow = destroyRequest
+    ? allRows.find((r) => r.item.id === destroyRequest.id)
+    : undefined;
   // Memoized for ListCommand, which re-walks the whole tree when `excludeIds`
   // changes identity — and this one is read on every keystroke in its filter box.
   const movingExcludeIds = useMemo(
@@ -683,7 +693,7 @@ export function ListsSection() {
                       }
                       onUnlock={() => setLockDialog({ mode: 'unlock', listId: row.item.id })}
                       onRemoveLock={() => setLockDialog({ mode: 'remove', listId: row.item.id })}
-                      onDelete={() => run(destroy(row.item))}
+                      onDelete={() => requestDestroy(row.item)}
                     />
                   );
                 })}
@@ -711,6 +721,16 @@ export function ListsSection() {
             onSelect: () => moveTo(movingRow, null),
           }}
           onSelect={(listId) => moveTo(movingRow, listId)}
+        />
+      )}
+
+      {destroyRequest && destroyingRow && (
+        <DestroyConfirm
+          noun="list"
+          blocker={destroyRequest.blocker}
+          description={`“${destroyingRow.item.name}” will be removed from all your devices. This can’t be undone.`}
+          onDestroy={() => destroy(destroyingRow.item)}
+          onClose={closeDestroy}
         />
       )}
 
