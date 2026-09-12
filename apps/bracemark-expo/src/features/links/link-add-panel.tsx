@@ -500,13 +500,16 @@ export function LinkAddPanel({ onClose }: { onClose: () => void }) {
               therefore has no top padding. The divider went with the app-bar
               geometry; this compact task is one continuous surface. */}
           <View className="relative shrink-0 pt-5 pr-14 pb-6 pl-4">
-            {/* Android/Fabric can retain a stale paint clip for intrinsically
-                measured text when the avoider's keyboard padding relays out
-                this transformed panel. The native/a11y bounds stay correct,
-                but only "Add a" paints after the keyboard closes and on the
-                next mount. Owning the row's remaining width keeps the text
-                paint extent definite across those relayouts. */}
-            <Text className="flex-1 text-base font-medium">Add a link</Text>
+            {/* The title's width must be DEFINITE. Sized to its own content,
+                Android/Fabric can retain a stale paint clip when the avoider's
+                keyboard padding relays out this transformed panel: the
+                native/a11y bounds stay correct, but the paint came up short
+                after the keyboard closed and on the next mount. A column child
+                is stretched to the header's width (the close button is
+                absolute, so there is no row to share), which is what makes it
+                definite here — NOT `flex-1`, which in a column acts on height.
+                Put the title back in a row and it needs `flex-1` again. */}
+            <Text className="text-base font-medium">Add link</Text>
             <Button
               variant="ghost"
               size="icon"

@@ -147,13 +147,17 @@ export function TagsCommand({
               disabled={creating}
               onPress={() => void create()}
               aria-label={`Create tag ${trimmed}`}
+              // `max-w-full` + `shrink` on the label, tags-field.tsx's chip: a
+              // Text beside a sibling in a row keeps its own width (RN's
+              // flexShrink is 0), so a long query would push past the chip's
+              // edge instead of wrapping inside it.
               className={cn(
-                'flex-row items-center gap-1 rounded-full border border-dashed border-input px-3 py-1.5',
+                'max-w-full flex-row items-center gap-1 rounded-full border border-dashed border-input px-3 py-1.5',
                 creating && 'opacity-50',
               )}
             >
               <Icon as={Plus} className="size-3.5 text-muted-foreground" />
-              <Text className="text-sm text-muted-foreground">Create “{trimmed}”</Text>
+              <Text className="shrink text-sm text-muted-foreground">Create “{trimmed}”</Text>
             </Pressable>
           )}
         </View>

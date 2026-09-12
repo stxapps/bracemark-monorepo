@@ -127,9 +127,12 @@ export function TagsField({
                 // balanced across (styles.css, `.dark`) — it reads Lc 14.2 on
                 // the field here against light mode's 10.9, which is what kept
                 // that value at 20% rather than the 25% the border role wanted.
-                className="inline-flex items-center gap-1 rounded-full bg-input px-2 py-0.5 text-xs"
+                // `max-w-full` + a `truncate` name, bracemark-expo's chip: as a
+                // flex item the chip is never narrower than its longest word,
+                // so one long unbroken name overflowed the field's border.
+                className="inline-flex max-w-full items-center gap-1 rounded-full bg-input px-2 py-0.5 text-xs"
               >
-                {t.name}
+                <span className="truncate">{t.name}</span>
                 <button
                   type="button"
                   aria-label={`Remove ${t.name}`}

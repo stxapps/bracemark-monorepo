@@ -293,14 +293,19 @@ inset-0` resolves against the parent's PADDING box (_the traps_ below), and
   a tap on the panel's own chrome — the header's empty middle, a `gap-4` seam —
   would fall through to the backdrop behind it and discard the draft. Claiming
   those taps is the job; `Keyboard.dismiss` is what to do with them.
-- **The header title owns the row's remaining width.** Left intrinsically sized,
+- **The header title's width is definite.** Left intrinsically sized,
   Android/Fabric retains a stale paint clip when the keyboard avoider's padding
-  relays out the transformed panel: the first keyboard-up frame paints "Add a
-  link", dismissing the keyboard cuts it to "Add a", and the clipped paint
-  survives the panel's next mount. `uiautomator` still reports the full string
-  and its full 210px text bounds, so neither the string nor the Yoga width is
-  truncated — only the paint is. `flex: 1` makes the title's allocation definite
-  across the relayout and prevents the stale clip.
+  relays out the transformed panel: the first keyboard-up frame paints the whole
+  title (then "Add a link"), dismissing the keyboard cuts it to "Add a", and the
+  clipped paint survives the panel's next mount. `uiautomator` still reports the
+  full string and its full 210px text bounds, so neither the string nor the Yoga
+  width is truncated — only the paint is. The cure is a width the layout
+  _assigns_ rather than one the text measures. Found when the header was a
+  `flex-row`, where that took `flex: 1` (the title owning the row's remaining
+  width); the header is now a column with the close button `absolute`, and the
+  default `align-items: stretch` assigns it instead. `flex: 1` in a column acts
+  on height, not width — it is not the fix there, and not a class to add to
+  every Text.
 
 The bottom padding is the share sheet's formula (`share-kit.tsx`,
 [share-sheet.md](./share-sheet.md)): the safe-area inset while the keyboard is

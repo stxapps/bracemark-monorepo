@@ -510,7 +510,11 @@ function AdvancedSearch() {
             className="flex-1"
           >
             <View className="h-14 flex-row items-center justify-between border-b border-border pr-2 pl-4">
-              <Text className="text-lg font-semibold">Advanced search</Text>
+              {/* Owns the row's remaining width — the topbars' title idiom, and
+                  the shape link-add-panel.tsx's title needed when its header
+                  was a row relaid out by a keyboard avoider (Android kept a
+                  stale paint clip on the intrinsically sized text). */}
+              <Text className="min-w-0 flex-1 text-lg font-semibold">Advanced search</Text>
               <Button
                 variant="ghost"
                 size="icon"

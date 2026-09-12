@@ -145,9 +145,12 @@ export function ShareTagsPicker({
               onPress={() => onRemoveNew(tag.id)}
               accessibilityRole="button"
               aria-label={`Remove ${tag.name}`}
-              className="flex-row items-center gap-1 rounded-full bg-primary py-1.5 pr-2.5 pl-3"
+              // `max-w-full` + `shrink` on the name, tags-field.tsx's chip: a Text
+              // beside a sibling in a row keeps its own width (RN's flexShrink is
+              // 0), so a long name would push the × off the chip.
+              className="max-w-full flex-row items-center gap-1 rounded-full bg-primary py-1.5 pr-2.5 pl-3"
             >
-              <Text className="text-sm text-primary-foreground">{tag.name}</Text>
+              <Text className="shrink text-sm text-primary-foreground">{tag.name}</Text>
               <Icon as={X} className="size-3.5 text-primary-foreground" />
             </Pressable>
           ))}
@@ -158,10 +161,10 @@ export function ShareTagsPicker({
               onPress={submit}
               accessibilityRole="button"
               aria-label={`Create tag ${trimmed}`}
-              className="flex-row items-center gap-1 rounded-full border border-dashed border-input px-3 py-1.5"
+              className="max-w-full flex-row items-center gap-1 rounded-full border border-dashed border-input px-3 py-1.5"
             >
               <Icon as={Plus} className="size-3.5 text-muted-foreground" />
-              <Text className="text-sm text-muted-foreground">Create “{trimmed}”</Text>
+              <Text className="shrink text-sm text-muted-foreground">Create “{trimmed}”</Text>
             </Pressable>
           )}
         </View>

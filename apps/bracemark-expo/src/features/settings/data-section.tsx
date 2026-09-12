@@ -182,7 +182,7 @@ function ImportStatus({ state }: { state: ImportState }) {
     return (
       <View className="mt-3 flex-row items-center gap-2">
         <ActivityIndicator size="small" />
-        <Text className="text-sm text-muted-foreground">
+        <Text className="min-w-0 flex-1 text-sm text-muted-foreground">
           {IMPORT_STEP_LABELS[state.step]}
           {counts}
         </Text>
@@ -420,7 +420,7 @@ function ExportStatus({ state, excludedCount }: { state: ExportState; excludedCo
     return (
       <View className="mt-3 flex-row items-center gap-2">
         <ActivityIndicator size="small" />
-        <Text className="text-sm text-muted-foreground">
+        <Text className="min-w-0 flex-1 text-sm text-muted-foreground">
           {EXPORT_STEP_LABELS[state.step]}
           {counts}
         </Text>
@@ -583,7 +583,9 @@ function DeleteStatus({ state }: { state: DeleteAllState }) {
     return (
       <View className="mt-3 flex-row items-center gap-2">
         <ActivityIndicator size="small" />
-        <Text className="text-sm text-muted-foreground">Deleting all your data…</Text>
+        <Text className="min-w-0 flex-1 text-sm text-muted-foreground">
+          Deleting all your data…
+        </Text>
       </View>
     );
   }
