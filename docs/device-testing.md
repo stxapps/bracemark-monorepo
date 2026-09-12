@@ -188,6 +188,35 @@ Two consequences of the bake:
   `vars` (measured). `bracemark-expo` needs none of this: native clients are not
   CORS-bound, which the `wrangler.jsonc` comment already says.
 
+⚠ **Switching back OUT is the half that gets forgotten, and it breaks the two
+targets that never needed this file.** Left uncommented, the override is still
+the highest-precedence dev file, so the iOS simulator and the Android emulator
+stop using loopback and start addressing the Mac across the network — and the
+emulator's `adb reverse` goes with them, because the reverse maps `localhost`
+and the bundle no longer says localhost. `npm run expo:android:reverse` then
+runs clean and changes nothing, which is why re-running it is not the fix it
+looks like.
+
+Whether that works at all becomes a property of the wifi rather than of the
+code. **Measured:** on one network the emulator resolved the Bonjour name and
+reached the Mac perfectly, so the override is not reliably broken — it is
+reliably CONDITIONAL, which is worse, because it keeps working until the Mac
+joins a different network, an mDNS query is dropped, a guest network isolates
+clients, or a VPN comes up. (Also measured, and a trap while diagnosing: before
+`sys.boot_completed` the same emulator answers `unknown host` for a name it
+resolves fine a minute later, so a check run against a half-booted device
+indicts the wrong thing.)
+
+**The symptom is specific enough to recognise.** The app LAUNCHES and Metro is
+healthy — the dev-client deep link and `adb reverse` both address :8081, which
+these two vars do not touch — while everything that reaches the api fails as a
+network error. So it reads as the api being down, not as an env file being one
+comment character short. `npm run e2e:mobile` fails the same way, one layer
+further from the cause. And per _Metro needs `--clear`_ above, the repair is not
+instant: commenting the two lines back out does nothing until Metro restarts
+with a cleared cache, so a reload leaves you testing the old inlined value and
+looking for a second bug.
+
 ### open decision: `bracemark-web` in `development`, on the iPhone and iPad
 
 **This is the only cell in the matrix that is unresolved.** Everything else in

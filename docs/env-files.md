@@ -352,6 +352,13 @@ device/app/environment matrix — including the secure-context rule that decides
 what `bracemark-web` can do from a phone — is
 [device-testing.md](./device-testing.md).
 
+**Comment it back out when you leave the device.** The override has no per-target
+scope — it is simply the highest-precedence dev file — so one left in place takes
+the simulator, the emulator and `npm run e2e:mobile` off loopback too, and the
+`--clear` above is what decides when the fix takes effect. The failure that
+produces, and why it is intermittent rather than reliable, is
+[device-testing.md](./device-testing.md), _one bundle, one set of origins_.
+
 Adding a new var = add the line to all three files, same deliberate symmetry as
 the other frontends.
 

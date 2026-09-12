@@ -425,6 +425,20 @@ server and needs no account. `playwright test` boots and waits for the stack
 itself via `webServer` + `global-setup.ts`; the `runner/` scripts check and tell
 you to start it.
 
+⚠ **`webServer` sets `reuseExistingServer: true`, and it does not check whose
+server it is.** If anything already answers on :3000 — another clone of this repo
+on the same machine, another session, another agent — Playwright attaches to it
+instead of starting one, and says nothing. The run then exercises THAT
+checkout's code and provisions its throwaway accounts into that checkout's
+`apps/bracemark-api/.wrangler/`, so a green suite says nothing about the tree you
+edited and a red one names a failure that isn't yours. The reuse itself is right
+— a second stack would only fail on the pinned ports — so the check belongs
+before the run: resolve :3000 and :8787 to the listening process's cwd
+(`.claude/skills/verify/SKILL.md`, Gotchas, _a port can belong to another
+clone_). The same question decides which Metro a mobile leg is really running
+against, since `runner/lib.ts` binds to whatever single device is booted and that
+device loads :8081.
+
 ```sh
 npx nx e2e-web @stxapps/e2e        # the web suite, headless, 2 workers
 npx nx e2e-web:headed @stxapps/e2e # the same, watchable

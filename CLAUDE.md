@@ -91,8 +91,8 @@ that reading comes _before_ the edit; nothing downstream will tell you.
 | prebuild, `app.config.ts`, the npm scripts, R8, signing, any native change     | `expo-build.md` ⚠               |
 | **writing or reviewing a spec**; test layers, jest vs vitest                   | `testing.md` ⚠                  |
 | driving an app to see it run — the browser, the AVD, Maestro, simctl/adb       | `app-drivers.md` ⚠              |
-| whole-flow e2e — `e2e/`, playwright, maestro, the contract runs                | `e2e.md`                        |
-| seeded dev accounts — a filled library, a paid plan, locally                   | `e2e.md`                        |
+| whole-flow e2e — `e2e/`, playwright, maestro, the contract runs                | `e2e.md` ⚠                      |
+| seeded dev accounts — a filled library, a paid plan, locally                   | `e2e.md` ⚠                      |
 | env vars, per app and per mode; where a credential goes instead                | `env-files.md` ⚠                |
 | **testing on a real phone/tablet** — what connects, secure contexts, HTTPS     | `device-testing.md` ⚠           |
 | **deploying a Worker; applying a D1 migration**                                | `hosting.md` ⚠                  |

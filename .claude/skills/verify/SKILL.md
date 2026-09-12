@@ -49,6 +49,17 @@ actually settles the question:
   `curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/` → 200 (~15s).
 - Local state lives under `apps/bracemark-api/.wrangler/`; creating a throwaway
   account per run is cheap and avoids depending on existing state.
+- **Check what is already up before launching anything.** A dev server, a
+  simulator or an emulator may already be running — started by the user, by
+  another session, or by another agent — and reusing one is free where starting
+  a second is not. Take one over or kill it whenever you need to; nothing here
+  is precious. The only thing to establish first is WHOSE it is (Gotchas, _a
+  port can belong to another clone_).
+- **Inside one clone, a second `dev` is a no-op that reports success.** With a
+  `nx run-many -t dev` already holding the task, a scoped `npx nx dev` on the
+  same project prints `Waiting for … in another nx process` and then
+  `Successfully ran target dev` — having served nothing. So there is no "restart
+  just the web leg": stop the `run-many` and re-run `npm run dev`.
 
 ## Drive bracemark-web (GUI surface)
 
@@ -195,6 +206,47 @@ chromium` (~550 MB into `~/Library/Caches/ms-playwright/`) if it is absent.
   plain JSON that can't hold a comment saying so. Unrelated but adjacent:
   `wrangler.jsonc` pins `dev.port: 8787`, so a port conflict fails loudly instead
   of silently drifting to 8788.
+- **⚠ A port can belong to another clone, and nothing on screen says so.** There
+  is more than one checkout of this repo on this machine
+  (`bracemark-monorepo-alice`, `-bob`), plus whatever another session or another
+  agent left running. All of them want the same five ports, and every way that
+  goes wrong is silent and reads as a broken change. **:3000** held by the other
+  clone's `next dev` means you drive ITS tree, and your edit is simply absent.
+  **:8787** means you also read its `apps/bracemark-api/.wrangler/`, so a
+  throwaway account arrives holding another checkout's links. **:8081** is the
+  worst, because the device hides it: `ios:open`/`android:open` hardcode
+  `url=http://localhost:8081/`, so the dev build on the shared simulator loads
+  whichever Metro won that port — the same symptom as the stale-bundle gotcha in
+  the expo section below, on which `watchman watch-del` + `expo start --clear`
+  has no effect at all.
+
+  Resolve it by the LISTENER'S CWD, the only thing that names a working
+  directory:
+
+  ```sh
+  for p in 3000 3001 8081 8787 8788; do
+    for pid in $(lsof -nP -iTCP:$p -sTCP:LISTEN -t); do
+      printf '%s\t%s\t%s\n' "$p" "$(ps -o comm= -p $pid)" \
+        "$(lsof -a -p $pid -d cwd -Fn | sed -n 's/^n//p')"
+    done
+  done
+  ```
+
+  Then reuse it, or kill it and launch your own — a dev server is cheap and
+  none of this is precious. **Do not filter lsof's output with grep.** Its NAME
+  column is `*:8787 (LISTEN)`, with a space before the paren, so a pattern like
+  `:8787(` matches nothing and reports an IDLE MACHINE while a full stack is up
+  — which is the one answer that makes you start a duplicate, or kill the wrong
+  process while cleaning up after yourself. Pass the port to `-iTCP:` and let
+  lsof do the matching.
+
+  **Devices are the same hazard with different economics.** The simulator and
+  the emulator are machine-global, and `com.bracemark.app` is ONE app id, so the
+  clone that last ran `expo:ios`/`expo:android` owns the installed binary.
+  Killing an emulator costs a ~32s reboot; clobbering an install costs the
+  multi-minute native build the expo section gates on. Kill a device freely,
+  reinstall deliberately.
+
 - **`Error evaluating Node.js code` from a Next dev server: clear the turbopack
   cache before you touch `node_modules`.** `.next/dev/cache/turbopack` (hundreds
   of MB, per Next app) caches the **result of evaluating `postcss.config.js` in
@@ -333,6 +385,12 @@ this watch 1 time, most recently because: MustScanSubDirs`. With the watch
   (above) before trusting any behavioural result — a stale bundle makes a correct
   change look broken.
 
+  **The other way that bundle is wrong is not stale, it is someone else's.** A
+  Metro belonging to another clone of this repo, holding :8081, serves ITS
+  bundle to this device — and the watchman recovery above cannot touch it.
+  Resolve the listener's cwd first (Gotchas, _a port can belong to another
+  clone_).
+
 - **The simulator may have no software keyboard at all.** With Simulator's
   _Connect Hardware Keyboard_ on (the default here), a focused field shows a
   caret and NO keyboard — so any keyboard-shaped change (avoidance, dismissal,
@@ -356,6 +414,20 @@ this watch 1 time, most recently because: MustScanSubDirs`. With the watch
   relaunch the app before reading anything into it. (It is also what a real
   a11y-modality bug looks like, which is why relaunching first is the way to
   tell them apart → `docs/soft-keyboard.md`, _the add panel_.)
+- **Nothing native reaching the api? Read
+  `apps/bracemark-expo/.env.development.local` before anything else.** It is
+  gitignored, dev-only and highest precedence, and the two `EXPO_PUBLIC_*` lines
+  at its foot are meant to stay COMMENTED — they exist for a physical phone,
+  which is the one target that cannot use loopback. Uncommented, they take the
+  simulator and the emulator off loopback as well, onto the Mac's LAN name, where
+  `adb reverse` no longer applies (it maps `localhost`, and the bundle has
+  stopped saying localhost — so re-running `expo:android:reverse` changes
+  nothing). The app still launches and Metro is still fine, because both address
+  :8081 and these vars don't touch it; only api traffic fails, which reads as the
+  api being down. It is also intermittent rather than broken — it works on a
+  network whose mDNS cooperates — so "it worked yesterday" is not evidence
+  against it. Commenting them back out needs `npm run expo:start -- --clear`; a
+  reload replays the old inlined value. → `docs/device-testing.md`
 - **`hideKeyboard` taps a blank area on iOS**, so on a surface with a
   tap-to-close backdrop it closes the surface. If a flow loses its buttons right
   after that step, this is why.
