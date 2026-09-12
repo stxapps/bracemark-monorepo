@@ -134,8 +134,12 @@ function AlertDialogContent({
             // description taller than that space overflows off the TOP, losing
             // the title — which is the half of the problem the gutter alone
             // cannot reach. A caller whose body can grow pairs this with
-            // `shrink` on its own scroller (link-destroy-confirm.tsx), since RN
-            // children do not shrink by default.
+            // `shrink grow-0` on its own scroller (link-destroy-confirm.tsx,
+            // which carries the derivation for both halves): RN children do not
+            // shrink by default, AND a `ScrollView` arrives with `flexGrow: 1`
+            // of its own, which under THIS content — content-sized in its cross
+            // axis, see the `w-full` note below — fills the whole cap with dead
+            // space. `shrink` does not cancel it; only `grow-0` does.
             // `max-w-md` is UNPREFIXED for the reason the sibling dialog.tsx
             // spells out — the overlay's `inset + 8` padding is the gutter, so
             // a `sm:` gate on the cap bought nothing and left a sub-640dp
@@ -154,7 +158,13 @@ function AlertDialogContent({
             // No `w-full` here, deliberately: this box stays content-sized
             // inside the overlay's `items-center`, so a one-line confirmation
             // hugs its text instead of filling — which makes the 28rem a
-            // ceiling for a long description, not a target.
+            // ceiling for a long description, not a target. That omission is
+            // also what makes the `grow-0` above load-bearing HERE and not in
+            // dialog.tsx, whose content is `w-full`: measured on the simulator,
+            // adding `w-full` to this box is the one other thing that suppresses
+            // the fill (a definite cross size changes how Yoga sizes the column
+            // around a grow-1 child). Taking that route would have bought the
+            // fix by discarding the hug, so the scroller carries it instead.
             'z-50 flex max-h-full max-w-md flex-col gap-6 rounded-4xl border border-border bg-popover p-6 shadow-lg shadow-black/5',
             Platform.select({
               web: 'animate-in fade-in-0 zoom-in-95 duration-200 web:max-w-[calc(100%-2rem)]',

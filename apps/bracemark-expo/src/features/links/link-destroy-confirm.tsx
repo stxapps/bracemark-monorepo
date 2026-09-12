@@ -79,8 +79,23 @@ export function LinkDestroyConfirm() {
             would re-space them at the content's `gap-6`. The title scrolling
             with its description is the right trade — it's one short line at the
             top, and what must never scroll away is the footer, which is outside
-            this and stays pinned. */}
-        <ScrollView className="shrink" nestedScrollEnabled>
+            this and stays pinned.
+
+            `grow-0` IS THE OTHER HALF OF `shrink`, and it is not symmetry: a
+            `ScrollView` ships `flexGrow: 1` in its own base style
+            (react-native's `ScrollView.js`, `styles.baseVertical`), which no
+            Uniwind class here cancels — `shrink` sets `flexShrink` and leaves
+            the grow behind. Under this content box that grow claims every point
+            the cap offers, so a two-line confirmation rendered FULL HEIGHT with
+            the footer pinned at the bottom of the screen and a screenful of
+            empty popover between it and the description. Measured on the iOS
+            simulator, both ways, with the dialog open under fast refresh; also
+            measured: dropping `max-h-full` does NOT help, so it is the grow and
+            never the cap. Nothing catches it — the box has no overflow, no
+            clipping and no error, it is merely the wrong size, and jest renders
+            no layout at all (docs/soft-keyboard.md, _the traps_). Any scroller
+            put directly under Alert/DialogContent wants both classes. */}
+        <ScrollView className="shrink grow-0" nestedScrollEnabled>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete permanently?</AlertDialogTitle>
             <AlertDialogDescription>

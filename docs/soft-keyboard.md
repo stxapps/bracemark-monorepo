@@ -111,9 +111,10 @@ behavior="padding"` around the centring box in `DialogOverlay` — the container
   definite, so it reads "the window, minus the keyboard, minus the gutter"
   without measuring anything — plus `shrink` on the one scroller each growable
   body owns (`list-command.tsx`, `bulk-tags-dialog.tsx`, and now
-  `link-destroy-confirm.tsx` under the alert dialog's copy of the cap), since RN
-  children do not shrink by default and the cap alone would keep pushing the
-  title off. The
+  `link-destroy-confirm.tsx` and `table-kit.tsx` under the alert dialog's copy of
+  the cap), since RN children do not shrink by default and the cap alone would
+  keep pushing the title off. Where that scroller is a `ScrollView`, `shrink` is
+  half the pair — see _the traps_ for the `grow-0` that goes with it. The
   margin was thinner than it looked: an iPhone 17 Pro leaves ~566pt above the
   keyboard and bulk "Edit tags" wants ~520. Both halves were driven on a
   simulator and an emulator against a deliberately oversized body. A third,
@@ -530,6 +531,27 @@ type error or a failing test.
   default `'never'` withholds the tap from the child. The bug reads as "the
   first press does nothing", which looks like a hit-target or a state problem
   and is neither.
+- **`shrink` on a `ScrollView` is only half the pair — it needs `grow-0` too.**
+  The cap/`shrink` rule above is written for a body that can OUTGROW the cap;
+  the other direction has its own trap. A `ScrollView` arrives with
+  **`flexGrow: 1` already set in its own base style** (react-native's
+  `ScrollView.js`, `styles.baseVertical`), and no class we write cancels it —
+  `shrink` sets `flexShrink` and leaves the grow standing. Directly under
+  `AlertDialogContent` that grow claims every point the `max-h-full` cap offers,
+  so the Lists/Tags "Delete list?" confirm — two lines of text — rendered FULL
+  HEIGHT, its footer pinned at the bottom of the screen and a screenful of empty
+  popover between the message and the buttons. Fix is `className="shrink grow-0"`
+  (`table-kit.tsx`, `link-destroy-confirm.tsx`); the long-description case still
+  shrinks and scrolls, which is the point of keeping both.
+  Two things measured on the simulator while cornering it, because each would
+  otherwise cost the session again: dropping `max-h-full` does **not** help — it
+  is the grow, not the cap — and adding `w-full` to `AlertDialogContent` **does**
+  suppress it, which is why `dialog.tsx`'s own `w-full` content never showed this
+  and `list-command.tsx`'s `max-h-80 shrink` scroller measured clean under it. We
+  did not take that route: the alert dialog omits `w-full` deliberately so a short
+  confirmation hugs its text (`ui/alert-dialog.tsx`). Nothing catches any of it —
+  no overflow, no clipping, no error; the box is merely the wrong size, and jest
+  renders no layout.
 
 ## verifying any of this
 

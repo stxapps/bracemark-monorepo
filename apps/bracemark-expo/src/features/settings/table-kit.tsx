@@ -160,7 +160,12 @@ export function DestroyConfirm({
   return (
     <AlertDialog open onOpenChange={(open) => !open && !deleting && onClose()}>
       <AlertDialogContent>
-        <ScrollView className="shrink" nestedScrollEnabled>
+        {/* `shrink grow-0`, both halves, for LinkDestroyConfirm's reasons — the
+            same unbounded name in the same alert dialog. `grow-0` is the one
+            that is easy to drop: a ScrollView's own `flexGrow: 1` fills the
+            content's `max-h-full` cap, and a "Delete list?" confirm rendered
+            full screen with the buttons a thumb's travel from its message. */}
+        <ScrollView className="shrink grow-0" nestedScrollEnabled>
           <View className="gap-3">
             <AlertDialogHeader>
               <AlertDialogTitle>
