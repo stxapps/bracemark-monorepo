@@ -63,7 +63,8 @@ convention: the site has no auth stack, no data layer, and its own origin (see
 - **bracemark-api** — backend API (hand-written, not nx-generated)
 - **bracemark-extractor** — Cloudflare Workers + hono server that fetches
   link metadata (title/image; read-mode deferred) for clients that can't reach the
-  URL themselves (`bracemark-web` without the browser extension, bulk imports). Its **own app on
+  URL themselves (`bracemark-web`, including its bulk imports). A separately installed
+  browser extension does not receive or extract saves made through the web app. Its **own app on
   its own origin** `extractor.bracemark.com`, **separate from `bracemark-api`** (the blind sync
   broker) so that "`api.bracemark.com` never sees your library in plaintext" stays
   code-provable —

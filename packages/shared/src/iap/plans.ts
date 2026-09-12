@@ -407,10 +407,10 @@ export const LIFETIME_ON_SALE = false;
 //     thumbnails", the opposite of what ENTITLEMENTS says. What Plus actually gates is
 //     `serverExtraction`, and the honest claim is COVERAGE, not quality: the
 //     server is the WORST extractor (`extractedBy: 'server'` is the floor of
-//     `tierOf` — see docs/link-extraction.md, _who extracts_), but it is the only
-//     one that can preview a link no device fetched — a save made in the web app,
-//     where CORS blocks the tab, and the back-fill of imported links. Free gets
-//     the BEST extractor, on the device doing the saving.
+//     `tierOf` — see docs/link-extraction.md, _who extracts and what wakes it_),
+//     but it lets the web app fill pending previews itself. Free still gets the
+//     BEST extractor in the browser extension and free on-device coverage in the
+//     mobile app, including synced and imported links when its setting is `all`.
 //   - "Unlimited" is fixed, not a word to re-pick. docs/brand-assets.md quotes
 //     'Unlimited saved links' — this exact string — as its specimen of the object
 //     noun, and /faq and both of bracemark-site's pricing surfaces spell it the
@@ -444,7 +444,7 @@ export const PLAN_CARD_COPY: Record<PaidPlan, { blurb: string; features: string[
     //     it understated the card to precisely the buyer it was written for.
     features: [
       'Unlimited saved links',
-      'Link previews for web saves & imports',
+      'Server link previews in the web app',
       'Nested lists',
       'App lock & hidden lists',
       'Search editor — fields, lists and tags',

@@ -161,7 +161,7 @@ FINDING IT AGAIN
 • Pins for the handful you are working from right now
 • Search across titles, addresses and hosts, instantly, on your device
 • Card or list layouts, set per device
-• Previews with titles and images, pulled by the device that saved the link
+• Previews with titles and images, fetched by the browser extension, the mobile app or our opt-in preview server
 • The whole library lives on the device, so it opens and searches offline
 
 YOURS TO LEAVE WITH

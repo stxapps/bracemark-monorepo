@@ -39,9 +39,11 @@ These aren't vulnerabilities, and the reasoning for each is in `docs/`:
   reset with. The recovery code is the second door.
 - **The server sees file paths, sizes and modification times.** That metadata is
   what makes sync work; the inventory is in the privacy policy.
-- **Link previews saved from the web app pass through our extractor**, opt-in and
-  off by default. It holds no key, never sees your account, and stores nothing it
-  read — only the IP addresses its rate limiter needs.
+- **Server previews in the web app pass through our extractor**, opt-in and off
+  by default. Once enabled, they cover new saves and pending links shown while you
+  browse; Generate all covers the full library. The extractor holds no key, never
+  sees your account, and stores no URL or page content. Its rate limiter briefly
+  holds the IP addresses it needs.
 - **Subscribing identifies you to the payment provider.** It costs anonymity, not
   confidentiality.
 

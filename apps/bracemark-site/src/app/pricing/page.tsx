@@ -80,13 +80,14 @@ function monthlyEquivalent(usdPerYear: number): string {
 // mode, screenshots, page copies and AI are entitlements without features behind
 // them yet, so they are not promised anywhere on this page.
 //
-// The previews line names WHERE it happens on purpose. Free gets the best
+// The previews line names the free CLIENT paths on purpose. Free gets the best
 // extractor there is — the browser extension's active tab, or the mobile app's
-// native fetch — but only for a link that device saves, so a free web-only
-// visitor gets no previews at all (docs/link-extraction.md, _the web-only gap_).
-// A bare "Preview images" here would promise that visitor something they can't
-// have, and the Plus card's counterpart line would then read as "free users get
-// no thumbnails", which is the opposite of what the entitlements say.
+// native fetch. The mobile app can also fill synced and imported links for free
+// when Link previews is set to All links. A free web-only visitor still gets no
+// previews (docs/link-extraction.md, _the web-only gap_). A bare "Preview images"
+// here would promise that visitor something they can't have, and the Plus card's
+// counterpart line would then read as "free users get no thumbnails", which is
+// the opposite of what the entitlements say.
 const FREE_FEATURES = [
   'End-to-end encryption — only you hold the key',
   'Sync across all your devices',
@@ -224,7 +225,7 @@ const COMPARISON: { label: string; cell: (plan: Plan) => Cell }[] = [
   // paid row promised something free already did. Drawn at the server, both rows
   // are true and the thing Plus sells — previews without a phone doing the work —
   // is what the label now says.
-  { label: 'Link previews, fetched by your own devices', cell: () => true },
+  { label: 'On-device link previews', cell: () => true },
   { label: 'Lists, tags, pins, notes & layouts', cell: () => true },
   // The haystack is NAMED, and that is the whole of the change. "Search across
   // your whole library" was true about the SCOPE and silent about the FIELDS, and
@@ -250,7 +251,7 @@ const COMPARISON: { label: string; cell: (plan: Plan) => Cell }[] = [
   { label: 'App lock & hidden lists', cell: (p) => entitlementsOf(p).locks },
   { label: 'Search editor (fields, lists, tags)', cell: (p) => entitlementsOf(p).searchEditor },
   {
-    label: 'Server previews for web saves & imports',
+    label: 'Server link previews in the web app',
     cell: (p) => (entitlementsOf(p).serverExtraction ? 'Opt-in' : false),
   },
 ];

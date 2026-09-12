@@ -24,7 +24,7 @@ export function tierOf(extractedBy: string | undefined): number {
   if (!extractedBy) return 0;
   if (extractedBy.endsWith(':fg')) return 3; // active-page — live DOM / WebView
   if (extractedBy.endsWith(':bg')) return 2; // background — raw-HTML fetch
-  if (extractedBy === 'server') return 1; // bracemark-extractor (deferred)
+  if (extractedBy === 'server') return 1; // bracemark-extractor
   return 0; // unknown → conservatively lowest
 }
 

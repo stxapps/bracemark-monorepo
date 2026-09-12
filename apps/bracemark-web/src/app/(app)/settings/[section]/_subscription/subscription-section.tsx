@@ -234,11 +234,11 @@ export function SubscriptionSection() {
             <span className="text-sm text-muted-foreground">
               {plan === 'free'
                 ? // NOT "without previews": free stores preview images like every
-                  // plan, it just needs a client to extract them — and in a web tab
-                  // CORS means that client is the browser extension. What Plus buys
-                  // is `serverExtraction`, i.e. previews for links no device fetched
-                  // (see docs/link-extraction.md, _the web-only gap_).
-                  `Encrypted saving, sync, lists and tags — up to ${entitlementsOf('free').maxLinks} links, with previews from the browser extension.`
+                  // plan, it just needs a client to extract them — the browser
+                  // extension or mobile app. What Plus buys is `serverExtraction`,
+                  // which lets the web app fill pending previews itself (see
+                  // docs/link-extraction.md, _the web-only gap_).
+                  `Encrypted saving, sync, lists and tags — up to ${entitlementsOf('free').maxLinks} links, with previews from the browser extension or mobile app.`
                 : expiresAt === null
                   ? 'Never expires.'
                   : // A trial's period end is the FIRST CHARGE, not a renewal —

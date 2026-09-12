@@ -127,7 +127,7 @@ so it can run beside bracemark-web's 3000.
 
 It is deliberately **not** in `npm run dev`, which is the app stack — api + web +
 extractor, three projects that are useless apart (no api means no auth or sync;
-no extractor means no link previews). The site is only loosely coupled: it links
+no extractor means no server previews in the web app). The site is only loosely coupled: it links
 to the app by URL and calls the api for public data at most. Same reasoning as
 `dev:ext`, which keeps the browser extension out of the default stack too.
 

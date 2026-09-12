@@ -156,11 +156,11 @@ export function ExtractionSection() {
       <SettingsPane>
         <SettingsHeader
           title="Link previews"
-          description="Bracemark fills in each saved link’s title and preview image automatically. Links saved from the Bracemark extension are previewed right on your device; previews for links saved on the web or added by import are part of the Plus plan."
+          description="The browser extension tries to fill in a title and preview image whenever you save. The mobile app can also fill pending synced and imported links on-device when its Link previews setting covers All links. Server previews inside this web app are part of the Plus plan."
         />
         <SettingsRow
           title="Server-side previews"
-          description="Upgrade to fill in titles and preview images for links that weren’t previewed on the device that saved them."
+          description="Upgrade to fill pending previews through the web app as links come into view, or generate them for the full library."
           action={
             <Button asChild variant="outline" size="sm">
               <Link href="/settings/subscription">Upgrade to Plus</Link>
@@ -175,7 +175,7 @@ export function ExtractionSection() {
     <SettingsPane>
       <SettingsHeader
         title="Link previews"
-        description="Bracemark fills in each saved link’s title and preview image automatically — you don’t need to do it by hand. Links you save from the Bracemark extension or mobile app are previewed right on your device, so the page never leaves it. Links saved here on the web, and links you import, are the ones no device has fetched: the mobile app can cover those too if you set its previews to all links, or you can turn on server-side previews below and Bracemark will fetch them for you."
+        description="The browser extension tries to fill in a title and preview image whenever you save. The mobile app fetches previews on-device: saved links by default, or every pending link that comes into view when its setting covers All links. This web app cannot fetch other sites directly. Turn on server-side previews below and pending links fill in as you browse; Generate all covers the full library."
       />
 
       <SettingsRow
@@ -206,7 +206,7 @@ export function ExtractionSection() {
         // front of an anonymous service could possibly work. /privacy and
         // /extractor already named the IP; the toggle that turns the thing ON is
         // the last place that should be quieter than the policy page.
-        description="Fetch each link on the server to fill in its title and preview image — for links that weren’t previewed on the device that saved them. Only the link’s URL is sent, never your account, and only while this is on. The request carries your IP address, as any web request does, and the service uses it to rate-limit and nothing else."
+        description="Fetch pending links through the preview server to fill in their titles and images. While this is on, links shown on screen are handled automatically and Generate all covers the full library. Each request sends the link’s URL but no account identity. The rate limiter briefly holds the requesting IP address."
         action={
           <Switch id="server-extraction" checked={serverExtraction} onCheckedChange={setEnabled} />
         }

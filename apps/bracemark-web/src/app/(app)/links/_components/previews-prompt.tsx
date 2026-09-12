@@ -92,8 +92,9 @@ export function PreviewsPrompt() {
           <>
             <p className="text-sm text-muted-foreground">
               Bracemark can fill in their titles and images by fetching each page through its
-              preview service. Only the link’s URL is sent, nothing is stored, and it never runs
-              until you turn it on.
+              preview service. Once you turn it on, pending links fill in as they come into view;
+              Generate all covers the rest. The service receives the URL and your IP address, but
+              stores no URL or page content.
             </p>
             <div className="mt-1 flex flex-wrap items-center gap-2">
               <Button asChild size="sm" variant="outline">
@@ -104,9 +105,10 @@ export function PreviewsPrompt() {
         ) : (
           <>
             <p className="text-sm text-muted-foreground">
-              The Bracemark browser extension previews links right in your browser as you save them
-              — free, and the page never leaves your device. Filling in the ones already here, saved
-              on the web or added by import, is part of Plus.
+              The Bracemark browser extension tries to preview links in your browser as you save
+              them — free, without our server fetching the page. The mobile app can also fill in the
+              links already here for free when its Link previews setting covers All links. Doing
+              that through the web app’s preview server is part of Plus.
             </p>
             <div className="mt-1 flex flex-wrap items-center gap-2">
               <Button asChild size="sm" variant="outline">

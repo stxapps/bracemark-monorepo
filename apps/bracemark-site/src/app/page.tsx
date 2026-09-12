@@ -213,8 +213,8 @@ function HeroPanel() {
           {/* The preview slot, filled the way the library will really fill it
               for a link like this one: `HostMonogram`, the deterministic
               letter-on-hue tile that stands in wherever there is no extracted
-              image — which on the free plan is most links, since previews come
-              from the device that saved them. It was an empty accent-tinted
+              image — which is what a web-only account shows while server
+              previews remain off. It was an empty accent-tinted
               block, defended as "a diagram, not a screenshot"; what it actually
               read as was a hole, in the one artefact a visitor studies, exactly
               where the product's own subject belongs.
@@ -231,12 +231,12 @@ function HeroPanel() {
               re-derive the old claim from the old wording.
 
               TWO REASONS SURVIVE, and they are about what this panel IS.
-              First, it draws the FREE-PLAN DEFAULT. Previews come from the device
-              that saved the link, so a visitor who signs up on the web and saves
-              from the web sees monograms, not covers — the figure below shows a
-              filled library and its caption carries exactly that split. The two
-              pictures show two states and both are true; the hero shows the one a
-              new visitor will actually meet.
+              First, it draws the WEB-ONLY DEFAULT. Server previews are off until
+              the user opts in, so a visitor who signs up on the web and saves
+              from the web sees monograms, not covers. A free phone with Link
+              previews set to All links can still fill those rows after sync; that
+              is why this is a surface default rather than a plan limit. The figure
+              below shows a filled library and its caption carries that split.
 
               Second, and decisively: this panel is a DRAWING, not a capture. Every
               cover in the screenshots is there because a camera was pointed at the
@@ -581,7 +581,7 @@ const CAPTURE = [
     // the four, and a reader can check this one against their own toolbar in
     // about four seconds. Same correction in packages/shared/src/stores/
     // listing-copy.ts, which shipped it to both extension stores.
-    body: 'Click the icon on the tab you are already reading, then Save. The extension takes the title and preview image from your own browser, so nothing has to fetch the page on your behalf.',
+    body: 'Click the icon on the tab you are already reading, then Save. The extension tries to take the title and preview image from your own browser, so no server of ours has to fetch the page.',
   },
   {
     name: 'Phone and tablet',
@@ -601,7 +601,7 @@ const CAPTURE = [
     // actually comes from. "Itself" is load-bearing and not a filler word: the
     // app does that fetch, NOT our server, which is the entire difference between
     // this card and the web-app card next to it.
-    body: 'Share into Bracemark from any app — a browser, a podcast player, a social app. It saves what that app hands over, sealed on the handset before it syncs. The app fills in the title and preview image itself the next time you open it.',
+    body: 'Share into Bracemark from any app — a browser, a podcast player, a social app. It saves what that app hands over, sealed on the handset before it syncs. With the default Link previews setting, the app fills in the title and preview image itself the next time you open Bracemark.',
   },
   {
     name: 'The web app',
@@ -613,7 +613,7 @@ const CAPTURE = [
     // sites, and a server fetching another site is exactly what the rest of the
     // sentence sells (docs/link-extraction.md, _server extraction_) — so
     // "a web site can't fetch another web site" would refute its own next clause.
-    body: `Paste a URL and it is saved. Browsers won’t let a web page fetch another site, so previews for web saves are the one thing that needs a server — opt-in, on ${PLAN_LABELS.plus}.`,
+    body: `Paste a URL and it is saved. Browsers won’t let a web page fetch another site. Turn on server previews on ${PLAN_LABELS.plus} and pending links fill in as you browse, or let a phone set to All links fill them in after sync.`,
   },
   {
     name: 'Import',
@@ -704,7 +704,7 @@ const LIBRARY: [string, string][] = [
   // it names the two cases and stops.
   [
     'Previews',
-    `Titles and images, pulled by the device that saved it. Web saves and imports need a phone set to fill them in, or ${PLAN_LABELS.plus}.`,
+    `Titles and images from the browser extension, the mobile app, or the opt-in preview server on ${PLAN_LABELS.plus}.`,
   ],
   // "In formats other apps read" appeared three times across the site and never
   // named one, which reads exactly like a company that doesn't export well. The
@@ -764,7 +764,7 @@ const TRADE: { aspect: string; hosted: string; ours: string }[] = [
   {
     aspect: 'Previews',
     hosted: 'Their servers fetch every page you save, and keep what they find.',
-    ours: `The device that saved the link pulls the title and image, so nothing fetches the page on your behalf. The links no device fetched — imports, and saves made in the web app — stay bare until you ask something to fill them in: a phone whose previews cover all links does it for free, from your own address, and our server does it on ${PLAN_LABELS.plus}. Both are off until you turn them on.`,
+    ours: `The browser extension tries to extract from the live tab when you save. The mobile app fetches on-device — saved links by default, or every pending link that comes into view when you choose All links. In the web app, the opt-in preview server on ${PLAN_LABELS.plus} fills new saves and pending links as you browse; Generate all covers the rest.`,
   },
   {
     // The loss a hosted-manager user is actually buying against, and the one this
@@ -1486,10 +1486,10 @@ export default function Page() {
         {/* The picture goes above the list, not beside it: the band's claim is
             that the library looks like a library, and a screenful of real saved
             links makes that argument in less time than six bullets can. The
-            caption is the mono instrument voice, and it does a second job —
-            previews coming from the saving device is the one thing the picture
-            cannot show, and the thing that decides whether a free web-only
-            visitor sees any. */}
+            caption is the mono instrument voice, and it does a second job — it
+            names both on-device and opt-in server previews, a distinction the
+            picture itself cannot show and the thing that decides whether a
+            web-only visitor sees any. */}
         <figure className={cn('mb-16')}>
           <div className={cn('overflow-hidden rounded-2xl border border-border bg-card shadow-sm')}>
             {/* `loading="lazy"`: this figure sits several screens down and
@@ -1572,7 +1572,7 @@ export default function Page() {
       <Band
         label="Compared with"
         title="What we gave up to get here."
-        lede="Raindrop, Pocket and your browser’s bookmarks hold your titles and addresses in readable form — that is what makes their server-side features possible in the first place. Bracemark gives those up for a server with nothing to read. Here is the whole trade."
+        lede="Hosted bookmark managers keep titles and addresses readable to run server-side features. Our API never receives your library in plaintext, so search stays on your device and server previews are a separate opt-in. Here is the whole trade."
       >
         {/* One `dt` and two `dd`s per row: one term, two descriptions, which is
             what a definition list is for and what makes this survive being

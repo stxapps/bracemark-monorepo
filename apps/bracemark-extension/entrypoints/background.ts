@@ -7,7 +7,7 @@
  *     sync materializing only links/ + extractions/. There is NO background
  *     extraction sweep here — the extension is active-context only (no `<all_urls>`
  *     host grant), so it never bg-fetches saved URLs; the bg-fetch residual is owned
- *     by the deferred `bracemark-extractor` (docs/link-extraction.md "the extension is
+ *     by `bracemark-extractor` or Expo's `all` mode (docs/link-extraction.md "the extension is
  *     active-context only").
  *   - it answers the typed popup → background message protocol, owning ALL
  *     privileged / CORS-exempt work: KICK_SYNC (run a cycle now) and EXTRACT (capture

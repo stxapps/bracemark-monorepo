@@ -152,7 +152,7 @@ export default defineConfig({
       // extension is deliberately ACTIVE-CONTEXT ONLY: it extracts from the focused
       // tab via `activeTab` (warning-free, highest quality), and the background
       // bg-fetch residual (cross-device pickups, bulk-import draining) is owned by
-      // the deferred server path `bracemark-extractor` instead. See
+      // `bracemark-extractor` or Expo's `all` mode instead. See
       // docs/link-extraction.md "the extension is active-context only". The api host
       // stays listed so the bearer-auth calls to bracemark-api keep their CORS exemption.
       host_permissions: [apiHost],

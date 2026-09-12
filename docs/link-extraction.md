@@ -62,10 +62,11 @@ so the posture is deliberately conservative:
   another device, draining a bulk import, and the per-host favicon cache that
   rides along. Each of those is a **new** disclosure of this device's IP to a site
   the user never pointed it at, so each waits for expo's `deviceExtractionMode` to
-  reach `all` (see _expo drains in the foreground_). A save on the **web** app is gated
-  regardless of the gesture — not because it's un-gestured, but because the only
-  way it can extract at all is through a **server**, which is the separate,
-  stricter `serverExtraction` opt-in below. So "we leak as little as possible"
+  reach `all` (see _expo drains in the foreground_). Extraction in the **web** app is gated
+  regardless of the gesture — not because a newly saved link is un-gestured, but because the
+  only way the browser can extract any pending link is through a **server**. The separate,
+  stricter `serverExtraction` opt-in covers both a new save once its row is visible and older
+  pending links as they come into view (see _the web drains in-page_). So "we leak as little as possible"
   stays the default, and no setting has to be found to get a title for the link
   you just saved on the device in your hand.
 - **…but "needs no opt-in" is not "cannot be declined."** The gestured path has
@@ -81,9 +82,10 @@ so the posture is deliberately conservative:
 - **The clients do the work, never the sync server.** `bracemark-api` stays a blind
   sync broker — it never fetches a user's URLs, so it never learns them. All
   extraction runs in clients the user already installed and trusts: the
-  **extension** and the (future) **Expo** app — or a client _orchestrating_ the
-  opt-in `bracemark-extractor` for a web-app save (it holds the key and writes the
-  result back; see _who extracts_). `bracemark-api` never fetches a URL either way.
+  **browser extension** and the **Expo app** — or `bracemark-web` _orchestrating_
+  the opt-in `bracemark-extractor` for the pending links it displays (it holds the
+  key and writes the result back; see _who extracts and what wakes it_).
+  `bracemark-api` never fetches a URL either way.
 - **No third-party extraction service.** A separate blind service can't write
   results back under E2E (it has no key), so it could only offer poll-and-hope;
   and it would leak every URL to a new party. Rejected on both privacy and cost.
@@ -140,10 +142,11 @@ The **`import`** row is the same shape one step further out: a bulk import does
 **no fetch of its own** — it seeds a provisional `extraction.title` from the
 export (a title only, never an image, hence `⚠️ export-provided` not
 `best-effort`: nothing is _fetched_, so nothing can be "best effort") and hands
-every link to the queue, later drained by `bracemark-extractor` / mobile background /
-an active-page client on first open (see _imported links_). So the share sheet and
-`import` are both **save contexts that seed a title, never extractors** — the ✅
-rows are the contexts that actually fetch.
+every link to a drain, later worked by `bracemark-extractor` or Expo at
+`deviceExtractionMode: 'all'` (see _imported links_). The extension has no
+background drain and merely opening an already-saved link does not recapture it.
+So the share sheet and `import` are both **save contexts that seed a title, never
+extractors** — the ✅ rows are the contexts that actually fetch.
 
 Two consequences baked into the design:
 
@@ -194,9 +197,9 @@ sweep** — its background service worker does sync only. The tier/queue machine
 below (`extractedBy`, the facet bookkeeping, the pending-work query) stays
 tier-agnostic and shared; it's the _bg-fetch arm in the extension_ that's dropped,
 not the model. The accepted cost: a link saved on another device isn't silently
-back-filled by a desktop extension in the background — it enriches when opened in
-the extension (active-page upgrade) or via `bracemark-extractor` (if opted in),
-otherwise it stays the _web-only gap_.
+back-filled by a desktop extension in the background, and opening that already-saved
+link in the extension does not trigger a recapture. It needs Expo set to `all` or
+`bracemark-extractor` (if opted in); otherwise it stays the _web-only gap_.
 
 **Why this _doesn't_ extend to the mobile app (`bracemark-expo`).** The instinct is
 that the same logic forbids background extraction on mobile too — it doesn't,
@@ -225,28 +228,31 @@ extension's design never turned on.** The shape of expo's drain — foreground
 first, `expo:bg` after, and why it never calls `bracemark-extractor` at all — is _expo
 drains in the foreground_.
 
-### who extracts: the client that did the save
+### who extracts and what wakes it
 
-Capability tiers say what each client _can_ do; this says _who actually does it_
-for a given link. The rule is simple and removes almost all cross-client
-coordination: **the client that performs the save extracts that link, at save
-time, from the best context it has.**
+Capability tiers say what each client _can_ do; the trigger says which pending
+links it actually works. There is deliberately no universal "only at save time"
+rule:
 
-| save happens on…            | extracts title+image via                          | tier        | cost / privacy                                                         |
-| --------------------------- | ------------------------------------------------- | ----------- | ---------------------------------------------------------------------- |
-| **extension** (address bar) | the live active tab                               | active-page | free, private, best — also gets screenshot/page-copy for free          |
-| **mobile / foreground**     | native fetch (no CORS) / a WebView                | active-page | free, private                                                          |
-| **web app**                 | **calls `bracemark-extractor`**, then writes back | server      | server sees the URL — opt-in, off by default (see _server extraction_) |
+| client / context                 | what wakes title+image extraction                                                 | tier        | cost / privacy                                                         |
+| -------------------------------- | --------------------------------------------------------------------------------- | ----------- | ---------------------------------------------------------------------- |
+| **browser extension save**       | every successful save kicks a capture from the live active tab                    | active-page | free, private, best                                                    |
+| **mobile / foreground save**     | `extractNow` fetches the link just saved; the share sheet hands it off to the app | active-page | free, private                                                          |
+| **mobile / foreground browse**   | at mode `all`, pending displayed links are fetched as they come into view         | active-page | free; each site sees the device's request                              |
+| **web app / visible links**      | with `serverExtraction` on, pending displayed links wake the in-page drain        | server      | server sees the URL — opt-in, off by default (see _server extraction_) |
+| **web or mobile / Generate all** | an explicit full-library pending scan                                             | server / fg | finite user-driven job                                                 |
 
-The third row is the correction to an easy misread of _the stance_: "the web app
-can't extract" is true only of **fetching** — a `bracemark-web` tab can't `fetch` an
-arbitrary URL (CORS). But the web app **holds the data key**, so it can still
+The web row corrects two easy misreads of _the stance_. First, "the web app
+can't extract" is true only of **fetching** — a `bracemark-web` tab can't `fetch`
+an arbitrary URL (CORS). But the web app **holds the data key**, so it can still
 _orchestrate_ extraction: `POST` the URL to `bracemark-extractor`, get plaintext
-title+image back, encrypt, and write the result into `extractions/`/`files/` itself.
-`bracemark-extractor` is a pure function (see _server extraction_); the web app is
-the client that drives it. So a web-app save is enriched at save time **if** the
-user has opted into server extraction — otherwise it stays the documented
-_web-only gap_.
+title+image back, encrypt, and write the result into `extractions/`/`files/`
+itself. Second, that work is **not attached only to the save call**. The
+`ExtractionProvider` observes pending state; once server extraction is enabled it
+works the pending rows currently displayed. A new save is covered when its row
+appears, and so are older, synced, and imported links as the user browses.
+**Generate all** switches the same provider to a finite full-library scan. With
+the opt-in off, all of those rows remain in the documented _web-only gap_.
 
 A mobile save reaches the active-page row above only from the **foreground** app.
 The mobile **share sheet** is the one save context that **doesn't** extract inline
@@ -264,53 +270,32 @@ Expo's `deviceExtractionMode` gates the un-gestured residual — links that arri
 by sync or import, and their favicons — at `all`; this row rides the default
 `saves`. Only the bottom position, `off`, stops it.
 
-**Preference order on a web-app save.** `bracemark-extractor` is the _fallback_, not
-the first choice. When a capable extension is present in the **same browser**, the
-more private path is to let _it_ extract — locally, so no server ever sees the URL
-— and that result reaches the web app's list through **synced `links/`**, the
-cross-client bus, with no direct handoff. So the order is **same-browser
-extension (local, private) → `bracemark-extractor` (opted-in, server sees the URL) →
-web-only gap**. The corollary: when the extension is installed, the _best_ save
-path is the extension itself (its toolbar button / context menu / shortcut) — it
-saves and extracts inline at **active-page** tier, the highest quality and most
-private, with zero cross-client coordination. Treat `bracemark-web`'s own save UI as
-the path for when no extension is there. Both clients are full participants in the
-bus: the web app syncs its library as the primary, full-sync client; the extension
-as a **selective-sync** client (see _what each client syncs_).
+**The save surface determines the immediate path.** Saving through the browser
+extension is the most private and highest-quality route: that save always kicks
+the active-tab capture. Saving through `bracemark-web` creates a pending link; if
+server extraction is on, the visible-row drain sends it to
+`bracemark-extractor`. There is no implemented web-to-extension handoff or
+presence preference that reroutes a web-app save through the extension. Both
+clients still participate in the synced bus: the web app is the primary,
+full-sync client, and the extension is a **selective-sync** client (see _what each
+client syncs_).
 
 Two consequences:
 
-- **The background queue is a safety net, not the primary path.** Because each
-  save is extracted by the client that made it, the `extractions/` pending
-  machinery (extract → write-back) exists only for the **residual**: a
-  save on a client that couldn't extract, later picked up by one that can
-  (cross-device), and **bulk imports** (see _imported links_). Steady-state, the
-  query is mostly empty.
-- **No web→extension _save handoff_ — but a content-script presence bridge is
-  right.** It's tempting to route a web-app save _directly_ to a same-browser
-  extension so the extension extracts it. Don't do that as a **data/save
-  handoff**: the cross-client bus is already **synced `links/` + `extractions/`**,
-  so a web-app save reaches the extension through sync — **cross-device, with no
-  extension-id handshake**. And a handoff has nothing to unlock anyway: the
-  extension is **active-context only** (no background bg-fetch — see _the extension
-  is active-context only_), so it enriches a synced URL **only if the user actually
-  opens it in a tab**, never headlessly — a save-channel can't change that. A direct
-  save-channel would be a worse-constrained version of a path we already have. Note
-  the extension's privacy advantage holds **only for `title+image`** (and
-  read-mode), and only once opened: **screenshot/page-copy have no server path at
-  all** (`bracemark-extractor` can't render), so those stay extension-active-tab only
-  regardless of any bridge. What a thin **content-script
-  bridge** _is_ for — and what the preference order above needs — is **presence
-  detection: is a capable extension installed and signed in?** The web app can't
-  choose "extension → server → gap" without knowing. Prefer a content-script
-  bridge over `externally_connectable` for this: it doubles as a cross-browser
-  presence signal (announce on injection / answer a ping) without hardcoding a
-  per-store extension id, and `externally_connectable` for web pages is
-  effectively Chrome-only. The bridge may also carry an optional **"sync now"
-  nudge** to collapse the idle-poll wait, and (deferred) a **favicon lookup**
-  answered from the browser's own icon cache (see _favicons_ — the `_favicon`
-  bridge) — never the URL, never the save itself
-  (see _the queue is a query_ for the cadence this feeds).
+- **Pending state is the shared handoff.** The extension and Expo save paths kick
+  their own capture, while the web and Expo browse drains observe the same
+  missing `titleImage` facet. That is what lets one loop cover a new visible save,
+  a cross-device pickup, and a **bulk import** without a separate queue (see
+  _imported links_).
+- **No web→extension _save handoff_.** It's tempting to route a web-app save
+  _directly_ to a same-browser extension so the extension extracts it. The
+  current product has no such channel: the web app writes the link, its own
+  displayed-row drain handles it when enabled, and ordinary sync eventually
+  puts the link in the extension's store. The extension is active-context only
+  and does not headlessly extract that synced URL. A future content-script
+  presence bridge is deferred; it may announce that the extension is installed,
+  carry a cheap "sync now" nudge, or return bytes already in the browser's favicon
+  cache (see _favicons_), but it must never carry the URL or the save itself.
 
 ### the data model: user data in `links/`, everything machine-derived in `extractions/`
 
@@ -598,7 +583,7 @@ fetch rejected below, third parties rejected below, no synced store) — so the
 designed answer is the monogram. The single invariant-respecting upgrade is
 icons that are **already on the device**: when a same-browser extension is
 present, the web app can ask over the **content-script presence bridge** (see
-_who extracts_) for a host's icon, and the extension answers with bytes from
+_who extracts and what wakes it_) for a host's icon, and the extension answers with bytes from
 the **browser's own favicon cache** (the same MV3 `_favicon` read as above),
 which land in `db.favicons` like any other fill. Zero network, zero new party
 — the only favicon source strictly more private than the proxy. No new trust
@@ -988,8 +973,10 @@ shape as the selection rule: parse per platform, agree afterwards.
 
 ### the queue is a query, not a structure
 
-Save-time extraction (see _who extracts_) handles the common case; this loop
-drains the **residual** — cross-device pickups and bulk imports. There is still
+Extension and Expo saves kick their own extraction, while the web app and Expo at
+`all` use this loop for every pending link in scope — including a newly saved row,
+cross-device pickups, and bulk imports (see _who extracts and what wakes it_).
+There is still
 **no separate queue object**: a client's extraction work loop is a query over
 synced state:
 
@@ -1014,7 +1001,7 @@ clients that can run against a queued URL with no live tab — the **Expo app**
 call; **`bracemark-web` itself drains in-page** (see _the web drains in-page_ below), and
 the **extension does not run a background drain at all** (it's active-context only —
 see _the extension is active-context only_), so its only role in this loop is the
-**active-context** capture on a save / on opening a page. All run against the **same
+**active-context** capture on a save. All run against the **same
 contract** — the reason the schema (including the shared `backoff()` curve) lives in
 `shared`.
 
@@ -1032,12 +1019,11 @@ replaces a fixed fast poll — a 1-minute alarm spends a request every minute to
 almost always find nothing, the worst case for a single-user app whose data
 changes a few times a day. An empty poll returning "nothing pending" is the
 **intended** steady state, not waste. Pair it with cheap local wake triggers so
-freshness doesn't wait on the long alarm — browser start, popup/icon open, a save
-performed _in_ the extension, and (if wired) the **content-script "sync now"
-nudge** a `bracemark-web` save can post to a same-browser extension (see _who
-extracts_ — presence bridge). **Don't reach for server push** for title+image:
-nothing is on the critical path for it (the saving client already did it), so
-there's no latency for push to remove. (Push only becomes interesting if the
+freshness doesn't wait on the long alarm — browser start, popup/icon open, and a save
+performed _in_ the extension. A deferred content-script bridge could add a
+**"sync now" nudge**, but it is not part of today's path (see _who extracts and
+what wakes it_). **Don't reach for server push** for title+image: enrichment is
+asynchronous and nothing blocks the save on it. (Push only becomes interesting if the
 extension ever becomes the authoritative background worker for a facet — which the
 active-page facets aren't.)
 
@@ -1186,20 +1172,23 @@ whereas `off` is a decision, and re-asking someone who picked "never contact the
 sites" is nagging. The dismissal is device-local while the setting it offers is
 synced, so a second phone still gets its one offer.
 
-⚠ **"The device that saved the link" describes the DEFAULT, not the product, and
-nine public surfaces stated it as the product.** `all` is the position where a
+⚠ **"The device that saved the link" describes the Expo DEFAULT, not the product.**
+`all` is the position where a
 device fetches pages for links it never saved — synced, imported, saved in the web
 app — as they come into view, so a sentence scoped to the save is wrong in two
 directions at once: it under-describes what leaves the phone (a privacy claim), and
 it sells a paid server for work a free phone already does. Both halves had shipped.
-The corrected set, which is also the list to re-read before writing a tenth: /faq's
-`previews` and `no-title-image`, /privacy's _Link previews_, the home page's hero
-caption, its Previews feature bullet and its trade-band Previews row, the /pricing
-previews pair, /extractor's opening paragraph (which owed a site operator the fact
-that a request need not follow a save), the web settings pane's description, and
-expo's free-plan subscription line. The rule any of them can be rebuilt from:
-**previews are scoped by a device and its setting, never by the save** — and
-wherever a surface says what covers imports and web saves, the phone at `all` is the
+The corrected set, which is also the list to re-read before adding another claim:
+the store description and paid-plan card; /faq's `previews` and `no-title-image`;
+/privacy's _Link previews_; the home page's screenshot caption, capture card,
+Previews feature bullet, and trade-band Previews row; the /pricing previews pair;
+/extractor's opening paragraph; the web links-page offer, settings pane, and
+free-plan subscription line; and Expo's preview offer, settings pane, and
+free-plan subscription line. The rule any of them can be rebuilt from:
+**the extension attempts extraction on its successful saves; Expo covers its own
+saves by default and displayed pending links at `all`; web covers displayed pending
+links when server extraction is enabled; and Generate all is the explicit full scan**.
+Wherever a surface says what covers imports and web saves, the phone at `all` is the
 free answer beside the paid one. Nothing catches a regression: the copy type-checks,
 lints, renders, and reads plausibly, which is how it survived the first public
 stretch.
@@ -1306,11 +1295,11 @@ already keys on the facet).
 **Imports are where `bracemark-extractor` stops being avoidable.** For a one-off web
 save it's a nicety; for a bulk import, client-only draining is genuinely weak. A
 web-only user gets thousands of bare URLs forever — and the **extension can't help
-here at all**: it's active-context only (no background bg-fetch — see _the extension
-is active-context only_), so it can only enrich an imported link if the user
-manually opens it in a tab, which nobody does for thousands of imports. That leaves
-**mobile background** (an `expo:bg` drain, also throttled and unreliable) or
-`bracemark-extractor`. A bulk import is also the natural **opt-in moment** ("enrich my
+here at all**: it has no background bg-fetch, and opening its popup on an
+already-saved imported link does not start extraction (see _the extension is
+active-context only_). That leaves Expo's foreground drain at `all` (plus any
+future, opportunistic `expo:bg` drain) or `bracemark-extractor`. A bulk import is
+also the natural **opt-in moment** ("enrich my
 whole library?" — in `bracemark-web` this is the explicit _enrich all_ drain, see _the
 web drains in-page_). So the honest framing: _interactive saves justify **avoiding**
 `bracemark-extractor`; imports justify **building** it_ — different workloads, different
@@ -1516,7 +1505,7 @@ browser that can't fetch for itself. It is a **separate app**, not a route in
   never a spoofed browser (`lib/safe-fetch.ts`), because a service that fetches
   strangers' sites anonymously and won't say who it is has picked the wrong side
   of its own argument. The consequence is that the UA **publishes a URL into the
-  access log of every site a user has ever saved from**, so `/extractor` is a
+  access log of every site this opt-in service fetches**, so `/extractor` is a
   route the marketing site owes them: what it is, why it came, the caps, and how
   to block it (`apps/bracemark-site/src/app/extractor/page.tsx`). Two things that
   page pins, neither of which anything can check for you:
@@ -1559,11 +1548,12 @@ takes the second, explicit opt-in.
 
 ### the web-only gap (a conscious stance)
 
-A user on **`bracemark-web` only** — no extension, no phone — **and opted out of
+A user on **`bracemark-web` only** — no browser extension, no phone — **and opted out of
 server extraction** gets **no enrichment**: a saved link stays a bare URL with
-whatever title they typed. (Opted _in_, the web app orchestrates `bracemark-extractor`
-at save time — see _who extracts_ — and there is no gap; that is the escape hatch
-below, realized.) Opted out, the gap is the direct, intended consequence of
+whatever title they typed. Opted _in_, the web app orchestrates
+`bracemark-extractor` for pending links as they appear on screen, including a
+newly saved row, and **Generate all** covers the rest (see _who extracts and what
+wakes it_); there is no gap. Opted out, the gap is the direct, intended consequence of
 "clients do the work, the server stays blind." It is **not** a bug to paper over:
 
 - it keeps the default maximally private (nothing fetches your URLs until you

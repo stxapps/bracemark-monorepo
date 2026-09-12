@@ -114,9 +114,10 @@ export const FAQ_GROUPS: FaqGroup[] = [
           <>
             Browser bookmarks don’t follow you off that browser. The hosted managers do follow you,
             but their servers hold your titles and addresses in readable form — that is what makes
-            their server-side search and recommendations possible in the first place. Bracemark
-            gives up those server-side features in exchange for a server that has nothing to read.
-            Search, previews and organisation all happen on your own devices instead.
+            their server-side search and recommendations possible in the first place. Our API never
+            receives your library in plaintext, so search and organisation happen on your own
+            devices. Link previews are fetched there too unless you choose the web app’s opt-in
+            preview server.
           </>
         ),
       },
@@ -250,9 +251,10 @@ export const FAQ_GROUPS: FaqGroup[] = [
             No. On a laptop it is the best way to save: the extension reads the page you are already
             looking at, so the title and preview image come from your own browser and nothing has to
             fetch that page on your behalf. On a phone or tablet, share into the iOS or Android app
-            from whatever app you are in — the link is saved on the spot, and the app fetches the
-            page itself, on the device, the next time you open it. Saving from the web app works
-            without either — see the previews question below for what changes.
+            from whatever app you are in — the link is saved on the spot and, with the default Link
+            previews setting, the app fetches the page itself the next time you open Bracemark.
+            Saving from the web app works without either — see the previews question below for what
+            changes.
           </>
         ),
       },
@@ -431,16 +433,16 @@ export const FAQ_GROUPS: FaqGroup[] = [
         q: 'If everything is encrypted, how do link previews work?',
         a: (
           <>
-            The device that saves the link does the fetching. The browser extension reads the tab
-            you are on; the mobile apps fetch the page themselves. Neither involves us, and both are
-            free. A link saved in the web app is the one no device can cover as it is saved, because
-            the browser blocks a page from fetching another site — and an imported link arrives with
-            no device having seen it either. Two things can fill those in. The mobile apps have a
-            previews setting that covers links they did not save: your phone fetches those pages
-            itself, as the links come into view, and it is free. Our server can do it instead, which
-            is an opt-in {PLAN_LABELS.plus} feature, off until you turn it on. The service that does
-            it holds no key, never sees your account, and stores nothing it read — only the IP
-            addresses its rate limiter needs to stop one source abusing it.
+            The browser extension reads the live tab and tries to fill in its title and preview
+            image every time you save. The mobile apps fetch pages themselves: by default they cover
+            links saved on that device, and the All links setting also covers synced and imported
+            links as they come into view. With All links selected, Generate all works through every
+            pending link. Those paths are free and involve no server of ours. In the web app, the
+            browser blocks one page from fetching another site. Turn on the opt-in{' '}
+            {PLAN_LABELS.plus} preview server and new saves, older links, synced links and imports
+            fill in as you browse; Generate all covers the rest. The service holds no key and
+            receives no account identity. It stores no URL or page content; its rate limiter briefly
+            holds the requesting IP address to stop one source abusing it.
           </>
         ),
       },
@@ -947,13 +949,14 @@ export const FAQ_GROUPS: FaqGroup[] = [
         q: 'Why don’t some of my links show a title or image?',
         a: (
           <>
-            A preview comes from one of your own devices, and it takes a moment to arrive. Links
-            saved in the web app are the exception — the browser won’t let a web page fetch another
-            site — so those show the bare address until something else fetches them: the free fixes
-            are the browser extension, which previews what you save as you save it, and a phone with
-            Link previews set to cover all links, which fills in what is already there. The opt-in{' '}
-            {PLAN_LABELS.plus} extraction has our server do it instead. Some pages give nothing up
-            whichever device asks, and no plan changes that: anything behind a login or a paywall, a
+            A preview takes a moment to arrive. The browser extension tries to fill one in whenever
+            you save a tab. The mobile apps fetch on the device: the default covers links saved
+            there, and setting Link previews to All links also fills in synced and imported links as
+            they come into view. With All links selected, Generate all works through everything
+            still pending. In the web app, the browser won’t let a web page fetch another site, so
+            the opt-in {PLAN_LABELS.plus} preview server fills in new saves and pending links as you
+            browse; its Generate all button covers the full library. Some pages give nothing up
+            whichever path asks, and no plan changes that: anything behind a login or a paywall, a
             PDF or another file that isn’t a web page, a site that turns away automated requests,
             and pages whose text is assembled by JavaScript after they load. We stop retrying those,
             so they land in the failed count under Link previews in Settings rather than a queue

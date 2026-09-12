@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 // The page every outbound fetch promises. `bracemark-extractor` identifies itself
 // as `bracemark-extractor/1.0 (+https://bracemark.com/extractor)` on EVERY request
 // (apps/bracemark-extractor/src/lib/safe-fetch.ts), so this URL is printed in the
-// logs of every site a user has ever saved a link from. It existed as a promise
+// logs of every site this service fetches. It existed as a promise
 // before it existed as a route.
 //
 // The audience is therefore NOT a prospective customer. It is a sysadmin who
@@ -209,7 +209,7 @@ const NEVER: [string, string][] = [
   ],
   [
     'Come back for the rest of your site',
-    'One saved link is one document. It has no queue of its own to add the rest of your pages to, no schedule to revisit this one on, and nothing that turns a link it found in your markup into a second request. The only thing that brings it back to your site is another person choosing another of your pages.',
+    'One request names one saved document. The fetcher has no queue of its own, never follows links it finds and never schedules a revisit. It returns only when a person’s Bracemark client asks for a saved address again — for another pending link or a retry of an earlier attempt.',
   ],
   [
     'Feed a dataset or a model',
@@ -222,7 +222,7 @@ export default function Page() {
     <PageShell
       eyebrow="Bot"
       title="Someone saved a link to your page."
-      lede="That is the whole reason this fetcher knocked. It read a title and a preview image out of your document, once, because a person asked it to — and here is everything about it that an access log won’t tell you."
+      lede="That is the whole reason this fetcher knocked. A person asked it to look for a title and preview image in your document — and here is everything about it that an access log won’t tell you."
     >
       <div className={cn('space-y-14')}>
         {/* The string they searched for, given the weight /support gives its
@@ -260,30 +260,32 @@ export default function Page() {
                 us their addresses in batches (docs/link-extraction.md, _imported
                 links_). Two hundred saved pages of one site is two hundred requests
                 to it, arriving together, and an operator who was told there is no
-                queue would reasonably call that a crawl. The paragraph below says
-                it in the other voice instead — whose queue it is, and what decides
-                its size — which costs us nothing, because every one of those
-                addresses was still chosen by a person. This page's own rule
-                applies: a behaviour promoted to a never is a promise nobody agreed
-                to make. */}
+                queue would reasonably call that a crawl. One pass over two hundred
+                saved pages is two hundred document requests, and transient failures
+                can add retries. The paragraph below says it in the other voice
+                instead — whose queue it is, and what decides its size — which costs
+                us nothing, because every one of those addresses was still chosen by
+                a person. This page's own rule applies: a behaviour promoted to a
+                never is a promise nobody agreed to make. */}
             <p>
               There is no schedule and no index behind it. It never follows a link out of a page it
               fetched, never asks for a second page from your site on its own initiative, and never
               returns to see whether anything changed. Every address it asks for is one a person
               saved by hand or brought with them from another bookmark manager — nothing here
-              discovers a page. One person saving one link is one request to you, plus one for a
-              preview image if your document names one. The person’s browser cannot read that image
-              cross-origin any more than it could read your page — that’s why we need the second
-              request.
+              discovers a page. One extraction attempt for one saved link makes one document request
+              to you, plus one for a preview image if your document names one. A transient failure
+              can be retried later. The person’s browser cannot read that image cross-origin any
+              more than it could read your page — that’s why we need the second request.
             </p>
             <p>
               There is a backlog, though, and it is theirs rather than ours. Links saved before
               previews were turned on, and anything brought in by an import, sit unfetched until
               their owner asks for them — so a request can arrive long after the save, and several
-              can arrive together: a drain hands us addresses in batches — the cap on one
-              request is in the table below — and we fetch a batch in parallel. Someone importing two hundred of your
-              pages means two hundred requests, close together, once. What decides that is the size
-              of one person’s library, not a schedule of ours.
+              can arrive together: a drain hands us addresses in batches — the cap on one request is
+              in the table below — and we fetch a batch in parallel. Someone importing two hundred
+              of your pages means one request for each page, close together; transient failures may
+              be retried later. What decides the initial batch is the size of one person’s library,
+              not a crawl or index of ours.
             </p>
             {/* Deliberately NOT "once a title has come back it is never fetched
                 again". That was a never about BEHAVIOUR on the one page whose

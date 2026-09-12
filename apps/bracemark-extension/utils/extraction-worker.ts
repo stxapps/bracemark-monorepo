@@ -15,7 +15,7 @@ import { capturePageCopy, captureReadMode, captureScreenshot, captureTitleImage 
 // DERIVED from it by `tierOf()`, so there's no stored `tier` field. The extension only
 // ever captures from the focused live DOM = foreground, active-page tier. (There is no
 // `extension:bg` value: the extension is active-context only — no `<all_urls>` grant, no
-// background bg-fetch sweep; that residual is owned by the deferred `bracemark-extractor`.
+// background bg-fetch sweep; that residual is owned by `bracemark-extractor` or Expo at `all`.
 // See docs/link-extraction.md "the extension is active-context only".)
 const EXTRACTED_BY = 'extension:fg';
 

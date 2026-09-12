@@ -195,16 +195,14 @@ const TRADEOFFS: [string, string][] = [
   // Second pass, on the half the first one left exposed. The FRAMING was made
   // future-proof — rot is a property of the web and survives whatever ships — and
   // then the sentence under it closed a LIST: "the address, the title, the preview
-  // image and whatever you write about it" is what a save captures TODAY, and it
-  // stops being the whole answer the day read mode, a screenshot or a page copy
-  // lands. An entry whose standing rests on volunteering things cannot be the one
-  // that quietly understates the product a year from now. "Whatever Bracemark could
-  // read of the page at the time" is open at the right end and closed at the one
-  // that matters: however much a save captures, it is a capture, and the page it
-  // came from is still somebody else's to change.
+  // image and whatever you write about it" understated future facets and implied
+  // every surface captured them synchronously at save time. An entry whose standing
+  // rests on volunteering things cannot quietly understate the product or collapse
+  // its asynchronous preview paths. "Any preview data Bracemark extracts" stays
+  // open at the right end and says when it exists without inventing one trigger.
   [
     'A saved link can rot',
-    'A save keeps the address and whatever Bracemark could read of the page at the time — its title, its preview image, and anything you write about it. The page itself is on someone else’s server: if it changes or goes away, what the library keeps is your record of the web, not the web.',
+    'A saved link keeps the address, anything you write about it and any preview data Bracemark extracts — at save time or later. The page itself is on someone else’s server: if it changes or goes away, what the library keeps is your record of the web, not the web.',
   ],
 ];
 

@@ -285,28 +285,28 @@ export default function Page() {
           crash-reporting library of ours.
         </p>
 
-        <h3>Link previews, if you turn them on</h3>
+        <h3>How link previews are fetched</h3>
         <p>
-          Titles and preview images are normally fetched by the device that saved the link — the
-          browser extension reads the tab you are on, and the mobile apps fetch the page themselves.
-          Neither involves our servers. The mobile apps can also cover links they did not save —
-          ones that arrived from another of your devices, or from an import — if you move their Link
-          previews setting up to all links. Those pages are then fetched from your phone, at your
-          address, as the links come into view while you browse. That position is not the default,
-          and it lives in the app’s own settings. The browser extension asks for the narrowest
-          permission that does that job: it can read a tab only in the moment you click to save it,
-          it holds no standing access to your browsing, and the only site it talks to is our own
-          API.
+          The browser extension reads the live tab and tries to fill in its title and preview image
+          every time you save. The mobile apps fetch pages themselves: by default they cover links
+          saved on that device, and the All links setting also covers links synced from another
+          device or added by import as they come into view. With All links selected, Generate all
+          works through every pending link. Neither path involves our servers. The browser extension
+          asks for the narrowest permission that does its job: it can read a tab only in the moment
+          you click to save it, and it holds no standing access to your browsing. Its background
+          service talks only to our API; during the save, code in that tab may fetch the preview
+          image named by the page.
         </p>
         <p>
-          For links saved in the web app, browsers do not allow a page to fetch another site, so
-          there is an <strong>opt-in {PLAN_LABELS.plus} setting</strong> that lets our extraction
-          service fetch the page on your behalf. It is off unless you turn it on. When it is on,
-          that service receives the address you saved, fetches the page, returns what it read there
-          — the title and the preview image — and keeps nothing: it stores no URLs, writes none to
-          its logs, holds no key, and is not told which account asked. Its rate limiter does record
-          IP addresses, so that a single source cannot abuse it. The same service is described from
-          the other side — for the people who run the sites it fetches — on{' '}
+          Browsers do not allow one web page to fetch another site, so the web app has an{' '}
+          <strong>opt-in {PLAN_LABELS.plus} setting</strong> that lets our extraction service do it.
+          It is off unless you turn it on. When it is on, newly saved links and older pending links
+          are sent as they come into view while you browse; Generate all sends every pending link.
+          The service receives the address, fetches the page, returns the title and preview image,
+          and keeps no page data: it stores no URLs, writes none to its logs, holds no key, and is
+          not told which account asked. Its rate limiter briefly holds the requesting IP address so
+          that a single source cannot abuse it. The same service is described from the other side —
+          for the people who run the sites it fetches — on{' '}
           <Link href="/extractor">its own page</Link>, including the caps it holds itself to and how
           to turn it away.
         </p>

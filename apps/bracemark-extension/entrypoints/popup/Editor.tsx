@@ -23,8 +23,8 @@ import { WEB_APP_URL } from '@/utils/web-app-url';
 // screen shows, so the save happens in place rather than swapping one screen for
 // another. Below it the shared ListSelect / TagsField pickers (web-ui — the same
 // pieces bracemark-web's quick-add popover and edit dialog render) and an optional
-// note. Save writes one `links/{id}.enc`, kicks the cheap active-tab extraction
-// (titleImage + readMode, fire-and-forget), and hands the created link up so the
+// note. Save writes one `links/{id}.enc`, kicks the cheap active-tab titleImage
+// extraction (fire-and-forget), and hands the created link up so the
 // popup shows the complete page.
 //
 // There is no URL FIELD, and that's the difference between this editor and
