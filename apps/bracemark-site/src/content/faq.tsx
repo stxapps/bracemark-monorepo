@@ -114,8 +114,8 @@ export const FAQ_GROUPS: FaqGroup[] = [
           <>
             Browser bookmarks don’t follow you off that browser. The hosted managers do follow you,
             but their servers hold your titles and addresses in readable form — that is what makes
-            their server-side search and recommendations possible in the first place. Our API never
-            receives your library in plaintext, so search and organisation happen on your own
+            their server-side search and recommendations possible in the first place. Each link is
+            encrypted on your device before it syncs, so search and organisation happen on your own
             devices. Link previews are fetched there too unless you choose the web app’s opt-in
             preview server.
           </>
@@ -252,7 +252,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
             looking at, so the title and preview image come from your own browser and nothing has to
             fetch that page on your behalf. On a phone or tablet, share into the iOS or Android app
             from whatever app you are in — the link is saved on the spot and, with the default Link
-            previews setting, the app fetches the page itself the next time you open Bracemark.
+            previews setting, the app fetches the page itself the next time you open it.
             Saving from the web app works without either — see the previews question below for what
             changes.
           </>

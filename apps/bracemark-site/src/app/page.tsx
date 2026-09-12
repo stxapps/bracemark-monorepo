@@ -601,7 +601,7 @@ const CAPTURE = [
     // actually comes from. "Itself" is load-bearing and not a filler word: the
     // app does that fetch, NOT our server, which is the entire difference between
     // this card and the web-app card next to it.
-    body: 'Share into Bracemark from any app — a browser, a podcast player, a social app. It saves what that app hands over, sealed on the handset before it syncs. With the default Link previews setting, the app fills in the title and preview image itself the next time you open Bracemark.',
+    body: 'Share into Bracemark from any app — a browser, a podcast player, a social app. It saves what that app hands over, sealed on the handset before it syncs. The app fills in the title and preview image itself the next time you open it.',
   },
   {
     name: 'The web app',
@@ -1572,7 +1572,7 @@ export default function Page() {
       <Band
         label="Compared with"
         title="What we gave up to get here."
-        lede="Hosted bookmark managers keep titles and addresses readable to run server-side features. Our API never receives your library in plaintext, so search stays on your device and server previews are a separate opt-in. Here is the whole trade."
+        lede="Hosted bookmark managers keep titles and addresses readable to run server-side features. Each link is encrypted on your device before it syncs, so search stays on your device and server previews are a separate opt-in. Here is the whole trade."
       >
         {/* One `dt` and two `dd`s per row: one term, two descriptions, which is
             what a definition list is for and what makes this survive being
