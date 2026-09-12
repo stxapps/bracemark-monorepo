@@ -54,6 +54,16 @@ import { useLinksViewActions, useLinksViewState } from './view-state-provider';
 // Past this many pixels we treat the pane as "scrolled away from the top", so a
 // background sync is staged behind the refresh pill (see view-state-provider).
 const SCROLL_TOP_THRESHOLD = 8;
+// FlashList v2 maintains the first visible row by default when data is
+// prepended. That is useful once the user has scrolled, but at the top of this
+// newest-first list it keeps the OLD first row in place and moves the newly
+// saved link above the viewport. A short list then has no scrollable blank tail
+// to drag against, so the link appears only after a remount resets the offset.
+// Use the same boundary as `scrolled`: an already-at-top view follows new links
+// to offset 0, while a genuinely scrolled view keeps its reading position.
+const MAINTAIN_VISIBLE_CONTENT_POSITION = {
+  autoscrollToTopThreshold: SCROLL_TOP_THRESHOLD,
+};
 
 // Which rows count as "displayed" for the extraction drain (web's virtualizer
 // window, in FlashList terms): ANY sliver on screen counts (threshold 0 — a
@@ -380,6 +390,7 @@ function UnlockedMain() {
             data={links}
             extraData={itemExtra}
             numColumns={numColumns}
+            maintainVisibleContentPosition={MAINTAIN_VISIBLE_CONTENT_POSITION}
             // The keyboard pair, and this list is where it matters most: the
             // search box (links/search-bar.tsx) is `autoFocus`, so the common
             // state is a keyboard up over the very results it just filtered.

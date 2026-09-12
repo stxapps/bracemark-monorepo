@@ -870,12 +870,12 @@ because Show All is the view the figure's alt text describes.
 
 ### state today
 
-| surface  | status                                                                    |
-| -------- | ------------------------------------------------------------------------- |
-| web      | **5 specs, passing** — account (reload, sign-out), links, lists           |
-| native   | 4 flows, **executed on an iOS dev build**; `add-link` fails on an app bug |
-| contract | web→mobile **passing**; mobile→web blocked by the same app bug            |
-| vectors  | **passing** on device                                                     |
+| surface  | status                                                                     |
+| -------- | -------------------------------------------------------------------------- |
+| web      | **5 specs, passing** — account (reload, sign-out), links, lists            |
+| native   | 4 flows; `add-link`'s two-insert regression **passes on an iOS dev build** |
+| contract | web→mobile **passing**; mobile→web needs a fresh full run                  |
+| vectors  | **passing** on device                                                      |
 
 They have now been run, and the earlier note that "their first real run will find
 things" turned out to be the accurate part of this doc. It found four, and the
@@ -890,14 +890,17 @@ at index 0 after a rejected submit, so it cleared nothing and the real code was
 typed IN FRONT of the wrong one). All three presented as the app being broken,
 which is the reason each carries its reasoning inline rather than a fix.
 
-The app one is real and open: **a link saved on the device does not appear in the
-list until the app is relaunched.** The write itself is fine — the duplicate
-check sees the link immediately ("You've already saved this link"), and a cold
-start shows it — so this is the list not reacting to a local insert, not a lost
-write ([client-queries.md](./client-queries.md)). It fails `flows/add-link.yaml`
-and blocks the mobile→web contract leg, which cannot write its link on the phone
-and then read it in the browser. It is deliberately **not** worked around with a
-relaunch in the flow: the flow is asserting exactly what a user would see.
+The app one was real and is fixed: **a link saved on the device stayed absent
+until the app was relaunched.** The write itself was fine — the duplicate check
+saw the link immediately, and a cold start showed it — but `useLiveRead` filtered
+expo-sqlite events by `databaseName`. Native reports the attached schema there
+(`main`); the database filename is in `databaseFilePath`, so every real insert
+event was discarded. The hook now filters the file path instead.
+
+`flows/add-link.yaml` keeps the failure shape intact: it saves one link into an
+empty account (mounting FlashList), then saves a second into that already-mounted
+list and asserts both without a relaunch or refresh. Persistence alone is not a
+pass; the screen where the user saved the link has to update immediately.
 
 Nothing here runs automatically. There is still no CI ([testing.md](./testing.md)),
 and the only git hook guards `internal/`.

@@ -547,7 +547,10 @@ changes is mechanical, and only the substrate forces it:
 - **liveQuery → `useLiveRead`, and no zone-echo.** Reactivity comes from
   expo-sqlite's `addDatabaseChangeListener` via the `useLiveRead` hook (which
   re-runs the whole read on any change to the tables it names, coarse-grained by
-  table), not from Dexie tracking which index ranges a querier touched. One
+  table), not from Dexie tracking which index ranges a querier touched. The
+  listener identifies this store by `databaseFilePath`; `databaseName` is the
+  attached SQLite schema (`main`), not the filename, so filtering that field by
+  `DB_NAME` silently drops every native write event. One
   native exception is load-bearing: SQLite's optimized bare `DELETE FROM table`
   does not call the `sqlite3_update_hook` behind that listener. Whole-store
   writers keep the fast truncate path and call `invalidateLiveReads` once after
@@ -577,6 +580,15 @@ changes is mechanical, and only the substrate forces it:
   anything — though a new `renderItem` costs a render of every mounted cell, see
   the next rule; what it fixes at construction is `viewabilityConfig` and whether
   a viewability callback exists at all.)
+- **A newest-first insert follows the list's top-edge state.** FlashList v2
+  maintains the first visible row by default when data is prepended. With no
+  `autoscrollToTopThreshold`, saving a link while already at offset 0 therefore
+  keeps the old first row in place and shifts the new row above the viewport; a
+  short list may then have no scrollable blank tail from which to recover it.
+  `main.tsx` sets `maintainVisibleContentPosition.autoscrollToTopThreshold` to
+  the same 8-point boundary used for `scrolled`: an at-top pane follows the new
+  row to offset 0, while a pane the user actually scrolled keeps its reading
+  position and stages incoming results behind the refresh pill.
 - **Mounted items re-render off `extraData` and nothing else.** A FlashList v2
   cell is a `React.memo` that re-renders when its item, index or layout moves, or
   when `extraData` or `renderItem` changes identity. So `main.tsx`'s `renderItem`

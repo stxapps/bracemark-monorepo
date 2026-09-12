@@ -1,7 +1,8 @@
-# Add a link from the FAB and see it in the list.
+# Add two links from the FAB and see both in the already-mounted list.
 #
 #   maestro test mobile/flows/add-link.yaml -e USERNAME=… -e PASSWORD=… \
-#     -e LINK_URL=https://e2e-local.invalid/added-on-device
+#     -e LINK_URL=https://e2e-local.invalid/first-on-device \
+#     -e LINK_URL_2=https://e2e-local.invalid/second-on-device
 #
 # LINK_URL should be unresolvable (`.invalid`), for the same reason the web specs
 # use one: bracemark-extractor's SSRF guard blocks every local address with no
@@ -10,7 +11,8 @@
 # typed, never on what was extracted — docs/e2e.md, "what e2e may not assert".
 appId: com.bracemark.app
 env:
-  LINK_URL: 'https://e2e-default.invalid/added-on-device'
+  LINK_URL: 'https://e2e-default.invalid/first-on-device'
+  LINK_URL_2: 'https://e2e-default.invalid/second-on-device'
 ---
 - runFlow:
     file: subflows/sign-in.yaml
@@ -42,3 +44,20 @@ env:
 - extendedWaitUntil:
     visible: ".*${LINK_URL.replace('https://', '')}.*"
     timeout: 20000
+
+# The first insert mounts FlashList from the empty state; the second exercises
+# an update of that already-mounted, newest-first list. Keep this assertion
+# relaunch-free: persistence alone is not enough — the mounted read must react
+# immediately. Maestro's accessibility visibility is not a precise scroll-offset
+# assertion, so the list's at-top position contract is verified on the native
+# viewport rather than inferred from this selector.
+- tapOn: 'Add link'
+- tapOn:
+    id: 'add-link-url'
+- inputText: ${LINK_URL_2}
+- tapOn:
+    id: 'add-link-save'
+- extendedWaitUntil:
+    visible: ".*${LINK_URL_2.replace('https://', '')}.*"
+    timeout: 20000
+- assertVisible: ".*${LINK_URL.replace('https://', '')}.*"
