@@ -1,7 +1,14 @@
 import React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 
-import { DestroyConfirm, RenameField, useDestroyRequest } from './table-kit';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@stxapps/web-ui/components/ui/dropdown-menu';
+
+import { DestroyConfirm, RenameField, useDestroyRequest, useRowMenuFocus } from './table-kit';
 
 // Pins the delete flow the Lists and Tags tables share. Each case is a failure
 // with no other symptom: a refusal a screen away from the row that asked (the bug
@@ -181,4 +188,82 @@ test('a blank name is not a rename, and never reaches the mutation', async () =>
 
   expect(onRename).not.toHaveBeenCalled();
   expect(renameField().value).toBe('Reading');
+});
+
+// jsdom implements neither of the two APIs Radix's popper reaches for at mount,
+// and neither is a subject here — they are seams, exactly as web-ui's shared
+// jsdom stubs are for the specs in that package (this app has no route to those:
+// `@stxapps/web-ui` exports components, not its testing folder).
+beforeAll(() => {
+  (globalThis as { ResizeObserver?: unknown }).ResizeObserver ??= class {
+    observe = noop;
+    unobserve = noop;
+    disconnect = noop;
+  };
+  Element.prototype.hasPointerCapture ??= () => false;
+  Element.prototype.setPointerCapture ??= noop;
+  Element.prototype.releasePointerCapture ??= noop;
+});
+
+function noop(): undefined {
+  return undefined;
+}
+
+const flushTimers = () => act(async () => void (await new Promise((r) => setTimeout(r, 0))));
+
+// The row kebab both tables render, reduced to the two items whose close-focus
+// differs: Rename hands focus to the inline field, everything else hands it back
+// to the trigger.
+function RowMenuHarness({ onFocusName }: { onFocusName: () => void }) {
+  const { triggerRef, onRenameSelect, onCloseAutoFocus } = useRowMenuFocus(onFocusName);
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger ref={triggerRef}>List actions</DropdownMenuTrigger>
+      <DropdownMenuContent onCloseAutoFocus={onCloseAutoFocus}>
+        <DropdownMenuItem onSelect={onRenameSelect}>Rename</DropdownMenuItem>
+        <DropdownMenuItem onSelect={noop}>Move up</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+const openRowMenu = async (onFocusName: () => void = noop) => {
+  render(<RowMenuHarness onFocusName={onFocusName} />);
+  const trigger = screen.getByRole('button', { name: 'List actions' });
+  const focus = jest.spyOn(trigger, 'focus');
+  // Opened from the keyboard: jsdom has no PointerEvent, so Radix's
+  // pointer-down path never sees a button 0 to toggle on.
+  fireEvent.keyDown(trigger, { key: 'Enter' });
+  await screen.findByRole('menu');
+  focus.mockClear();
+  return focus;
+};
+
+// Radix restores focus to the trigger on close with a bare `.focus()`, and a
+// focus that scrolls is a focus that scrolls the page AWAY from the notice the
+// op just posted at the top of the pane — the restore runs last, so it wins.
+// jsdom has no layout to scroll, so the argument IS the assertion here; the
+// movement it prevents was driven in a browser (see the hook, and
+// docs/editors.md).
+test('closing the row menu hands focus back to the trigger without scrolling', async () => {
+  const focus = await openRowMenu();
+
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Move up' }));
+
+  // Radix dispatches the close-focus event from a timeout after the content
+  // unmounts — the same timeout its own trigger restore would have run in.
+  await flushTimers();
+  expect(focus).toHaveBeenCalledTimes(1);
+  expect(focus).toHaveBeenCalledWith({ preventScroll: true });
+});
+
+test('Rename keeps the field, not the trigger — the menu closing never takes it back', async () => {
+  const onFocusName = jest.fn();
+  const focus = await openRowMenu(onFocusName);
+
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Rename' }));
+
+  await flushTimers();
+  expect(onFocusName).toHaveBeenCalledTimes(1);
+  expect(focus).not.toHaveBeenCalled();
 });

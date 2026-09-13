@@ -99,7 +99,7 @@ import {
   useDestroyRequest,
   useOpRunner,
   useRenameFocus,
-  useRenameOnClose,
+  useRowMenuFocus,
 } from '../../_components/table-kit';
 import {
   excludeActiveDescendants,
@@ -196,12 +196,13 @@ function RowActions({
     setOpen(false);
   };
 
-  const { onRenameSelect, onCloseAutoFocus } = useRenameOnClose(onFocusName);
+  const { triggerRef, onRenameSelect, onCloseAutoFocus } = useRowMenuFocus(onFocusName);
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
         <Button
+          ref={triggerRef}
           variant="ghost"
           size="icon-sm"
           className="text-muted-foreground"

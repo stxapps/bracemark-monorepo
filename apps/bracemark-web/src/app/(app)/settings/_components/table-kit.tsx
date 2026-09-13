@@ -389,23 +389,59 @@ export function useRenameFocus() {
   return { nameRef, focusName };
 }
 
-// The menu half of that dance. Rename can't focus the field from onSelect: Radix
-// closes the menu and returns focus to the trigger on close (onCloseAutoFocus),
-// which fires after us and steals it back. So onSelect only records the intent,
-// and the focus moves from within onCloseAutoFocus itself — preventing Radix's
-// default trigger-refocus. Spread the two onto the Rename item and the content.
-export function useRenameOnClose(onFocusName: () => void) {
+// The menu half of that dance, and the row kebab's whole close-focus policy: it
+// owns where focus lands when the menu closes, for BOTH ways it can close.
+//
+// Rename can't focus the field from onSelect: Radix closes the menu and returns
+// focus to the trigger on close (onCloseAutoFocus), which fires after us and
+// steals it back. So onSelect only records the intent, and the focus moves from
+// within onCloseAutoFocus itself — preventing Radix's default trigger-refocus.
+// Spread the three onto the Rename item, the content, and the trigger.
+//
+// THE OTHER CLOSE IS THE ONE THAT MOVES THE PAGE, and it is why the trigger is
+// refocused here by hand rather than left to Radix. Radix's own restore is a bare
+// `triggerRef.current?.focus()` (react-dropdown-menu's DropdownMenuContent), and
+// a focus with no `preventScroll` SCROLLS THE TRIGGER BACK INTO VIEW — which for
+// a kebab deep in the Lists table means scrolling away from the notice at the top
+// of the pane that the op fired from this menu just posted. It also lands second:
+// the restore runs from a `setTimeout(…, 0)` after the content unmounts, while
+// SettingsNotice scrolls from the effect that rendered the message, so the yank
+// both cancels the in-flight smooth scroll and wins. Driven in Chromium at this
+// geometry — scroller at 1493, notice a screen above: with Radix's restore the
+// scroller ends at 1493 and the notice sits 1384px off the top of the fold; with
+// `preventScroll: true` it ends at 37 with the notice at y=72, exactly where the
+// scroll alone puts it (settings/layout.tsx's `scroll-pt-18`).
+//
+// So EVERY close refocuses the trigger without scrolling. Nothing is lost by
+// that: the trigger was on screen when it was clicked, so the scroll only ever
+// had somewhere to go when something else had moved the page — and the only
+// thing that moves it is the message the user needs to read. Rename hid this for
+// as long as it was the only failure anyone saw: its write commits on BLUR, a
+// beat after the menu closed, so its notice scrolls into a page nothing is about
+// to pull back. A move fails while the menu is still closing.
+//
+// The toolbar SortMenu below deliberately doesn't take this: its trigger sits in
+// the same block as the notice, so a restore can't scroll anywhere the notice
+// isn't. A menu whose trigger can be a screen away from the notice owes it.
+export function useRowMenuFocus(onFocusName: () => void) {
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const requested = useRef(false);
 
   return {
+    triggerRef,
     onRenameSelect: () => {
       requested.current = true;
     },
     onCloseAutoFocus: (e: Event) => {
-      if (!requested.current) return;
-      requested.current = false;
+      // Ours or Radix's, never both: preventing the default is what stops the
+      // scrolling restore, so this has to put focus somewhere itself.
       e.preventDefault();
-      onFocusName();
+      if (requested.current) {
+        requested.current = false;
+        onFocusName();
+        return;
+      }
+      triggerRef.current?.focus({ preventScroll: true });
     },
   };
 }

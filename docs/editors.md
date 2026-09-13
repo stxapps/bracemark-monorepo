@@ -304,6 +304,28 @@ draft; each keystroke commits or reverts in place):
     belongs to the frame, and the kit stays layout-ignorant. Any surface that
     puts a notice under a sticky bar owes the same padding on its scroller.
 
+    **And the menu the op fired from has to let go of the page.** Radix returns
+    focus to a menu's trigger on close with a bare `.focus()`, which SCROLLS
+    that trigger back into view — so a move launched from a row kebab a screen
+    below the notice scrolled to the notice and was then dragged straight back
+    to the row, the smooth scroll cancelled mid-flight (the restore runs from a
+    timeout after the content unmounts, so it always lands second). Only the ops
+    fired FROM the menu could show it: rename commits on blur, a beat after the
+    menu is gone, which is why every other failure looked fine and move looked
+    like the scroll had never fired. The row kebabs therefore own their whole
+    close-focus — `useRowMenuFocus` in the web kit's `table-kit.tsx` prevents
+    Radix's restore and refocuses the trigger with `preventScroll: true`,
+    keeping the Rename branch that already handed focus to the inline field.
+    Expo has nothing to mirror here: its menus restore no focus of their own,
+    which is why its Rename already focused the field from a ref.
+    Nothing is lost: the trigger was on screen when it was clicked, so the
+    restore only ever had somewhere to scroll when the notice had moved the page
+    first. The toolbar's Sort menu doesn't take this and doesn't need it — its
+    trigger sits in the same block as the notice. Any menu whose trigger can be
+    a screen away from a notice owes it. Both branches are spec'd
+    (`table-kit.spec.tsx`); the movement itself was driven in a browser, since
+    jsdom has no layout to scroll.
+
   - `RenameField` **puts the stored name back when the commit doesn't land.**
     The field is uncontrolled and the call site keys it on the STORED name, so
     a failed write changes nothing and the row goes on displaying a name no

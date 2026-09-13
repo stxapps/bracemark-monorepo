@@ -58,7 +58,7 @@ import {
   useDestroyRequest,
   useOpRunner,
   useRenameFocus,
-  useRenameOnClose,
+  useRowMenuFocus,
 } from '../../_components/table-kit';
 
 // The per-row overflow menu: rename, reorder within the group, delete. Rename
@@ -82,12 +82,13 @@ function RowActions({
   onMoveDown: () => void;
   onDelete: () => void;
 }) {
-  const { onRenameSelect, onCloseAutoFocus } = useRenameOnClose(onFocusName);
+  const { triggerRef, onRenameSelect, onCloseAutoFocus } = useRowMenuFocus(onFocusName);
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button
+          ref={triggerRef}
           variant="ghost"
           size="icon-sm"
           className="text-muted-foreground"
