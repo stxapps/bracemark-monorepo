@@ -4,11 +4,11 @@
 // the selected links' tags, saved as a DIFF against that seed — added tags are
 // added to every link, removed seed tags removed from every link, and a tag
 // only SOME links carry is never shown as selected and never touched, so a
-// bulk edit can't silently strip tags the user couldn't see). Web puts its
-// TagsField (trigger + popover) in here; this renders the picker BODY the
-// add/edit screens' TagsField opens (components/links/tags-command) directly,
-// because a dialog holding nothing but a tag field that opens a second dialog
-// would be one tap and one layer too many. So bulk retag gets the same filter
+// bulk edit can't silently strip tags the user couldn't see). Like web, this
+// renders the picker BODY the add/edit screens' TagsField opens
+// (components/links/tags-command) directly, because a dialog holding nothing
+// but a tag field that opens a second dialog would be one tap and one layer too
+// many. So bulk retag gets the same filter
 // input and reuse-or-mint Create; the diff semantics live entirely in the save
 // below. Hoisted to the
 // screen level and driven by view-state-provider's `retagging`, like the
@@ -113,9 +113,9 @@ function BulkTagsForm({ links, onClose }: { links: LinkView[]; onClose: () => vo
             {links.length === 1 ? 'link' : 'links'}; a removed tag is removed from all of them.
           </DialogDescription>
         </DialogHeader>
-        {/* The chip cloud can outgrow a dialog, so TagsCommand caps its own
+        {/* The tag rows can outgrow a dialog, so TagsCommand caps its own
             scroller — `max-h-48` here rather than its default 320, so input
-            plus cloud keep the ~240 this block has always had. A tag minted
+            plus rows keep the ~240 this block has always had. A tag minted
             here persists even if the user then cancels — web's accepted
             mint-then-cancel cost — and lands selected in the draft, so the
             dirty guard engages. The cap `shrink`s when the keyboard leaves less

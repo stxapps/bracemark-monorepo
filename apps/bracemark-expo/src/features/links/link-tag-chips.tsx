@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { type LinkView } from '@stxapps/expo-react';
@@ -48,18 +49,25 @@ import { useEngagedOpen } from './shared';
 // is inert (bulk-edit renders plain Views), so it never presses.
 const TAG_CHIP_CLASS = 'max-w-32 rounded-full bg-foreground/6 px-2 py-1 active:bg-foreground/12';
 
-// The strip ESTIMATES which chips fit its width, where web MEASURES (a hidden
-// clone + a ResizeObserver, `_layouts/shared/link-tag-chips.tsx`). Measuring is
-// the better answer and it isn't available here: RN has no synchronous
-// pre-paint measure, so the equivalent is an `onLayout` that lands a frame
-// LATE — once per item, re-running on every recycled cell bind, inside a
-// virtualized list that is usually mid-scroll when it happens. A visible chip
-// pop on every row is a worse artifact than a chip too few.
+// The visual chip is 24pt tall. Ten points above and below bring its vertical
+// target to the iOS 44pt floor without stealing any of a neighbouring chip's
+// visible width. Horizontal slop would overlap at this strip's 4pt gap, so it
+// deliberately stays zero; see docs/accessibility.md.
+const TAG_CHIP_HIT_SLOP = { top: 10, bottom: 10 } as const;
+
+// The strip measures ITS OWN container width, then ESTIMATES which chips fit,
+// where web measures every chip with a hidden clone + ResizeObserver
+// (`_layouts/shared/link-tag-chips.tsx`). Owning the container measurement here
+// removes the error-prone chrome subtraction that used to be split between the
+// card and row renderers. Measuring each native chip is a different trade: RN
+// has no synchronous pre-paint measure, so all those `onLayout`s would land a
+// frame late in recycled cells and need a per-label cache to avoid repeated
+// visible reshuffles.
 //
-// So the caller passes the width it can give the strip (link-row.tsx and
-// link-card.tsx each subtract their own chrome from the item width main.tsx
-// hands down) and the numbers below turn names into widths. Being an estimate
-// is safe in one direction only, so every constant here is rounded AGAINST
+// Before the one container layout arrives, `fitChipCount` conservatively keeps
+// one named tag plus `+N`. The strip is therefore never blank or loading and its
+// fixed one-line height never changes; layout only expands it when there is
+// proven room. The numbers below still estimate label widths, rounded AGAINST
 // fitting: overestimate a chip and the strip shows one fewer than it could;
 // underestimate and the chips are already `shrink` with `numberOfLines={1}`, so
 // the overflow lands as truncation, never as a clipped or occluded row.
@@ -133,15 +141,11 @@ function fitChipCount(names: string[], width: number, fontScale: number): number
 export function LinkTagChips({
   link,
   tagsById,
-  availableWidth,
   selectMode,
   className = '',
 }: {
   link: LinkView;
   tagsById: Map<string, string>;
-  // What the item can spare for the strip, in pt. The item computes it, since
-  // only the item knows its own chrome.
-  availableWidth: number;
   // Bulk-edit mode, handed down by the item (its LinkItemProps.selectMode) rather
   // than read off useLinksViewState: that value changes whenever any menu opens,
   // and a subscription here would re-render the strip in every mounted item.
@@ -150,6 +154,7 @@ export function LinkTagChips({
 }) {
   const { setSimpleQuery } = useLinksPage();
   const [, onOverflowOpenChange] = useEngagedOpen();
+  const [availableWidth, setAvailableWidth] = useState(0);
   // The chip's own text obeys the app-wide ceiling (components/ui/text.tsx), so
   // the fit has to reason at the capped scale, not the raw one. The helper's
   // floor at 1 is conservative here rather than exact — a user on SMALLER
@@ -171,52 +176,62 @@ export function LinkTagChips({
   const onTagPress = (id: string) => setSimpleQuery({ kind: 'tag', id });
 
   return (
-    <View className={`flex-row items-center gap-1 overflow-hidden ${className}`}>
-      {chips.slice(0, visibleCount).map((chip) =>
-        selectMode ? (
-          <View key={chip.id} className={`shrink ${TAG_CHIP_CLASS}`}>
-            <Text numberOfLines={1} className="text-xs leading-4 text-foreground/80">
-              {chip.name}
-            </Text>
-          </View>
-        ) : (
-          <Pressable
-            role="button"
-            key={chip.id}
-            onPress={() => onTagPress(chip.id)}
-            className={`shrink ${TAG_CHIP_CLASS}`}
-          >
-            <Text numberOfLines={1} className="text-xs leading-4 text-foreground/80">
-              {chip.name}
-            </Text>
-          </Pressable>
-        ),
-      )}
-      {overflow.length > 0 &&
-        (selectMode ? (
-          <View className={`shrink-0 ${TAG_CHIP_CLASS}`}>
-            <Text className="text-xs leading-4 text-foreground/80">+{overflow.length}</Text>
-          </View>
-        ) : (
-          <DropdownMenu onOpenChange={onOverflowOpenChange}>
-            <DropdownMenuTrigger asChild>
-              <Pressable
-                role="button"
-                aria-label={`Show ${overflow.length} more ${overflow.length === 1 ? 'tag' : 'tags'}`}
-                className={`shrink-0 ${TAG_CHIP_CLASS}`}
-              >
-                <Text className="text-xs leading-4 text-foreground/80">+{overflow.length}</Text>
-              </Pressable>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="max-w-64">
-              {overflow.map((chip) => (
-                <DropdownMenuItem key={chip.id} onPress={() => onTagPress(chip.id)}>
-                  <Text numberOfLines={1}>{chip.name}</Text>
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ))}
+    <View className={className}>
+      <View
+        className="flex-row items-center gap-1 overflow-hidden"
+        onLayout={(event) => {
+          const width = event.nativeEvent.layout.width;
+          setAvailableWidth((current) => (current === width ? current : width));
+        }}
+      >
+        {chips.slice(0, visibleCount).map((chip) =>
+          selectMode ? (
+            <View key={chip.id} className={`shrink ${TAG_CHIP_CLASS}`}>
+              <Text numberOfLines={1} className="text-xs leading-4 text-foreground/80">
+                {chip.name}
+              </Text>
+            </View>
+          ) : (
+            <Pressable
+              role="button"
+              key={chip.id}
+              onPress={() => onTagPress(chip.id)}
+              hitSlop={TAG_CHIP_HIT_SLOP}
+              className={`shrink ${TAG_CHIP_CLASS}`}
+            >
+              <Text numberOfLines={1} className="text-xs leading-4 text-foreground/80">
+                {chip.name}
+              </Text>
+            </Pressable>
+          ),
+        )}
+        {overflow.length > 0 &&
+          (selectMode ? (
+            <View className={`shrink-0 ${TAG_CHIP_CLASS}`}>
+              <Text className="text-xs leading-4 text-foreground/80">+{overflow.length}</Text>
+            </View>
+          ) : (
+            <DropdownMenu onOpenChange={onOverflowOpenChange}>
+              <DropdownMenuTrigger asChild>
+                <Pressable
+                  role="button"
+                  aria-label={`Show ${overflow.length} more ${overflow.length === 1 ? 'tag' : 'tags'}`}
+                  hitSlop={TAG_CHIP_HIT_SLOP}
+                  className={`shrink-0 ${TAG_CHIP_CLASS}`}
+                >
+                  <Text className="text-xs leading-4 text-foreground/80">+{overflow.length}</Text>
+                </Pressable>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="max-w-64">
+                {overflow.map((chip) => (
+                  <DropdownMenuItem key={chip.id} onPress={() => onTagPress(chip.id)}>
+                    <Text numberOfLines={1}>{chip.name}</Text>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ))}
+      </View>
     </View>
   );
 }

@@ -61,9 +61,9 @@ export type LinkItemProps = {
   sortOn: LinkSortOn;
   tagsById: Map<string, string>;
   // The width FlashList gives one cell — the pane's usable width over its
-  // column count (main.tsx). Only the tag strip reads it, and only to estimate
-  // how many chips fit (link-tag-chips.tsx); each item subtracts its OWN chrome
-  // first, since the item is what knows its chrome.
+  // column count (main.tsx). The card uses it for its capped banner geometry;
+  // the row uses it for the relative-time breakpoint. LinkTagChips now measures
+  // its own actual flex width instead of reconstructing either item's chrome.
   itemWidth: number;
   // Bulk-edit mode: a checkbox appears and a press toggles selection instead of
   // opening the URL (web's selectable rows/cards).

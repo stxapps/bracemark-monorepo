@@ -69,7 +69,7 @@ export function TagsCommand({
   return (
     <Command shouldFilter={false} className={cn('outline-none', className)}>
       <CommandInput placeholder="Search or create tags…" value={query} onValueChange={setQuery} />
-      <CommandList>
+      <CommandList aria-multiselectable="true">
         {/* Only shown when there's nothing to pick AND nothing to create (blank
             query, no tags) — otherwise the Create row is the next step. */}
         {!canCreate && <CommandEmpty>No tags found.</CommandEmpty>}
@@ -78,6 +78,10 @@ export function TagsCommand({
             key={item.id}
             value={item.id}
             data-checked={value.includes(item.id)}
+            // cmdk's aria-selected tracks its active keyboard/pointer row, not
+            // membership in this persistent set. aria-checked exposes the real
+            // multi-select state on the option while data-checked paints it.
+            aria-checked={value.includes(item.id)}
             // cmdk may normalize `value`, so pass the id via closure.
             onSelect={() => onToggle(item.id)}
           >

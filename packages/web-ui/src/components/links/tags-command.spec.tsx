@@ -81,10 +81,13 @@ describe('TagsCommand', () => {
   it('marks the chosen rows', () => {
     render(<TagsCommand value={['recipes']} onToggle={jest.fn()} onCreate={jest.fn()} />);
 
-    expect(screen.getByRole('option', { name: 'recipes' }).getAttribute('data-checked')).toBe(
-      'true',
-    );
-    expect(screen.getByRole('option', { name: 'work' }).getAttribute('data-checked')).toBe('false');
+    expect(screen.getByRole('listbox').getAttribute('aria-multiselectable')).toBe('true');
+    const recipes = screen.getByRole('option', { name: 'recipes' });
+    const work = screen.getByRole('option', { name: 'work' });
+    expect(recipes.getAttribute('data-checked')).toBe('true');
+    expect(recipes.getAttribute('aria-checked')).toBe('true');
+    expect(work.getAttribute('data-checked')).toBe('false');
+    expect(work.getAttribute('aria-checked')).toBe('false');
   });
 
   describe('the Create row', () => {

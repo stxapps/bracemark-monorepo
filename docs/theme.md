@@ -617,13 +617,11 @@ leftovers and nothing a user notices; the classes are the system.
 | box                                                     | `rounded-[6px]` | 6   | checkbox                                                                                                  |
 | circle                                                  | `rounded-full`  | —   | radio dot, switch, the alert-dialog media badge                                                           |
 
-One control is neither a pill nor too tall to be one: a field that **wraps**,
-like expo's `TagsField` trigger (one row when empty, more as the chosen chips
-grow). It takes `rounded-3xl`. That's 24, which on a one-row 40pt box resolves
-to the same 20 as the `rounded-4xl` Input above it, and stays a rounded
-rectangle once it wraps, where 32 would turn a two-row box into a lozenge. Web's
-twin uses `rounded-2xl` on a 36px `min-h-9`, close to a pill at that height;
-against native's 40pt the same 16 visibly misses the inputs beside it.
+Expo's `TagsField` no longer needs a wrapping-field exception: it is the same
+single-row outline Button shape as `ListSelect`, and therefore takes the normal
+`rounded-4xl` single-line-control radius. Web's token-combobox trigger remains a
+`rounded-2xl` control, but is also one line: two removable selections plus a
+non-shrinking `+N` keep its height fixed.
 
 **32px on a 36–40pt control is a pill, not a rounded rectangle**, and that is the
 point: CSS and React Native implement the SAME rule — css-backgrounds-3's

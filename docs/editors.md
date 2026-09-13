@@ -132,14 +132,15 @@ platform's file-store doctrine. They can't render the web pickers (`web-ui` is
 `list-command.tsx` body and `tags-field.tsx` over `tags-command.tsx` — the same
 two shell/body splits as web, with dialogs standing in for anchored popovers —
 plus `link-quota-banner.tsx`) wired to `@stxapps/expo-react`'s live hooks.
-**The tag cloud never renders inline in an editor.** It used to — every tag as
-a chip under the field, unbounded — and on an account with forty tags it pushed
-the add panel's Note and Save off its keyboard-shortened height, the same defect
-the share sheet's compose screen had (`share-tags-picker.tsx`). So `TagsField`
-is web's token combobox: the trigger shows only the chosen tags, which the user
-bounds, and the capped `TagsCommand` opens in a dialog that stays open across
-presses (tags are a set) until Done. `BulkTagsDialog` is the one host that
-renders `TagsCommand` directly, being a dialog that holds nothing else. Unlike
+**The tag option set never renders inline in an editor.** It used to — every tag
+as a wrapped chip, unbounded — and on an account with forty tags it pushed the
+add panel's Note and Save off its keyboard-shortened height, the same defect the
+share sheet's compose screen had (`share-tags-picker.tsx`). On web, `TagsField`
+is a one-line token-combobox trigger capped to two removable selections plus `+N`; on
+expo it is a fixed one-line summary matching `ListSelect`. Both open a capped,
+searchable `TagsCommand` whose full-width checkbox rows stay open across presses
+(tags are a set) until Done. `BulkTagsDialog` renders `TagsCommand` directly on
+both platforms, being a dialog that holds nothing else. Unlike
 the share sheet's snapshot-fed pickers, these run in-process and therefore
 follow the web rule: they create **immediately** (top-level, index 0,
 case-insensitive reuse) — see "web pickers create IMMEDIATELY; the share sheet
@@ -325,10 +326,10 @@ The list and tag inputs are **two picker pairs** in
 searchable command body; the body owns the tree/search rendering and is wired
 straight to `web-react`'s live data hook:
 
-| pair | shell                                            | body                               | data hook                       |
-| ---- | ------------------------------------------------ | ---------------------------------- | ------------------------------- |
-| list | `list-select.tsx` (`ListSelect`, a combobox)     | `list-command.tsx` (`ListCommand`) | `useLists` / `useListMutations` |
-| tag  | `tags-field.tsx` (`TagsField`, a token combobox) | `tags-command.tsx` (`TagsCommand`) | `useTags` / `useTagMutations`   |
+| pair | shell                                              | body                               | data hook                       |
+| ---- | -------------------------------------------------- | ---------------------------------- | ------------------------------- |
+| list | `list-select.tsx` (`ListSelect`, a combobox)       | `list-command.tsx` (`ListCommand`) | `useLists` / `useListMutations` |
+| tag  | `tags-field.tsx` (`TagsField`, a compact combobox) | `tags-command.tsx` (`TagsCommand`) | `useTags` / `useTagMutations`   |
 
 All three link editors render `ListSelect` + `TagsField`, so the pickers stay
 identical across web quick-add, the extension, and the edit dialog. That's the
@@ -817,7 +818,7 @@ in `view-state-provider`, items grow a `LinkRowSelect` checkbox
   there is no batched spelling of that. Same rule and same code shape on
   bracemark-expo.
 - **Bulk Edit tags** (`BulkTagsDialog` — hoisted at the page level like the edit
-  dialog, driven by `retagging` in `view-state-provider`) seeds one `TagsField`
+  dialog, driven by `retagging` in `view-state-provider`) seeds one `TagsCommand`
   with the **intersection** of the selection's tags and saves the **diff**:
   added tags are added to every link, removed seed tags are removed from every
   link, and a tag only some links carry is never shown and never touched — a
@@ -865,7 +866,7 @@ picker whose body can grow pairs that with `shrink` on its own scroller — whic
 is why the bulk tags editor stays a dialog rather than becoming a route screen
 ([soft-keyboard.md](./soft-keyboard.md), _avoidance_). And the
 bulk tags dialog renders the picker body the in-app editors' `TagsField` opens
-(`TagsCommand` — web's seeds the whole `TagsField`; here that would be a dialog
-opening a second one) — filter input and reuse-or-mint Create included; the single-link case no longer rides this dialog anyway — the row
+(`TagsCommand`) directly — filter input and reuse-or-mint Create included; the
+single-link case no longer rides this dialog anyway — the row
 menu's Edit tags pushes `/edit-link` focused on tags, like web). Web's
 shift-click `selectRange` has no touch analogue and is not ported.

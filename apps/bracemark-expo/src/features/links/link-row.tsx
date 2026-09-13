@@ -50,21 +50,6 @@ function formatRelativeTime(epochMs: number): string {
 // supported devices while keeping the rule correct for a future wider surface.
 const RELATIVE_TIME_MIN_ROW_WIDTH = 576;
 
-// What the row can spare for the tag strip, off that same item width
-// (link-tag-chips.tsx does the fitting). Without the optional date, left to
-// right: pl-4 + pr-2 (24), the gap-3 before the ⋯ menu (12), the menu's size-8
-// (32), and inside the text box the thumbnail's w-16 plus its gap-3 (76).
-//
-// One number for both modes, deliberately: bulk-edit drops the menu (32 + a
-// 12pt gap) and inserts a size-4 checkbox (16 + a 12pt gap), so a selecting row
-// is 16pt ROOMIER. Budgeting the tighter shape for both means entering the mode
-// can't reflow the chips under the user's thumb — 16pt buys a couple of
-// characters, not a chip.
-const ROW_CHIP_BASE_CHROME = 144;
-// When present, the date adds its widest value ("12mo", font-scaled — 34) and
-// another gap-3 (12) between it and the text box.
-const ROW_CHIP_DATE_CHROME = 46;
-
 // Whether this row renders a chip strip, and so which of its two shapes it
 // takes: exactly the test LinkTagChips applies before it renders anything, so
 // the two must not drift. A plain `tagIds.length > 0` would be subtly wrong — a
@@ -203,9 +188,6 @@ export const LinkRow = memo(function LinkRow({
           <LinkTagChips
             link={link}
             tagsById={tagsById}
-            availableWidth={
-              itemWidth - ROW_CHIP_BASE_CHROME - (showRelativeTime ? ROW_CHIP_DATE_CHROME : 0)
-            }
             selectMode={selectMode}
             className="mt-3"
           />

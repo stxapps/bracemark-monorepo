@@ -356,7 +356,7 @@ carries on the extension's tile: square is unsaved, cut is saved
 
 The two pickers are the exception, and a deliberate one: they replace the
 specimen rather than sit under it. They are screens precisely because the tree
-and the chip cloud need the height (below), and 40px of tile plus its gap is a
+and the full-width tag rows need the height (below), and 40px of tile plus its gap is a
 sixth of what the list has to work with. The thread the user is holding is the
 one they just tapped — "choose a list" — not the page, which is still there when
 they come back, unmoved.
@@ -378,8 +378,9 @@ screen with room to change it. A destination is one value; a tag set is bounded
 by what the user picked. The pickers were previously a `max-h-40` peephole
 nested inside the sheet's own ScrollView plus a blind "New list…" field, which
 gave the 10% path most of a 520pt panel and still had nowhere to put a tree.
-As screens they get the height, and they borrow the app's own picker rules line
-for line (`components/links/list-command.tsx`, `tags-command.tsx`): one input that
+As screens they get the height, and they borrow the app's own picker rules and
+row presentation line for line (`components/links/list-command.tsx`,
+`tags-command.tsx`): one input that
 filters as you type and doubles as the new entity's name field, ancestor paths on
 filtered rows, an explicit `Create "…"` affordance suppressed on an exact
 case-insensitive match. Someone who has picked a list in the app should not have

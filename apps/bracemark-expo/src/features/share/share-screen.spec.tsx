@@ -94,7 +94,10 @@ test('saves a draft into the picked list and shows the saved state', async () =>
   fireEvent.press(getByTestId('share-list-list-a'));
 
   fireEvent.press(getByTestId('share-tags-row'));
-  fireEvent.press(getByTestId('share-tag-tag-a'));
+  const tagRow = getByTestId('share-tag-tag-a');
+  expect(tagRow.props.accessibilityState.checked).toBe(false);
+  fireEvent.press(tagRow);
+  expect(getByTestId('share-tag-tag-a').props.accessibilityState.checked).toBe(true);
   // Tags is multi-select, so it takes an explicit Done.
   fireEvent.press(getByTestId('share-back'));
 

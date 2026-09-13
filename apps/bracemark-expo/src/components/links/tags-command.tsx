@@ -1,14 +1,12 @@
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
-import { Plus } from 'lucide-react-native';
+import { ScrollView, View } from 'react-native';
 
 import { useTags } from '@stxapps/expo-react';
 import { flattenTree } from '@stxapps/shared';
 
 import { cn } from '../../lib/utils';
-import { Icon } from '../ui/icon';
 import { Input } from '../ui/input';
-import { Text } from '../ui/text';
+import { TagPickerRows } from './tag-picker-rows';
 
 // The searchable, multi-select tag picker body — the expo port of web-ui's
 // TagsCommand (that header is canonical: multi-select, so a press toggles and
@@ -19,25 +17,24 @@ import { Text } from '../ui/text';
 // holding nothing but the tag field. Query state lives here, so a host that
 // unmounts on close resets the search for free.
 //
-// Chips where web has cmdk rows, and that is the one deliberate divergence: a
-// wrapped cloud shows three or four tags per row where rows show one, and the
-// share sheet's tags screen (share-tags-picker.tsx) copies this chip vocabulary
-// exactly, so someone who tags in both places learns it once.
+// Full-width checkbox rows, matching the list picker's scanning and touch
+// geometry while keeping the semantic difference: tags are a set, so a press
+// toggles one and the host stays open. The share sheet renders these same rows
+// from its snapshot through tag-picker-rows.tsx.
 //
-//  - The input filters the chips as you type and doubles as the new tag's name
+//  - The input filters the rows as you type and doubles as the new tag's name
 //    field. `submitBehavior="submit"` keeps the keyboard up for the next entry,
 //    which leaves this field no return-key exit — the scroller's `on-drag` and
 //    `handled` are its dismissal paths (docs/soft-keyboard.md, _dismissal_).
-//  - The Create chip is suppressed on an exact case-insensitive match, where
+//  - The Create row is suppressed on an exact case-insensitive match, where
 //    submit just selects (findOrCreate's reuse).
-//  - A just-minted tag's chip surfaces a beat later, when the live useTags
+//  - A just-minted tag's row surfaces a beat later, when the live useTags
 //    query catches up — selected, since its id is already in `value`.
 //
-// THE CLOUD IS CAPPED, and that is the reason this body exists apart from its
-// field. It used to render inline, every tag at once, with no bound: forty tags
-// wrapped to eight rows and pushed the add panel's Note and Save off its
-// keyboard-shortened height — the defect share-tags-picker.tsx records for the
-// share sheet's compose screen.
+// THE LIST IS CAPPED, and that is the reason this body exists apart from its
+// field. It used to render inline, every tag at once, with no bound and pushed
+// the add panel's Note and Save off its keyboard-shortened height — the defect
+// share-tags-picker.tsx records for the share sheet's compose screen.
 
 export function TagsCommand({
   value,
@@ -49,10 +46,10 @@ export function TagsCommand({
   value: string[];
   // Toggle a tag's membership. Multi-select: the host stays open.
   onToggle: (tagId: string) => void;
-  // Mint a tag by the typed name and add it. Awaited, so the Create chip can
+  // Mint a tag by the typed name and add it. Awaited, so the Create row can
   // disable itself while the write lands.
   onCreate: (name: string) => void | Promise<void>;
-  // Onto the cloud's scroller — its cap. `max-h-80` matches ListCommand's list,
+  // Onto the rows' scroller — its cap. `max-h-80` matches ListCommand's list,
   // so the two picker dialogs open at the same height; a host that has less room
   // to give passes a smaller one (BulkTagsDialog).
   className?: string;
@@ -102,8 +99,8 @@ export function TagsCommand({
         className="h-9"
       />
       {/* `interactive` for list-command.tsx's reason: the host Dialog
-          re-centres and this cloud regrows when the keyboard leaves, so
-          `on-drag` jumped the chips under the finger. The input is
+          re-centres and this list regrows when the keyboard leaves, so
+          `on-drag` jumped the rows under the finger. The input is
           `submitBehavior="submit"`, so return never blurs — the exits are
           DialogContent's chrome tap, `"handled"` here, and (iOS) a drag down
           into the keys. */}
@@ -113,54 +110,14 @@ export function TagsCommand({
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
       >
-        {/* Only when there's nothing to pick AND nothing to create (blank query,
-            no tags) — otherwise the Create chip is the next step. */}
-        {visible.length === 0 && !canCreate && (
-          <Text className="py-1.5 text-sm text-muted-foreground">No tags found.</Text>
-        )}
-        <View className="flex-row flex-wrap items-center gap-2">
-          {visible.map((o) => {
-            const selected = value.includes(o.id);
-            return (
-              <Pressable
-                key={o.id}
-                onPress={() => onToggle(o.id)}
-                role="checkbox"
-                aria-checked={selected}
-                aria-label={o.name}
-                className={cn('rounded-full px-3 py-1.5', selected ? 'bg-primary' : 'bg-muted')}
-              >
-                <Text
-                  className={cn(
-                    'text-sm',
-                    selected ? 'text-primary-foreground' : 'text-muted-foreground',
-                  )}
-                >
-                  {o.name}
-                </Text>
-              </Pressable>
-            );
-          })}
-          {canCreate && (
-            <Pressable
-              role="button"
-              disabled={creating}
-              onPress={() => void create()}
-              aria-label={`Create tag ${trimmed}`}
-              // `max-w-full` + `shrink` on the label, tags-field.tsx's chip: a
-              // Text beside a sibling in a row keeps its own width (RN's
-              // flexShrink is 0), so a long query would push past the chip's
-              // edge instead of wrapping inside it.
-              className={cn(
-                'max-w-full flex-row items-center gap-1 rounded-full border border-dashed border-input px-3 py-1.5',
-                creating && 'opacity-50',
-              )}
-            >
-              <Icon as={Plus} className="size-3.5 text-muted-foreground" />
-              <Text className="shrink text-sm text-muted-foreground">Create “{trimmed}”</Text>
-            </Pressable>
-          )}
-        </View>
+        <TagPickerRows
+          rows={visible.map((option) => ({ ...option, selected: value.includes(option.id) }))}
+          onToggle={onToggle}
+          emptyText="No tags found."
+          createName={canCreate ? trimmed : undefined}
+          creating={creating}
+          onCreate={canCreate ? () => void create() : undefined}
+        />
       </ScrollView>
     </View>
   );

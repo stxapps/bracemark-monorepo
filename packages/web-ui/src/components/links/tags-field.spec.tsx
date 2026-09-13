@@ -76,6 +76,31 @@ describe('TagsField — the trigger', () => {
     ).toEqual(['Remove recipes', 'Remove reading']);
   });
 
+  it('caps the removable summary and counts the remaining selected tags', () => {
+    setTags([
+      tag('alpha', 'alpha'),
+      tag('bravo', 'bravo'),
+      tag('charlie', 'charlie'),
+      tag('delta', 'delta'),
+      tag('echo', 'echo'),
+    ]);
+    render(
+      <TagsField value={['alpha', 'bravo', 'charlie', 'delta', 'echo']} onChange={jest.fn()} />,
+    );
+
+    expect(
+      screen
+        .getAllByRole('button', { name: /^Remove/ })
+        .map((button) => button.getAttribute('aria-label')),
+    ).toEqual(['Remove alpha', 'Remove bravo']);
+    expect(screen.getByLabelText('3 more selected tags').textContent).toBe('+3');
+    expect(
+      ['h-9', 'flex-nowrap', 'overflow-hidden'].every((name) => trigger().classList.contains(name)),
+    ).toBe(true);
+    expect(screen.getByText('alpha').classList.contains('truncate')).toBe(true);
+    expect(screen.getByText('bravo').classList.contains('truncate')).toBe(true);
+  });
+
   // A tag id can legitimately have no row yet: `findOrCreate` returns before the
   // live `useTags` query catches up, so for a beat the caller holds an id this
   // component cannot name. Rendering it anyway would put an empty chip — or the

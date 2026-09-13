@@ -309,17 +309,15 @@ non-labelable `htmlFor` target by hand (focus + click, which is what the browser
 does for the labelable set). Any future picker built on a div inherits both
 halves; a picker built on a `Button` (`ListSelect`) needs neither.
 
-**Native has the same trigger and its own two traps.** bracemark-expo's
-`TagsField` is a `Pressable role="combobox"` with a `Pressable` ✕ nested in
-each chip. Touch is fine, since the innermost responder wins. VoiceOver is not:
-an `accessible` Pressable collapses its children into **one** element, so the
-✕s do not exist for it, and nothing says so. Each removal is therefore also a
-custom action on the trigger (`accessibilityActions`, `Remove <name>`, reached
-from the rotor). And the trigger declares **`activate`** itself: without it iOS
-activates an element by simulating a tap at its centre, which on a trigger
-holding chips can be a chip's ✕, so a double-tap meant to open the picker
-removes a tag. Its name carries the chosen tags ("Tags: reading, work"), the
-`ShareRow` idiom above. Any native control that nests pressables inherits both.
+**Native avoids that nested-control trap.** bracemark-expo's `TagsField` is one
+fixed-height `Button` combobox: its first two visible names may truncate
+independently and `+N` counts the remainder, while its accessible name carries
+every chosen tag ("Tags: reading, work"). Selection and removal happen in
+`TagPickerRows`, where each full-width 44pt row is one checkbox with a real
+checked state. There are no nested chip-removal Pressables, so VoiceOver does not
+need custom removal actions and activation cannot land on the wrong child. The
+in-app picker and the snapshot-fed share picker share those rows even though
+their data and commit lifecycles stay separate.
 
 Expo's `ui/text.tsx` maps its heading variants to `role="heading"` with the
 matching `aria-level`, so `<Text variant="h2">` is a real heading to TalkBack /
@@ -442,10 +440,11 @@ Both chokepoints spread `{...props}` _after_ the default, so a call site can
 still opt out or choose its own ceiling. For the rare place that must do
 ARITHMETIC on scaling text, `useCappedFontScale()` returns the device scale
 clamped to the same `[1, 1.3]` the text itself is capped at — the tag strip
-(`link-tag-chips.tsx`) is the one caller, and it estimates chip widths rather than
-sizing a box. Nothing sizes a fixed box around scaling text any more: both link
-items are intrinsic-height and simply grow (`link-card.tsx` was the last one, and
-its height budget is gone).
+(`link-tag-chips.tsx`) is the one caller: it measures its own container, then
+estimates chip widths at that font scale rather than sizing a fixed box. Nothing
+sizes a fixed box around scaling text any more: both link items are
+intrinsic-height and simply grow (`link-card.tsx` was the last one, and its
+height budget is gone).
 
 The web has no equivalent policy: browser text zoom reflows, and
 `use-root-font-scale.ts` handles the root-size case.
@@ -463,6 +462,15 @@ is set by its glyph's corner margin — the advanced-filter dot lives in that
 margin, and 20px of glyph in a 36px box leaves the dot ~1px off the end of the
 slider (`features/links/search-bar.tsx` works it through). `hitSlop` costs no
 layout at all, which is the whole reason it is the right lever here.
+
+The link card/list tag chips use the same lever on one axis: their 24pt visual
+height gets 10pt of top and bottom slop, reaching 44pt vertically without
+changing how many adaptive chips fit. They deliberately get no horizontal slop:
+the strip has only a 4pt gap, so enough slop to make a short label 44pt wide
+would overlap adjacent tag targets. This is a pragmatic improvement, not a claim
+that every one-letter pill now has a 44 by 44 target; true two-axis compliance
+would require visible minimum-width wrappers (and new fit arithmetic) or one
+strip-level action instead of adjacent tag actions.
 
 **The one rule for the value: never take more than HALF the gap to a pressable
 neighbour.** RN resolves overlapping touch regions by tree order — the later

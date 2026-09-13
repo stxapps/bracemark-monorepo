@@ -1,7 +1,7 @@
 // "Add tags" — the share sheet's own screen for labelling the link, and the
 // share-sized RN cousin of components/links/tags-command.tsx (whose header, and
 // web-ui's TagsField/TagsCommand pair above it, are canonical). Presentational
-// like the list picker: chips in, events out; the screen owns the reuse-or-mint
+// like the list picker: rows in, events out; the screen owns the reuse-or-mint
 // (findOrCreate) rule.
 //
 // IT IS A SCREEN for the same reason the list picker is, and one more. Tags used
@@ -15,24 +15,20 @@
 // three times out of four. Done is the way out, at the bottom where the thumb
 // is.
 //
-// The chip vocabulary is tags-command.tsx's, exactly: `rounded-full px-3 py-1.5`,
-// selected on `--primary`, unselected on `--muted`, and a dashed-outline
-// `Create "…"` chip suppressed on an exact case-insensitive match (submitting
-// selects the existing tag instead, which is what findOrCreate does). Someone
-// who has tagged a link in the app should recognise this on sight.
+// The row vocabulary is tags-command.tsx's exactly: one full-width checkbox row
+// per tag, a trailing check for the selected state, and a Create row suppressed
+// on an exact case-insensitive match. Someone who has tagged a link in the app
+// should recognise this on sight.
 
 import { useCallback, useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
-import Plus from 'lucide-react-native/icons/plus';
-import X from 'lucide-react-native/icons/x';
+import { ScrollView } from 'react-native';
 
 import type { ShareNewEntity, ShareTaxonomyTag } from '@stxapps/expo-react/data/share-store';
 
+import { TagPickerRows } from '../../components/links/tag-picker-rows';
 import { Button } from '../../components/ui/button';
-import { Icon } from '../../components/ui/icon';
 import { Input } from '../../components/ui/input';
 import { Text } from '../../components/ui/text';
-import { cn } from '../../lib/utils';
 import { ShareHeader, ShareSheet } from './share-kit';
 
 export function ShareTagsPicker({
@@ -103,71 +99,33 @@ export function ShareTagsPicker({
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
       >
-        {visibleTags.length === 0 && visibleNew.length === 0 && !canCreate && (
-          <Text className="px-2 py-2.5 text-sm text-muted-foreground">
-            {tags.length === 0 && newTags.length === 0
-              ? 'No tags yet. Type a name to make one.'
-              : 'No tags found.'}
-          </Text>
-        )}
-
-        <View className="flex-row flex-wrap items-center gap-2">
-          {visibleTags.map((tag) => {
-            const selected = selectedTagIds.includes(tag.id);
-            return (
-              <Pressable
-                key={tag.id}
-                testID={`share-tag-${tag.id}`}
-                onPress={() => onToggle(tag.id)}
-                accessibilityRole="checkbox"
-                aria-label={`${tag.name}: ${selected ? 'selected' : 'not selected'}`}
-                className={cn('rounded-full px-3 py-1.5', selected ? 'bg-primary' : 'bg-muted')}
-              >
-                <Text
-                  className={cn(
-                    'text-sm',
-                    selected ? 'text-primary-foreground' : 'text-muted-foreground',
-                  )}
-                >
-                  {tag.name}
-                </Text>
-              </Pressable>
-            );
-          })}
-
-          {/* A tag that does not exist yet, so it has no unselected state — the
-              only thing to do with it is take it back off the draft. The × says
-              that, where an identical chip beside the existing ones would not. */}
-          {visibleNew.map((tag) => (
-            <Pressable
-              key={tag.id}
-              testID={`share-new-tag-${tag.id}`}
-              onPress={() => onRemoveNew(tag.id)}
-              accessibilityRole="button"
-              aria-label={`Remove ${tag.name}`}
-              // `max-w-full` + `shrink` on the name, tags-field.tsx's chip: a Text
-              // beside a sibling in a row keeps its own width (RN's flexShrink is
-              // 0), so a long name would push the × off the chip.
-              className="max-w-full flex-row items-center gap-1 rounded-full bg-primary py-1.5 pr-2.5 pl-3"
-            >
-              <Text className="shrink text-sm text-primary-foreground">{tag.name}</Text>
-              <Icon as={X} className="size-3.5 text-primary-foreground" />
-            </Pressable>
-          ))}
-
-          {canCreate && (
-            <Pressable
-              testID="share-tag-create"
-              onPress={submit}
-              accessibilityRole="button"
-              aria-label={`Create tag ${trimmed}`}
-              className="max-w-full flex-row items-center gap-1 rounded-full border border-dashed border-input px-3 py-1.5"
-            >
-              <Icon as={Plus} className="size-3.5 text-muted-foreground" />
-              <Text className="shrink text-sm text-muted-foreground">Create “{trimmed}”</Text>
-            </Pressable>
-          )}
-        </View>
+        <TagPickerRows
+          rows={[
+            ...visibleTags.map((tag) => ({
+              ...tag,
+              selected: selectedTagIds.includes(tag.id),
+            })),
+            ...visibleNew.map((tag) => ({ ...tag, selected: true })),
+          ]}
+          onToggle={(id) =>
+            newTags.some((tag) => tag.id === id) ? onRemoveNew(id) : onToggle(id)
+          }
+          emptyText={
+            visibleTags.length === 0 && visibleNew.length === 0 && !canCreate
+              ? tags.length === 0 && newTags.length === 0
+                ? 'No tags yet. Type a name to make one.'
+                : 'No tags found.'
+              : undefined
+          }
+          createName={canCreate ? trimmed : undefined}
+          onCreate={canCreate ? submit : undefined}
+          testIDForRow={(row) =>
+            newTags.some((tag) => tag.id === row.id)
+              ? `share-new-tag-${row.id}`
+              : `share-tag-${row.id}`
+          }
+          createTestID="share-tag-create"
+        />
       </ScrollView>
 
       <Button variant="outline" size="lg" onPress={onDone}>

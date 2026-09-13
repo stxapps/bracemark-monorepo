@@ -37,10 +37,9 @@ import { useLinksViewActions } from './view-state-provider';
 // The banner is 12:7 — its height is 58.33% of the card's width — so it scales
 // with the column count instead of being pinned to one number (web's
 // `aspect-[12/7]`). Spelled as a HEIGHT computed off the item width main.tsx
-// hands down rather than as an aspect class: the card already knows that width
-// (the chip strip needs it), and a plain dp height needs nothing from the class
-// layer to be exactly right on the first frame — which is what keeps the cell
-// from measuring twice as the image resolves.
+// hands down rather than as an aspect class: a plain dp height needs nothing
+// from the class layer to be exactly right on the first frame — which is what
+// keeps the cell from measuring twice as the image resolves.
 const PREVIEW_ASPECT = 7 / 12;
 // The cell's horizontal chrome — the wrapper's p-2, both sides — so the CARD is
 // the item width less this. main.tsx's column math imports it rather than
@@ -55,11 +54,6 @@ export const CARD_H_CHROME = 16;
 // margin either side of it (`self-center`). No phone reaches it — a 430pt device
 // gives a 398 card — it's for the widths a tablet or a foldable opens up.
 const MAX_CARD_WIDTH = 420;
-
-// What the card can spare for the tag strip, off the CAPPED card width
-// (link-tag-chips.tsx does the fitting): the strip's own px-3. Nothing else
-// shares the strip's line.
-const CARD_CHIP_PADDING = 24;
 
 export const LinkCard = memo(function LinkCard({
   link,
@@ -220,7 +214,6 @@ export const LinkCard = memo(function LinkCard({
         <LinkTagChips
           link={link}
           tagsById={tagsById}
-          availableWidth={cardWidth - CARD_CHIP_PADDING}
           selectMode={selectMode}
           className="px-3 pb-3"
         />

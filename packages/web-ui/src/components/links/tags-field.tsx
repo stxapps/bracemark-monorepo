@@ -22,6 +22,11 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { TagsCommand } from './tags-command';
 
+// Keep the editor control bounded even when a link carries many tags. Every
+// selected tag remains visible and toggleable in TagsCommand; this trigger is a
+// compact summary with direct removal for the first few.
+const MAX_VISIBLE_SELECTED_TAGS = 2;
+
 export function TagsField({
   id,
   value,
@@ -62,6 +67,8 @@ export function TagsField({
   const chosen = value
     .map((tid) => ({ id: tid, name: nameById.get(tid) }))
     .filter((t): t is { id: string; name: string } => t.name !== undefined);
+  const visibleChosen = chosen.slice(0, MAX_VISIBLE_SELECTED_TAGS);
+  const hiddenChosenCount = chosen.length - visibleChosen.length;
 
   const toggle = (tagId: string) => {
     onChange(value.includes(tagId) ? value.filter((t) => t !== tagId) : [...value, tagId]);
@@ -84,21 +91,20 @@ export function TagsField({
           // The name, because the consumer's `<Label htmlFor>` CANNOT supply it:
           // a label only names a labelable element, and this is a div (see the
           // note above, and ui/label.tsx, which makes the label's CLICK reach here
-          // by hand for the same reason). Hardcoded because all four consumers —
-          // web quick-add, the edit dialog, BulkTagsDialog, the browser
-          // extension's popup — label it "Tags"; one that needs another word
+          // by hand for the same reason). Hardcoded because all three consumers —
+          // web quick-add, the edit dialog, and the browser extension's popup —
+          // label it "Tags"; one that needs another word
           // should take this as a prop rather than leave the control unnamed.
           aria-label="Tags"
           aria-controls={listId}
           aria-expanded={open}
           tabIndex={0}
           className={cn(
-            'flex min-h-9 w-full flex-wrap items-center gap-1.5 rounded-2xl border',
+            'flex h-9 w-full flex-nowrap items-center gap-1.5 overflow-hidden rounded-2xl border',
             // `text-base md:text-sm` — the control type step (input.tsx), which
             // here sets the "Add tags" placeholder and the trigger's own line
             // box. The chips keep `text-xs`: they are a caption tier of their
-            // own, and `min-h-9` already holds the empty trigger to the Input's
-            // height at either size.
+            // own, and `h-9` holds every selection to the Input's height.
             'bg-input/30 px-3 py-1.5 text-base outline-none md:text-sm',
             focused || open ? 'border-ring ring-[3px] ring-ring/50' : 'border-input',
           )}
@@ -114,7 +120,7 @@ export function TagsField({
           }}
         >
           {chosen.length > 0 ? (
-            chosen.map((t) => (
+            visibleChosen.map((t) => (
               <span
                 key={t.id}
                 // `bg-input` (not `bg-muted`) so the chip separates from the
@@ -127,16 +133,16 @@ export function TagsField({
                 // balanced across (styles.css, `.dark`) — it reads Lc 14.2 on
                 // the field here against light mode's 10.9, which is what kept
                 // that value at 20% rather than the 25% the border role wanted.
-                // `max-w-full` + a `truncate` name, bracemark-expo's chip: as a
-                // flex item the chip is never narrower than its longest word,
-                // so one long unbroken name overflowed the field's border.
-                className="inline-flex max-w-full items-center gap-1 rounded-full bg-input px-2 py-0.5 text-xs"
+                // `min-w-0 shrink` + a `truncate` name lets both visible chips
+                // give width up independently while their remove buttons stay
+                // intact. The non-shrinking `+N` and chevron always remain.
+                className="inline-flex min-w-0 shrink items-center gap-1 rounded-full bg-input px-2 py-0.5 text-xs"
               >
-                <span className="truncate">{t.name}</span>
+                <span className="min-w-0 truncate">{t.name}</span>
                 <button
                   type="button"
                   aria-label={`Remove ${t.name}`}
-                  className="inline-flex"
+                  className="inline-flex shrink-0"
                   // Don't let removing a chip open the popover.
                   onPointerDown={(e) => e.stopPropagation()}
                   onClick={(e) => {
@@ -150,6 +156,14 @@ export function TagsField({
             ))
           ) : (
             <span className="text-muted-foreground">Add tags</span>
+          )}
+          {hiddenChosenCount > 0 && (
+            <span
+              aria-label={`${hiddenChosenCount} more selected ${hiddenChosenCount === 1 ? 'tag' : 'tags'}`}
+              className="shrink-0 rounded-full bg-input px-2 py-0.5 text-xs"
+            >
+              +{hiddenChosenCount}
+            </span>
           )}
           <ChevronsUpDownIcon className="ml-auto size-4 shrink-0 text-muted-foreground" />
         </div>
