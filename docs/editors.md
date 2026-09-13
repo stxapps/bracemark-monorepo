@@ -281,10 +281,29 @@ draft; each keystroke commits or reverts in place):
     which is the sighted half of the `role="alert"` it already carried. Web
     uses `scrollIntoView({ block: 'nearest' })`, so a notice already on screen
     moves nothing; expo has no DOM to walk, so `scroll-host.tsx` grew
-    `scrollIntoView(node)` — measured in window coordinates against the same
-    viewport the drag layer compares a gesture against, animated, and skipped
-    when the notice is already visible. `info` and `pending` never move the
-    page: they are standing text, not events.
+    `scrollIntoView(node)` — `measureLayout` onto the host's own wrapper, so `y`
+    arrives in CONTENT coordinates and is compared against the window of content
+    on screen (`offsetY` … `+ viewportHeight`), animated, and skipped when the
+    notice is already visible. `info` and `pending` never move the page: they are
+    standing text, not events.
+
+    **Which frame each side of that comparison is in decides whether the expo
+    half runs at all, and getting it wrong is silent.** `measureLayout` sums
+    layout boxes up the tree and a scroll offset is not one of them, so comparing
+    its `y` against the viewport's own box — the obvious reading of "is this on
+    screen" — compares two numbers that never move relative to each other: driven
+    on the simulator with the page a screen down, the notice measured 156 either
+    way, so it counted as already visible every time and the method did nothing.
+    There is no failure to see, only a page that stays put, which is
+    indistinguishable from the bug the scroll was added to fix. Window
+    coordinates for both sides is the other road and worse: the wrapper sits
+    inside a `SafeAreaView`, which applies its insets as a native view outside
+    Yoga ([soft-keyboard.md](./soft-keyboard.md), _the traps_), so measuring the
+    node one way and the viewport the other mixes two frames a top inset apart.
+    The rule is one tree and one frame — hence the content-coordinate comparison
+    above, and hence the drag layer's window-coordinate `viewport()` being a
+    SEPARATE accessor rather than one both callers share: it exists to be
+    compared against a gesture's `absoluteY`, which is genuinely in the window.
 
     **The scroller has to declare the band its sticky bar covers, or the web
     half only looks like it works.** `nearest` aims at the SCROLLPORT's edge,

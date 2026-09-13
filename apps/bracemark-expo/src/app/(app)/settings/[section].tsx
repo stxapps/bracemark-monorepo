@@ -31,8 +31,12 @@ export default function SettingsSectionScreen() {
       {/* The scrolling frame lives in the feature (scroll-host.tsx): the Lists
           and Tags tables drag rows INSIDE it, so the scroll view is part of that
           machinery (scroll offset, auto-scroll, locking) rather than page
-          furniture. It still does the keyboard-aware job it always did. */}
-      <SettingsScrollHost>
+          furniture. It still does the keyboard-aware job it always did.
+          `resetKey` is what puts the new section at the top: this screen is
+          re-rendered, not remounted, when the section param moves (the drawer
+          reuses its route key), so the scroller has to be told — see its
+          effect. */}
+      <SettingsScrollHost resetKey={section}>
         <SectionContent section={section} />
       </SettingsScrollHost>
     </StyledSafeAreaView>

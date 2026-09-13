@@ -22,6 +22,10 @@
 // the viewport's position in WINDOW coordinates anyway (to compare against the
 // gesture's `absoluteY`), which a layout event can't give — it's parent-relative.
 //
+// It also owns the SECTION SWITCH, because it owns the offset: `resetKey` is the
+// section id, and a change in it puts the page back at the top (see the effect
+// below for why nothing else does that here).
+//
 // `useSettingsScroll()` returns null outside a host (a section rendered in a test
 // or another frame still works — it just gets no auto-scroll), so every consumer
 // must treat the handle as optional.
@@ -31,6 +35,7 @@ import {
   type ReactNode,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -76,7 +81,15 @@ export function useSettingsScroll(): SettingsScrollHandle | null {
   return useContext(SettingsScrollContext);
 }
 
-export function SettingsScrollHost({ children }: { children: ReactNode }) {
+export function SettingsScrollHost({
+  resetKey,
+  children,
+}: {
+  // The identity of the page under this scroller — the section id from the route.
+  // A change in it means different content, so the offset resets (see below).
+  resetKey: string;
+  children: ReactNode;
+}) {
   const wrapperRef = useRef<View>(null);
   const scrollRef = useRef<ScrollView>(null);
 
@@ -99,6 +112,40 @@ export function SettingsScrollHost({ children }: { children: ReactNode }) {
     },
     [scrollY],
   );
+
+  // Put the page back at the top when the SECTION changes. Not optional polish:
+  // the sidebar's pick is a `router.push('/settings/<id>')` into a Drawer, and
+  // expo-router demotes a push to a navigate there (docs/search.md, _leaving the
+  // page and coming back_) — a drawer's router reuses the route KEY when only the
+  // params move, so the one `[section]` screen RE-RENDERS rather than remounting
+  // and this ScrollView keeps the offset the previous section left. Open Lists,
+  // scroll down its table, pick About: a three-line page arrives scrolled past
+  // its own end, or clamped to a middle the user never chose. Nothing reports it
+  // — the offset is a valid offset, and the section that rendered is the section
+  // that was asked for.
+  //
+  // Web needs no equivalent and that is why this is easy to lose: its `<main>` is
+  // in the layout and stays mounted across the same navigation, but Next's app
+  // router scrolls the new segment into view on every one, which walks every
+  // overflow ancestor — so the port is where the behaviour has to be spelled out.
+  //
+  // Same shape as the links pane's view-change reset (`features/links/main.tsx`,
+  // web's `useScrollTopOnQuery`): an effect on the identity that means "different
+  // content", guarded by a prev-ref so the host's other renders (a drag locking
+  // the scroll, a keyboard) leave the user's position alone. `animated: false` —
+  // this is a page replacing another under a closing drawer, not a movement the
+  // user should watch.
+  //
+  // The JS mirrors move with it for `scrollBy`'s reason: the next drag frame or
+  // `scrollIntoView` call reads them and `onScroll` can lag a frame behind.
+  const prevResetKeyRef = useRef(resetKey);
+  useEffect(() => {
+    if (prevResetKeyRef.current === resetKey) return;
+    prevResetKeyRef.current = resetKey;
+    offsetY.current = 0;
+    scrollY.value = 0;
+    scrollRef.current?.scrollTo({ y: 0, animated: false });
+  }, [resetKey, scrollY]);
 
   const handle = useMemo<SettingsScrollHandle>(
     () => ({

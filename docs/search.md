@@ -206,6 +206,21 @@ built a _second_ links card at the default view and left the real one buried bel
 between sections doesn't stack: they're screens of the Settings drawer, so
 expo-router demotes their `push` to a navigate.
 
+**That demotion is also why a section arrives at the top only if it's told to.** A
+navigate onto the same `[section]` route reuses the route KEY (nothing declares a
+`getId`), so the one screen re-renders with new params and everything it holds
+stays mounted — including `features/settings/scroll-host.tsx`'s ScrollView, which
+kept the offset the previous section left: scroll the Lists table down, pick
+About, and a three-line page opens scrolled past its own end or clamped to a
+middle nobody chose. So the host takes a `resetKey` (the section id) and scrolls
+to 0 when it changes — the same effect shape as the links pane's view-change reset
+([client-queries.md](./client-queries.md), _pagination_), for the same reason: a
+scroller that outlives the content under it. **Web needs none of this and that is
+the trap** — its `<main>` outlives the section too, but Next's app router scrolls
+the new segment into view on every navigation and that walks the overflow
+ancestor, so the behaviour is free there and has to be written out here. Nothing
+fails when it isn't: the offset is legal and the right section rendered.
+
 **bracemark-web remembers.** Nothing stays mounted — navigating to `/settings` unmounts
 the links tree — so the route itself has to be recorded. `LinksPageProvider` writes the
 current href to `sessionStorage` on every URL change (`lib/links-return.ts` owns the key),
