@@ -561,16 +561,43 @@ that no rule case had:
 Replacing it means exporting again and replacing both files, since the pair is
 the point.
 
-`import/linkwarden.spec.ts` is the same IOU, written where it can't be missed —
-its header states in the first paragraph that there is **no real specimen**, and
-what stands in for one: LinkWarden's own export controller (`exportData.ts`,
-which returns the user's Prisma row minus the password and the user's id), plus
-two independent readers of real backups that agree on the subset we use
-(karakeep's zod schema and the community `backup.json` → Netscape converter). A
-source-derived schema is a stronger footing than memory and a weaker one than a
-file: every fixture in that spec still agrees with our parser by construction.
-One real `backup.json` — from any LinkWarden instance, including a throwaway —
-replaces the first case there and nothing else.
+LinkWarden's IOU is paid. `import/linkwarden-export.spec.ts` runs one real
+`backup.json` — a hosted instance, exported 2026-09-13, kept whole at 11
+collections / 25 links / 3 pins — against `__fixtures__/linkwarden-export.json`.
+Until it landed, `import/linkwarden.spec.ts` opened by saying there was no
+specimen and naming what stood in for one: LinkWarden's export controller
+(`exportData.ts`, the user's Prisma row minus the password and the user's id)
+plus two second-hand readings of it. That footing held the shape and got two
+rules wrong, both of which had been written down here and in
+[data-lifecycle.md](./data-lifecycle.md) as if settled:
+
+- **`createdAt` is the wrong date.** It is when LinkWarden minted the row, so a
+  library that arrived by import carries the minute of the import run — two
+  distinct values across all 25 rows — while `importDate` holds when each link
+  was actually saved. The wrong reading produces 25 correctly-filed, correctly
+  titled, correctly dated-looking links, all from the day the user switched apps.
+- **A title arrives HTML-escaped**, because LinkWarden stores its `<title>`
+  scrape undecoded. The control is inside a single row: `name` reads
+  `Marketing &amp; Technology` where that row's `metaDescription` — same page,
+  same scrape — has a bare `&`. No hand-written JSON fixture would have had an
+  entity in it, because JSON doesn't need one.
+- **The archived copies are in the file** (on the pinned rows, as server-side
+  paths), which both docs denied. No bytes are, though — and that is now
+  attested rather than assumed: the account uploaded a custom image and
+  re-exported, and the image appears nowhere in the JSON.
+
+The specimen is anonymized, which the netscape fixtures' rule forbids for a
+reason — so the rule it is held to instead is written in its spec header: every
+substitution preserves the property the original carried (the `&amp;` and its
+bare-`&` control, an unbalanced U+202D, Thai script, an embedded `"`, empty query
+values, a `www.` host beside its bare twin, the exact duplicate rows). What is
+verbatim: key order, every id and `parentId`, every timestamp, the collection and
+tag names. What is replaced: URLs, titles, scraped descriptions, and the four
+account scalars that identify a person.
+
+Rules still live in `linkwarden.spec.ts`, one per hand-written case — a fixture
+can be shaped to reach an edge, and a real library can't. Replacing the specimen
+means exporting again from an instance and re-anonymizing by the same rule.
 
 `bracemark-web` was the gap worth naming and no longer is. Its suite is shaped
 by what only this app can lose, so most of the file tree has no spec on purpose —

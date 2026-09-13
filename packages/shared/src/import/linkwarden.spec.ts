@@ -4,17 +4,17 @@ import { parseImportText } from './parse';
 
 // LinkWarden's backup.json, rule by rule.
 //
-// NO REAL SPECIMEN, and that is stated here rather than left to be discovered:
-// the shape these fixtures are built from comes from LinkWarden's own export
-// controller (`exportData.ts` returns the user's Prisma row minus `password` and
-// the user's id) and is corroborated by two independent readers of real
-// backups — karakeep's zod schema for its LinkWarden importer, and the community
-// `backup.json` → Netscape converter. That is a stronger footing than memory and
-// a weaker one than a file: everything below agrees with our parser by
-// construction, which is exactly the limit `brace-export.spec.ts` and
-// `netscape-exports.spec.ts` exist to escape for the formats where we DO have
-// one. A real export (`docs/testing.md`, _import specimens_) replaces the first
-// case here and nothing else.
+// THE SPECIMEN IS NEXT DOOR NOW. This header used to open by saying there wasn't
+// one — that these fixtures came from LinkWarden's export controller
+// (`exportData.ts` returns the user's Prisma row minus `password` and the user's
+// id) plus two second-hand readings of it, and so agreed with our parser by
+// construction. `linkwarden-export.spec.ts` and
+// `__fixtures__/linkwarden-export.json` are the escape from that, and they
+// settled two things this file had wrong by inheritance: the archived copies ARE
+// exported (as server-side paths, on the pinned rows only), and `createdAt` is
+// the wrong date to read. Rules still belong HERE, one per case, where a fixture
+// can be shaped to reach them — the specimen holds the relations a real library
+// has and cannot be edited to test an edge.
 //
 // The fixtures deliberately put the user's scalar columns FIRST, because that is
 // where a real file puts them and it is what the detection probe has to survive.
@@ -100,6 +100,74 @@ describe('parseLinkwardenExport', () => {
         pinRank: '000000',
       },
     ]);
+  });
+
+  // `importDate` is the date the link was SAVED, carried over from wherever
+  // LinkWarden imported it from; `createdAt` is when LinkWarden minted the row.
+  // For anyone who arrived by import — most people — the second is the day they
+  // switched apps, identical across their whole library. Both orders are here
+  // because the fallback is what a link added by hand relies on.
+  it('prefers importDate over createdAt, and falls back when there is none', () => {
+    const dated = JSON.stringify({
+      collections: [
+        {
+          id: 1,
+          name: 'C',
+          parentId: null,
+          links: [
+            {
+              id: 1,
+              url: 'https://example.com/imported',
+              tags: [],
+              importDate: '2019-06-01T00:00:00.000Z',
+              createdAt: '2024-03-01T10:00:00.000Z',
+            },
+            {
+              id: 2,
+              url: 'https://example.com/added-here',
+              tags: [],
+              importDate: null,
+              createdAt: '2024-03-01T10:00:00.000Z',
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(parseLinkwardenExport(dated).map((link) => link.createdAt)).toEqual([
+      Date.parse('2019-06-01T00:00:00.000Z'),
+      Date.parse('2024-03-01T10:00:00.000Z'),
+    ]);
+  });
+
+  // A `name` is LinkWarden's own scrape of the page's `<title>`, stored without
+  // decoding — so an HTML entity in a JSON string is the producer's artifact, and
+  // the title is the ONLY field it can be in: `description` is typed by the user
+  // and so is a tag name.
+  it('decodes an entity in the title and leaves the typed fields alone', () => {
+    const escaped = JSON.stringify({
+      collections: [
+        {
+          id: 1,
+          name: 'C',
+          parentId: null,
+          links: [
+            {
+              id: 1,
+              name: 'Ben &amp; Jerry&rsquo;s',
+              url: 'https://example.com/e',
+              description: 'Typed with an &amp; in it',
+              tags: [{ id: 1, name: 'R&amp;D' }],
+            },
+          ],
+        },
+      ],
+    });
+
+    const [link] = parseLinkwardenExport(escaped);
+    expect(link.customTitle).toBe('Ben & Jerry’s');
+    expect(link.note).toBe('Typed with an &amp; in it');
+    expect(link.tagNames).toEqual(['R&amp;D']);
   });
 
   it('files a link under its whole collection chain, root first', () => {

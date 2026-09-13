@@ -1,3 +1,4 @@
+import { decodeHtmlEntities } from '../html/entities';
 import { normalizeUrl } from '../url/url';
 import type { ImportedLink } from './bundle';
 import { parseEpoch } from './epoch';
@@ -23,31 +24,57 @@ import { parseEpoch } from './epoch';
 //
 // So `collections` is NOT the first key (the user's scalar columns come first),
 // which is what the detection probe in detect.ts has to survive, and the ids the
-// path walk needs ARE present — only the USER's id is stripped. Two independent
-// readers of real backups agree on this subset (karakeep's zod schema for its
-// LinkWarden importer, and the community `backup.json` → Netscape converter), and
-// the export controller is the source it was checked against. What we have never
-// had is a real specimen: see `linkwarden.spec.ts`, which says so at the top.
+// path walk needs ARE present — only the USER's id is stripped (`ownerId` and
+// `createdById` still sit on every collection, link and tag, so "minus the user's
+// id" is a TOP-LEVEL claim only). There is now a real specimen —
+// `__fixtures__/linkwarden-export.json`, run end to end by
+// `linkwarden-export.spec.ts` — and the two rules below it contradicted are
+// marked where they sit.
 //
 // WHAT IS DELIBERATELY DROPPED:
 //  - `rssSubscriptions` — feeds, not links; nothing here models one.
 //  - `icon`/`iconWeight`/`color` — LinkWarden's per-collection and per-link
 //    decor, with no counterpart (the same call brace.ts makes about `decor`).
 //  - `preview`/`image`/`pdf`/`monolith`/`readable`/`textContent` — LinkWarden's
-//    archived copies, and they are not IN the export anyway (`exportData` omits
-//    them). A link's image here would have to be re-fetched, which is the one
-//    thing import must never do: it would announce the user's whole library to
-//    every host in it.
-//  - the top-level user scalars — another product's account.
+//    archived copies. They ARE in the export, which this file used to deny: a
+//    `pinnedLinks` row carries all six (the collection rows carry none of them,
+//    so the two row shapes DIFFER — a pinned row also has no `tags`). What they
+//    carry is a server-side PATH, `archives/341597/4842862.jpeg`, never bytes:
+//    the specimen was re-exported after uploading a custom image and the file
+//    contains no `data:` URI and no base64 run of any length. So nothing crosses
+//    even when we want it to, and a link's image would have to be RE-FETCHED,
+//    which is the one thing import must never do — it would announce the user's
+//    whole library to every host in it. `bundle.images` is empty for this format
+//    because the producer leaves it no choice.
+//  - the top-level user scalars — another product's account. `collectionOrder`
+//    is among them: it ranks the root collections (partially — the specimen's
+//    lists 3 of its 5) and nothing here models folder order, which the
+//    resolver assigns by encounter instead.
+//  - a collection's `description`. Our `List` has a name and nothing else
+//    (sync/entities.ts), so there is nowhere to put it.
 //  - `collectionId` on a link. Membership comes from the NESTING, which is the
 //    only one of the two the file guarantees is consistent.
 
 // The default collection LinkWarden files everything into is just a collection
-// named "Unorganized" — it carries no flag, so it CANNOT be recognized
-// structurally, and matching it by name is exactly what `systemList` exists to
-// avoid (see bundle.ts): a name match would swallow a real folder someone named
-// the same, and it would miss the renamed default. It crosses as an ordinary
-// folder, which is the honest reading of a file that says nothing more.
+// (named "Unorganized" on the instances we have looked at) — it carries no flag,
+// so it CANNOT be recognized structurally, and matching it by name is exactly
+// what `systemList` exists to avoid (see bundle.ts): a name match would swallow a
+// real folder someone named the same, and it would miss the renamed default. It
+// crosses as an ordinary folder, which is the honest reading of a file that says
+// nothing more.
+//
+// The specimen does NOT attest that name, and it is worth saying so before
+// someone "corrects" this from it: its first collection was minted in the same
+// millisecond batch as the two beside it, 15 minutes after the account — it came
+// from a Raindrop import (it was called "Unsorted", then renamed), not from
+// signup. A file whose default was never used contains no default to look at.
+//
+// What the specimen DOES pin, one rung downstream: a collection named `archive`
+// resolves INTO the system Archive list, because ListResolver matches by
+// case-insensitive name and excludes only Trash (resolve.ts) while `readLists`
+// merges the system defaults in. That is the intended reading — a folder called
+// Archive is an archive — and `linkwarden-export.spec.ts` holds it, since
+// nothing else did.
 
 interface Named {
   name?: unknown;
@@ -58,6 +85,7 @@ interface LwLink extends Named {
   url?: unknown;
   description?: unknown;
   tags?: unknown;
+  importDate?: unknown;
   createdAt?: unknown;
   updatedAt?: unknown;
 }
@@ -166,7 +194,19 @@ export function parseLinkwardenExport(text: string): ImportedLink[] {
       // which case its UI shows the URL. It crosses as customTitle
       // (docs/data-lifecycle.md): nothing in the file says whether a human typed
       // it or a fetch did, and only the second is safe to overwrite.
-      const title = nonEmpty(row.name);
+      //
+      // DECODED, which a JSON field has no business needing — the value is
+      // LinkWarden's own scrape of the page's `<title>`, stored without decoding
+      // it, so the entity is the producer's artifact and not the transport's.
+      // The specimen carries the control IN ONE ROW: `name` reads
+      // `Marketing &amp; Technology` while that row's `metaDescription` — same
+      // page, same scrape — has a bare `&`. Untouched, two of its 25 rows import
+      // with a visible `&amp;` in the title. This is the parse boundary, which is
+      // where html/entities.ts says to do it and exactly once (never in
+      // cleanTitle, downstream of every client). Only the title: `description` is
+      // the user's typed note and a collection/tag name is their own word, so
+      // decoding those would corrupt an ampersand somebody meant.
+      const title = nonEmpty(decodeHtmlEntities(typeof row.name === 'string' ? row.name : ''));
       if (title !== undefined) link.customTitle = title;
 
       // `description` is the note the user typed under the link — the field our
@@ -174,7 +214,18 @@ export function parseLinkwardenExport(text: string): ImportedLink[] {
       const note = nonEmpty(row.description);
       if (note !== undefined) link.note = note;
 
-      const createdAt = timestamp(row.createdAt);
+      // `importDate` WINS over `createdAt` when the file carries one, and the
+      // specimen is why. `createdAt` is when the ROW was made in LinkWarden; a
+      // library that arrived there through an import (a bookmarks file, another
+      // service) has every row stamped with the minute of the import run —
+      // literally two values across all 25 rows of the specimen, matching its two
+      // import batches — while `importDate` holds the date each link was
+      // originally saved, spread across the real days. Reading `createdAt` alone
+      // flattens a user's whole history onto the day they moved apps, and
+      // nothing about the result looks wrong: the links are all there, sorted
+      // newest-first, all dated the same afternoon. This is the same field a
+      // Netscape `ADD_DATE` becomes, one import chain further back.
+      const createdAt = timestamp(row.importDate) ?? timestamp(row.createdAt);
       if (createdAt !== undefined) link.createdAt = createdAt;
       const updatedAt = timestamp(row.updatedAt);
       if (updatedAt !== undefined) link.updatedAt = updatedAt;

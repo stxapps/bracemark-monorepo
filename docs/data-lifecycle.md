@@ -215,17 +215,46 @@ _does_ write Netscape HTML, always crossed fine.
 What crosses now: `collections` nest through `parentId` into a folder chain, a
 link's `name` is its title (as `customTitle`, like every interop title — below),
 `description` is its note, `tags[].name`
-are tags, `createdAt`/`updatedAt` are the timestamps, and the user's separate
+are tags, **`importDate` is the created date** with `createdAt` as the fallback,
+`updatedAt` is the updated one, and the user's separate
 `pinnedLinks` relation marks pins by id — read as a SET, never as extra rows, or
 every pinned link would import twice. What does not: `rssSubscriptions` (feeds),
-per-link decor, and LinkWarden's archived copies, which its own exporter omits
-anyway. Its default collection, **"Unorganized", crosses as an ordinary folder** —
-it carries no flag in the file, so it can't be recognized structurally, and
-matching it by NAME is the mistake `systemList` exists to prevent (it would
-swallow a real folder called Unorganized and miss a renamed default). Detection
-is structural in two parts, an anchor plus a scan, for a reason the file explains:
-LinkWarden exports the user's whole Prisma row, so `collections` is not the first
-key.
+per-link decor, a collection's `description` (our `List` has only a name), the
+user scalars including `collectionOrder`, and LinkWarden's archived copies.
+
+Three of those came from a real `backup.json` rather than from reading
+LinkWarden's exporter, and two of them corrected this page
+([testing.md](./testing.md), _import specimens_):
+
+- **`importDate`, not `createdAt`.** `createdAt` is when LinkWarden minted the
+  row; a library that reached it by import — the ordinary way anyone arrives —
+  has every row stamped with the minute of the import run. In the specimen that
+  is two values across 25 links. `importDate` holds when each link was really
+  saved, so it wins when present. Nothing about the wrong reading looks wrong:
+  every link is there, newest-first, all dated the day the user switched apps.
+- **A title arrives HTML-escaped.** LinkWarden stores its `<title>` scrape
+  without decoding it, so a JSON string carries `&amp;` — the specimen proves it
+  in one row, whose `metaDescription` (same page, same scrape) has a bare `&`.
+  Titles are decoded at the parse boundary; `description` and tag names are the
+  user's own words and are not.
+- **The archived copies are IN the export** — this page said they weren't. A
+  `pinnedLinks` row carries `preview`/`image`/`pdf`/`monolith`/`readable`/
+  `textContent`; a collection's link rows carry none of them, so the two row
+  shapes differ. What they hold is a server-side path, never bytes: the specimen
+  was re-exported after uploading a custom image and the image is nowhere in the
+  file. So no image can cross, and re-fetching one is the single thing import
+  must never do — it would announce the user's whole library to every host in it.
+
+Its default collection **crosses as an ordinary folder** — it carries no flag in
+the file, so it can't be recognized structurally, and matching it by NAME is the
+mistake `systemList` exists to prevent (it would swallow a real folder called
+Unorganized and miss a renamed default). One rung downstream a collection named
+`archive` DOES land in the system Archive list, because `ListResolver` matches
+folders by case-insensitive name and excludes only Trash — the intended reading
+of a folder called Archive, and the specimen is the first file to exercise it.
+Detection is structural in two parts, an anchor plus a scan, for a reason the file
+explains: LinkWarden exports the user's whole Prisma row, so `collections` is not
+the first key.
 
 Both halves land through **one projection** — `import/project.ts`
 `projectImportedLinks` — which turns parsed rows into the entities to write:
