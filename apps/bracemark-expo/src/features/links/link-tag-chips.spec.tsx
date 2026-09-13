@@ -37,11 +37,13 @@ test('starts conservatively, then expands from its own measured width', () => {
   const { UNSAFE_root, getByText, queryByText } = render(
     <LinkTagChips
       link={link}
-      tagsById={new Map([
-        ['alpha', 'Alpha'],
-        ['beta', 'Beta'],
-        ['gamma', 'Gamma'],
-      ])}
+      tagsById={
+        new Map([
+          ['alpha', 'Alpha'],
+          ['beta', 'Beta'],
+          ['gamma', 'Gamma'],
+        ])
+      }
       selectMode={false}
     />,
   );
@@ -60,9 +62,7 @@ test('starts conservatively, then expands from its own measured width', () => {
   expect(getByText('Beta')).toBeTruthy();
   expect(getByText('Gamma')).toBeTruthy();
   expect(queryByText('+2')).toBeNull();
-  const enlargedTargets = UNSAFE_root.findAll(
-    (node: TestNode) => node.props.hitSlop !== undefined,
-  );
+  const enlargedTargets = UNSAFE_root.findAll((node: TestNode) => node.props.hitSlop !== undefined);
   expect(enlargedTargets.length).toBeGreaterThanOrEqual(3);
   expect(enlargedTargets.every((node: TestNode) => node.props.hitSlop?.top === 10)).toBe(true);
   expect(enlargedTargets.every((node: TestNode) => node.props.hitSlop?.bottom === 10)).toBe(true);

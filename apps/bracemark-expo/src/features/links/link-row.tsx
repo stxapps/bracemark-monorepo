@@ -185,12 +185,7 @@ export const LinkRow = memo(function LinkRow({
             {pinned && <PinnedBadge />}
             {link.note !== undefined && link.note !== '' && <NoteBadge />}
           </View>
-          <LinkTagChips
-            link={link}
-            tagsById={tagsById}
-            selectMode={selectMode}
-            className="mt-3"
-          />
+          <LinkTagChips link={link} tagsById={tagsById} selectMode={selectMode} className="mt-3" />
         </View>
       </View>
       {showRelativeTime && (

@@ -107,9 +107,7 @@ export function ShareTagsPicker({
             })),
             ...visibleNew.map((tag) => ({ ...tag, selected: true })),
           ]}
-          onToggle={(id) =>
-            newTags.some((tag) => tag.id === id) ? onRemoveNew(id) : onToggle(id)
-          }
+          onToggle={(id) => (newTags.some((tag) => tag.id === id) ? onRemoveNew(id) : onToggle(id))}
           emptyText={
             visibleTags.length === 0 && visibleNew.length === 0 && !canCreate
               ? tags.length === 0 && newTags.length === 0

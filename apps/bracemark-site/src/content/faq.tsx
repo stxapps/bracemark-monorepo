@@ -252,9 +252,8 @@ export const FAQ_GROUPS: FaqGroup[] = [
             looking at, so the title and preview image come from your own browser and nothing has to
             fetch that page on your behalf. On a phone or tablet, share into the iOS or Android app
             from whatever app you are in — the link is saved on the spot and, with the default Link
-            previews setting, the app fetches the page itself the next time you open it.
-            Saving from the web app works without either — see the previews question below for what
-            changes.
+            previews setting, the app fetches the page itself the next time you open it. Saving from
+            the web app works without either — see the previews question below for what changes.
           </>
         ),
       },
