@@ -305,7 +305,17 @@ export function SettingsRow({
 // `block: 'nearest'` is what keeps that from being a nuisance — a notice already
 // on screen does not move the page at all, which is the common case on a short
 // pane — and it walks whatever ancestor actually scrolls, so this needs to know
-// nothing about the settings layout. Only `error` moves the page: `info` and
+// nothing about the settings layout. What `nearest` measures is the SCROLLPORT,
+// which is not the same as the part of it a reader can see: the settings pane
+// keeps its topbar sticky INSIDE the scroller, and for as long as the scroller
+// didn't say so, this call aimed the notice at a top edge 56px of bar was sitting
+// on — hidden when it moved, and left alone when it was already under there,
+// since a covered element still counts as in view. That is the scroller's fact to
+// declare and it does (`scroll-pt-18`, layout.tsx, which carries the measurement
+// — the bar's 56 is the floor, the rest is air); the band comes out of the
+// optimal viewing region and this line is unchanged.
+// Any other frame that renders a notice under a sticky bar owes the same padding.
+// Only `error` moves the page: `info` and
 // `pending` are standing text, and yanking the viewport for a banner nobody
 // asked for is the behaviour this would deserve to be blamed for. `smooth`
 // respects prefers-reduced-motion in every browser we target (the OS setting

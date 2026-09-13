@@ -138,6 +138,14 @@ export function Topbar() {
   // `sticky` is still a positioned element, so the absolutely-placed close button
   // below anchors to this header exactly as it did under the `relative` it
   // replaced.
+  //
+  // `h-14` IS THE FLOOR UNDER THE SCROLLER'S `scroll-pt-18` (layout.tsx), because
+  // a sticky bar inside a scroll container hides that band from every
+  // scrollIntoView that aims at the top of it — SettingsNotice's error scroll
+  // landed under this bar until the padding cleared it. The padding is this 56
+  // plus 16 of air, so a notice arrives a step below the hairline instead of
+  // welded to it; layout.tsx carries that half. Grow this bar and the padding
+  // MUST grow with it; nothing will report the pair drifting apart.
   return (
     <header className={cn('sticky top-0 z-10 h-14 border-b border-border bg-background')}>
       {/* The label rides the content column; the close button does NOT. It is a

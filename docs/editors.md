@@ -285,6 +285,25 @@ draft; each keystroke commits or reverts in place):
     viewport the drag layer compares a gesture against, animated, and skipped
     when the notice is already visible. `info` and `pending` never move the
     page: they are standing text, not events.
+
+    **The scroller has to declare the band its sticky bar covers, or the web
+    half only looks like it works.** `nearest` aims at the SCROLLPORT's edge,
+    and the settings topbar is `sticky top-0` _inside_ that scroller
+    (`settings/layout.tsx`) — so a notice scrolled to the top edge landed
+    behind 56px of bar, and one already behind it counted as visible and moved
+    nothing at all. Neither case reports anything: the call fires, the promise
+    of "the message comes to the reader" is broken, and the click reads as
+    having done nothing — the exact bug the scroll was added to fix.
+    `scroll-padding-top` on the scroll container is the fix (`scroll-pt-18`),
+    because it takes the obscured band out of the scrollport's optimal viewing
+    region for every scroll into the pane at once. The bar's `h-14` is a FLOOR
+    under that number, not an equality: at exactly 56 the notice lands welded to
+    the bar's hairline and still reads as chrome, so the padding is the band
+    plus one step of air.
+    It is deliberately NOT a `scroll-mt-*` on the notice: the bar's height
+    belongs to the frame, and the kit stays layout-ignorant. Any surface that
+    puts a notice under a sticky bar owes the same padding on its scroller.
+
   - `RenameField` **puts the stored name back when the commit doesn't land.**
     The field is uncontrolled and the call site keys it on the STORED name, so
     a failed write changes nothing and the row goes on displaying a name no

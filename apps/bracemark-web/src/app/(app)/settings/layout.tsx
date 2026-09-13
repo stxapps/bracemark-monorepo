@@ -16,6 +16,40 @@ import { Topbar } from './_panes/topbar';
 // whose scrollbars are overlays; ~15px wide on Windows and Linux). topbar.tsx
 // carries the rest.
 //
+// WHICH IS WHY THE SCROLLER OWES IT A `scroll-pt`. A sticky bar INSIDE a scroll
+// container covers the top 56px of the scrollport, and no scroll API knows that:
+// `scrollIntoView({ block: 'nearest' })` measures against the scrollport's own
+// box, so an element it lifts to the top edge lands BEHIND the bar, and one
+// already sitting behind the bar counts as visible and doesn't move at all.
+// That is SettingsNotice's error scroll (settings-kit.tsx) — the failure a rename
+// deep in the Lists table reports was being scrolled to precisely where it could
+// not be read, which looks exactly like a scroll that never fired. Driven in
+// Chromium at this geometry: from a screen below, `nearest` put the notice's top
+// at y=0 under a bar whose bottom is 56, fully hidden; from just above the fold
+// it moved nothing.
+//
+// `scroll-padding-top` is the one place the browser takes that obscured band as
+// an argument — it shrinks the scrollport's optimal viewing region, so both cases
+// land the element clear of the bar's hairline instead, and every other scroll
+// into this pane (a focused field, a jump link) gets the same correction without
+// asking. It belongs HERE rather than as a `scroll-mt-*` on whatever scrolls
+// itself: the bar is this frame's fact, and a notice that had to know the height
+// of a bar two files away is the coupling the kit deliberately doesn't have.
+// THE 18 IS THE BAR'S 14 PLUS A STEP OF AIR, and what ties the two numbers is a
+// FLOOR rather than an equality. 56px is the band the bar covers, so anything
+// under it leaves the notice hidden — but exactly 56 lands the notice's top edge
+// welded to the bar's hairline: nothing is obscured, and a red `role="alert"`
+// strip flush against the chrome's own border still reads as chrome rather than
+// as something that just appeared. `scroll-padding-top` is not "the height of the
+// bar", it is where the optimal viewing region starts, and the bar only sets its
+// minimum. The extra 16 is the step this surface already puts between a heading
+// and its content (settings-kit.tsx), so the landing is spaced in the page's own
+// rhythm rather than at a number picked for this one scroll.
+//
+// The rule to keep, then: `scroll-pt` >= the topbar's height. Grow the bar and
+// this MUST grow with it; topbar.tsx says the same on its `h-14` line, and
+// nothing will report the two drifting apart.
+//
 // `scrollbar-gutter: stable` is the other half, and it is a TRADE. The gutter's
 // width is part of the shared column's centring, so without it the whole settings
 // column — bar and content together — slides sideways between a section that
@@ -78,7 +112,7 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
     <div data-no-scrollbar-gutter="" className="flex h-dvh overflow-hidden safe-area">
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
-        <main className="min-h-0 flex-1 scrollbar-gutter-stable overflow-y-auto">
+        <main className="min-h-0 flex-1 scroll-pt-18 scrollbar-gutter-stable overflow-y-auto">
           <Topbar />
           {children}
         </main>
