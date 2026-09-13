@@ -168,4 +168,20 @@ describe('a real Raindrop.io export, HTML and CSV', () => {
     // …and Unsorted, end to end, is the default list itself.
     expect(links.filter((link) => link.listId === MY_LIST_ID)).toHaveLength(4);
   });
+
+  // The same pass-through `linkwarden-export.spec.ts` records, now in a second
+  // real file and from two parsers: the SYMBL title carries an unbalanced U+202D
+  // the page itself put there, and nothing on our side strips it. Raindrop's CSV
+  // has a balanced pair in that row's `excerpt` too, which is not a column we
+  // read — so a title is the only way one of these reaches a row. Not an
+  // endorsement, a record, so that a future sanitizer changes it deliberately
+  // rather than the fixture changing under one.
+  it('passes a bidi control character in a title through untouched, from either file', () => {
+    for (const links of [html, csv]) {
+      const carrying = links.filter((link) => link.customTitle?.includes('\u202d'));
+      expect(carrying).toHaveLength(1);
+      expect(carrying[0].url).toBe('https://symbl.cc/en/collections/quotation-marks/');
+      expect(carrying[0].customTitle).toContain('Quotation Marks \u202d\u00bb');
+    }
+  });
 });
