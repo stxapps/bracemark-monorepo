@@ -509,7 +509,14 @@ function AdvancedSearch() {
             keyboardVerticalOffset={keyboardVerticalOffset}
             className="flex-1"
           >
-            <View className="h-14 flex-row items-center justify-between border-b border-border pr-2 pl-4">
+            {/* Match the edit-link system-modal header rather than the app's
+                fixed-height topbar. Android is full-screen and SafeAreaView has
+                already cleared the status bar, so 8pt above and below the 40pt
+                close control preserves the ordinary 56pt bar. iOS pageSheet
+                reports almost no top inset despite its prominent system arc;
+                the extra 12pt above supplies optical clearance while the shared
+                bottom padding keeps the header-to-form rhythm unchanged. */}
+            <View className="shrink-0 flex-row items-center justify-between border-b border-border pt-2 pr-2 pb-2 pl-4 ios:pt-5">
               {/* Owns the row's remaining width — the topbars' title idiom, and
                   the shape link-add-panel.tsx's title needed when its header
                   was a row relaid out by a keyboard avoider (Android kept a

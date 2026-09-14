@@ -639,11 +639,12 @@ and must keep 32px against a 400pt box.
 corners: `rounded-t-2xl` for a bottom sheet.** Web quick-add is the same form as
 its wide popover, so changing containers must not change its shape; the native
 quick-add panel and share sheet follow that role too. `rounded-4xl` remains for a
-detached dialog with four visible corners. A system-presented modal route is the
-other case: the navigator owns the outer corners, so the app does not redraw
-them. Its inner spacing may still follow that presentation — the iOS edit-link
-page sheet has extra top padding beneath the system arc, while Android's
-full-screen modal keeps the ordinary app-bar inset.
+detached dialog with four visible corners. A system-presented modal is the other
+case: the navigator or native `Modal` owns the outer corners, so the app does not
+redraw them. Its inner spacing may still follow that presentation — the edit-link
+and Advanced Search headers use `pt-2 pb-2 ios:pt-5`: iOS gets extra top padding
+beneath the system page-sheet arc, while Android's full-screen modal keeps the
+ordinary 56pt app-bar rhythm.
 
 ⚠ **The two kits are separate copies and this pairing drifted for months.** There
 is nothing to import across them (Uniwind and Tailwind are separate compilers
