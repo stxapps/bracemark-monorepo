@@ -221,6 +221,14 @@ export const BROWSER_EXTENSION_LISTING = {
 // "Private by design" and friends are the failure mode: a claim about intent,
 // spent over a picture that could have carried a claim about the software.
 export const SCREENSHOT_CAPTIONS = {
+  /** The filled mobile links screen: the category and the product's core promise. */
+  onlyYou: BRAND.subtitle,
+  /** The mobile share sheet over the app that supplied the link. */
+  saveFromAnyApp: 'Save from any app',
+  /** The mobile links screen with a committed basic search and the keyboard away. */
+  searchOnDevice: 'Search titles and addresses on-device',
+  /** The mobile links drawer with both its Lists and Tags sections expanded. */
+  listsAndTags: 'Put links in lists and add tags',
   /** The popup open on a page, list and tags chosen, Save unpressed. */
   saveTab: 'Save the tab you’re reading',
   /**

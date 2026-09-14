@@ -1,0 +1,54 @@
+# The fourth mobile-store capture. Android arrives here with ShareActivity
+# already started explicitly over Chrome. iOS arrives in Safari and must cross
+# the system share sheet by coordinate: Maestro's semantic tap on the Bracemark
+# activity reports success but does not launch the extension (docs/share-sheet.md).
+appId: com.bracemark.app
+---
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      # Safari 26 shows this one-time coachmark over the new bottom menu. It is
+      # absent on repeat runs, so both operations stay optional.
+      - assertVisible:
+          text: 'Close'
+          optional: true
+      - tapOn:
+          text: 'Close'
+          optional: true
+
+      # Safari 26 moved Share into the bottom-right menu.
+      - tapOn: 'More'
+      - extendedWaitUntil:
+          visible: 'Share'
+          timeout: 30000
+      - tapOn: 'Share'
+      - extendedWaitUntil:
+          visible: 'Bracemark'
+          timeout: 30000
+      # Calibrated from the activity row documented in docs/share-sheet.md:
+      # (245,646) on 402x874pt. Percentages keep the same target on Pro Max.
+      - tapOn:
+          point: '61%,74%'
+
+- extendedWaitUntil:
+    visible:
+      id: 'share-add'
+    timeout: 60000
+
+# Make the compose state visibly useful without saving or mutating the fixture.
+- tapOn:
+    id: 'share-list-row'
+- tapOn: 'Interview prep'
+- tapOn:
+    id: 'share-tags-row'
+- tapOn: 'work'
+- tapOn: 'interview'
+- tapOn: 'thursday'
+- tapOn: 'Done'
+- assertVisible:
+    id: 'share-add'
+- assertVisible: 'Interview prep'
+- assertVisible:
+    id: 'share-tags-row'
+- takeScreenshot: ${SAVE_FROM_ANY_APP_SHOT}

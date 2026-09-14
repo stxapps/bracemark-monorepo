@@ -617,15 +617,17 @@ photographed. Everything this project publishes a picture of the product for is
 made here — the marketing site's one figure (the links page under "A private
 library is still a library"), the screenshots `apps/bracemark-web`'s
 `manifest.json` hands Chrome's install dialog, and the browser extension's Chrome
-Web Store and AMO listings.
+Web Store and AMO listings, and the native captures used to compose the App Store
+and Play Store phone listings.
 
-**Two legs, two entry points, and they do not share a browser.** `capture.ts`
+**Three legs, three entry points, and they do not share a browser.** `capture.ts`
 drives bracemark-web through `launchApp` and system Chrome; `extension.ts` drives
 the browser extension's popup, and has to launch Playwright's own Chromium with an
-unpacked build (_the browser this repo drives_, above). They share the account and
-nothing else — which is a prerequisite rather than a coupling: **`npm run shot`
-first, then `npm run shot:ext`**, because the second one only signs in and refuses
-to run against an account the first has not filled.
+unpacked build (_the browser this repo drives_, above); `mobile.ts` drives the
+native app with Maestro on exactly one booted platform. They share the account
+and nothing else — which is a prerequisite rather than a coupling: **`npm run
+shot` first**, because both later legs only sign in and refuse to run against an
+account the first has not filled.
 
 ```sh
 npm run dev              # api + web + extractor (the extractor is the point)
@@ -635,12 +637,18 @@ npm run shot -- library-narrow search-narrow   # …only these
 npm run shot -- --fresh  # …after wiping the account's data first
 npm run shot:ext         # the browser extension's popup — needs the above first
 npm run shot:ext -- ext-sync                   # …only this PNG (the flow still runs whole)
+npm run shot:mobile -- ios      # four native iPhone captures
+npm run shot:mobile -- android  # four native Pixel captures; boot it separately
 ```
 
 Out comes one PNG per scene in `e2e/.artifacts/shot/`, and for `library-list` the
 run also prints the `tools/scripts/make-image-variants.sh` line that turns it into
 the `.webp` variants `SCREENSHOT` in `apps/bracemark-site/src/app/page.tsx` points
-at.
+at. The mobile runner freezes the platform status bar, captures three app scenes
+plus the real platform share surface, verifies the native raster, and restores
+the status bar. Run iOS and Android separately: iOS uses Safari plus the share
+extension; Android uses Chrome behind `ShareActivity`. These are raw captures,
+not finished store canvases.
 
 **`scenes.ts` is WHAT, `capture.ts` is HOW, and the split is the point.** The
 account, the import, the extraction drain and the waits are one apparatus every

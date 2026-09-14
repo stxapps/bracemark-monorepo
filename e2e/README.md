@@ -90,6 +90,7 @@ terminal.
 | `paths.ts`         | where a run writes — the only source of `.artifacts` paths            |
 | `web/`             | Playwright specs (`*.e2e.ts`) and their fixtures                      |
 | `mobile/flows/`    | Maestro flows that run standalone                                     |
+| `mobile/shots/`    | Maestro flows for native store-listing captures                       |
 | `mobile/contract/` | Maestro legs of a contract run — driven by a `runner/`, never by hand |
 | `runner/`          | orchestrators: mobile, vectors, web→mobile, mobile→web                |
 | `seed/`            | the dev-account seed — not a test (above)                             |

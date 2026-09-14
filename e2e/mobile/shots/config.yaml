@@ -1,0 +1,5 @@
+# Published mobile-store captures. Kept out of mobile/flows' non-recursive glob:
+# these use the durable shot account and write assets; they are not regressions.
+appId: com.bracemark.app
+flows:
+  - '*.yaml'

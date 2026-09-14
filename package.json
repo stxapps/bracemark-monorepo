@@ -33,6 +33,7 @@
     "seed:fixtures": "nx seed:fixtures @stxapps/e2e",
     "shot": "nx shot @stxapps/e2e",
     "shot:preflight": "nx shot:preflight @stxapps/e2e",
+    "shot:mobile": "nx shot:mobile @stxapps/e2e",
     "shot:ext": "nx shot:ext @stxapps/e2e",
     "build": "nx run-many -t build --output-style=stream",
     "deploy:web:staging": "bash tools/scripts/deploy-static.sh web staging",

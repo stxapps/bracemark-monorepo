@@ -37,3 +37,20 @@ env:
 - openLink:
     link: ${EXPO_DEV_CLIENT_LINK}
     autoVerify: false
+
+# iOS 26.5 confirms custom-scheme handoff after app state is cleared. Older iOS
+# versions and Android open immediately, so keep the system button optional and
+# platform-gated. This remains part of cold launch: callers should never need to
+# know whether the dev-client link required a confirmation on this simulator.
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      # The alert can arrive after the app has already painted behind it. Pace
+      # the optional tap with an optional lookup so we do not race that arrival.
+      - assertVisible:
+          text: 'Open'
+          optional: true
+      - tapOn:
+          text: 'Open'
+          optional: true

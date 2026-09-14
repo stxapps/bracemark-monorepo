@@ -877,10 +877,11 @@ byte-identical copy rather than a duplicate.
 
 ⚠ **The PWA screenshots are bare captures — no device bezel, no caption.** Chrome
 draws them inside its own install dialog at a few hundred pixels, where a frame
-inside a frame reads as a mistake and a caption is illegible. Bezels and captions
-belong on a store listing, which is a different consumer of the same capture. And
-the set `manifest.json` lists is the set that ships: two of the v1 files sat in
-`public/` referenced by nothing, deploying 2MB per release for no reader.
+inside a frame reads as a mistake and a caption is illegible. A store listing is
+a different consumer of the same capture: it may add a caption, but the mobile
+store design deliberately adds no handset bezel either. And the set
+`manifest.json` lists is the set that ships: two of the v1 files sat in `public/`
+referenced by nothing, deploying 2MB per release for no reader.
 
 **They are `1170x2532` narrow and `2560x1600` wide** — 390x844 CSS at DPR 3, and
 1280x800 CSS at DPR 2. Both are chosen rather than inherited; the v1 files were
@@ -931,9 +932,9 @@ one**, and nothing here reads a store screenshot — a person uploads it to a
 console. What IS here is the half that can go wrong silently.
 
 **The captions are public, and that is the point of them being here at all.**
-`SCREENSHOT_CAPTIONS` in `packages/shared/src/stores/listing-copy.ts` holds one
-line per published screenshot. A caption is a user-facing claim drawn into a
-picture, so a caption typed beside the art would be the one piece of public copy
+`SCREENSHOT_CAPTIONS` in `packages/shared/src/stores/listing-copy.ts` holds every
+store-screenshot line. A caption is a user-facing claim drawn into a picture, so
+a caption typed beside the art would be the one piece of public copy
 in the product that nothing reviews — where in that file it gets the character
 budget, the bare-"extension" rule, the banned-claim list and the typographic
 apostrophe check for free, exactly like the store descriptions beside it. They are
@@ -945,9 +946,10 @@ is the only thing that does.** A long caption is accepted everywhere and simply
 sets smaller, wraps to three lines and spends the room the product was going to
 have. 40 characters is what the layout holds.
 
-⚠ **These four are NOT stamped, and the gap is real.** `assets.stamp.json` covers
-files in this tree; a store picture has no destination in it, so `check:assets`
-cannot see that a caption edit has made one wrong. The regenerate list above
+⚠ **These console-uploaded pictures are NOT stamped, and the gap is real.**
+`assets.stamp.json` covers files in this tree; a store picture has no destination
+in it, so `check:assets` cannot see that a caption edit has made one wrong. The
+regenerate list above
 therefore gains a line that nothing will enforce: **a caption changes → redraw the
 store screenshots.** They declare their inputs anyway, so the contract is already
 written the day a store family becomes a tracked asset.
@@ -967,14 +969,37 @@ either, for the reason the four screenshots are not, and it is not stamped
 either: **`BRAND.slogan` changing is one more line on the regenerate list that
 nothing will enforce.**
 
+**The mobile stores use the same four semantic pictures, not the same four
+files.** App Store receives native iOS captures at 1290x2796 for the 6.9-inch
+phone class; Play receives native Android captures composed at 1080x1920. These
+two phone families are the current eight-asset deliverable. If an iPad family is
+needed for submission, capture the same four jobs independently in the real iPad
+layout at 2064x2752 rather than stretching phone art. The Play size is deliberate
+9:16: it is recommendation-eligible and stays inside
+Play's 2:1 long-side ceiling, unlike a raw 1080x2400 emulator screenshot. Four
+is enough to meet Play's recommendation-surface minimum while leaving Apple's
+first three images to carry the main story. Re-verify every size and count in
+the consoles at submission.
+
+The families share captions and subject matter so the promise does not change by
+store, but each shows the platform-native app and share surface a buyer will
+actually receive. They are caption-above-product composites on the quiet border
+field: Bricolage Grotesque, foreground ink, one or two lines in the top 18%, then
+an unframed app pane with a hairline and top corners that continues past the
+bottom edge. No handset outline, Dynamic Island, camera hole, vendor mockup,
+gradient, decorative object or mixed light/dark set. This keeps the UI large,
+avoids claiming one device model, and follows Play's guidance to minimize text
+and device imagery. The caption-to-screen pairing and upload order remain outside
+the public repo.
+
 ⚠ **The one third-party thing in a store picture is the page being saved**, and it
 is chosen under the rule `e2e/seed/shot/library.ts` already argues: our own pages,
 public-domain or openly-licensed material, cover art that is a photograph rather
-than a masthead. The seeded library's own accepted exception — one logo-card cover,
-on the argument that one wordmark tile in a wall of photographs is what a real
-library looks like — **does not carry to a store submission**, where third-party
-marks are something a reviewer looks for. A frame decides that question, not a
-library, and a store screenshot crops harder than any figure on the site.
+than a masthead. The listing-safe seed permits no logo-card cover: a real host and
+favicon are nominative context, but a publisher mark presented as artwork is a
+different claim and a store reviewer can reasonably read it as an endorsement.
+A store screenshot crops harder than any figure on the site, so inspect the
+finished crop rather than approving the source list in the abstract.
 
 **When there is nothing fit to ship, the key comes out.** The eight v1 files were
 deleted outright rather than left in place until replacements existed: a manifest

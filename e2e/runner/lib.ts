@@ -93,8 +93,10 @@ function maestroBin(): string {
 export interface MaestroOptions {
   // `-e KEY=VALUE` pairs, read inside a flow as `${KEY}`.
   env?: Record<string, string>;
-  // Where to drop screenshots/recordings for this run.
+  // Where to write a JUnit report. This is not Maestro's artifact directory.
   outputDir?: string;
+  // Where Maestro may safely write this run's screenshots, recordings and logs.
+  testOutputDir?: string;
 }
 
 // Run a flow (or a directory of flows) and reject on a non-zero exit. Output is
@@ -107,6 +109,7 @@ export async function maestro(target: string, options: MaestroOptions = {}): Pro
     args.push('-e', `${key}=${value}`);
   }
   if (options.outputDir) args.push('--format', 'junit', '--output', options.outputDir);
+  if (options.testOutputDir) args.push('--test-output-dir', options.testOutputDir);
 
   await new Promise<void>((resolve, reject) => {
     const child = spawn(maestroBin(), args, { cwd: E2E_ROOT, stdio: 'inherit' });
