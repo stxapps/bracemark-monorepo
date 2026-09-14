@@ -138,12 +138,39 @@ function BulkTagsForm({ links, onClose }: { links: LinkView[]; onClose: () => vo
             {/* The dialog's only field is already open: TagsCommand owns the
                 search/create input and its capped scroller. `min-h-0 shrink`
                 carries DialogContent's height squeeze down to that list without
-                making a short taxonomy fill the dialog. */}
+                making a short taxonomy fill the dialog.
+
+                `-mx-2` cancels the 8px the picker sits inside this dialog's text
+                column: `Command`'s own `p-1` (it is styled to BE a popover, which
+                here it isn't — the dialog already is one) plus the 4 that
+                CommandInput's wrapper and CommandList's `px-1` add on top of it.
+                What that lands on the column is the search field's BORDER BOX and
+                the row highlight's rect — which is where a field belongs
+                (link-edit-dialog's inputs are flush on it) and what expo's port of
+                this dialog already draws, its bare Input and row press rects both
+                at the column edge. Not the row TEXT, which stays 12 further in
+                (CommandItem's `px-3`); pulling THAT to the column would hang the
+                highlight and its focus ring 12px out into a 24px gutter, i.e. a
+                full-bleed menu, which this isn't. Horizontal only, so `p-1`'s 4px
+                above and below stay — the gaps the block comments here derive are
+                measured with them.
+
+                `w-auto` is load-bearing beside it, not tidying. `Command`'s base
+                is `size-full`, and a flex item with a definite `width: 100%` does
+                not grow into a negative margin — it SHIFTS: measured, the box
+                lands 8px outside the column on the left and 8px INSIDE it on the
+                right, 16px of asymmetry. With the width back to `auto` the stretch
+                resolves as the line minus margins and both edges move out by 8.
+                tailwind-merge keeps `size-full` AND `w-auto` (they aren't a
+                conflict pair — it only drops `w-*`/`h-*` that a LATER `size-*`
+                overrides), so this rides on Tailwind emitting `size-*` before
+                `w-*`/`h-*` and the later rule winning — the same mechanism the
+                `h-auto` beside it already depends on for the height squeeze. */}
             <TagsCommand
               value={tagIds}
               onToggle={toggle}
               onCreate={create}
-              className="h-auto min-h-0 shrink"
+              className="-mx-2 h-auto min-h-0 w-auto shrink"
             />
             {/* A peer block of the BODY, not a line in the field's column.
                 lock-password-dialog draws the boundary: a message about the VALUE

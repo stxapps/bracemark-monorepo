@@ -172,11 +172,27 @@ export function ListCommand({
             onSelect={() => onSelect(item.id)}
           >
             {!filtering && depth > 0 && (
-              // Guide lines, one per level; -my-2 runs them through the
-              // row padding so they connect across adjacent rows.
-              <span aria-hidden className="-my-2 flex self-stretch">
+              // Guide lines, one per level. `-my-2` runs them through the row
+              // padding so they connect across adjacent rows.
+              //
+              // `-mr-2` cancels the row's `gap-2` for THIS pair only, and it is
+              // what makes the lines line up at all. The gap sits between this
+              // group and the name, so it adds 8 to the name's offset and
+              // nothing to the lines: at `w-4` the lines landed on 12/28/44
+              // while the names landed on 12/36/52. Only depth 1 agreed — and no
+              // unit width fixes the rest, because the discrepancy is a constant
+              // 8 the gap adds once, not a step. With the gap cancelled, a level
+              // costs exactly one unit on both, so `line_n` IS `text(n-1)`: every
+              // line hangs from the left edge of the name it belongs to.
+              //
+              // `w-6` (24) over `w-4` because 24 is the step the names already
+              // had — `w-4` plus that `gap-2` — so depth 1 does not move; what
+              // changes is depth 2 and deeper, which used to step 16 while the
+              // first level stepped 24. bracemark-expo's guide-lines.tsx is the
+              // same pair of numbers.
+              <span aria-hidden className="-my-2 -mr-2 flex self-stretch">
                 {Array.from({ length: depth }, (_, i) => (
-                  <span key={i} className="w-4 border-l border-border" />
+                  <span key={i} className="w-6 border-l border-border" />
                 ))}
               </span>
             )}

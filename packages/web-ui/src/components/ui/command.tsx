@@ -178,6 +178,14 @@ function CommandList({ className, ...props }: React.ComponentProps<typeof Comman
   );
 }
 
+// `text-muted-foreground` is a local change to the registry's `py-6 text-center
+// text-sm`, which paints this at full foreground — louder than the rows it
+// stands in for, and the only secondary line in the app that wasn't muted. The
+// CENTRING is the registry's and is worth keeping: it says "state of the panel",
+// where a line at the rows' own inset would read as a row. Both halves are
+// ported to expo's three picker bodies, which had it left-aligned and
+// row-shaped — on that platform a non-pressable line wearing row geometry sits
+// among Pressables that light up under a finger (docs/theme.md, _ported_).
 function CommandEmpty({
   className,
   ...props
@@ -185,7 +193,7 @@ function CommandEmpty({
   return (
     <CommandPrimitive.Empty
       data-slot="command-empty"
-      className={cn('py-6 text-center text-sm', className)}
+      className={cn('py-6 text-center text-sm text-muted-foreground', className)}
       {...props}
     />
   );

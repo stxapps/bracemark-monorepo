@@ -16,6 +16,15 @@ import { Text } from '../ui/text';
 // A row is at least 44pt tall, so it is its own touch target. Unlike the old
 // wrapped chip cloud it needs no hitSlop competing with a pressable neighbour,
 // and long names get the full picker width before they truncate.
+//
+// `px-3` is WEB'S number, and deliberately so: web-ui's CommandItem is `px-3`,
+// this is the same row of the same picker, and the two ports should put a tag
+// name in the same place (docs/theme.md, _ported_ — the same rule the dropdown
+// row follows). It sat at `px-2` until the hosts on both platforms pulled their
+// picker onto the dialog's text column, at which point the last 4px of drift was
+// all that was left between them. `py-2.5` beside it is NOT web's `py-2` and
+// must not be flattened to it: every native size is one step taller than web's,
+// and it is what fills the `min-h-11` above on a one-line row.
 
 export type TagPickerRow = {
   id: string;
@@ -45,7 +54,7 @@ export function TagPickerRows({
   return (
     <>
       {rows.length === 0 && createName === undefined && emptyText !== undefined && (
-        <Text className="px-2 py-2.5 text-sm text-muted-foreground">{emptyText}</Text>
+        <Text className="py-6 text-center text-sm text-muted-foreground">{emptyText}</Text>
       )}
 
       {rows.map((row) => (
@@ -56,7 +65,7 @@ export function TagPickerRows({
           role="checkbox"
           aria-checked={row.selected}
           aria-label={row.name}
-          className="min-h-11 flex-row items-center justify-between gap-2 rounded-xl px-2 py-2.5 active:bg-muted"
+          className="min-h-11 flex-row items-center justify-between gap-2 rounded-xl px-3 py-2.5 active:bg-muted"
         >
           <Text numberOfLines={1} className="min-w-0 flex-1">
             {row.name}
@@ -75,7 +84,7 @@ export function TagPickerRows({
           role="button"
           aria-label={`Create tag ${createName}`}
           className={cn(
-            'min-h-11 flex-row items-center gap-2 rounded-xl px-2 py-2.5 active:bg-muted',
+            'min-h-11 flex-row items-center gap-2 rounded-xl px-3 py-2.5 active:bg-muted',
             creating && 'opacity-50',
           )}
         >

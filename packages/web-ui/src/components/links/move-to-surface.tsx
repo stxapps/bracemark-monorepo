@@ -78,6 +78,28 @@ export function MoveToSurface({
   // `bg-transparent p-0`: ListCommand's root is styled to BE a popover (its own
   // background and padding), which it isn't here — the surface already provides
   // both, and doubling them boxes the list inside a second panel.
+  //
+  // `-mx-1 w-auto` finishes that job horizontally. `p-0` drops `Command`'s own
+  // 4px, but CommandInput's wrapper `p-1` and CommandList's `px-1` put another 4
+  // back, so the count-gated filter field's border box and every row's highlight
+  // rect sat 4px inside the surface's text column — 28 against a 24 title in the
+  // dialog, 20 against a 16 title in the sheet. Both containers are symmetric, so
+  // one class serves them. What lands on the column is the BOXES, not the row
+  // text (CommandItem's `px-3` keeps that 12 further in); expo's move-to-dialog
+  // draws exactly this — its ListCommand has no panel padding at all, so field
+  // and row rects meet the dialog's `p-6` column — and bulk-tags-dialog.tsx pulls
+  // its TagsCommand to the same place by the same means. Web was the odd one.
+  //
+  // `w-auto` is not tidying: `Command`'s base is `size-full`, and a box with a
+  // definite `width: 100%` does not grow into a negative margin — it SHIFTS, 4px
+  // out on the left and 4px IN on the right, under the wide branch's grid and the
+  // sheet's block scroller alike. With the width back to `auto` both edges move
+  // out by 4. tailwind-merge keeps `size-full` beside it (they aren't a conflict
+  // pair — it only drops a `w-*` that a LATER `size-*` overrides), so this rides
+  // on Tailwind emitting `size-*` ahead of `w-*` and the later rule winning.
+  // Nothing vertical moves, so the sheet header's `pb-4` derivation below still
+  // holds, and the sheet's own `px-4` keeps the 4px of bleed inside that
+  // scroller's padding box rather than turning it into a horizontal scrollbar.
   const body = busy ? (
     // Progress, not an error — `status` announces politely and doesn't interrupt
     // (docs/accessibility.md; `alert` is for the message that means it failed).
@@ -91,7 +113,7 @@ export function MoveToSurface({
       disabledIds={disabledIds}
       root={root}
       onSelect={onSelect}
-      className="bg-transparent p-0"
+      className="-mx-1 w-auto bg-transparent p-0"
     />
   );
 

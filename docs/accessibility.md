@@ -521,6 +521,18 @@ The web side needs none of this: at 36 its pointer targets clear WCAG 2.5.8's
 24px floor with room, and the `h-9` band is set by the search input they sit
 beside.
 
+**A picker ROW takes the floor as height, not as slop** — `min-h-11` on every
+row of `links/tag-picker-rows.tsx`, `links/list-command.tsx` and the share
+sheet's copy of the list rows. The lever differs from the icon buttons above
+because the constraint does: nothing pins a row to 40 the way a topbar's 36 is
+pinned, the rows are full-width so there is no neighbour to steal from, and
+`hitSlop` on stacked rows would overlap the row above and below (RN resolves
+that by tree order — the later sibling wins, which would silently retarget the
+last few px of one row's tap to the next). `py-2.5` around a one-line name
+reaches only 40, which is what the two list pickers carried until the rows were
+brought in line with the tag picker's. `min-h`, never `h`: a large font scale has
+to grow the row, not clip the name.
+
 ### modality — an overlay that covers the screen must also cover the a11y tree
 
 A surface drawn OVER the app rather than presented by the navigator has to say

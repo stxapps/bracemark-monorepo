@@ -33,6 +33,7 @@ import Plus from 'lucide-react-native/icons/plus';
 
 import type { ShareNewEntity, ShareTaxonomyList } from '@stxapps/expo-react/data/share-store';
 
+import { GuideLines } from '../../components/links/guide-lines';
 import { Button } from '../../components/ui/button';
 import { Icon } from '../../components/ui/icon';
 import { Input } from '../../components/ui/input';
@@ -150,7 +151,7 @@ export function ShareListPicker({
         keyboardDismissMode="on-drag"
       >
         {visible.length === 0 && !canCreate && (
-          <Text className="px-2 py-2.5 text-sm text-muted-foreground">No lists found.</Text>
+          <Text className="py-6 text-center text-sm text-muted-foreground">No lists found.</Text>
         )}
 
         {newList && !filtering && (
@@ -179,7 +180,7 @@ export function ShareListPicker({
             testID="share-list-create"
             onPress={create}
             accessibilityRole="button"
-            className="flex-row items-center gap-2 rounded-xl px-2 py-2.5 active:bg-muted"
+            className="min-h-11 flex-row items-center gap-2 rounded-xl px-3 py-2.5 active:bg-muted"
           >
             <Icon as={Plus} className="size-4 shrink-0 text-muted-foreground" />
             <Text numberOfLines={1} className="min-w-0 flex-1">
@@ -224,10 +225,15 @@ function ListRow({
       accessibilityRole="menuitem"
       accessibilityState={{ selected }}
       className={cn(
-        'flex-row items-center justify-between gap-2 rounded-xl px-2 py-2.5 active:bg-muted',
+        'min-h-11 flex-row items-center justify-between gap-2 rounded-xl px-3 py-2.5 active:bg-muted',
       )}
-      style={indent > 0 ? { paddingLeft: indent * 12 + 8 } : undefined}
     >
+      {/* The depth is DRAWN, not padded — one guide line per level, the same
+          leaf component the in-app picker uses (guide-lines.tsx carries the
+          derivation). `min-h-11` above is the 44pt target every picker row
+          takes. Both are list-command.tsx's ListCommand, line for line
+          (docs/share-sheet.md). */}
+      {indent > 0 && <GuideLines depth={indent} />}
       <Text numberOfLines={1} className="min-w-0 flex-1">
         {path !== undefined && <Text className="text-muted-foreground">{path}</Text>}
         {name}

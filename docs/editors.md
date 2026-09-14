@@ -444,6 +444,26 @@ for one frame; and the links page's row menus need the same boolean, one
 `matchMedia` per page rather than one per virtualized row (it rides
 `view-state-provider`'s `wide`; the settings section calls the hook itself).
 
+**A picker embedded in a surface sits on that surface's text column.** Four
+surfaces render a command body directly rather than behind a combobox —
+`MoveToSurface`'s two branches, the web and expo `BulkTagsDialog`s, and expo's
+`MoveToDialog` — and in each, what lands on the host's column is the filter
+field's **border box** and the row highlight's **rect**, not the row text
+(`CommandItem`'s `px-3` keeps that 12px further in; pulling _it_ out would hang
+the highlight and its focus ring in the host's gutter, which is a full-bleed menu
+and not what any of these are). Expo gets this for free — its pickers have no
+panel padding — while web's `Command` is styled to _be_ a popover, so each web
+host cancels the difference itself: `-mx-2` where the whole `p-1` is still on
+(`BulkTagsDialog`), `-mx-1` on top of the `bg-transparent p-0` that
+`MoveToSurface` already passes. **Both need `w-auto` beside the margin**, and
+that half is the silent one: `Command`'s base is `size-full`, and a box with a
+definite `width: 100%` does not grow into a negative margin — it _shifts_,
+leaving one edge out by the full amount and the other in by it, under a grid, a
+flex column and a block scroller alike. tailwind-merge won't warn (`size-full`
+and `w-auto` aren't a conflict pair; it only drops a `w-*` that a _later_
+`size-*` overrides), so the override rides on Tailwind emitting `size-*` ahead of
+`w-*` — the same thing the `h-auto` in those class lists already depends on.
+
 **Both pickers can CREATE, and both creates are opt-in on the shell.**
 `TagsField` always mints (a tag editor with no way to make a tag is barely an
 editor); `ListSelect` mints only under **`allowCreate`**, which the three link

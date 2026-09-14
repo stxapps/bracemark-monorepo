@@ -25,6 +25,13 @@
 // pass NEITHER (creating a list is incoherent as a move destination). All
 // per web ListCommand.
 //
+// Every row here is `min-h-11` — 44pt, its own touch target — as
+// tag-picker-rows.tsx's have been all along (docs/accessibility.md, _a 36dp box
+// is not a 44pt target_). `py-2.5` around a one-line name reaches only 40, and
+// these rows carried exactly that for a while: an under-floor target is a
+// working row, so nothing reported it. It is `min-h`, not `h`, so a large font
+// scale still grows the row rather than clipping the name.
+//
 // Holds a live list read (useLists) — per-item hosts must let their Dialog
 // unmount this while closed (it does: the dialog portal renders null when
 // closed), or one live query per virtualized item (the useTagMap rationale).
@@ -40,6 +47,7 @@ import { cn } from '../../lib/utils';
 import { Icon } from '../ui/icon';
 import { Input } from '../ui/input';
 import { Text } from '../ui/text';
+import { GuideLines } from './guide-lines';
 
 // Below this many lists, scrolling beats a filter box — don't render one
 // (unless the input is the create name field, above).
@@ -153,7 +161,7 @@ export function ListCommand({
       >
         {/* Suppressed when there's a Create row: that row IS the next step. */}
         {visibleRows.length === 0 && !canCreate && (
-          <Text className="px-2 py-2.5 text-sm text-muted-foreground">No lists found.</Text>
+          <Text className="py-6 text-center text-sm text-muted-foreground">No lists found.</Text>
         )}
         {root && !filtering && (
           // Hidden while filtering: it has no name to match, and the flat
@@ -164,7 +172,7 @@ export function ListCommand({
               onPress={() => root.onSelect()}
               accessibilityRole="menuitem"
               className={cn(
-                'flex-row items-center justify-between gap-2 rounded-xl px-2 py-2.5 active:bg-muted',
+                'min-h-11 flex-row items-center justify-between gap-2 rounded-xl px-3 py-2.5 active:bg-muted',
                 root.selected && 'opacity-50',
               )}
             >
@@ -187,11 +195,11 @@ export function ListCommand({
               onPress={() => onSelect(item.id)}
               accessibilityRole="menuitem"
               className={cn(
-                'flex-row items-center justify-between gap-2 rounded-xl px-2 py-2.5 active:bg-muted',
+                'min-h-11 flex-row items-center justify-between gap-2 rounded-xl px-3 py-2.5 active:bg-muted',
                 disabled && 'opacity-50',
               )}
-              style={!filtering && depth > 0 ? { paddingLeft: depth * 12 + 8 } : undefined}
             >
+              {!filtering && depth > 0 && <GuideLines depth={depth} />}
               <Text numberOfLines={1} className="min-w-0 flex-1">
                 {filtering && ancestors.length > 0 && (
                   <Text className="text-muted-foreground">{`${ancestors.join(' / ')} / `}</Text>
@@ -210,7 +218,7 @@ export function ListCommand({
             onPress={() => void create()}
             accessibilityRole="menuitem"
             className={cn(
-              'flex-row items-center gap-2 rounded-xl px-2 py-2.5 active:bg-muted',
+              'min-h-11 flex-row items-center gap-2 rounded-xl px-3 py-2.5 active:bg-muted',
               creating && 'opacity-50',
             )}
           >
