@@ -73,7 +73,30 @@ export interface SettingsScrollHandle {
 }
 
 // The gap left above a node scrolled into view, and below one scrolled up to.
-const SCROLL_INTO_VIEW_MARGIN = 8;
+// 16 is THIS surface's own step, not a number picked for this one scroll: it is
+// the `gap-4` SettingsPane already puts between a heading and its content
+// (settings-kit.tsx), and it is the `bottomOffset` on the scroll view below —
+// the same question asked about the keyboard, which is how much air a thing
+// needs from the edge that would otherwise crowd it.
+//
+// IT IS NOT THE WEB TWIN'S NUMBER, and the resemblance is a trap worth naming.
+// web's scroller carries `scroll-pt-18` — 72px, which is 56 PLUS 16 — because
+// its topbar is `sticky top-0` INSIDE the scroller and covers the top 56px of
+// the scrollport, so the 56 is a FLOOR that a taller bar has to drag up with it
+// (bracemark-web `(app)/settings/layout.tsx`, docs/editors.md). Here the topbar
+// is a SIBLING of this host (`(app)/settings/[section].tsx`) and the scrollport
+// starts below it: nothing is obscured, so there is no floor in this number and
+// nothing to keep in sync with the bar's height. Only the air is shared between
+// the two platforms, and this is the air.
+//
+// Unlike web's, this margin is SYMMETRIC — one constant sets the top landing
+// gap, the bottom one, and the `fits` threshold, where web pads only the top
+// (`scroll-padding-bottom` stays 0). So it also sets how close to an edge a node
+// still counts as ALREADY VISIBLE, and raising it widens the band that moves: a
+// notice sitting just inside the old margin now gets a short animated nudge
+// instead of staying put. That is the cost to weigh before this climbs again —
+// the common case is a short pane where nothing should move at all.
+const SCROLL_INTO_VIEW_MARGIN = 16;
 
 const SettingsScrollContext = createContext<SettingsScrollHandle | null>(null);
 
