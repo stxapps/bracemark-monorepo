@@ -176,10 +176,25 @@ export const LinkRow = memo(function LinkRow({
               The badges ride THIS line in all four layouts (web's list layout
               carries the argument: a host is bounded where a title is not, so
               this is the line with slack to spend). 14px inside a 20px line box,
-              so the row's look doesn't move. */}
+              so the row's look doesn't move.
+
+              And they ride it NEXT TO the host, which is what `shrink` on the
+              host buys over the `flex-1` this used to carry. `flex-1` made the
+              host claim the whole line whatever it held, so the badges were
+              pushed out to the row's trailing edge and read as a column of
+              their own — sometimes a hand's width from the link they annotate,
+              and not what web paints (its host is a bare `truncate`, sized to
+              its text). Spelled out because RN children do not shrink by
+              default: Yoga's flexShrink is 0 where the web's is 1, so the class
+              is doing what web gets for free. It is also enough on its own —
+              Yoga implements no `min-width: auto` min-content floor
+              (link-tag-chips.tsx carries that note), so a long host ellipsizes
+              here instead of shoving the badges off the row. The `min-w-0` that
+              rode along with the `flex-1` was always a no-op for the same
+              reason. */}
           <View className="mt-0.5 flex-row items-center gap-1.5">
             <Favicon host={hostFromText(link.url)} className="size-3.5 shrink-0 rounded-sm" />
-            <Text numberOfLines={1} className="min-w-0 flex-1 text-sm text-muted-foreground">
+            <Text numberOfLines={1} className="shrink text-sm text-muted-foreground">
               {hostFromText(link.url)}
             </Text>
             {pinned && <PinnedBadge />}

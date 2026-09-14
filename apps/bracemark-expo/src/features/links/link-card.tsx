@@ -167,8 +167,16 @@ export const LinkCard = memo(function LinkCard({
               trailing edge (web's card, verbatim). The badges ride this line in
               all four layouts — web's list-layout.tsx carries the argument: the
               host is bounded where the title is not, so this is the line with
-              slack. The menu joins them here rather than floating over the
-              banner, so nothing covers the preview. It can sit INSIDE the card's
+              slack, and they sit NEXT TO the host rather than out at the
+              trailing edge — `shrink` on the host below, where this used to
+              carry `flex-1` (link-row.tsx has the full note: `flex-1` made the
+              host claim the line whatever it held, and RN children don't shrink
+              by default, so the class is doing what web's bare `truncate` gets
+              for free). The ⋯ menu keeps the trailing edge on an `ml-auto`
+              wrapper, web's own `ml-auto` on the same slot — with a host that no
+              longer grows, nothing else would hold it there. The menu sits on
+              this line rather than floating over the banner, so nothing covers
+              the preview. It can sit INSIDE the card's
               Pressable on this platform (RN's responder hands the touch to the
               innermost pressable), which is the whole trick web has to buy with
               a stretched overlay. */}
@@ -181,7 +189,7 @@ export const LinkCard = memo(function LinkCard({
                 24. The size-4 favicon lands at the list row's proportion too —
                 the mark matches the font size there (14/14) as here (16/16). */}
             <Favicon host={host} className="size-4 shrink-0 rounded-sm" />
-            <Text numberOfLines={1} className="min-w-0 flex-1 text-base text-muted-foreground">
+            <Text numberOfLines={1} className="shrink text-base text-muted-foreground">
               {host}
             </Text>
             {pinned && <PinnedBadge />}
@@ -192,15 +200,20 @@ export const LinkCard = memo(function LinkCard({
               // The menu itself can't stay: an action this mode doesn't offer
               // shouldn't be painted, and leaving it pressable-but-dead would
               // take the touch that should be selecting the card. Nor can the
-              // slot simply go: this line's height is that size-8 box, and the
-              // `flex-1` host above would take the freed width and carry the
-              // badges right with it. Reserved and empty, nothing on the line
-              // moves when the mode turns on, and a plain View claims no
-              // responder — so a touch here reaches the card's Pressable and
+              // slot simply go: this line's HEIGHT is that size-8 box, so the
+              // meta line — and with it the whole card — would shrink by 8pt
+              // the moment the mode turned on, re-measuring every cell in the
+              // grid. (It used to carry the badges' position too, back when the
+              // host was `flex-1`; they hold their place beside the host now,
+              // so height is the whole of it.) Reserved and empty, nothing on
+              // the line moves when the mode turns on, and a plain View claims
+              // no responder — so a touch here reaches the card's Pressable and
               // selects, like any other empty part of the card.
-              <View aria-hidden className="size-8 shrink-0" />
+              <View aria-hidden className="ml-auto size-8 shrink-0" />
             ) : (
-              <LinkRowMenu link={link} pinned={pinned} isFirst={isFirst} isLast={isLast} />
+              <View className="ml-auto">
+                <LinkRowMenu link={link} pinned={pinned} isFirst={isFirst} isLast={isLast} />
+              </View>
             )}
           </View>
           {/* text-base, not the list row's text-sm: a card is the layout with the
