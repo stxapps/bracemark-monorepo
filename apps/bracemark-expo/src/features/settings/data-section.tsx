@@ -516,7 +516,7 @@ function ExportView({ onBack }: { onBack: () => void }) {
     <View>
       <SettingsHeader
         title="Export all data"
-        description="Save a copy of your data. Pick a format for where it’s going. This may take a few minutes for a large library."
+        description="Save a copy of your data. Pick the format that matches where you’ll use it. This may take a few minutes for a large library."
         back={{ label: 'Data', onPress: onBack }}
       />
 

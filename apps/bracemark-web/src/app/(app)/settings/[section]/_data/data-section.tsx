@@ -505,7 +505,7 @@ function ExportView({ onBack }: { onBack: () => void }) {
       <SettingsHeader
         back={{ label: 'Data', onClick: onBack }}
         title="Export all data"
-        description="Download a copy of your data to your device. Pick a format for where it’s going. This may take a few minutes for a large library."
+        description="Save a copy of your data. Pick the format that matches where you’ll use it. This may take a few minutes for a large library."
       />
 
       <RadioGroup
@@ -723,7 +723,7 @@ export function DataSection() {
             <SettingsRow
               icon={<Download className="size-5" />}
               title="Export all data"
-              description="Download everything as a backup or bookmarks file."
+              description="Save everything as a backup or bookmarks file."
               onClick={() => setView('export')}
             />
             <SettingsRow
