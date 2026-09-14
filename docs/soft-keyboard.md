@@ -411,6 +411,22 @@ itself is irreducible: keyboard-controller's `dismiss` has no `animated` option,
 and the hide animation belongs to the OS on both platforms. Dropping it also ends the rename, and `RenameField` commits on `onEndEditing` —
 the same save web makes when the click takes focus to the trigger.
 
+**The links drawer drops it on every transition, in the drawer content.** The
+same container-not-caller rule, and it is needed in BOTH directions. Closing: the
+filter box is focused, and the rule in 2 is what strands the keyboard — `"handled"`
+delivers the row tap instead of spending it on the keyboard, so the row selects,
+the rail slides away, and the keyboard stays up over the links list, still fed by a
+field that is now off screen. Opening: the links search box keeps its focus through
+the menu press (`autoFocus`), so its keyboard covers the foot of the rail that press
+just opened. A SWIPE close is the one path that was already covered — react-native-
+drawer-layout dismisses at gesture start, its `keyboardDismissMode` defaulting to
+`'on-drag'` — and it sees only the gesture, so a row press, a footer link and the
+backdrop tap all close the drawer straight past it. `links/sidebar.tsx` hangs the
+dismiss on `useDrawerStatus` instead, which catches all four. It skips the first run
+deliberately: a Drawer mounts its content with the screen rather than on first open,
+and `SearchBar` can mount autofocused in that same commit (a `?text=` query arriving
+with the screen — _arrival_ below), so a dismiss on mount would race that focus.
+
 **The add panel adds a FOURTH vector, and it is the one that needs guarding.**
 Its backdrop closes on a tap — web's outside-click, and swallowed by the same
 rule while the optional section holds work (`link-add-panel.tsx`). Everything

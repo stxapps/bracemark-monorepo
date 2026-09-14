@@ -13,9 +13,10 @@
 // The one intentional divergence left is native affordances (no hover, so the
 // "Lock now" action is always shown; the row press also closes the drawer).
 
-import { Fragment, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { Fragment, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Keyboard, Platform, Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useDrawerStatus } from '@react-navigation/drawer';
 import { useRouter } from 'expo-router';
 import {
   Archive,
@@ -440,6 +441,36 @@ export function Sidebar({ closeDrawer }: { closeDrawer: () => void }) {
     else if (selection.kind === 'tag') expand(ancestorIds(tags, selection.id));
   }, [selection, lists, tags, expand]);
 
+  // Put away a keyboard left over across a drawer transition — in the CONTAINER,
+  // once, not in each row's press: ui/dialog.tsx and ui/alert-dialog.tsx make the
+  // same move on `open` for the same reason (docs/soft-keyboard.md, _dismissal_).
+  // Both directions strand one, and nothing else drops it:
+  //  - CLOSING. The filter box sits outside the scroller below, whose
+  //    `keyboardShouldPersistTaps="handled"` deliberately DELIVERS the row tap
+  //    rather than spending it on the keyboard (that is what fixes this rail's
+  //    double-tap). So the row selects and the drawer slides away, while the
+  //    keyboard stays up over the links list — fed by a field now off-screen.
+  //  - OPENING. The links search box keeps its focus through the menu press
+  //    (`autoFocus`, search-bar.tsx), so its keyboard covers the foot of the rail
+  //    that press just opened.
+  // A SWIPE close is the one path already handled: react-native-drawer-layout's
+  // own `keyboardDismissMode` defaults to `'on-drag'` and dismisses at gesture
+  // start. It only sees the gesture though — a row press, a footer link and the
+  // backdrop tap all close the drawer programmatically, straight past it.
+  // The first run is skipped on purpose: this content mounts with the screen (a
+  // Drawer never renders it lazily) at status `'closed'`, and SearchBar can mount
+  // autofocused in that same commit when a `?text=` query arrives with the screen
+  // — dismissing there would race that focus. Comparing against the previous
+  // status, rather than a "have I mounted" flag, also survives an effect that is
+  // mounted twice (StrictMode): an unchanged status is a no-op.
+  const drawerStatus = useDrawerStatus();
+  const prevDrawerStatus = useRef(drawerStatus);
+  useEffect(() => {
+    if (drawerStatus === prevDrawerStatus.current) return;
+    prevDrawerStatus.current = drawerStatus;
+    if (Platform.OS !== 'web') Keyboard.dismiss();
+  }, [drawerStatus]);
+
   // A lock marker on rows that carry their OWN engaged lock (children a lock
   // merely covers stay unmarked — the locked ancestor is the visual cue).
   const listBadge = (id: string) =>
@@ -514,6 +545,9 @@ export function Sidebar({ closeDrawer }: { closeDrawer: () => void }) {
           while the keyboard is up dismisses it AND is withheld from the row —
           so filtering to a list and tapping it did nothing the first time, and
           navigated only on a second press. That is this rail's primary flow.
+          It is also why the drawer-status effect above exists: a tap that
+          reaches the row is a tap the keyboard doesn't get, so closing the
+          drawer has to put it away itself.
           `on-drag` covers the other half: the tree is what you scroll to read
           past the keyboard. */}
       <ScrollView
