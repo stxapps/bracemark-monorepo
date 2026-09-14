@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { access, copyFile, mkdir, readdir,readFile } from 'node:fs/promises';
+import { access, copyFile, mkdir, readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 
