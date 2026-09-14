@@ -184,6 +184,15 @@ const config: ExpoConfig = {
     // Position in this array does not matter: it is a `finalized` mod, which
     // runs after the whole chain. See the plugin.
     './plugins/with-share-extension-build-settings',
+    // One line of the share extension's generated ShareExtensionViewController:
+    // it sizes React Native's root view to `UIScreen.main.bounds` while adding
+    // it to a view the share presentation has already pushed 72pt down the
+    // screen, so the whole sheet hangs that far off the BOTTOM and the Save
+    // button is cut in half. `ios/` is CNG output and the file is re-copied out
+    // of node_modules on every prebuild, so this cannot be an edit. Also a
+    // `finalized` mod, also position-independent. See the plugin, and
+    // docs/share-sheet.md — the host view is full-screen.
+    './plugins/with-share-extension-root-view',
   ],
 };
 

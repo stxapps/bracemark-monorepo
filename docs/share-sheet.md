@@ -202,6 +202,58 @@ ceiling when it is up. Nothing in JS may assume the surface's origin any more:
 the lift is computed from the keyboard's own top edge, not from where the
 container starts.
 
+⚠ **"Full-screen" is a SIZE, and upstream applies it as a POSITION too — which
+put the whole sheet 72pt below the bottom of the screen.** `configureRootView`'s
+no-height branch is
+
+```swift
+rootView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+frame = screenBounds                       // UIScreen.main.bounds
+```
+
+and `frame` is in the **superview's** coordinate space. The superview is the
+extension view controller's own `view`, which the share presentation places
+**72pt down from the top of the screen** and sizes to the remaining 802 — not at
+the screen's origin. So a rect of the right size lands in the wrong place:
+screen y 72 → 946 on an 874pt screen, with the bottom 72pt of the sheet, which
+is where the Save button lives, off the display. Measured on iOS 26.5 with
+`maestro hierarchy`, iPhone 17 and iPhone 17 Pro **identical**:
+
+| node             | before              | after               |
+| ---------------- | ------------------- | ------------------- |
+| Safari (screen)  | `[0,0][402,874]`    | `[0,0][402,874]`    |
+| `share-backdrop` | `[0,72][402,946]`   | `[0,72][402,874]`   |
+| `Save`           | `[16,852][386,896]` | `[16,780][386,824]` |
+
+`.flexibleHeight` does not save it — an autoresizing mask redistributes on a
+_later_ superview resize, and there is no later resize, so the initial rect is
+the final one. The fix is `frame = view.bounds`: fill the superview, which is
+what the mask on the line above already says this view is for, and what the
+library's own `initialViewHeight` initial prop (`self.view.bounds.height`, 802)
+already tells JS the container is.
+
+**It is a config plugin, `plugins/with-share-extension-root-view.js`, because
+`ios/` is CNG output** — `addPbxGroup.js` re-copies
+`ShareExtensionViewController.swift` out of `node_modules` on every prebuild, so
+an edit there dies at the next `--clean` with a clean working tree throughout.
+A `finalized` mod for the same reason as the build-settings plugin next door
+(→ [expo-build.md](./expo-build.md), _ios share extension build settings_); it
+rewrites the one branch, is idempotent, and **throws** if upstream rewords it
+rather than silently leaving the sheet off-screen.
+
+**Nothing in `features/share/` was wrong, and nothing there could have caught
+it.** The panel is `shrink` inside a `flex-1 justify-end` frame and was
+bottom-anchoring itself perfectly — to a box whose bottom edge was below the
+display. `useSafeAreaInsets()` reports a clean 34 for such a view, because that
+is what `UIView.safeAreaInsets` says; the Save button had its 16 + 34 of
+clearance and all of it was off-screen. It is the same family as the two RN bugs
+in _what an app-extension process breaks_ above — a plausible number, no error —
+except that here the number is right and its **origin** is not. This is also why
+`share-keyboard.ts`'s `panelBottom` (`Dimensions.get('screen').height`) was
+wrong by the same 72 while it lasted: its doc comment asserts the RN root is
+"flush with the bottom of the screen", which is exactly the assumption upstream
+was breaking. That assertion is now true.
+
 **The root must not paint, whatever its size.** Left to itself
 `ShareExtensionViewController` fills that view with `.systemBackground` and
 square corners. The sheet's four screens are not one height — compose and saved
@@ -794,6 +846,7 @@ can neither see the share sheet nor anything in this process. →
 | session mirror in the shared Keychain (App Group id as access group) + `loadSharedSession`                           | `@stxapps/expo-react` `data/session-store.ts` over `@stxapps/expo-crypto` `lib/shared-keychain.ts` (BracemarkSharedKeychain, iOS Swift)                                                                                                                                                                             |
 | write edge (writeLink/writeTag/writeExtraction)                                                                      | `@stxapps/expo-react` `data/mutations.ts`                                                                                                                                                                                                                                                                           |
 | iOS extension target, App Group, preprocessing JS                                                                    | `expo-share-extension` plugin in `app.config.ts` + `share-extension/preprocessing.js` + `withShareExtension` in `metro.config.js`                                                                                                                                                                                   |
+| iOS extension target's build settings, and its root view's frame                                                     | `apps/bracemark-expo/plugins/with-share-extension-build-settings.js` (team, deployment target, versions, display name) + `plugins/with-share-extension-root-view.js` (root view fills its superview, not the screen) — both `finalized` mods                                                                        |
 | Android ShareActivity + close() module                                                                               | `apps/bracemark-expo/modules/bracemark-share/android/` (autolinked local module; activity + intent-filter merged from its AndroidManifest)                                                                                                                                                                          |
 | iOS keyboard frames for the extension (`BracemarkShareKeyboard`) + the lift JS reads them through                    | `apps/bracemark-expo/modules/bracemark-share/ios/` (same local module, `BracemarkShare.podspec` path-linked into BOTH targets by `use_expo_modules!`) + `features/share/share-keyboard.ts`                                                                                                                          |
 

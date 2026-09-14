@@ -372,6 +372,22 @@ skipped and no team is written, so a fresh clone still prebuilds and you pick
 both teams by hand. → [env-files.md](./env-files.md), _the one
 non-`EXPO_PUBLIC_` var_.
 
+**A fifth thing the target is born with wrong, and it is SOURCE rather than
+settings.** `expo-share-extension` also copies its own
+`ShareExtensionViewController.swift` into the target on every prebuild
+(`plugin/build/xcode/addPbxGroup.js`), and that file sizes React Native's root
+view to `UIScreen.main.bounds` while adding it to a view the share presentation
+has already pushed 72pt down the screen — a frame is in its **superview's**
+coordinates, so the whole sheet renders 72pt below the bottom of the display and
+the Save button is cut in half. `plugins/with-share-extension-root-view.js`
+rewrites that one branch to `frame = view.bounds`. It is a second `finalized`
+mod for exactly the reasons above — `ios/` is CNG output and the `.swift` is
+re-copied on every prebuild, so an edit in Xcode dies at the next `--clean` —
+and it throws rather than no-ops if upstream rewords the branch, because the
+failure it prevents is invisible to prebuild, the Swift compiler, lint, types
+and every test. Full derivation, and the before/after measurements, in
+[share-sheet.md](./share-sheet.md), _the host view is full-screen_.
+
 #### android release minification — R8
 
 Release Android builds run **R8** (shrink + obfuscate) with resource shrinking,

@@ -661,6 +661,17 @@ and both apps' surfaces are edge-to-edge by default (iOS always was; Android
     (`features/share/share-keyboard.ts`). Nothing catches getting this wrong —
     it reads as dead space, not as a broken layout, until the screen is small
     enough that it is both.
+  - **A correct inset still lands nowhere if the view it insets is off the
+    screen**, and on the iOS sheet it was: `expo-share-extension` sized the RN
+    root to `UIScreen.main.bounds` inside a container the share presentation had
+    placed 72pt down, so the panel bottom-anchored itself to an edge 72pt below
+    the display. `useSafeAreaInsets()` reported a clean 34 throughout — that is
+    what `UIView.safeAreaInsets` says for such a view — and the Save button had
+    its full clearance, all of it off-screen. Fixed in native, by
+    `plugins/with-share-extension-root-view.js`; the point to carry away is that
+    the inset hook answers for the view it is in, and says nothing about where
+    that view is. → [share-sheet.md](./share-sheet.md), _the host view is
+    full-screen_.
 - **Screens: `SafeAreaView` from `react-native-safe-area-context`** (never the
   deprecated RN-core one), wrapped once per file as
   `const StyledSafeAreaView = withUniwind(SafeAreaView)` so it accepts
