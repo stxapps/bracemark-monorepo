@@ -3,7 +3,6 @@ import {
   type GestureResponderEvent,
   Keyboard,
   Platform,
-  Pressable,
   Text as RNText,
   View,
   type ViewProps,
@@ -17,6 +16,7 @@ import { X } from 'lucide-react-native';
 import { withUniwind } from 'uniwind';
 
 import { cn } from '../../lib/utils';
+import { Button } from './button';
 import { Icon } from './icon';
 import { NativeOnlyAnimatedView, POPUP_FADE_MS } from './native-only-animated-view';
 import { Text } from './text';
@@ -25,7 +25,8 @@ import { Text } from './text';
 // see docs/setup.md for why the copy is manual (the CLI needs tsconfig path
 // aliases; this app uses relative imports). Local changes vs upstream: imports
 // rewritten to relative, the KeyboardAvoidingView in DialogOverlay below, the
-// keyboard dismissal on DialogContent (on open, and on a chrome tap), and
+// keyboard dismissal on DialogContent (on open, and on a chrome tap), the close
+// button rebuilt on the kit's Button (DialogCloseButton carries why), and
 // `leading-none` dropped from DialogTitle — a leading tighter than Inter's
 // natural 1.21 ratio is uncentrable on iOS, so the title sat 1.55pt high inside
 // its own box with nothing above it able to help (docs/theme.md, _extending_).
@@ -183,38 +184,44 @@ function DialogOverlay({
 // vector. bracemark-expo's link-edit-screen already draws the same division by
 // hand, with its own header X against `usePreventRemove`.
 //
-// The two branches spell the wrapper out rather than sharing one through
-// `asChild`, which would put the press path through the primitive's Slot on the
-// branch that is meant to bypass the primitive entirely.
+// IT IS THE KIT'S BUTTON, and that is the second half of the port. This was a
+// bare `Pressable` wearing `rounded opacity-70 active:opacity-100` — the
+// hand-rolled control chrome docs/theme.md's ⚠ rules out — and it had drifted
+// exactly the way that rule predicts nobody would notice: a 4px radius that
+// belongs to no role in the scale, sitting beside pills; press feedback that was
+// an opacity blip on a 16pt glyph rather than the ghost fill every other icon
+// button in the app gives; and a box that WAS the glyph, 16pt, which
+// `hitSlop={12}` lifted only to 40 — under iOS's 44 and Material's 48
+// (docs/accessibility.md). `variant="ghost" size="icon-sm"` is web-ui's
+// DialogCloseButton one touch step taller (36 against its 32, the rule the whole
+// size scale runs on), the glyph stays web's `size-4`, the colour comes down
+// through TextClassContext as web's inherits, and `hitSlop={6}` reaches 48.
+//
+// `asChild` on the default branch is web's spelling verbatim, and it is safe
+// HERE for a reason worth stating: @rn-primitives/dialog's NATIVE Close does
+// destructure it (`const Component = asChild ? Slot : Pressable`) where the same
+// build's Title does not — see DialogTitle below, which is why that one needed a
+// different fix. Do not carry the spelling to a third primitive without reading
+// its native build. The `onClose` branch takes no Slot at all: it is the branch
+// meant to bypass the primitive, so its press path must not run through one.
 function DialogCloseButton({ onClose }: { onClose?: () => void }) {
-  const className = cn(
-    'absolute top-4 right-4 rounded opacity-70 active:opacity-100',
-    Platform.select({
-      web: 'ring-offset-background transition-opacity hover:opacity-100 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:outline-none data-[state=open]:bg-accent',
-    }),
-  );
-  const content = (
-    <>
-      <Icon
-        as={X}
-        className={cn('size-4 shrink-0 text-accent-foreground web:pointer-events-none')}
-      />
+  const button = (
+    <Button
+      variant="ghost"
+      size="icon-sm"
+      onPress={onClose}
+      hitSlop={6}
+      className="absolute top-4 right-4"
+    >
+      <Icon as={X} className="size-4 shrink-0 web:pointer-events-none" />
       {/* The one deliberate bare RN Text in this file — `sr-only`
           text paints nothing, so it needs neither Inter nor the font-
           scale cap. Everything else here goes through ui/text's Text;
           see DialogTitle. */}
       <RNText className="sr-only">Close</RNText>
-    </>
+    </Button>
   );
-  return onClose ? (
-    <Pressable role="button" onPress={onClose} className={className} hitSlop={12}>
-      {content}
-    </Pressable>
-  ) : (
-    <DialogPrimitive.Close className={className} hitSlop={12}>
-      {content}
-    </DialogPrimitive.Close>
-  );
+  return onClose ? button : <DialogPrimitive.Close asChild>{button}</DialogPrimitive.Close>;
 }
 
 function DialogContent({

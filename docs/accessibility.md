@@ -451,10 +451,12 @@ The web has no equivalent policy: browser text zoom reflows, and
 
 ### a 36dp box is not a 44pt target (expo)
 
-Every icon button in expo's chrome is `size-9` (36) — both topbars, links and
-settings — or `size-10` (40) for the screen-header closes and the advanced-search
-trigger. iOS HIG asks for 44pt and Material for 48dp, so **every one of them is
-under the floor as drawn**, and the fix is `hitSlop`, not a bigger box.
+Every icon button in expo's chrome is `size-9` (36) — both topbars, the two
+floating-surface closes (`ui/dialog.tsx`'s corner X and the add panel's) — or
+`size-10` (40) for the two system-modal header closes (edit-link, Advanced
+Search) and the advanced-search trigger. iOS HIG asks for 44pt and Material for
+48dp, so **every one of them is under the floor as drawn**, and the fix is
+`hitSlop`, not a bigger box.
 
 The box has to stay because it is load-bearing twice over: both bars are cut to
 36 and a user crosses between them constantly, and the 40 on the search trigger
@@ -462,6 +464,30 @@ is set by its glyph's corner margin — the advanced-filter dot lives in that
 margin, and 20px of glyph in a 36px box leaves the dot ~1px off the end of the
 slider (`features/links/search-bar.tsx` works it through). `hitSlop` costs no
 layout at all, which is the whole reason it is the right lever here.
+
+**Every one of those boxes now carries the slop, and for a while three did not.**
+The rule was stated here and applied to the two topbars and the advanced-search
+trigger, while the closes on the three editor surfaces — edit-link, Advanced
+Search, the add panel — shipped bare at 40, and `ui/dialog.tsx`'s shipped at 40
+effective because its box was the 16pt glyph plus `hitSlop={12}`. Nothing
+reported it: an under-floor target is a working button. The values, each read off
+the rule above rather than picked: the two in-row header closes take
+`{ top: 4, bottom: 4, left: 8, right: 6 }` (54x48 — `right: 6` runs out to the
+row's `pr-1.5` frame edge, and the left 8 is free because the title beside them
+is a `Text`, which takes no touches); the add panel's takes a plain `8` (52x52,
+nothing pressable near it); the dialog's takes `6` on the kit's 36 box (48). The
+five closes sit at the app's two glyph rungs for the same reason the topbars do —
+`size-5` on the two bar-shaped headers, `size-4` on the floating pair — which is
+`features/links/topbar.tsx`'s free-margin rule, not a size preference: 40/20 and
+36/16 both leave 10pt a side.
+
+The **share sheet's** close (`features/share/share-kit.tsx`) takes the topbars'
+plain `6` on its `size-9` box for the topbars' reason — the lockup it trails is
+an icon and a `Text`, and `ml-auto` leaves the middle of that header empty. Being
+in another process changes nothing here: `hitSlop` is plain RN. It is the one
+place where a near-miss strands the user rather than annoying them, because on
+iOS that X is the ONLY way out of the compose screen — no swipe, and a backdrop
+that announces nothing ([share-sheet.md](./share-sheet.md)).
 
 The link card/list tag chips use the same lever on one axis: their 24pt visual
 height gets 10pt of top and bottom slop, reaching 44pt vertically without

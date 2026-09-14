@@ -396,7 +396,10 @@ carrying one. Three rules hold them together:
   floats over another app and has no other carrier — plus a close control, which
   is not decoration: iOS offers no swipe to dismiss, and the backdrop is a
   tap target with nothing to announce it, so this is the one way out that is on
-  every screen at every height. The lockup's row is
+  every screen at every height — which is also why its 36pt box carries
+  `hitSlop={6}`. It is the one control in the product where a near-miss strands
+  the user inside somebody else's app rather than merely annoying them
+  ([accessibility.md](./accessibility.md), _a 36dp box is not a 44pt target_). The lockup's row is
   the full width of the header — it places that control with `ml-auto`, so a
   `flex-row` PARENT collapses it to its content and strands the control against
   the wordmark; both rails put the lockup in a column for the same reason

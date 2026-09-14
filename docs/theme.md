@@ -642,9 +642,25 @@ quick-add panel and share sheet follow that role too. `rounded-4xl` remains for 
 detached dialog with four visible corners. A system-presented modal is the other
 case: the navigator or native `Modal` owns the outer corners, so the app does not
 redraw them. Its inner spacing may still follow that presentation — the edit-link
-and Advanced Search headers use `pt-2 pb-2 ios:pt-5`: iOS gets extra top padding
-beneath the system page-sheet arc, while Android's full-screen modal keeps the
-ordinary 56pt app-bar rhythm.
+and Advanced Search headers carry the app's only two `ios:` variants, `ios:pt-4`
+and `ios:pt-2.5` over a shared `pt-2`, because iOS's page-sheet arc wants optical
+clearance that Android's full-screen modal (already inset by `SafeAreaView`) does
+not.
+
+**The two numbers differ because the anchor is the TITLE'S CAPS, not the
+padding.** Advanced Search's header row is set by its 40pt close button, so a
+28pt `text-lg` line box floats with 6pt of slack above and below; edit-link's row
+IS its 44pt title/URL stack, where the padding is the whole gap. Add Inter's
+7.4pt from line-box top to cap top (_extending_, below, carries the metrics) and
+both titles land 23.4pt under the sheet's edge. The shared `ios:pt-5` the two
+used to carry put them 6pt apart, and both loose. Nothing BELOW the title is
+forked, and nothing should be: the arc is the only iOS-specific thing about these
+headers, so where the bottom paddings differ (`pb-2` against `pb-2.5`) they
+differ on BOTH platforms and answer their own content — a muted subtitle line
+sits closer to the border than a floating single title does. Android is still
+6pt apart on the same cap-top measure, because the shared 8pt base cannot see the
+button's slack; the correction would go on Advanced Search, and it has not been
+eyeballed on the AVD.
 
 ⚠ **The two kits are separate copies and this pairing drifted for months.** There
 is nothing to import across them (Uniwind and Tailwind are separate compilers
@@ -741,7 +757,14 @@ use the kit's Button, and the day the kit took web's radii every one of them
 became an 8px square beside a pill. (Two more controls were the same story at
 other sizes: the share sheet's back button, now `variant="ghost" size="sm"`, and
 the list picker's combobox trigger, now `variant="outline"` exactly as its web
-twin is.) Hand-rolled control chrome does not track the
+twin is.) **The registry copies themselves are a source of these, not only call
+sites**: `ui/dialog.tsx`'s corner close shipped as a bare `Pressable` wearing
+`rounded opacity-70 active:opacity-100` — a 4px radius belonging to no role in
+the table above, an opacity blip where every other icon button gives a ghost
+fill, and a box that was just the 16pt glyph, which `hitSlop={12}` could lift
+only to 40 — while web-ui's twin had been `variant="ghost" size="icon-sm"` all
+along. It is the kit's Button now, at the scale's one-step-taller 36, and the
+file's own local-changes list records it. Hand-rolled control chrome does not track the
 kit, and nothing reports that it has stopped matching: it is a valid box with
 valid classes. **It is not only buttons**: the same rule caught two
 checkbox-shaped boxes a pass later, both still at the registry's `rounded-[4px]`

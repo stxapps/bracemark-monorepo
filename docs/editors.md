@@ -41,7 +41,7 @@ _enforcement_), so a save that gets past a create surface syncs and stays. All
 four create surfaces therefore refuse at the cap. The three **in-process** ones
 read `useLinkQuota` and render `LinkQuotaBanner` + an upgrade CTA **instead of**
 the form — web quick-add, the browser extension's popup, bracemark-expo's add
-screen (that hook's header is the canonical rationale; it counts
+panel (that hook's header is the canonical rationale; it counts
 trash-inclusive, because Trash is a listId and the blob still exists). The
 bracemark-expo **share sheet** is the fourth, off `isAtLinkCap`
 ([share-sheet.md](./share-sheet.md)). The full-edit surfaces need no gate — they
@@ -114,13 +114,35 @@ is derived from those same fields, so a reverting collapse would disarm the clos
 guard exactly when a draft was in hand.
 
 The two bracemark-expo in-app editors are the web pair's behavioral twins (same
-validation, same quota banner on create, same dirty close guard — swipe-down /
-Android-back swallowed via `usePreventRemove`) presented phone-shaped: both
-are **modal-presented expo-router screens** (`/add-link` pushed by the links
-screen's FAB, `/edit-link` pushed by the row menu with a `linkId` + optional
-`focus` param) — router screens, not RN `Modal`s, so they inherit the screens'
-`KeyboardAwareScrollView` path for free and portalled dialogs work inside them
-(docs/soft-keyboard.md — the presentation decides the keyboard mechanism). Two structural consequences: the edit screen
+validation, same quota banner on create, same dirty close guard) presented
+phone-shaped — but they are presented by **different mechanisms**, and only one
+of them is a route.
+
+The **edit** editor is a modal-presented expo-router screen: `/edit-link`,
+pushed by the row menu with a `linkId` + optional `focus` param
+(`presentation: 'modal'` — an iOS page sheet, an Android slide-up). A router
+screen, not an RN `Modal`, so it inherits the screens'
+`KeyboardAwareScrollView` path for free and portalled dialogs work inside it
+(docs/soft-keyboard.md — the presentation decides the keyboard mechanism), and
+its accidental close vectors (swipe-down, Android back) are swallowed while
+dirty by `usePreventRemove`.
+
+The **add** editor is **not a route at all**, and that is a load-bearing
+decision rather than an accident of history. `link-add-panel.tsx` is an absolute
+layer the links screen draws over itself while its own `adding` state is true
+(the FAB flips it); its header carries the three measured facts that pushed it
+out of expo-router, all of them silent — a `fitToContents` form sheet has no
+Android half once the keyboard is up, a fitted sheet may hold no scroller (which
+costs two of the three keyboard-dismissal paths), and presenting a transparent
+modal route a second time drops the WHOLE app's accessibility tree. What the
+route was providing it now provides itself, one line each: a fresh draft per open
+(the links screen mounts it only while `adding`), Android's hardware back via a
+`BackHandler` that swallows the press while the optional section holds work, and
+modality for a screen reader (`accessibilityViewIsModal` on iOS, the links screen
+hiding its own subtree on Android). Its backdrop is web's outside-click and is
+guarded the same way. → docs/soft-keyboard.md, _the add panel_.
+
+Two structural consequences: the edit screen
 needs **no hoisted `editing` view state** (web hoists its dialog because
 virtualized rows repaint under it; a pushed screen isn't row-anchored and its
 draft is a snapshot), and its custom-image flow is **uri/path-based end to

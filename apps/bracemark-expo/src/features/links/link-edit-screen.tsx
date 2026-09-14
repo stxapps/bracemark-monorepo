@@ -273,24 +273,57 @@ function LinkEditForm({ link, focus }: { link: LinkItem; focus?: EditFocus }) {
       {/* The system owns this modal's outer shape: a rounded page sheet on iOS
           and a full-screen slide-up on Android. SafeAreaView clears hardware,
           but the iOS sheet reports almost no top inset and its arc still needs
-          optical clearance, so only that presentation gets the roomier `pt-5`.
-          `pb-2` stays shared: the title/URL stack and 40pt close control remain
-          centred together, and the header-to-form spacing does not drift. */}
-      <View className="shrink-0 flex-row items-center justify-between gap-2 border-b border-border pt-2 pr-2 pb-2 pl-4 ios:pt-5">
+          optical clearance, so only that presentation gets the roomier top.
+
+          `ios:pt-4` rather than search-bar.tsx's `ios:pt-2.5` because the two
+          headers are anchored on the TITLE'S CAPS and their rows are set by
+          different things: this row IS the 44pt title/URL stack (a 28pt
+          `text-lg` line box over a 16pt `text-xs` one), so the padding is the
+          whole gap, while the Advanced Search row is its 40pt close button with
+          the title floating 6pt clear inside it. Inter puts the caps 7.4pt below
+          the line box's top (docs/theme.md, _extending_), so 16 + 7.4 lands this
+          title 23.4pt under the sheet's edge — the same place `ios:pt-2.5` lands
+          that one. The `ios:pt-5` both carried before had them 6pt apart.
+
+          `pb-2.5` is NOT forked, and no bottom padding here should be: the only
+          iOS-specific thing about these headers is the arc at the top. The 10pt
+          answers this header's own content — a muted subtitle sits closer to the
+          border than a floating single title does, which is why Advanced Search
+          keeps `pb-2` — and it answers it on both platforms. These two headers
+          are the app's only `ios:` variants; keep it that way.
+
+          `pr-1.5` plus the button's own 10pt glyph margin puts the ✕ on the same
+          16pt optical edge as the title's `pl-4`, matching both topbars
+          (features/links/topbar.tsx). */}
+      <View className="shrink-0 flex-row items-center justify-between gap-2 border-b border-border pt-2 pr-1.5 pb-2.5 pl-4 ios:pt-4">
         <View className="min-w-0 flex-1">
           <Text className="text-lg font-semibold">Edit link</Text>
           <Text numberOfLines={1} className="text-xs text-muted-foreground">
             {link.url}
           </Text>
         </View>
+        {/* `text-foreground`, not the muted step this wore: a close on a
+            bar-shaped header is nav chrome, and both topbars argue the case
+            against dimming it (features/links/topbar.tsx — the inactive state
+            ends up reading as disabled). The muted rung belongs to the floating
+            tier, where ui/dialog.tsx and the add panel put theirs. Advanced
+            Search already said `text-foreground` for the identical control, so
+            the two sibling headers were giving two answers.
+
+            54x48 effective: the box stays 40 and `hitSlop` makes up the
+            difference (docs/accessibility.md, _a 36dp box is not a 44pt
+            target_). `right: 6` runs out to the row's `pr-1.5` frame edge; the
+            left 8 is free because the neighbour is a Text stack, which takes no
+            touches. */}
         <Button
           variant="ghost"
           size="icon"
           onPress={close}
           aria-label="Close edit link"
+          hitSlop={{ top: 4, bottom: 4, left: 8, right: 6 }}
           className="shrink-0"
         >
-          <Icon as={X} className="size-5 text-muted-foreground" />
+          <Icon as={X} className="size-5 text-foreground" />
         </Button>
       </View>
       <StyledKeyboardAwareScrollView

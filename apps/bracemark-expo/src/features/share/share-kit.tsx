@@ -352,6 +352,22 @@ export function ShareHeader({
               size="icon-sm"
               onPress={closeShareSheet}
               aria-label="Close"
+              // 48x48 effective, the topbars' value for the topbars' reason: the
+              // box is 36, under both platform floors, and `hitSlop` is the
+              // lever rather than a bigger box (docs/accessibility.md, _a 36dp
+              // box is not a 44pt target_). The full 6 on every side because
+              // nothing pressable is beside it — the lockup it trails is an icon
+              // and a Text, and `ml-auto` leaves the whole middle of the header
+              // empty. Slop reaching past the header's bounds is fine: the
+              // tap-to-dismiss Pressable above is this button's PARENT, so
+              // child-first negotiation gives the slop the press, and the next
+              // sibling down the panel is a `gap-4` away.
+              //
+              // It matters more here than anywhere else in the app. On iOS this
+              // is the ONLY way out of the compose screen — no swipe, and a
+              // backdrop that announces nothing (docs/share-sheet.md) — so a
+              // near-miss on it is a user stuck in somebody else's app.
+              hitSlop={6}
               className="-mr-2"
             >
               <Icon as={X} className="size-5 text-muted-foreground" />

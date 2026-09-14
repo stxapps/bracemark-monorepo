@@ -1,7 +1,10 @@
 import { router } from 'expo-router';
 
-// Leaving settings — shared by the topbar's ✕ and the drawer's back arrow, the
-// two ways out (topbar.tsx, sidebar.tsx).
+// Leaving settings — the topbar's ✕, and only that (topbar.tsx). The drawer's
+// rail used to carry a second exit and no longer does: a bare back arrow in its
+// top-right corner was anchored to nothing and duplicated this one, which is
+// where bracemark-web's settings rail had already landed (sidebar.tsx's header
+// is the record, including why a ✕ there would have been worse than the arrow).
 //
 // IT POPS, IT DOESN'T NAVIGATE. Both exits used to `router.push('/links')`,
 // which is a different thing entirely: `links` and `settings` are sibling cards

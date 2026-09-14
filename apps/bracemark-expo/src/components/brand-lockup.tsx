@@ -72,9 +72,11 @@ import { Text } from './ui/text';
 // too — that file exists because five consoles and three apps have to agree, and
 // a hardcoded wordmark is precisely the drift it was written to stop.
 export function BrandLockup({
-  // Trailing control on the lockup's row. The rails have nothing to put there;
-  // the settings topbar puts its surface label there, so the label sits ON the
-  // brand row rather than floating in the bar beside it.
+  // Trailing control on the lockup's row. Neither rail puts anything there —
+  // leaving a surface is its topbar's job, in one place (features/settings/
+  // sidebar.tsx carries the argument, which is also web's) — so the share
+  // sheet's close is the only caller: a sheet floating over another app has no
+  // topbar to hold it, and on iOS no swipe out either (docs/share-sheet.md).
   //
   // IT IS PLACED WITH `ml-auto`, so it is only rightmost if this component's own
   // row is as wide as the header — which makes the PARENT's flex direction part

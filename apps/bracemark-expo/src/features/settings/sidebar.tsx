@@ -10,22 +10,46 @@
 // slid over the app is the one moment the user can't see which app they are in,
 // and both this rail and the links rail are reached the same way — so both open
 // on the same lockup rather than one opening on brand and the other on an icon.
-// Where the back arrow WAS the only exit, it now sits on the lockup's own row as
-// its trailing action, so the panel leaves from the row that announces it
-// (bracemark-web's SidebarBody takes its drawer dismiss in exactly that slot).
+//
+// THE ARROW DID NOT MOVE ONTO THE LOCKUP'S ROW — IT WENT AWAY. It sat there for
+// a while as the lockup's trailing action, on the reading that "the panel leaves
+// from the row that announces it", and citing bracemark-web's SidebarBody as the
+// precedent. That citation was the wrong slot: on web that action is the LINKS
+// drawer's `SheetClose` (`links/_panes/sidebar-drawer.tsx` — a ✕ named "Close
+// navigation"), which closes the drawer and leaves nothing. Web's SETTINGS rail
+// carries no action at all, and its header is the record for why — a bare back
+// arrow in a rail's top-RIGHT corner is anchored to nothing, and it duplicates
+// the topbar's ✕. Leaving settings is the topbar's job, in one place, where a
+// close control is looked for: every section renders that bar
+// (`(app)/settings/[section].tsx`, and `/settings` redirects to a concrete
+// section), so the ✕ is always one press away.
+//
+// RE-SKINNING IT AS A ✕ WOULD HAVE BEEN WORSE, not better, which is the part
+// worth writing down. The arrow's real fault was never its direction — iOS pops
+// a card rightward under a back chevron all day, and `settings` is an ordinary
+// stack card — it was a LEADING-edge affordance parked in a TRAILING slot with
+// no destination beside it, plus one action (`closeSettings`) wearing two icons
+// and two names. But in a drawer header a ✕ means CLOSE THIS DRAWER, as it does
+// in this very product, while this control left the whole surface: the arrow was
+// misread, and a ✕ would have been misread more confidently, with a worse
+// outcome behind the misreading.
+//
+// What the drawer keeps are its three ordinary dismissals — the scrim, a left
+// swipe, picking a section — and every one of them uncovers the bar. The cost,
+// taken deliberately: the drawer covers the topbar, so leaving settings from
+// inside the drawer is two actions rather than one. That is a rare path; this
+// drawer is opened to switch sections. Both expo rails are now the same header —
+// `h-14`, a hairline, a bare BrandLockup — and so is web's.
 
 import { Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { usePathname, useRouter } from 'expo-router';
-import { ArrowLeft } from 'lucide-react-native';
 import { withUniwind } from 'uniwind';
 
 import { BrandLockup } from '../../components/brand-lockup';
-import { Button } from '../../components/ui/button';
 import { Icon } from '../../components/ui/icon';
 import { Text } from '../../components/ui/text';
 import { cn } from '../../lib/utils';
-import { closeSettings } from './close';
 import { SETTINGS_SECTIONS, type SettingsSection } from './sections';
 
 const StyledSafeAreaView = withUniwind(SafeAreaView);
@@ -86,19 +110,7 @@ export function Sidebar({ closeDrawer }: { closeDrawer: () => void }) {
           topbar beside it carries, so the two meet across the frame instead of
           the drawer's header floating a few pixels off the bar it covers. */}
       <View className="h-14 justify-center border-b border-border px-4">
-        <BrandLockup
-          action={
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onPress={closeSettings}
-              aria-label="Back to links"
-              className="-mr-2"
-            >
-              <Icon as={ArrowLeft} className="size-5 text-muted-foreground" />
-            </Button>
-          }
-        />
+        <BrandLockup />
       </View>
 
       {/* The section list. `pt-2` sets it off the hairline; the label above the

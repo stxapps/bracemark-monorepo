@@ -495,10 +495,16 @@ export function LinkAddPanel({ onClose }: { onClose: () => void }) {
           style={panelStyle}
         >
           {/* A sheet header rather than an app bar: the top padding aligns the
-              title with the 40pt close control (`top-3` puts both centres at
+              title with the 36pt close control (`top-3.5` puts both centres at
               32pt), and `pb-6` is the complete title-to-form gap. The scroller
               therefore has no top padding. The divider went with the app-bar
-              geometry; this compact task is one continuous surface. */}
+              geometry; this compact task is one continuous surface — the same
+              answer ui/dialog.tsx and the share sheet give, against the bordered
+              bars the two system-modal editors wear (link-edit-screen.tsx,
+              search-bar.tsx). If a scrolled form ever needs its clip edge
+              marked, the line to add is one that appears on `scrollOffset > 0`,
+              not a static one: a static divider would pull this panel into the
+              app-bar tier it deliberately left. */}
           <View className="relative shrink-0 pt-5 pr-14 pb-6 pl-4">
             {/* The title's width must be DEFINITE. Sized to its own content,
                 Android/Fabric can retain a stale paint clip when the avoider's
@@ -510,14 +516,34 @@ export function LinkAddPanel({ onClose }: { onClose: () => void }) {
                 definite here — NOT `flex-1`, which in a column acts on height.
                 Put the title back in a row and it needs `flex-1` again. */}
             <Text className="text-base font-medium">Add link</Text>
+            {/* The floating-surface close, spelled like ui/dialog.tsx's and like
+                the web twin this panel ports — web-ui `sheet.tsx`'s
+                SheetCloseButton is `variant="ghost" size="icon-sm"` with a
+                `size-4` glyph, pinned to the surface's own top-right corner. The
+                box is the kit's 36 against web's 32, which is the one touch step
+                the whole size scale runs on (docs/theme.md, _the two kits_), and
+                that 2pt is the entire reason this says `top-3.5` where web says
+                `top-3`: 14 + 18 puts the ✕'s centre on the title's, at 32.
+
+                No colour class on the glyph — TextClassContext hands down the
+                ghost variant's `text-foreground`, which is what web's inherits
+                too. The `size-5` it used to wear is the BAR tier's glyph rung
+                (features/links/topbar.tsx: 20 for nav chrome, 16 everywhere
+                else) and did not belong on a sheet header whose title is
+                `text-base`.
+
+                52x52 effective. Nothing pressable is near it — the title is a
+                Text and the header reserves `pr-14` — and 8 of slop still lands
+                inside the header's own box. */}
             <Button
               variant="ghost"
-              size="icon"
+              size="icon-sm"
               onPress={close}
               aria-label="Close add link"
-              className="absolute top-3 right-3"
+              hitSlop={8}
+              className="absolute top-3.5 right-3"
             >
-              <Icon as={X} className="size-5 text-muted-foreground" />
+              <Icon as={X} className="size-4" />
             </Button>
           </View>
           {/* `shrink` is what lets the cap above reach this scroller instead of

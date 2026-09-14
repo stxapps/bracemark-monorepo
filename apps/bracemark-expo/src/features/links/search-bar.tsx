@@ -513,10 +513,35 @@ function AdvancedSearch() {
                 fixed-height topbar. Android is full-screen and SafeAreaView has
                 already cleared the status bar, so 8pt above and below the 40pt
                 close control preserves the ordinary 56pt bar. iOS pageSheet
-                reports almost no top inset despite its prominent system arc;
-                the extra 12pt above supplies optical clearance while the shared
-                bottom padding keeps the header-to-form rhythm unchanged. */}
-            <View className="shrink-0 flex-row items-center justify-between border-b border-border pt-2 pr-2 pb-2 pl-4 ios:pt-5">
+                reports almost no top inset despite its prominent system arc, so
+                that presentation alone pays for optical clearance.
+
+                THE iOS NUMBER IS DERIVED FROM THE TITLE'S CAPS, NOT FROM THE
+                PADDING, which is why this header's step is 2pt where
+                link-edit-screen.tsx's is 8. The row here is 40 because the close
+                BUTTON sets it — `text-lg` is a 28pt line box, so the title
+                floats with 6pt of slack above and below — while the edit
+                header's row IS its 44pt title/URL stack, where the padding is
+                the whole gap. Add Inter's 7.4pt from line-box top to cap top
+                (docs/theme.md, _extending_, carries the metrics) and `ios:pt-2.5`
+                puts these caps 23.4pt under the sheet's edge, exactly where
+                `ios:pt-4` puts the edit screen's. The shared `ios:pt-5` both
+                headers used to carry had them 6pt apart and both loose.
+
+                These two headers are the app's ONLY `ios:` variants, and the
+                fork is the ARC — so nothing below the title is forked. `pb-2`
+                here and `pb-2.5` there each answer their own content on both
+                platforms (a subtitle line sits closer to the border than a
+                floating title does); an `ios:` on a bottom padding would be a
+                fork with no cause. Android is still 6pt apart on the cap-top
+                measure, because the 8pt base can't see the button's slack — the
+                correction would be here, not there, and it has not been
+                eyeballed on the AVD yet.
+
+                `pr-1.5` plus the button's own 10pt glyph margin puts the ✕ on
+                the same 16pt optical edge as the title's `pl-4`, which is where
+                both topbars put theirs (features/links/topbar.tsx). */}
+            <View className="shrink-0 flex-row items-center justify-between border-b border-border pt-2 pr-1.5 pb-2 pl-4 ios:pt-2.5">
               {/* Owns the row's remaining width — the topbars' title idiom, and
                   the shape link-add-panel.tsx's title needed when its header
                   was a row relaid out by a keyboard avoider (Android kept a
@@ -527,6 +552,14 @@ function AdvancedSearch() {
                 size="icon"
                 onPress={() => setOpen(false)}
                 aria-label="Close advanced search"
+                // 54x48 effective. The box stays 40 and the slop makes up the
+                // difference — docs/accessibility.md, _a 36dp box is not a 44pt
+                // target_, where the lever is never a bigger box. 4 above and
+                // below clears both platform floors and still lands inside the
+                // header's own padding; `right: 6` runs out to the row's
+                // `pr-1.5` frame edge; the full 8 on the left is free because
+                // the title beside it is a Text and a Text takes no touches.
+                hitSlop={{ top: 4, bottom: 4, left: 8, right: 6 }}
               >
                 <Icon as={X} className="size-5 text-foreground" />
               </Button>

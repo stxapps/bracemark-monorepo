@@ -194,8 +194,9 @@ own navigation gives it, and the two fixes look nothing alike on purpose.
 
 **bracemark-expo pops.** `links` and `settings` are sibling cards in the `(app)`
 stack, so the links screen stays **mounted** underneath while Settings covers it.
-`features/settings/close.ts` (`closeSettings`, shared by the topbar's ✕ and the
-drawer's back arrow) calls `router.dismiss()` — one card, so it uncovers whatever Settings
+`features/settings/close.ts` (`closeSettings`, behind the topbar's ✕ — the one
+way out, since the drawer's rail carries no exit of its own) calls
+`router.dismiss()` — one card, so it uncovers whatever Settings
 covered rather than unwinding the stack (the add panel's paywall row closes the
 panel and pushes from the links screen, so that is what it lands back on) —
 which reveals the original screen with its params, its scroll offset, and its
