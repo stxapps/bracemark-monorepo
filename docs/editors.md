@@ -940,10 +940,10 @@ in `view-state-provider`, items grow a `LinkRowSelect` checkbox
   dialog, driven by `retagging` in `view-state-provider`) seeds one `TagsCommand`
   with the **intersection** of the selection's tags and saves the **diff**:
   added tags are added to every link, removed seed tags are removed from every
-  link, and a tag only some links carry is never shown and never touched — a
-  bulk edit can't strip tags the user couldn't see. An all-identical-tags
-  selection degenerates to plain edit-in-place. It upholds the §invariants
-  (copy-to-draft, dirty close guard, minimal per-link patches).
+  link, and a tag only some links carry never starts selected and is never
+  touched — a bulk edit can't strip tags the user couldn't see. An
+  all-identical-tags selection degenerates to plain edit-in-place. It upholds
+  the §invariants (copy-to-draft, dirty close guard, minimal per-link patches).
 
 **On bracemark-expo** the mode is ported with the same selection/action semantics
 (`features/links/` — `view-state-provider` holds the selection and the hoisted

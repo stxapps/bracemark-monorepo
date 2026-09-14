@@ -4,9 +4,9 @@
 // whole selection. Seeded with the INTERSECTION of the selected links' tags —
 // the tags every link carries — and saved as a DIFF against that seed: tags the
 // user added are added to every link, seed tags the user removed are removed
-// from every link, and a tag only SOME links carry is never shown and never
-// touched — a bulk edit can't silently strip tags the user couldn't see. A
-// selection whose links all share the same tags degenerates to plain
+// from every link, and a tag only SOME links carry never starts selected and is
+// never touched — a bulk edit can't silently strip tags the user couldn't see.
+// A selection whose links all share the same tags degenerates to plain
 // edit-in-place. It renders the picker body directly because this dialog has no
 // other field to disclose; adding a TagsField trigger and a nested popover would
 // add one tap and one floating layer to the dialog's only job. The diff semantics
@@ -156,8 +156,8 @@ function BulkTagsForm({ links, onClose }: { links: LinkView[]; onClose: () => vo
                 before the 16 reads as separation from it. expo's port has the same
                 two blocks in the same wrapper. */}
             <p className="text-xs text-muted-foreground">
-              Only tags shared by every selected link are shown; a tag on just some of them is left
-              untouched.
+              Only tags shared by every selected link start selected; a tag on just some of them is
+              left untouched.
             </p>
           </div>
           <DialogFooter>
