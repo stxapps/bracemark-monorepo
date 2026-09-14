@@ -14,8 +14,9 @@ import { z } from '../zod';
 // (canonicalizeUsername → trim + NFKC + lowercase — the exact form the server
 // stores as the unique handle), so casing/Unicode variants ("Admin", "ADMIN") all
 // collapse to one lowercase entry and can't slip through. Exact-match only (not
-// substring), so "admin123" stays allowed. Every entry is charset-valid
-// ([a-z0-9_], ≥3 chars) — the regex already rejects anything the set couldn't hit.
+// substring), so "admin123" stays allowed. Every entry is a valid handle
+// (alphanumeric groups joined by single `_`/`-` separators, ≥3 chars) — the
+// regexes already reject anything the set couldn't hit.
 export const RESERVED_USERNAMES: ReadonlySet<string> = new Set([
   // system / infrastructure
   'admin',
@@ -95,7 +96,8 @@ export const usernameSchema = z
   .trim()
   .min(3, 'At least 3 characters.')
   .max(32, 'At most 32 characters.')
-  .regex(/^[a-zA-Z0-9_]+$/, 'Use letters, numbers, or _')
+  .regex(/^[a-zA-Z0-9_-]+$/, 'Use letters, numbers, _ or -')
+  .regex(/^[a-zA-Z0-9]+(?:[_-][a-zA-Z0-9]+)*$/, 'Use _ or - only as separators')
   .refine((u) => !RESERVED_USERNAMES.has(canonicalizeUsername(u)), {
     message: 'This username is reserved',
   });

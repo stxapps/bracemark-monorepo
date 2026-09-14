@@ -103,7 +103,7 @@ describe('recoveryCodeSchema (recovery sign-in — permissive)', () => {
 // `usernameSchema` is not only the form's rule — it backs every auth endpoint's
 // payload (endpoints.ts), so it is the SERVER's gate on the handle too, and it
 // runs before the directory claim. The blocklist below was the only part pinned.
-describe('usernameSchema (length + charset)', () => {
+describe('usernameSchema (length + handle grammar)', () => {
   it('accepts the shortest and longest allowed handles', () => {
     expect(usernameSchema.safeParse('abc').success).toBe(true); // 3
     expect(usernameSchema.safeParse('a'.repeat(32)).success).toBe(true); // 32
@@ -114,12 +114,31 @@ describe('usernameSchema (length + charset)', () => {
     expect(usernameSchema.safeParse('a'.repeat(33)).success).toBe(false); // 33
   });
 
-  it('allows only letters, digits and underscore', () => {
-    for (const u of ['alice_01', 'ALICE', '___', '000']) {
+  it('allows alphanumeric groups separated by a single underscore or hyphen', () => {
+    for (const u of ['alice_01', 'alice-01', 'ALICE', 'abc', '000']) {
       expect(usernameSchema.safeParse(u).success).toBe(true);
     }
-    // The near-misses a user actually types — the shapes other products allow.
-    for (const u of ['alice-01', 'alice.01', 'alice 01', 'alice@01', 'alicé']) {
+  });
+
+  it('rejects characters outside the ASCII handle set', () => {
+    for (const u of ['alice.01', 'alice 01', 'alice@01', 'alicé']) {
+      expect(usernameSchema.safeParse(u).success).toBe(false);
+    }
+  });
+
+  it('rejects leading, trailing and repeated separators', () => {
+    for (const u of [
+      '_alice',
+      'alice_',
+      '-alice',
+      'alice-',
+      'alice__01',
+      'alice--01',
+      'alice_-01',
+      'alice-_01',
+      '___',
+      '---',
+    ]) {
       expect(usernameSchema.safeParse(u).success).toBe(false);
     }
   });
@@ -155,11 +174,13 @@ describe('usernameSchema (reserved-name blocklist)', () => {
     }
   });
 
-  it('every reserved entry is itself charset-valid and ≥3 chars (no dead entries)', () => {
+  it('every reserved entry is itself handle-valid and ≥3 chars (no dead entries)', () => {
     for (const name of RESERVED_USERNAMES) {
       // Would a real user typing this exact handle be blocked? Only if the entry
-      // could pass the length+charset rules to begin with.
-      expect(name).toMatch(/^[a-z0-9_]{3,32}$/);
+      // could pass the length+handle-grammar rules to begin with.
+      expect(name).toMatch(/^[a-z0-9]+(?:[_-][a-z0-9]+)*$/);
+      expect(name.length).toBeGreaterThanOrEqual(3);
+      expect(name.length).toBeLessThanOrEqual(32);
     }
   });
 });
@@ -250,7 +271,8 @@ describe('the field messages fit their one-line slot', () => {
   const cases: [string, z.ZodType, unknown][] = [
     ['username too short', usernameSchema, 'ab'],
     ['username too long', usernameSchema, 'a'.repeat(33)],
-    ['username charset', usernameSchema, 'alice-01'],
+    ['username charset', usernameSchema, 'alice.01'],
+    ['username separator placement', usernameSchema, 'alice--01'],
     ['username reserved', usernameSchema, 'admin'],
     ['password too short', passwordSchema, 'abc'],
     ['password too long', passwordSchema, 'a'.repeat(129)],

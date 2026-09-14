@@ -88,10 +88,9 @@ export function usernameMessage(
   return takenOnSubmit
     ? { text: 'Username is taken', tone: 'error' }
     : username === ''
-      ? // Spelling the charset out ("letters, numbers, or underscores") ran 257px and
-        // wrapped below a ~430px viewport. `_` is the character itself, which is what
-        // the rule is about, and it survives the width budget at 176px.
-        { text: '3–32 letters, numbers, or _', tone: 'muted' }
+      ? // Spelling the separators out as words runs past the narrow-screen budget.
+        // `_` / `-` are the characters themselves, which is what the rule is about.
+        { text: '3–32 letters, numbers, _ or -', tone: 'muted' }
       : !parse.success
         ? // Reuse the schema's own message so the rule that actually failed (length,
           // charset, or reserved name) shows through instead of one catch-all string.

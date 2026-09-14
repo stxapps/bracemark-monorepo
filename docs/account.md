@@ -278,12 +278,13 @@ that drifts fails CI instead of locking users out.
 Defined once in `auth/credentials.ts` (`usernameSchema`) and enforced
 identically on the form and the server:
 
-| rule             | value                     | why                                                         |
-| ---------------- | ------------------------- | ----------------------------------------------------------- |
-| length           | **3–32** chars            | short enough to type, long enough to be distinct            |
-| charset          | `[a-zA-Z0-9_]`            | unambiguous, URL-safe, no Unicode confusables in the handle |
-| canonicalization | `trim → NFKC → lowercase` | one deterministic form (`canonicalizeUsername`)             |
-| reserved names   | `RESERVED_USERNAMES` set  | no account can impersonate the product or a system/role     |
+| rule             | value                                        | why                                                          |
+| ---------------- | -------------------------------------------- | ------------------------------------------------------------ |
+| length           | **3–32** chars                               | short enough to type, long enough to be distinct             |
+| charset          | `[a-zA-Z0-9_-]`                              | unambiguous, URL-safe, no Unicode confusables in the handle  |
+| shape            | alphanumeric groups joined by one `_` or `-` | no punctuation-only, leading, trailing or doubled separators |
+| canonicalization | `trim → NFKC → lowercase`                    | one deterministic form (`canonicalizeUsername`)              |
+| reserved names   | `RESERVED_USERNAMES` set                     | no account can impersonate the product or a system/role      |
 
 The **length floor is an identity choice, not a security one**: the username is
 the salt, but a salt needs to be _unique_ (the server's `UNIQUE` handle
@@ -293,6 +294,12 @@ would buy no security. The **reserved-name blocklist** _is_ the meaningful
 username hardening: exact-match (so `admin123` is fine) against the CANONICAL
 form, so casing can't smuggle a reserved handle past. It lives in `usernameSchema`
 and therefore holds on the **server** too (every auth endpoint validates it).
+
+The two separators support natural multi-word handles without admitting the
+larger punctuation and Unicode surface. Requiring an alphanumeric group on each
+side keeps the public handle readable and prevents names such as `___`, `_alice`,
+`alice-`, or `alice--01`; `_` and `-` remain distinct rather than canonicalizing
+to one another.
 
 The set covers **two products, deliberately**: the legacy spellings `brace`,
 `braceto`, and `braceapp` stay reserved alongside the `bracemark*` entries, so

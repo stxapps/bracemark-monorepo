@@ -83,7 +83,7 @@ describe('usernameMessage', () => {
 
   it('rests on the format rule when the field is empty', () => {
     expect(usernameMessage('', settled(true), false)).toEqual({
-      text: '3–32 letters, numbers, or _',
+      text: '3–32 letters, numbers, _ or -',
       tone: 'muted',
     });
   });
@@ -97,7 +97,10 @@ describe('usernameMessage', () => {
       tone: 'error',
     });
     expect(usernameMessage('has space', settled(true), false).text).toBe(
-      'Use letters, numbers, or _',
+      'Use letters, numbers, _ or -',
+    );
+    expect(usernameMessage('alice--01', settled(true), false).text).toBe(
+      'Use _ or - only as separators',
     );
   });
 
