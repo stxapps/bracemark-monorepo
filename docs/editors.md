@@ -753,6 +753,43 @@ guarantee structurally — a modal-presented router screen lives outside the lis
 tree, so there is no row to lose and nothing to hoist. A new editor over
 _existing_ links on web inherits the rule.
 
+**A failed write is silent in every one of these editors, and that is a decision
+rather than an oversight.** Every save handler is `try { … } finally {
+setSaving(false) }` with no `catch` — the edit dialog, quick-add, the move
+surface, the destroy confirm, `BulkTagsDialog`, and both bulk bars' `runBulk`, on
+both platforms. A rejection out of `update`/`updateMany`/`destroy` therefore
+escapes the handler (a console error on web, a LogBox warning in bracemark-expo's
+dev build) and the user is told nothing in words. What the user gets instead is
+the state the code falls into, and it is the recoverable one: the write is a
+single transaction, so nothing landed; `onClose()` and `exitBulkEdit()` sit
+_after_ the await, so the editor stays open with the draft intact and the
+selection unchanged; `finally` re-arms Save. Pressing it again is the whole
+affordance. What could reach that catch is a **local-store** write failing — a
+Dexie or expo-sqlite transaction, so a quota or a closed database — which is
+neither about a value in the form nor a decision the user can make: there is
+nothing to put in a footer but OK, nothing to say beyond "it didn't save", and a
+dialog that said it would still have to leave the draft exactly where the silence
+already leaves it. Sync failures don't reach here at all; the write is local and
+`requestSync()` is fire-and-forget
+([local-first-sync.md](./local-first-sync.md)). `bulk-edit-toolbar.tsx`'s
+clipboard `catch` records the same conclusion for its own row.
+
+**The two things that DO report mark the boundary.** Validation is not this case:
+an empty URL is about the value in the field, it blocks before any write, and it
+gets its `role="alert"` line in all four create surfaces (invariant 2). And the
+lists/tags tables' `useOpRunner` → `SettingsNotice` is scoped to those two tables
+on purpose (_the editing surfaces_ above, the Delete entry) — they are a
+different shape of surface, where ops run from rows a screen apart and a rename
+commits on blur.
+
+**So don't fit one editor with an error surface of its own.** A `catch` plus an
+alert line in a single dialog makes that dialog the only link operation in either
+app that reports a failure, and if it is bulk retag then the least consequential
+op reports while the full edit dialog stays mute — an inconsistency the next
+reader has to re-litigate from scratch, since nothing in the file says the
+silence was chosen. If the silence should end, it ends for all of them at once
+through one shared surface, and this entry changes with it.
+
 ### bulk edit
 
 Bulk edit is a **mode**, not a separate editor: the topbar toggles `bulkEditing`
