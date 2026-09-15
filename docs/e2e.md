@@ -735,6 +735,29 @@ runner flag rather than a flow `env:` default because — measured on Maestro 2.
 — a flow-level `env:` value **beats** `-e` from the command line instead of
 yielding to it, so a default would have made the flag a silent no-op.
 
+⚠ **Android's frozen status bar is entered with `exit` first, and the reason is a
+leak that outlives the run.** SystemUI demo mode is not idempotent the way the
+broadcast makes it look: `enter` builds its `DemoStatusIcons` only when there is
+not one already, so a second `enter` moves nothing and cannot repair a container
+that has gone wrong. One goes wrong on any CONFIGURATION CHANGE — a density,
+font-scale or theme change reaches `StatusBarIconControllerImpl
+.onDensityOrFontScaleChanged` → `refreshIconGroups()`, which destroys and re-adds
+every icon group while `mIsInDemoMode` is still true, because `destroy()` is only
+`mGroup.removeAllViews()` and the demo container hangs off the group's parent. The
+wifi holder coming back then calls `DemoStatusIcons.addModernWifiView` a SECOND
+time; it de-dups nothing and overwrites its own reference, so the first view is
+orphaned in the container, still drawn, and the removal path can never reach it
+again. **The status bar carries two wifi icons** from then on, in every capture,
+and nothing in the run fails — a picture of a device the emulator is not.
+Measured on the API 36 emulator: one extra icon per config change, a `font_scale`
+write taking the collapsed bar 1 → 2 → 3 and the shade header with it. Demo mode
+also outlives an interrupted run, `clearStatusBar` reaching the device only from
+`main`'s `finally`, so the count is INHERITED by the next run. `freezeStatusBar`
+therefore sends `exit` before `enter` — the one command that tears the container
+down — after the `sysui_demo_allowed` write, since an unavailable
+`DemoModeController` drops commands rather than queuing them. iOS needs no
+equivalent: `simctl status_bar override` sets state, it does not build views.
+
 ⚠ **The mobile leg needs `deviceExtractionMode: 'all'`, and the reason is not
 extraction.** Favicons are the one enrichment that never syncs
 ([link-extraction.md](./link-extraction.md), _favicons: a device-local host

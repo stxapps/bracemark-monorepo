@@ -120,6 +120,15 @@ async function adbShell(words: string[]): Promise<void> {
   await command('adb', ['shell', quoted]);
 }
 
+// Every SystemUI demo-mode instruction is this one broadcast plus `--es` pairs.
+async function demoCommand(...extras: string[]): Promise<void> {
+  const words = ['am', 'broadcast', '-a', 'com.android.systemui.demo'];
+  for (let index = 0; index < extras.length; index += 2) {
+    words.push('--es', extras[index], extras[index + 1]);
+  }
+  await adbShell(words);
+}
+
 async function bootedUdid(): Promise<string> {
   const listed = JSON.parse(await capture('xcrun', ['simctl', 'list', 'devices', 'booted', '-j']));
   const booted: { udid: string; name: string }[] = Object.values(listed.devices).flat() as never;
@@ -200,15 +209,35 @@ async function freezeStatusBar(platform: Platform): Promise<void> {
   // mode is entered, so the clock below is drawn with it already in force.
   await adbShell(['settings', 'put', 'system', 'time_12_24', '12']);
   await adbShell(['settings', 'put', 'global', 'sysui_demo_allowed', '1']);
-  await adbShell([
-    'am',
-    'broadcast',
-    '-a',
-    'com.android.systemui.demo',
-    '--es',
-    'command',
-    'enter',
-  ]);
+
+  // ⚠ EXIT BEFORE ENTER, OR THIS RUN PHOTOGRAPHS THE LAST ONE'S LEAK.
+  //
+  // `enter` cannot repair a demo status bar that has already gone wrong:
+  // IconManager.onDemoModeStarted builds its DemoStatusIcons only `if
+  // (mDemoStatusIcons == null)`, so a second `enter` is a no-op — measured, it moves
+  // nothing. And the container goes wrong on any CONFIGURATION CHANGE, which reaches
+  // StatusBarIconControllerImpl.onDensityOrFontScaleChanged → refreshIconGroups():
+  // that destroys and re-adds every icon group, and `destroy()` is only
+  // `mGroup.removeAllViews()` — it leaves `mIsInDemoMode` true and the demo container
+  // standing, because the container is a child of the group's PARENT. Re-adding the
+  // wifi holder then reaches IconManager.addNewWifiIcon → DemoStatusIcons
+  // .addModernWifiView a SECOND time; that method de-dups nothing and overwrites
+  // `mModernWifiView`, so the first view is orphaned in the container, still drawn,
+  // and the `onRemoveIcon` path can never reach it again. The status bar carries TWO
+  // WIFI ICONS from then on, in every capture, and nothing in the run fails.
+  //
+  // Measured on the API 36 emulator, one extra icon per config change — a font-scale
+  // write took the collapsed bar 1 → 2 → 3, the shade header with it. Demo mode
+  // outlives an interrupted run (`clearStatusBar` only gets to run in `main`'s
+  // `finally`), so the count is INHERITED across runs until something exits: a fresh
+  // `enter` on a dirty container is exactly the case this freeze cannot see.
+  //
+  // `exit` is all it takes — onDemoModeFinished → exitDemoMode removes the container,
+  // nulls it and clears the flag — and it is harmless when demo mode was already off.
+  // It must follow the `sysui_demo_allowed` write above: an unavailable
+  // DemoModeController drops the command instead of queuing it.
+  await demoCommand('command', 'exit');
+  await demoCommand('command', 'enter');
   for (const extras of [
     ['command', 'clock', 'hhmm', '0941'],
     ['command', 'battery', 'level', '100', 'plugged', 'false'],
@@ -217,11 +246,7 @@ async function freezeStatusBar(platform: Platform): Promise<void> {
     // "connected, no internet" ! badge over the bars, whatever the device's real link is.
     ['command', 'network', 'wifi', 'show', 'level', '4', 'fully', 'true'],
   ]) {
-    const words = ['am', 'broadcast', '-a', 'com.android.systemui.demo'];
-    for (let index = 0; index < extras.length; index += 2) {
-      words.push('--es', extras[index], extras[index + 1]);
-    }
-    await adbShell(words);
+    await demoCommand(...extras);
   }
 }
 
@@ -230,7 +255,7 @@ async function clearStatusBar(platform: Platform): Promise<void> {
     await command('xcrun', ['simctl', 'status_bar', 'booted', 'clear']);
     return;
   }
-  await adbShell(['am', 'broadcast', '-a', 'com.android.systemui.demo', '--es', 'command', 'exit']);
+  await demoCommand('command', 'exit');
 }
 
 async function openShareSource(platform: Platform): Promise<void> {
