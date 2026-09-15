@@ -12,19 +12,28 @@ appId: com.bracemark.app
 # Select the real My List through the drawer so a warm run cannot inherit an old
 # view. Its seven links are the visible fold of the listing-safe library, enough
 # to fill the frame while the other links keep the named lists populated.
+#
+# BY ID, NOT BY NAME, and the id is why this step is two lines instead of a
+# platform branch. `tapOn: 'My List'` matched TWO nodes on Android: the drawer is
+# an overlay, so the links topbar stays in the view hierarchy BEHIND it, and that
+# topbar's title is the current selection's name — the very list this step
+# selects. Maestro takes the first match in tree order, the topbar's, whose
+# bounds sit under the drawer panel (measured: title [136,167][838,241], drawer
+# 0–933 wide), so the touch landed on the drawer, nothing navigated, and the
+# drawer stayed open. It reads as an Android drawer quirk and is not one — a
+# finger on that row closes it, and `index: 1` on the same text closes it here.
+# Neither is the fix: the ambiguity only exists when the title already names this
+# list, so an index would be wrong in every other starting state, and the label is
+# renameable user data besides. docs/app-drivers.md, _a text match can resolve to
+# a node under the drawer_.
+#
+# What it cost while it was wrong: the drawer stayed up, the row assertions below
+# still passed behind it, and every later capture photographed navigation instead
+# of the requested scene.
 - tapOn:
     id: 'links-open-navigation'
-- tapOn: 'My List'
-# Android keeps the drawer open when the destination is already selected because
-# the tap causes no navigation transition. Close it through the exposed scrim;
-# otherwise row assertions still pass behind the drawer and every later capture
-# photographs navigation instead of the requested scene.
-- runFlow:
-    when:
-      platform: Android
-    commands:
-      - tapOn:
-          point: '96%,50%'
+- tapOn:
+    id: 'links-nav-list-my-list'
 - extendedWaitUntil:
     visible: '.*wikihow.com.*'
     timeout: 120000
@@ -46,26 +55,26 @@ appId: com.bracemark.app
 # Search is committed and the keyboard is gone. The query deliberately matches
 # extracted titles from Wikivoyage rather than a URL fragment.
 #
-# iOS drives the visible field and its keyboard action. Android's Maestro
-# hardware Enter and hideKeyboard paths can both fall through to the app's
-# BackHandler and close the bar on this emulator, so its capture opens the same
-# public `/links?text=travel` route through the app's registered scheme. That is
-# the route submitBasic writes and gives both platforms the identical committed
-# state without depending on an injected hardware key.
-- runFlow:
-    when:
-      platform: iOS
-    commands:
-      - tapOn: 'Search links'
-      - inputText: travel
-      - pressKey: Enter
-- runFlow:
-    when:
-      platform: Android
-    commands:
-      - openLink:
-          link: 'bracemark://links?text=travel'
-          autoVerify: false
+# ONE PATH FOR BOTH PLATFORMS: the visible field and its keyboard action, which
+# is what a user does. Android went around it for a while, opening the same
+# `/links?text=travel` route through the app's scheme; `pressKey: Enter` is
+# measured committing the search on this AVD with the bar still up, and the title
+# check below is what proves it every run.
+#
+# What is NOT safe on Android is `hideKeyboard`. Maestro dismisses the IME with
+# BACK, and while the bar shows, the topbar registers a `hardwareBackPress`
+# handler that closes the search UI and restores the previous view
+# (links/topbar.tsx) — so the shutter would catch the view the search ran from,
+# green. Enter is enough anyway: `blurAndSubmit` puts the keyboard away as it
+# commits.
+#
+# Enter has its own cost, paid by the next step rather than avoided: a hardware
+# key takes Android out of touch mode and the platform paints a focus highlight
+# on whatever the blur moves focus to (docs/app-drivers.md, _`pressKey`
+# photographs a focus state no user has_).
+- tapOn: 'Search links'
+- inputText: travel
+- pressKey: Enter
 - extendedWaitUntil:
     visible: 'Porto.*'
     timeout: 60000

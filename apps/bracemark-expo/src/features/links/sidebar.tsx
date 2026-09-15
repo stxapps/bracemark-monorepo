@@ -141,6 +141,23 @@ function pruneHidden<T extends TreeItem>(
     );
 }
 
+// The row's stable handle for the mobile flows (docs/e2e.md, _the testID
+// contract_), derived from the SELECTION rather than the label because the label
+// is user data: the system three are renameable (settings/lists-section.tsx) and
+// every other row is a list or tag the user named. Only the system list ids are
+// strings a flow can hardcode (`my-list`, `archive`, `trash`); a user row's is a
+// uuid, but the shape is uniform, so a `maestro hierarchy` dump names what it
+// found. It is an id and not the label for the sharper reason too — with the
+// drawer OPEN the links topbar is still in Android's hierarchy behind it, and its
+// title is this same list's name, so `tapOn: 'My List'` is ambiguous there and
+// resolves to the occluded one (docs/app-drivers.md, _a text match can resolve to
+// a node under the drawer_).
+function navTestID(selection: Selection): string {
+  if (selection.kind === 'list') return `links-nav-list-${selection.id}`;
+  if (selection.kind === 'tag') return `links-nav-tag-${selection.id}`;
+  return `links-nav-${selection.kind}`;
+}
+
 function isActive(current: Selection, candidate: Selection): boolean {
   if (current.kind !== candidate.kind) return false;
   if (current.kind === 'list' || current.kind === 'tag') {
@@ -227,6 +244,7 @@ function NavItem({
       ) : null}
       <Pressable
         role="button"
+        testID={navTestID(selection)}
         onPress={() => {
           setSimpleQuery(selection);
           onSelected();

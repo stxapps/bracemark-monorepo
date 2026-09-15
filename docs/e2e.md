@@ -379,6 +379,9 @@ All of them are in the app:
 | `sign-in-use-password`      | ” — the toggle back out                         |
 | `links-screen`              | `src/app/(app)/links/index.tsx` (a root marker) |
 | `links-open-navigation`     | `src/features/links/topbar.tsx`                 |
+| `links-nav-list-<id>`       | `src/features/links/sidebar.tsx` — a drawer row |
+| `links-nav-tag-<id>`        | ” — the tag rows                                |
+| `links-nav-all`             | ” — Show All                                    |
 | `links-more-options`        | `src/features/links/more-options-menu.tsx`      |
 | `links-open-settings`       | ” — the Settings menu item                      |
 | `add-link-url`              | `src/features/links/link-add-panel.tsx`         |
@@ -408,6 +411,18 @@ password? Use a recovery code"), and a flow keyed to a sentence turns a wording
 edit into a red run. The two error ids exist so the failure paths — a wrong
 password, a wrong recovery code — have something legal to assert on; the message
 text itself is copy.
+
+The `links-nav-*` group is derived from the row's SELECTION, not its label, and
+the three system lists are the only ones a flow can name outright
+(`links-nav-list-my-list`, `-archive`, `-trash` — `MY_LIST_ID` and friends in
+`packages/shared/src/sync/system-lists.ts`); a user list or tag gets the same
+shape around its uuid. Two reasons, and the second is the load-bearing one.
+Every label here is renameable user data — even the system three
+(`settings/lists-section.tsx`). And with the drawer open, the links topbar is
+still in Android's hierarchy behind it showing the current list's name, so
+`tapOn: 'My List'` is ambiguous there and resolves to the node underneath:
+[app-drivers.md](./app-drivers.md), _a text match can resolve to a node under the
+drawer_.
 
 `add-link-save` is the sharpest case for why these are ids and not text: its label
 is `Save` until a malformed/duplicate/trashed warning relabels it `Confirm`, so

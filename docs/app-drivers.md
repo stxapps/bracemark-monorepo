@@ -230,6 +230,44 @@ with no press handler — between the Enter and the shutter. Worth checking in a
 capture that ends on a `pressKey`, since nothing else reports it: the flow is
 green, the pixels are wrong, and the result ships to a store listing.
 
+#### ⚠ a text match can resolve to a node under the drawer
+
+**Android's hierarchy contains views an overlay covers, so a `tapOn` by text can
+pick an element nobody can see — and the tap then lands on whatever is drawn over
+it.** Nothing reports this. The step passes, the touch is delivered, and the
+screen simply does not change.
+
+The specimen is the drawer in `e2e/mobile/shots/store.yaml`. A React Navigation
+drawer is an overlay: the links screen stays mounted and stays in the dump
+behind it. The links topbar's title is the current selection's NAME
+(`links/topbar.tsx`, `useSelectionLabel`), so opening the drawer on My List puts
+**two** "My List" nodes in the tree — the occluded title at `[136,167][838,241]`
+and the drawer row at `[200,537][892,590]`. Maestro takes the first in tree
+order, which is the title's, and the drawer panel is 933px wide on this AVD, so
+the title's centre is under it. The touch went to the drawer, nothing navigated,
+and the drawer stayed open — which read as "Android keeps the drawer open when
+the destination is already selected" and was written into the flow as a
+platform-conditional scrim tap at `96%,50%` for months. It is not an app
+behaviour and not a Maestro bug: a finger on that row closes the drawer, and so
+does `index: 1` on the same text.
+
+**Bind to a `testID` when an overlay is open** ([e2e.md](./e2e.md), _the testID
+contract_) — `links-nav-list-<id>` on the drawer rows, added for exactly this.
+Two cheaper-looking fixes are both wrong. `index: 1` encodes the collision rather
+than avoiding it: the second match exists only because the title already names
+the destination, so it breaks in every other starting state — and these flows
+start warm, on whatever view the device last held. A coordinate tap on the scrim
+is worse: `96%,50%` is pinned to this AVD's drawer width and would land INSIDE
+the drawer on a tablet, silently, in the one kind of run whose output ships to a
+store listing.
+
+The general shape, since the drawer is only where it was caught: **any text
+selector evaluated while a drawer, sheet, dialog or menu is open can match the
+surface underneath.** The tell is a step that passes and changes nothing. Dump
+the tree and count the matches — `maestro hierarchy` filtered on the string
+answers it in one command, and a second dump after the tap says whether anything
+moved.
+
 #### the driver: Maestro, not Appium
 
 > The flows themselves live in `e2e/mobile/`; [e2e.md](./e2e.md) covers the
