@@ -1,0 +1,77 @@
+# How a shot flow gets a signed-in app on the links screen. Pulled in with
+# `runFlow` by store.yaml; never run directly.
+#
+# Parameters (set by shot/mobile.ts):
+#   USERNAME, PASSWORD  — the durable shot account
+#   FRESH               — 'true' for the wiped cold start, anything else for warm
+#
+# WARM BY DEFAULT, AND THE WIPE IS THE FLAG. `flows/subflows/sign-in.yaml` opens
+# with `clearState` because the REGRESSION flows run as a directory and each one
+# has to be state-independent (docs/app-drivers.md, _launchApp resumes_). This leg
+# is not that: two flows, one order, one durable account `npm run shot:account` has
+# already filled. Inherited here, the wipe costs the whole of every run — landing
+# screen, Argon2id on the device, then a first sync of the entire library and a
+# favicon fetch per host — to arrive at the state the device was already in.
+#
+# So stop the process and start it again. The session survives, because it lives
+# in expo-secure-store + expo-sqlite, and `flows/sign-in.yaml` is the regression
+# that says so. `stopApp` first, because `launchApp` alone resumes. Nothing here
+# needs the dev-client deep link that cold-launch.yaml carries: no state was
+# cleared, so the launcher's recently-opened-apps registry still names the bundle
+# and it reopens that one by itself.
+#
+# It is better for the pictures, not just faster. The favicon cache is
+# device-local (docs/link-extraction.md, _favicons_), so on a warm start the icons
+# are already on disk and the one capture that could be photographed half-loaded
+# no longer can be — the failure docs/e2e.md records having shipped once. The
+# store flow's own settle step stays anyway, because it also covers a first run.
+#
+# `FRESH=true` is for the case where the wipe is the point: straight after
+# `npm run shot:account -- --fresh` rebuilt this account's data, where a warm device would
+# otherwise photograph the library it already held while sync caught up.
+#
+# No `env:` default for FRESH on purpose. Measured on Maestro 2.8.0: a flow-level
+# `env:` value BEATS `-e` from the command line rather than yielding to it, so a
+# default here would make `--fresh` a silent no-op. Unset, `${FRESH == 'true'}`
+# evaluates false rather than throwing, which is the wanted default anyway.
+appId: com.bracemark.app
+---
+- runFlow:
+    when:
+      true: ${FRESH == 'true'}
+    commands:
+      - runFlow:
+          file: ../../flows/subflows/sign-in.yaml
+
+- runFlow:
+    when:
+      true: ${FRESH != 'true'}
+    commands:
+      - stopApp
+      - launchApp
+
+      # Metro may still be handing over the bundle. This polls rather than
+      # waiting once, because what comes up decides the next step and it has to
+      # return either way — the optional `assertVisible` is what paces the loop
+      # (it waits out its own lookup before warning), the same shape
+      # `flows/subflows/sign-in.yaml` uses around the AutoFill sheet.
+      - repeat:
+          times: 8
+          while:
+            notVisible:
+              id: 'links-screen'
+          commands:
+            - assertVisible:
+                id: 'links-screen'
+                optional: true
+
+      # No session: a device that has never run this, or one a `--fresh` run
+      # wiped. Fall through to the cold path, which brings its own `clearState`
+      # and its own dev-client link, so a first run needs no special invocation.
+      - runFlow:
+          when:
+            notVisible:
+              id: 'links-screen'
+          commands:
+            - runFlow:
+                file: ../../flows/subflows/sign-in.yaml

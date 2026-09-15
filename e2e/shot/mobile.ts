@@ -3,10 +3,10 @@ import { access, copyFile, mkdir, readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 
-import { SHOT_OUTPUT } from '../../paths';
-import { maestro, waitForApi } from '../../runner/lib';
-import { seedPassword } from '../catalog';
-import { findUserId } from '../plan';
+import { SHOT_OUTPUT } from '../paths';
+import { maestro, waitForApi } from '../runner/lib';
+import { seedPassword } from '../seed/catalog';
+import { findUserId } from '../seed/plan';
 import { SHOT_USER } from './library';
 
 const run = promisify(execFile);
@@ -15,10 +15,27 @@ const SHARE_TITLE = 'Job interview';
 
 type Platform = 'ios' | 'android';
 
-function selectedPlatform(): Platform {
-  const value = process.argv[2];
-  if (value === 'ios' || value === 'android') return value;
-  throw new Error('choose one platform: `npm run shot:mobile -- ios` or `... -- android`');
+interface Options {
+  platform: Platform;
+  // Wipe the device and sign in again, rather than restarting the app onto the
+  // session and library it already has. See mobile/shots/subflows/start.yaml for
+  // which way round these are and why; the short version is that this one is for
+  // the run straight after `npm run shot:account -- --fresh` rebuilt the account's data.
+  fresh: boolean;
+}
+
+function selectedOptions(): Options {
+  const argv = process.argv.slice(2);
+  const fresh = argv.includes('--fresh');
+  const rest = argv.filter((arg) => arg !== '--fresh');
+  const platform = rest[0];
+  if (rest.length !== 1 || (platform !== 'ios' && platform !== 'android')) {
+    throw new Error(
+      'choose one platform: `npm run shot:mobile -- ios` or `... -- android`\n' +
+        '    add `--fresh` to wipe the device and sign in, instead of restarting the app',
+    );
+  }
+  return { platform, fresh };
 }
 
 function rawPath(platform: Platform, scene: string): string {
@@ -174,11 +191,12 @@ async function verifyCaptures(platform: Platform, files: string[]): Promise<void
 }
 
 async function main(): Promise<void> {
-  const platform = selectedPlatform();
+  const { platform, fresh } = selectedOptions();
+  console.log(`${platform}: ${fresh ? 'wiped cold start, then sign in' : 'warm restart'}`);
   await waitForApi();
   if (!(await findUserId(SHOT_USER.username))) {
     throw new Error(
-      `no ${SHOT_USER.username} account on the local stack; run \`npm run shot\` first to build it`,
+      `no ${SHOT_USER.username} account on the local stack; run \`npm run shot:account\` first to build it`,
     );
   }
 
@@ -203,6 +221,9 @@ async function main(): Promise<void> {
     await maestro('mobile/shots/store.yaml', {
       env: {
         ...credentials,
+        // Passed on every run, never defaulted in the flow: a Maestro `env:`
+        // block beats `-e` rather than yielding to it (start.yaml, last note).
+        FRESH: String(fresh),
         ONLY_YOU_SHOT: 'only-you',
         SEARCH_SHOT: 'search-on-device',
         LISTS_AND_TAGS_SHOT: 'lists-and-tags',

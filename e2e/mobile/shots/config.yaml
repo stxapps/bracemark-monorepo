@@ -1,5 +1,7 @@
 # Published mobile-store captures. Kept out of mobile/flows' non-recursive glob:
 # these use the durable shot account and write assets; they are not regressions.
+# This glob is non-recursive for the same reason theirs is — `subflows/` holds
+# fragments meant to be pulled in with `runFlow`, not run on their own.
 appId: com.bracemark.app
 flows:
   - '*.yaml'

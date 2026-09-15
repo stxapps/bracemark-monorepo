@@ -1,11 +1,13 @@
-# The three in-app mobile store captures. `seed/shot/mobile.ts` supplies the
-# durable shot-account credentials and run-local screenshot names. The runner
-# copies those captures into stable artifacts after Maestro exits. The fourth
-# capture is the platform share surface in share.yaml.
+# The three in-app mobile store captures. `shot/mobile.ts` supplies the
+# durable shot-account credentials, the run-local screenshot names and `FRESH`.
+# The runner copies those captures into stable artifacts after Maestro exits. The
+# fourth capture is the platform share surface in share.yaml.
 appId: com.bracemark.app
 ---
+# Warm restart by default, wiped cold start under `--fresh` — subflows/start.yaml
+# carries both and the reasoning for preferring the first here.
 - runFlow:
-    file: ../flows/subflows/sign-in.yaml
+    file: subflows/start.yaml
 
 # The shot account's inbox is intentionally empty: every link is filed. Select
 # Show All through the real drawer so the picture is the same state a person can
@@ -25,10 +27,10 @@ appId: com.bracemark.app
 # The host line arriving is NOT the row being finished. Favicons never sync
 # (docs/link-extraction.md, _favicons_), so the device fetches one per host the
 # moment these rows mount — six hosts for the whole library, behind the account's
-# `deviceExtractionMode: 'all'` (seed/shot/library.ts). The wait above returns on
+# `deviceExtractionMode: 'all'` (shot/library.ts). The wait above returns on
 # the first host STRING, which is several hundred ms before the icons beside them.
 # Web's capture counts the `<img>`s and waits for the count to hold
-# (seed/shot/scenes.ts, `faviconsQuiesced`); Maestro has nothing addressable to
+# (shot/scenes.ts, `faviconsQuiesced`); Maestro has nothing addressable to
 # count, so settle on the screen itself — this returns as soon as the pixels stop
 # moving, which is the last icon landing, and returns immediately once they have.
 # Nothing here FAILS if an icon never comes: standardebooks.org serves none, so

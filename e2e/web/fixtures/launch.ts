@@ -38,11 +38,12 @@ export interface LaunchOptions {
   // runner's reverse leg uses this: the account was made on the phone.
   existing?: Credentials;
   // Create an account with THESE credentials instead of freshly minted ones.
-  // Only the seed wants this (seed/seed.ts): its accounts are named so a human
-  // can sign back into them tomorrow, which is the opposite of what a spec wants
-  // and the reason `newCredentials()` stays the default. It still goes through
-  // the same create-account ceremony — there is no seeding shortcut here either
-  // (see ./account.ts) — so the only thing it changes is who gets created.
+  // Only the seeds want this (seed/accounts.ts, shot/account.ts): their
+  // accounts are named so a human can sign back into them tomorrow, which is the
+  // opposite of what a spec wants and the reason `newCredentials()` stays the
+  // default. It still goes through the same create-account ceremony — there is no
+  // seeding shortcut here either (see ./account.ts) — so the only thing it
+  // changes is who gets created.
   create?: Credentials;
   // Take create-account's recovery-code exit instead of skipping it, and return
   // the minted code as `recoveryCode`. Only the mobile runner wants this — see
@@ -53,7 +54,7 @@ export interface LaunchOptions {
   headed?: boolean;
   slowMo?: number;
   // Raster density for `page.screenshot`. 2 everywhere except the marketing
-  // capture (seed/shot/), which asks for 3 — and the reason is a constraint one
+  // capture (shot/), which asks for 3 — and the reason is a constraint one
   // step downstream: `make-image-variants.sh` refuses to upscale, so the widest
   // variant the site ships (2200px) needs a source at least that wide. The
   // capture's CSS width is a DESIGN choice — it sets how large the app's own type

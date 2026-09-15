@@ -1,6 +1,6 @@
 import { expect, type Page } from '@playwright/test';
 
-// WHAT to photograph. `capture.ts` is the HOW, and the split is the point: the
+// WHAT to photograph. `web.ts` is the HOW, and the split is the point: the
 // account, the import, the extraction drain and the waits are one apparatus that
 // every picture needs, and the only thing that varies between pictures is a
 // viewport, a URL and what "finished" means on that screen.
@@ -16,7 +16,7 @@ import { expect, type Page } from '@playwright/test';
 // another repo).
 
 export interface Scene {
-  /** `.artifacts/shot/<id>.png`, and what `npm run shot -- <id>` selects. */
+  /** `.artifacts/shot/<id>.png`, and what `npm run shot:web -- <id>` selects. */
   id: string;
   /** One line, for the run's own listing. */
   what: string;
@@ -24,7 +24,7 @@ export interface Scene {
   viewport: { width: number; height: number };
   /**
    * Device pixel ratio. ⚠ `deviceScaleFactor` is a BROWSER-CONTEXT option, not a
-   * page one, so scenes at different scales cannot share a launch — `capture.ts`
+   * page one, so scenes at different scales cannot share a launch — `web.ts`
    * groups on this field and launches once per group. Getting that wrong does not
    * throw; it silently photographs everything at the first group's DPR.
    */

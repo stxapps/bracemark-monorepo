@@ -1,20 +1,19 @@
 import { execFileSync } from 'node:child_process';
 import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import { type BrowserContext, chromium, expect, type Page } from '@playwright/test';
 
-import { ARTIFACTS, SHOT_OUTPUT } from '../../paths';
-import { waitForApi } from '../../runner/lib';
-import { seedPassword } from '../catalog';
-import { findUserId } from '../plan';
+import { E2E_ROOT, profileDir, SHOT_OUTPUT, SHOT_STAGED_EXTENSION } from '../paths';
+import { waitForApi } from '../runner/lib';
+import { seedPassword } from '../seed/catalog';
+import { findUserId } from '../seed/plan';
 import { SHOT_USER } from './library';
 
 // The browser extension's popup, photographed for the Chrome Web Store and AMO.
 //
 //   npm run dev            # api + web + extractor
-//   npm run shot           # ONCE, first — this leg photographs that account
+//   npm run shot:account      # ONCE, first — this leg photographs that account
 //   npm run shot:ext       # the three popup scenes
 //   npm run shot:ext -- ext-sync           # a subset (the flow still runs whole)
 //
@@ -24,7 +23,7 @@ import { SHOT_USER } from './library';
 // chrome around these. Nothing here is a finished size, which is why these scenes
 // are not in `scenes.ts`'s table and why nothing asserts them against a profile.
 //
-// ── WHY THIS IS A SEPARATE FILE FROM capture.ts ──────────────────────────────
+// ── WHY THIS IS A SEPARATE FILE FROM web.ts ──────────────────────────────────
 //
 // Three things differ, and each of them is a browser-CONTEXT decision, so they
 // could not have shared a launch even if the table had fitted:
@@ -68,7 +67,7 @@ import { SHOT_USER } from './library';
 //
 // Why this and not an `addInitScript` that fakes `tabs.query`: the fake would be
 // the harness AUTHORING the one thing the picture is of — the page being saved —
-// and `capture.ts` exists on the principle that nothing in a finished image is
+// and `web.ts` exists on the principle that nothing in a finished image is
 // authored. Here every string in the specimen is the browser's own answer about a
 // page that is genuinely open, fetched by the product's own code path. The only
 // difference from production is HOW the extension came to have access to that
@@ -84,12 +83,16 @@ import { SHOT_USER } from './library';
 // (apps/bracemark-extension/.env.development); only `WXT_PUBLIC_API_URL` differs,
 // so the pixels are the production build's.
 
-const HERE = dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = join(HERE, '..', '..', '..');
+// Off E2E_ROOT rather than off this file: `dirname(import.meta.url)` plus a count
+// of `..` is a path that breaks SILENTLY when the file moves — it did, when the
+// shot legs came out of `seed/shot/` and the count went stale by one. Nothing
+// types it, nothing lints it, and the symptom is `nx build` running in a
+// directory that is not this repo. ../paths.ts resolves the same anchor once.
+const REPO_ROOT = join(E2E_ROOT, '..');
 const EXT_PROJECT = '@stxapps/bracemark-extension';
 const BUILT = join(REPO_ROOT, 'apps', 'bracemark-extension', '.output', 'chrome-mv3-dev');
-const STAGED = join(ARTIFACTS, 'shot', 'extension-staged');
-const EXT_PROFILE = join(ARTIFACTS, 'profiles', 'shot-extension');
+const STAGED = SHOT_STAGED_EXTENSION;
+const EXT_PROFILE = profileDir('shot-extension');
 
 // ⚠ THE POPUP'S OWN WIDTH, and a contract with the compositor rather than a
 // choice made here. `popup/Shell.tsx` declares `w-90` — 360px — and a toolbar
@@ -134,7 +137,7 @@ const SCALE = 2;
 // once. Saving writes a link to the account, so the SECOND run opens on
 // `Complete` — `SaveFlow` skips the editor for a page already in the store — and
 // scene one silently becomes scene two, which is the same class of defect as
-// `capture.ts`'s `--fresh` trap and just as invisible in the output. Undoing it
+// `account.ts`'s `--fresh` trap and just as invisible in the output. Undoing it
 // afterwards means deleting the link AND emptying the trash through bracemark-web,
 // in a second browser, to leave an account exactly as it was found.
 //
@@ -225,13 +228,13 @@ async function main(): Promise<void> {
 
   await waitForApi();
 
-  // The account is `npm run shot`'s to make: it imports the library, grants the
+  // The account is `npm run shot:account`'s to make: it imports the library, grants the
   // plan, turns server extraction on and drains it, and none of that is repeated
   // here. This leg only signs in — so an account that does not exist is a missing
   // PREREQUISITE, not something to create quietly and photograph half-filled.
   if (!(await findUserId(SHOT_USER.username))) {
     throw new Error(
-      `no \`${SHOT_USER.username}\` account on the local api — run \`npm run shot\` first.\n` +
+      `no \`${SHOT_USER.username}\` account on the local api — run \`npm run shot:account\` first.\n` +
         '    This leg photographs that account: the popup shows its lists and its tags.',
     );
   }

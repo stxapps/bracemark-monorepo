@@ -69,11 +69,13 @@ e2e/
   paths.ts                the one answer to where a run writes
   web/                    playwright specs + fixtures
   mobile/flows/           maestro flows, run standalone
+  mobile/shots/           maestro flows for the native store captures
   mobile/contract/        maestro legs of a contract run (parameterised)
   runner/                 the orchestrators: mobile, web→mobile, mobile→web
-  seed/                   the dev-account seed — not a test (below)
+  seed/                   the dev accounts and their archives — not tests (below)
+  shot/                   the published screenshots — not tests either (below)
   .artifacts/             gitignored — traces, reports, run manifests, profiles
-  credentials/            gitignored — what `npm run seed` created
+  credentials/            gitignored — what `npm run seed:accounts` created
 ```
 
 ### staying out of `npm run test`
@@ -132,7 +134,7 @@ nothing when it declines, so driving the popup needs Playwright's own Chromium
 (`npx playwright install chromium`) — see `docs/app-drivers.md`, _driving
 bracemark-web_, and the extension section of `.claude/skills/verify/SKILL.md`.
 
-**Exactly one thing in `e2e/` uses it**, and it is not a spec: `seed/shot/extension.ts`,
+**Exactly one thing in `e2e/` uses it**, and it is not a spec: `shot/extension.ts`,
 the store-screenshot leg (_the published screenshots_, below). Every **spec** here
 still goes through `CHROME_PATH`, and that is the line to hold — a spec that needs
 the bundled browser has stopped testing what users run. The leg is exempt because
@@ -298,7 +300,8 @@ Four repo-specific gotchas:
   param rides on the inner URL, which is what Android reads as the manifest URL
   and iOS as `expoUrl`. The hand-driven twins are `npm run expo:ios:open` and
   `npm run expo:android:open`. Its cost is that the mobile legs now assume a
-  **dev** build with Metro up, which they already did.
+  **dev** build with Metro up, which they already did. The published-captures leg
+  opts out of the wipe altogether — _the published screenshots_, below.
 - **Android needs `adb reverse tcp:8787 tcp:8787`** (and `8788` for the
   extractor, `8081` for Metro — `npm run expo:android:reverse` does all three). Both
   `.env.development` files point at `http://localhost:8787` and
@@ -527,10 +530,17 @@ have something to work on without anyone typing 190 links into a form.
 
 ```sh
 npm run dev            # the stack, as always
-npm run seed           # all four accounts
-npm run seed -- free-full        # or just one
+npm run seed:accounts            # all four accounts
+npm run seed:accounts -- free-full   # or just one
 npm run seed:fixtures            # the archives only — no browser, no api
 ```
+
+⚠ **`seed:accounts` regenerates the archives itself; it does not consume
+`seed:fixtures`' output.** They are derived from `seed/library.ts` and cost
+milliseconds, so a stale zip on disk is a trap with no upside — it would import
+yesterday's library and report a clean run. `seed:fixtures` exists to let you
+LOOK at what is about to be imported, or to hand the file to an account you
+already have, not to be step one of a pipeline.
 
 Credentials land in `e2e/credentials/accounts.json` (gitignored, and **not**
 under `.artifacts`: they outlive the run that made them, so clearing run output
@@ -574,8 +584,10 @@ throwaway ones, because these accounts are meant to be signed back into tomorrow
   is skip-existing **by path**, so an account seeded before you edited
   `seed/library.ts` keeps its old entities. That is the right behaviour for a
   restore and the wrong one for iterating on a fixture: use Settings → Data →
-  Delete all data first, then re-seed. (Re-running with no edits is a genuine
-  no-op, which is what makes a half-finished run safe to repeat.)
+  Delete all data first, then re-run `seed:accounts`. Re-running with no edits is
+  a genuine no-op, which is what makes a half-finished run safe to repeat. (The
+  shot account answers the same trap with a flag — `shot:account --fresh` —
+  because its fixture is a hand-edited URL list that changes more often.)
 - **The seed waits for sync, and must.** An import lands in Dexie and pushes in
   the background, and the browser profile is deleted when the run ends. Close
   early and the account exists, the plan is granted, and the library is nowhere —
@@ -612,34 +624,77 @@ backup format is exercised at all.
 
 ### the published screenshots
 
-`e2e/seed/shot/` is the seed's odd cousin: a fifth account whose only job is to be
-photographed. Everything this project publishes a picture of the product for is
-made here — the marketing site's one figure (the links page under "A private
+`e2e/shot/` is the seed's odd cousin, and sits beside it rather than inside it: a
+fifth account whose only job is to be photographed — `npm run shot:account` makes it,
+three `shot:*` legs photograph it. Everything this project publishes a picture of
+the product for is made here — the marketing site's one figure (the links page under "A private
 library is still a library"), the screenshots `apps/bracemark-web`'s
 `manifest.json` hands Chrome's install dialog, and the browser extension's Chrome
 Web Store and AMO listings, and the native captures used to compose the App Store
 and Play Store phone listings.
 
-**Three legs, three entry points, and they do not share a browser.** `capture.ts`
-drives bracemark-web through `launchApp` and system Chrome; `extension.ts` drives
-the browser extension's popup, and has to launch Playwright's own Chromium with an
+**ONE PRODUCER, THREE CONSUMERS, and they do not share a browser.**
+`shot/account.ts` builds the account — import, plan, extraction drain, synced
+settings — and nothing else photographs anything. Then `web.ts` drives
+bracemark-web through `launchApp` and system Chrome; `extension.ts` drives the
+browser extension's popup, and has to launch Playwright's own Chromium with an
 unpacked build (_the browser this repo drives_, above); `mobile.ts` drives the
-native app with Maestro on exactly one booted platform. They share the account
-and nothing else — which is a prerequisite rather than a coupling: **`npm run
-shot` first**, because both later legs only sign in and refuse to run against an
-account the first has not filled.
+native app with Maestro on exactly one booted platform. The three consumers share
+the account and nothing else — a prerequisite rather than a coupling: each signs
+in, and each refuses to run against an account `shot:account` has not built, naming
+it in the error.
 
 ```sh
 npm run dev              # api + web + extractor (the extractor is the point)
 npm run shot:preflight   # check the URL list — seconds, no browser
-npm run shot             # every scene: account → import → extract → capture
-npm run shot -- library-narrow search-narrow   # …only these
-npm run shot -- --fresh  # …after wiping the account's data first
-npm run shot:ext         # the browser extension's popup — needs the above first
+npm run shot:account        # the account: import → extract → previews → sync
+npm run shot:account -- --fresh   # …after wiping the account's data first
+npm run shot:web         # every web scene
+npm run shot:web -- library-narrow search-narrow   # …only these
+npm run shot:ext         # the browser extension's popup
 npm run shot:ext -- ext-sync                   # …only this PNG (the flow still runs whole)
 npm run shot:mobile -- ios      # four native iPhone captures
 npm run shot:mobile -- android  # four native Pixel captures; boot it separately
+npm run shot:mobile -- ios --fresh             # …wiping the device first (see below)
 ```
+
+**Why the whole thing is a folder of its own.** It was `seed/shot/` until the
+split made the cost visible: `seed/` is the DEV-ACCOUNT seed — four accounts a
+human signs into — and this is an asset pipeline that happens to need an account,
+which is why the paragraph above has always had to call it a cousin. Now `seed/`
+holds only what `seed:fixtures` and `seed:accounts` need, and `shot/` holds the
+fixture (`library.ts`, the 26 URLs), what to photograph (`scenes.ts`), the
+producer and the four legs — and the producer stays with them because every leg
+imports `./library`: moving it alone would have separated one thing from itself
+and left the two folders importing each other.
+
+**Every entry point's path is its target with a slash for the colon**, which is
+the rule the move bought and the reason `seed:shot` became `shot:account`:
+
+| target           | file                |                                       |
+| ---------------- | ------------------- | ------------------------------------- |
+| `seed:fixtures`  | `seed/fixtures.ts`  | the four backup archives              |
+| `seed:accounts`  | `seed/accounts.ts`  | the four dev accounts                 |
+| `shot:preflight` | `shot/preflight.ts` | check the URL list                    |
+| `shot:account`   | `shot/account.ts`   | build the account the pictures are of |
+| `shot:web`       | `shot/web.ts`       | the site figure + the PWA scenes      |
+| `shot:ext`       | `shot/extension.ts` | the browser extension's popup         |
+| `shot:mobile`    | `shot/mobile.ts`    | the native store captures             |
+
+`shot:ext` is the one abbreviation. Nothing else needs remembering: `seed/` is the
+dev accounts, `shot/` is the published pictures, and the four `shot:*` legs after
+`shot:account` are the pipeline in the order you run them.
+
+**Why the producer is its own step.** It is minutes of real network and the same
+minutes whatever is being photographed, so a re-capture after a viewport moved by
+40px should cost the screenshot and nothing else — and before the split it cost
+the whole drain, because the only entry point that could photograph the web
+scenes also rebuilt the account. The split also puts `--fresh` where the wipe
+belongs: on the thing that owns the account, not on three legs that merely look
+at it. **There is deliberately no bare `npm run shot`**, for the reason there is
+no bare `npm run e2e` (_running it_, above): the three consumers have different
+prerequisites — a booted simulator, Playwright's Chromium, one platform at a time
+— so a script that fanned out to all of them could only fail in the middle.
 
 Out comes one PNG per scene in `e2e/.artifacts/shot/`, and for `library-list` the
 run also prints the `tools/scripts/make-image-variants.sh` line that turns it into
@@ -650,6 +705,29 @@ the status bar. Run iOS and Android separately: iOS uses Safari plus the share
 extension; Android uses Chrome behind `ShareActivity`. These are raw captures,
 not finished store canvases.
 
+**The mobile leg restarts the app; it does not wipe it.** `mobile/shots/store.yaml`
+goes through `shots/subflows/start.yaml` rather than straight to
+`flows/subflows/sign-in.yaml`, and the difference is `clearState`. The wipe is
+load-bearing for the REGRESSION flows — they run as a directory and each has to be
+state-independent (_launchApp resumes_, above) — and inherited baggage here: this
+leg runs two flows in one order against a durable account, so the wipe only buys
+the landing screen, Argon2id on the device, and a first sync of the whole library
+plus a favicon per host, every run, to reach the state the device was already in.
+So: `stopApp`, `launchApp`, and the session comes back with it (it lives in
+expo-secure-store + expo-sqlite, which `flows/sign-in.yaml` is the regression for).
+If no session comes up — a device that has never run this — the subflow falls
+through to the cold path by itself, so a first run needs no special invocation.
+The warm start is also the better picture: the favicon cache is device-local, so
+the icons are on disk before the capture and the half-loaded icon column below
+cannot happen.
+
+`--fresh` is the one case that wants the wipe back: the run straight after
+`npm run shot:account -- --fresh` rebuilt this account's data, where a warm device would
+otherwise photograph the library it already held while sync caught up. It is a
+runner flag rather than a flow `env:` default because — measured on Maestro 2.8.0
+— a flow-level `env:` value **beats** `-e` from the command line instead of
+yielding to it, so a default would have made the flag a silent no-op.
+
 ⚠ **The mobile leg needs `deviceExtractionMode: 'all'`, and the reason is not
 extraction.** Favicons are the one enrichment that never syncs
 ([link-extraction.md](./link-extraction.md), _favicons: a device-local host
@@ -659,7 +737,7 @@ gates that guess on the mode reaching `all`. Every link on this account arrived 
 sync, so the shipped `saves` default does not cover them either: the captures ran
 for a while with the mode at `off` and produced a column of real covers beside a
 column of empty chips, which is what a half-loaded app looks like. The value is
-seeded in `seed/shot/library.ts` rather than clicked the way `serverExtraction` is
+seeded in `shot/library.ts` rather than clicked the way `serverExtraction` is
 — it is in no plan, so there is no grant to prove, and it has no device-local
 override, so the synced value wins outright. On this account it costs nothing:
 `all` arms the drain, but the web capture has already resolved every facet, so the
@@ -670,7 +748,7 @@ serves no `/favicon.ico` at all (it declares a PNG instead), so row 3 wears the
 quiet plate on the phone and in the figure alike — one cause, the deferred
 `faviconUrl` step in the extract contract, and not something a different URL fixes.
 
-**`scenes.ts` is WHAT, `capture.ts` is HOW, and the split is the point.** The
+**`scenes.ts` is WHAT, `web.ts` is HOW, and the split is the point.** The
 account, the import, the extraction drain and the waits are one apparatus every
 picture needs; the only things that vary are a viewport, a URL and what "finished"
 means on that screen. A scene declares `viewport`, `scale`, `goto`, an optional
@@ -708,7 +786,7 @@ bottom of the picture the way the card's pane does. DPR 2 rather than 3, because
 this one is composed into a 1x canvas and a third raster would be thrown away.
 
 ⚠ **One launch per DPR.** `deviceScaleFactor` is a **browser-context** option, not
-a page one, so scenes at different `scale` cannot share a launch — `capture.ts`
+a page one, so scenes at different `scale` cannot share a launch — `web.ts`
 groups on it and calls `launchApp` once per group. Setting it per page does not
 fail; it silently photographs everything at the first context's density.
 `page.setViewportSize()` per scene _within_ a group is fine, which is why the
@@ -719,7 +797,7 @@ partial one to the next context.
 
 #### the browser extension leg
 
-`seed/shot/extension.ts` photographs the popup for the two store listings. Three
+`shot/extension.ts` photographs the popup for the two store listings. Three
 of its rules are silent ones — each is a way to get a picture that renders
 perfectly and shows the wrong thing.
 
@@ -775,22 +853,27 @@ Save button. Invisible in the diff and in the log; obvious in the picture, which
 is how it was found.
 
 **It photographs the LIST layout, and that is a step the card grid did not need.**
-The swap is argued at the top of `capture.ts` and in `SCREENSHOT`'s own comment,
-and it costs `useListLayout()` — a click on the Settings → Misc radio before any
-capture, because `linksLayout` **syncs** and this account is reused, so one manual
-click in the app would otherwise silently photograph cards on the next run.
+The swap is argued at the top of `web.ts` and in `SCREENSHOT`'s own comment.
+`shot:account` sets it through the Settings → Misc radio (`useListLayout()`) because
+`linksLayout` **syncs** and this account is reused, so one manual click in the app
+would otherwise silently photograph cards on the next run — and `shot:web`
+re-reads that radio before it photographs anything, since the seeding and the
+capture are now separate runs and a human can sit between them. Set, once;
+checked, every time.
 
-One consequence of sharing `seed.ts`'s helpers is worth knowing, because it
-failed silently in exactly the way this repo's tripwires do: `seed/seed.ts` and
-`seed/generate.ts` both end in a top-level `await main()`, and only `generate.ts`
-was guarded on being the entry module. Importing `importArchive`/`waitForSync`
-from the unguarded one **re-seeded all four dev accounts** before the capture
-started — no error, no failed check, just the seed's own receipts in the log and
-ten wasted minutes, because the seed is idempotent. Both are guarded now; a new
-top-level `await` in either is the same bug again.
+⚠ **The shared seed helpers live in `seed/steps.ts`, and the reason is a silent
+failure.** `seed/accounts.ts` and `seed/fixtures.ts` both end in a top-level
+`await main()`, and only `fixtures.ts` was guarded on being the entry module.
+While the shot run imported `importArchive`/`waitForSync` from the unguarded one,
+that import **re-seeded all four dev accounts** before the capture started — no
+error, no failed check, just the seed's own receipts in the log and ten wasted
+minutes, because the seed is idempotent. The steps both seeds share now live in a
+module that runs nothing, so neither seed imports the other; both guards stay as
+backstops. A new top-level `await` in a module something imports is the same bug
+again.
 
-**It is not a fifth entry in `SEED_USERS`, deliberately.** `npm run seed` fans out
-over that list, and this account does not belong in a dev session's 2x2: it exists
+**It is not a fifth entry in `SEED_USERS`, deliberately.** `npm run seed:accounts`
+fans out over that list, and this account does not belong in a dev session's 2x2: it exists
 for one asset, its library is a hand-typed list rather than the generator, and —
 alone in `e2e/` — it fetches real, public URLs off the machine it runs on. It has
 its own entry point for all three reasons.

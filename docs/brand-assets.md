@@ -865,7 +865,7 @@ is the _only_ thing there is, since those are not stamped.
 **The card has two designs and the stamp records which one is committed.**
 `slab` is type on white over an inverted ciphertext band — the page's own
 inverted-slab rhetoric, where dark is what the server sees. `library` is the
-seeded capture from `e2e/seed/shot` cropped to the list pane, which shows the
+seeded capture from `e2e/shot` cropped to the list pane, which shows the
 real product and pays for it by cropping a 25:19 object into 1.91:1 and carrying
 other people's cover art.
 
@@ -891,7 +891,7 @@ median laptop viewport. `narrow` is the median modern phone (iPhone 12–16; Pix
 is 412 CSS) rather than the widest, because the dialog scales a screenshot to a
 fixed width: a narrower CSS viewport makes the app's own type **bigger** in the
 result. Both sit under Tailwind's `sm`, so the mobile layout is the same either
-way. The captures that fill these are scenes in `e2e/seed/shot/scenes.ts` —
+way. The captures that fill these are scenes in `e2e/shot/scenes.ts` —
 `docs/e2e.md`, _the published screenshots_.
 
 ⚠ **Chrome applies three rules to `manifest.json`'s screenshots and reports none
@@ -914,7 +914,7 @@ still life and starts making a claim — **the library** (`?list=all`, filled) a
 shows the summoned search row and on a laptop shows the rail with nothing
 highlighted, because a text search projects to no single axis). A third can be
 added later provided it comes from the **same profile**, since one form factor must
-share one aspect ratio. The captures are scenes in `e2e/seed/shot/scenes.ts`.
+share one aspect ratio. The captures are scenes in `e2e/shot/scenes.ts`.
 
 ⚠ **A filtered view is short, and that is the fixture rather than a defect.** The
 shot library is 26 links across 10 lists, so the search shots land four rows and
@@ -993,7 +993,7 @@ and device imagery. The caption-to-screen pairing and upload order remain outsid
 the public repo.
 
 ⚠ **The one third-party thing in a store picture is the page being saved**, and it
-is chosen under the rule `e2e/seed/shot/library.ts` already argues: our own pages,
+is chosen under the rule `e2e/shot/library.ts` already argues: our own pages,
 public-domain or openly-licensed material, cover art that is a photograph rather
 than a masthead. The listing-safe seed permits no logo-card cover: a real host and
 favicon are nominative context, but a publisher mark presented as artwork is a

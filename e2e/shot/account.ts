@@ -1,67 +1,51 @@
 import { mkdir, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { expect, type Page } from '@playwright/test';
 
-import { profileDir, SEED_ARCHIVES, SHOT_OUTPUT } from '../../paths';
-import { waitForApi } from '../../runner/lib';
-import { launchApp } from '../../web/fixtures/launch';
-import { buildBackupArchive } from '../archive';
-import { seedPassword } from '../catalog';
-import { findUserId, grantPlan, readGrantedPlan } from '../plan';
-import { importArchive, waitForSync } from '../seed';
+import { profileDir, SHOT_ARCHIVE } from '../paths';
+import { waitForApi } from '../runner/lib';
+import { buildBackupArchive } from '../seed/archive';
+import { seedPassword } from '../seed/catalog';
+import { findUserId, grantPlan, readGrantedPlan } from '../seed/plan';
+import { deleteAllData, importArchive, waitForSync } from '../seed/steps';
+import { launchApp } from '../web/fixtures/launch';
 import { buildShotLibrary, SHOT_USER } from './library';
-import { groupByScale, type Scene, selectScenes } from './scenes';
 
-// Every screenshot we publish of bracemark-web, made by driving the product.
+// THE ACCOUNT every published screenshot is taken of — built once, photographed
+// by three separate legs.
 //
-//   npm run dev              # api + web + extractor
-//   npm run shot:preflight   # check the URL list first — see ./preflight.ts
-//   npm run shot             # every scene
-//   npm run shot -- library-narrow search-narrow   # some
-//   npm run shot -- --fresh  # wipe the account's data first (see below)
+//   npm run dev              # api + web + extractor (the extractor is the point)
+//   npm run shot:preflight   # check the URL list first — seconds, no browser
+//   npm run shot:account        # this: account → plan → import → extract → sync
+//   npm run shot:account -- --fresh   # …wiping the account's data first (see below)
 //
-// What comes out: one PNG per scene in `e2e/.artifacts/shot/`. WHAT the scenes
-// are — viewport, URL, and what "finished" means on that screen — is `scenes.ts`;
-// this file is the apparatus every one of them needs. `library-list` is the
-// marketing site's figure and is handed to `tools/scripts/make-image-variants.sh`
-// (the run prints the exact command); the rest are consumed by the compositor
-// that places the PWA install-dialog screenshots.
+// Then the three consumers, in any order and as often as you like:
+// `npm run shot:web`, `npm run shot:ext`, `npm run shot:mobile -- ios|android`.
+// Each one signs in and photographs what it finds; none of them builds anything,
+// and each fails with a pointer back here if the account is missing.
 //
-// ⚠ ONE LAUNCH PER DPR, and it is the trap this file exists to hold shut.
-// `deviceScaleFactor` is a browser-CONTEXT option, so scenes at different scales
-// cannot share a launch — and setting it per page does not fail, it just
-// photographs everything at the first context's density. `groupByScale` is what
-// the loop below iterates, and the account setup happens on the FIRST group only;
-// later groups sign back into the same account and let it sync.
+// THE SPLIT IS THE POINT. This half is minutes of real network — a batched
+// extract over 26 live sites, then an image per link through the proxy — and it
+// is the same work whatever is being photographed. Re-running a capture because a
+// viewport moved by 40px should not re-run any of it, and before the split it
+// did: one entry point meant every re-capture re-walked the whole drain, and the
+// only way to photograph the web scenes was to rebuild the account first.
 //
-// WHY THE LIST AND NOT THE CARD GRID. It photographed the cards first, and the
-// argument for the swap is two-sided. It is the DEFAULT — `_panes/main.tsx`
-// resolves `LAYOUTS[linksLayout] ?? ListLayout` — so the grid was advertising a
-// mode a visitor has to go and turn on. And a wall of twelve full-bleed
-// photographs is the loudest thing on a page whose whole design is achromatic
-// except for one petrol accent (page.tsx's design note): the covers read as
-// somebody else's brand colours stacked twelve high, and the band under them
-// went quiet. A list renders the same covers at 64x40 — present, still doing the
-// "these are real pages" job — and spends the rest of the frame on the type and
-// the rules, which are the page's own material.
+// It is a SEPARATE FIXTURE from `npm run seed:accounts`, not a fifth account in
+// it. The four seeded accounts are a 2x2 that a dev session wants filled and this
+// one is not part of that shape: it exists for one asset, its library is a
+// hand-typed list rather than the generator, and — unlike every other thing in
+// e2e/ — it deliberately fetches real, public URLs off the machine it runs on.
 //
-// THE POINT OF DOING IT THIS WAY. The band this picture sits in claims that a
-// private library is still a library, and the placeholder it replaces is a
-// labelled box precisely because the alternative — a convincing mock grid — is
-// the trap the site has already fallen into once (the hero's hand-typed
-// ciphertext). So nothing in the finished image is authored: the archive carries
-// bare URLs, `bracemark-extractor` fetches the titles and the covers, the client
-// decrypts and lays them out, and the capture is of whatever that produced. If a
-// page has no og:image the row's slot is a monogram, and the honest fix is a
-// different URL rather than a different screenshot.
-//
-// It is a SEPARATE ENTRY POINT from `npm run seed`, not a fifth account in it.
-// The four seeded accounts are a 2x2 that a dev session wants filled and this one
-// is not part of that shape: it exists for one asset, its library is a hand-typed
-// list rather than the generator, and — unlike every other thing in e2e/ — it
-// deliberately fetches real, public URLs off the machine it runs on.
+// WHAT IT LEAVES BEHIND, and why each step is here rather than in the archive.
+// The plan grant is server state (../plan.ts). The import is the only way links
+// can exist at all — they are E2E encrypted, so a signed-in client is the only
+// writer there is. `serverExtraction` and `linksLayout` are ordinary synced
+// settings that the archive COULD carry, and are taken through the real controls
+// anyway: each click doubles as a check that something upstream landed, and the
+// comments on those two functions say which failure taught us that.
 
 // The first pass over 26 links: one batched extract request (the server fans the
 // URLs out), then an image per link pulled through the proxy at a small
@@ -79,20 +63,20 @@ const DRAIN_TIMEOUT_MS = 10 * 60 * 1000;
 const RETRY_TIMEOUT_MS = 15 * 60 * 1000;
 
 async function main(): Promise<void> {
-  const argv = process.argv.slice(2);
-  const fresh = argv.includes('--fresh');
-  const scenes = selectScenes(argv.filter((arg) => !arg.startsWith('--')));
-  const groups = groupByScale(scenes);
+  const fresh = process.argv.slice(2).includes('--fresh');
   await waitForApi();
 
+  // Regenerated every run, exactly as `seed:accounts` regenerates its four: the
+  // archive is derived from ./library.ts and costs milliseconds, so a stale one on
+  // disk is a trap with no upside. What it does NOT do is re-import itself over an
+  // account that already holds these ids — see `--fresh` on `prepareAccount`.
   const now = Date.now();
   const library = buildShotLibrary(now);
-  await mkdir(SEED_ARCHIVES, { recursive: true });
-  const archivePath = join(SEED_ARCHIVES, 'shot.zip');
-  await writeFile(archivePath, buildBackupArchive(library));
+  await mkdir(dirname(SHOT_ARCHIVE), { recursive: true });
+  await writeFile(SHOT_ARCHIVE, buildBackupArchive(library));
   console.log(
     `archive: ${library.counts.links} links, ${library.counts.lists} lists, ` +
-      `${library.counts.tags} tags, no extractions → ${archivePath}`,
+      `${library.counts.tags} tags, no extractions → ${SHOT_ARCHIVE}`,
   );
 
   const credentials = {
@@ -102,80 +86,33 @@ async function main(): Promise<void> {
   const existingId = await findUserId(SHOT_USER.username);
   console.log(existingId ? 'account exists — signing in' : 'creating account (Argon2id, ~seconds)');
 
-  console.log(
-    `scenes: ${scenes.map((scene) => scene.id).join(', ')} — ` +
-      `${groups.length} launch(es), one per DPR`,
-  );
-
-  // The account is set up ONCE, on the first group, and every later group signs
-  // back into it. The setup is the expensive half — an import, a real-network
-  // extraction drain, minutes of it — and none of it is DPR-dependent, so paying
-  // it per density would double a ten-minute run for nothing.
-  let prepared = false;
-  const captured: string[] = [];
-
-  for (const group of groups) {
-    // A profile dir PER DPR, because `launchApp` wipes the one it is given (a
-    // profile left by an earlier run holds a session for an account nobody has
-    // the password for). Sharing one dir across groups would work — each launch
-    // would just re-sign-in — but naming them apart keeps a failed run's state
-    // readable afterwards.
-    const app = await launchApp(profileDir(`shot-${group.scale}x`), {
-      ...(existingId || prepared ? { existing: credentials } : { create: credentials }),
-      deviceScaleFactor: group.scale,
-    });
-
-    try {
-      const { page } = app;
-
-      if (!prepared) {
-        await prepareAccount(page, { existingId, archivePath, fresh });
-        prepared = true;
-      } else {
-        // A fresh profile has an empty local store, so this launch is waiting for
-        // the PULL rather than for a push: the links, the extraction records and
-        // the preview blobs all come back down from the server before anything is
-        // worth photographing. The scene's own `settle` is the real gate — it
-        // fails loudly if the covers never arrive — but waiting here first turns
-        // "the pictures are empty" into "the sync did not finish".
-        await waitForSync(page);
-      }
-
-      for (const scene of group.scenes) captured.push(await shoot(page, scene));
-    } finally {
-      await app.close();
-    }
+  // One launch, one profile, and it is closed on the way out — `launchApp` wipes
+  // the directory it is given, so the session for an account whose password is
+  // derived rather than recorded never outlives the run (../../paths.ts).
+  const app = await launchApp(profileDir('shot-seed'), {
+    ...(existingId ? { existing: credentials } : { create: credentials }),
+  });
+  try {
+    await prepareAccount(app.page, { existingId, fresh });
+  } finally {
+    await app.close();
   }
 
-  console.log(`\ncaptured ${captured.length} scene(s):`);
-  for (const path of captured) console.log(`  ${path}`);
-
-  // The site's figure is the one capture with a downstream step attached; the
-  // rest are read by the compositor, which is told where to look rather than
-  // being handed a path here.
-  const figure = captured.find((path) => path.endsWith('library-list.png'));
-  if (figure) {
-    console.log('\nNext, for the marketing site’s figure:');
-    console.log(
-      `  tools/scripts/make-image-variants.sh ${figure} \\\n` +
-        `    apps/bracemark-site/public/screenshots/library-list`,
-    );
-    console.log(
-      '  then check SCREENSHOT in apps/bracemark-site/src/app/page.tsx: `widths` is what\n' +
-        '  the script prints, and the frame ratio must still match the scene’s viewport.',
-    );
-  }
+  console.log(`\n${SHOT_USER.username} is ready.`);
+  console.log('  npm run shot:web                 # the site figure + the PWA install dialog');
+  console.log('  npm run shot:ext                 # the browser extension popup');
+  console.log('  npm run shot:mobile -- ios       # the native store captures');
 }
 
 /**
  * Everything that has to be true of the ACCOUNT before any scene is worth
- * photographing. Runs on one launch only — every step it takes is either
- * server-side (the plan grant, the import) or a synced setting, so a second
- * context sees all of it after a sync.
+ * photographing. Every step is either server-side (the plan grant, the import) or
+ * a SYNCED setting, which is what makes the split safe: the three capture legs
+ * sign in on their own fresh profiles and pull all of it back down.
  */
 async function prepareAccount(
   page: Page,
-  options: { existingId: string | null; archivePath: string; fresh: boolean },
+  options: { existingId: string | null; fresh: boolean },
 ): Promise<void> {
   const userId = options.existingId ?? (await findUserId(SHOT_USER.username));
   if (!userId) throw new Error(`no user id for ${SHOT_USER.username} after create-account`);
@@ -186,7 +123,9 @@ async function prepareAccount(
   await page.reload();
 
   // `--fresh` — wipe the account's data before importing, and reach for it
-  // whenever the fixture itself has changed.
+  // whenever the fixture itself has changed. It belongs to THIS step and no
+  // longer to the capture: wiping is something done to an account, and the legs
+  // that photograph one have no business doing it.
   //
   // A Bracemark backup merges SKIP-EXISTING BY PATH (docs/data-lifecycle.md),
   // so re-running against an account that already has these ids imports
@@ -205,7 +144,7 @@ async function prepareAccount(
   // starts the ladder from zero.
   if (options.fresh) await deleteAllData(page);
 
-  await importArchive(page, options.archivePath);
+  await importArchive(page, SHOT_ARCHIVE);
   await waitForSync(page);
 
   await enableServerExtraction(page);
@@ -217,51 +156,6 @@ async function prepareAccount(
   // signed back into, and the NEXT DPR group reads its library back off the
   // server, so leaving it half-pushed would photograph a partial library.
   await waitForSync(page);
-}
-
-/**
- * One scene, one PNG. The viewport is set per scene (fine — only the DPR is fixed
- * per context), and `scale: 'device'` is what makes the output `viewport × scale`
- * rather than CSS pixels.
- */
-async function shoot(page: Page, scene: Scene): Promise<string> {
-  console.log(`\nscene ${scene.id} — ${scene.what}`);
-  await page.setViewportSize(scene.viewport);
-  await page.goto(scene.goto);
-  if (scene.prepare) await scene.prepare(page);
-  await scene.settle(page);
-
-  await mkdir(SHOT_OUTPUT, { recursive: true });
-  const path = join(SHOT_OUTPUT, `${scene.id}.png`);
-  await page.screenshot({ path, scale: 'device' });
-  const { width, height } = scene.viewport;
-  console.log(`  ${width * scene.scale}x${height * scene.scale} → ${path}`);
-  return path;
-}
-
-// Settings → Data → Delete all data, through the checkbox gate and the button it
-// arms. Destructive by definition, which is why it is behind a flag and never the
-// default — but the account it destroys is a local, throwaway fixture whose
-// password is derived from its key, so there is nothing here to lose that
-// `npm run shot` does not rebuild in the next ten minutes.
-async function deleteAllData(page: Page): Promise<void> {
-  await page.goto('/settings/data');
-  // Two controls named "Delete all data", one after the other: the Data pane's
-  // drill-down ROW (SettingsRow with an `onClick` renders the whole row as a
-  // button) and then the destructive button inside the view it opens. They are
-  // never on screen together — the view replaces the pane — so the same query
-  // run twice is unambiguous each time, and it is what a person's two clicks are.
-  await page.getByRole('button', { name: 'Delete all data' }).click();
-  await page.getByRole('checkbox', { name: /absolutely sure/ }).click();
-  await page.getByRole('button', { name: 'Delete all data' }).click();
-  // Both receipts, because an empty account is a legitimate state to run this
-  // from — a first `--fresh` run, or a re-run after one that died mid-import.
-  // Waiting only for the "deleted N items" half would hang on exactly the case
-  // where there was nothing to do.
-  await expect(
-    page.getByText(/^(All your data has been deleted|There was no data to delete)/),
-  ).toBeVisible({ timeout: 5 * 60 * 1000 });
-  console.log('deleted all data');
 }
 
 // The privacy-load-bearing opt-in, taken through the real Switch.
@@ -426,7 +320,7 @@ async function fillPreviews(page: Page): Promise<void> {
     if (await permanent.isVisible()) {
       throw new Error(
         `a link settled as permanent — it will never get a cover. Run ` +
-          `\`npm run shot:preflight\` and replace it in seed/shot/library.ts.`,
+          `\`npm run shot:preflight\` and replace it in shot/library.ts.`,
       );
     }
 
@@ -445,8 +339,8 @@ async function fillPreviews(page: Page): Promise<void> {
   // Running out of budget is a WARNING here, not a failure, and the split is
   // deliberate: this function is about the whole library, and the photograph is
   // not. The frame holds six rows and a bit over a virtualized list, so what ships
-  // is the top seven links — and `capture()` below hard-fails if any row IN THE
-  // PICTURE is wearing a monogram. Gating on all 24 instead would spend forty
+  // is the top seven links — and a scene's own `settle` (scenes.ts) hard-fails if
+  // any row IN THE PICTURE is wearing a monogram. Gating on all 24 instead would spend forty
   // minutes waiting for rows nobody will ever see, and then throw away a perfectly
   // good capture over them.
   //
@@ -457,7 +351,7 @@ async function fillPreviews(page: Page): Promise<void> {
       `are cooling off after a transient failure — a slow site against the extractor’s 8s ` +
       `per-hop timeout, or its per-IP cap during the image pass. The backoff ladder is ` +
       `stored on the facet, so a plain re-run resumes ` +
-      `mid-ladder; \`npm run shot -- --fresh\` starts the attempt counts at zero.`,
+      `mid-ladder; \`npm run shot:account -- --fresh\` starts the attempt counts at zero.`,
   );
   console.warn('Capturing anyway — the frame is gated on the rows it actually shows.\n');
 }

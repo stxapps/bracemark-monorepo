@@ -43,10 +43,14 @@ stack, two with a full library, so paging, the list/tag tree, filtering,
 drag-and-drop and the search editor have something to work on.
 
 ```sh
-npm run seed                  # all four (needs `npm run dev` up)
-npm run seed -- free-full     # or just one
-npm run seed:fixtures         # the backup archives only — no browser, no api
+npm run seed:accounts              # all four (needs `npm run dev` up)
+npm run seed:accounts -- free-full # or just one
+npm run seed:fixtures              # the backup archives only — no browser, no api
 ```
+
+`seed:accounts` regenerates the archives itself — `seed:fixtures` is for looking
+at one, or importing it by hand, not for feeding the other. There is no bare
+`npm run seed`: the two things it could have meant are these two.
 
 | key          | username          | plan | library                                    |
 | ------------ | ----------------- | ---- | ------------------------------------------ |
@@ -93,9 +97,53 @@ terminal.
 | `mobile/shots/`    | Maestro flows for native store-listing captures                       |
 | `mobile/contract/` | Maestro legs of a contract run — driven by a `runner/`, never by hand |
 | `runner/`          | orchestrators: mobile, vectors, web→mobile, mobile→web                |
-| `seed/`            | the dev-account seed — not a test (above)                             |
+| `seed/`            | the four dev accounts and their archives — not a test (above)         |
+| `shot/`            | the published screenshots: the fixture, the producer, the four legs   |
 | `.artifacts/`      | gitignored — traces, reports, run manifests, browser profiles         |
-| `credentials/`     | gitignored — the accounts `npm run seed` created                      |
+| `credentials/`     | gitignored — the accounts `npm run seed:accounts` created             |
+
+## the published screenshots
+
+Also not a test, and its own folder rather than a corner of `seed/`: `e2e/shot/`
+holds the 26-URL fixture, the producer and the four legs. One account, built once,
+photographed by three of them — the design record is `docs/e2e.md`, _the published
+screenshots_.
+
+```sh
+npm run shot:preflight           # check the URL list — seconds, no browser
+npm run shot:account             # build the account: import → extract → previews
+npm run shot:account -- --fresh  # …wiping its data first, after editing the list
+npm run shot:web                 # the site figure + the PWA install-dialog scenes
+npm run shot:ext                 # the browser extension's popup
+npm run shot:mobile -- ios       # the native store captures (one platform at a time)
+```
+
+That is the order to run them in, and it is the order they are listed in
+`package.json`. The last three only sign in: each refuses to run against an
+account `shot:account` has not built, and says so by name. There is no bare
+`npm run shot` for the same reason there is no bare `npm run e2e`.
+
+Every file here is named for its target — `shot/preflight.ts`, `shot/account.ts`,
+`shot/web.ts`, `shot/extension.ts` (`shot:ext`, the one abbreviation),
+`shot/mobile.ts` — over one shared fixture (`shot/library.ts`, the 26 URLs) and
+one scene table (`shot/scenes.ts`, what `web.ts` photographs). The Maestro YAML
+`shot/mobile.ts` drives stays in `mobile/shots/`, with the rest of the flows.
+
+## what a spec may depend on
+
+**No spec depends on a seeded account, and none should.** Every web spec creates
+its own throwaway account per worker (`web/fixtures/app.ts`), and the mobile and
+contract runners provision one through `provisionAccount`. The four seeded
+accounts are a HUMAN's fixture: you sign into them, edit them, and leave them in
+whatever state you left them in, so a spec asserting on one would be asserting on
+something a person changes by hand.
+
+The **archives** are the other half of that rule and the useful half: they are
+pure functions of `seed/library.ts`, so a spec that genuinely needs a library at
+scale — paging, virtual scrolling, search over a thousand links — should build one
+with `generateArchives()` into its own fresh account rather than clicking a
+thousand links into being or reaching for `seed_plus_full`. Nothing does this
+today; it is where to start if something needs to.
 
 ## four things that will surprise you
 

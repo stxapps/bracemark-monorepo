@@ -12,15 +12,15 @@ import {
   TAGS_PREFIX,
 } from '@stxapps/shared';
 
-import type { SeedUser } from '../catalog';
-import type { SeedLibrary } from '../library';
+import type { SeedUser } from '../seed/catalog';
+import type { SeedLibrary } from '../seed/library';
 
 // The library behind the marketing site's ONE screenshot — the list layout in the
 // "A private library is still a library" band
 // (apps/bracemark-site/src/app/page.tsx, `SCREENSHOT`).
 //
 // Sized for a frame that shows SEVEN of these links, not twenty-six: the capture
-// is 1000x760 over a virtualized list (capture.ts counts the geometry), so the top
+// is 1000x760 over a virtualized list (web.ts counts the geometry), so the top
 // seven are the picture and the rest are what makes the account worth signing back
 // into. Order is newest-first, so the first entries in SHOT_LINKS below are the
 // ones that ship.
@@ -327,7 +327,7 @@ const SHOT_LINKS: ShotLink[] = [
     tags: ['budget', 'work'],
   },
   // The seventh row, cut 62px in: its cover, title and host are in frame and its
-  // tags are not (capture.ts derives the number).
+  // tags are not (web.ts derives the number).
   { url: 'https://en.wikivoyage.org/wiki/Sintra', list: 'Lisbon', tags: ['lisbon'] },
   { url: 'https://en.wikipedia.org/wiki/Sleep', list: 'Health', tags: ['health'] },
   { url: 'https://www.gutenberg.org/ebooks/1342', list: 'Reading', tags: ['classic'] },
@@ -370,10 +370,10 @@ const SHOT_LINKS: ShotLink[] = [
 // added `Health` and `Shopping`, which is exactly the edit that would have left
 // them wrong.
 //
-// It is deliberately NOT in `SEED_USERS`. That list is what `npm run seed` fans
+// It is deliberately NOT in `SEED_USERS`. That list is what `npm run seed:accounts` fans
 // out over, and this account is not part of the 2x2 a dev session wants: it is a
 // fixture for one marketing asset, it reaches the public internet, and its
-// library is this file rather than the generator. `npm run shot` is its entry
+// library is this file rather than the generator. `npm run shot:account` is its entry
 // point.
 export const SHOT_USER = {
   key: 'shot',
@@ -480,7 +480,7 @@ export function buildShotLibrary(now: number): SeedLibrary {
     // The picture is of the LIST layout, and this is the synced value that puts it
     // there: `useSettings` resolves this one unless a device has opted out, and a
     // fresh profile never has (`linksLayoutSource` defaults to 'sync'). It does
-    // NOT make capture.ts's `useListLayout()` redundant — this account is reused,
+    // NOT make account.ts's `useListLayout()` redundant — this account is reused,
     // the setting syncs, and one manual click in the app would otherwise silently
     // photograph cards on the next run. The seeded value is where a fresh import
     // starts; the click is what makes it true of an account that already existed.
@@ -519,8 +519,8 @@ export function buildShotLibrary(now: number): SeedLibrary {
     // no plan (packages/shared/src/iap/plans.ts), so there is nothing to prove —
     // and it has no device-local override the way `linksLayout` and `theme` do
     // (expo-react's use-settings), so the synced value wins outright and no
-    // Maestro trip through Settings is needed. `capture.ts` re-imports the
-    // archive every run, so an edit here lands on the next `npm run shot`.
+    // Maestro trip through Settings is needed. `account.ts` re-imports the
+    // archive every run, so an edit here lands on the next `npm run shot:account`.
     //
     // ⚠ IT PHOTOGRAPHS AN OPT-IN STATE, DELIBERATELY. Expo ships `saves`, so a
     // person who installs the app and syncs a web-filled library sees the plates
@@ -578,7 +578,7 @@ export function buildShotLibrary(now: number): SeedLibrary {
 // anyone traces back to this.
 function must(ids: Map<string, string>, name: string, kind: string): string {
   const id = ids.get(name);
-  if (!id) throw new Error(`no ${kind} named "${name}" — seed/shot/library.ts is inconsistent`);
+  if (!id) throw new Error(`no ${kind} named "${name}" — shot/library.ts is inconsistent`);
   return id;
 }
 

@@ -2,17 +2,18 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { expect, type Page } from '@playwright/test';
+import { expect } from '@playwright/test';
 
 import { profileDir, SEED_CREDENTIALS } from '../paths';
 import { waitForApi } from '../runner/lib';
 import { WEB_URL } from '../web/fixtures/env';
 import { launchApp } from '../web/fixtures/launch';
 import { SEED_USERS, seedPassword, type SeedUser, seedUser } from './catalog';
-import { generateArchives } from './generate';
+import { generateArchives } from './fixtures';
 import { findUserId, grantPlan, readGrantedPlan } from './plan';
+import { importArchive, waitForSync } from './steps';
 
-// The seed — four dev accounts, filled, on the local stack.
+// The account seed — four dev accounts, filled, on the local stack.
 //
 // It is `init`/`prepare` for a session of looking at the app by hand, and it does
 // exactly what you would do yourself, in the order you would do it: create the
@@ -28,16 +29,9 @@ import { findUserId, grantPlan, readGrantedPlan } from './plan';
 // (see seed/plan.ts). Read docs/e2e.md, _seeding a dev account_, before changing
 // the shape of this.
 //
-//   npm run seed                       # all four
-//   npm run seed -- free-full          # just one
+//   npm run seed:accounts              # all four
+//   npm run seed:accounts -- free-full # just one
 //   npm run seed:fixtures              # the archives only, no browser
-
-// A thousand links is ~2,000 metadata blobs plus preview images, all of which
-// must land in local R2 before the account is worth handing over — the browser
-// profile this runs in is deleted at the end, so anything still sitting in Dexie
-// is lost. These are wall-clock budgets for that, not correctness knobs.
-const IMPORT_TIMEOUT_MS = 15 * 60 * 1000;
-const SYNC_TIMEOUT_MS = 30 * 60 * 1000;
 
 interface SeededAccount {
   key: string;
@@ -145,88 +139,6 @@ async function seedOne(user: SeedUser, archivePath: string | undefined): Promise
   }
 }
 
-// Import through Settings → Data, the same three clicks a person makes. The file
-// input is hidden behind a "Choose a file" button; `setInputFiles` drives it
-// directly, which is the one place this is allowed to reach past the UI — a real
-// OS file picker cannot be driven at all.
-//
-// Exported for seed/shot/, which needs the same import and the same wait but not
-// `seedOne` around them: it has to keep the browser OPEN afterwards to photograph
-// what it just made, and `seedOne`'s whole contract is that it closes the profile
-// on the way out.
-export async function importArchive(page: Page, archivePath: string): Promise<void> {
-  console.log(`importing ${archivePath}`);
-  await page.goto('/settings/data');
-  await page.getByRole('button', { name: /^Import data/ }).click();
-  await page.locator('input[type=file]').setInputFiles(archivePath);
-
-  const receipt = page.getByText(/^Imported \d+ link/);
-  const failure = page.getByText(/^Import failed:/);
-  await expect(receipt.or(failure)).toBeVisible({ timeout: IMPORT_TIMEOUT_MS });
-  if (await failure.isVisible()) throw new Error(await failure.innerText());
-
-  console.log((await receipt.innerText()).trim());
-}
-
-// Wait for the pending-ops queue to drain to the api.
-//
-// This is the step it would be easy to skip and fatal to: an import lands in
-// Dexie first and pushes in the background, and this profile is deleted when the
-// run ends. Close early and the account is real, the plan is granted, and the
-// library exists nowhere — signing in on another browser shows an empty account
-// with no error to explain it.
-//
-// The signal is the Data section's own sync row: "N changes waiting to sync"
-// while the queue is non-empty, "Last synced …" once a cycle has settled. Reading
-// the UI rather than polling the api keeps this honest — it is the same thing a
-// person watches — and the Sync now button is the same nudge they would press.
-//
-// The settled reading has to hold for THREE consecutive polls, and that is the
-// part not to simplify away. Both halves can lie for one frame just after the
-// navigation below: "Last synced" can still be showing the timestamp of the
-// refresh the import itself ran before writing anything, and the pending count is
-// a liveQuery that reads 0 until its first result lands. Either alone would let
-// this return while the queue is full, which is precisely the failure this
-// function exists to prevent — and it would look like a clean run.
-const SETTLED_POLLS = 3;
-
-export async function waitForSync(page: Page): Promise<void> {
-  await page.goto('/settings/data');
-
-  const pending = page.getByText(/\d+ changes? waiting to sync/);
-  const synced = page.getByText(/^Last synced/);
-  const syncNow = page.getByRole('button', { name: 'Sync now' });
-
-  const deadline = Date.now() + SYNC_TIMEOUT_MS;
-  let settled = 0;
-  let lastReport = '';
-  while (Date.now() < deadline) {
-    if ((await synced.isVisible()) && !(await pending.isVisible())) {
-      if (++settled >= SETTLED_POLLS) {
-        console.log('synced');
-        return;
-      }
-    } else {
-      settled = 0;
-      if (await pending.isVisible()) {
-        const report = (await pending.innerText()).trim();
-        if (report !== lastReport) {
-          console.log(report);
-          lastReport = report;
-        }
-      }
-      // Only offered at rest, so this nudges a queue that has stopped moving and
-      // is a no-op mid-cycle. `requestSync` coalesces, so repeating it is safe.
-      if (await syncNow.isVisible()) await syncNow.click();
-    }
-    await page.waitForTimeout(2000);
-  }
-  throw new Error(
-    `sync did not settle within ${SYNC_TIMEOUT_MS / 60_000} minutes — the library may be ` +
-      `only partly on the server. Sign in as this user and let it finish, or re-run the seed.`,
-  );
-}
-
 // One file, rewritten after each account, so a run that dies on the fourth still
 // leaves working credentials for the first three.
 async function recordAccount(account: SeededAccount): Promise<void> {
@@ -247,13 +159,12 @@ async function recordAccount(account: SeededAccount): Promise<void> {
   await writeFile(path, `${JSON.stringify(next, null, 2)}\n`, 'utf8');
 }
 
-// Guarded on being the entry module, exactly as seed/generate.ts is, and for a
-// reason that is easy to create and hard to see: `importArchive` and `waitForSync`
-// are imported by seed/shot/, and an UNGUARDED top-level `await main()` runs on
-// IMPORT — so `npm run shot` silently re-seeded all four dev accounts before
-// taking its screenshot. Nothing fails when that happens. The seed is idempotent,
-// so it prints its usual receipts, exits clean, and only costs ten minutes and a
-// confusing log.
+// Guarded on being the entry module, exactly as seed/fixtures.ts is. Nothing
+// imports this file today — the steps the shot run shares with it live in
+// `seed/steps.ts` precisely so that nothing has to — and the guard stays as the
+// backstop for the day something does: an unguarded top-level `await main()` runs
+// on IMPORT, and this one re-seeds four accounts, idempotently and silently, for
+// ten minutes. `seed/steps.ts` carries the specimen.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   await main();
 }

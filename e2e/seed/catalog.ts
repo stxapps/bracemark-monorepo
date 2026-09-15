@@ -19,7 +19,7 @@ import { createHash } from 'node:crypto';
 export type SeedPlan = 'free' | 'plus';
 
 export interface SeedUser {
-  // The CLI selector (`npm run seed -- free-full`) and the archive filename.
+  // The CLI selector (`npm run seed:accounts -- free-full`) and the archive filename.
   key: string;
   username: string;
   // 'plus' is granted as a `manual` purchase row — see seed/plan.ts. Pro is a

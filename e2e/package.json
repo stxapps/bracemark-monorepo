@@ -18,22 +18,25 @@
       "e2e-contract": {
         "cache": false
       },
-      "seed": {
-        "cache": false
-      },
       "seed:fixtures": {
         "cache": false
       },
-      "shot": {
+      "seed:accounts": {
         "cache": false
       },
       "shot:preflight": {
         "cache": false
       },
-      "shot:mobile": {
+      "shot:account": {
+        "cache": false
+      },
+      "shot:web": {
         "cache": false
       },
       "shot:ext": {
+        "cache": false
+      },
+      "shot:mobile": {
         "cache": false
       }
     }
@@ -45,12 +48,13 @@
     "e2e-web:report": "playwright show-report .artifacts/report",
     "e2e-mobile": "tsx runner/mobile.ts",
     "e2e-contract": "tsx runner/vectors.ts && tsx runner/web-to-mobile.ts && tsx runner/mobile-to-web.ts",
-    "seed": "tsx seed/seed.ts",
-    "seed:fixtures": "tsx seed/generate.ts",
-    "shot": "tsx seed/shot/capture.ts",
-    "shot:preflight": "tsx seed/shot/preflight.ts",
-    "shot:mobile": "tsx seed/shot/mobile.ts",
-    "shot:ext": "tsx seed/shot/extension.ts"
+    "seed:fixtures": "tsx seed/fixtures.ts",
+    "seed:accounts": "tsx seed/accounts.ts",
+    "shot:preflight": "tsx shot/preflight.ts",
+    "shot:account": "tsx shot/account.ts",
+    "shot:web": "tsx shot/web.ts",
+    "shot:ext": "tsx shot/extension.ts",
+    "shot:mobile": "tsx shot/mobile.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",

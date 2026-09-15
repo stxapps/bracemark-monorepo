@@ -2,7 +2,7 @@ import { pathToFileURL } from 'node:url';
 
 import { extractEndpoint, isRenderableIconBytes, MAX_EXTRACT_URLS } from '@stxapps/shared';
 
-import { EXTRACTOR_URL } from '../../web/fixtures/env';
+import { EXTRACTOR_URL } from '../web/fixtures/env';
 import { shotLinkUrls } from './library';
 
 // Ask `bracemark-extractor` about every URL in shot/library.ts, and fail on any
@@ -136,7 +136,11 @@ async function checkFavicon(host: string): Promise<HostVerdict> {
       // The 200-that-isn't-an-icon: a host answering the guessed path with its
       // own 404 document, or with something past the 512 KB icon ceiling. The
       // clients record `none` for this exactly as they do for a 404.
-      return { host, ok: false, detail: `${bytes.byteLength}B at /favicon.ico, not a renderable icon` };
+      return {
+        host,
+        ok: false,
+        detail: `${bytes.byteLength}B at /favicon.ico, not a renderable icon`,
+      };
     }
     return { host, ok: true, detail: `${bytes.byteLength}B` };
   } catch (error) {
@@ -228,7 +232,7 @@ async function main(): Promise<void> {
   if (failed.length > 0) {
     throw new Error(
       `${failed.length} URL${failed.length === 1 ? '' : 's'} would not produce a card — ` +
-        `replace ${failed.length === 1 ? 'it' : 'them'} in seed/shot/library.ts before capturing.`,
+        `replace ${failed.length === 1 ? 'it' : 'them'} in shot/library.ts before capturing.`,
     );
   }
 

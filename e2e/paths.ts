@@ -30,10 +30,11 @@ export function profileDir(name: string): string {
 //
 // The generated backup archives are RUN OUTPUT — regenerated from seed/library.ts
 // on every seed, disposable, and covered by the `/e2e/.artifacts/` line the
-// profiles and traces already sit behind.
+// profiles and traces already sit behind. FOUR files, one per dev account with a
+// library; the shot account's archive is not among them (SHOT_ARCHIVE, below).
 export const SEED_ARCHIVES = join(ARTIFACTS, 'seed');
 
-// Where the published screenshots land (seed/shot/) — one PNG per scene. Run
+// Where the published screenshots land (shot/) — one PNG per scene. Run
 // output like the archives — regenerate it by re-running the capture — and it
 // belongs under `.artifacts` rather than beside the site's `public/screenshots/`
 // for the same reason: what this writes is the raw device-pixel capture, and what
@@ -43,6 +44,26 @@ export const SEED_ARCHIVES = join(ARTIFACTS, 'seed');
 // source here keeps the unoptimized original from being the one someone points an
 // <img> at.
 export const SHOT_OUTPUT = join(ARTIFACTS, 'shot');
+
+// The shot account's backup archive — one FILE, not a directory, because there is
+// one fixture and `shot/account.ts` rebuilds it on every run.
+//
+// It sits under `SHOT_OUTPUT` rather than with the four dev-account zips in
+// `SEED_ARCHIVES`, and the reason is whose fixture it is: those four are
+// `seed/library.ts`'s and are read by `seed:accounts`, this one is
+// `shot/library.ts`'s and is read by `shot:account`. They share a format and
+// nothing else, and it lived in the wrong directory only because the shot legs
+// used to live under `seed/`. `.artifacts/shot/` already holds more than the PNGs
+// — the Maestro run directories and the staged extension are both here — so what
+// this directory means is "what a shot leg wrote", which is exactly right for it.
+export const SHOT_ARCHIVE = join(SHOT_OUTPUT, 'library.zip');
+
+// The unpacked browser-extension build the popup captures are taken against, with
+// `tabs` added to its manifest (shot/extension.ts says why). A COPY, rebuilt every
+// run, and named here for the same reason everything else is: `.artifacts` has one
+// source of truth, and a path composed at the call site is how a write lands
+// outside the gitignore line (see the note at the top of this file).
+export const SHOT_STAGED_EXTENSION = join(SHOT_OUTPUT, 'extension-staged');
 
 // The credentials are NOT run output. They are working sign-ins for accounts that
 // outlive the run that made them — the whole point is to open a browser tomorrow

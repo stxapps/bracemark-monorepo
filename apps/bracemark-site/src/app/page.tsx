@@ -83,14 +83,14 @@ const SPECIMEN_HOST = 'wikihow.com';
 // Explicit `width`/`height` reserve the box so the band below it doesn't jump.
 //
 // THE FRAME'S RATIO IS THE CAPTURE'S, exactly — `aspect-[25/19]` here and
-// 1000x760 on the `library-list` scene in `e2e/seed/shot/scenes.ts`, which is why
+// 1000x760 on the `library-list` scene in `e2e/shot/scenes.ts`, which is why
 // `object-cover` has nothing to crop. That is a change from the card grid's
 // 16:10, and it is the layout swap's real cost: the list is a TALL object where
 // the grid was a wide one, and at 16:10 this capture held five rows, which reads
 // as a to-do list rather than as a library. The two numbers have to move
-// together — capture.ts counts its height off the row geometry (56 + 6*107 + 62)
-// and this ratio follows it. A mismatch does not fail anything; it just silently
-// starts cropping the bottom row somewhere ugly.
+// together — e2e/shot/web.ts counts its height off the row geometry
+// (56 + 6*107 + 62) and this ratio follows it. A mismatch does not fail anything;
+// it just silently starts cropping the bottom row somewhere ugly.
 //
 // Not `next-image-export-optimizer` either, which is the usual answer to that
 // first sentence and was declined deliberately — the trade is argued in
@@ -100,10 +100,11 @@ const SPECIMEN_HOST = 'wikihow.com';
 // writes into `public/`, and two more runtime dependencies, for a site with one
 // screenshot on it.
 //
-// HOW THIS ONE WAS MADE, and how to remake it: `e2e/seed/shot/` — a Plus account
+// HOW THIS ONE WAS MADE, and how to remake it: `e2e/shot/` — a Plus account
 // seeded with twenty-six real, checked URLs and nothing else, which then turns on
 // server extraction and lets the PRODUCT fetch every title and every cover before
-// the frame is taken (`npm run shot`; docs/e2e.md, _the published screenshots_).
+// the frame is taken (`npm run shot:account`, then `npm run shot:web`; docs/e2e.md,
+// _the published screenshots_).
 // Nothing in the image is authored, which is the point: this band's argument is
 // what the library looks like, and a hand-built mock of it is the same mistake as
 // the hero's hand-typed ciphertext, one screen further down.
@@ -160,7 +161,7 @@ const SCREENSHOT = {
   //
   // The nest is named for the same reason, and it is the re-read working: the
   // capture that added `Health` and `Shopping` also put one list UNDER another in
-  // the rail (`Weekends > Lisbon`, e2e/seed/shot/library.ts), and nested lists are
+  // the rail (`Weekends > Lisbon`, e2e/shot/library.ts), and nested lists are
   // the first thing the Plus footnote under this band names. A sighted visitor can
   // see the indent; a clause is what hands the same fact to AT. Drop it the moment
   // the tree goes flat again.
@@ -347,7 +348,7 @@ function HeroPanel() {
                 its og:image on every post. Which this panel had already worked
                 out for itself, at this size, for the reason two paragraphs up;
                 the store frame is where the same fact stopped being a question
-                about a 64x40 slot. e2e/seed/shot/library.ts carries the rule.
+                about a 64x40 slot. e2e/shot/library.ts carries the rule.
 
                 RE-VERIFYING IT DOES NOT WORK FROM AN ORDINARY SHELL, and the trap
                 is worse than the one it replaces. wikiHow answers a plain `curl`

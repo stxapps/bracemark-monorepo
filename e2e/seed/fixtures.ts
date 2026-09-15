@@ -7,13 +7,19 @@ import { buildBackupArchive } from './archive';
 import { SEED_USERS, type SeedUser } from './catalog';
 import { buildLibrary } from './library';
 
-// Step one of the seed, and the half that is worth having on its own: write the
-// backup archives, touching neither a browser nor the api.
+// THE ARCHIVES — the backup zips both seeds import, written from `./library.ts`
+// and `./archive.ts`, touching neither a browser nor the api.
+//
+// The file is named for its target (`seed:fixtures`) and the function for what it
+// does, which is the split worth keeping: `fixtures.ts` is where you go from the
+// command, `generateArchives()` is what a caller reads. Note that "fixtures" means
+// something else one directory over — `web/fixtures/` holds Playwright fixtures —
+// and that overload lives in the target name already.
 //
 // Run it alone (`npm run seed:fixtures`) when you want to look at what is about to
 // be imported, or to import one by hand into an account you already have —
-// picking the file in Settings → Data → Import is exactly what seed.ts does with
-// it, minus the driving.
+// picking the file in Settings → Data → Import is exactly what accounts.ts does
+// with it, minus the driving.
 
 export interface GeneratedArchive {
   user: SeedUser;
@@ -48,8 +54,9 @@ export async function generateArchives(
   return written;
 }
 
-// `tsx seed/generate.ts` — the CLI. Guarded on being the entry module so seed.ts,
-// which imports `generateArchives` and calls it itself, doesn't run it twice.
+// `tsx seed/fixtures.ts` — the CLI, and `seed:fixtures` is the target it answers
+// to. Guarded on being the entry module so accounts.ts, which imports
+// `generateArchives` and calls it itself, doesn't run it twice.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   await generateArchives();
 }

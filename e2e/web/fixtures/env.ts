@@ -18,7 +18,7 @@ export const API_URL = process.env.E2E_API_URL ?? 'http://localhost:8787';
 
 // bracemark-extractor — the server-extraction origin, on 8788 (docs/env-files.md,
 // _the local port map_), and brought up by `npm run dev` alongside the api and the
-// web app. Only the marketing-screenshot capture needs it (seed/shot/): it is the
+// web app. Only the marketing-screenshot capture needs it (shot/): it is the
 // one thing in e2e/ that deliberately fetches real, public URLs, and its preflight
 // asks THIS origin rather than curl because the two genuinely disagree — a zone
 // behind Cloudflare answers a Worker where it 403s a shell.
@@ -33,7 +33,7 @@ export const SITE_URL = process.env.E2E_SITE_URL ?? 'http://localhost:3001';
 // The system Chrome. `@playwright/test` normally launches a browser it downloaded
 // itself; no install here fetches one, so every launch has to be told where the
 // installed one is. (A downloaded Chromium may nonetheless be present, and one
-// thing here does use it: `seed/shot/extension.ts` must, since Chrome won't load
+// thing here does use it: `shot/extension.ts` must, since Chrome won't load
 // an unpacked extension at all. It launches its own context and does not come
 // through this constant — every SPEC stays on system Chrome.) Chrome
 // auto-updates, so expect the occasional protocol-assumption break on a new major
