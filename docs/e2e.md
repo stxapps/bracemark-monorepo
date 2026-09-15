@@ -1002,9 +1002,11 @@ that has failed three times is 40 minutes from its next attempt and a fresh run
 can spend its whole budget waiting for one retry window. A wipe drops the facets
 and the next import starts the ladder at zero.
 
-The capture is the **Show All** view (`?list=all`), because every link is filed in
-one of the ten named lists and the default My List is genuinely empty — and
-because Show All is the view the figure's alt text describes.
+The capture is the default **My List** view (`/links`). Its seven links are the
+visible fold every lead frame draws; the remaining nineteen stay distributed
+through the ten named lists, so the drawer and global search still show a real
+filed collection. Keeping the title and the visible rows in the same list also
+means no compositor has to rewrite product chrome.
 
 ### state today
 

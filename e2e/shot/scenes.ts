@@ -126,6 +126,12 @@ async function settleList(page: Page): Promise<void> {
   await faviconsQuiesced(page);
 }
 
+/** The lead scenes are the real default inbox, not a relabelled all-links view. */
+async function settleMyList(page: Page): Promise<void> {
+  await expect(page.getByRole('heading', { name: 'My List', exact: true })).toBeVisible();
+  await settleList(page);
+}
+
 // The one query the search scenes commit, as a URL rather than as keystrokes —
 // `?text=` IS the committed search (docs/search.md, _the query is the URL_), so
 // driving the box would only be re-typing what the address bar already says, and
@@ -153,10 +159,10 @@ async function settleList(page: Page): Promise<void> {
 const SEARCH_WORD = 'travel';
 
 // ⚠ A FILTERED VIEW IS SHORT, AND THAT IS THE FIXTURE, NOT THE QUERY. The library
-// is 26 links across 10 lists, so every filter lands 2–5 rows and leaves air
-// under them — Show All is the only view that fills a screen. Look at it in
-// `--preview`: if the air reads as an empty product rather than as a narrowed
-// one, the fix is a longer library in `library.ts`, not a broader search word.
+// is 26 links across My List and 10 named lists, so a search lands 2–5 rows and
+// leaves air under them. Look at it in `--preview`: if the air reads as an empty
+// product rather than as a narrowed one, the fix is a longer library in
+// `library.ts`, not a broader search word.
 async function searchCommitted(page: Page): Promise<void> {
   // The box is `value={text}`, seeded from the committed query, so this asserts
   // the URL actually reached the UI — a parse regression would otherwise
@@ -185,15 +191,13 @@ export const SCENES: Scene[] = [
     // `make-image-variants.sh` refuses to upscale and the site ships a 2200px
     // variant, so a 1000px-wide capture has to be rastered at 3x to feed it.
     id: 'library-list',
-    what: 'the marketing site’s figure — Show All, list layout, six rows and a bit',
+    what: 'the marketing site’s figure — My List, list layout, six rows and a bit',
     viewport: { width: 1000, height: 760 },
     scale: 3,
-    // Show All rather than the default My List: every link in this library is
-    // filed in one of the ten named lists, so the inbox is genuinely empty, and
-    // Show All is the only view that spans them — which is also the one the
-    // figure's alt text describes.
-    goto: '/links?list=all',
-    settle: settleList,
+    // The seven links this frame can show live in the default inbox, so the title
+    // and every visible row describe the same real My List state.
+    goto: '/links',
+    settle: settleMyList,
   },
   {
     // ⚠ PWA `narrow`. 390x844 CSS at DPR 3 = 1170x2532 = 2.164:1, which must
@@ -208,8 +212,8 @@ export const SCENES: Scene[] = [
     what: 'the library as it opens on a phone — no rail, the title is the door',
     viewport: { width: 390, height: 844 },
     scale: 3,
-    goto: '/links?list=all',
-    settle: settleList,
+    goto: '/links',
+    settle: settleMyList,
   },
   {
     // The phone's search: below `md` the box is not in the bar at all — it is a
@@ -235,8 +239,8 @@ export const SCENES: Scene[] = [
     what: 'the library on a laptop — the rail, the tree and the list together',
     viewport: { width: 1280, height: 800 },
     scale: 2,
-    goto: '/links?list=all',
-    settle: settleList,
+    goto: '/links',
+    settle: settleMyList,
   },
   {
     // The same search on a laptop, where the box lives in the topbar and the rail
@@ -272,8 +276,8 @@ export const SCENES: Scene[] = [
     what: 'the library in a laptop window — the source for the store listings',
     viewport: { width: 1152, height: 720 },
     scale: 2,
-    goto: '/links?list=all',
-    settle: settleList,
+    goto: '/links',
+    settle: settleMyList,
   },
 ];
 

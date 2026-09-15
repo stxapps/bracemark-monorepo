@@ -4,6 +4,7 @@ import {
   LINKS_PREFIX,
   type List,
   LISTS_PREFIX,
+  MY_LIST_ID,
   pathFromId,
   ranksBetween,
   SETTINGS_GENERAL_PATH,
@@ -201,11 +202,12 @@ const TAGS = [
 ] as const;
 
 type ListName = (typeof LISTS)[number]['name'];
+type ShotList = ListName | typeof MY_LIST_ID;
 type TagName = (typeof TAGS)[number];
 
 interface ShotLink {
   url: string;
-  list: ListName;
+  list: ShotList;
   tags: TagName[];
 }
 
@@ -291,7 +293,10 @@ const SHOT_LINKS: ShotLink[] = [
   // cooked, something being bought, something being read, a checkup, a weekend
   // away. That is the ordinary month the privacy claim is ABOUT: no one row of it
   // is sensitive and the aggregate is a profile, which is the argument the hero
-  // paragraph makes in prose and this list has to make in pictures.
+  // paragraph makes in prose and this list has to make in pictures. They live in
+  // My List together, so the lead picture is the ordinary inbox rather than the
+  // Show All utility view; the remaining nineteen links keep every named list
+  // populated for the drawer, search and return visits.
   //
   // THE SECOND ROW IS THE HEALTH ROW, and the pick was made on the COVER as much
   // as on the topic: it is the tile directly under the hero's own link, so it is
@@ -299,23 +304,23 @@ const SHOT_LINKS: ShotLink[] = [
   // a photograph of a monitor on an arm.
   {
     url: 'https://www.wikihow.com/Prepare-for-a-Job-Interview',
-    list: 'Interview prep',
+    list: MY_LIST_ID,
     tags: ['work', 'interview', 'thursday'],
   },
   {
     url: 'https://en.wikipedia.org/wiki/Blood_pressure',
-    list: 'Health',
+    list: MY_LIST_ID,
     tags: ['health', 'checkup'],
   },
   {
     url: 'https://standardebooks.org/ebooks/jane-austen/persuasion',
-    list: 'Reading',
+    list: MY_LIST_ID,
     tags: ['to-read', 'classic'],
   },
-  { url: 'https://en.wikipedia.org/wiki/Lasagne', list: 'Recipes', tags: ['recipe'] },
+  { url: 'https://en.wikipedia.org/wiki/Lasagne', list: MY_LIST_ID, tags: ['recipe'] },
   {
     url: 'https://www.english-heritage.org.uk/visit/places/stonehenge/',
-    list: 'Weekends',
+    list: MY_LIST_ID,
     tags: ['weekend'],
   },
   // The one row that is in two threads at once: a chair is a purchase and it is
@@ -323,12 +328,12 @@ const SHOT_LINKS: ShotLink[] = [
   // they are for — and this is the row where the picture shows it.
   {
     url: 'https://en.wikipedia.org/wiki/Office_chair',
-    list: 'Shopping',
+    list: MY_LIST_ID,
     tags: ['budget', 'work'],
   },
   // The seventh row, cut 62px in: its cover, title and host are in frame and its
   // tags are not (web.ts derives the number).
-  { url: 'https://en.wikivoyage.org/wiki/Sintra', list: 'Lisbon', tags: ['lisbon'] },
+  { url: 'https://en.wikivoyage.org/wiki/Sintra', list: MY_LIST_ID, tags: ['lisbon'] },
   { url: 'https://en.wikipedia.org/wiki/Sleep', list: 'Health', tags: ['health'] },
   { url: 'https://www.gutenberg.org/ebooks/1342', list: 'Reading', tags: ['classic'] },
   { url: 'https://en.wikipedia.org/wiki/Electric_kettle', list: 'Shopping', tags: ['budget'] },
@@ -456,7 +461,7 @@ export function buildShotLibrary(now: number): SeedLibrary {
     const createdAt = Math.round(now - i * STEP_MS);
     const link: Link = {
       url: spec.url,
-      listId: must(listIds, spec.list, 'list'),
+      listId: spec.list === MY_LIST_ID ? MY_LIST_ID : must(listIds, spec.list, 'list'),
       tagIds: spec.tags.map((name) => must(tagId, name, 'tag')),
       createdAt,
       updatedAt: createdAt,

@@ -913,7 +913,7 @@ whatever `make-image-variants.sh` argues for the site's own figures.
 5 narrow and 8 wide, but the dialog shows about one and a half at a time; and every
 extra file is another PNG the regenerate list above invalidates, another stamp
 entry, another capture run against real sites. Two is where the set stops being a
-still life and starts making a claim — **the library** (`?list=all`, filled) and
+still life and starts making a claim — **My List** (`/links`, filled) and
 **the library doing something** (a committed `?text=` search, which on a phone also
 shows the summoned search row and on a laptop shows the rail with nothing
 highlighted, because a text search projects to no single axis). A third can be
