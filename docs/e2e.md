@@ -650,6 +650,26 @@ the status bar. Run iOS and Android separately: iOS uses Safari plus the share
 extension; Android uses Chrome behind `ShareActivity`. These are raw captures,
 not finished store canvases.
 
+⚠ **The mobile leg needs `deviceExtractionMode: 'all'`, and the reason is not
+extraction.** Favicons are the one enrichment that never syncs
+([link-extraction.md](./link-extraction.md), _favicons: a device-local host
+cache_), so the titles and covers the web run wrote reach the phone and the icons
+do not — the device has to guess `https://{host}/favicon.ico` itself, and expo
+gates that guess on the mode reaching `all`. Every link on this account arrived by
+sync, so the shipped `saves` default does not cover them either: the captures ran
+for a while with the mode at `off` and produced a column of real covers beside a
+column of empty chips, which is what a half-loaded app looks like. The value is
+seeded in `seed/shot/library.ts` rather than clicked the way `serverExtraction` is
+— it is in no plan, so there is no grant to prove, and it has no device-local
+override, so the synced value wins outright. On this account it costs nothing:
+`all` arms the drain, but the web capture has already resolved every facet, so the
+drain finds no work and the only requests are six favicons. Two consequences worth
+knowing before reading a capture. It photographs an **opt-in** state, deliberately,
+exactly as the site's figure does with `serverExtraction`. And `standardebooks.org`
+serves no `/favicon.ico` at all (it declares a PNG instead), so row 3 wears the
+quiet plate on the phone and in the figure alike — one cause, the deferred
+`faviconUrl` step in the extract contract, and not something a different URL fixes.
+
 **`scenes.ts` is WHAT, `capture.ts` is HOW, and the split is the point.** The
 account, the import, the extraction drain and the waits are one apparatus every
 picture needs; the only things that vary are a viewport, a URL and what "finished"
@@ -821,7 +841,13 @@ an item that can block every future capture.
   list. A URL that has 404'd or lost its og:image since costs one monogram in the
   column of covers, which is invisible in a diff and obvious in the shipped PNG.
   Only the top seven links are in frame, so an edit near the top of
-  `SHOT_LINKS` is the one to re-check hardest.
+  `SHOT_LINKS` is the one to re-check hardest. It then reports a second, **host**
+  pass — `/favicon.ico` on each distinct host, which is a property the per-URL
+  pass structurally cannot see, since a host can serve every page and og:image
+  here perfectly and still have no icon at the guessed path. That one **warns
+  rather than fails**: the hole is a 14dp plate rather than a monogram filling the
+  row, the render path calls it a correct final state, and no edit to this file
+  repairs it.
 - **The drain is two mechanisms, and each has a way of looking finished when it
   is not.** `Generate all` starts it — the auto drain would not, being
   displayed-scoped, visibility-gated and budget-capped by design (web-react's

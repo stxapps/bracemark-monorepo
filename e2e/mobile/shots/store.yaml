@@ -22,6 +22,19 @@ appId: com.bracemark.app
 - extendedWaitUntil:
     visible: '.*wikihow.com.*'
     timeout: 120000
+# The host line arriving is NOT the row being finished. Favicons never sync
+# (docs/link-extraction.md, _favicons_), so the device fetches one per host the
+# moment these rows mount — six hosts for the whole library, behind the account's
+# `deviceExtractionMode: 'all'` (seed/shot/library.ts). The wait above returns on
+# the first host STRING, which is several hundred ms before the icons beside them.
+# Web's capture counts the `<img>`s and waits for the count to hold
+# (seed/shot/scenes.ts, `faviconsQuiesced`); Maestro has nothing addressable to
+# count, so settle on the screen itself — this returns as soon as the pixels stop
+# moving, which is the last icon landing, and returns immediately once they have.
+# Nothing here FAILS if an icon never comes: standardebooks.org serves none, so
+# row 3 is a plate by design and a timeout would be the normal case.
+- waitForAnimationToEnd:
+    timeout: 10000
 - takeScreenshot: ${ONLY_YOU_SHOT}
 
 # Search is committed and the keyboard is gone. The query deliberately matches

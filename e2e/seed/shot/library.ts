@@ -244,9 +244,12 @@ interface ShotLink {
 //   bbcgoodfood.com  x2   photographs, but the BBC mark is one nobody argues with
 //
 // What CANNOT be removed, and is not the target: a hostname and a 16px favicon in
-// every row. An all-Wikipedia library still prints `en.wikipedia.org` and the
-// Wikimedia W twenty-six times. That is nominative use and it is what every
-// bookmark manager's store screenshots show. The line is drawn at artwork.
+// every row that has one. An all-Wikipedia library still prints
+// `en.wikipedia.org` and the Wikimedia W twenty-six times. That is nominative use
+// and it is what every bookmark manager's store screenshots show. The line is
+// drawn at artwork. (Which rows HAVE one is the `deviceExtractionMode` note
+// below: the mobile frames showed none at all until it moved, and one host serves
+// no icon on either platform.)
 //
 // ⚠ AND THE PICKS ARE VERIFIED BY LOOKING, because a passing preflight does not
 // mean a usable cover. `en.wikipedia.org/wiki/Slow_cooker` was proposed for the
@@ -482,12 +485,65 @@ export function buildShotLibrary(now: number): SeedLibrary {
     // photograph cards on the next run. The seeded value is where a fresh import
     // starts; the click is what makes it true of an account that already existed.
     linksLayout: 'list',
-    // Inherited from the big seed for the same reason it holds there: a device
-    // that opens this account must not start fetching these (real, reachable)
-    // hosts on its own. Web ignores the field — bracemark-expo reads it — and
-    // the capture's own fetching is the SERVER path, which is a different,
-    // explicitly-toggled switch.
-    deviceExtractionMode: 'off',
+    // `all`, and it is the MOBILE captures that need it. Web ignores this field
+    // — bracemark-expo reads it — so this is the one synced setting whose value
+    // is decided by the store listings rather than by the site's figure.
+    //
+    // WHY THE PHONE NEEDS IT AT ALL. Favicons are the one enrichment that never
+    // syncs (docs/link-extraction.md, _favicons: a device-local host cache_): not
+    // a facet, no `files/` blob, just a per-host cache on whichever device
+    // fetched it. So the titles and covers the web run wrote DO reach the phone
+    // and the icons do NOT — the phone has to guess `https://{host}/favicon.ico`
+    // itself, and expo gates that guess on this field reaching `all`
+    // (expo-react's FaviconProvider: `enabled` is `deviceExtractionMode ===
+    // 'all'`). Every link here arrived by SYNC, so the shipped `saves` default
+    // does not cover them either — that one licenses the icons for links saved on
+    // that device. Below `all`, every row in the store screenshots wears the
+    // quiet plate, and a column of real covers beside a column of empty chips
+    // reads as an app that half-loaded.
+    //
+    // WHAT `all` ACTUALLY COSTS ON THIS ACCOUNT, which is what let the value
+    // move. It was `off`, inherited from the big seed, on the stated grounds that
+    // a device opening this account must not start fetching these (real,
+    // reachable) hosts on its own. That argument is sound THERE and does not
+    // transfer HERE: `all` arms the extraction drain, but the drain works the
+    // PENDING bucket, and by the time a phone signs in the web capture has
+    // resolved every title and `titleImage` facet in the library. It finds no
+    // work and fetches no pages. What `all` buys is the favicon queue, and that
+    // is SIX requests — icons are keyed per HOST, and twenty-six links resolve to
+    // six hosts.
+    //
+    // SEEDED RATHER THAN CLICKED, unlike `serverExtraction` below, and the
+    // asymmetry is not an oversight. That switch is clicked because it is a Plus
+    // entitlement and the click is the proof the grant landed. This field is in
+    // no plan (packages/shared/src/iap/plans.ts), so there is nothing to prove —
+    // and it has no device-local override the way `linksLayout` and `theme` do
+    // (expo-react's use-settings), so the synced value wins outright and no
+    // Maestro trip through Settings is needed. `capture.ts` re-imports the
+    // archive every run, so an edit here lands on the next `npm run shot`.
+    //
+    // ⚠ IT PHOTOGRAPHS AN OPT-IN STATE, DELIBERATELY. Expo ships `saves`, so a
+    // person who installs the app and syncs a web-filled library sees the plates
+    // until they choose otherwise. Photographing `all` is the same choice the web
+    // figure already makes with `serverExtraction`: the picture is of the product
+    // working, and both switches are one tap from the default on a real account.
+    // It is recorded here rather than left implicit because it is a JUDGEMENT
+    // about what the store art claims, not a fix — the kind of thing that looks
+    // like a default the next time someone reads it.
+    //
+    // ONE ROW STAYS A PLATE EITHER WAY, and it is not this setting's doing.
+    // standardebooks.org serves no `/favicon.ico` (it declares
+    // `/images/favicons/favicon-32x32.png` instead), and BOTH clients ship the
+    // GUESS only — the real `<link rel=icon>` upgrade rides a page extraction,
+    // which will not run here. So `Persuasion` at row 3 wears the plate on the
+    // phone exactly as it does in the site's figure, from one cause. That is the
+    // deferred step-2 ladder (docs/link-extraction.md, _deferred / open_ —
+    // `faviconUrl` in the extract contract), not a defect in this fixture, and it
+    // is the reason to leave the two Standard Ebooks URLs where they are: swapping
+    // them would fix the phone and desync it from the figure. `shot:preflight`
+    // checks the hosts now, so the next one of these is a red line rather than a
+    // thing someone eventually notices in a shipped PNG.
+    deviceExtractionMode: 'all',
     // NOT `serverExtraction: true`. It could be set here and it deliberately
     // isn't: it is the privacy-load-bearing opt-in, so the capture run flips the
     // real Switch in Settings → Link previews. That costs one click and buys the

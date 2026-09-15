@@ -1,12 +1,13 @@
 import { pathToFileURL } from 'node:url';
 
-import { extractEndpoint, MAX_EXTRACT_URLS } from '@stxapps/shared';
+import { extractEndpoint, isRenderableIconBytes, MAX_EXTRACT_URLS } from '@stxapps/shared';
 
 import { EXTRACTOR_URL } from '../../web/fixtures/env';
 import { shotLinkUrls } from './library';
 
 // Ask `bracemark-extractor` about every URL in shot/library.ts, and fail on any
-// that would land in the screenshot as a monogram.
+// that would land in the screenshot as a monogram. Then ask each distinct HOST
+// for its favicon, and report — without failing — the ones that have none.
 //
 //   npm run shot:preflight        # needs `npm run dev` (the extractor is on 8788)
 //
@@ -64,10 +65,103 @@ import { shotLinkUrls } from './library';
 // a single-URL re-check is how you tell which one when a batch trips it.
 const SLOW_MS = 4_000;
 
+// The FAVICON pass, added when the mobile captures started needing icons — and it
+// is two departures from everything above, both deliberate.
+//
+// IT IS KEYED BY HOST, because a favicon is (docs/link-extraction.md, _favicons_).
+// Twenty-six links resolve to six hosts, so this is six requests, and — more to
+// the point — it is a property the per-URL pass above structurally cannot see. A
+// host can serve every page and every og:image in this file perfectly and still
+// have no icon at the guessed path, which is exactly what standardebooks.org
+// does: it declares `/images/favicons/favicon-32x32.png` and 404s
+// `/favicon.ico`. Twenty-six green URL verdicts, two plates in the picture, and
+// nothing in a diff to suggest it.
+//
+// IT WARNS RATHER THAN FAILS, which is the opposite call from `imageUrl` above
+// and rests on the size of the hole. A missing og:image is a MONOGRAM filling the
+// row's 64x40 slot — loud, and fixable by choosing a different URL. A missing
+// favicon is the quiet 14dp plate beside the host, it is a state the render path
+// calls correct and final (web's `faviconsQuiesced` note in scenes.ts says the
+// same), and the fix is not in this file: both clients ship the `/favicon.ico`
+// GUESS, so the only real repair is the deferred `faviconUrl` step in the extract
+// contract. Failing the run would mean `npm run shot:preflight` is red today, on
+// a library that is correct, for a defect nobody here can fix by editing a URL.
+// So it prints, and the number it prints is the one to compare against after an
+// edit.
+//
+// IT GOES DIRECT, unlike the pass above, and for once that IS what the clients
+// do: expo fetches `https://{host}/favicon.ico` itself (native HTTP has no CORS),
+// and web asks the extractor to proxy the same URL. The verdict below is the
+// clients' own — `isRenderableIconBytes`, the shared byte sniff, which is what
+// makes an HTML 404 page served at the guessed path a miss rather than an icon.
+const FAVICON_TIMEOUT_MS = 10_000;
+
+// The string expo presents for this fetch. COPIED, not imported: `@stxapps/e2e`
+// is `platform:agnostic` and expo-react is `platform:expo`, so the import that
+// would keep these in step is the one the module boundaries refuse. If a host
+// ever walls this UA, check expo-react's lib/user-agent.ts before believing the
+// verdict.
+const FAVICON_USER_AGENT = 'Bracemark/1 (+https://bracemark.com)';
+
 interface Verdict {
   url: string;
   ok: boolean;
   detail: string;
+}
+
+interface HostVerdict {
+  host: string;
+  ok: boolean;
+  detail: string;
+}
+
+function distinctHosts(urls: string[]): string[] {
+  return [...new Set(urls.map((url) => new URL(url).hostname))].sort();
+}
+
+async function checkFavicon(host: string): Promise<HostVerdict> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FAVICON_TIMEOUT_MS);
+  try {
+    const response = await fetch(`https://${host}/favicon.ico`, {
+      headers: { 'user-agent': FAVICON_USER_AGENT },
+      signal: controller.signal,
+      redirect: 'follow',
+    });
+    if (!response.ok) {
+      return { host, ok: false, detail: `${response.status} at /favicon.ico` };
+    }
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    if (!isRenderableIconBytes(bytes)) {
+      // The 200-that-isn't-an-icon: a host answering the guessed path with its
+      // own 404 document, or with something past the 512 KB icon ceiling. The
+      // clients record `none` for this exactly as they do for a 404.
+      return { host, ok: false, detail: `${bytes.byteLength}B at /favicon.ico, not a renderable icon` };
+    }
+    return { host, ok: true, detail: `${bytes.byteLength}B` };
+  } catch (error) {
+    return { host, ok: false, detail: `fetch failed — ${String(error)}` };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function reportFavicons(urls: string[]): Promise<void> {
+  const hosts = distinctHosts(urls);
+  console.log(`\nchecking /favicon.ico on ${hosts.length} distinct hosts\n`);
+  const verdicts = await Promise.all(hosts.map(checkFavicon));
+  for (const verdict of verdicts) {
+    console.log(`${verdict.ok ? '  ok ' : 'none'}  ${verdict.host}\n        ${verdict.detail}`);
+  }
+  const missing = verdicts.filter((verdict) => !verdict.ok);
+  console.log(`\n${verdicts.length - missing.length}/${verdicts.length} hosts serve an icon`);
+  if (missing.length > 0) {
+    // Not thrown — see the header above this block.
+    console.log(
+      `        every row on ${missing.map((verdict) => verdict.host).join(', ')} shows the ` +
+        `quiet plate beside its host, on the phone and in the site’s figure alike.`,
+    );
+  }
 }
 
 async function main(): Promise<void> {
@@ -137,6 +231,10 @@ async function main(): Promise<void> {
         `replace ${failed.length === 1 ? 'it' : 'them'} in seed/shot/library.ts before capturing.`,
     );
   }
+
+  // After the gate, not before it: a dead URL is the thing that stops a capture,
+  // and the favicon report is information to read on the way past.
+  await reportFavicons(urls);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
