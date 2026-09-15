@@ -31,11 +31,11 @@ export const BRAND = {
   slogan: 'We don’t promise not to look. We built it so we can’t.',
 
   /**
-   * The tagline's positive inversion, for the ~30-character store fields. Says
-   * the same thing without the momentary "…is it broken?" reading that "can't
-   * read" carries when it appears with no supporting copy around it.
+   * The store-length mechanism. The listing name already supplies the bookmark
+   * category; this uses the product's object noun and says where encryption
+   * happens, without the tagline's momentary "…is it broken?" reading.
    */
-  subtitle: 'Bookmarks only you can read',
+  subtitle: 'Links encrypted on your device',
 } as const;
 
 // The legal entity behind Bracemark, and the postal address of record.

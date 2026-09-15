@@ -99,14 +99,15 @@ export const APP_STORE = {
    * Apple's keyword field — invisible to users, pure search index. Comma-separated
    * with NO spaces (a space is an indexed character), singular forms only, and
    * never a word already in `name` or `subtitle`: Apple indexes those separately,
-   * so "private", "bookmarks" and "read" here would be wasted budget.
+   * so "private", "bookmarks", "link", "encrypted" and "device" here would be
+   * wasted budget. "read" returned when it left the subtitle.
    *
    * No competitor names. "pocket", "raindrop" and "pinboard" are the obvious
    * additions and all three are trademarks — Apple rejects the build for it
    * (guideline 2.3.7) rather than just dropping the term.
    */
   keywords:
-    'zero,knowledge,encrypted,e2ee,secure,vault,later,save,link,url,tab,offline,sync,manager',
+    'zero,knowledge,e2ee,secure,vault,later,save,url,tab,offline,sync,manager,read',
 
   /**
    * The one field Apple lets us change without a review, which makes it the only
@@ -122,7 +123,7 @@ export const PLAY = {
   title: APP_STORE.name,
 
   /** Indexed, and the only copy most visitors read. */
-  shortDescription: 'Bookmarks only you can read. Encrypted on your device before they ever sync.',
+  shortDescription: 'Your links are encrypted on your device before they ever sync.',
 } as const;
 
 // --- the long description, for both stores -----------------------------------
@@ -221,7 +222,7 @@ export const BROWSER_EXTENSION_LISTING = {
 // "Private by design" and friends are the failure mode: a claim about intent,
 // spent over a picture that could have carried a claim about the software.
 export const SCREENSHOT_CAPTIONS = {
-  /** The filled mobile links screen: the category and the product's core promise. */
+  /** The filled mobile links screen: the product's core encryption mechanism. */
   onlyYou: BRAND.subtitle,
   /** The mobile share sheet over the app that supplied the link. */
   saveFromAnyApp: 'Save from any app',

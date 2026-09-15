@@ -330,8 +330,12 @@ and states the mechanism as an **inability rather than an intention**, which no
 competitor holding plaintext can copy. Its one weakness is that "can't read" can
 momentarily parse as _broken_ rather than _blind_, so it is safest where
 supporting copy resolves it immediately — which is why the ~30-character store
-fields get a fourth line instead: **"Bookmarks only you can read"**, the same
-claim inverted to a positive.
+fields get a fourth line instead: **"Links encrypted on your device"**. The
+listing name already supplies the bookmark category; the shorter line uses the
+product's object noun and names the mechanism. It replaced "Bookmarks only you
+can read", whose noun phrase could still be taken at a glance as an instruction
+to save only what you have time to read — grammatically avoidable, commercially
+real on a surface read that quickly.
 
 **Adjectives are the failure mode here, not a missing feature.**
 "Privacy-focused", "private & secure" and the rest are claims about intent, in a
@@ -436,7 +440,7 @@ argue, and the register follows the room rather than the channel.
 
 | surface                                | tone                                                                   | specimen                                                                                                        |
 | -------------------------------------- | ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| hero, store name/subtitle, OG title    | flat and declarative — one claim, no hedge, no supporting clause       | "Bookmarks only you can read"                                                                                   |
+| hero, store name/subtitle, OG title    | flat and declarative — one claim, no hedge, no supporting clause       | "Links encrypted on your device"                                                                                |
 | /about, /faq, `FULL_DESCRIPTION`       | argued and long — makes the case, then concedes                        | "That is not a privacy policy. It is the architecture."                                                         |
 | in-app labels and helper text          | instructional — what this does, in the user's own words                | "Every link you save shows up here, whichever list it lives in."                                                |
 | empty states                           | names the next act, never the absence                                  | "No tags yet. Type a name to make one."                                                                         |

@@ -143,9 +143,9 @@ function DecryptingScreen({ progress }: { progress: InitialSyncProgress | null }
         is itself the counterexample to: the password unwraps the key
         (docs/account.md), so a first pull on a SECOND device is exactly what is
         being narrated here. The key is not held by the device, which is the
-        whole reason the second device can get at it at all. Matches BRAND's "Bookmarks only you can read"
-        (brand/brand.ts), and the password clause is what makes the wait
-        legible rather than just reassuring.
+        whole reason the second device can get at it at all. It expands BRAND's
+        "Links encrypted on your device" (brand/brand.ts), and the password
+        clause is what makes the wait legible rather than just reassuring.
       */}
       <p className="max-w-xs text-center text-xs text-muted-foreground">
         Your links are encrypted — only you, with your password, can read them.
