@@ -41,13 +41,44 @@ appId: com.bracemark.app
 
 # Search is committed and the keyboard is gone. The query deliberately matches
 # extracted titles from Wikivoyage rather than a URL fragment.
+#
+# NO `hideKeyboard` after the Enter, and on Android the omission is what makes
+# this the right screen. Maestro's is `input keyevent 4` on that platform — a
+# bare BACK press, sent unconditionally, with no check that a keyboard is even up
+# (2.8.0, `AndroidDriver.hideKeyboard`; the iOS one taps a blank area instead,
+# docs/soft-keyboard.md). Enter has already put the IME away by then, because the
+# field is single-line and sets no `submitBehavior`, so RN resolves
+# `blurAndSubmit` (links/search-bar.tsx) — which leaves the press nothing to be
+# consumed by. It falls through to the app, where links/topbar.tsx registers a
+# BackHandler for exactly as long as the bar shows, closes the search and
+# restores the pre-search selection. The capture came back as Show All's whole
+# library: the right picture of the wrong screen, with nothing in the run that
+# fails, because the host the wait below keys on is in the unfiltered list too.
+# What tells the two screens apart is the title, and the step that reads it is
+# the tap below.
 - tapOn: 'Search links'
 - inputText: travel
 - pressKey: Enter
-- hideKeyboard
 - extendedWaitUntil:
     visible: '.*en.wikivoyage.org.*'
     timeout: 60000
+# A TAP ON THE TITLE, to put the device back in TOUCH MODE before the shutter.
+# `pressKey` injects a hardware key event, which takes Android out of touch mode;
+# the Enter above then blurs the field, focus lands on the drawer button, and the
+# platform paints its DEFAULT FOCUS HIGHLIGHT there — a 92px square of #ECECEC,
+# which is neither this kit's `--muted` (#F5F5F5) nor any shape it draws, since
+# every button is `rounded-4xl` (ui/button.tsx). No user can reach that pixel: the
+# soft keyboard's Search key is a touch, and touch mode suppresses the highlight
+# entirely. Any touch restores it, and the title is the one thing on this bar that
+# is not pressable — a `Text`, so the tap changes nothing else (links/topbar.tsx).
+# It doubles as the screen check the comment above asks for, since 'Search' is the
+# title only under the committed selection; on the old failure — the bar closed,
+# the title back to 'Show All' — this is the step that fails.
+- tapOn:
+    text: 'Search'
+    # The tap is meant to change nothing, so spare Maestro the retry it would
+    # otherwise spend looking for a change.
+    retryTapIfNoChange: false
 - takeScreenshot: ${SEARCH_SHOT}
 
 # Re-open the real navigation drawer. It remembers the scroll used to reach

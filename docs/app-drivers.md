@@ -157,6 +157,79 @@ real performance. See [share-sheet.md](./share-sheet.md) and
 running — and which apps work on which of the five devices — is
 [device-testing.md](./device-testing.md).
 
+#### ⚠ `adb shell` has no argv
+
+**Everything after `shell` is joined with spaces and re-split by the device's
+shell.** `adb` does not forward an argument vector; it concatenates one into a
+command string, ships that, and the shell on the other end splits it again on
+whitespace. So `execFile('adb', ['shell', 'am', 'start', …, '--es',
+'android.intent.extra.SUBJECT', 'Job interview'])` — argv-safe by construction on
+this side, and wrong on arrival — hands `ShareActivity` a `SUBJECT` of `Job`,
+with `interview` left over as a positional `am` swallows as the intent's package.
+
+Nothing reports it. `am` prints `Starting: Intent { … }` and exits 0, the flow
+that follows passes, and the only evidence is the payload itself: the
+`save-from-any-app` store capture photographed a page titled **"Job"** across
+three runs, which reads as the sheet clipping its own title — a bug in the app —
+rather than as the harness having handed it a shorter one. What settles it in
+one command is the echoed intent, which names the damage directly:
+
+```sh
+adb shell am start … --es android.intent.extra.SUBJECT 'Job interview'
+# Starting: Intent { act=… pkg=interview cmp=… (has extras) }
+#                       ^^^^^^^^^^^^^^ the second word, parsed as -p
+```
+
+**Quote every word on this side** — the remote shell has no argv to preserve, so
+there is nowhere else to fix it. `e2e/shot/mobile.ts`'s `adbShell` helper
+single-quotes each word and passes the result as one argument; route new `adb
+shell` calls through it rather than through `command('adb', ['shell', …])`.
+Maestro's own steps are unaffected: it speaks to the device over its driver, not
+through a shell.
+
+#### ⚠ an `am start` can decline to start anything
+
+**A second `am start` naming an activity that already has a task does not launch
+it — it surfaces the old one, with the old intent.** Extras are not part of
+`Intent.filterEquals`, so the new payload is simply dropped, and the shell says
+so in a line that is easy to read as success: `Starting: Intent { … }`, then
+`Warning: Activity not started, its current task has been brought to the front`,
+exit 0.
+
+It bites the Android share capture specifically, because `ShareActivity` declares
+`taskAffinity=""` ([share-sheet.md](./share-sheet.md)) and so lands in a task of
+its own that outlives the sheet. The second run of `npm run shot:mobile --
+android` then either photographs the FIRST run's payload as the second's, or —
+what actually happened — never brings the sheet forward at all and times out on
+`share-add` with a screenshot of plain Chrome. **`--activity-clear-task` is the
+fix** (`e2e/shot/mobile.ts`, `openShareSource`). Note there is no
+`--activity-new-task` to pair it with; `am help` lists the options, and the
+system supplies `NEW_TASK` itself for an activity launched from a shell, which is
+what CLEAR_TASK rides on.
+
+#### ⚠ `pressKey` photographs a focus state no user has
+
+**A hardware key event takes Android out of TOUCH MODE, and the platform then
+draws focus highlights the product never shows.** Anything that moves focus after
+that point paints one: `pressKey: Enter` on a single-line field blurs it
+(`blurAndSubmit`), focus lands on the next focusable view, and Android fills that
+view's bounds with its default highlight.
+
+It is easy to read as an app bug and is not one. On the links topbar the drawer
+button came out as a **92px square of #ECECEC** — neither a colour this kit uses
+(`--muted` is #F5F5F5) nor a shape it can draw, since every button is
+`rounded-4xl` and the sibling search button in the same capture is a clean circle
+(`ui/button.tsx`). Nobody can reach that pixel by hand: the soft keyboard's own
+Search key is a **touch**, and touch mode suppresses the highlight.
+
+**Any touch clears it**, which is both the diagnosis and the fix — measured by
+sampling the pixel through the sequence: white, white after `input text`, #ECECEC
+the instant `keyevent 66` lands, white again after one `input tap` anywhere.
+`e2e/mobile/shots/store.yaml` taps the topbar title — the one element on that bar
+with no press handler — between the Enter and the shutter. Worth checking in any
+capture that ends on a `pressKey`, since nothing else reports it: the flow is
+green, the pixels are wrong, and the result ships to a store listing.
+
 #### the driver: Maestro, not Appium
 
 > The flows themselves live in `e2e/mobile/`; [e2e.md](./e2e.md) covers the

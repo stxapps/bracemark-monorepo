@@ -577,8 +577,9 @@ affordances entirely — so a surface can lose all three mechanisms with every e
 run still green. Same for jest: none of this renders. A device or simulator is
 the only instrument.
 
-**And the instrument has holes.** Driving the keyboard with Maestro on iOS ran
-into four separate blind spots, each of which reads exactly like a failing fix:
+**And the instrument has holes.** Driving the keyboard with Maestro ran into six
+separate blind spots, each of which reads exactly like a failing fix. They were
+measured on iOS except where noted:
 
 - **Over the iOS share extension, the panel leaves the accessibility tree the
   moment the keyboard is presented.** `maestro hierarchy` returns only the
@@ -595,10 +596,22 @@ into four separate blind spots, each of which reads exactly like a failing fix:
   `tapOn: "Longreads"` resolved to the suggestion strip floating over the row.
   Prefer a filter term the keyboard won't offer a correction for, or tap the row
   by coordinate below the bubble.
-- **`hideKeyboard` is a TAP on iOS.** It puts the keyboard away by pressing a
-  blank area, so on any surface with a tap-to-close backdrop it closes the
-  surface — the add flows lost their Save button to it mid-run, reported as a
-  missing element rather than as a dismissal.
+- **`hideKeyboard` is a TAP on iOS and a BACK PRESS on Android**, and it
+  misleads on both. On iOS it puts the keyboard away by pressing a blank area, so
+  on any surface with a tap-to-close backdrop it closes the surface — the add
+  flows lost their Save button to it mid-run, reported as a missing element
+  rather than as a dismissal. On Android it is `input keyevent 4`, sent
+  **unconditionally**: Maestro never checks whether a keyboard is up (2.8.0,
+  `AndroidDriver.hideKeyboard` — one `shell`, a 300 ms sleep, a settle). So the
+  moment the field has already dismissed its own IME, the press is a plain back
+  press delivered to the app, and whatever `BackHandler` is mounted answers it.
+  A `pressKey: Enter` on any single-line field is enough to get there, since RN
+  resolves `submitBehavior` to `'blurAndSubmit'` — which is how the shot leg's
+  search step lost the search UI to `links/topbar.tsx`'s handler and photographed
+  the unfiltered library instead (`e2e/mobile/shots/store.yaml`, and
+  [e2e.md](./e2e.md), _keyboard dismissal_). Nothing fails: the back press is
+  consumed and reported as handled, and the capture is a perfectly good picture
+  of the wrong screen.
 - **A stale accessibility tree survives a Fast Refresh.** Editing a file while a
   modal or an overlay panel is on screen can leave `maestro hierarchy` returning
   the app root and nothing else, on a screen that renders fine. Relaunch the app

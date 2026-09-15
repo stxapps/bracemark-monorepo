@@ -256,8 +256,15 @@ command — it puts the keyboard away without touching the app's own affordances
 On iOS it does that by TAPPING A BLANK AREA, which is why the two add-link flows
 no longer use it: the add panel's blank area is its backdrop, so the step closed
 the surface mid-form and the run failed on a Save button that was no longer
-there (docs/soft-keyboard.md, _the add panel_). Prefer leaving it out where the
-form is already above the keyboard.
+there (docs/soft-keyboard.md, _the add panel_). **On Android it is a BACK press**
+— `input keyevent 4`, sent whether or not a keyboard is up — so wherever the
+field has already blurred, it reaches the app instead and the topmost
+`BackHandler` answers it. `shots/store.yaml`'s search step lost its search UI
+that way, one line after the `pressKey: Enter` that had already dropped the IME,
+and the run stayed green around a capture of the unfiltered library. Prefer
+leaving it out where the form is already above the keyboard, and reach for it
+only where an input is still focused — if the flow has just submitted, the step
+is at best a no-op and at worst a navigation.
 So every one of the app's dismissal paths (return/done, tap-outside,
 scroll-to-dismiss) can regress with the whole suite still green, and a field can
 end up with no way to close the keyboard at all. That is not a gap to close by

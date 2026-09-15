@@ -11,7 +11,12 @@ import { SHOT_USER } from './library';
 
 const run = promisify(execFile);
 const SHARE_URL = 'https://en.wikipedia.org/wiki/Job_interview';
-const SHARE_TITLE = 'Job interview';
+// The page's real `<title>`, because that is what a browser puts in EXTRA_SUBJECT
+// and what iOS's leg gets for free — it crosses Safari's own share sheet, so its
+// title comes from the page. Android's leg synthesises the intent, so anything
+// shorter here would photograph the two platforms with different titles for the
+// same URL.
+const SHARE_TITLE = 'Job interview - Wikipedia';
 
 type Platform = 'ios' | 'android';
 
@@ -68,6 +73,21 @@ async function command(file: string, args: string[]): Promise<void> {
   await run(file, args, { maxBuffer: 1 << 20 });
 }
 
+// `adb shell` IS NOT `execFile`, and the difference is silent. Everything after
+// `shell` is JOINED WITH SPACES into one string and handed to the DEVICE's shell,
+// which splits it again on whitespace — so an argv element that contains a space
+// arrives as two arguments, however carefully it was passed here. That is not a
+// hypothetical: `--es android.intent.extra.SUBJECT 'Job interview'` reached
+// `ShareActivity` as `SUBJECT=Job` plus a stray `interview` token (which `am`
+// swallowed as the intent's package), and the share capture duly photographed a
+// page titled "Job" — a picture of a bug the app does not have, with nothing in
+// the run that fails. Quoting each word on THIS side is the only place it can be
+// fixed, because the remote shell has no argv to preserve.
+async function adbShell(words: string[]): Promise<void> {
+  const quoted = words.map((word) => `'${word.replaceAll("'", `'\\''`)}'`).join(' ');
+  await command('adb', ['shell', quoted]);
+}
+
 async function freezeStatusBar(platform: Platform): Promise<void> {
   if (platform === 'ios') {
     await command('xcrun', [
@@ -78,7 +98,7 @@ async function freezeStatusBar(platform: Platform): Promise<void> {
       '--time',
       '9:41',
       '--batteryState',
-      'charged',
+      'discharging',
       '--batteryLevel',
       '100',
       '--cellularBars',
@@ -89,9 +109,8 @@ async function freezeStatusBar(platform: Platform): Promise<void> {
     return;
   }
 
-  await command('adb', ['shell', 'settings', 'put', 'global', 'sysui_demo_allowed', '1']);
-  await command('adb', [
-    'shell',
+  await adbShell(['settings', 'put', 'global', 'sysui_demo_allowed', '1']);
+  await adbShell([
     'am',
     'broadcast',
     '-a',
@@ -103,13 +122,16 @@ async function freezeStatusBar(platform: Platform): Promise<void> {
   for (const extras of [
     ['command', 'clock', 'hhmm', '0941'],
     ['command', 'battery', 'level', '100', 'plugged', 'false'],
-    ['command', 'network', 'wifi', 'show', 'level', '4'],
+    ['command', 'notifications', 'visible', 'false'],
+    // `fully true` is the wifi icon's inet condition: without it SystemUI paints the
+    // "connected, no internet" ! badge over the bars, whatever the device's real link is.
+    ['command', 'network', 'wifi', 'show', 'level', '4', 'fully', 'true'],
   ]) {
-    const args = ['shell', 'am', 'broadcast', '-a', 'com.android.systemui.demo'];
+    const words = ['am', 'broadcast', '-a', 'com.android.systemui.demo'];
     for (let index = 0; index < extras.length; index += 2) {
-      args.push('--es', extras[index], extras[index + 1]);
+      words.push('--es', extras[index], extras[index + 1]);
     }
-    await command('adb', args);
+    await adbShell(words);
   }
 }
 
@@ -118,16 +140,7 @@ async function clearStatusBar(platform: Platform): Promise<void> {
     await command('xcrun', ['simctl', 'status_bar', 'booted', 'clear']);
     return;
   }
-  await command('adb', [
-    'shell',
-    'am',
-    'broadcast',
-    '-a',
-    'com.android.systemui.demo',
-    '--es',
-    'command',
-    'exit',
-  ]);
+  await adbShell(['am', 'broadcast', '-a', 'com.android.systemui.demo', '--es', 'command', 'exit']);
 }
 
 async function openShareSource(platform: Platform): Promise<void> {
@@ -140,18 +153,22 @@ async function openShareSource(platform: Platform): Promise<void> {
   // Put a real browser behind the translucent activity, then hand the activity
   // the same ACTION_SEND payload a chooser would. Selecting Bracemark in the
   // chooser changes no app pixels and makes this capture less repeatable.
-  await command('adb', [
-    'shell',
-    'am',
-    'start',
-    '-a',
-    'android.intent.action.VIEW',
-    '-d',
-    SHARE_URL,
-  ]);
+  await adbShell(['am', 'start', '-a', 'android.intent.action.VIEW', '-d', SHARE_URL]);
   await new Promise((resolve) => setTimeout(resolve, 2_000));
-  await command('adb', [
-    'shell',
+  // `--activity-clear-task`, or the SECOND run of this script gets no sheet.
+  // ShareActivity declares `taskAffinity=""` (bracemark-share's AndroidManifest),
+  // so each share lands in a task of its own — and that task outlives the sheet.
+  // An `am start` naming the same component then MATCHES the surviving task
+  // rather than launching: extras are not part of `Intent.filterEquals`, so the
+  // system prints `Activity not started, its current task has been brought to the
+  // front`, exits 0, and keeps the OLD intent in the record. Either the previous
+  // run's payload is photographed as this one's, or — measured, on the run that
+  // found this — nothing comes forward at all and the share flow times out on
+  // `share-add` with a screenshot of plain Chrome. CLEAR_TASK is enough on its
+  // own: there is no `--activity-new-task` option (`am help` has the list), and
+  // none is needed, because the system adds NEW_TASK itself for an activity
+  // launched from a shell, which is the flag CLEAR_TASK rides on.
+  await adbShell([
     'am',
     'start',
     '-a',
@@ -160,6 +177,7 @@ async function openShareSource(platform: Platform): Promise<void> {
     'text/plain',
     '-n',
     'com.bracemark.app/com.bracemark.share.ShareActivity',
+    '--activity-clear-task',
     '--es',
     'android.intent.extra.TEXT',
     SHARE_URL,
