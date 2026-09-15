@@ -18,6 +18,33 @@ const SHARE_URL = 'https://en.wikipedia.org/wiki/Job_interview';
 // same URL.
 const SHARE_TITLE = 'Job interview - Wikipedia';
 
+// ⚠ THE REGION IS PART OF THE PICTURE, AND IT IS INHERITED FROM THE MAC.
+//
+// `simctl status_bar override --time 9:41` does not draw the string it is given —
+// it draws that time FORMATTED BY THE DEVICE'S REGION. A simulator created on a
+// Mac set to a 24-hour region renders Apple's own convention as `09:41`, in every
+// App Store screenshot, and nothing in the run fails: the flag was accepted, the
+// clock is frozen, the time is even correct. It is only wrong in the one way a
+// store listing is judged on.
+//
+// Measured on iOS 26.5, isolating one key at a time:
+//
+//   AppleLocale=en_TH  →  09:41      AppleLocale=en_US  →  9:41
+//
+// `AppleLocale` alone is the lever. `AppleICUForce12HourTime` does nothing here
+// and `AppleLanguages` is not involved — both were tried and neither moved it.
+// ⚠ AND A RESPRING IS NOT ENOUGH: `launchctl stop com.apple.SpringBoard` leaves
+// the old format in place, because SpringBoard reads the region once at launch.
+// The device has to be shut down and booted. That is why this is pinned here
+// rather than left to whoever set up the machine — the alternative is a capture
+// that is correct on one clone and wrong on the other, with no way to tell from
+// the file which one took it.
+//
+// `simctl` accepts only `H:mm` for `--time`: `9:41 AM` and a full ISO string are
+// both rejected outright (NSPOSIXErrorDomain 22), so there is no format that
+// sidesteps the region.
+const SHOT_LOCALE = 'en_US';
+
 type Platform = 'ios' | 'android';
 
 interface Options {
@@ -73,6 +100,11 @@ async function command(file: string, args: string[]): Promise<void> {
   await run(file, args, { maxBuffer: 1 << 20 });
 }
 
+async function capture(file: string, args: string[]): Promise<string> {
+  const { stdout } = await run(file, args, { maxBuffer: 1 << 20 });
+  return stdout.trim();
+}
+
 // `adb shell` IS NOT `execFile`, and the difference is silent. Everything after
 // `shell` is JOINED WITH SPACES into one string and handed to the DEVICE's shell,
 // which splits it again on whitespace — so an argv element that contains a space
@@ -88,8 +120,59 @@ async function adbShell(words: string[]): Promise<void> {
   await command('adb', ['shell', quoted]);
 }
 
+async function bootedUdid(): Promise<string> {
+  const listed = JSON.parse(await capture('xcrun', ['simctl', 'list', 'devices', 'booted', '-j']));
+  const booted: { udid: string; name: string }[] = Object.values(listed.devices).flat() as never;
+  if (booted.length !== 1) {
+    throw new Error(
+      `expected exactly one booted simulator, found ${booted.length}` +
+        `${booted.map((d) => `\n    ${d.name}`).join('')}`,
+    );
+  }
+  return booted[0].udid;
+}
+
+/**
+ * Pin the simulator's region so the frozen clock reads 9:41. See SHOT_LOCALE.
+ *
+ * Free on every run after the first: the check is a `defaults read`, and the
+ * expensive half — shut down, boot, wait — happens only on a device that has not
+ * been pinned yet. Which means a fresh machine pays one reboot and then behaves
+ * like a machine that was always set up correctly.
+ */
+async function pinClockRegion(): Promise<void> {
+  const udid = await bootedUdid();
+  const current = await capture('xcrun', [
+    'simctl',
+    'spawn',
+    udid,
+    'defaults',
+    'read',
+    '-g',
+    'AppleLocale',
+  ]).catch(() => '');
+  if (current === SHOT_LOCALE) return;
+
+  console.log(`  region ${current || '(unset)'} → ${SHOT_LOCALE}; rebooting to apply it`);
+  await command('xcrun', [
+    'simctl',
+    'spawn',
+    udid,
+    'defaults',
+    'write',
+    '-g',
+    'AppleLocale',
+    '-string',
+    SHOT_LOCALE,
+  ]);
+  await command('xcrun', ['simctl', 'shutdown', udid]);
+  await command('xcrun', ['simctl', 'boot', udid]);
+  await command('xcrun', ['simctl', 'bootstatus', udid, '-b']);
+}
+
 async function freezeStatusBar(platform: Platform): Promise<void> {
   if (platform === 'ios') {
+    await pinClockRegion();
     await command('xcrun', [
       'simctl',
       'status_bar',
@@ -109,6 +192,13 @@ async function freezeStatusBar(platform: Platform): Promise<void> {
     return;
   }
 
+  // The same host dependency as iOS, through the emulator's own setting rather
+  // than a region: SystemUI's demo clock renders `hhmm 0941` as `09:41` on a
+  // device set to 24-hour time and `9:41` on one set to 12. It happens to read
+  // 9:41 on the emulator these captures were taken from, which is exactly the
+  // kind of accident that survives until someone else runs it. Set before demo
+  // mode is entered, so the clock below is drawn with it already in force.
+  await adbShell(['settings', 'put', 'system', 'time_12_24', '12']);
   await adbShell(['settings', 'put', 'global', 'sysui_demo_allowed', '1']);
   await adbShell([
     'am',
