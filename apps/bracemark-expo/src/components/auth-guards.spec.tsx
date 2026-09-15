@@ -4,6 +4,7 @@ import { render, screen } from '@testing-library/react-native';
 import { Text } from './ui/text';
 import { AuthGuard } from './auth-guard';
 import { GuestGuard } from './guest-guard';
+import { HomeGuard } from './home-guard';
 
 let mockStatus = 'authenticated';
 let mockReason: string | null = null;
@@ -158,4 +159,52 @@ describe('GuestGuard', () => {
     expect(screen.queryByText('Sign-in form')).toBeNull();
     expect(mockRedirect).not.toHaveBeenCalled();
   });
+});
+
+// The third route-level gate, on `/`. It differs from the two above in having
+// CONTENT of its own to withhold — the landing hero — and `/` is the launch
+// route, so the state that matters most here is the one where nothing has been
+// decided yet: every signed-in cold start passes through 'loading' on its way to
+// the redirect, and an ungated hero would flash the signed-out CTAs at them each
+// time.
+describe('HomeGuard', () => {
+  test('shows the landing to a signed-out visitor', () => {
+    mockStatus = 'unauthenticated';
+
+    render(
+      <HomeGuard>
+        <Text>Landing hero</Text>
+      </HomeGuard>,
+    );
+
+    expect(screen.getByText('Landing hero')).toBeTruthy();
+    expect(mockRedirect).not.toHaveBeenCalled();
+  });
+
+  test('sends an authenticated visitor into the app instead of the landing', () => {
+    render(
+      <HomeGuard>
+        <Text>Landing hero</Text>
+      </HomeGuard>,
+    );
+
+    expect(mockRedirect).toHaveBeenCalledWith('/links');
+    expect(screen.queryByText('Landing hero')).toBeNull();
+  });
+
+  test.each(['loading', 'ending'])(
+    'withholds the landing and does not navigate while %s',
+    (next) => {
+      mockStatus = next;
+
+      render(
+        <HomeGuard>
+          <Text>Landing hero</Text>
+        </HomeGuard>,
+      );
+
+      expect(screen.queryByText('Landing hero')).toBeNull();
+      expect(mockRedirect).not.toHaveBeenCalled();
+    },
+  );
 });

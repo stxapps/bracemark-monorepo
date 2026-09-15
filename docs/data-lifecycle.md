@@ -623,9 +623,10 @@ automatic navigation to misfire. Expo keeps its selection in React state, so it 
 no such effect and nothing there crashes — the phase buys the frame itself, where
 the list would otherwise empty on screen a beat before the group unmounts. It is
 still worth mirroring: the rule belongs to the state machine, and the platform that
-drops it re-opens the frame for whatever it adds next. Expo's guards
-(`AuthGuard`, `GuestGuard`) test `'ending'` explicitly; `AuthedHomeRedirect` acts on
-`'authenticated'` alone, which is the same safety by a different route.
+drops it re-opens the frame for whatever it adds next. Two of expo's three guards
+(`AuthGuard`, `GuestGuard`) test `'ending'` explicitly; the third, `HomeGuard` (the
+landing's, at `/`), navigates on `'authenticated'` alone and renders nothing in the
+other three, which is the same safety by a different route.
 
 ### delete all data — one server-side wipe, not a client delete loop
 

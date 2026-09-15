@@ -7,7 +7,7 @@ import { useAuth } from '@stxapps/web-react';
 
 import { SITE_URL } from '@/lib/site';
 
-// Client-side gate for the signed-in app. Auth is client-only — the bearer token
+// Client-side guard for the signed-in app. Auth is client-only — the bearer token
 // and non-extractable encryptionKey live in IndexedDB (see session-store), never
 // in a cookie — so the server (server components, middleware) can't see the
 // session and can't gate. The gate therefore runs here, off `useAuth`.

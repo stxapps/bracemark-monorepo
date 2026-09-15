@@ -3,7 +3,7 @@ import { Redirect, usePathname } from 'expo-router';
 
 import { useAuth } from '@stxapps/expo-react';
 
-// Client-side gate for the signed-in app group — the expo sibling of bracemark-web's
+// Client-side guard for the signed-in app group — the expo sibling of bracemark-web's
 // components/auth-guard.tsx. Auth is client-only: the bearer token and raw
 // `encryptionKey` bytes live in secure-store (session-store), never in a cookie,
 // so there's no server to gate — the check runs here off `useAuth`.

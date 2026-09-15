@@ -16,6 +16,14 @@ import { PaywallProvider } from '@/contexts/paywall-provider';
 // order — kept in the SAME order as bracemark-expo's `(app)/_layout.tsx`, whose
 // header carries the matching list. Nesting depth tracks dependency strength:
 // session-only providers sit shallow, ready-store ones deeper, gates last.
+//
+// Guard vs Gate is a rule, not decoration: a GUARD's non-pass branch NAVIGATES
+// (it redirects off the route), a GATE's swaps content in place and never leaves
+// it. That is why only the guards take part in the sign-out teardown ordering
+// (docs/data-lifecycle.md) — nothing that can't navigate can misfire during it.
+// The per-entry "Redirects." / "Never redirects." notes below are that rule,
+// applied. Expo has a third guard, HomeGuard, on the landing route this app
+// doesn't have.
 //   AuthGuard       — "do you have a session?" (client-side: the session lives
 //                     in IndexedDB, not a cookie, so the server can't gate).
 //                     Redirects.

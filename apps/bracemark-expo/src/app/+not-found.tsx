@@ -12,7 +12,7 @@ import { Redirect, Unmatched, usePathname } from 'expo-router';
 // route segment of its own.
 //
 // In production it redirects to `/`, which already sorts out both cases —
-// AuthedHomeRedirect (src/app/index.tsx) bounces an authenticated user on to
+// HomeGuard (src/app/index.tsx) bounces an authenticated user on to
 // `/links`, guests get the landing. Deliberately no UI of its own: expo-router's
 // built-in fallback (`views/Unmatched`) is dev-shaped — its main link navigates
 // to the same broken path, and with the root Stack's `headerShown: false` it

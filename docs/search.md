@@ -241,13 +241,25 @@ isn't a back destination). It runs on **positive evidence only** — `useLists`/
 collapse "still loading" into `[]`, so only a _non-empty_ tree can convict an id, which
 is what keeps a cold load of a shared list URL from bouncing to the inbox. Lists always
 land non-empty (the system three are merged in); the one case it can't judge is a tag id
-on an account whose last tag was just deleted, which falls back to the "Unknown" header
-it would have shown anyway. Compound queries are never judged — one dead id among live
+on an account whose last tag was just deleted, which is left showing an unnamed view
+(the title rule below). Compound queries are never judged — one dead id among live
 clauses isn't worth discarding the whole search. The rule lives with the URL rather than
 in the close button because a stale bookmark and a back-button entry reach the same
 state, and on expo it is additionally **gated on focus**: the provider stays mounted
 under Settings, and an ungated `replace` would swap Settings out from under the user
 mid-edit.
+
+**The topbar title runs on the same evidence**, and for the same reason
+(`useSelectionLabel`, both platforms). An empty tree names nothing — the title is
+blank — because a tree that hasn't been read back yet cannot tell a live list from a
+deleted one, and the fallback it used to reach for was the word **"Unknown"**: with
+`useLists` resolving asynchronously on both platforms (dexie's `useLiveQuery`, expo's
+`useLiveRead`), that word flashed over EVERY cold mount of the links screen, the
+default inbox included. "Unknown" now survives only where it is true: a non-empty tree
+that doesn't contain the id — the frames between a deletion and the `replace` above.
+The unjudgeable last-tag case goes blank instead, and that is the price of the rule
+rather than a second bug: a view whose tag is gone loses its title, so that no cold
+mount gains a false one.
 
 ### the three-rung ladder (tiering)
 

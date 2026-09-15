@@ -39,8 +39,8 @@ import '../../global.css';
 //
 // AuthProvider wraps the whole Stack (mirroring bracemark-web's root-level placement)
 // so one auth state is shared across every route group: the `(app)` AuthGuard,
-// the `(auth)` GuestGuard, and the landing's future AuthedHomeRedirect all read
-// the same `useAuth`. It hydrates the session from secure-store once on mount.
+// the `(auth)` GuestGuard, and the landing's HomeGuard all read the same
+// `useAuth`. It hydrates the session from secure-store once on mount.
 //
 // KeyboardProvider is react-native-keyboard-controller's root: it feeds the
 // WindowInsetsAnimation-synced keyboard values that KeyboardAwareScrollView

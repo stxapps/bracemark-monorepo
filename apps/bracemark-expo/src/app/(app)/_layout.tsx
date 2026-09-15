@@ -24,6 +24,13 @@ import { PaywallProvider } from '../../contexts/paywall-provider';
 // deeper, gates last. The only deliberate differences from web are the
 // platform-specific render-null triggers: ShareBridge here,
 // DanglingExtractionSweep there.
+//
+// Guard vs Gate is a rule, not decoration: a GUARD's non-pass branch NAVIGATES
+// (it redirects off the route), a GATE's swaps content in place and never leaves
+// it. That is why only the guards take part in the sign-out teardown ordering
+// (docs/data-lifecycle.md) — nothing that can't navigate can misfire during it.
+// The "Redirects." / "Never redirects." notes below are that rule, applied; the
+// app's third guard, HomeGuard, sits on the landing route outside this group.
 //   AuthGuard    — "do you have a session?" It redirects to `/sign-in` (or `/`
 //                  on a deliberate sign-out) when there's no session —
 //                  client-side, since the local-first session lives on-device

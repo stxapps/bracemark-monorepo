@@ -1,4 +1,4 @@
-import { AuthedHomeRedirect } from '../components/authed-home-redirect';
+import { HomeGuard } from '../components/home-guard';
 import { Landing } from '../components/landing';
 
 // The public landing at `/`, outside both `(app)` and `(auth)` groups. Thin route:
@@ -11,14 +11,14 @@ import { Landing } from '../components/landing';
 // app can't hand off to a website for its first screen, so this landing ships in the
 // binary and the two hero copies are maintained in parallel.
 //
-// AuthedHomeRedirect bounces already-authenticated visitors from `/` to `/links` off
-// the AuthProvider in the root `_layout`; it renders null for guests, so the landing
-// hero shows unaffected.
+// HomeGuard decides which audience this route is for, off the AuthProvider in the
+// root `_layout`: the hero for a guest, a bounce to /links for an authenticated
+// visitor, and nothing at all until the session has read back — this is the
+// launch route, so an ungated hero would flash at every signed-in cold start.
 export default function Index() {
   return (
-    <>
-      <AuthedHomeRedirect />
+    <HomeGuard>
       <Landing />
-    </>
+    </HomeGuard>
   );
 }
