@@ -639,6 +639,21 @@ copy that other projects already pin. What it does cover:
   the wrapper, so the reassurance is announced too), while the count must NOT —
   it rides `aria-valuetext` and its visible copy is `aria-hidden`. Plus the
   no-flash pair, which is two one-frame bugs nobody catches by looking.
+- **The one rule the canonical copy can't hold for itself.**
+  `links/_components/bulk-tags-dialog.spec.tsx` is a drift guard on a ported
+  pair (_the ported pair_ above), not a second copy of the protocol:
+  `bulk-tags-dialog.tsx` is duplicated source, and bracemark-expo's twin spec is
+  canonical for the diff semantics — the seed, the per-link patch, the pending
+  save, the unchanged link that gets no write. The two cases here are the
+  intersection seed and the per-link diff, because the obvious simplification on
+  this side (`links.map((link) => ({ link, patch: { tagIds } }))`) lints,
+  typechecks and passes every expo case while stripping the tags only SOME of
+  the selected links carried — which the dialog never showed as selected, so the
+  user cannot know to restore them. Both halves were checked by mutating the
+  source. It does NOT cover a rejected write: the silence is a decision
+  (docs/editors.md) and the shape that carries it — an async handler whose
+  promise nothing awaits — is one jest-circus turns into a failed test, so
+  neither platform's spec can assert it.
 - **`app/robots.spec.ts` and `lib/links-return.spec.ts`**, the two small ones,
   both guards rather than getters: `ALLOW_INDEXING` required in BOTH directions
   (a truthiness check reads `"false"` as allow), and a sessionStorage value that

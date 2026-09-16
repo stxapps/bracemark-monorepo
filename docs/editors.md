@@ -784,7 +784,14 @@ the state the code falls into, and it is the recoverable one: the write is a
 single transaction, so nothing landed; `onClose()` and `exitBulkEdit()` sit
 _after_ the await, so the editor stays open with the draft intact and the
 selection unchanged; `finally` re-arms Save. Pressing it again is the whole
-affordance. What could reach that catch is a **local-store** write failing — a
+affordance. **No spec can pin that state**, on either platform: the escape is an
+async handler whose promise nothing awaits, and jest-circus fails any test that
+produces an unhandled rejection — a spec-local
+`process.on('unhandledRejection')` never fires, because jest listens on the real
+process while the sandbox's `process` is a deep copy of it. So the recovery
+described here is checked by hand, not by the suite
+([testing.md](./testing.md), _coverage today_). What could reach that catch is a
+**local-store** write failing — a
 Dexie or expo-sqlite transaction, so a quota or a closed database — which is
 neither about a value in the form nor a decision the user can make: there is
 nothing to put in a footer but OK, nothing to say beyond "it didn't save", and a
