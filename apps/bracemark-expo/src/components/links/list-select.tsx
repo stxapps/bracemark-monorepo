@@ -72,11 +72,26 @@ export function ListSelect({
       {/* The trigger is the kit's `outline` Button, as web's is
           (web-ui/components/links/list-select.tsx) — same box, same fill, same
           edge as the Input it sits beside in every editor. `px-3` is restated
-          because the native default size carries `px-4`, and the type is
-          restated on the Texts below: web puts `text-base font-normal` on the
-          button and lets it cascade, which native cannot do — the label would
-          otherwise take the kit's `text-sm font-medium` and sit 2px under the
-          Input beside it, the exact defect web's comment there records. */}
+          because the native default size carries `px-4` where web's carries
+          `px-3` (ui/button.tsx's header records that drift), which is what puts
+          this label on the Input's text edge; and the type is restated on the
+          Texts below: web puts `text-base font-normal` on the button and lets it
+          cascade, which native cannot do — the label would otherwise take the
+          kit's `text-sm font-medium` and sit 2px under the Input beside it, the
+          exact defect web's comment there records.
+
+          `leading-5` IS PART OF THAT TYPE, not a nudge. `text-base` alone
+          carries Tailwind's paired 1.5 line-height — a 24pt box for a 16pt font
+          — and while the default size still carried `py-2` there were only 22pt
+          inside `h-10` to measure it against: the paragraph's frame was clamped
+          to 22 and iOS, having dropped the glyphs by half the box's surplus over
+          Inter's natural 1.21×, cut the DESCENDER off the bottom — the y of `My
+          List` here, the g of `Add tags` in tags-field.tsx. That padding is now
+          gone from the kit (ui/button.tsx carries the derivation, and it was
+          clipping every default-size label at one Dynamic Type step up), so what
+          this class is for is the Input's own pairing: `text-base leading-5`,
+          measured-centred as a `Text` (docs/theme.md, _extending_), which is
+          what keeps the two controls on one baseline. */}
       <Button
         variant="outline"
         // No Keyboard.dismiss: DialogContent drops the keyboard on open, so
@@ -89,7 +104,7 @@ export function ListSelect({
         className="justify-between px-3"
       >
         {selected ? (
-          <Text numberOfLines={1} className="min-w-0 flex-1 text-base font-normal">
+          <Text numberOfLines={1} className="min-w-0 flex-1 text-base leading-5 font-normal">
             {selected.ancestors.length > 0 && (
               <Text className="text-muted-foreground">{`${selected.ancestors.join(' / ')} / `}</Text>
             )}
@@ -98,7 +113,7 @@ export function ListSelect({
         ) : (
           <Text
             numberOfLines={1}
-            className="min-w-0 flex-1 text-base font-normal text-muted-foreground"
+            className="min-w-0 flex-1 text-base leading-5 font-normal text-muted-foreground"
           >
             Choose a list
           </Text>

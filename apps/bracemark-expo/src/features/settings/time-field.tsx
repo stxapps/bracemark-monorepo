@@ -99,15 +99,21 @@ export function TimeField({
     <View className="gap-1.5">
       <Text className="text-sm font-medium">{label}</Text>
 
-      {/* Mirrors the Input this replaced — same width, same left-aligned text —
-          so the custom-mode block keeps the shape web's two time inputs have. */}
+      {/* Mirrors the Input this replaced — same width, same left-aligned text,
+          and `leading-5` from it too — so the custom-mode block keeps the shape
+          web's two time inputs have. The leading is load-bearing: a bare
+          `text-base` label's line box is 24pt, and any box tighter than that
+          clamps the paragraph's frame and takes the difference out of the
+          descender. `09:00` has none, which is the only reason this site looked
+          fine while the link editors' two pickers did not
+          (components/links/list-select.tsx carries the derivation). */}
       <Button
         variant="outline"
         onPress={open}
         className="w-36 justify-start"
         aria-label={`${label}, ${formatForDisplay(value)}`}
       >
-        <Text className="text-base">{formatForDisplay(value)}</Text>
+        <Text className="text-base leading-5">{formatForDisplay(value)}</Text>
       </Button>
 
       {draft !== null && (

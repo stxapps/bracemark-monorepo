@@ -74,11 +74,18 @@ export function TagsField({
 
   return (
     <>
-      {/* A single-row outline Button, exactly like ListSelect above it. All tag
-          toggling now happens in the dialog's full-width checkbox rows, so this
-          trigger neither grows with the selection nor nests removal Pressables
-          that VoiceOver would collapse. Each of the first two visible names
-          truncates independently and a fixed `+N` counts the rest; the
+      {/* A single-row outline Button, exactly like ListSelect above it — and
+          exactly like it down to the box and the type: `px-3` over the size's
+          `px-4`, and `text-base leading-5 font-normal` restated on the Texts
+          because nothing cascades here. The leading is not decoration — it is
+          the Input's own pairing, and a bare `text-base` label's 24pt line box
+          is what used to lose the g of `Add tags` off the bottom edge.
+          ListSelect's trigger comment carries the derivation for both.
+
+          All tag toggling now happens in the dialog's full-width checkbox rows,
+          so this trigger neither grows with the selection nor nests removal
+          Pressables that VoiceOver would collapse. Each of the first two visible
+          names truncates independently and a fixed `+N` counts the rest; the
           accessible name still carries every chosen tag. */}
       <Button
         variant="outline"
@@ -93,7 +100,11 @@ export function TagsField({
         {chosen.length > 0 ? (
           <View className="min-w-0 flex-1 flex-row items-center gap-1.5">
             {visibleChosen.map((tag, index) => (
-              <Text key={tag.id} numberOfLines={1} className="min-w-0 shrink text-base font-normal">
+              <Text
+                key={tag.id}
+                numberOfLines={1}
+                className="min-w-0 shrink text-base leading-5 font-normal"
+              >
                 {tag.name}
                 {index < visibleChosen.length - 1 ? ',' : ''}
               </Text>
@@ -108,7 +119,10 @@ export function TagsField({
             )}
           </View>
         ) : (
-          <Text numberOfLines={1} className="min-w-0 flex-1 text-base text-muted-foreground">
+          <Text
+            numberOfLines={1}
+            className="min-w-0 flex-1 text-base leading-5 font-normal text-muted-foreground"
+          >
             Add tags
           </Text>
         )}

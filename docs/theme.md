@@ -929,6 +929,51 @@ same role the kit's menu items have).
   at every call site whatever size it passes; its comment carries the rest,
   including why `leading-[normal]` is not the spelling.
 
+  **A FIXED BOX CLIPS A LINE BOX TALLER THAN IT, and the bottom edge is where
+  it shows.** This is the third direction and the only one with no leading in
+  it: `text-base` is not a size, it is a size PAIRED with Tailwind's 1.5
+  line-height — a 24pt box for a 16pt font — and a box's usable height is its
+  `h-*` minus its borders minus its vertical padding. Yoga measures a row child
+  against that inner height AtMost, so a taller line box has the paragraph's own
+  frame CLAMPED to it, while iOS has already dropped the glyphs by half the
+  box's surplus over Inter's 1.21× (the compensation above, working as
+  designed). What falls off is therefore the DESCENDER: measured on an iPhone,
+  the y of `My List` and the g of `Add tags`, the two combobox triggers the link
+  editors put beside an Input.
+
+  **The whole app had exactly one box that could do it, and it was the kit's**:
+  `Button size="default"` carried the registry's `h-10 px-4 py-2`, and `py-2`
+  left 22pt inside a height the class had already pinned — so the padding could
+  not size anything and could only shrink what the label was measured against.
+  22 fits the kit's own `text-sm` label at 1× with 2pt to spare, which is why
+  this surfaced first at the three call sites that restate `text-base`
+  (`components/links/list-select.tsx`, `components/links/tags-field.tsx`,
+  `features/settings/time-field.tsx` — the first carries the measurement), and
+  it does **not** fit that same label one Dynamic Type step up: RN's iOS
+  multiplier for `ExtraLarge` is 1.118, 20 × 1.118 = 22.35, so every
+  default-size button in the app clipped its descenders for anyone who had ever
+  touched the text-size slider — ~35 call sites, none of them wrong in
+  themselves. At `sm:` (`h-9`, 18pt inside) it clipped at 1×, which is one more
+  thing the tablet layout would have walked into (_the two kits_, above).
+  **The padding is now gone from every size in the native kit** — `ui/button.tsx`
+  carries the derivation — which is also a drift closed rather than opened, since
+  web-ui's own `default` is `h-9 gap-1.5 px-3` and has never had vertical
+  padding. Removing it is invisible at 1× (the height is unchanged, and
+  `items-center` centres the same line box in the same box) and leaves 38pt
+  inside, which absorbs the 1.3 ceiling for `text-sm` and `text-base` alike.
+  That ceiling is worth reading in this light: [accessibility.md](./accessibility.md),
+  _font scaling_, bounds the overflow "to what the surrounding chrome absorbs",
+  and a fixed box with padding that leaves 2pt of slack is chrome that absorbs
+  nothing.
+
+  Nothing reports any of it — a valid class on a valid tree, jest never lays
+  text out, and the web twins are correct as written, because a web button does
+  not clip an overflowing line box, which is what makes such a class look safe
+  arriving from a port. **So: no vertical padding on a box whose height is
+  pinned** (it cannot add room and can only take it), and a control that means
+  to match an `Input` takes `ui/input.tsx`'s type verbatim — `text-base
+leading-5`, measured-centred as a `Text` — rather than the size variant's.
+
 - **A new type-scale token** — the bar is high, and it is not "this size repeats".
   Tailwind's `--text-*` names a size, but what usually has to hold is a size
   **paired** with a leading, and a role that shares a number with a different

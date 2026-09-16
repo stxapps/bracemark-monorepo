@@ -33,7 +33,33 @@ import { TextClassContext } from './text';
 // (`ui/input.tsx`'s header carries the argument); settle all of them together
 // with the tablet layout, not one size at a time. A call site that needs a box
 // the scale doesn't have restates it in `className` — `size-8` on the two dense
-// row affordances, whose web twins pin the same 32 for the same reason.//
+// row affordances, whose web twins pin the same 32 for the same reason.
+//
+// NO VERTICAL PADDING ON ANY SIZE, and `default` is where that had to be
+// corrected: it carried the registry's `py-2`, which web-ui's own `default`
+// (`h-9 gap-1.5 px-3`) does not have — so this closes a drift rather than
+// opening one. On native the class could only ever do harm. Every size pins a
+// height, so the padding never sizes the box; all it does is shrink the room
+// the label is measured against, and Yoga measures a row child against that
+// inner height AtMost, so a line box taller than it gets CLAMPED and iOS —
+// which has already dropped the glyphs by half the box's surplus over Inter's
+// 1.21× — loses the descender off the bottom edge. `h-10` minus `py-2` left 22
+// for a label whose line box is 20 at 1× and 22.4 at the FIRST Dynamic Type
+// step above default (RN's iOS multiplier for ExtraLarge is 1.118), i.e. every
+// default-size button in the app clipped its g's and y's for anyone who has
+// ever touched the text-size slider — and 18 at `sm:`, which clips at 1×. The
+// three call sites that restated `text-base` clipped at 1× on a phone and are
+// what found this (components/links/list-select.tsx carries the measurement;
+// docs/theme.md, _extending_, carries the rule). Removing it is invisible at
+// 1× — the height is unchanged and `items-center` centres the same line box in
+// the same box — and leaves 38 inside, which absorbs the 1.3 ceiling
+// (docs/accessibility.md, _font scaling_: the cap only bounds the overflow to
+// what the chrome can absorb, which presumes the chrome has any to spare).
+// Still drifting from web here and NOT fixed, because both are visible at 1×
+// and are a design call, not a defect: web's `default` is `px-3` against this
+// `px-4` (hence ListSelect's trigger restating `px-3` to sit on the Input's
+// text edge) and `gap-1.5` against the base's `gap-2`.
+//
 // THE ICON-EDGE PADDING. The edge an icon sits against gets the smaller padding,
 // so a glyph at the rim doesn't read as heavier than the text at the other end;
 // icon-only buttons stay symmetric. packages/web-ui/src/components/ui/button.tsx
@@ -100,7 +126,7 @@ const buttonVariants = cva(
         link: '',
       },
       size: {
-        default: 'h-10 px-4 py-2 sm:h-9',
+        default: 'h-10 px-4 sm:h-9',
         xs: 'h-7 gap-1 px-2.5 sm:h-6',
         sm: 'h-9 gap-1.5 px-3 sm:h-8',
         lg: 'h-11 px-6 sm:h-10',
