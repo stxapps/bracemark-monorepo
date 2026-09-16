@@ -129,7 +129,7 @@ export function LockPane({
         <Icon as={Lock} className="size-5 text-muted-foreground" />
       </View>
       <View className="items-center">
-        <Text role="heading" className="text-lg font-semibold">
+        <Text role="heading" className="text-center text-lg font-semibold">
           {title}
         </Text>
         <Text className="mt-1 text-center text-sm text-muted-foreground">{description}</Text>

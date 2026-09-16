@@ -159,7 +159,7 @@ function PasswordSignIn({ onUseRecovery }: { onUseRecovery: () => void }) {
           onPress={onUseRecovery}
           className="items-center py-2"
         >
-          <Text className="text-sm text-muted-foreground underline">
+          <Text className="text-center text-sm text-muted-foreground underline">
             Forgot your password? Use a recovery code
           </Text>
         </Pressable>
@@ -274,7 +274,9 @@ function RecoverySignIn({ onUsePassword }: { onUsePassword: () => void }) {
           onPress={onUsePassword}
           className="items-center py-2"
         >
-          <Text className="text-sm text-muted-foreground underline">Use your password instead</Text>
+          <Text className="text-center text-sm text-muted-foreground underline">
+            Use your password instead
+          </Text>
         </Pressable>
       </View>
     </View>

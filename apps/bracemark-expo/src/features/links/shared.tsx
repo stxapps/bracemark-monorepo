@@ -220,7 +220,11 @@ export function EmptyState({
           already on top of this state. A second Add button 40px from it would be
           two controls for one verb; a sentence pointing at the one that is there
           is the honest version. */}
-      {cta && <Text className="text-xs text-muted-foreground">Tap + to add your first link.</Text>}
+      {cta && (
+        <Text className="text-center text-xs text-muted-foreground">
+          Tap + to add your first link.
+        </Text>
+      )}
     </View>
   );
 }

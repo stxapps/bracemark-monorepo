@@ -158,7 +158,7 @@ export function AboutSection() {
           <Text className="text-lg font-semibold tracking-tight">{BRAND.name}</Text>
           <Text className="text-center text-sm text-muted-foreground">{BRAND.descriptor}</Text>
         </View>
-        <Text className="text-xs text-muted-foreground">Version {versionLabel()}</Text>
+        <Text className="text-center text-xs text-muted-foreground">Version {versionLabel()}</Text>
       </View>
 
       <SettingsGroup title="Pages">
@@ -173,7 +173,7 @@ export function AboutSection() {
           press — it is the end of the screen, not a row you missed. */}
       <View className="items-center gap-1 pt-2">
         <Text className="text-center text-sm text-muted-foreground">{BRAND.slogan}</Text>
-        <Text className="text-xs text-muted-foreground">
+        <Text className="text-center text-xs text-muted-foreground">
           © {new Date().getFullYear()} {COMPANY.legalName}
         </Text>
       </View>

@@ -131,7 +131,7 @@ function DecryptingScreen({ progress }: { progress: InitialSyncProgress | null }
   return (
     <StyledSafeAreaView className="flex-1 bg-background">
       <View className="flex-1 items-center justify-center gap-3 px-6">
-        <Text>Decrypting your links…</Text>
+        <Text className="text-center">Decrypting your links…</Text>
         {progress ? <SyncProgressBar progress={progress} /> : <ActivityIndicator size="small" />}
         {/*
           Standing prose, not an announcement (docs/accessibility.md, "what must
