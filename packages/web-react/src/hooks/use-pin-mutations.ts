@@ -31,10 +31,12 @@ export interface PinMutations {
   pin: (link: LinkItem) => Promise<void>;
   // Remove a link's pin (the link itself is untouched).
   unpin: (link: LinkItem) => Promise<void>;
-  // Move a pinned link one slot toward the top / bottom of the pinned section.
-  // A no-op (no write) if the link isn't pinned or is already at that end.
-  moveUp: (link: LinkItem) => Promise<void>;
-  moveDown: (link: LinkItem) => Promise<void>;
+  // Move a pinned link one slot toward the top / bottom of the pinned section
+  // AS THE VIEW SHOWS IT: to just above `above` / just below `below`, the
+  // adjacent pinned link the caller renders. A no-op (no write) if either link
+  // is no longer pinned.
+  moveUp: (link: LinkItem, above: LinkItem) => Promise<void>;
+  moveDown: (link: LinkItem, below: LinkItem) => Promise<void>;
 }
 
 export function usePinMutations(): PinMutations {
@@ -72,30 +74,42 @@ export function usePinMutations(): PinMutations {
     [username, requestSync],
   );
 
-  // Shared body for the two one-slot moves. `delta` is -1 (up) / +1 (down). The
-  // destination is computed against the sibling group MINUS the moved pin, exactly
-  // like useListMutations.move, so rankForIndex inserts between the right pair.
-  const moveBy = useCallback(
-    async (link: LinkItem, delta: number) => {
+  // Shared body for the two one-slot moves: re-rank `link` to sit directly
+  // before (`side` -1) or after (+1) `neighbour`. The neighbour, not a global
+  // index ± 1, because pins have no listId: the store holds ONE rank order and
+  // each view filters it (readPinnedOverlay), so the pin one global slot away
+  // may be in another list, or dangling — stepping past it writes a rank and
+  // changes nothing on screen. The view's order is a subsequence of the global
+  // one, so landing beside the neighbour always swaps the two there. The
+  // destination is computed against the pins MINUS the moved one, exactly like
+  // useListMutations.move, so rankForIndex inserts between the right pair.
+  const moveBeside = useCallback(
+    async (link: LinkItem, neighbour: LinkItem, side: -1 | 1) => {
       if (!username) throw new Error('usePinMutations: no active account');
 
       const id = linkIdOf(link);
       const ordered = (await readPins()).sort(compareRank);
-      const i = ordered.findIndex((p) => p.id === id);
-      if (i < 0) return; // not pinned
+      const moved = ordered.find((p) => p.id === id);
+      if (!moved) return; // not pinned
 
-      const target = i + delta;
-      if (target < 0 || target >= ordered.length) return; // already at the end
+      const siblings = ordered.filter((p) => p !== moved);
+      const j = siblings.findIndex((p) => p.id === linkIdOf(neighbour));
+      if (j < 0) return; // the neighbour was unpinned since render
 
-      const siblings = ordered.filter((_, idx) => idx !== i);
-      await writePin(username, ordered[i], { rank: rankForIndex(siblings, target) });
+      await writePin(username, moved, { rank: rankForIndex(siblings, side < 0 ? j : j + 1) });
       requestSync();
     },
     [username, requestSync],
   );
 
-  const moveUp = useCallback((link: LinkItem) => moveBy(link, -1), [moveBy]);
-  const moveDown = useCallback((link: LinkItem) => moveBy(link, 1), [moveBy]);
+  const moveUp = useCallback(
+    (link: LinkItem, above: LinkItem) => moveBeside(link, above, -1),
+    [moveBeside],
+  );
+  const moveDown = useCallback(
+    (link: LinkItem, below: LinkItem) => moveBeside(link, below, 1),
+    [moveBeside],
+  );
 
   return useMemo<PinMutations>(
     () => ({ pin, unpin, moveUp, moveDown }),

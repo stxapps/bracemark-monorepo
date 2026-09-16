@@ -53,11 +53,12 @@ import { useLinksViewActions } from './view-state-provider';
 export type LinkItemProps = {
   link: LinkView;
   pinned: boolean;
-  // At the pinned section's ends — the row menu disables the Move up/down that
-  // would fall off them (web's LinkRowMenu props). Meaningful only when
-  // `pinned`; false otherwise.
-  isFirst: boolean;
-  isLast: boolean;
+  // The adjacent links in the pinned section as this view renders it — what the
+  // row menu's Move up/down moves past, and undefined at the section's ends,
+  // which disables that move (web's LinkRowMenu props). Always undefined when
+  // not `pinned`.
+  pinnedAbove: LinkView | undefined;
+  pinnedBelow: LinkView | undefined;
   sortOn: LinkSortOn;
   tagsById: Map<string, string>;
   // The width FlashList gives one cell — the pane's usable width over its

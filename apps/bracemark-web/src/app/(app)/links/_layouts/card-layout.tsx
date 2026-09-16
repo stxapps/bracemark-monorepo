@@ -390,8 +390,8 @@ export function CardLayout({
                               <LinkRowMenu
                                 link={link}
                                 pinned={pinned}
-                                isFirst={index === 0}
-                                isLast={index === pinnedCount - 1}
+                                pinnedAbove={index > 0 && pinned ? links[index - 1] : undefined}
+                                pinnedBelow={index < pinnedCount - 1 ? links[index + 1] : undefined}
                               />
                             </span>
                           )}

@@ -58,8 +58,8 @@ const MAX_CARD_WIDTH = 420;
 export const LinkCard = memo(function LinkCard({
   link,
   pinned,
-  isFirst,
-  isLast,
+  pinnedAbove,
+  pinnedBelow,
   tagsById,
   itemWidth,
   selectMode,
@@ -212,7 +212,12 @@ export const LinkCard = memo(function LinkCard({
               <View aria-hidden className="ml-auto size-8 shrink-0" />
             ) : (
               <View className="ml-auto">
-                <LinkRowMenu link={link} pinned={pinned} isFirst={isFirst} isLast={isLast} />
+                <LinkRowMenu
+                  link={link}
+                  pinned={pinned}
+                  pinnedAbove={pinnedAbove}
+                  pinnedBelow={pinnedBelow}
+                />
               </View>
             )}
           </View>

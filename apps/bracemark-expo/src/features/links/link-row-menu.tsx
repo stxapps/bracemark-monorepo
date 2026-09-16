@@ -7,8 +7,9 @@
 // through the hoisted confirmation; in Archive "Archive" flips to "Unarchive").
 // Move to / Archive / Restore / Remove are all one `update({ listId })`;
 // `pinned` swaps the pin block between "Pin to top" and the pinned set (move
-// up/down + unpin), with `isFirst`/`isLast` disabling the move that would fall
-// off the pinned section's ends. Divergences from web:
+// up/down + unpin); a move goes past `pinnedAbove`/`pinnedBelow`, the pinned
+// neighbour this view renders, and is disabled where there is none. Divergences
+// from web:
 //
 //  - Copy link goes through expo-clipboard (web's navigator.clipboard).
 //  - Edit / Edit tags / Edit note PUSH the modal edit-link route (web opens
@@ -73,13 +74,13 @@ import { useLinksViewActions } from './view-state-provider';
 export function LinkRowMenu({
   link,
   pinned,
-  isFirst,
-  isLast,
+  pinnedAbove,
+  pinnedBelow,
 }: {
   link: LinkView;
   pinned: boolean;
-  isFirst: boolean;
-  isLast: boolean;
+  pinnedAbove: LinkView | undefined;
+  pinnedBelow: LinkView | undefined;
 }) {
   const router = useRouter();
   const { pin, unpin, moveUp, moveDown } = usePinMutations();
@@ -166,11 +167,17 @@ export function LinkRowMenu({
               </DropdownMenuItem>
               {pinned ? (
                 <>
-                  <DropdownMenuItem disabled={isFirst} onPress={() => void moveUp(link)}>
+                  <DropdownMenuItem
+                    disabled={!pinnedAbove}
+                    onPress={() => pinnedAbove && void moveUp(link, pinnedAbove)}
+                  >
                     <Icon as={ArrowUp} className="size-4" />
                     <Text>Move up</Text>
                   </DropdownMenuItem>
-                  <DropdownMenuItem disabled={isLast} onPress={() => void moveDown(link)}>
+                  <DropdownMenuItem
+                    disabled={!pinnedBelow}
+                    onPress={() => pinnedBelow && void moveDown(link, pinnedBelow)}
+                  >
                     <Icon as={ArrowDown} className="size-4" />
                     <Text>Move down</Text>
                   </DropdownMenuItem>

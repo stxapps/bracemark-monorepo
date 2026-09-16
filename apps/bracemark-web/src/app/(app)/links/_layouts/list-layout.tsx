@@ -431,8 +431,8 @@ export function ListLayout({
                   <LinkRowMenu
                     link={link}
                     pinned={pinned}
-                    isFirst={row.index === 0}
-                    isLast={row.index === pinnedCount - 1}
+                    pinnedAbove={row.index > 0 && pinned ? links[row.index - 1] : undefined}
+                    pinnedBelow={row.index < pinnedCount - 1 ? links[row.index + 1] : undefined}
                   />
                 )}
               </div>

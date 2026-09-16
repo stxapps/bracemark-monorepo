@@ -400,6 +400,16 @@ rest.total`. (When the rest's total is `undefined` — text search can't count
   reorder affordances at (there's no drag-and-drop — see the design note). One
   array keeps the virtualizer and the decode cache working uniformly across the
   whole result; `pinnedCount` is just where the view splits it.
+- **A move names its neighbour, never an index.** Pins carry no `listId`, so the
+  store holds ONE rank order and every view renders a filtered subsequence of
+  it. "Move down" as "one slot down the global order" steps past whatever pin is
+  next globally — often one from another list, or a dangling pin whose link is
+  gone — writes a new rank, and changes nothing on screen: no error, and
+  re-entering the list shows the same order. So the view hands the row menu the
+  adjacent pinned links it renders (`pinnedAbove`/`pinnedBelow`, taken from
+  `links` beside `pinnedCount`), and `moveUp`/`moveDown` re-rank the pin to sit
+  directly beside that neighbour in the fresh global order — which, the view
+  being a subsequence, always swaps the two there.
 
 The overlay reuses the existing read primitives — `decodeCachedLink` for the
 same memoized decode, `columnMatches`/`textMatches` for the same filters — so it
@@ -598,7 +608,7 @@ changes is mechanical, and only the substrate forces it:
   mounted cell on every render of the pane (a scroll-flag flip, a menu opening,
   a sync or extraction status change). `itemExtra` also carries `links`, because
   the cell skips `renderItem` when only an item's _index_ moves, and `pinned` /
-  `isFirst` / `isLast` are index-derived. The other half is context: an item, its
+  `pinnedAbove` / `pinnedBelow` are index-derived. The other half is context: an item, its
   row menu and its chip strip read `useLinksViewActions` (the setters, a value
   that never changes), never `useLinksViewState`, whose value moves with every
   menu open and scroll flag — one subscription there re-renders every mounted

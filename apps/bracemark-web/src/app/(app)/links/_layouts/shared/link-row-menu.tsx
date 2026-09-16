@@ -64,8 +64,10 @@ import { useEngagedOpen } from './hooks';
 // layer can't measure (the arithmetic and the rest of the reasoning are in
 // move-to-surface.tsx). The narrow item is the ONLY one here that doesn't act
 // immediately, hence the ellipsis. `pinned` swaps the pin block between "Pin to top" and the
-// pinned set (move up/down + unpin); `isFirst`/`isLast` disable the move that
-// would fall off the pinned section's ends.
+// pinned set (move up/down + unpin); a move goes past `pinnedAbove`/
+// `pinnedBelow`, the pinned neighbour this view renders — pins are one global
+// order filtered per view, so the neighbour, not an index, names the slot — and
+// is disabled where there is none.
 //
 // The menu is a sibling of the row's link, never nested inside the `<a>` — a
 // button inside an anchor is invalid and would also fire the navigation. The
@@ -74,13 +76,13 @@ import { useEngagedOpen } from './hooks';
 export function LinkRowMenu({
   link,
   pinned,
-  isFirst,
-  isLast,
+  pinnedAbove,
+  pinnedBelow,
 }: {
   link: LinkView;
   pinned: boolean;
-  isFirst: boolean;
-  isLast: boolean;
+  pinnedAbove: LinkView | undefined;
+  pinnedBelow: LinkView | undefined;
 }) {
   const { pin, unpin, moveUp, moveDown } = usePinMutations();
   const { update } = useLinkMutations();
@@ -200,11 +202,17 @@ export function LinkRowMenu({
             </DropdownMenuItem>
             {pinned ? (
               <>
-                <DropdownMenuItem disabled={isFirst} onSelect={() => void moveUp(link)}>
+                <DropdownMenuItem
+                  disabled={!pinnedAbove}
+                  onSelect={() => pinnedAbove && void moveUp(link, pinnedAbove)}
+                >
                   <ArrowUp className="size-4" />
                   Move up
                 </DropdownMenuItem>
-                <DropdownMenuItem disabled={isLast} onSelect={() => void moveDown(link)}>
+                <DropdownMenuItem
+                  disabled={!pinnedBelow}
+                  onSelect={() => pinnedBelow && void moveDown(link, pinnedBelow)}
+                >
                   <ArrowDown className="size-4" />
                   Move down
                 </DropdownMenuItem>

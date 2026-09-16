@@ -270,7 +270,8 @@ function UnlockedMain() {
   // The rule that keeps that correct: renderItem may read ONLY from here. A
   // value it closed over instead would go stale in already-mounted cells.
   //
-  // `links` rides along for the index-derived props (pinned, isFirst, isLast).
+  // `links` rides along for the index-derived props (pinned, pinnedAbove,
+  // pinnedBelow).
   // The ViewHolder skips renderItem when only an item's INDEX moves (its
   // children memo leaves index out), so a pin reorder would leave those stale
   // if nothing in here changed with it. Today's reads build fresh LinkView
@@ -307,11 +308,11 @@ function UnlockedMain() {
         <Item
           link={item}
           pinned={index < x.pinnedCount}
-          // The pinned section's ends, for the row menu's Move up/down
-          // (meaningful only when pinned; pins sort first, so flat indexes
-          // 0..pinnedCount-1 are exactly the pinned section).
-          isFirst={index === 0}
-          isLast={index === x.pinnedCount - 1}
+          // The pinned neighbours, for the row menu's Move up/down (pins sort
+          // first, so flat indexes 0..pinnedCount-1 are exactly the pinned
+          // section).
+          pinnedAbove={index > 0 && index < x.pinnedCount ? x.links[index - 1] : undefined}
+          pinnedBelow={index < x.pinnedCount - 1 ? x.links[index + 1] : undefined}
           sortOn={x.sortOn}
           tagsById={x.tagsById}
           itemWidth={x.itemWidth}

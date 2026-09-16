@@ -64,8 +64,8 @@ export const hasKnownTags = (link: LinkView, tagsById: Map<string, string>) =>
 export const LinkRow = memo(function LinkRow({
   link,
   pinned,
-  isFirst,
-  isLast,
+  pinnedAbove,
+  pinnedBelow,
   sortOn,
   tagsById,
   itemWidth,
@@ -210,7 +210,14 @@ export const LinkRow = memo(function LinkRow({
       )}
       {/* Hidden while selecting — the checkbox column stands in (web's list
           layout, verbatim). */}
-      {!selectMode && <LinkRowMenu link={link} pinned={pinned} isFirst={isFirst} isLast={isLast} />}
+      {!selectMode && (
+        <LinkRowMenu
+          link={link}
+          pinned={pinned}
+          pinnedAbove={pinnedAbove}
+          pinnedBelow={pinnedBelow}
+        />
+      )}
     </Pressable>
   );
 });
