@@ -2,7 +2,7 @@ import * as React from 'react';
 import { act, render } from '@testing-library/react-native';
 
 import type { LinkView } from '@stxapps/expo-react';
-import type { LinkQuery } from '@stxapps/shared';
+import { DEFAULT_LIST_ID, type LinkQuery } from '@stxapps/shared';
 
 import type { Selection } from './page-provider';
 import {
@@ -13,9 +13,14 @@ import {
 
 let mockQuery: LinkQuery = {} as LinkQuery;
 let mockSelection: Selection = { kind: 'all' };
+const mockSetSimpleQuery = jest.fn();
 
 jest.mock('./page-provider', () => ({
-  useLinksPage: () => ({ query: mockQuery, selection: mockSelection }),
+  useLinksPage: () => ({
+    query: mockQuery,
+    selection: mockSelection,
+    setSimpleQuery: mockSetSimpleQuery,
+  }),
 }));
 
 const link = (path: string) => ({ path, id: path }) as unknown as LinkView;
@@ -53,6 +58,7 @@ const selectedPaths = () => [...api.selectedLinks.keys()].sort();
 beforeEach(() => {
   mockQuery = { lists: { any: [], none: [] } } as unknown as LinkQuery;
   mockSelection = { kind: 'all' };
+  mockSetSimpleQuery.mockClear();
 });
 
 describe('engagement', () => {
@@ -137,6 +143,76 @@ describe('search visibility', () => {
     act(rerenderPage);
 
     expect(api.searchVisible).toBe(true);
+  });
+});
+
+// Every exit from a committed search runs `restorePreSearch` — the topbar's
+// toggle, Android back, the box's ✕, and Enter on an emptied box. What it must
+// never do is what the ✕ used to: commit an empty query, which silently moved
+// the user to My List and left the view they were on reachable only by
+// re-navigating the drawer (the search is simple again, so the toggle no longer
+// has one to leave).
+describe('leaving a search', () => {
+  const search = (rerenderPage: () => void) => {
+    mockSelection = { kind: 'none' };
+    act(rerenderPage);
+  };
+
+  test('returns to the view the search was run from', () => {
+    mockSelection = { kind: 'tag', id: 'rust' };
+    const { rerenderPage } = mount();
+    search(rerenderPage);
+
+    act(() => api.restorePreSearch());
+
+    expect(mockSetSimpleQuery).toHaveBeenCalledWith({ kind: 'tag', id: 'rust' });
+  });
+
+  // The bar force-shows for a committed search nobody opened it for (a back
+  // gesture into a `?text=` URL), so the restore target cannot come from the
+  // toggle — it is tracked as the views go by.
+  test('remembers a view the search bar was never opened over', () => {
+    mockSelection = { kind: 'list', id: 'reading' };
+    const { rerenderPage } = mount();
+    search(rerenderPage);
+
+    act(() => api.restorePreSearch());
+
+    expect(mockSetSimpleQuery).toHaveBeenCalledWith({ kind: 'list', id: 'reading' });
+  });
+
+  test('holds the remembered view for the whole search, not just its first frame', () => {
+    mockSelection = { kind: 'list', id: 'reading' };
+    const { rerenderPage } = mount();
+    search(rerenderPage);
+    act(rerenderPage);
+    act(rerenderPage);
+
+    act(() => api.restorePreSearch());
+
+    expect(mockSetSimpleQuery).toHaveBeenCalledWith({ kind: 'list', id: 'reading' });
+  });
+
+  // A cold mount straight into a search URL: there is no earlier view, so the
+  // default inbox is the only honest destination.
+  test('falls back to the default inbox with no earlier view to return to', () => {
+    mockSelection = { kind: 'none' };
+    mount();
+
+    act(() => api.restorePreSearch());
+
+    expect(mockSetSimpleQuery).toHaveBeenCalledWith({ kind: 'list', id: DEFAULT_LIST_ID });
+  });
+
+  // Typing into the box over a plain list view and clearing it again commits
+  // nothing — so it must not navigate either.
+  test('does nothing when no search is committed', () => {
+    mockSelection = { kind: 'list', id: 'reading' };
+    mount();
+
+    act(() => api.restorePreSearch());
+
+    expect(mockSetSimpleQuery).not.toHaveBeenCalled();
   });
 });
 

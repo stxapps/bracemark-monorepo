@@ -33,6 +33,7 @@ import { Input } from '@stxapps/web-ui/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@stxapps/web-ui/components/ui/popover';
 
 import { useLinksPage } from '../_contexts/page-provider';
+import { useLinksViewState } from '../_contexts/view-state-provider';
 
 import { usePaywall } from '@/contexts/paywall-provider';
 
@@ -552,6 +553,7 @@ function AdvancedSearch() {
 
 export function SearchBar({ autoFocus = false }: { autoFocus?: boolean }) {
   const { query, setQuery } = useLinksPage();
+  const { restorePreSearch } = useLinksViewState();
 
   // Basic box: a draft synced from the committed text. Navigation clears text → the
   // box empties; a basic/advanced search sets it → the box shows it.
@@ -561,11 +563,14 @@ export function SearchBar({ autoFocus = false }: { autoFocus?: boolean }) {
 
   const submitBasic = () => {
     const w = words(text);
-    // GLOBAL: replace the whole query with just the text. An empty box returns home
-    // (the default inbox, via an empty query). Sort is a global synced setting
-    // applied by use-links, not part of the query, so there's nothing to carry over.
+    // GLOBAL: replace the whole query with just the text, so a search spans the
+    // library rather than the view it was typed from. Sort is a global synced
+    // setting applied by use-links, not part of the query, so there's nothing to
+    // carry over. SUBMITTING NOTHING IS NOT A COMMIT — it's the same "get me out
+    // of this search" as the ✕ below, so it takes the same exit rather than
+    // committing an empty query to the inbox.
     if (w.length === 0) {
-      setQuery(emptyQuery());
+      restorePreSearch();
       return;
     }
     const q = emptyQuery();
@@ -573,9 +578,18 @@ export function SearchBar({ autoFocus = false }: { autoFocus?: boolean }) {
     setQuery(q);
   };
 
+  // Emptying the box ABORTS the search; it does not commit a new one. So it
+  // restores the view the search was run from rather than navigating home —
+  // `setQuery(emptyQuery())` here put the user in My List, which is a silent
+  // view reset AND a dead end: the query is simple again, so the topbar's
+  // dismiss no longer has a search to leave, and the list they were on is
+  // reachable only by re-navigating the sidebar. Same body as every other exit
+  // (view-state-provider's `restorePreSearch`), and a no-op when nothing is
+  // committed — typing into the box over a list view and clearing it again
+  // leaves that list alone.
   const clearBasic = () => {
     setText('');
-    setQuery(emptyQuery());
+    restorePreSearch();
   };
 
   return (

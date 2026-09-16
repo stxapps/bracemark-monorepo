@@ -27,7 +27,7 @@
 
 import { act, render } from '@testing-library/react';
 
-import type { LinkQuery } from '@stxapps/shared';
+import { DEFAULT_LIST_ID, type LinkQuery } from '@stxapps/shared';
 import type { LinkView } from '@stxapps/web-react';
 
 import type { Selection } from './page-provider';
@@ -36,9 +36,14 @@ import { LinksViewStateProvider, useLinksViewState } from './view-state-provider
 let mockQuery: LinkQuery = {} as LinkQuery;
 let mockSelection: Selection = { kind: 'all' };
 let mockWide = true;
+const mockSetSimpleQuery = jest.fn();
 
 jest.mock('./page-provider', () => ({
-  useLinksPage: () => ({ query: mockQuery, selection: mockSelection }),
+  useLinksPage: () => ({
+    query: mockQuery,
+    selection: mockSelection,
+    setSimpleQuery: mockSetSimpleQuery,
+  }),
 }));
 
 jest.mock('@stxapps/web-ui/hooks/use-media-query', () => ({
@@ -88,6 +93,7 @@ describe('LinksViewStateProvider', () => {
     mockQuery = { lists: { any: [], none: [] } } as unknown as LinkQuery;
     mockSelection = { kind: 'all' };
     mockWide = true;
+    mockSetSimpleQuery.mockClear();
   });
 
   describe('engaged — when a repaint would disrupt the user', () => {
@@ -192,6 +198,77 @@ describe('LinksViewStateProvider', () => {
       act(() => api.setSearchOpen(true));
       mockSelection = { kind: 'list', id: 'list-abc' };
       expect(api.searchVisible).toBe(true);
+    });
+  });
+
+  // Every exit from a committed search runs `restorePreSearch` — the topbar's
+  // toggle below `md`, the box's ✕ and an emptied box at every width. What it
+  // must never do is what the ✕ used to: commit an empty query, which silently
+  // moved the user to My List and left the view they were on reachable only by
+  // re-navigating the sidebar (the query is simple again, so the toggle no
+  // longer has a search to leave).
+  describe('leaving a search', () => {
+    const search = (rerenderPage: () => void) => {
+      mockSelection = { kind: 'none' };
+      act(rerenderPage);
+    };
+
+    it('returns to the view the search was run from', () => {
+      mockSelection = { kind: 'tag', id: 'tag-rust' };
+      const { rerenderPage } = mount();
+      search(rerenderPage);
+
+      act(() => api.restorePreSearch());
+
+      expect(mockSetSimpleQuery).toHaveBeenCalledWith({ kind: 'tag', id: 'tag-rust' });
+    });
+
+    // ABOVE `md` the box is persistent chrome and the search toggle never
+    // renders, so a snapshot taken when the row is summoned would be null for
+    // every desktop viewport — where the ✕ is the only exit there is.
+    it('remembers a view the search row was never summoned over', () => {
+      mockWide = true;
+      mockSelection = { kind: 'list', id: 'list-abc' };
+      const { rerenderPage } = mount();
+      search(rerenderPage);
+
+      act(() => api.restorePreSearch());
+
+      expect(mockSetSimpleQuery).toHaveBeenCalledWith({ kind: 'list', id: 'list-abc' });
+    });
+
+    it('holds the remembered view for the whole search, not just its first frame', () => {
+      mockSelection = { kind: 'list', id: 'list-abc' };
+      const { rerenderPage } = mount();
+      search(rerenderPage);
+      act(rerenderPage);
+      act(rerenderPage);
+
+      act(() => api.restorePreSearch());
+
+      expect(mockSetSimpleQuery).toHaveBeenCalledWith({ kind: 'list', id: 'list-abc' });
+    });
+
+    // A cold load straight into a search URL: there is no earlier view, so the
+    // default inbox is the only honest destination.
+    it('falls back to the default inbox with no earlier view to return to', () => {
+      mockSelection = { kind: 'none' };
+      mount();
+
+      act(() => api.restorePreSearch());
+
+      expect(mockSetSimpleQuery).toHaveBeenCalledWith({ kind: 'list', id: DEFAULT_LIST_ID });
+    });
+
+    // Typing into the box over a plain list view and clearing it again commits
+    // nothing — so it must not navigate either.
+    it('does nothing when no search is committed', () => {
+      mockSelection = { kind: 'list', id: 'list-abc' };
+      mount();
+
+      act(() => api.restorePreSearch());
+
+      expect(mockSetSimpleQuery).not.toHaveBeenCalled();
     });
   });
 

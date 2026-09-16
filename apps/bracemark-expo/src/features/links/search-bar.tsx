@@ -692,7 +692,7 @@ function AdvancedSearch() {
 }
 
 export function SearchBar() {
-  const { searchVisible, bulkEditing } = useLinksViewState();
+  const { searchVisible, bulkEditing, restorePreSearch } = useLinksViewState();
   const { query, setQuery } = useLinksPage();
 
   // Basic box: a draft synced from the committed text. Navigation clears text →
@@ -712,11 +712,14 @@ export function SearchBar() {
 
   const submitBasic = () => {
     const w = words(text);
-    // GLOBAL: replace the whole query with just the text. An empty box returns
-    // home (the default inbox, via an empty query). Sort is a global synced
-    // setting applied by use-links, not part of the query.
+    // GLOBAL: replace the whole query with just the text, so a search spans the
+    // library rather than the view it was typed from. Sort is a global synced
+    // setting applied by use-links, not part of the query. SUBMITTING NOTHING IS
+    // NOT A COMMIT — it's the same "get me out of this search" as the ✕ below,
+    // so it takes the same exit rather than committing an empty query to the
+    // inbox.
     if (w.length === 0) {
-      setQuery(emptyQuery());
+      restorePreSearch();
       return;
     }
     const q = emptyQuery();
@@ -724,9 +727,18 @@ export function SearchBar() {
     setQuery(q);
   };
 
+  // Emptying the box ABORTS the search; it does not commit a new one. So it
+  // restores the view the search was run from rather than navigating home —
+  // `setQuery(emptyQuery())` here put the user in My List, which is a silent
+  // view reset AND a dead end: the query is simple again, so the topbar's ✕ no
+  // longer has a search to leave, and the list they were on is reachable only by
+  // re-navigating the drawer. Same body as every other exit
+  // (view-state-provider's `restorePreSearch`), and a no-op when nothing is
+  // committed — typing into the box over a list view and clearing it again
+  // leaves that list alone.
   const clearBasic = () => {
     setText('');
-    setQuery(emptyQuery());
+    restorePreSearch();
   };
 
   return (

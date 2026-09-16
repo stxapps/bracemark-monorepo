@@ -281,17 +281,15 @@ saved searches. The gate is **value-capture, client-enforced** — the editor co
   same component fills both slots; the topbar owns the measure and the toggle.
   Visibility below `md` is the derived `searchVisible` in `view-state-provider`
   (`searchOpen || selection.kind === 'none'`), so the toggle and the row can't
-  disagree, and dismissing the row also **restores the view the search was run
-  from** (`preSearch`, falling back to the default inbox) — with the row gone, a
-  committed `?text=` would otherwise keep filtering the list with nothing on
-  screen left to show or clear it. This is the same shape bracemark-expo settled
-  on; see _on native_ below, which now differs only in that a phone has no wide
-  slot to fall back to. Type + Enter commits `?text=…`; results reshape the main
-  pane. **Basic
+  disagree — with the row gone, a committed `?text=` would otherwise keep
+  filtering the list with nothing on screen left to show or clear it. This is
+  the same shape bracemark-expo settled on; see _on native_ below, which now
+  differs only in that a phone has no wide slot to fall back to. Type + Enter
+  commits `?text=…`; results reshape the main pane. **Basic
   search is GLOBAL by design**: submitting replaces the whole query with just its text,
-  so a search spans the library rather than the list you were on. An empty box returns
-  home. (Sort isn't part of the committed query — it's the global setting resolved by
-  the provider — so a search neither carries nor needs to preserve it.)
+  so a search spans the library rather than the list you were on. (Sort isn't part of
+  the committed query — it's the global setting resolved by the provider — so a search
+  neither carries nor needs to preserve it.)
 - **Advanced popover** — an anchored panel (not a modal: search is iterative, so the
   results stay visible while you refine). It exposes nearly the whole grammar:
   - the **word trio** over the combined url⊕title haystack — _All / Any / None of
@@ -327,6 +325,38 @@ saved searches. The gate is **value-capture, client-enforced** — the editor co
   (no join), and `text.any`/`text.none` cost the same as `text.all` (any text
   clause already forces the extraction join) — see
   [client-queries.md](./client-queries.md).
+
+- **Leaving a search is ONE destination, not four.** A committed search ends in
+  several ways — the ✕ inside the box, Enter on an emptied box, dismissing the
+  row (narrow widths), the Android back press (expo) — and every one of them runs
+  `view-state-provider`'s **`restorePreSearch`**: return to the last view that was
+  _not_ a search, or the default inbox when there hasn't been one. The box's ✕
+  used to commit an empty query instead, which is a different act wearing the same
+  label: it moved the user to **My List**, silently discarding the list or tag they
+  searched from — and it was a dead end, since the query is simple again, so the
+  row's dismiss no longer has a search to leave and the old view is reachable only
+  by re-navigating the sidebar. The line that keeps the four consistent is
+  **commit vs. abort**: submitting text commits (and is global — it spans the
+  library, not the restored view), while anything that ends a search without
+  committing one aborts and restores. The advanced editor's own **Clear** button is
+  neither — it empties the draft, nothing moves until Search commits it, and an
+  empty query committed that way still means home. The restore is also a **no-op
+  unless `selection` is `'none'`**: typing into the box over a list view and
+  clearing it again committed nothing, so it must navigate nowhere.
+
+  **`preSearch` is tracked, not snapshotted.** The provider records each simple
+  `selection` as it passes and holds it for the duration of a search. Snapshotting
+  it when the bar opens — what the dismiss path did first — is null exactly where
+  the restore matters most and stale where it doesn't: above `md` on web the box
+  is persistent chrome and the toggle never fires at all, and at any width the bar
+  force-shows for a search nobody opened it for (the `'none'` disjunct — a Back or
+  a back gesture into a `?text=` URL). Its type is `SimpleSelection`
+  (`Exclude<Selection, { kind: 'none' }>`), which is what guarantees a restore can
+  never itself resolve to `'none'` and force the bar back open. It is **transient
+  by design**: the URL stays the source of truth and this is only a return
+  destination, so a cold entry straight into a search URL has no earlier view and
+  clears to the inbox — the same best-effort ceiling the Settings round trip has
+  above.
 
 - **The Plus gate lives in the form, not the write path.** Free users see the trigger
   (visible, not hidden) but opening it presents the upgrade path instead of the
@@ -382,9 +412,15 @@ comments — not re-derived here:
   `searchVisible` (`searchOpen || selection.kind === 'none'`) so the topbar
   toggle and the bar itself can't disagree, the `none` disjunct force-shows the
   bar for a committed search that has no other on-screen surface (a back-gesture
-  into a `?text=` URL), dismissing restores `preSearch`, and the row is mutually
-  exclusive with the bulk-edit toolbar (same slot). Web ports the whole of that
-  for its narrow widths, naming included.
+  into a `?text=` URL), every exit runs `restorePreSearch` (above — the Android
+  back press is the one extra exit this platform adds, and it shares the body
+  rather than re-deciding the destination), and the row is mutually exclusive
+  with the bulk-edit toolbar (same slot). Web ports the whole of that for its
+  narrow widths, naming included. One native-only dependency: tracking
+  `preSearch` continuously is safe **because** the page provider holds its params
+  bag while another screen is focused (above) — this tree stays mounted under
+  Settings and the modal editors, and an unheld bag would parse the no-filter
+  default there and overwrite the very view the round trip exists to preserve.
 - **The advanced editor is a full-height page-sheet `Modal`**, not an anchored
   popover — five inputs plus two checklists and a keyboard don't fit a 320px
   panel on a phone. The tri-state box is **hand-rolled** (check/minus), because

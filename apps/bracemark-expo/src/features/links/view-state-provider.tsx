@@ -32,7 +32,10 @@
 // state as `bulkEditing` (whose bottom bar it is mutually exclusive with —
 // the search bar row hides while the mode is on, see search-bar.tsx). An OPEN
 // bar is not an engagement signal: the list only changes when a search commits
-// (a navigation), so a background repaint under the bar disturbs nothing.
+// (a navigation), so a background repaint under the bar disturbs nothing. The
+// one piece of that chrome state that is not chrome is `preSearch` — the last
+// non-search view, which is what leaving a search returns to; it lives here
+// because every exit reads it and none of them own it.
 
 import {
   createContext,
@@ -45,14 +48,19 @@ import {
 } from 'react';
 
 import type { LinkView } from '@stxapps/expo-react';
+import { DEFAULT_LIST_ID } from '@stxapps/shared';
 
 import { type Selection, useLinksPage } from './page-provider';
 
 // What `preSearch` may hold: a selection the drawer/topbar can render WITHOUT
 // the search bar — everything but the 'none' projection. Narrowing the type
-// (not just the writers) is what guarantees restoring a snapshot can never
-// itself resolve `selection` to 'none' and force the bar back open.
+// (not just the writer) is what guarantees restoring one can never itself
+// resolve `selection` to 'none' and force the bar back open.
 export type SimpleSelection = Exclude<Selection, { kind: 'none' }>;
+
+// Where leaving a committed search lands when no simple selection has been seen
+// yet — the default inbox (serializes to the bare `/links`).
+const HOME_SELECTION: SimpleSelection = { kind: 'list', id: DEFAULT_LIST_ID };
 
 interface LinksViewStateValue {
   // True while a repaint would disrupt the user: scrolled past the top, a row
@@ -80,12 +88,21 @@ interface LinksViewStateValue {
   // must survive that commit. (Bulk-edit suppression is separate: the bar and
   // that mode share a slot, so search-bar hides on `bulkEditing` on top of this.)
   searchVisible: boolean;
-  // Where the user was when the search bar was summoned — dismissing a
-  // committed search returns here instead of home (topbar's toggle). Null when
-  // the bar has never been opened, or was opened over a compound deep-link
-  // view ('none' selection), which has no clean single-axis restore target.
+  // The last view that was NOT a search — where leaving a committed search
+  // lands. TRACKED off `selection`, not snapshotted when the bar opens: the bar
+  // also shows without ever being opened (the `none` disjunct above — a back
+  // gesture into a `?text=` URL), and a toggle-time snapshot is null there and
+  // stale after any drawer nav that followed an earlier search. Null only until
+  // the first simple selection is seen — a cold mount straight into a search
+  // URL, which has no single-axis view to go back to.
   preSearch: SimpleSelection | null;
-  setPreSearch: (selection: SimpleSelection | null) => void;
+  // Leave a committed search: restore `preSearch`, or the default inbox when
+  // there isn't one. The single body behind every exit — the topbar's toggle,
+  // Android back, the box's ✕, and Enter on an emptied box — so the four can't
+  // drift to different destinations. A no-op unless `selection` is 'none': with
+  // a plain list/tag view committed there is no search to leave, so an emptied
+  // box just empties.
+  restorePreSearch: () => void;
   // The permanent-delete confirmation: the links awaiting it (null = none; an
   // empty request is ignored, so a non-null value always has at least one).
   destroying: LinkView[] | null;
@@ -124,7 +141,6 @@ type LinksViewActions = Pick<
   | 'setScrolled'
   | 'setMenuOpen'
   | 'setSearchOpen'
-  | 'setPreSearch'
   | 'requestDestroy'
   | 'closeDestroy'
   | 'requestRetag'
@@ -187,7 +203,7 @@ export function LinksViewStateProvider({ children }: { children: React.ReactNode
   // bulk-edit mode — see the header comment. Keyed on the query's identity, the
   // same stable reference useLinks depends on. `selection` (same projection the
   // topbar/bar read) also feeds the derived `searchVisible` below.
-  const { query, selection } = useLinksPage();
+  const { query, selection, setSimpleQuery } = useLinksPage();
   const searchVisible = searchOpen || selection.kind === 'none';
   const prevQueryRef = useRef(query);
   useEffect(() => {
@@ -196,12 +212,29 @@ export function LinksViewStateProvider({ children }: { children: React.ReactNode
     exitBulkEdit();
   }, [query, exitBulkEdit]);
 
+  // Remember every non-search view as it passes, so leaving a search can return
+  // to one. `selection` is memoized on `query` (page-provider), so this runs on
+  // navigation, not on render. It is only safe to track continuously because
+  // that provider HOLDS its params bag while another screen is focused: this
+  // tree stays mounted under Settings and the modal editors, and an unheld bag
+  // would parse the no-filter default there and overwrite the very view the
+  // round trip exists to preserve (docs/search.md, _on native_).
+  useEffect(() => {
+    if (selection.kind === 'none') return;
+    setPreSearch(selection);
+  }, [selection]);
+
+  // Every exit from a committed search, in one place — see `restorePreSearch`.
+  const restorePreSearch = useCallback(() => {
+    if (selection.kind !== 'none') return;
+    setSimpleQuery(preSearch ?? HOME_SELECTION);
+  }, [selection, preSearch, setSimpleQuery]);
+
   const actions = useMemo<LinksViewActions>(
     () => ({
       setScrolled,
       setMenuOpen,
       setSearchOpen,
-      setPreSearch,
       requestDestroy,
       closeDestroy,
       requestRetag,
@@ -240,6 +273,7 @@ export function LinksViewStateProvider({ children }: { children: React.ReactNode
       searchOpen,
       searchVisible,
       preSearch,
+      restorePreSearch,
       destroying,
       retagging,
       bulkEditing,
@@ -251,6 +285,7 @@ export function LinksViewStateProvider({ children }: { children: React.ReactNode
       searchOpen,
       searchVisible,
       preSearch,
+      restorePreSearch,
       destroying,
       retagging,
       bulkEditing,

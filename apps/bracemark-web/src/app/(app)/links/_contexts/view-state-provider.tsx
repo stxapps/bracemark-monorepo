@@ -43,13 +43,19 @@
 //                 the stable `link.path` row key): the topbar enters the mode, the
 //                 virtualized rows toggle membership, the toolbar acts on it.
 //
-// It also holds the narrow-width search chrome (`searchOpen` / `searchVisible` /
-// `preSearch`), for the same reason the flags above live here: the topbar's
-// toggle and the bar itself are siblings that must not disagree. Below `md` the
-// basic search box is not persistent topbar chrome — there is no room for it
-// beside a title and four actions — so the Search action summons it as a row
-// under the bar, exactly as bracemark-expo does (docs/search.md). Above `md`
-// the box is inline in the topbar and none of this applies.
+// It also holds the narrow-width search chrome (`searchOpen` / `searchVisible`),
+// for the same reason the flags above live here: the topbar's toggle and the bar
+// itself are siblings that must not disagree. Below `md` the basic search box is
+// not persistent topbar chrome — there is no room for it beside a title and four
+// actions — so the Search action summons it as a row under the bar, exactly as
+// bracemark-expo does (docs/search.md). Above `md` the box is inline in the
+// topbar and neither flag does anything.
+//
+// `preSearch` and `restorePreSearch` are the exception to that width split: they
+// are not chrome but a DESTINATION — the last non-search view, and the one body
+// that returns to it. Every exit from a committed search goes through it (the
+// toggle below `md`, the box's ✕ and an emptied box at every width), so no two
+// of them can land the user somewhere different.
 //
 // It holds one thing that is neither: `wide`, the live `md` media query. It's
 // here because the alternative is a matchMedia listener PER ROW — the row menus
@@ -74,6 +80,7 @@ import {
   useState,
 } from 'react';
 
+import { DEFAULT_LIST_ID } from '@stxapps/shared';
 import type { LinkView } from '@stxapps/web-react';
 import { MD_QUERY, useMediaQuery } from '@stxapps/web-ui/hooks/use-media-query';
 
@@ -83,6 +90,10 @@ import { type Selection, useLinksPage } from './page-provider';
 // no-single-axis 'none' a text search resolves to. What `preSearch` can hold:
 // restoring one can never force the search bar back open.
 export type SimpleSelection = Exclude<Selection, { kind: 'none' }>;
+
+// Where leaving a committed search lands when no simple selection has been seen
+// yet — the default inbox (serializes to the bare `/links`).
+const HOME_SELECTION: SimpleSelection = { kind: 'list', id: DEFAULT_LIST_ID };
 
 // An open edit-dialog request: the link's row snapshot (the dialog re-resolves
 // freshness at save time — useLinkMutations.update re-reads before merging) and
@@ -121,12 +132,23 @@ interface LinksViewStateValue {
   // that toolbar are the same 3rem of a phone screen, so the topbar hides the
   // row on `bulkEditing` on top of this.)
   searchVisible: boolean;
-  // Where the user was when the search row was summoned — dismissing a
-  // committed search returns here instead of home. Null when the row has never
-  // been opened, or was opened over a compound deep-link view ('none'
-  // selection), which has no clean single-axis restore target.
+  // The last view that was NOT a search — where leaving a committed search
+  // lands. TRACKED off `selection`, not snapshotted when the row is summoned:
+  // ABOVE `md` the box is persistent and that toggle never fires, so a
+  // snapshot-only `preSearch` is null for every desktop viewport — where the
+  // box's ✕ is the sole exit from a search. Below `md` it also covers the row
+  // that force-shows without being opened (the `none` disjunct — a Back into a
+  // `?text=` URL), where a snapshot is null or stale from an earlier open.
+  // Null only until the first simple selection is seen — a cold load straight
+  // into a search URL, which has no single-axis view to go back to.
   preSearch: SimpleSelection | null;
-  setPreSearch: (selection: SimpleSelection | null) => void;
+  // Leave a committed search: restore `preSearch`, or the default inbox when
+  // there isn't one. The single body behind every exit — the topbar's toggle,
+  // the box's ✕, and Enter on an emptied box — so the three can't drift to
+  // different destinations. A no-op unless `selection` is 'none': with a plain
+  // list/tag view committed there is no search to leave, so an emptied box just
+  // empties.
+  restorePreSearch: () => void;
   // The link edit dialog: the open request (null = closed) and its controls.
   editing: LinkEditRequest | null;
   openEditor: (link: LinkView, focus?: 'tags' | 'note') => void;
@@ -267,7 +289,7 @@ export function LinksViewStateProvider({ children }: { children: React.ReactNode
   // bulk-edit mode — see the header comment. Keyed on the query's identity, the
   // same stable reference useLinks depends on. `selection` (the same hook's
   // lossy projection) feeds the derived `searchVisible` below.
-  const { query, selection } = useLinksPage();
+  const { query, selection, setSimpleQuery } = useLinksPage();
   const searchVisible = searchOpen || selection.kind === 'none';
   const prevQueryRef = useRef(query);
   useEffect(() => {
@@ -275,6 +297,20 @@ export function LinksViewStateProvider({ children }: { children: React.ReactNode
     prevQueryRef.current = query;
     exitBulkEdit();
   }, [query, exitBulkEdit]);
+
+  // Remember every non-search view as it passes, so leaving a search can return
+  // to one. `selection` is memoized on `query` (page-provider), so this runs on
+  // navigation, not on render.
+  useEffect(() => {
+    if (selection.kind === 'none') return;
+    setPreSearch(selection);
+  }, [selection]);
+
+  // Every exit from a committed search, in one place — see `restorePreSearch`.
+  const restorePreSearch = useCallback(() => {
+    if (selection.kind !== 'none') return;
+    setSimpleQuery(preSearch ?? HOME_SELECTION);
+  }, [selection, preSearch, setSimpleQuery]);
 
   const value = useMemo<LinksViewStateValue>(
     () => ({
@@ -292,7 +328,7 @@ export function LinksViewStateProvider({ children }: { children: React.ReactNode
       setSearchOpen,
       searchVisible,
       preSearch,
-      setPreSearch,
+      restorePreSearch,
       editing,
       openEditor,
       closeEditor,
@@ -322,6 +358,7 @@ export function LinksViewStateProvider({ children }: { children: React.ReactNode
       searchOpen,
       searchVisible,
       preSearch,
+      restorePreSearch,
       editing,
       openEditor,
       closeEditor,

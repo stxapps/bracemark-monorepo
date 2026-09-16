@@ -19,18 +19,14 @@ import { useNavigation } from 'expo-router';
 import { Menu, Search } from 'lucide-react-native';
 
 import { useLists, useTags } from '@stxapps/expo-react';
-import { ALL_LABEL, DEFAULT_LIST_ID, flattenTree } from '@stxapps/shared';
+import { ALL_LABEL, flattenTree } from '@stxapps/shared';
 
 import { Button } from '../../components/ui/button';
 import { Icon } from '../../components/ui/icon';
 import { Text } from '../../components/ui/text';
 import { MoreOptionsMenu } from './more-options-menu';
 import { useLinksPage } from './page-provider';
-import { type SimpleSelection, useLinksViewState } from './view-state-provider';
-
-// Where a dismissed search lands when there's no `preSearch` snapshot to
-// restore — the default inbox (serializes to the bare `/links`).
-const HOME_SELECTION: SimpleSelection = { kind: 'list', id: DEFAULT_LIST_ID };
+import { useLinksViewState } from './view-state-provider';
 
 function useSelectionLabel(): string {
   const { selection } = useLinksPage();
@@ -64,22 +60,20 @@ function useSelectionLabel(): string {
 export function Topbar() {
   const label = useSelectionLabel();
   const navigation = useNavigation();
-  const { selection, setSimpleQuery } = useLinksPage();
-  const { searchVisible, setSearchOpen, preSearch, setPreSearch } = useLinksViewState();
+  const { searchVisible, setSearchOpen, restorePreSearch } = useLinksViewState();
 
   // Closing DISMISSES the search: with the bar gone, a committed search
   // ('none' selection) would keep filtering the list with no visible surface
-  // left to show or clear it — return to where the search began, or home if
-  // there's no snapshot. Both targets are `SimpleSelection`s, so neither can
-  // resolve back to 'none' and force the bar open again. A plain list/tag
-  // view (nothing committed, or a single-list/tag advanced search) just
-  // hides the bar and stays put. The two close paths — the toggle and the
-  // Android back press below — share this one body so the restore semantics
-  // can't drift.
+  // left to show or clear it — so `restorePreSearch` returns to where the
+  // search began, or home if nothing simple has been seen yet. A plain list/tag
+  // view (nothing committed, or a single-list/tag advanced search) just hides
+  // the bar and stays put, which is that call's own no-op branch. The bar's ✕
+  // and an emptied box (search-bar.tsx) run the same body, so no exit lands
+  // somewhere different from another.
   const closeSearch = useCallback(() => {
     setSearchOpen(false);
-    if (selection.kind === 'none') setSimpleQuery(preSearch ?? HOME_SELECTION);
-  }, [selection, setSimpleQuery, preSearch, setSearchOpen]);
+    restorePreSearch();
+  }, [restorePreSearch, setSearchOpen]);
 
   // Android back closes the search UI before it navigates — the platform
   // cascade (keyboard → search → navigation; the IME consumes the first press
@@ -99,12 +93,6 @@ export function Topbar() {
 
   const toggleSearch = () => {
     if (!searchVisible) {
-      // Snapshot where the user is, so dismissing a committed search returns
-      // here. Always simple in this branch — a 'none' selection forces the bar
-      // visible, so opening can't happen under one; the explicit guard is what
-      // proves that to TS now that `searchVisible` comes from context (it can no
-      // longer narrow `selection` through a local alias).
-      if (selection.kind !== 'none') setPreSearch(selection);
       setSearchOpen(true);
       return;
     }

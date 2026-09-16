@@ -39,7 +39,7 @@
 import { useCallback } from 'react';
 import { Search, SquarePen } from 'lucide-react';
 
-import { ALL_LABEL, DEFAULT_LIST_ID, flattenTree } from '@stxapps/shared';
+import { ALL_LABEL, flattenTree } from '@stxapps/shared';
 import { useLists, useTags } from '@stxapps/web-react';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import { cn } from '@stxapps/web-ui/lib/utils';
@@ -48,12 +48,8 @@ import { LinkAddSurface } from '../_components/link-add-surface';
 import { MoreOptionsMenu } from '../_components/more-options-menu';
 import { SearchBar } from '../_components/search-bar';
 import { useLinksPage } from '../_contexts/page-provider';
-import { type SimpleSelection, useLinksViewState } from '../_contexts/view-state-provider';
+import { useLinksViewState } from '../_contexts/view-state-provider';
 import { SidebarDrawer } from './sidebar-drawer';
-
-// Where a dismissed search lands when there's no `preSearch` snapshot to
-// restore — the default inbox (serializes to the bare `/links`).
-const HOME_SELECTION: SimpleSelection = { kind: 'list', id: DEFAULT_LIST_ID };
 
 function useSelectionLabel(): string {
   const { selection } = useLinksPage();
@@ -86,36 +82,30 @@ function useSelectionLabel(): string {
 
 export function Topbar() {
   const label = useSelectionLabel();
-  const { selection, setSimpleQuery } = useLinksPage();
   const {
     bulkEditing,
     enterBulkEdit,
     exitBulkEdit,
     searchVisible,
     setSearchOpen,
-    preSearch,
-    setPreSearch,
+    restorePreSearch,
   } = useLinksViewState();
 
   // Closing DISMISSES the search: with the row gone, a committed search ('none'
   // selection) would keep filtering the list with no visible surface left to
-  // show or clear it — so return to where the search began, or home if there's
-  // no snapshot. Both targets are `SimpleSelection`s, so neither can resolve
-  // back to 'none' and force the row open again. A plain list/tag view (nothing
+  // show or clear it — so `restorePreSearch` returns to where the search began,
+  // or home if nothing simple has been seen yet. A plain list/tag view (nothing
   // committed, or a single-list/tag advanced search) just hides the row and
-  // stays put.
+  // stays put, which is that call's own no-op branch. The box's ✕ and an
+  // emptied box (search-bar.tsx) run the same body — and above `md`, where this
+  // toggle doesn't render, they are the only exits there are.
   const closeSearch = useCallback(() => {
     setSearchOpen(false);
-    if (selection.kind === 'none') setSimpleQuery(preSearch ?? HOME_SELECTION);
-  }, [selection, setSimpleQuery, preSearch, setSearchOpen]);
+    restorePreSearch();
+  }, [restorePreSearch, setSearchOpen]);
 
   const toggleSearch = () => {
     if (!searchVisible) {
-      // Snapshot where the user is, so dismissing a committed search returns
-      // here. Always simple in this branch — a 'none' selection forces the row
-      // visible, so opening can't happen under one; the explicit guard is what
-      // proves that to TS.
-      if (selection.kind !== 'none') setPreSearch(selection);
       setSearchOpen(true);
       return;
     }
