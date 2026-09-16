@@ -35,6 +35,7 @@ import { withUniwind } from 'uniwind';
 import { useEntitlements, useLists, useTags } from '@stxapps/expo-react';
 import { emptyQuery, flattenTree, type LinkQuery } from '@stxapps/shared';
 
+import { StickyFooter } from '../../components/sticky-footer';
 import { Button } from '../../components/ui/button';
 import { Icon } from '../../components/ui/icon';
 import { Input } from '../../components/ui/input';
@@ -340,6 +341,7 @@ function AdvancedSearch() {
 
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<Draft>(() => initDraft(query));
+  const [footerHeight, setFooterHeight] = useState(0);
 
   // Snapshot the committed query into the draft each time the sheet opens, so
   // it edits the CURRENT query rather than a stale one (web's onOpenChange).
@@ -548,13 +550,17 @@ function AdvancedSearch() {
               NEVER nest this inside a KeyboardAvoidingView: it pads its own
               content by the keyboard's full height, which an outer avoider has
               already removed from the container — they double-compensate
-              (docs/soft-keyboard.md, _avoidance_). */}
+              (docs/soft-keyboard.md, _avoidance_).
+
+              `+ footerHeight` because Clear/Search are pinned below this in a
+              bar that lifts onto the keyboard and covers that band
+              (components/sticky-footer.tsx). */}
           <StyledKeyboardAwareScrollView
             className="flex-1"
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="on-drag"
             contentContainerClassName="gap-4 p-4"
-            bottomOffset={16}
+            bottomOffset={16 + footerHeight}
           >
             {!entitlements.searchEditor && (
               <LockedBanner
@@ -662,15 +668,15 @@ function AdvancedSearch() {
                 ) : undefined
               }
             />
-            <View className="flex-row justify-end gap-2">
-              <Button variant="ghost" size="sm" onPress={() => setDraft(initDraft(emptyQuery()))}>
-                <Text>Clear</Text>
-              </Button>
-              <Button size="sm" onPress={apply}>
-                <Text>Search</Text>
-              </Button>
-            </View>
           </StyledKeyboardAwareScrollView>
+          <StickyFooter onHeight={setFooterHeight}>
+            <Button variant="ghost" size="sm" onPress={() => setDraft(initDraft(emptyQuery()))}>
+              <Text>Clear</Text>
+            </Button>
+            <Button size="sm" onPress={apply}>
+              <Text>Search</Text>
+            </Button>
+          </StickyFooter>
         </StyledSafeAreaView>
       </Modal>
     </>

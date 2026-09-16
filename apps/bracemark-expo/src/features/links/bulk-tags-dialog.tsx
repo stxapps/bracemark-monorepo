@@ -143,7 +143,11 @@ function BulkTagsForm({ links, onClose }: { links: LinkView[]; onClose: () => vo
             left untouched.
           </Text>
         </View>
-        <DialogFooter>
+        {/* A row at every width, not DialogFooter's stacked phone default —
+            an editor's footer (docs/editors.md, _the editing surfaces_), and
+            on the tallest dialog in the app the stack's second row is the
+            height the chip list gives up under the keyboard. */}
+        <DialogFooter className="flex-row justify-end">
           <Button variant="ghost" size="sm" onPress={onClose}>
             <Text>Cancel</Text>
           </Button>

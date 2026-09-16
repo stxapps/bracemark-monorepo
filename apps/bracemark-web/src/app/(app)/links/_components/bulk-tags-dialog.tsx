@@ -187,7 +187,9 @@ function BulkTagsForm({ links, onClose }: { links: LinkView[]; onClose: () => vo
               left untouched.
             </p>
           </div>
-          <DialogFooter>
+          {/* A row at every width, not DialogFooter's stacked phone default —
+              an editor's footer (docs/editors.md, _the editing surfaces_). */}
+          <DialogFooter className="flex-row justify-end">
             <Button type="button" variant="ghost" size="sm" onClick={onClose}>
               Cancel
             </Button>

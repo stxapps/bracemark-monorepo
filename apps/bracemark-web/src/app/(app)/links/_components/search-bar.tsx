@@ -408,7 +408,7 @@ function AdvancedSearch() {
             with. 14px against `Field`'s internal `gap-1` gives a 1:3.5 ratio, and
             being a half-step down from the form still pays for itself in a panel
             that's `max-h-[70vh]` with ten children stacked in it. */}
-        <div className="flex flex-col gap-3.5">
+        <div className="flex min-h-0 flex-col gap-3.5">
           {/* The app's ONE panel-title style, the same string SheetTitle and
               DialogTitle carry (sheet.tsx, dialog.tsx). This popover is a titled
               surface like they are, so it takes their title rather than inventing
@@ -418,125 +418,138 @@ function AdvancedSearch() {
               of this panel does (its modal keeps the native screen-title rung over
               `text-xs` WordField labels). */}
           <p className="text-base leading-none font-medium">Advanced search</p>
-          {!entitlements.searchEditor && <LockedBanner />}
-          {/* The word trio (Google-advanced-search shape) over the combined
-              url⊕title haystack — text.all / text.any / text.none. Because the
-              haystack contains the url, "None of these words" also covers the
-              practical exclude-a-domain case.
+          {/* The title and the Clear/Search row stay put and THIS scrolls.
+              Search used to sit at the end of the scroll, under the Lists and
+              Tags checklists — the longest part of the panel — so committing a
+              query meant scrolling back down past them. bracemark-expo's sheet
+              pins the same row (components/sticky-footer.tsx), and the link
+              edit dialog has always drawn its footer this way.
 
-              `density="dense"` (label.tsx) over `h-8` controls, matching the
-              checklist labels and hint block below. Don't promote these six to
-              standard — they'd out-weigh the checklists they sit above. */}
-          <Field className="gap-1">
-            <FieldLabel htmlFor="adv-text-all" density="dense">
-              All of these words (URL or title)
-            </FieldLabel>
-            <Input
-              id="adv-text-all"
-              value={draft.textAll}
-              placeholder="every word must match"
-              onChange={(e) => setDraft((d) => ({ ...d, textAll: e.target.value }))}
-              className="h-8"
+              `-mx-4 px-4` runs the scroll box out to PopoverContent's edge and
+              pads back, so the clip lands where the panel's did and the
+              controls' focus rings keep the room they had; `-my-1 py-1` does
+              the same at the box's top and bottom. */}
+          <div className="-mx-4 -my-1 flex min-h-0 flex-col gap-3.5 overflow-y-auto px-4 py-1">
+            {!entitlements.searchEditor && <LockedBanner />}
+            {/* The word trio (Google-advanced-search shape) over the combined
+                url⊕title haystack — text.all / text.any / text.none. Because the
+                haystack contains the url, "None of these words" also covers the
+                practical exclude-a-domain case.
+
+                `density="dense"` (label.tsx) over `h-8` controls, matching the
+                checklist labels and hint block below. Don't promote these six to
+                standard — they'd out-weigh the checklists they sit above. */}
+            <Field className="gap-1">
+              <FieldLabel htmlFor="adv-text-all" density="dense">
+                All of these words (URL or title)
+              </FieldLabel>
+              <Input
+                id="adv-text-all"
+                value={draft.textAll}
+                placeholder="every word must match"
+                onChange={(e) => setDraft((d) => ({ ...d, textAll: e.target.value }))}
+                className="h-8"
+              />
+            </Field>
+            <Field className="gap-1">
+              <FieldLabel htmlFor="adv-text-any" density="dense">
+                Any of these words
+              </FieldLabel>
+              <Input
+                id="adv-text-any"
+                value={draft.textAny}
+                placeholder="at least one matches"
+                onChange={(e) => setDraft((d) => ({ ...d, textAny: e.target.value }))}
+                className="h-8"
+              />
+            </Field>
+            <Field className="gap-1">
+              <FieldLabel htmlFor="adv-text-none" density="dense">
+                None of these words
+              </FieldLabel>
+              <Input
+                id="adv-text-none"
+                value={draft.textNone}
+                placeholder="exclude matches"
+                onChange={(e) => setDraft((d) => ({ ...d, textNone: e.target.value }))}
+                className="h-8"
+              />
+            </Field>
+            <Field className="gap-1">
+              <FieldLabel htmlFor="adv-url" density="dense">
+                URL contains
+              </FieldLabel>
+              <Input
+                id="adv-url"
+                value={draft.url}
+                onChange={(e) => setDraft((d) => ({ ...d, url: e.target.value }))}
+                className="h-8"
+              />
+            </Field>
+            <Field className="gap-1">
+              <FieldLabel htmlFor="adv-title" density="dense">
+                Title contains
+              </FieldLabel>
+              <Input
+                id="adv-title"
+                value={draft.title}
+                onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
+                className="h-8"
+              />
+            </Field>
+            {/* The note is the one searchable field with NO basic counterpart: the
+                word trio above runs over url⊕title only, so this box is the only way
+                to reach what you wrote about a link. Placed last of the field-scoped
+                three, after the two the trio already covers. */}
+            <Field className="gap-1">
+              <FieldLabel htmlFor="adv-note" density="dense">
+                Note contains
+              </FieldLabel>
+              <Input
+                id="adv-note"
+                value={draft.note}
+                onChange={(e) => setDraft((d) => ({ ...d, note: e.target.value }))}
+                className="h-8"
+              />
+            </Field>
+            <TriCheckList
+              label="Lists"
+              options={listOptions}
+              include={draft.listsAny}
+              exclude={draft.listsNone}
+              onChange={(include, exclude) =>
+                setDraft((d) => ({ ...d, listsAny: include, listsNone: exclude }))
+              }
             />
-          </Field>
-          <Field className="gap-1">
-            <FieldLabel htmlFor="adv-text-any" density="dense">
-              Any of these words
-            </FieldLabel>
-            <Input
-              id="adv-text-any"
-              value={draft.textAny}
-              placeholder="at least one matches"
-              onChange={(e) => setDraft((d) => ({ ...d, textAny: e.target.value }))}
-              className="h-8"
+            <TriCheckList
+              label="Tags"
+              options={tagOptions}
+              include={draft.tagsInclude}
+              exclude={draft.tagsNone}
+              onChange={(include, exclude) =>
+                setDraft((d) => ({ ...d, tagsInclude: include, tagsNone: exclude }))
+              }
+              // The match toggle only matters once ≥2 tags are included (any ≡ all
+              // for one tag); below that the ✓/− legend takes the slot.
+              action={
+                draft.tagsInclude.length >= 2 ? (
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] text-muted-foreground">Match</span>
+                    {(['any', 'all'] as const).map((mode) => (
+                      <Button
+                        key={mode}
+                        variant={draft.tagsMode === mode ? 'secondary' : 'ghost'}
+                        size="xs"
+                        onClick={() => setDraft((d) => ({ ...d, tagsMode: mode }))}
+                      >
+                        {mode}
+                      </Button>
+                    ))}
+                  </div>
+                ) : undefined
+              }
             />
-          </Field>
-          <Field className="gap-1">
-            <FieldLabel htmlFor="adv-text-none" density="dense">
-              None of these words
-            </FieldLabel>
-            <Input
-              id="adv-text-none"
-              value={draft.textNone}
-              placeholder="exclude matches"
-              onChange={(e) => setDraft((d) => ({ ...d, textNone: e.target.value }))}
-              className="h-8"
-            />
-          </Field>
-          <Field className="gap-1">
-            <FieldLabel htmlFor="adv-url" density="dense">
-              URL contains
-            </FieldLabel>
-            <Input
-              id="adv-url"
-              value={draft.url}
-              onChange={(e) => setDraft((d) => ({ ...d, url: e.target.value }))}
-              className="h-8"
-            />
-          </Field>
-          <Field className="gap-1">
-            <FieldLabel htmlFor="adv-title" density="dense">
-              Title contains
-            </FieldLabel>
-            <Input
-              id="adv-title"
-              value={draft.title}
-              onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
-              className="h-8"
-            />
-          </Field>
-          {/* The note is the one searchable field with NO basic counterpart: the
-              word trio above runs over url⊕title only, so this box is the only way
-              to reach what you wrote about a link. Placed last of the field-scoped
-              three, after the two the trio already covers. */}
-          <Field className="gap-1">
-            <FieldLabel htmlFor="adv-note" density="dense">
-              Note contains
-            </FieldLabel>
-            <Input
-              id="adv-note"
-              value={draft.note}
-              onChange={(e) => setDraft((d) => ({ ...d, note: e.target.value }))}
-              className="h-8"
-            />
-          </Field>
-          <TriCheckList
-            label="Lists"
-            options={listOptions}
-            include={draft.listsAny}
-            exclude={draft.listsNone}
-            onChange={(include, exclude) =>
-              setDraft((d) => ({ ...d, listsAny: include, listsNone: exclude }))
-            }
-          />
-          <TriCheckList
-            label="Tags"
-            options={tagOptions}
-            include={draft.tagsInclude}
-            exclude={draft.tagsNone}
-            onChange={(include, exclude) =>
-              setDraft((d) => ({ ...d, tagsInclude: include, tagsNone: exclude }))
-            }
-            // The match toggle only matters once ≥2 tags are included (any ≡ all
-            // for one tag); below that the ✓/− legend takes the slot.
-            action={
-              draft.tagsInclude.length >= 2 ? (
-                <div className="flex items-center gap-1">
-                  <span className="text-[10px] text-muted-foreground">Match</span>
-                  {(['any', 'all'] as const).map((mode) => (
-                    <Button
-                      key={mode}
-                      variant={draft.tagsMode === mode ? 'secondary' : 'ghost'}
-                      size="xs"
-                      onClick={() => setDraft((d) => ({ ...d, tagsMode: mode }))}
-                    >
-                      {mode}
-                    </Button>
-                  ))}
-                </div>
-              ) : undefined
-            }
-          />
+          </div>
           <div className="flex justify-end gap-2">
             <Button variant="ghost" size="sm" onClick={() => setDraft(initDraft(emptyQuery()))}>
               Clear

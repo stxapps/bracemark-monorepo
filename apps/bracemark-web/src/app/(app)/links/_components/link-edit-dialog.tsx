@@ -440,7 +440,15 @@ function LinkEditForm({
             </div>
           </div>
 
-          <DialogFooter>
+          {/* A right-aligned row at EVERY width, overriding DialogFooter's
+              stacked default below `sm` (full-width Save over full-width
+              Cancel). That default is the confirmation shape, where the buttons
+              are the dialog; on an editor it spends a second row of a pinned
+              footer against a capped, scrolling body, sizes a ghost Cancel to
+              match Save, and made this the one link editor whose footer
+              differed from its add twin's (docs/editors.md, _the editing
+              surfaces_). */}
+          <DialogFooter className="flex-row justify-end">
             <Button type="button" variant="ghost" size="sm" onClick={onClose}>
               Cancel
             </Button>

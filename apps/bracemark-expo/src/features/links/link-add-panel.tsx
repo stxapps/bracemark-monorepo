@@ -122,6 +122,7 @@ import { Input } from '../../components/ui/input';
 import { NativeOnlyAnimatedView } from '../../components/ui/native-only-animated-view';
 import { Text } from '../../components/ui/text';
 import { Textarea } from '../../components/ui/textarea';
+import { cn } from '../../lib/utils';
 import { useLinksPage } from './page-provider';
 
 // Composite components need the wrapper to accept `className` (the note in
@@ -152,9 +153,6 @@ const StyledAnimatedScrollView = withUniwind(Animated.ScrollView);
 const SHEET_CURVE = Easing.bezier(0.32, 0.72, 0, 1);
 const SHEET_MS = 300;
 const DIM_MS = 200;
-// The same 16pt clearance the scroller's `pb-4` leaves at its end, applied to
-// Note itself when only part of the form needs revealing.
-const NOTE_REVEAL_GAP = 16;
 
 // A labeled field row (web's Label + control pairs; the SearchBar WordField
 // idiom).
@@ -273,8 +271,11 @@ export function LinkAddPanel({ onClose }: { onClose: () => void }) {
   // Keep a focused Note above the fold. The outer avoider is the ONE keyboard
   // owner: it shrinks this scroller's viewport frame by frame but keeps its
   // offset, so a Note near the form's end sinks behind the keyboard. Each call
-  // scrolls to the ABSOLUTE offset that puts Note's bottom NOTE_REVEAL_GAP above
-  // the viewport's, and only ever downward. Absolute, not "offset + overlap":
+  // scrolls to the ABSOLUTE offset that puts Note's bottom on the viewport's, and
+  // only ever downward. ON it, not above it: Note is the content's last child and
+  // the scroller has no end padding (the 16 above Save is the footer's `pt-4`,
+  // below), so this is the furthest the content can scroll — a target past it
+  // would ask the scroller to overshoot its own end. Absolute, not "offset + overlap":
   // Note's measured pageY inside a scroller comes from the shadow tree's copy of
   // the content offset, which native updates asynchronously, so an overlap
   // measured right after a scrollTo is stale and would be added twice. The
@@ -283,7 +284,7 @@ export function LinkAddPanel({ onClose }: { onClose: () => void }) {
     'worklet';
     const viewport = measure(scrollRef);
     if (viewport === null) return;
-    const target = noteBottom.get() + NOTE_REVEAL_GAP - viewport.height;
+    const target = noteBottom.get() - viewport.height;
     if (target > scrollOffset.get()) scrollTo(scrollRef, 0, target, animated);
   };
   // The keyboard's own per-frame events, so the scroll moves WITH the keyboard.
@@ -291,7 +292,9 @@ export function LinkAddPanel({ onClose }: { onClose: () => void }) {
   // once, at the start, already holding the final height — a reaction on it runs
   // a single time, before the avoider has moved, and never again. `measure` sees
   // the layout committed last frame, so the scroll trails the avoider by one
-  // frame; the gap absorbs that, and `onEnd` re-checks after the last commit.
+  // frame — Note's bottom edge can dip under the clip for that frame, into the
+  // footer's blank `pt-4` band rather than behind Save — and `onEnd` re-checks
+  // after the last commit.
   //
   // Gated on the event's `target` — the input focused at that moment, read on
   // the UI thread — and not on `noteFocused`, which JS clears in `onBlur`
@@ -556,7 +559,10 @@ export function LinkAddPanel({ onClose }: { onClose: () => void }) {
           <StyledAnimatedScrollView
             ref={scrollRef}
             className="shrink"
-            contentContainerClassName="gap-4 px-4 pb-4"
+            // No end padding while the form shows: the space above Save is the
+            // footer's `pt-4`, which has to stay visible when the fields are
+            // clipped. The quota banner has no footer, so it keeps its own.
+            contentContainerClassName={cn('gap-4 px-4', atLimit && max !== null && 'pb-4')}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="interactive"
           >
@@ -734,39 +740,58 @@ export function LinkAddPanel({ onClose }: { onClose: () => void }) {
                     </Field>
                   </View>
                 )}
-
-                <View className="flex-row justify-end gap-2">
-                  <Button variant="ghost" size="sm" onPress={close}>
-                    <Text>Cancel</Text>
-                  </Button>
-                  {/* Only on the trashed ground — the one already-saved case where the
-                  match is unreachable, so a second door is worth the width. */}
-                  {urlWarning === 'trashed' && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={saving}
-                      onPress={() => void onRestore()}
-                    >
-                      <Text>Restore</Text>
-                    </Button>
-                  )}
-                  {/* `add-link-save` rides the button, not its label: the label flips
-                  Save → Confirm on a warning, so it is the one control on this
-                  screen a Maestro flow could not have bound to by text even if
-                  the rule allowed it (docs/e2e.md, _the testID contract_). */}
-                  <Button
-                    testID="add-link-save"
-                    size="sm"
-                    disabled={saving}
-                    onPress={() => void onSubmit()}
-                  >
-                    <Text>{urlWarning !== null ? 'Confirm' : 'Save'}</Text>
-                  </Button>
-                </View>
               </>
             )}
           </StyledAnimatedScrollView>
+          {/* The footer is PINNED below the scroller rather than being its last
+              child — web quick-add's footer is the same. With the optional
+              section open and the keyboard up the form outgrows the panel, and
+              Note's reveal (above) scrolls Note into view, which put Save
+              beneath the fold at the one moment the draft is complete. Out here
+              `shrink` squeezes only the fields, so Save stays on the keyboard's
+              edge whatever the form's height.
+
+              `pt-4` is the gap above the buttons, and it lives HERE rather than
+              as the scroller's `pb-4` (which is where it started) because end
+              padding is the last thing in the scroll: while the fields overflow,
+              it is scrolled out of view and the clipped fields run straight into
+              the buttons. On the footer it shows at every scroll position — web
+              quick-add gets the same from its form's `gap-4` outside the scroll
+              box. When the form fits, it draws exactly as before. Not a
+              KeyboardStickyView like the full-screen editors'
+              (components/sticky-footer.tsx): the whole panel already rides the
+              keyboard. Gone with the quota banner, which replaces the form. */}
+          {!(atLimit && max !== null) && (
+            <View className="flex-row justify-end gap-2 px-4 pt-4 pb-4">
+              <Button variant="ghost" size="sm" onPress={close}>
+                <Text>Cancel</Text>
+              </Button>
+              {/* Only on the trashed ground — the one already-saved case where the
+                  match is unreachable, so a second door is worth the width. */}
+              {urlWarning === 'trashed' && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={saving}
+                  onPress={() => void onRestore()}
+                >
+                  <Text>Restore</Text>
+                </Button>
+              )}
+              {/* `add-link-save` rides the button, not its label: the label flips
+                  Save → Confirm on a warning, so it is the one control on this
+                  screen a Maestro flow could not have bound to by text even if
+                  the rule allowed it (docs/e2e.md, _the testID contract_). */}
+              <Button
+                testID="add-link-save"
+                size="sm"
+                disabled={saving}
+                onPress={() => void onSubmit()}
+              >
+                <Text>{urlWarning !== null ? 'Confirm' : 'Save'}</Text>
+              </Button>
+            </View>
+          )}
         </StyledAnimatedView>
       </StyledKeyboardAvoidingView>
     </View>

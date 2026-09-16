@@ -59,6 +59,7 @@ import { hostFromText, LINK_NOTE_MAX, LINK_TITLE_MAX, TRASH_ID } from '@stxapps/
 
 import { ListSelect } from '../../components/links/list-select';
 import { TagsField } from '../../components/links/tags-field';
+import { StickyFooter } from '../../components/sticky-footer';
 import { Button } from '../../components/ui/button';
 import { Icon } from '../../components/ui/icon';
 import { Input } from '../../components/ui/input';
@@ -219,6 +220,7 @@ function LinkEditForm({ link, focus }: { link: LinkItem; focus?: EditFocus }) {
   // (fields are direct children of the scroll content, so layout.y is
   // content-relative). No programmatic focus — see the header.
   const scrollRef = useRef<ScrollView>(null);
+  const [footerHeight, setFooterHeight] = useState(0);
   const scrolledToFocus = useRef(false);
   const onFocusFieldLayout = (e: LayoutChangeEvent) => {
     if (scrolledToFocus.current) return;
@@ -326,13 +328,16 @@ function LinkEditForm({ link, focus }: { link: LinkItem; focus?: EditFocus }) {
           <Icon as={X} className="size-5 text-foreground" />
         </Button>
       </View>
+      {/* `bottomOffset` adds the pinned footer's height to the usual 16: once
+          the footer lifts onto the keyboard it covers that band, so a focused
+          field has to clear it too (components/sticky-footer.tsx). */}
       <StyledKeyboardAwareScrollView
         ref={scrollRef}
         className="flex-1"
         contentContainerClassName="gap-4 p-4"
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
-        bottomOffset={16}
+        bottomOffset={16 + footerHeight}
       >
         <Field label="Title">
           <Input
@@ -440,16 +445,15 @@ function LinkEditForm({ link, focus }: { link: LinkItem; focus?: EditFocus }) {
             )}
           </View>
         </Field>
-
-        <View className="flex-row justify-end gap-2">
-          <Button variant="ghost" size="sm" onPress={close}>
-            <Text>Cancel</Text>
-          </Button>
-          <Button size="sm" disabled={saving} onPress={() => void onSubmit()}>
-            <Text>{saving ? 'Saving…' : 'Save'}</Text>
-          </Button>
-        </View>
       </StyledKeyboardAwareScrollView>
+      <StickyFooter onHeight={setFooterHeight}>
+        <Button variant="ghost" size="sm" onPress={close}>
+          <Text>Cancel</Text>
+        </Button>
+        <Button size="sm" disabled={saving} onPress={() => void onSubmit()}>
+          <Text>{saving ? 'Saving…' : 'Save'}</Text>
+        </Button>
+      </StickyFooter>
     </>
   );
 }

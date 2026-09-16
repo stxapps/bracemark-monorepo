@@ -205,6 +205,64 @@ behavior="padding"` around the centring box in `DialogOverlay` — the container
   keyboard by itself and forbids the scroller the first answer is built on, the
   next section.
 
+### the sticky footer
+
+The two full-screen editors — edit link (`link-edit-screen.tsx`) and
+AdvancedSearch — pin their Cancel/Save (Clear/Search) row **below** the
+`KeyboardAwareScrollView` instead of ending the scroll with it, in
+`components/sticky-footer.tsx`. Both forms run past the fold on a phone, so a
+scrolled footer put the commit button a scroll away: edit link's Save under the
+12:7 image preview, a long way from the Note that "Edit note" lands on;
+AdvancedSearch's Search under the Tags tree. The bar **rides the keyboard**, so a
+note can be typed and saved without putting the keyboard away.
+
+Four things make it work, and a miss on any of them produces no error:
+
+- **⚠ The lift is a Reanimated shared value, NOT keyboard-controller's
+  `KeyboardStickyView`.** The sticky view moves itself through react-native's
+  `Animated` with the native driver, and on iOS that update did not reach the
+  bar while its `Modal` was presenting. The specimen: focus the links search
+  box, then press Advanced search. iOS hides the keyboard about 150ms into the
+  sheet's slide, and keyboard-controller reports it (`keyboardWillHide` and
+  `keyboardDidHide`, height 0, logged in the sheet). Yet the bar stayed lifted a
+  full keyboard's height over an empty screen, with no keyboard in the
+  accessibility tree. It dropped into place on the sheet's next re-render, so the
+  value was right and the view never received it. Measured on the iOS 26.5
+  simulator, iPhone 17 Pro. The bar now keeps its own shared value, set from
+  `useKeyboardHandler`'s `onMove`/`onInteractive`/`onEnd` (per frame on both
+  platforms), and seeds it from `KeyboardController.state()` so a bar mounted
+  over an open keyboard starts on it. That is the mechanism the add panel
+  already uses in the same tree. Don't swap `KeyboardStickyView` back in without
+  re-running that specimen.
+- **`bottomOffset` adds the bar's height** (`16 + footerHeight`, measured by the
+  bar's `onLayout`). The aware scroller resolves the focused field against the
+  keyboard's top edge; once the bar sits on that edge it covers another
+  bar-height band, and a field focused behind it comes to rest under the bar,
+  not above it.
+- **The lift gives the bottom inset back, on both platforms:**
+  `max(keyboardHeight − insets.bottom, 0)`. The bar rests on the
+  `SafeAreaView`'s bottom padding, and the reported height runs to the bottom of
+  the screen. On iOS the keyboard's frame contains the home indicator. On
+  Android the lib reports the IME inset **including** the navigation bar,
+  because `edgeToEdgeEnabled` is on and `KeyboardProvider` therefore passes
+  `navigationBarTranslucent` (`animated.tsx`, `IS_EDGE_TO_EDGE`). The first
+  version of this bar read the Android default instead, and gave nothing back
+  there. The clamp keeps the bar still while the keyboard's edge is inside the
+  inset band.
+- **It is not an avoider**, so it doesn't break the rule against nesting an
+  aware scroller inside one. It moves only itself (a transform) and leaves the
+  scroller's frame alone.
+
+The add panel does **not** use it: the whole panel is already parked on the
+keyboard, so its footer is just the last child below the panel's `shrink`
+scroller. Web quick-add and the web advanced-search popover pin theirs the same
+way, below a scroll box that holds only the fields.
+
+**Status:** driven on the iOS simulator: the specimen above, a focused field
+(the bar sits flush on the keys), and drag-to-dismiss. Not yet driven on an AVD.
+An iPad page sheet does not reach the screen's bottom edge, so the lift will
+overshoot there. That is also unverified.
+
 ### the add panel — and why it is not a sheet presentation
 
 The add surface is a bottom panel the LINKS SCREEN draws over itself
@@ -275,7 +333,9 @@ lose. Its mechanisms are the ordinary ones, and they are `ui/dialog.tsx`'s three
   `onMove` — the per-frame event on both platforms — measuring the scroller's
   viewport height and scrolling, unanimated, to the absolute offset that puts
   Note's bottom (its content position, from the optional section's `onLayout`)
-  16pt above the viewport's; `onEnd` re-checks one frame later, and a reaction
+  on the viewport's bottom edge. That is the scroller's own end: the 16pt above
+  Save is the footer's `pt-4`, not scroll padding, so the gap stays visible
+  while the fields are clipped. `onEnd` re-checks one frame later, and a reaction
   covers what the keyboard never announces (focus under an already-open
   keyboard, the multiline field growing). Three traps sit under that, and all
   fail silently — no error, just motion that is wrong:
@@ -299,7 +359,9 @@ lose. Its mechanisms are the ordinary ones, and they are `ui/dialog.tsx`'s three
     event (`nativeEvent.target`, the same tag).
 
   `measure` sees the layout committed last frame, so the scroll trails the
-  avoider by one frame; the 16pt gap absorbs it. This is deliberately not a JS
+  avoider by one frame. Note's bottom edge can dip under the clip for that
+  frame, into the footer's blank `pt-4` band rather than behind Save, and
+  `onEnd` puts it back. This is deliberately not a JS
   `keyboardDidShow` listener (it lands after the keyboard, then animates a
   second time — the visible lag this replaced), RN ScrollView's
   `automaticallyAdjustKeyboardInsets` (iOS only), or a nested

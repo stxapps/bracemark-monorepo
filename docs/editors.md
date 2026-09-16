@@ -213,6 +213,46 @@ image", because an image-less card is **not** blank (`LinkPreviewImage`'s `panel
 fallback paints the host's hue — link-extraction.md) and because the same state
 covers a blob this device hasn't materialized yet.
 
+**The Cancel/Save footer is a content-width row on the right, at every width**:
+a ghost Cancel, then the filled Save, with Restore between them when quick-add
+matches a trashed link. Web quick-add and both bracemark-expo editors build that
+row by hand (`justify-end gap-2`). The two web dialogs, edit and bulk "Edit tags"
+on both platforms, use `DialogFooter`. Its base class is shadcn's
+`flex-col-reverse … sm:flex-row`, which stacks a full-width Save over a full-width
+Cancel below `sm`, so they pass `className="flex-row justify-end"`. They used to
+take that default, which nobody had chosen, and were the only editors whose
+footer changed shape on a phone.
+
+The stack is the **prompt** shape: the dialog asks one thing and its full-size
+buttons are the answers. The destroy confirms, the lists/tags delete confirm
+(`table-kit.tsx`), the paywall, `lock-password-dialog.tsx` and expo's
+`time-field.tsx` keep it. So does a lone full-width **Done** that closes a picker
+(expo's `tags-field.tsx`, the share sheet's pickers), which has no pair to rank.
+On an editor the stack costs a second row exactly where height runs short. It
+also makes a ghost Cancel as big as Save, when Save should be the loudest button
+in the footer. Nothing flags a stacked footer, so check it below `sm` when you
+add an editor.
+
+**…and the footer is PINNED, never the scroller's last child.** Only the fields
+scroll; the button row stays in view. Every editor here runs past the fold
+somewhere: the full editors end on the 12:7 image preview, AdvancedSearch ends on
+the Tags tree, and quick-add outgrows its keyboard-shortened sheet once "List,
+tags & note" is open. A footer at the end of the scroll put Save a scroll away at
+the moment the draft was finished. How each surface does it:
+
+- **Web dialogs:** a `min-h-0 flex-1` body with `overflow-y-auto` above
+  `DialogFooter`.
+- **Web quick-add and the advanced-search popover:** a scroll box of fields,
+  bled out with `-mx-4 px-4 -my-1 py-1` so its clip doesn't cut the ghost
+  disclosure's overhang or the focus rings.
+- **The expo add panel:** its footer sits below the panel's `shrink` scroller.
+- **The two full-screen expo editors:** `components/sticky-footer.tsx`, a bar
+  that also rides the keyboard ([soft-keyboard.md](./soft-keyboard.md), _the
+  sticky footer_).
+
+The bulk-tags dialogs never needed the change, because `TagsCommand` scrolls its
+own rows.
+
 The share sheet is the RN member of the create family
 ([share-sheet.md](./share-sheet.md) is its own map — the two native shells, the
 iOS snapshot/outbox, the upload). It can't render the web pickers (`web-ui` is
