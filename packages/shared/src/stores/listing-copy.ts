@@ -106,8 +106,7 @@ export const APP_STORE = {
    * additions and all three are trademarks — Apple rejects the build for it
    * (guideline 2.3.7) rather than just dropping the term.
    */
-  keywords:
-    'zero,knowledge,e2ee,secure,vault,later,save,url,tab,offline,sync,manager,read',
+  keywords: 'zero,knowledge,e2ee,secure,vault,later,save,url,tab,offline,sync,manager,read',
 
   /**
    * The one field Apple lets us change without a review, which makes it the only
