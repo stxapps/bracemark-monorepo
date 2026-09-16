@@ -27,6 +27,7 @@
     "expo:ios": "npm run ios -w @stxapps/bracemark-expo --",
     "expo:ios:open": "npm run ios:open -w @stxapps/bracemark-expo --",
     "e2e:web": "nx e2e-web @stxapps/e2e",
+    "e2e:extension": "nx e2e-extension @stxapps/e2e",
     "e2e:mobile": "nx e2e-mobile @stxapps/e2e",
     "e2e:contract": "nx e2e-contract @stxapps/e2e",
     "seed:fixtures": "nx seed:fixtures @stxapps/e2e",

@@ -44,7 +44,7 @@ has just passed on every platform.
 | Web               | Six Playwright cases: session reload, sign-out teardown, one-link persistence, two mounted writes, list creation round trip, mounted delete-all repaint |
 | Native            | Four Maestro flows: password sign-in/cold start, recovery sign-in, two mounted link inserts, mounted delete-all repaint                                 |
 | Contract          | Frozen device vectors plus web to mobile and mobile to web encrypted round trips                                                                        |
-| Browser extension | Published-screenshot driver only; no functional E2E target                                                                                              |
+| Browser extension | Nine Playwright cases: profile auth, save/saved/restore/boundary states, two-way sync, live extraction, and MV3 worker restart                          |
 | PWA               | Unit/component coverage around registration and navigation; no production-build offline E2E target                                                      |
 | Automation        | No CI workflow currently runs these targets                                                                                                             |
 
@@ -178,23 +178,23 @@ permission, as the screenshot leg does, but the suite must state that this does
 not prove the real toolbar click's `activeTab` grant. That final boundary belongs
 to release qualification.
 
-- [ ] `EXT-AUTH-001` Sign in through the browser extension and remain signed in
+- [x] `EXT-AUTH-001` Sign in through the browser extension and remain signed in
       after closing and reopening its page/profile.
-- [ ] `EXT-SAVE-001` Save an unsaved HTTP page with a chosen list, tags, and note;
+- [x] `EXT-SAVE-001` Save an unsaved HTTP page with a chosen list, tags, and note;
       observe the saved state without reopening.
-- [ ] `EXT-SAVED-001` Open a page the account already holds and render the
+- [x] `EXT-SAVED-001` Open a page the account already holds and render the
       already-saved state instead of the editor.
-- [ ] `EXT-RESTORE-001` Open a page whose link is in Trash and restore the existing
+- [x] `EXT-RESTORE-001` Open a page whose link is in Trash and restore the existing
       entity rather than creating a duplicate.
-- [ ] `EXT-BOUNDARY-001` Open a non-HTTP browser page and show the unsupported-page
+- [x] `EXT-BOUNDARY-001` Open a non-HTTP browser page and show the unsupported-page
       state.
-- [ ] `EXT-SYNC-001` Create a link in the web app, request sync from the browser
+- [x] `EXT-SYNC-001` Create a link in the web app, request sync from the browser
       extension, and observe it there.
-- [ ] `EXT-SYNC-002` Save in the browser extension, sync, and observe the link in
+- [x] `EXT-SYNC-002` Save in the browser extension, sync, and observe the link in
       a separate web profile.
-- [ ] `EXT-EXTRACT-001` On a controlled live page, save and verify the active-tab
+- [x] `EXT-EXTRACT-001` On a controlled live page, save and verify the active-tab
       title/image extraction result reaches the web app.
-- [ ] `EXT-SERVICE-WORKER-001` Exercise a sync request after the MV3 background
+- [x] `EXT-SERVICE-WORKER-001` Exercise a sync request after the MV3 background
       worker has suspended and restarted.
 - [ ] `EXT-RELEASE-001` Manually install the production Chrome build, invoke the
       real toolbar action, and prove the `activeTab` grant exposes the current

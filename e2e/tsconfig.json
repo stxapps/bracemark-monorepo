@@ -11,11 +11,13 @@
   },
   "include": [
     "web/**/*.ts",
+    "extension/**/*.ts",
     "runner/**/*.ts",
     "seed/**/*.ts",
     "global-setup.ts",
     "paths.ts",
-    "playwright.config.ts"
+    "playwright.config.ts",
+    "extension.playwright.config.ts"
   ],
   "exclude": [".artifacts", "node_modules", "eslint.config.mjs"],
   "references": [

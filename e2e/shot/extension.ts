@@ -1,10 +1,19 @@
-import { execFileSync } from 'node:child_process';
-import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { mkdir } from 'node:fs/promises';
+import { join } from 'node:path';
 
-import { type BrowserContext, chromium, expect, type Page } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 
-import { E2E_ROOT, profileDir, SHOT_OUTPUT, SHOT_STAGED_EXTENSION } from '../paths';
+import {
+  buildDevelopmentExtension,
+  EXTENSION_POPUP_WIDTH,
+  extensionId,
+  launchExtensionProfile,
+  openExtensionPopup,
+  signInExtension,
+  stageExtensionCopy,
+  waitForExtensionSync,
+} from '../extension/fixtures/extension';
+import { profileDir, SHOT_OUTPUT, SHOT_STAGED_EXTENSION } from '../paths';
 import { waitForApi } from '../runner/lib';
 import { seedPassword } from '../seed/catalog';
 import { findUserId } from '../seed/plan';
@@ -83,14 +92,9 @@ import { SHOT_USER } from './library';
 // (apps/bracemark-extension/.env.development); only `WXT_PUBLIC_API_URL` differs,
 // so the pixels are the production build's.
 
-// Off E2E_ROOT rather than off this file: `dirname(import.meta.url)` plus a count
-// of `..` is a path that breaks SILENTLY when the file moves — it did, when the
-// shot legs came out of `seed/shot/` and the count went stale by one. Nothing
-// types it, nothing lints it, and the symptom is `nx build` running in a
-// directory that is not this repo. ../paths.ts resolves the same anchor once.
-const REPO_ROOT = join(E2E_ROOT, '..');
-const EXT_PROJECT = '@stxapps/bracemark-extension';
-const BUILT = join(REPO_ROOT, 'apps', 'bracemark-extension', '.output', 'chrome-mv3-dev');
+// Build/load/profile plumbing is shared with the functional extension target in
+// extension/fixtures/extension.ts. That module anchors paths through paths.ts so
+// moving this file cannot silently point `nx build` at the wrong directory.
 const STAGED = SHOT_STAGED_EXTENSION;
 const EXT_PROFILE = profileDir('shot-extension');
 
@@ -100,7 +104,7 @@ const EXT_PROFILE = profileDir('shot-extension');
 // canvas that composes these scales one number by one factor; a capture at
 // another width would be silently rescaled into the same frame and land the
 // popup's type at a size nothing intended. `assertPopupWidth` is the check.
-const POPUP_WIDTH = 360;
+const POPUP_WIDTH = EXTENSION_POPUP_WIDTH;
 
 // Tall enough that no scene's document reaches it, because a document taller than
 // the viewport paints a scrollbar and the popup deliberately opts OUT of the
@@ -239,8 +243,13 @@ async function main(): Promise<void> {
     );
   }
 
-  const extension = await stageExtension();
-  const context = await launch(extension);
+  console.log('building @stxapps/bracemark-extension (development — the api is localhost)');
+  buildDevelopmentExtension();
+  const extension = await stageExtensionCopy(STAGED, { permissions: ['tabs'] });
+  const context = await launchExtensionProfile(EXT_PROFILE, extension, {
+    headless: false,
+    deviceScaleFactor: SCALE,
+  });
 
   try {
     const id = await extensionId(context);
@@ -255,7 +264,9 @@ async function main(): Promise<void> {
     await tab.goto(UNSAVED_URL, { waitUntil: 'load' });
     console.log(`tab: ${await tab.title()}`);
 
-    const popup = await openPopup(context, id, tab);
+    const popup = await openExtensionPopup(context, id, tab, {
+      height: POPUP_VIEWPORT_HEIGHT,
+    });
     await signIn(popup);
     await assertPopupWidth(popup);
 
@@ -275,7 +286,9 @@ async function main(): Promise<void> {
     // saved by this run — see the note above SAVED_URL for why that is the
     // difference between a leg that works once and one that works every time.
     await tab.goto(SAVED_URL, { waitUntil: 'load' });
-    const revisit = await openPopup(context, id, tab);
+    const revisit = await openExtensionPopup(context, id, tab, {
+      height: POPUP_VIEWPORT_HEIGHT,
+    });
     await expect(revisit.getByText('Saved', { exact: true })).toBeVisible({ timeout: 60_000 });
     // `In <list>`, not the bare list name: this page's TITLE is "Lisbon -
     // Wikipedia", so the name alone matches the specimen as well as the row, and
@@ -299,54 +312,6 @@ async function main(): Promise<void> {
  * `.output/` photographs a popup that no longer exists in the source, and nothing
  * about the picture says so.
  */
-async function stageExtension(): Promise<string> {
-  console.log(`building ${EXT_PROJECT} (development — the api is localhost)`);
-  execFileSync('npx', ['nx', 'build:development', EXT_PROJECT], {
-    cwd: REPO_ROOT,
-    stdio: 'inherit',
-  });
-
-  await rm(STAGED, { recursive: true, force: true });
-  await mkdir(dirname(STAGED), { recursive: true });
-  await cp(BUILT, STAGED, { recursive: true });
-
-  const manifestPath = join(STAGED, 'manifest.json');
-  const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as {
-    permissions: string[];
-  };
-  // Added to the COPY, and named here rather than spread over the file so the one
-  // difference between what is photographed and what ships is a single line.
-  manifest.permissions = [...manifest.permissions, 'tabs'];
-  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
-  return STAGED;
-}
-
-/**
- * ⚠ BOTH ARGS, AND PLAYWRIGHT'S OWN CHROMIUM. `--load-extension` alone silently
- * loads nothing, and no `executablePath` is passed on purpose — see the header.
- *
- * Headed, because headless Chrome renders zero-width scrollbars and this popup's
- * whole right edge is a scrollbar-gutter question (docs/safe-area.md). Nothing in
- * these scenes should scroll, but "nothing scrolls" is the thing being
- * photographed, not an assumption to render under.
- */
-async function launch(extension: string): Promise<BrowserContext> {
-  await rm(EXT_PROFILE, { recursive: true, force: true });
-  return chromium.launchPersistentContext(EXT_PROFILE, {
-    headless: false,
-    deviceScaleFactor: SCALE,
-    args: [`--disable-extensions-except=${extension}`, `--load-extension=${extension}`],
-  });
-}
-
-/** The id is minted at load time; the background service worker's URL carries it. */
-async function extensionId(context: BrowserContext): Promise<string> {
-  const worker =
-    context.serviceWorkers()[0] ??
-    (await context.waitForEvent('serviceworker', { timeout: 30_000 }));
-  return new URL(worker.url()).host;
-}
-
 /**
  * The popup's own sign-in — not `launchApp`'s. "Signing in here is separate from
  * the web app", as the form itself says: the extension holds its own key in this
@@ -357,11 +322,10 @@ async function extensionId(context: BrowserContext): Promise<string> {
  * this is seconds of real work rather than a round trip.
  */
 async function signIn(popup: Page): Promise<void> {
-  // `textbox`, not `getByLabel`: the password field ships a "Show password"
-  // toggle inside its own label's scope, so a label query matches two elements.
-  await popup.getByRole('textbox', { name: 'Username' }).fill(SHOT_USER.username);
-  await popup.getByRole('textbox', { name: 'Password' }).fill(seedPassword(SHOT_USER.key));
-  await popup.getByRole('button', { name: 'Sign in' }).click();
+  await signInExtension(popup, {
+    username: SHOT_USER.username,
+    password: seedPassword(SHOT_USER.key),
+  });
   await expect(popup.getByText('Save this page')).toBeVisible({ timeout: 120_000 });
 
   // The specimen carries the live tab's own title, which is the proof that the
@@ -425,15 +389,6 @@ async function fillEditor(popup: Page): Promise<void> {
  * about the wrong URL. Opening, focusing the page, then reloading is the order
  * that makes the query resolve against what this scene is about.
  */
-async function openPopup(context: BrowserContext, id: string, tab: Page): Promise<Page> {
-  const popup = await context.newPage();
-  await popup.setViewportSize({ width: POPUP_WIDTH, height: POPUP_VIEWPORT_HEIGHT });
-  await popup.goto(`chrome-extension://${id}/popup.html`);
-  await tab.bringToFront();
-  await popup.reload();
-  return popup;
-}
-
 /**
  * The footer pill at rest — "Synced <when>", the phase the sync panel calls
  * `idle`. It is the one condition that means the pull finished: `lastSyncAt` is
@@ -443,7 +398,7 @@ async function openPopup(context: BrowserContext, id: string, tab: Page): Promis
  * over a local api — and it is the only slow step in the run.
  */
 async function waitForSyncedPill(popup: Page): Promise<void> {
-  await expect(popup.getByRole('button', { name: /^Synced/ })).toBeVisible({ timeout: 180_000 });
+  await waitForExtensionSync(popup);
 }
 
 /**

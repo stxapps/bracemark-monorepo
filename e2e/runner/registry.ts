@@ -4,8 +4,8 @@ import { pathToFileURL } from 'node:url';
 
 import { E2E_ROOT } from '../paths';
 
-export type E2ESurface = 'web' | 'native' | 'contract';
-export type E2ETier = 'smoke' | 'full';
+export type E2ESurface = 'web' | 'extension' | 'native' | 'contract';
+export type E2ETier = 'smoke' | 'full' | 'release';
 export type FixtureSize = 'empty' | 'small' | 'scale';
 
 export interface E2ECase {
@@ -28,7 +28,7 @@ export interface CaseFilters {
 
 const REGISTRY_PATH = join(E2E_ROOT, 'cases.json');
 const FIXTURE_REGISTRY_PATH = join(E2E_ROOT, 'fixtures.json');
-const CASE_ID = /^(?:WEB|NATIVE|CONTRACT)-[A-Z]+(?:-[A-Z]+)*-\d{3}$/;
+const CASE_ID = /^(?:WEB|EXT|NATIVE|CONTRACT)-[A-Z]+(?:-[A-Z]+)*-\d{3}$/;
 
 export function readCaseRegistry(): E2ECase[] {
   const parsed: unknown = JSON.parse(readFileSync(REGISTRY_PATH, 'utf8'));
@@ -64,10 +64,10 @@ export function validateCaseRegistry(cases = readCaseRegistry()): void {
     if (!CASE_ID.test(testCase.id)) throw new Error(`invalid E2E case id: ${testCase.id}`);
     if (ids.has(testCase.id)) throw new Error(`duplicate E2E case id: ${testCase.id}`);
     ids.add(testCase.id);
-    if (!['web', 'native', 'contract'].includes(testCase.surface)) {
+    if (!['web', 'extension', 'native', 'contract'].includes(testCase.surface)) {
       throw new Error(`${testCase.id}: invalid surface ${testCase.surface}`);
     }
-    if (!['smoke', 'full'].includes(testCase.tier)) {
+    if (!['smoke', 'full', 'release'].includes(testCase.tier)) {
       throw new Error(`${testCase.id}: invalid tier ${testCase.tier}`);
     }
     if (!(testCase.fixture in fixtures.sizes)) {
@@ -79,7 +79,7 @@ export function validateCaseRegistry(cases = readCaseRegistry()): void {
     const source = readFileSync(join(E2E_ROOT, testCase.path), 'utf8');
     const expectedTags = [testCase.id, testCase.tier, ...testCase.traits];
     for (const tag of expectedTags) {
-      const needle = testCase.surface === 'web' ? `@${tag}` : tag;
+      const needle = ['web', 'extension'].includes(testCase.surface) ? `@${tag}` : tag;
       if (!source.includes(needle)) {
         throw new Error(`${testCase.id}: ${testCase.path} is missing registry tag ${needle}`);
       }
@@ -94,13 +94,18 @@ export function selectCases(surface: E2ESurface, filters: CaseFilters = {}): E2E
   const all = readCaseRegistry();
 
   for (const id of requestedCases) {
-    if (!all.some((testCase) => testCase.id === id && testCase.surface === surface)) {
+    const requested = all.find((testCase) => testCase.id === id && testCase.surface === surface);
+    if (!requested) {
       throw new Error(`unknown ${surface} E2E case: ${id}`);
+    }
+    if (requested.tier === 'release') {
+      throw new Error(`${id} is release qualification and cannot run automatically`);
     }
   }
 
   const selected = all.filter((testCase) => {
     if (testCase.surface !== surface) return false;
+    if (testCase.tier === 'release') return false;
     if (requestedCases.size > 0 && !requestedCases.has(testCase.id)) return false;
     if (filters.suite === 'smoke' && testCase.tier !== 'smoke') return false;
     if ([...include].some((trait) => !testCase.traits.includes(trait))) return false;

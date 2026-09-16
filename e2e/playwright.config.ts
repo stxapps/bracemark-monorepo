@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { defineConfig } from '@playwright/test';
 
 import { createRunId } from './runner/lib';
-import { WEB_URL } from './web/fixtures/env';
+import { API_URL, WEB_URL } from './web/fixtures/env';
 import { E2E_ROOT, runArtifactDir } from './paths';
 
 const runId = process.env.E2E_RUN_ID ?? createRunId('web-direct');
@@ -73,17 +73,28 @@ export default defineConfig({
   outputDir: join(runDir, 'test-results'),
   reporter: [['list'], ['html', { outputFolder: join(runDir, 'report'), open: 'never' }]],
 
-  // `npm run dev` is the api + web + extractor stack. `reuseExistingServer` is
-  // true for local runs because the normal case is that the stack is already up
-  // in another terminal. The wrapper/global setup verify its process cwd first.
-  // CI never reuses a listener: the job must own every process it drives.
-  webServer: {
-    command: 'npm run dev',
-    cwd: join(E2E_ROOT, '..'),
-    url: WEB_URL,
-    reuseExistingServer: !process.env.CI,
-    timeout: 180_000,
-    stdout: 'ignore',
-    stderr: 'pipe',
-  },
+  // Start missing legs independently. Keying one root `npm run dev` command only
+  // to WEB_URL reused an orphaned Next listener while the API was absent, then
+  // global setup spent 90 seconds waiting for a process nothing had started.
+  // Local runs reuse each verified listener independently; CI owns both.
+  webServer: [
+    {
+      command: 'npx nx dev @stxapps/bracemark-api',
+      cwd: join(E2E_ROOT, '..'),
+      url: `${API_URL}/health`,
+      reuseExistingServer: !process.env.CI,
+      timeout: 180_000,
+      stdout: 'ignore',
+      stderr: 'pipe',
+    },
+    {
+      command: 'npx nx dev @stxapps/bracemark-web',
+      cwd: join(E2E_ROOT, '..'),
+      url: WEB_URL,
+      reuseExistingServer: !process.env.CI,
+      timeout: 180_000,
+      stdout: 'ignore',
+      stderr: 'pipe',
+    },
+  ],
 });

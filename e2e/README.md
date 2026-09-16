@@ -24,6 +24,7 @@ data. Native runners require an already-running stack and Metro.
 npx nx e2e-web @stxapps/e2e
 npx nx e2e-web:headed @stxapps/e2e
 npx nx e2e-web:report @stxapps/e2e
+npx nx e2e-extension @stxapps/e2e
 
 # Use exact ids from `xcrun simctl list devices booted` or `adb devices`.
 npx nx e2e-mobile @stxapps/e2e -- --platform ios --device <udid> --suite full
@@ -39,7 +40,14 @@ appear — a much longer walk back to the same answer. Run it alone with the
 contract target plus `--case CONTRACT-VECTORS-001`; it needs the dev build and
 Metro, and nothing else.
 
-`--suite smoke` selects only smoke cases; `full` includes both tiers. Narrow any
+The browser extension target needs Playwright's bundled Chromium; install it once
+with `npx playwright install chromium` if the runner reports it missing. It builds
+and stages the unpacked development extension itself. The staged popup path does
+not prove Chrome's real toolbar-created `activeTab` grant; release checks live in
+[`extension/RELEASE.md`](./extension/RELEASE.md).
+
+`--suite smoke` selects only smoke cases; `full` includes smoke and full (never
+release qualification). Narrow any
 runner with repeatable/comma-separated `--case`, `--include-trait`, and
 `--exclude-trait`. The registry is [`cases.json`](./cases.json); its ids and tags
 are checked against the specs and flows by `npm run check:registry -w
@@ -51,8 +59,9 @@ manifest, per-case JUnit, Maestro command/log/screenshot output, named stable
 checkpoints, and a hierarchy dump on failure. A pass that needed Playwright's
 retry exits non-zero.
 
-The three run-it targets also have root scripts: `npm run e2e:web`, `e2e:mobile`,
-`e2e:contract`. There is no bare `npm run e2e` — see `docs/e2e.md`, _running_.
+The four run-it targets also have root scripts: `npm run e2e:web`,
+`e2e:extension`, `e2e:mobile`, `e2e:contract`. There is no bare `npm run e2e` —
+see `docs/e2e.md`, _running_.
 
 ## seeding a dev account
 
@@ -115,6 +124,7 @@ terminal.
 | `fixtures.json`    | empty/small/scale and deterministic/online URL fixture contracts      |
 | `paths.ts`         | where a run writes — the only source of `.artifacts` paths            |
 | `web/`             | Playwright specs (`*.e2e.ts`) and their fixtures                      |
+| `extension/`       | unpacked MV3 specs, shared driver, and release qualification          |
 | `mobile/flows/`    | Maestro flows that run standalone                                     |
 | `mobile/shots/`    | Maestro flows for native store-listing captures                       |
 | `mobile/contract/` | Maestro legs of a contract run — driven by a `runner/`, never by hand |

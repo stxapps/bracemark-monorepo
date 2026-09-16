@@ -9,14 +9,15 @@ survives it.
 `e2e/` is one Nx project, `@stxapps/e2e`. It is deliberately **not** part of
 `npm run test`.
 
-### three surfaces, not two
+### four client surfaces, plus the stitched contracts
 
-| surface      | driver             | what only it can prove                                                          |
-| ------------ | ------------------ | ------------------------------------------------------------------------------- |
-| **web**      | `@playwright/test` | Dexie survives a reload, cross-origin sign-out, real Argon2id in a real browser |
-| **native**   | Maestro            | real expo-sqlite, secure-store, cold-start session, per-platform navigation     |
-| **contract** | both, stitched     | one password → the same keys → the same blobs, **web ⇄ mobile**                 |
-| **vectors**  | Maestro, no stack  | the FROZEN table against real quick-crypto, on device                           |
+| surface       | driver             | what only it can prove                                                          |
+| ------------- | ------------------ | ------------------------------------------------------------------------------- |
+| **web**       | `@playwright/test` | Dexie survives a reload, cross-origin sign-out, real Argon2id in a real browser |
+| **extension** | `@playwright/test` | unpacked MV3 profile/session, popup writes, worker restart, web cross-read      |
+| **native**    | Maestro            | real expo-sqlite, secure-store, cold-start session, per-platform navigation     |
+| **contract**  | both, stitched     | one password → the same keys → the same blobs, **web ⇄ mobile**                 |
+| **vectors**   | Maestro, no stack  | the FROZEN table against real quick-crypto, on device                           |
 
 The third one is the reason this layer exists at all. `web-crypto` and
 `expo-crypto` each carry a `contract-vectors.spec.ts`, and those prove both
@@ -65,11 +66,12 @@ reasons in descending weight:
 
 ```
 e2e/
-  playwright.config.ts    global-setup.ts
+  playwright.config.ts    extension.playwright.config.ts    global-setup.ts
   cases.json              case ids, tiers, traits, fixtures and artifact contract
   fixtures.json           fixture sizes and deterministic/online URL contract
   paths.ts                the one answer to where a run writes
   web/                    playwright specs + fixtures
+  extension/              unpacked-extension specs, shared driver, release checks
   mobile/flows/           maestro flows, run standalone
   mobile/shots/           maestro flows for the native store captures
   mobile/contract/        maestro legs of a contract run (parameterised)
@@ -90,7 +92,8 @@ that true, and the first is the one that will bite:
   from its mere presence, and the project would silently join `nx run-many -t test`.
 - Specs are named `*.e2e.ts`, never `*.spec.ts` — a second line of defence behind
   the first, and the reason `testMatch` is set explicitly.
-- Targets are `e2e-web`, `e2e-mobile`, `e2e-contract`. No target is called `test`.
+- Targets are `e2e-web`, `e2e-extension`, `e2e-mobile`, `e2e-contract`. No target
+  is called `test`.
 
 Inferred from the project's own files, `@stxapps/e2e` gets `typecheck` and `lint`
 for free and no `build`. Both are worth having: a stale selector type is a free
@@ -120,7 +123,8 @@ for exactly this reason.
 
 ### the browser this repo drives
 
-**`@playwright/test`, launching the system Chrome.** The runner is worth its
+**`@playwright/test`, launching system Chrome for the web app and bundled
+Chromium for the browser extension.** The runner is worth its
 dependency for auto-retrying `expect(locator)` assertions, the trace viewer, and
 worker fixtures; hand-rolling retry logic is the reinvention this repo's
 dependency culture exists to avoid.
@@ -136,11 +140,11 @@ nothing when it declines, so driving the popup needs Playwright's own Chromium
 (`npx playwright install chromium`) — see `docs/app-drivers.md`, _driving
 bracemark-web_, and the extension section of `.claude/skills/verify/SKILL.md`.
 
-**Exactly one thing in `e2e/` uses it**, and it is not a spec: `shot/extension.ts`,
-the store-screenshot leg (_the published screenshots_, below). Every **spec** here
-still goes through `CHROME_PATH`, and that is the line to hold — a spec that needs
-the bundled browser has stopped testing what users run. The leg is exempt because
-its subject IS the unpacked extension, which system Chrome cannot load at all.
+Exactly two entrypoints use it: the `e2e-extension` functional target and
+`shot/extension.ts`, the store-screenshot leg (_the published screenshots_,
+below). Every web-app spec still goes through `CHROME_PATH`. The browser
+extension is the exception because its subject is the unpacked build, which
+system Chrome cannot load from command-line flags at all.
 
 **No suppression is needed to keep it that way, and none is configured.** At
 1.62.1 none of `@playwright/test`, `playwright`, or `playwright-core` declares an
@@ -170,6 +174,35 @@ Because it borrows the system browser it is pinned against whatever Chrome is
 installed, and Chrome auto-updates. Expect an occasional bump when a new Chrome
 breaks a protocol assumption; `E2E_CHROME_PATH` overrides the location, and
 `/Applications/Chromium.app` works the same way.
+
+#### the browser extension functional target
+
+`e2e-extension` builds the development Chrome MV3 bundle, copies it under the
+run's artifact directory, adds `tabs` to that copy, and launches it in a fresh
+persistent headed bundled-Chromium profile per case. Headed is required because
+this runtime does not register the unpacked MV3 worker in its default headless
+mode. The target runs one worker: every case already pairs that browser with a
+system-Chrome account client, and two simultaneous pairs stalled both auth
+ceremonies in measurement. The copy matters twice: the store
+manifest remains unchanged, and the profile preserves the origin-bound,
+non-extractable encryption key across popup and browser restarts. Each case also
+owns a disposable account; the sync cases use an independent system-Chrome web
+profile as the other client.
+
+The `tabs` addition lets popup.html run as an attachable tab and still read the
+real active page behind it. It is not a substitute for the shipped manifest's
+toolbar-created `activeTab` grant. `EXT-EXTRACT-001` stages a second copy with one
+additional host permission — only the local web origin — so the background can
+inject the title/image collector into its controlled page. The run manifest
+records both differences and records `activeTabToolbarGrantProven: false`.
+`EXT-RELEASE-001` in `e2e/extension/RELEASE.md` owns the real Chrome-toolbar
+boundary; the Firefox production-build smoke is beside it.
+
+Popup and background remain real extension contexts. The worker-restart case
+stops the installed MV3 service-worker version through CDP, observes its stopped
+state, then uses the popup's public Sync request to wake it back to running and
+observes the pulled link through the live popup. There is no app source import,
+storage-state shortcut, or test-only message.
 
 #### the fixture constraint — read this before touching `web/fixtures/`
 
@@ -470,7 +503,9 @@ npm run dev # api :8787, web :3000, extractor :8788
 
 Every entrypoint now owns a preflight. Web resolves existing listeners on 3000
 and 8787 to their process cwd before Playwright may reuse them; CI disables
-server reuse completely. Native resolves Metro in the Expo dev-client link,
+server reuse completely. Playwright starts or reuses the web and API legs
+independently, so an orphaned same-checkout Next listener cannot prevent the
+missing API from starting. Native resolves Metro in the Expo dev-client link,
 requires it to report a running packager from this checkout, and records the
 link and all stack origins. It also requires the selected device to be booted,
 the development build to be installed, and Android to have completed boot with
@@ -481,6 +516,7 @@ provisioning.
 npx nx e2e-web @stxapps/e2e
 npx nx e2e-web:headed @stxapps/e2e
 npx nx e2e-web:report @stxapps/e2e
+npx nx e2e-extension @stxapps/e2e
 
 # Exact ids come from `xcrun simctl list devices booted` or `adb devices`.
 npx nx e2e-mobile @stxapps/e2e -- --platform ios --device <udid> --suite full
@@ -495,8 +531,8 @@ still be run serially because they share the local stack and are intentionally
 expensive. The vectors case remains first in a full contract run. Run it alone
 with `--case CONTRACT-VECTORS-001`.
 
-The three targets also have root scripts — `npm run e2e:web`, `e2e:mobile`, and
-`e2e:contract`. There is deliberately no bare `npm run e2e`: no honest fan-out
+The four targets also have root scripts — `npm run e2e:web`, `e2e:extension`,
+`e2e:mobile`, and `e2e:contract`. There is deliberately no bare `npm run e2e`: no honest fan-out
 can boot, build, select, and prepare both native platforms. `expo:ios` and
 `expo:android` are prerequisites, not tests; see [expo-build.md](./expo-build.md).
 On Android, run `npm run expo:android:reverse` after each emulator boot.
@@ -504,15 +540,17 @@ On Android, run `npm run expo:android:reverse` after each emulator boot.
 #### cases, suites and fixtures
 
 [`e2e/cases.json`](../e2e/cases.json) is the machine-readable registry. Every
-case has an id, surface, primary `smoke` or `full` tier, traits, fixture size,
-path, and expected artifacts. `npm run check:registry -w @stxapps/e2e` rejects
-duplicate ids, missing paths, and tag drift. `full` includes both tiers;
-`smoke` selects only smoke. `--case`, `--include-trait`, and `--exclude-trait`
-are repeatable or comma-separated and work across the wrappers:
+case has an id, surface, primary `smoke`, `full`, or `release` tier, traits,
+fixture size, path, and expected artifacts. `npm run check:registry -w
+@stxapps/e2e` rejects duplicate ids, missing paths, and tag drift. Automated
+`full` includes smoke and full but never release qualification; `smoke` selects
+only smoke. `--case`, `--include-trait`, and `--exclude-trait` are repeatable or
+comma-separated and work across the wrappers:
 
 ```sh
 npm run e2e:web -- --suite smoke
 npm run e2e:web -- --case WEB-LINK-001
+npm run e2e:extension -- --case EXT-AUTH-001
 npm run e2e:mobile -- --platform ios --device <udid> --exclude-trait destructive
 ```
 
@@ -526,8 +564,10 @@ carry the `online` trait and use the separate public fixture table in that file.
 
 #### artifacts and retries
 
-Every invocation gets `.artifacts/runs/<run-id>/`. Web writes its HTML report,
-failure screenshot, retained failure trace, command, and run manifest there.
+Every invocation gets `.artifacts/runs/<run-id>/`. Web and browser extension
+write their HTML report, failure screenshot, retained failure trace, command,
+and run manifest there. The extension manifest also records bundled Chromium,
+the staged permission differences, and that the toolbar grant was not proven.
 Native writes a secret-free run manifest plus per-case JUnit, Maestro
 manifest/commands/logs/screenshots, named stable checkpoints, sanitized command
 metadata, and an accessibility hierarchy when a case fails. The manifest names
@@ -1055,12 +1095,16 @@ means no compositor has to rewrite product chrome.
 
 ### state today
 
-Measured 2026-09-16 from commit `eb9119b2c393413d15bb85d2bc392c0022de283b`
-with the harness changes present in the working tree:
+Web, native, and contract were measured 2026-09-16 from commit
+`eb9119b2c393413d15bb85d2bc392c0022de283b` with the Phase 1 harness changes
+present in the working tree. Extension was measured the same day from commit
+`6a214440e5789e660934809fffcb9d966ae1b9df` with the Phase 2 changes present in
+the working tree:
 
 | surface          | measured result                                                                  |
 | ---------------- | -------------------------------------------------------------------------------- |
 | web              | **6/6 passed** — Playwright 1.62.1, system Chrome 152.0.7977.83                  |
+| extension        | **9/9 passed** — Playwright 1.62.1, bundled Chromium 151.0.7922.34               |
 | iOS native       | **4/4 passed** — iPhone 17 Pro simulator, iOS 26.5, app 1.0.0 (1), Maestro 2.8.0 |
 | Android native   | **4/4 passed** — `sdk_gphone64_arm64`, Android 16, app 0.0.0 (1), Maestro 2.8.0  |
 | iOS contract     | **3/3 passed** — frozen vectors, web→mobile, mobile→web                          |

@@ -60,6 +60,116 @@
     "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
   },
   {
+    "id": "EXT-AUTH-001",
+    "title": "Extension sign-in survives popup and browser-profile reopen",
+    "surface": "extension",
+    "tier": "smoke",
+    "traits": ["online", "extension"],
+    "fixture": "empty",
+    "path": "extension/extension.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
+    "id": "EXT-SAVE-001",
+    "title": "Extension saves list, tags, and note without a reopen",
+    "surface": "extension",
+    "tier": "smoke",
+    "traits": ["online", "extension"],
+    "fixture": "small",
+    "path": "extension/extension.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
+    "id": "EXT-SAVED-001",
+    "title": "Extension recognizes an already-saved page",
+    "surface": "extension",
+    "tier": "full",
+    "traits": ["online", "extension"],
+    "fixture": "small",
+    "path": "extension/extension.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
+    "id": "EXT-RESTORE-001",
+    "title": "Extension restores a trashed link without duplicating it",
+    "surface": "extension",
+    "tier": "full",
+    "traits": ["online", "destructive", "extension"],
+    "fixture": "small",
+    "path": "extension/extension.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
+    "id": "EXT-BOUNDARY-001",
+    "title": "Extension rejects non-HTTP browser pages",
+    "surface": "extension",
+    "tier": "full",
+    "traits": ["online", "extension"],
+    "fixture": "empty",
+    "path": "extension/extension.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
+    "id": "EXT-SYNC-001",
+    "title": "Extension pulls and renders a web-created link on request",
+    "surface": "extension",
+    "tier": "full",
+    "traits": ["online", "extension"],
+    "fixture": "small",
+    "path": "extension/extension.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
+    "id": "EXT-SYNC-002",
+    "title": "A separate web profile reads an extension-created link",
+    "surface": "extension",
+    "tier": "full",
+    "traits": ["online", "extension"],
+    "fixture": "small",
+    "path": "extension/extension.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
+    "id": "EXT-EXTRACT-001",
+    "title": "Active-page title and image extraction reaches the web app",
+    "surface": "extension",
+    "tier": "full",
+    "traits": ["online", "extension"],
+    "fixture": "small",
+    "path": "extension/extension.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
+    "id": "EXT-SERVICE-WORKER-001",
+    "title": "A sync request wakes a terminated MV3 service worker",
+    "surface": "extension",
+    "tier": "full",
+    "traits": ["online", "extension"],
+    "fixture": "small",
+    "path": "extension/extension.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
+    "id": "EXT-RELEASE-001",
+    "title": "Production Chrome toolbar invocation grants the active tab",
+    "surface": "extension",
+    "tier": "release",
+    "traits": ["online", "extension"],
+    "fixture": "small",
+    "path": "extension/RELEASE.md",
+    "artifacts": ["manual-checklist"]
+  },
+  {
+    "id": "EXT-RELEASE-002",
+    "title": "Firefox production build signs in, saves, reopens, and syncs",
+    "surface": "extension",
+    "tier": "release",
+    "traits": ["online", "extension"],
+    "fixture": "small",
+    "path": "extension/RELEASE.md",
+    "artifacts": ["manual-checklist"]
+  },
+  {
     "id": "NATIVE-ACCOUNT-001",
     "title": "Password sign-in survives a cold restart",
     "surface": "native",
