@@ -1,0 +1,120 @@
+# Delete the account from the device, and prove it stays deleted.
+#
+# The api's own spec owns the server matrix — tombstone, doors, subscription
+# gate, every session revoked (apps/bracemark-api/src/routes/auth.spec.ts). What
+# only a device shows is the client half: Argon2id + the signed delete-account
+# proof through react-native-quick-crypto, then endSession taking the session out
+# of expo-secure-store + expo-sqlite so a COLD START comes up signed out. Then the
+# same credentials are refused at the real sign-in form.
+#
+#   maestro test mobile/flows/delete-account.yaml -e USERNAME=… -e PASSWORD=…
+#
+# Destructive: the runner provisions a fresh account for this flow alone.
+appId: com.bracemark.app
+tags: [ACCOUNT-DELETE-002, full, online, destructive, ios, android]
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+
+# Settings through the more-options menu, the same path delete-all-data.yaml
+# drives on both platforms.
+- tapOn:
+    id: 'links-more-options'
+- tapOn:
+    id: 'links-open-settings'
+- tapOn:
+    id: 'settings-open-navigation'
+- tapOn:
+    id: 'settings-nav-account'
+
+- scrollUntilVisible:
+    element:
+      id: 'delete-account-open'
+- tapOn:
+    id: 'delete-account-open'
+
+# Password first, while nothing else on the screen could take a stray tap, and
+# dismiss the keyboard while the field is still focused — Android's
+# `hideKeyboard` is a BACK press, which would leave Settings if no IME were up
+# (docs/soft-keyboard.md, _verifying any of this_).
+- tapOn:
+    id: 'delete-account-password'
+- inputText: ${PASSWORD}
+- hideKeyboard
+
+- scrollUntilVisible:
+    element:
+      id: 'delete-account-confirm'
+- tapOn:
+    id: 'delete-account-confirm'
+- scrollUntilVisible:
+    element:
+      id: 'delete-account-submit'
+- takeScreenshot: delete-account-ready
+- tapOn:
+    id: 'delete-account-submit'
+
+# Argon2id runs on the device before the POST, hence the minute. The signed-out
+# landing screen is the only exit a successful deletion has; a wrong password or
+# a failed POST keeps Settings up with an error, and fails here.
+#
+# iOS may raise its "Save Password?" sheet as the password field unmounts, over
+# the landing screen — the same SpringBoard race subflows/sign-in.yaml documents.
+- repeat:
+    times: 5
+    while:
+      notVisible: 'Sign in'
+    commands:
+      - runFlow:
+          when:
+            platform: iOS
+          commands:
+            - tapOn:
+                text: 'Not Now'
+                optional: true
+      - assertVisible:
+          text: 'Sign in'
+          optional: true
+- extendedWaitUntil:
+    visible: 'Sign in'
+    timeout: 60000
+- assertNotVisible:
+    id: 'links-screen'
+
+# The persistence half. `stopApp` first, because `launchApp` alone resumes. A
+# session left in secure-store would land on links-screen here instead.
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible: 'Sign in'
+    timeout: 30000
+- assertNotVisible:
+    id: 'links-screen'
+- takeScreenshot: signed-out-after-cold-restart
+
+# The refusal. A tombstoned username 404s on the pre-auth door fetch, so no
+# Argon2id runs and the answer is quick.
+- tapOn: 'Sign in'
+- tapOn:
+    id: 'sign-in-username'
+- inputText: ${USERNAME}
+- tapOn:
+    id: 'sign-in-password'
+- inputText: ${PASSWORD}
+- hideKeyboard
+- tapOn:
+    id: 'sign-in-submit'
+
+# By id AND by a word of the message. The id alone cannot tell a refusal from an
+# outage — an unreachable api fills the same node with "Could not sign in" — so
+# the word that distinguishes them is the assertion, not a selector.
+- extendedWaitUntil:
+    visible:
+      id: 'sign-in-error'
+    timeout: 30000
+- assertVisible:
+    id: 'sign-in-error'
+    text: '.*[Ii]ncorrect.*'
+- assertNotVisible:
+    id: 'links-screen'
+- takeScreenshot: sign-in-refused-after-delete

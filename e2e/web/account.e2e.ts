@@ -1,7 +1,19 @@
+import { type Page } from '@playwright/test';
+
 import { expect, test } from './fixtures/app';
 import { unique } from './fixtures/data';
 import { SITE_URL } from './fixtures/env';
 import { addLinkButton } from './fixtures/links';
+
+// Both ways out of a session land on the marketing site's origin by a cross-origin
+// `location.replace`. See the sign-out spec below for why it is stubbed.
+async function stubMarketingSite(page: Page): Promise<URL> {
+  const site = new URL(SITE_URL);
+  await page.route(`${site.origin}/**`, (route) =>
+    route.fulfill({ contentType: 'text/html', body: '<title>site stub</title>' }),
+  );
+  return site;
+}
 
 // Account creation itself is not a test in this file — every worker performs it in
 // setup (fixtures/account.ts), so a failure there fails the whole run loudly and a
@@ -46,10 +58,7 @@ test.describe('account', () => {
       // faked that the spec asserts on: the claim is that bracemark-web sends the
       // browser to the site's ORIGIN, and what the site would have served is its
       // own concern, tested in its own project.
-      const site = new URL(SITE_URL);
-      await page.route(`${site.origin}/**`, (route) =>
-        route.fulfill({ contentType: 'text/html', body: '<title>site stub</title>' }),
-      );
+      const site = await stubMarketingSite(page);
 
       // Sign out from a USER LIST, not from the bare /links this spec used to use.
       // That distinction is the whole regression: bare /links selects My List, a
@@ -91,6 +100,54 @@ test.describe('account', () => {
       // would hang; one that asserted on the site's content would be testing the
       // wrong project.
       await page.waitForURL((url) => url.origin === site.origin, { timeout: 30_000 });
+    },
+  );
+
+  test(
+    'deleting the account ends the session and refuses a later sign-in',
+    { tag: ['@ACCOUNT-DELETE-001', '@full', '@online', '@destructive'] },
+    async ({ isolatedApp: app }) => {
+      // Destructive by definition, so it owns its account and profile. What the
+      // api's own spec cannot reach is the client half: the password re-entry
+      // derives the key in a real browser and signs the delete-account proof,
+      // and the local teardown then has to take the IndexedDB session with it.
+      // The server's deletion matrix (tombstone, doors, the subscription gate,
+      // every session revoked) stays in apps/bracemark-api/src/routes/auth.spec.ts.
+      const { page, credentials } = app;
+      const site = await stubMarketingSite(page);
+
+      await page.goto('/settings/account');
+      await page.getByRole('button', { name: /^Delete account/ }).click();
+
+      // By id, as in fixtures/account.ts: the password wrapper's "Show password"
+      // toggle also matches the field's label.
+      await page.locator('#delete-account-password').fill(credentials.password);
+      await page.locator('#delete-account-confirm').check();
+      await page.getByRole('button', { name: 'Delete account forever' }).click();
+
+      // Argon2id runs before the POST, so this waits out a derivation.
+      await page.waitForURL((url) => url.origin === site.origin, { timeout: 60_000 });
+
+      // The session has to be gone from the PROFILE, not just from the page that
+      // left. A fresh load of a protected route with no stored session is a
+      // direct visit, which AuthGuard answers with /sign-in rather than the app.
+      await page.goto('/links');
+      await expect(page).toHaveURL(/\/sign-in/);
+      await expect(addLinkButton(page)).not.toBeVisible();
+
+      await page.locator('#username').fill(credentials.username);
+      await page.locator('#password').fill(credentials.password);
+      await page.getByRole('button', { name: /^Sign in$/ }).click();
+
+      // The message is asserted because it is the only thing that tells a refusal
+      // from an outage: an unreachable api raises an alert in the same place with
+      // "Could not sign in". A deleted username answers exactly like one that never
+      // existed (docs/data-lifecycle.md, _delete account_).
+      // Scoped to the form: Next's route announcer is also a role="alert".
+      await expect(page.locator('form').getByRole('alert')).toHaveText(
+        /Incorrect username or password/,
+      );
+      await expect(page).toHaveURL(/\/sign-in/);
     },
   );
 });

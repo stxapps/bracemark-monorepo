@@ -440,6 +440,10 @@ All of them are in the app:
 | `delete-all-confirm`        | ” — the confirmation checkbox row               |
 | `delete-all-submit`         | ” — the destructive action                      |
 | `delete-all-complete`       | ” — renders only after a successful wipe        |
+| `delete-account-open`       | `src/features/settings/account-section.tsx`     |
+| `delete-account-password`   | ” — the fresh-proof password re-entry           |
+| `delete-account-confirm`    | ” — the confirmation checkbox row               |
+| `delete-account-submit`     | ” — the destructive action                      |
 | `contract-vectors-pass`     | `src/app/contract-vectors.tsx` (dev-only)       |
 | `contract-vectors-fail`     | ” — carries the failing check names in its text |
 | `vector-<check>`            | ” — one per vector, `PASS`/`FAIL`/`RUNNING`     |
@@ -1142,6 +1146,20 @@ event was discarded. The hook now filters the file path instead.
 empty account (mounting FlashList), then saves a second into that already-mounted
 list and asserts both without a relaunch or refresh. Persistence alone is not a
 pass; the screen where the user saved the link has to update immediately.
+
+The Phase 3 account cases were measured the same day from commit
+`9358e0ad994063c38d6a78884aafb559194d2af7` with their changes present in the
+working tree, on the same browser, simulator, emulator and Maestro as above:
+
+| surface        | measured result                                                                            |
+| -------------- | ------------------------------------------------------------------------------------------ |
+| web            | **9/9 passed** — `WEB-ACCOUNT-001`/`002` and `ACCOUNT-DELETE-001`, three repeats, no retry |
+| iOS native     | **3/3 passed** — `NATIVE-ACCOUNT-001`/`002` and `ACCOUNT-DELETE-002`                       |
+| Android native | **3/3 passed** — the same three flows                                                      |
+
+Both delete-account cases were also run against a client that skipped the
+delete-account POST but still ended its local session. Each failed at its
+refused-sign-in assertion, which is the half a local sign-out cannot fake.
 
 Nothing here runs automatically. There is still no CI ([testing.md](./testing.md)),
 and the only git hook guards `internal/`.

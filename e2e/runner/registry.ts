@@ -28,7 +28,9 @@ export interface CaseFilters {
 
 const REGISTRY_PATH = join(E2E_ROOT, 'cases.json');
 const FIXTURE_REGISTRY_PATH = join(E2E_ROOT, 'fixtures.json');
-const CASE_ID = /^(?:WEB|EXT|NATIVE|CONTRACT)-[A-Z]+(?:-[A-Z]+)*-\d{3}$/;
+// The prefix names the claim, not the surface: a case such as ACCOUNT-DELETE-001
+// is filed under the journey it proves, and `surface` says where it runs.
+const CASE_ID = /^[A-Z]+(?:-[A-Z]+)+-\d{3}$/;
 
 export function readCaseRegistry(): E2ECase[] {
   const parsed: unknown = JSON.parse(readFileSync(REGISTRY_PATH, 'utf8'));

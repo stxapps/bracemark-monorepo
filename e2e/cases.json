@@ -20,6 +20,16 @@
     "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
   },
   {
+    "id": "ACCOUNT-DELETE-001",
+    "title": "Deleting an account ends the session and refuses a later sign-in",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online", "destructive"],
+    "fixture": "empty",
+    "path": "web/account.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
     "id": "WEB-LINK-001",
     "title": "A link added through quick-add survives reload",
     "surface": "web",
@@ -187,6 +197,16 @@
     "traits": ["online", "ios", "android"],
     "fixture": "empty",
     "path": "mobile/flows/recovery-sign-in.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "ACCOUNT-DELETE-002",
+    "title": "Deleting an account on device survives a cold start and refuses sign-in",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "destructive", "ios", "android"],
+    "fixture": "empty",
+    "path": "mobile/flows/delete-account.yaml",
     "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
   },
   {

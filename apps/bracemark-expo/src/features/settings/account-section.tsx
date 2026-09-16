@@ -133,7 +133,12 @@ function DeleteAccountView({ onBack }: { onBack: () => void }) {
           even though you're signed in. */}
       <View className="mt-6 max-w-sm gap-2">
         <Text className="text-sm font-medium">Confirm your password</Text>
+        {/* `aria-label` because the Text above is only visually adjacent — RN
+            has no <label for>. `testID`s here and below are the e2e contract
+            (docs/e2e.md, _the testID contract_). */}
         <PasswordInput
+          testID="delete-account-password"
+          aria-label="Confirm your password"
           autoComplete="current-password"
           value={password}
           editable={!isPending}
@@ -153,6 +158,7 @@ function DeleteAccountView({ onBack }: { onBack: () => void }) {
           be re-declared here or the whole row announces as untyped text. */}
       <Pressable
         role="checkbox"
+        testID="delete-account-confirm"
         aria-checked={confirmed}
         className="mt-4 flex-row items-start gap-3 rounded-lg border border-border p-3"
         onPress={() => {
@@ -182,7 +188,12 @@ function DeleteAccountView({ onBack }: { onBack: () => void }) {
         {/* `subscriptionBlocks` is the one disable this view keeps: the
             SettingsNotice above states it in full and links where to fix it, so the
             dimmed button sits under its own explanation. */}
-        <Button variant="destructive" disabled={isPending || subscriptionBlocks} onPress={onSubmit}>
+        <Button
+          variant="destructive"
+          testID="delete-account-submit"
+          disabled={isPending || subscriptionBlocks}
+          onPress={onSubmit}
+        >
           <Icon as={Trash2} className="size-4" />
           <Text>{isPending ? 'Deleting account…' : 'Delete account forever'}</Text>
         </Button>
@@ -609,6 +620,7 @@ export function AccountSection() {
               icon={<Icon as={UserX} className="size-5 text-destructive" />}
               title="Delete account"
               description="Permanently delete your account and all your data."
+              testID="delete-account-open"
               onPress={() => setView('delete')}
               destructive
             />

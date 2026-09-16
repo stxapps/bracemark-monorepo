@@ -39,14 +39,14 @@ not itself completeness.
 Present in the tree today; this table is an inventory, not a claim that every row
 has just passed on every platform.
 
-| Surface           | Current coverage                                                                                                                                        |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Web               | Six Playwright cases: session reload, sign-out teardown, one-link persistence, two mounted writes, list creation round trip, mounted delete-all repaint |
-| Native            | Four Maestro flows: password sign-in/cold start, recovery sign-in, two mounted link inserts, mounted delete-all repaint                                 |
-| Contract          | Frozen device vectors plus web to mobile and mobile to web encrypted round trips                                                                        |
-| Browser extension | Nine Playwright cases: profile auth, save/saved/restore/boundary states, two-way sync, live extraction, and MV3 worker restart                          |
-| PWA               | Unit/component coverage around registration and navigation; no production-build offline E2E target                                                      |
-| Automation        | No CI workflow currently runs these targets                                                                                                             |
+| Surface           | Current coverage                                                                                                                                                          |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Web               | Seven Playwright cases: session reload, sign-out teardown, delete account, one-link persistence, two mounted writes, list creation round trip, mounted delete-all repaint |
+| Native            | Five Maestro flows: password sign-in/cold start, recovery sign-in, delete account/cold start, two mounted link inserts, mounted delete-all repaint                        |
+| Contract          | Frozen device vectors plus web to mobile and mobile to web encrypted round trips                                                                                          |
+| Browser extension | Nine Playwright cases: profile auth, save/saved/restore/boundary states, two-way sync, live extraction, and MV3 worker restart                                            |
+| PWA               | Unit/component coverage around registration and navigation; no production-build offline E2E target                                                                        |
+| Automation        | No CI workflow currently runs these targets                                                                                                                               |
 
 Before adding broad new coverage, capture a fresh result for every existing case:
 
@@ -209,16 +209,16 @@ to release qualification.
 Keep the existing account cases and add only boundaries not already observable
 below E2E.
 
-- [ ] `WEB-ACCOUNT-001` Existing: session survives a browser reload.
-- [ ] `WEB-ACCOUNT-002` Existing: sign-out from a user list leaves for the
+- [x] `WEB-ACCOUNT-001` Existing: session survives a browser reload.
+- [x] `WEB-ACCOUNT-002` Existing: sign-out from a user list leaves for the
       marketing site without a teardown race.
-- [ ] `NATIVE-ACCOUNT-001` Existing: password sign-in survives a cold restart;
+- [x] `NATIVE-ACCOUNT-001` Existing: password sign-in survives a cold restart;
       run on iOS and Android.
-- [ ] `NATIVE-ACCOUNT-002` Existing: a wrong recovery code fails and the real one
+- [x] `NATIVE-ACCOUNT-002` Existing: a wrong recovery code fails and the real one
       signs in; run on iOS and Android.
-- [ ] `ACCOUNT-DELETE-001` Delete an account from an isolated web account; prove
+- [x] `ACCOUNT-DELETE-001` Delete an account from an isolated web account; prove
       the session ends and a later sign-in is refused.
-- [ ] `ACCOUNT-DELETE-002` Repeat the user-visible delete-account boundary on iOS
+- [x] `ACCOUNT-DELETE-002` Repeat the user-visible delete-account boundary on iOS
       and Android, without re-testing the server's entire deletion matrix.
 
 ### Link lifecycle and editors
