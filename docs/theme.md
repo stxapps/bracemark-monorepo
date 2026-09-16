@@ -208,7 +208,7 @@ plain JS. Single source, no hand-copied duplicate of the resolver.
   read from the sqlite singletons, so it needs no account. There is deliberately
   **no `expo-ui` package** while bracemark-expo is the only expo app, so it lives in
   the app, not a package (the same reason the RN reusables components do). Three
-  substitutions from web:
+  substitutions from web, and one surface with no web counterpart at all:
 
   - **Apply is `Uniwind.setTheme('light' | 'dark' | 'system')`, not the `.dark`
     class.** RN has no `<html>` to toggle; Uniwind's runtime theme is the
@@ -231,11 +231,34 @@ dark` token sets (the native mirror of web-ui's `:root`/`.dark`).
     pre-paint apparatus (the section below) exists _only_ because a browser paints
     before React/IndexedDB. Native has no pre-paint script and no synchronous
     store to read mid-mount, so there is nothing to mirror into. The native splash
-    screen (`expo-splash-screen`, already wired) covers startup, and Uniwind's own
-    startup default is `system` — which matches `DEFAULT_THEME`, so first paint is
-    consistent with the default exactly like web's cold-load fallback. If a
-    pinned-theme cold flash ever needs eliminating, the native lever is a real gate
-    (hold the splash until the settings live read first resolves), not a cache.
+    screen covers startup — but only because it is **held** there:
+    `src/components/splash-hold.tsx` keeps it up until `AuthProvider` has read the
+    session back, since expo-router would otherwise drop it one frame after the
+    navigator is ready, which is before any of our reads land
+    ([expo-native-deps.md](./expo-native-deps.md), _expo-splash-screen_). Under it,
+    Uniwind's own startup default is `system` — which matches `DEFAULT_THEME`, so
+    first paint is consistent with the default exactly like web's cold-load
+    fallback. The hold is on AUTH, not on settings, so a **pinned** theme can still
+    cross over a paint or two after the splash lifts; eliminating that is the same
+    lever extended rather than a cache, and it is not free — `useSettings` has no
+    "the live read has landed" signal to gate on (it defaults every field instead,
+    which is what makes it safe to call mid-mount everywhere else), so it would
+    need one before the hold could wait for it.
+  - **The root navigator carries `--color-background` too.** Every navigator in
+    the app (the root `Stack`, `(app)`'s, `(auth)`'s, settings' and the links
+    `Drawer`) reads react-navigation's theme from the nearest provider, and with
+    none of our own they all took its stock `DefaultTheme`, whose
+    `colors.background` is `rgb(242, 242, 242)` — which native-stack hands to every
+    screen as its default `contentStyle`. That is invisible under a screen painting
+    its own `bg-background`, and it is the only thing on screen whenever one isn't:
+    the null frames of the guards and the gates (docs/locks.md, _the no-flash
+    pair_). In dark mode it read as near-white. `src/app/_layout.tsx` now wraps the
+    root `Stack` in a `ThemeProvider` (react-navigation's, not ours) carrying
+    `DefaultTheme` with `background` replaced by the live token via
+    `useCSSVariable` — the same read `ui/switch.tsx` uses, for the same reason: a
+    hex pair here would be a second copy of `global.css` free to drift. Only
+    `background` is overridden, not the whole palette — `card` still reaches the
+    Drawer panel, and nothing in this app renders against `text`/`border`.
 
   The **iOS/Android share sheet** (`features/share/share-root.tsx`) mounts outside
   the router tree — a separate process on iOS — so it carries **no

@@ -234,6 +234,57 @@ plugin to the app config. Wiring (already done):
     non-route markers are the fixed set (`_layout`, `+not-found`, `+html`,
     `+native-intent`, `+middleware`, `+api`, plus `(group)`/`[param]`).
 
+#### expo-splash-screen
+
+Configured in `app.config.ts` (the mark at 200pt, `contain`, on `#ffffff` with a
+`dark` pair on `#0a0a0a` — the same two values `--color-background` resolves to,
+see [brand-assets.md](./brand-assets.md)), so both platforms get a native launch
+screen with no JS involved. What needs saying is **when it comes off**, because
+the default answer is not the one this app wants and nothing about it is visible
+in our source.
+
+**expo-router hides the splash itself.** One `requestAnimationFrame` after the
+`NavigationContainer` reports ready (`global-state/router-store.js`, `onReady` →
+`_internal_maybeHideAsync`), which it arms from the entry in a `setTimeout`
+explicitly so an app can get its own `preventAutoHideAsync()` in first
+(`renderRootComponent`). That instant is the first frame the navigator CAN paint —
+strictly before `AuthProvider`'s secure-store read resolves, before the locks
+read, before the store's first-sync flag. So the splash used to lift onto the null
+branch of `HomeGuard`/`AuthGuard` and the `'checking'` branch of `AppLockGate`/
+`InitialSyncGate`: a launch screen followed by a blank one, every cold start, for
+as long as a keystore round trip takes on a cold Android process.
+
+**The hold is two files and only works as a pair.**
+`SplashScreen.preventAutoHideAsync()` at module scope in `src/app/_layout.tsx`
+(module scope is the point — anything later loses the race it was written to win)
+turns the router's auto-hide into a no-op, and
+`src/components/splash-hold.tsx` — mounted under `AuthProvider`, renders null in
+every state — hides it once `status` leaves `'loading'`. The prevent without the
+component is a splash that never lifts, which is why neither half moves alone.
+
+Three properties worth keeping if this is ever touched:
+
+- **It hides on the AUTH decision, not on first content.** The `<Redirect>` to
+  `/links`, the locks read and the first-sync flag all land after the splash is
+  gone. Each is one local read, the long pole is the one being covered, and
+  reaching further would mean gating on providers that only exist under `(app)` —
+  a guest never mounts them.
+- **What those remaining frames paint is the root navigator's background**, which
+  is `--color-background` only because `_layout.tsx` says so; react-navigation's
+  stock `DefaultTheme` background is `rgb(242, 242, 242)`. See
+  [theme.md](./theme.md), _per-app wiring_.
+- **The hide is latched and has a 5s fallback timer.** A splash that never hides
+  is an app that never starts — no error, no screen, nothing to tap — so a
+  hydration that never settles still gets the screen back.
+  `components/splash-hold.spec.tsx` pins that one, because it is the only failure
+  here that isn't cosmetic and it has no symptom in jest or on device short of a
+  brick.
+
+`expo-splash-screen` is in the iOS share extension's `excludedPackages`
+(`app.config.ts`): that process has no splash, and it never loads `_layout.tsx`
+anyway — it boots `index.share.js`, which registers the share root and nothing
+else ([share-sheet.md](./share-sheet.md)).
+
 #### uniwind + react-native-reusables
 
 The RN equivalent of the web tailwind + shadcn stack (see architecture.md —

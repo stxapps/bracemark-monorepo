@@ -17,9 +17,18 @@ import { useAuth } from '@stxapps/expo-react';
 // of bg-background that AuthGuard, GuestGuard, AppLockGate and InitialSyncGate
 // each already spend: a guard or a gate renders NOTHING while it is still
 // deciding, as a semantic guarantee rather than a timing race (docs/locks.md,
-// the no-flash pair). If that beat ever needs closing, the lever is the native splash —
-// `SplashScreen.preventAutoHideAsync()` at the root, hidden once `status` leaves
-// 'loading' — not a loading screen here, which would just be a second flash.
+// the no-flash pair). That beat is now SPENT BEHIND THE SPLASH, which is where
+// this comment used to say the lever was: components/splash-hold.tsx holds the
+// native splash until `status` leaves 'loading', so what a launch shows through
+// the read is the app's own splash and not a blank screen. Two things follow, and
+// both belong here. A loading screen in THIS file is still wrong — it would be
+// the second flash, now against the splash instead of against the hero. And "a
+// beat of bg-background" only became true when the root navigator started
+// carrying `--color-background` as its theme background (src/app/_layout.tsx):
+// react-navigation's stock DefaultTheme background is a light grey, so before
+// that the blank frame was near-white in dark mode. The frames that still reach
+// it are the ones after the splash lifts — the <Redirect>'s, and the two gates'
+// 'checking' reads on the other side of it.
 //
 // This has no web sibling any more. On the web the landing page moved off the app
 // origin entirely, to bracemark-site on the apex (docs/hosting.md), so
