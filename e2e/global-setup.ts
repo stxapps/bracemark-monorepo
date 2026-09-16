@@ -1,4 +1,6 @@
 import { waitForApi } from './runner/lib';
+import { assertStackOwnedByRepo } from './runner/stack';
+import { API_URL, WEB_URL } from './web/fixtures/env';
 
 // `webServer` in playwright.config.ts waits for bracemark-web on :3000, but
 // `npm run dev` is a three-project `nx run-many` and Next is reliably first up.
@@ -10,4 +12,8 @@ import { waitForApi } from './runner/lib';
 // web/fixtures/app.ts, where it is scoped and torn down.
 export default async function globalSetup(): Promise<void> {
   await waitForApi();
+  await assertStackOwnedByRepo([
+    { origin: WEB_URL, label: 'bracemark-web', required: true },
+    { origin: API_URL, label: 'bracemark-api', required: true },
+  ]);
 }

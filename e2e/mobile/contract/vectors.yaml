@@ -18,6 +18,7 @@
 # as they resolve and exactly one terminal marker, so there is no window in which
 # a half-finished run looks like a pass.
 appId: com.bracemark.app
+tags: [CONTRACT-VECTORS-001, full, ios, android]
 ---
 - runFlow:
     file: ../flows/subflows/cold-launch.yaml
@@ -39,3 +40,4 @@ appId: com.bracemark.app
     visible:
       id: 'contract-vectors-pass'
     timeout: 180000
+- takeScreenshot: frozen-contract-vectors-pass

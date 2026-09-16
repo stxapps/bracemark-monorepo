@@ -8,6 +8,7 @@
 #
 #   maestro test mobile/flows/sign-in.yaml -e USERNAME=… -e PASSWORD=…
 appId: com.bracemark.app
+tags: [NATIVE-ACCOUNT-001, smoke, online, ios, android]
 ---
 - runFlow:
     file: subflows/sign-in.yaml
@@ -19,3 +20,4 @@ appId: com.bracemark.app
     visible:
       id: 'links-screen'
     timeout: 30000
+- takeScreenshot: signed-in-after-cold-restart

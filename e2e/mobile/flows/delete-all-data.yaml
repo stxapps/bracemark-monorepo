@@ -3,6 +3,7 @@
 # behind Settings, useLiveRead's explicit invalidation, and the staged links
 # repaint. The same flow runs on iOS and Android; run one platform at a time.
 appId: com.bracemark.app
+tags: [NATIVE-DATA-001, full, online, destructive, ios, android]
 env:
   LINK_URL: 'https://delete-all.invalid/saved-link'
   LIST_NAME: 'Delete test list'
@@ -86,3 +87,4 @@ env:
 - assertVisible: 'My List'
 - assertVisible: 'Archive'
 - assertVisible: 'Trash'
+- takeScreenshot: mounted-screen-after-delete-all

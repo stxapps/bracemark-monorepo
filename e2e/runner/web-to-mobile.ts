@@ -3,7 +3,8 @@ import { unresolvableUrl } from '../web/fixtures/data';
 import { launchApp } from '../web/fixtures/launch';
 import { addLink, displayUrl } from '../web/fixtures/links';
 import { syncAndWait } from '../web/fixtures/sync';
-import { maestro, waitForApi, writeManifest } from './lib';
+import { type NativeRun } from './native-run';
+import { type E2ECase } from './registry';
 
 // THE contract run, web → mobile. Create an account and write links in a real
 // browser, then sign into the same account on a real device and read them back.
@@ -23,11 +24,9 @@ import { maestro, waitForApi, writeManifest } from './lib';
 // files point at `http://localhost:8787` and EXPO_PUBLIC_* is inlined by Metro at
 // bundle time, so the emulator has to be taught that localhost means the host,
 // rather than the env being forked per platform (docs/env-files.md).
-async function main(): Promise<void> {
-  await waitForApi();
-
-  const first = unresolvableUrl('written-on-web-one');
-  const second = unresolvableUrl('written-on-web-two');
+export async function runWebToMobile(run: NativeRun, testCase: E2ECase): Promise<void> {
+  const first = unresolvableUrl(`${run.runId}-written-on-web-one`);
+  const second = unresolvableUrl(`${run.runId}-written-on-web-two`);
   const links = [first, second];
 
   const app = await launchApp(profileDir('contract-web-to-mobile'));
@@ -43,24 +42,16 @@ async function main(): Promise<void> {
     await app.close();
   }
 
-  const manifest = await writeManifest('contract-web-to-mobile', {
-    direction: 'web → mobile',
-    username: app.credentials.username,
-    password: app.credentials.password,
-    links,
-  });
-  console.log(`wrote ${manifest}`);
-
-  await maestro('mobile/contract/verify-links.yaml', {
-    env: {
+  await run.runCase(
+    testCase,
+    {
       USERNAME: app.credentials.username,
       PASSWORD: app.credentials.password,
       LINK_1: displayUrl(first),
       LINK_2: displayUrl(second),
     },
-  });
+    [app.credentials.password],
+  );
 
   console.log('contract web → mobile: OK');
 }
-
-await main();

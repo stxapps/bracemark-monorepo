@@ -50,12 +50,12 @@ has just passed on every platform.
 
 Before adding broad new coverage, capture a fresh result for every existing case:
 
-- [ ] `BASE-001` Run the complete web suite.
-- [ ] `BASE-002` Run all four native flows on iOS.
-- [ ] `BASE-003` Run all four native flows on Android.
-- [ ] `BASE-004` Run vectors, web to mobile, and mobile to web on iOS.
-- [ ] `BASE-005` Run vectors, web to mobile, and mobile to web on Android.
-- [ ] `BASE-006` Update the state table in `docs/e2e.md` with the measured
+- [x] `BASE-001` Run the complete web suite.
+- [x] `BASE-002` Run all four native flows on iOS.
+- [x] `BASE-003` Run all four native flows on Android.
+- [x] `BASE-004` Run vectors, web to mobile, and mobile to web on iOS.
+- [x] `BASE-005` Run vectors, web to mobile, and mobile to web on Android.
+- [x] `BASE-006` Update the state table in `docs/e2e.md` with the measured
       results, versions, and any still-pending leg.
 
 ## Rules for every new case
@@ -104,66 +104,66 @@ Additional traits: `online`, `destructive`, `scale`, `visual`, `ios`, `android`,
 
 ### Native runner
 
-- [ ] `HARNESS-NATIVE-001` Add required platform and device selection to the
+- [x] `HARNESS-NATIVE-001` Add required platform and device selection to the
       mobile runner. Pass Maestro the selected device explicitly; fail if the
       resolved device does not match.
-- [ ] `HARNESS-NATIVE-002` Accept `smoke`/`full` and include/exclude traits, then
+- [x] `HARNESS-NATIVE-002` Accept `smoke`/`full` and include/exclude traits, then
       select Maestro flows through tags rather than directory ordering.
-- [ ] `HARNESS-NATIVE-003` Give every invocation a unique artifact directory
-      containing JUnit, detailed HTML where useful, screenshots, recordings,
-      command metadata, and debug logs.
-- [ ] `HARNESS-NATIVE-004` Record platform, device id/model, OS version, Maestro
+- [x] `HARNESS-NATIVE-003` Give every invocation a unique artifact directory
+      containing JUnit, detailed HTML where useful, screenshots, recordings when
+      motion is the subject, command metadata, and debug logs.
+- [x] `HARNESS-NATIVE-004` Record platform, device id/model, OS version, Maestro
       version, app build identity, Metro URL, and stack origins in a run manifest.
       Never record passwords, recovery codes, tokens, or signed proofs in an
       uploaded manifest.
-- [ ] `HARNESS-NATIVE-005` Validate Android boot completion and the required port
+- [x] `HARNESS-NATIVE-005` Validate Android boot completion and the required port
       reversals before provisioning an account.
-- [ ] `HARNESS-NATIVE-006` Validate the Expo dev-client deep link and serving
+- [x] `HARNESS-NATIVE-006` Validate the Expo dev-client deep link and serving
       checkout before the first flow.
-- [ ] `HARNESS-NATIVE-007` Run ordering-sensitive or destructive flows with their
+- [x] `HARNESS-NATIVE-007` Run ordering-sensitive or destructive flows with their
       own provisioned account. Do not depend on the state left by a previous flow.
 
 ### Browser runner
 
-- [ ] `HARNESS-WEB-001` Automate the existing port-owner/cwd preflight before
+- [x] `HARNESS-WEB-001` Automate the existing port-owner/cwd preflight before
       reusing servers on ports 3000 and 8787. In CI, always own the processes the
       job drives.
-- [ ] `HARNESS-WEB-002` Mark a pass-after-retry as a failed/flaky run while
+- [x] `HARNESS-WEB-002` Mark a pass-after-retry as a failed/flaky run while
       retaining the retry trace.
-- [ ] `HARNESS-WEB-003` Keep the persistent-profile fixture required by the
+- [x] `HARNESS-WEB-003` Keep the persistent-profile fixture required by the
       non-extractable `CryptoKey`, but provide an isolated-app helper for every
       destructive, sign-out, ordering, or multi-profile case.
-- [ ] `HARNESS-WEB-004` Add case/trait filtering without introducing a Jest
+- [x] `HARNESS-WEB-004` Add case/trait filtering without introducing a Jest
       config or a target named `test`.
 
 ### Shared fixtures and case registry
 
-- [ ] `HARNESS-FIXTURE-001` Add a small machine-readable case registry containing
+- [x] `HARNESS-FIXTURE-001` Add a small machine-readable case registry containing
       id, title, surface, tier, traits, fixture, flow/spec path, and artifact
       expectations. It organizes execution; it must not import product source or
       provide expectation values.
-- [ ] `HARNESS-FIXTURE-002` Give every run a collision-free id and every created
+- [x] `HARNESS-FIXTURE-002` Give every run a collision-free id and every created
       entity a readable, namespaced value.
-- [ ] `HARNESS-FIXTURE-003` Continue generating scale archives from
+- [x] `HARNESS-FIXTURE-003` Continue generating scale archives from
       `e2e/seed/library.ts`, but import them into fresh disposable accounts. Never
       bind a spec to `seed_free_full`, `seed_plus_full`, or the published-capture
       account.
-- [ ] `HARNESS-FIXTURE-004` Define three fixture sizes: empty, small journey
+- [x] `HARNESS-FIXTURE-004` Define three fixture sizes: empty, small journey
       library, and scale library. Use the smallest one capable of exposing the
       failure.
-- [ ] `HARNESS-FIXTURE-005` Reserve `.invalid` URLs for deterministic non-extracted
+- [x] `HARNESS-FIXTURE-005` Reserve `.invalid` URLs for deterministic non-extracted
       links and define a separate explicitly-online fixture set for extraction.
 
 ### Failure evidence
 
-- [ ] `HARNESS-ARTIFACT-001` Keep Playwright trace and screenshot on failure for
+- [x] `HARNESS-ARTIFACT-001` Keep Playwright trace and screenshot on failure for
       functional cases; add video only to flows where motion or system chrome is
       the subject.
-- [ ] `HARNESS-ARTIFACT-002` Add named native screenshots after meaningful stable
+- [x] `HARNESS-ARTIFACT-002` Add named native screenshots after meaningful stable
       checkpoints, not after every tap or character.
-- [ ] `HARNESS-ARTIFACT-003` Capture the accessibility hierarchy with a native
+- [x] `HARNESS-ARTIFACT-003` Capture the accessibility hierarchy with a native
       failure so selector ambiguity and covered nodes can be diagnosed.
-- [ ] `HARNESS-ARTIFACT-004` Establish artifact retention and redaction rules
+- [x] `HARNESS-ARTIFACT-004` Establish artifact retention and redaction rules
       before uploading anything from CI.
 
 ## Phase 2 — browser-extension functional target

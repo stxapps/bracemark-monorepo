@@ -4,7 +4,9 @@ import { profileDir } from '../paths';
 import { unresolvableUrl } from '../web/fixtures/data';
 import { launchApp } from '../web/fixtures/launch';
 import { displayUrl } from '../web/fixtures/links';
-import { maestro, provisionAccount, waitForApi, writeManifest } from './lib';
+import { provisionAccount } from './lib';
+import { type NativeRun } from './native-run';
+import { type E2ECase } from './registry';
 
 // THE contract run, mobile → web. The mirror of web-to-mobile.ts, and not
 // redundant with it: the two directions exercise opposite halves of the crypto
@@ -18,27 +20,19 @@ import { maestro, provisionAccount, waitForApi, writeManifest } from './lib';
 // is maintaining a second create-account flow for no extra coverage.
 //
 // Same prerequisites as web-to-mobile.ts; see e2e/README.md.
-async function main(): Promise<void> {
-  await waitForApi();
-
+export async function runMobileToWeb(run: NativeRun, testCase: E2ECase): Promise<void> {
   const credentials = await provisionAccount('contract-mobile-to-web');
-  const url = unresolvableUrl('written-on-device');
+  const url = unresolvableUrl(`${run.runId}-written-on-device`);
 
-  const manifest = await writeManifest('contract-mobile-to-web', {
-    direction: 'mobile → web',
-    username: credentials.username,
-    password: credentials.password,
-    links: [url],
-  });
-  console.log(`wrote ${manifest}`);
-
-  await maestro('mobile/contract/add-link.yaml', {
-    env: {
+  await run.runCase(
+    testCase,
+    {
       USERNAME: credentials.username,
       PASSWORD: credentials.password,
       LINK_URL: url,
     },
-  });
+    [credentials.password],
+  );
 
   const app = await launchApp(profileDir('contract-mobile-to-web-verify'), {
     existing: credentials,
@@ -55,5 +49,3 @@ async function main(): Promise<void> {
 
   console.log('contract mobile → web: OK');
 }
-
-await main();

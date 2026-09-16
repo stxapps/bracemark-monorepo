@@ -7,19 +7,23 @@ import { unique } from './fixtures/data';
 // keep this spec about "created there, visible here" and push editor mechanics —
 // validation, the rename commit, tree drag-and-drop — down to component specs.
 test.describe('lists', () => {
-  test('a list created in settings shows up in the links sidebar', async ({ page }) => {
-    const name = unique('E2e list');
+  test(
+    'a list created in settings shows up in the links sidebar',
+    { tag: ['@WEB-TAXONOMY-001', '@full', '@online'] },
+    async ({ page }) => {
+      const name = unique('E2e list');
 
-    await page.goto('/settings/lists');
-    const create = page.getByLabel('New list name');
-    await create.fill(name);
-    await create.press('Enter');
+      await page.goto('/settings/lists');
+      const create = page.getByLabel('New list name');
+      await create.fill(name);
+      await create.press('Enter');
 
-    // Rows are uncontrolled inputs, so match on the value attribute — Playwright
-    // has no Testing Library `getByDisplayValue`.
-    await expect(page.locator(`input[aria-label="List name"][value="${name}"]`)).toBeVisible();
+      // Rows are uncontrolled inputs, so match on the value attribute — Playwright
+      // has no Testing Library `getByDisplayValue`.
+      await expect(page.locator(`input[aria-label="List name"][value="${name}"]`)).toBeVisible();
 
-    await page.goto('/links');
-    await expect(page.getByRole('button', { name })).toBeVisible();
-  });
+      await page.goto('/links');
+      await expect(page.getByRole('button', { name })).toBeVisible();
+    },
+  );
 });

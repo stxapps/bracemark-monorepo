@@ -8,29 +8,37 @@ import { addLink, displayUrl } from './fixtures/links';
 // (validation, the Save → Confirm relabel on a malformed URL) belongs in a
 // component spec, and should be written there rather than added to this file.
 test.describe('links', () => {
-  test('a link added through the topbar survives a reload', async ({ page }) => {
-    const url = unresolvableUrl('added-through-the-topbar');
+  test(
+    'a link added through the topbar survives a reload',
+    { tag: ['@WEB-LINK-001', '@smoke', '@online'] },
+    async ({ page }) => {
+      const url = unresolvableUrl('added-through-the-topbar');
 
-    await page.goto('/links');
-    await addLink(page, url);
+      await page.goto('/links');
+      await addLink(page, url);
 
-    await page.reload();
-    await expect(page.getByText(displayUrl(url))).toBeVisible();
-  });
+      await page.reload();
+      await expect(page.getByText(displayUrl(url))).toBeVisible();
+    },
+  );
 
-  test('two links added in one session are both listed', async ({ page }) => {
-    // Distinct paths are enough to tell untitled links apart. Asserting on both —
-    // rather than on a count — is what keeps this safe beside the other specs
-    // sharing this worker's account.
-    const first = unresolvableUrl(unique('first'));
-    const second = unresolvableUrl(unique('second'));
+  test(
+    'two links added in one session are both listed',
+    { tag: ['@WEB-LINK-002', '@full', '@online'] },
+    async ({ page }) => {
+      // Distinct paths are enough to tell untitled links apart. Asserting on both —
+      // rather than on a count — is what keeps this safe beside the other specs
+      // sharing this worker's account.
+      const first = unresolvableUrl(unique('first'));
+      const second = unresolvableUrl(unique('second'));
 
-    await page.goto('/links');
-    await addLink(page, first);
-    await addLink(page, second);
+      await page.goto('/links');
+      await addLink(page, first);
+      await addLink(page, second);
 
-    await page.reload();
-    await expect(page.getByText(displayUrl(first))).toBeVisible();
-    await expect(page.getByText(displayUrl(second))).toBeVisible();
-  });
+      await page.reload();
+      await expect(page.getByText(displayUrl(first))).toBeVisible();
+      await expect(page.getByText(displayUrl(second))).toBeVisible();
+    },
+  );
 });

@@ -1,4 +1,5 @@
-import { maestro } from './lib';
+import { type NativeRun } from './native-run';
+import { type E2ECase } from './registry';
 
 // THE third contract run: the frozen vectors on device.
 //
@@ -16,9 +17,7 @@ import { maestro } from './lib';
 //
 // Prerequisites: a bracemark-expo dev build on a booted simulator/emulator, with
 // Metro up. No `npm run dev` needed — see e2e/README.md.
-async function main(): Promise<void> {
-  await maestro('mobile/contract/vectors.yaml');
+export async function runVectors(run: NativeRun, testCase: E2ECase): Promise<void> {
+  await run.runCase(testCase);
   console.log('contract vectors on device: OK');
 }
-
-await main();

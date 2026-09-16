@@ -16,6 +16,7 @@
 # This flow does not use subflows/sign-in.yaml: that subflow exists to GET other
 # flows signed in, and its password door is exactly what this one is avoiding.
 appId: com.bracemark.app
+tags: [NATIVE-ACCOUNT-002, full, online, ios, android]
 ---
 - runFlow:
     file: subflows/cold-launch.yaml
@@ -90,3 +91,4 @@ appId: com.bracemark.app
     visible:
       id: 'links-screen'
     timeout: 20000
+- takeScreenshot: recovered-account-links

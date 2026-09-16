@@ -1,0 +1,132 @@
+[
+  {
+    "id": "WEB-ACCOUNT-001",
+    "title": "Session survives a browser reload",
+    "surface": "web",
+    "tier": "smoke",
+    "traits": ["online"],
+    "fixture": "empty",
+    "path": "web/account.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
+    "id": "WEB-ACCOUNT-002",
+    "title": "Sign-out from a user list leaves for the marketing site",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online", "destructive"],
+    "fixture": "empty",
+    "path": "web/account.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
+    "id": "WEB-LINK-001",
+    "title": "A link added through quick-add survives reload",
+    "surface": "web",
+    "tier": "smoke",
+    "traits": ["online"],
+    "fixture": "empty",
+    "path": "web/links.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
+    "id": "WEB-LINK-002",
+    "title": "Two mounted writes remain visible",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online"],
+    "fixture": "empty",
+    "path": "web/links.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
+    "id": "WEB-TAXONOMY-001",
+    "title": "A list created in Settings appears in the links sidebar",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online"],
+    "fixture": "empty",
+    "path": "web/lists.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
+    "id": "WEB-DATA-001",
+    "title": "Delete all repaints an already-mounted links page",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online", "destructive"],
+    "fixture": "empty",
+    "path": "web/delete-all-data.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
+    "id": "NATIVE-ACCOUNT-001",
+    "title": "Password sign-in survives a cold restart",
+    "surface": "native",
+    "tier": "smoke",
+    "traits": ["online", "ios", "android"],
+    "fixture": "empty",
+    "path": "mobile/flows/sign-in.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "NATIVE-ACCOUNT-002",
+    "title": "Wrong recovery code fails and the real code signs in",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "ios", "android"],
+    "fixture": "empty",
+    "path": "mobile/flows/recovery-sign-in.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "NATIVE-LINK-001",
+    "title": "Two mounted native writes remain visible",
+    "surface": "native",
+    "tier": "smoke",
+    "traits": ["online", "ios", "android"],
+    "fixture": "empty",
+    "path": "mobile/flows/add-link.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "NATIVE-DATA-001",
+    "title": "Delete all repaints the mounted native links screen",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "destructive", "ios", "android"],
+    "fixture": "empty",
+    "path": "mobile/flows/delete-all-data.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "CONTRACT-VECTORS-001",
+    "title": "Frozen crypto vectors pass on the selected native runtime",
+    "surface": "contract",
+    "tier": "full",
+    "traits": ["ios", "android"],
+    "fixture": "empty",
+    "path": "mobile/contract/vectors.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "CONTRACT-WEB-MOBILE-001",
+    "title": "Native decrypts links encrypted by web",
+    "surface": "contract",
+    "tier": "full",
+    "traits": ["online", "ios", "android"],
+    "fixture": "small",
+    "path": "mobile/contract/verify-links.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "CONTRACT-MOBILE-WEB-001",
+    "title": "Web decrypts a link encrypted by native",
+    "surface": "contract",
+    "tier": "full",
+    "traits": ["online", "ios", "android"],
+    "fixture": "small",
+    "path": "mobile/contract/add-link.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  }
+]

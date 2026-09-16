@@ -16,13 +16,23 @@ import { fileURLToPath } from 'node:url';
 export const E2E_ROOT = dirname(fileURLToPath(import.meta.url));
 export const ARTIFACTS = join(E2E_ROOT, '.artifacts');
 
+// Every real test invocation gets one collision-free directory under `runs/`.
+// The wrapper that owns the invocation sets E2E_RUN_ID before Playwright workers
+// or account-provisioning helpers are spawned, so every process agrees on the
+// same location. Utilities that are not test runs (seed/ and shot/) deliberately
+// keep their dedicated paths below.
+export function runArtifactDir(runId: string): string {
+  return join(ARTIFACTS, 'runs', runId);
+}
+
 // A persistent Chrome profile for `launchApp` (web/fixtures/launch.ts). Every
 // caller that needs one comes through here, so there is exactly one answer to where
 // profiles live. The name namespaces the caller: `w0`/`w1` per Playwright worker,
 // `signout-w0` for the spec that must not share the worker's session, `contract-*`
 // and `provision-*` for the runners.
 export function profileDir(name: string): string {
-  return join(ARTIFACTS, 'profiles', name);
+  const runId = process.env.E2E_RUN_ID;
+  return runId ? join(runArtifactDir(runId), 'profiles', name) : join(ARTIFACTS, 'profiles', name);
 }
 
 // Where the seed writes (docs/e2e.md, _seeding a dev account_). Two directories,

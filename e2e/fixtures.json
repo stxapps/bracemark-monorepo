@@ -1,0 +1,29 @@
+{
+  "sizes": {
+    "empty": {
+      "description": "A newly provisioned disposable account with no user-created data."
+    },
+    "small": {
+      "description": "Only the deterministic entities created by one journey; no shared seed account."
+    },
+    "scale": {
+      "description": "A generated seed/library.ts archive imported through Settings into a fresh disposable account.",
+      "generator": "seed/fixtures.ts",
+      "importDriver": "seed/steps.ts"
+    }
+  },
+  "urls": {
+    "deterministic": {
+      "suffix": ".invalid",
+      "description": "Unresolvable links whose typed URL fallback is the assertion."
+    },
+    "onlineExtraction": [
+      {
+        "id": "iana-example-domain",
+        "url": "https://example.com/",
+        "expectedTitle": "Example Domain",
+        "trait": "online"
+      }
+    ]
+  }
+}

@@ -26,6 +26,10 @@ import { launchApp, type LaunchedApp } from './launch';
 interface AppFixtures {
   page: Page;
   credentials: Credentials;
+  // A fresh account and profile owned by one test. Destructive, sign-out,
+  // ordering and multi-profile cases use this instead of reaching around the
+  // fixture and accidentally mutating the worker-shared account.
+  isolatedApp: LaunchedApp;
 }
 
 interface AppWorkerFixtures {
@@ -49,6 +53,14 @@ export const test = base.extend<AppFixtures, AppWorkerFixtures>({
 
   credentials: async ({ app }, use) => {
     await use(app.credentials);
+  },
+
+  // eslint-disable-next-line no-empty-pattern
+  isolatedApp: async ({}, use, testInfo) => {
+    const safeId = testInfo.testId.replace(/[^a-zA-Z0-9_-]+/g, '-').slice(-80);
+    const app = await launchApp(profileDir(`isolated-w${testInfo.workerIndex}-${safeId}`));
+    await use(app);
+    await app.close();
   },
 
   // One page per test on the shared context, so a test that navigates away or

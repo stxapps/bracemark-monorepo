@@ -10,6 +10,7 @@
 # live internet and make the assertion below non-deterministic. Assert on what was
 # typed, never on what was extracted — docs/e2e.md, "what e2e may not assert".
 appId: com.bracemark.app
+tags: [NATIVE-LINK-001, smoke, online, ios, android]
 env:
   LINK_URL: 'https://e2e-default.invalid/first-on-device'
   LINK_URL_2: 'https://e2e-default.invalid/second-on-device'
@@ -61,3 +62,4 @@ env:
     visible: ".*${LINK_URL_2.replace('https://', '')}.*"
     timeout: 20000
 - assertVisible: ".*${LINK_URL.replace('https://', '')}.*"
+- takeScreenshot: two-mounted-link-writes

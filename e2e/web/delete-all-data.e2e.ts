@@ -1,18 +1,12 @@
-import { profileDir } from '../paths';
 import { expect, test } from './fixtures/app';
 import { unique, unresolvableUrl } from './fixtures/data';
-import { launchApp } from './fixtures/launch';
 import { addLink, displayUrl } from './fixtures/links';
 
 test.describe('delete all data', () => {
-  // The empty pattern is required by Playwright, which parses this signature for
-  // fixture dependencies. This destructive flow owns a separate account and
-  // profile so it cannot erase the worker-shared library used by other specs.
-  // eslint-disable-next-line no-empty-pattern
-  test('repaints an already-open links page after the wipe', async ({}, testInfo) => {
-    const app = await launchApp(profileDir(`delete-all-w${testInfo.workerIndex}`));
-
-    try {
+  test(
+    'repaints an already-open links page after the wipe',
+    { tag: ['@WEB-DATA-001', '@full', '@online', '@destructive'] },
+    async ({ isolatedApp: app }) => {
       const settingsPage = app.page;
       const linksPage = await app.context.newPage();
       const url = unresolvableUrl('delete-all');
@@ -57,8 +51,6 @@ test.describe('delete all data', () => {
       await expect(linksPage.getByRole('button', { name: 'My List' })).toBeVisible();
       await expect(linksPage.getByRole('button', { name: 'Archive' })).toBeVisible();
       await expect(linksPage.getByRole('button', { name: 'Trash' })).toBeVisible();
-    } finally {
-      await app.close();
-    }
-  });
+    },
+  );
 });

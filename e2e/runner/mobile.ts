@@ -1,41 +1,51 @@
-import { maestro, provisionAccount, waitForApi, writeManifest } from './lib';
+import { unique, unresolvableUrl } from '../web/fixtures/data';
+import { parseNativeCli } from './cli';
+import { provisionAccount } from './lib';
+import { prepareNativeRun } from './native-run';
+import { selectCasesForPlatform, validateCaseRegistry } from './registry';
 
-// `npm run e2e-mobile` — the standalone native flows, which need an account
-// before they can do anything.
-//
-// Maestro cannot create one: every flow here starts signed in, and a
-// create-account flow would be a second copy of a form jest already covers. So
-// this provisions a throwaway account through the browser (see provisionAccount)
-// and hands the credentials to `maestro test` as `-e` parameters.
-//
-// Prerequisites: `npm run dev`, plus a bracemark-expo dev build on a booted
-// simulator or emulator. On Android, `adb reverse tcp:8787 tcp:8787` first.
-// See e2e/README.md.
+// Standalone native journeys. Platform and device are deliberately mandatory:
+// a result that does not say which runtime it exercised is not a baseline.
 async function main(): Promise<void> {
-  await waitForApi();
+  validateCaseRegistry();
+  const options = parseNativeCli();
+  const selected = selectCasesForPlatform('native', options.platform, options);
+  const run = await prepareNativeRun('mobile', options, selected);
 
-  // `withRecovery` because one flow in the directory signs in through the
-  // recovery door. It costs one extra checkbox on the way through the ceremony,
-  // and the resulting account behaves identically for every other flow — a
-  // recovery door is additive, not a different kind of account (docs/account.md,
-  // _the doors_).
-  const account = await provisionAccount('mobile', { withRecovery: true });
-  if (!account.recoveryCode) throw new Error('provisioning returned no recovery code');
+  try {
+    for (const testCase of selected) {
+      // Every flow gets a fresh account. This makes destructive and ordering-
+      // sensitive cases independent, and keeps a failed flow from poisoning the
+      // state observed by the next one.
+      const withRecovery = testCase.id === 'NATIVE-ACCOUNT-002';
+      const account = await provisionAccount(`${run.runId}-${testCase.id}`, { withRecovery });
+      if (withRecovery && !account.recoveryCode) {
+        throw new Error(`${testCase.id}: provisioning returned no recovery code`);
+      }
 
-  const manifest = await writeManifest('mobile-run', {
-    username: account.username,
-    password: account.password,
-    recoveryCode: account.recoveryCode,
-  });
-  console.log(`wrote ${manifest}`);
+      const env: Record<string, string> = {
+        USERNAME: account.username,
+        PASSWORD: account.password,
+      };
+      if (account.recoveryCode) env.RECOVERY_CODE = account.recoveryCode;
 
-  await maestro('mobile/flows', {
-    env: {
-      USERNAME: account.username,
-      PASSWORD: account.password,
-      RECOVERY_CODE: account.recoveryCode,
-    },
-  });
+      if (testCase.id === 'NATIVE-LINK-001') {
+        env.LINK_URL = unresolvableUrl(`${run.runId}-first-on-device`);
+        env.LINK_URL_2 = unresolvableUrl(`${run.runId}-second-on-device`);
+      }
+      if (testCase.id === 'NATIVE-DATA-001') {
+        env.LINK_URL = unresolvableUrl(`${run.runId}-delete-all`);
+        env.LIST_NAME = unique(`${run.runId} delete list`);
+        env.TAG_NAME = unique(`${run.runId} delete tag`);
+      }
+
+      await run.runCase(testCase, env, [account.password, account.recoveryCode ?? '']);
+    }
+    await run.finish('passed');
+  } catch (error) {
+    await run.finish('failed');
+    throw error;
+  }
 }
 
 await main();

@@ -16,22 +16,40 @@ which talks to no server and needs no account:
 npm run dev        # api :8787, web :3000, extractor :8788
 ```
 
-`playwright test` boots and waits for it itself; the `runner/` scripts check and
-tell you to start it.
+The web wrapper boots and waits for it itself when the ports are free. Every
+wrapper rejects a listener owned by another checkout before it creates test
+data. Native runners require an already-running stack and Metro.
 
 ```sh
-npx nx e2e-web @stxapps/e2e         # the web suite, headless, 2 workers
-npx nx e2e-web:headed @stxapps/e2e  # the same, watchable
-npx nx e2e-web:report @stxapps/e2e  # open the last HTML report
-npx nx e2e-mobile @stxapps/e2e      # provision an account, run mobile/flows
-npx nx e2e-contract @stxapps/e2e    # vectors, then web → mobile, then mobile → web
+npx nx e2e-web @stxapps/e2e
+npx nx e2e-web:headed @stxapps/e2e
+npx nx e2e-web:report @stxapps/e2e
+
+# Use exact ids from `xcrun simctl list devices booted` or `adb devices`.
+npx nx e2e-mobile @stxapps/e2e -- --platform ios --device <udid> --suite full
+npx nx e2e-contract @stxapps/e2e -- --platform ios --device <udid>
+npx nx e2e-mobile @stxapps/e2e -- --platform android --device <serial> --suite full
+npx nx e2e-contract @stxapps/e2e -- --platform android --device <serial>
 ```
 
 The vectors leg runs FIRST in that chain on purpose: it is the cheapest and the
 most fundamental. If the frozen crypto table no longer holds on the device the
 two round trips are going to fail too, and they would fail as a link that did not
-appear — a much longer walk back to the same answer. Run it alone with
-`npx tsx runner/vectors.ts`; it needs the dev build and Metro, and nothing else.
+appear — a much longer walk back to the same answer. Run it alone with the
+contract target plus `--case CONTRACT-VECTORS-001`; it needs the dev build and
+Metro, and nothing else.
+
+`--suite smoke` selects only smoke cases; `full` includes both tiers. Narrow any
+runner with repeatable/comma-separated `--case`, `--include-trait`, and
+`--exclude-trait`. The registry is [`cases.json`](./cases.json); its ids and tags
+are checked against the specs and flows by `npm run check:registry -w
+@stxapps/e2e`.
+
+Every invocation writes to a unique `.artifacts/runs/<run-id>/`. Web keeps its
+HTML report, failure screenshots, and traces there. Native keeps a redacted run
+manifest, per-case JUnit, Maestro command/log/screenshot output, named stable
+checkpoints, and a hierarchy dump on failure. A pass that needed Playwright's
+retry exits non-zero.
 
 The three run-it targets also have root scripts: `npm run e2e:web`, `e2e:mobile`,
 `e2e:contract`. There is no bare `npm run e2e` — see `docs/e2e.md`, _running_.
@@ -66,22 +84,24 @@ account_. The one to know before you edit `seed/library.ts`: **re-seeding does
 not update an account that already exists** (a backup merge is skip-existing by
 path), so delete all data in Settings → Data first.
 
-A single spec, from this directory: `npx playwright test web/links.e2e.ts`.
+A single case: `npm run e2e-web -- --case WEB-LINK-001`. A spec file can still be
+added as a trailing Playwright argument.
 
 The mobile and contract targets also need a **bracemark-expo dev build installed
 on a booted simulator or emulator**. Nothing here builds the app —
 `npx nx ios @stxapps/bracemark-expo` (or `android`) does, and it is a
 prerequisite, not an e2e step.
 
-**Run one platform at a time.** `runner/lib.ts` passes Maestro no `--device`, so
-with both an iOS simulator and an Android emulator booted it picks one
-non-deterministically or hangs on an interactive picker. Boot one, run its legs,
-shut it down, boot the other. Web e2e is platform-independent — run it once.
+Platform and device are mandatory and are passed to Maestro explicitly. The
+preflight proves that exact device is booted, the dev build is installed, Metro
+belongs to this checkout, and Android has completed boot with all three reverse
+mappings. Web e2e is platform-independent — run it once.
 
 ```sh
-npm run expo:ios          # or: npm run expo:android
-npm run expo:android:reverse   # Android only, once per emulator boot
-npm run e2e:mobile && npm run e2e:contract
+npm run expo:ios                    # or: npm run expo:android
+npm run expo:android:reverse        # Android only, once per emulator boot
+npm run e2e:mobile -- --platform ios --device <udid>
+npm run e2e:contract -- --platform ios --device <udid>
 ```
 
 Both build commands hold the foreground running Metro, so the rest wants a second
@@ -91,12 +111,14 @@ terminal.
 
 | path               | what                                                                  |
 | ------------------ | --------------------------------------------------------------------- |
+| `cases.json`       | case ids, tiers, traits, fixtures, paths, artifact expectations       |
+| `fixtures.json`    | empty/small/scale and deterministic/online URL fixture contracts      |
 | `paths.ts`         | where a run writes — the only source of `.artifacts` paths            |
 | `web/`             | Playwright specs (`*.e2e.ts`) and their fixtures                      |
 | `mobile/flows/`    | Maestro flows that run standalone                                     |
 | `mobile/shots/`    | Maestro flows for native store-listing captures                       |
 | `mobile/contract/` | Maestro legs of a contract run — driven by a `runner/`, never by hand |
-| `runner/`          | orchestrators: mobile, vectors, web→mobile, mobile→web                |
+| `runner/`          | web/native orchestrators, filters, preflights, manifests              |
 | `seed/`            | the four dev accounts and their archives — not a test (above)         |
 | `shot/`            | the published screenshots: the fixture, the producer, the four legs   |
 | `.artifacts/`      | gitignored — traces, reports, run manifests, browser profiles         |

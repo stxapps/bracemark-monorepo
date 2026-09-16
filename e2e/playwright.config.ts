@@ -1,6 +1,14 @@
+import { join } from 'node:path';
+
 import { defineConfig } from '@playwright/test';
 
+import { createRunId } from './runner/lib';
 import { WEB_URL } from './web/fixtures/env';
+import { E2E_ROOT, runArtifactDir } from './paths';
+
+const runId = process.env.E2E_RUN_ID ?? createRunId('web-direct');
+process.env.E2E_RUN_ID = runId;
+const runDir = process.env.E2E_RUN_DIR ?? runArtifactDir(runId);
 
 // Whole-flow e2e for bracemark-web. The design record — what belongs at this
 // layer, why the standard auth fixture cannot work here, and the four repo
@@ -35,6 +43,9 @@ export default defineConfig({
   // a pipeline one. One retry buys the trace below without hiding a real break —
   // a spec that only passes on retry should be treated as failing.
   retries: 1,
+  // Retrying is useful evidence, but a pass on retry is still a broken quality
+  // gate. The retained trace shows both attempts while the command exits red.
+  failOnFlakyTests: true,
 
   // Account creation runs Argon2id in the browser and takes seconds, not
   // milliseconds. A 30s default times out on the create-account spec on a cold
@@ -56,22 +67,21 @@ export default defineConfig({
   // the HTML report; `open: 'never'` keeps a failed run from hijacking a browser
   // tab mid-task, which matters when an agent is driving.
   //
-  // These two paths are relative to THIS FILE. Anything resolving `.artifacts` at
-  // runtime must go through ./paths.ts instead — `testInfo.config.rootDir` is
-  // `testDir` (`./web`), not this directory, and using it silently writes outside
-  // the one line .gitignore anchors. See the comment in paths.ts.
-  outputDir: '.artifacts/test-results',
-  reporter: [['list'], ['html', { outputFolder: '.artifacts/report', open: 'never' }]],
+  // The wrapper supplies one absolute run directory. Anything resolving
+  // `.artifacts` at runtime must still go through ./paths.ts —
+  // `testInfo.config.rootDir` is `testDir` (`./web`), not this directory.
+  outputDir: join(runDir, 'test-results'),
+  reporter: [['list'], ['html', { outputFolder: join(runDir, 'report'), open: 'never' }]],
 
   // `npm run dev` is the api + web + extractor stack. `reuseExistingServer` is
-  // unconditionally true because there is no CI: the normal case is that the
-  // stack is already up in another terminal, and booting a second one would
-  // collide on all three ports.
+  // true for local runs because the normal case is that the stack is already up
+  // in another terminal. The wrapper/global setup verify its process cwd first.
+  // CI never reuses a listener: the job must own every process it drives.
   webServer: {
     command: 'npm run dev',
-    cwd: '..',
+    cwd: join(E2E_ROOT, '..'),
     url: WEB_URL,
-    reuseExistingServer: true,
+    reuseExistingServer: !process.env.CI,
     timeout: 180_000,
     stdout: 'ignore',
     stderr: 'pipe',

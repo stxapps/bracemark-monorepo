@@ -66,12 +66,14 @@ reasons in descending weight:
 ```
 e2e/
   playwright.config.ts    global-setup.ts
+  cases.json              case ids, tiers, traits, fixtures and artifact contract
+  fixtures.json           fixture sizes and deterministic/online URL contract
   paths.ts                the one answer to where a run writes
   web/                    playwright specs + fixtures
   mobile/flows/           maestro flows, run standalone
   mobile/shots/           maestro flows for the native store captures
   mobile/contract/        maestro legs of a contract run (parameterised)
-  runner/                 the orchestrators: mobile, web→mobile, mobile→web
+  runner/                 wrappers, filters, preflights and cross-client orchestration
   seed/                   the dev accounts and their archives — not tests (below)
   shot/                   the published screenshots — not tests either (below)
   .artifacts/             gitignored — traces, reports, run manifests, profiles
@@ -327,8 +329,10 @@ Four repo-specific gotchas:
 
 Maestro cannot create one: every flow starts signed in, and a native
 create-account flow would be a second copy of a form jest already covers. So
-`runner/mobile.ts` provisions a throwaway account **through the browser** and
-hands the credentials to `maestro test` as `-e` parameters.
+`runner/mobile.ts` provisions a throwaway account **through the browser for each
+flow** and hands the credentials to `maestro test` as `-e` parameters. Accounts
+are not shared across flows: a destructive or failed case cannot change the
+starting state of the next case.
 
 That is not a shortcut around native key derivation — signing in on the device
 runs the full Argon2id + HKDF path there, which is the thing under test. It is
@@ -339,9 +343,9 @@ generated would have to be scraped off a screen.
 **The recovery code is the exception, and it has to be.** `recovery-sign-in.yaml`
 needs one, and a recovery code cannot be chosen — it is CSPRNG-minted by the
 client and never user-supplied by design (`crypto/recovery-code.ts`: "we GENERATE
-it and never let users type their own"). So the mobile runner provisions with
-`withRecovery`, which takes the ceremony's recovery exit and reads the code off
-the show-once panel by its `aria-label`. That is scraping a secret out of the DOM
+it and never let users type their own"). So the mobile runner provisions the
+recovery case with `withRecovery`, which takes the ceremony's recovery exit and
+reads the code off the show-once panel by its `aria-label`. That is scraping a secret out of the DOM
 — the thing the paragraph above avoids — but the preference there was
 chosen-over-scraped, and here there is no chosen form to prefer. The code is
 captured in its **display** form, hyphens included, because that is what a user
@@ -350,8 +354,18 @@ would have saved and what the flow should type back;
 round trip is part of what gets exercised.
 
 A recovery door is **additive** — the same account still signs in by password
-identically (see [account.md](./account.md), _the doors_) — so provisioning with
-one costs the other flows nothing. The contract runners still provision without.
+identically (see [account.md](./account.md), _the doors_) — but the runner does
+not reuse that fact as an ordering dependency. The contract runners provision
+their own accounts without recovery.
+
+Passwords and recovery codes are never written to the run manifest or command
+metadata. They exist only long enough to pass the selected flow, and text
+artifacts are redacted again after the case. Because the recovery-code input is
+readable rather than masked, its automatic Maestro screenshots are deleted; the
+named post-sign-in checkpoint is retained after the form has unmounted. Inspect
+all remaining native screenshots before any upload. CI must upload only the
+documented run directory after that review, never process environment or shell
+history.
 
 Contract legs live in `mobile/contract/`, outside the `mobile/flows/` glob, because
 a parameterised leg run without its `-e` values fails on unset variables rather
@@ -444,100 +458,93 @@ alongside their ids, matching `new-password-field.tsx`.
 
 ### running it
 
-Everything needs the dev stack: **`npm run dev`** (api on 8787, web on 3000,
-extractor on 8788) — with one exception, the vectors leg, which talks to no
-server and needs no account. `playwright test` boots and waits for the stack
-itself via `webServer` + `global-setup.ts`; the `runner/` scripts check and tell
-you to start it.
-
-⚠ **`webServer` sets `reuseExistingServer: true`, and it does not check whose
-server it is.** If anything already answers on :3000 — another clone of this repo
-on the same machine, another session, another agent — Playwright attaches to it
-instead of starting one, and says nothing. The run then exercises THAT
-checkout's code and provisions its throwaway accounts into that checkout's
-`apps/bracemark-api/.wrangler/`, so a green suite says nothing about the tree you
-edited and a red one names a failure that isn't yours. The reuse itself is right
-— a second stack would only fail on the pinned ports — so the check belongs
-before the run: resolve :3000 and :8787 to the listening process's cwd
-(`.claude/skills/verify/SKILL.md`, Gotchas, _a port can belong to another
-clone_). The same question decides which Metro a mobile leg is really running
-against, since `runner/lib.ts` binds to whatever single device is booted and that
-device loads :8081.
+Everything needs Metro and an installed Expo development build except web. The
+API/web/extractor stack is additionally required by every `online` native or
+contract case; frozen vectors are the exception because they have no account or
+server. Web starts the stack when the ports are free. Native runners require it
+already running:
 
 ```sh
-npx nx e2e-web @stxapps/e2e        # the web suite, headless, 2 workers
-npx nx e2e-web:headed @stxapps/e2e # the same, watchable
-npx nx e2e-web:report @stxapps/e2e # open the last HTML report
-npx nx e2e-mobile @stxapps/e2e     # provision an account, run mobile/flows
-npx nx e2e-contract @stxapps/e2e   # vectors, then web → mobile, then mobile → web
+npm run dev # api :8787, web :3000, extractor :8788
 ```
 
-The vectors leg runs FIRST in that chain on purpose. It is the cheapest of the
-three (no stack, no account, ~40s) and the most fundamental: if the frozen table
-no longer holds on the device, the two round trips are going to fail too, and
-they would fail as a link that did not appear — which is a much longer walk back
-to the same answer. Run it alone with `npx tsx runner/vectors.ts` from `e2e/`.
-
-Its off-device siblings are not part of any Nx target, because neither is
-JavaScript — the native framers are covered by `swift test` in
-`packages/expo-crypto` and `./gradlew :stxapps-expo-crypto:test` from
-`apps/bracemark-expo/android`. Both read the same vector JSON and take seconds;
-see [testing.md](./testing.md).
-
-The three run-it targets also have root scripts — `npm run e2e:web`,
-`e2e:mobile`, `e2e:contract` — matching the `dev` / `dev:ext` / `dev:site`
-convention. **There is deliberately no bare `npm run e2e`.** A script that fanned
-out to all three would be a lie: it cannot boot a device, cannot install a dev
-build, cannot know which platform was meant, and would fan out to a target pair
-that cannot both run in one pass (below). It would fail as a Maestro timeout on a
-missing element, which is the failure mode the rest of this doc exists to avoid.
-The asymmetry with `npm run test` is the honest one — e2e has prerequisites a
-unit test does not.
-
-The mobile and contract targets additionally need a **bracemark-expo dev build
-already installed on a booted simulator or emulator**. Nothing here builds the
-app — see [expo-build.md](./expo-build.md).
-
-#### one platform at a time, and it is forced
-
-`runner/lib.ts`'s `MaestroOptions` is `{ env, outputDir }` — there is **no
-`--device` plumbing**, so `maestro test` is spawned bare and binds to whatever
-single device it finds. With an iOS simulator and an Android emulator both
-booted, Maestro either drops an interactive picker — which hangs, because the
-child inherits stdio — or picks one non-deterministically. Either way the run no
-longer says which platform it proved. Boot one, finish its leg, shut it down.
-
-Web e2e is platform-independent; run it once, not once per leg.
+Every entrypoint now owns a preflight. Web resolves existing listeners on 3000
+and 8787 to their process cwd before Playwright may reuse them; CI disables
+server reuse completely. Native resolves Metro in the Expo dev-client link,
+requires it to report a running packager from this checkout, and records the
+link and all stack origins. It also requires the selected device to be booted,
+the development build to be installed, and Android to have completed boot with
+the 8081/8787/8788 reverse mappings. A failed preflight happens before account
+provisioning.
 
 ```sh
-npm run dev                          # terminal 1, stays up for everything below
+npx nx e2e-web @stxapps/e2e
+npx nx e2e-web:headed @stxapps/e2e
+npx nx e2e-web:report @stxapps/e2e
 
-# iOS leg
-npm run expo:ios                     # boots the sim, builds + installs the dev build
-npm run e2e:web
-npm run e2e:mobile
-npm run e2e:contract
-
-# Android leg — shut the iOS simulator down first
-npm run expo:android                 # leave Metro running; new terminal for the rest
-npm run expo:android:reverse         # adb reverse 8081 + 8787 + 8788, per emulator boot
-npm run e2e:mobile
-npm run e2e:contract
+# Exact ids come from `xcrun simctl list devices booted` or `adb devices`.
+npx nx e2e-mobile @stxapps/e2e -- --platform ios --device <udid> --suite full
+npx nx e2e-contract @stxapps/e2e -- --platform ios --device <udid>
+npx nx e2e-mobile @stxapps/e2e -- --platform android --device <serial> --suite full
+npx nx e2e-contract @stxapps/e2e -- --platform android --device <serial>
 ```
 
-`expo:ios` / `expo:android` are **not** e2e — they are the prerequisite, and the
-only step that produces the dev build the two native targets assume. Both hold the
-foreground running Metro once the app is installed, so the commands under them
-want a second terminal; `expo:android:reverse` is deliberately not chained onto the build
-for that exact reason ([expo-build.md](./expo-build.md), _the npm scripts_). Note
-that `apps/bracemark-expo/ios/` and `android/` being present on disk proves
-nothing: they are generated and gitignored, so the folders can exist with no build
-installed on any device.
+Platform and device are mandatory and are passed to every Maestro invocation.
+Having both platforms booted is no longer ambiguous, though the full legs should
+still be run serially because they share the local stack and are intentionally
+expensive. The vectors case remains first in a full contract run. Run it alone
+with `--case CONTRACT-VECTORS-001`.
 
-Failures leave a trace: `npx nx e2e-web:report @stxapps/e2e`, or
-`npx playwright show-trace e2e/.artifacts/test-results/<test>/trace.zip`. A run
-also writes its throwaway credentials to `e2e/.artifacts/*.json`, so the account a
-failed run left behind can be signed into and looked at.
+The three targets also have root scripts — `npm run e2e:web`, `e2e:mobile`, and
+`e2e:contract`. There is deliberately no bare `npm run e2e`: no honest fan-out
+can boot, build, select, and prepare both native platforms. `expo:ios` and
+`expo:android` are prerequisites, not tests; see [expo-build.md](./expo-build.md).
+On Android, run `npm run expo:android:reverse` after each emulator boot.
+
+#### cases, suites and fixtures
+
+[`e2e/cases.json`](../e2e/cases.json) is the machine-readable registry. Every
+case has an id, surface, primary `smoke` or `full` tier, traits, fixture size,
+path, and expected artifacts. `npm run check:registry -w @stxapps/e2e` rejects
+duplicate ids, missing paths, and tag drift. `full` includes both tiers;
+`smoke` selects only smoke. `--case`, `--include-trait`, and `--exclude-trait`
+are repeatable or comma-separated and work across the wrappers:
+
+```sh
+npm run e2e:web -- --suite smoke
+npm run e2e:web -- --case WEB-LINK-001
+npm run e2e:mobile -- --platform ios --device <udid> --exclude-trait destructive
+```
+
+[`e2e/fixtures.json`](../e2e/fixtures.json) defines the fixture sizes: `empty`
+(the normal fresh account), `small` (the minimum multi-entity journey state),
+and `scale` (an archive generated from
+`e2e/seed/library.ts` and imported into a fresh account). No test uses the human
+seed accounts or the published-capture account. Offline deterministic links use
+the reserved `.invalid` TLD; a case that deliberately exercises extraction must
+carry the `online` trait and use the separate public fixture table in that file.
+
+#### artifacts and retries
+
+Every invocation gets `.artifacts/runs/<run-id>/`. Web writes its HTML report,
+failure screenshot, retained failure trace, command, and run manifest there.
+Native writes a secret-free run manifest plus per-case JUnit, Maestro
+manifest/commands/logs/screenshots, named stable checkpoints, sanitized command
+metadata, and an accessibility hierarchy when a case fails. The manifest names
+the platform, device/model/OS, Maestro, installed app build, Metro URL, stack
+origins, checkout commit, selected cases, and timings.
+
+Playwright still retries once to retain diagnostic evidence, but
+`failOnFlakyTests` makes a pass-after-retry exit red. Videos remain off until a
+case specifically owns motion or system chrome. Passing local artifacts are
+disposable; keep failures until resolved. Never upload environment dumps or
+shell history, and inspect native screenshots before uploading a run because a
+device can paint user input that text redaction cannot see.
+
+Open the latest web report with `npx nx e2e-web:report @stxapps/e2e`; traces and
+native evidence live below the run directory printed by the wrapper. Test
+passwords and recovery codes are not persisted, so a failed throwaway account
+is intentionally not reusable.
 
 Local api state lives in `apps/bracemark-api/.wrangler/`. Nothing resets it, on
 purpose: a throwaway account per worker is cheaper and less brittle than clearing
@@ -1048,12 +1055,24 @@ means no compositor has to rewrite product chrome.
 
 ### state today
 
-| surface  | status                                                                     |
-| -------- | -------------------------------------------------------------------------- |
-| web      | **5 specs, passing** — account (reload, sign-out), links, lists            |
-| native   | 4 flows; `add-link`'s two-insert regression **passes on an iOS dev build** |
-| contract | web→mobile **passing**; mobile→web needs a fresh full run                  |
-| vectors  | **passing** on device                                                      |
+Measured 2026-09-16 from commit `eb9119b2c393413d15bb85d2bc392c0022de283b`
+with the harness changes present in the working tree:
+
+| surface          | measured result                                                                  |
+| ---------------- | -------------------------------------------------------------------------------- |
+| web              | **6/6 passed** — Playwright 1.62.1, system Chrome 152.0.7977.83                  |
+| iOS native       | **4/4 passed** — iPhone 17 Pro simulator, iOS 26.5, app 1.0.0 (1), Maestro 2.8.0 |
+| Android native   | **4/4 passed** — `sdk_gphone64_arm64`, Android 16, app 0.0.0 (1), Maestro 2.8.0  |
+| iOS contract     | **3/3 passed** — frozen vectors, web→mobile, mobile→web                          |
+| Android contract | **3/3 passed** — frozen vectors, web→mobile, mobile→web                          |
+
+The iOS native matrix was completed across two invocations. Sign-in passed in
+the first; before recovery provisioning, an orphaned same-checkout Next process
+owned port 3000 but stopped answering. The runner now checks web responsiveness
+as well as port ownership. Recovery, add-link, and delete-all then passed in one
+filtered invocation. Android's first preflight also exposed an ADB formatting
+assumption (space versus tab between serial and state); the parser is now
+whitespace-agnostic, and the complete four-flow rerun passed.
 
 They have now been run, and the earlier note that "their first real run will find
 things" turned out to be the accurate part of this doc. It found four, and the

@@ -5,6 +5,7 @@
 #
 # Parameters: USERNAME, PASSWORD, LINK_URL (full URL, scheme included).
 appId: com.bracemark.app
+tags: [CONTRACT-MOBILE-WEB-001, full, online, ios, android]
 ---
 - runFlow:
     file: ../flows/subflows/sign-in.yaml
@@ -37,3 +38,4 @@ appId: com.bracemark.app
 - extendedWaitUntil:
     visible: ".*${LINK_URL.replace('https://', '')}.*"
     timeout: 20000
+- takeScreenshot: native-encrypted-link-before-sync
