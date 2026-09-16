@@ -31,7 +31,7 @@ feature**:
 | ------------------------------------------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------- |
 | regular expo-router screen                                    | keyboard-controller `KeyboardAwareScrollView` in the screen wrapper            | `auth-screen.tsx`, `settings/[section].tsx` |
 | portaled overlay content (`Dialog`)                           | keyboard-controller `KeyboardAvoidingView` in the CONTAINER                    | `ui/dialog.tsx`'s `DialogOverlay`           |
-| RN `Modal`                                                    | keyboard-controller `KeyboardAvoidingView` — the lib handles the window        | AdvancedSearch (`links/search-bar.tsx`)     |
+| RN `Modal`                                                    | keyboard-controller `KeyboardAwareScrollView` — the lib handles the window     | AdvancedSearch (`links/search-bar.tsx`)     |
 | share sheet (iOS extension process / Android `ShareActivity`) | plain `KeyboardAvoidingView` — keyboard-controller cannot work here            | `share/share-screen.tsx` `Sheet`            |
 | an in-tree overlay panel                                      | keyboard-controller `KeyboardAvoidingView` in the PANEL, which owns the window | the add panel (`links/link-add-panel.tsx`)  |
 
@@ -54,41 +54,67 @@ feature**:
   window in `SOFT_INPUT_ADJUST_NOTHING` ("imitating edge-to-edge mode
   behavior"), and propagates the values back through the root provider — wired
   up whenever the provider is active. On **iOS** nothing special is needed:
-  keyboard notifications are app-wide, and the lib's `KeyboardAvoidingView` is
+  keyboard notifications are app-wide, and the lib's own components are
   Reanimated over context values, owning no native view that would have to wrap
-  the window (the same property that lets it work through the dialog's portal).
-  Driven on both: inside the sheet the lib reports the keyboard's height (335 on
-  an iPhone 17 Pro) and the `ScrollView` shrinks by the lift.
+  the window (the same property that lets them work through the dialog's
+  portal). Driven on both: inside the sheet the lib reports the keyboard's
+  height (335 on an iPhone 17 Pro) and moves the content by it.
   **This was not a bug fix.** Unlike the portal case below, RN's own
   `KeyboardAvoidingView` avoids correctly in this Modal on _both_ platforms —
   a modal window carries its own `softInputMode`, so the resize RN's metrics
   want still happens. What the swap buys is one keyboard library across the app
-  tree and a lift synced to the keyboard's own animation. **Pin the version when
+  tree, motion synced to the keyboard's own animation, and — once the surface
+  became a `KeyboardAwareScrollView`, two bullets down — a focused-field gutter
+  no avoider of either library can give it. **Pin the version when
   you re-check this**: the Android half is a library behaviour, not a platform
   one, so a downgrade silently takes it away.
-- **The pageSheet under-lift, and the `keyboardVerticalOffset` that pays for
-  it.** With `presentationStyle="pageSheet"` on iOS, a `KeyboardAvoidingView`'s
-  `onLayout` frame is measured relative to the SHEET while the `screenHeight` it
-  subtracts from is the whole screen — `max(frame.y + frame.height -
-(screenHeight - keyboardHeight - keyboardVerticalOffset), 0)`, which is the
-  formula RN's KAV and keyboard-controller's share, verbatim. So with the offset
-  at its default 0 the lift falls short by the sheet's top offset (~60pt on an
-  iPhone 17 Pro) and AdvancedSearch's Clear/Search row stays behind the keyboard
-  once its body is tall enough to scroll. Measured, not inferred: the
-  `ScrollView` goes 722 → 483 against a 335pt keyboard. Android's modal is
-  full-screen, offset 0, and clears the row unaided.
-  AdvancedSearch now passes `keyboardVerticalOffset = screenHeight −
-sheetHeight`, the one place the formula lets us re-register the two rulers:
-  an `onLayout` on the Modal's `SafeAreaView` root supplies `sheetHeight`, and
-  `screenHeight` must come from **keyboard-controller's own**
-  `useWindowDimensions` (`UIScreen.main.bounds`, re-emitted on rotation), not
-  react-native's same-named window hook — the terms only cancel if both are read
-  off the same ruler. Two guards: the offset is 0 until the first layout, so the
-  failure mode is the old under-lift for one frame and never an over-lift; and
-  it is applied on iOS only, since Android's screen height counts system bars
-  whose relation to the modal decorView is an edge-to-edge detail not worth
-  betting a working surface on. A `Modal` that is NOT a page sheet (Android's,
-  or an iOS `fullScreen`) needs none of this.
+- **The page sheet used to carry a `keyboardVerticalOffset` correction. It
+  doesn't any more — but the arithmetic behind it is still true of every avoider
+  in the tree.** Both KAV implementations lift by `max(frame.y + frame.height −
+(screenHeight − keyboardHeight − keyboardVerticalOffset), 0)`, verbatim, and
+  under `presentationStyle="pageSheet"` on iOS the `onLayout` frame is measured
+  relative to the SHEET while `screenHeight` spans the whole screen. So at the
+  default offset the lift fell short by the sheet's top offset (~60pt on an
+  iPhone 17 Pro) and AdvancedSearch's Clear/Search row stayed behind the keyboard
+  once its body was tall enough to scroll. Measured, not inferred: the
+  `ScrollView` went 722 → 483 against a 335pt keyboard. The repair was
+  `keyboardVerticalOffset = screenHeight − sheetHeight`, an `onLayout` on the
+  Modal's `SafeAreaView` root supplying `sheetHeight` and `screenHeight` coming
+  from **keyboard-controller's own** `useWindowDimensions`
+  (`UIScreen.main.bounds`, re-emitted on rotation) rather than react-native's
+  same-named window hook — the terms only cancel if both are read off the same
+  ruler. **Put an avoider in a page sheet and you owe it that measurement
+  again**; AdvancedSearch no longer pays it because it no longer has an avoider,
+  not because the sheet stopped needing one. A `Modal` that is NOT a page sheet
+  (Android's, or an iOS `fullScreen`) never did.
+- **⚠ An avoider cannot give a focused field AIR above the keyboard — only the
+  thing that scrolls can.** This is what ended the avoider on AdvancedSearch, and
+  it generalises: a KAV pads the container by its overlap with the keyboard and
+  stops there. The scroll that brings a newly focused field into view is then the
+  PLATFORM's, and on iOS that scroll is measured against the keyboard rather than
+  against the container the KAV has just shrunk — so the field comes to rest
+  flush on the keys. The specimen is AdvancedSearch's tri-state filter box
+  (`TriCheckList` past `FILTER_THRESHOLD`, which the Tags tree is first to
+  cross), whose bottom border sat on the keyboard. **Paying the avoider a 16pt
+  `keyboardVerticalOffset` to buy that air does not work**, and the failure is
+  recorded here because it reads like a near-miss rather than a wrong mechanism:
+  on a real iPhone the field stayed exactly where it was on the keys while the
+  container's bottom edge rose 16pt OVER its bottom border — the gap appeared,
+  but it belonged to the keyboard and it ate the field's own edge. The number has
+  to reach the code that computes the scroll, and keyboard-controller spells that
+  `bottomOffset` on `KeyboardAwareScrollView`: "the distance between the keyboard
+  and the focused `TextInput`". So AdvancedSearch is now a
+  `KeyboardAwareScrollView bottomOffset={16}` in the sheet — no avoider, and no
+  page-sheet correction either, because that component's terms are already
+  screen-absolute on both sides (the focused field's `absoluteY` is its frame
+  converted to the root view controller's view, the lib's `globalFrame`, so the
+  sheet's ~60pt offset is inside it). **16 is this app's number for that gap** —
+  every `KeyboardAwareScrollView` here passes it (`auth-screen.tsx`,
+  `link-edit-screen.tsx`, `settings/scroll-host.tsx`, `lock-pane.tsx`);
+  `ui/dialog.tsx`'s 8 is a different measurement, a floating card's corner off
+  the keys rather than a field. And **never nest an aware scroller inside an
+  avoider**: it pads its own content by the keyboard's full height, which the
+  avoider has already removed from the container.
 - **Why a portaled dialog is NOT the `Modal` case, and still needs its own
   avoider.** `Dialog` content portals to the root `PortalHost`, which is mounted
   _inside_ `KeyboardProvider` (`src/app/_layout.tsx`), so keyboard-controller's
@@ -171,10 +197,11 @@ behavior="padding"` around the centring box in `DialogOverlay` — the container
   React Native itself_.
 - **For a new surface, decide the presentation first; the keyboard answer
   follows.** A router screen inherits the keyboard-controller path for free; a
-  page-sheet `Modal` (like AdvancedSearch) carries its own keyboard-controller
-  `KeyboardAvoidingView` — and must copy the `keyboardVerticalOffset`
-  measurement above with it, or inherit the under-lift (invisible until its body
-  is tall enough to scroll); a **form sheet sized to its contents** answers the
+  page-sheet `Modal` (like AdvancedSearch) takes a keyboard-controller
+  `KeyboardAwareScrollView` for the same reasons a screen does, and if it takes
+  an avoider instead it must copy the `keyboardVerticalOffset` measurement above
+  with it, or inherit the under-lift (invisible until its body is tall enough to
+  scroll); a **form sheet sized to its contents** answers the
   keyboard by itself and forbids the scroller the first answer is built on, the
   next section.
 

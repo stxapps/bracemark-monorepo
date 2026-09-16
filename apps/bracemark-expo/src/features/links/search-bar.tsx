@@ -25,16 +25,8 @@
 //    `apply`).
 
 import { useEffect, useMemo, useState } from 'react';
-import { Modal, Platform, Pressable, ScrollView, View } from 'react-native';
-import {
-  KeyboardAvoidingView,
-  // The lib's OWN screen-dimensions hook, not react-native's window one: this is
-  // the exact value its KeyboardAvoidingView subtracts from (`UIScreen.main.bounds`
-  // on iOS, fed through its `windowDidResize` event so it survives a rotation), and
-  // the pageSheet offset below only cancels out if both terms come from the same
-  // ruler. Aliased because react-native exports a same-named hook that does NOT.
-  useWindowDimensions as useScreenDimensions,
-} from 'react-native-keyboard-controller';
+import { Modal, Pressable, ScrollView, View } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Check, Lock, Minus, Search, SlidersHorizontal, X } from 'lucide-react-native';
@@ -54,9 +46,10 @@ import { useLinksViewState } from './view-state-provider';
 
 const StyledSafeAreaView = withUniwind(SafeAreaView);
 // Composite components need the wrapper to accept `className` — the same
-// treatment ui/dialog.tsx gives this component and the screens give
-// KeyboardAwareScrollView.
-const StyledKeyboardAvoidingView = withUniwind(KeyboardAvoidingView);
+// treatment the screens give this component (auth-screen.tsx,
+// link-edit-screen.tsx) and ui/dialog.tsx gives its avoider. The HOC also maps
+// `contentContainerClassName` onto `contentContainerStyle`.
+const StyledKeyboardAwareScrollView = withUniwind(KeyboardAwareScrollView);
 
 // Split a raw field value into lowercased, trimmed words — the same normalization
 // parseLinkQuery applies on read-back, done here so a multi-word field becomes the
@@ -348,24 +341,6 @@ function AdvancedSearch() {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<Draft>(() => initDraft(query));
 
-  // The pageSheet under-lift correction (the KeyboardAvoidingView comment below
-  // carries the diagnosis). Both KAV implementations lift by
-  // `max(frame.y + frame.height - (screenHeight - keyboardHeight - offset), 0)`,
-  // where the frame is measured inside the SHEET and `screenHeight` spans the whole
-  // screen; feeding the sheet's top offset back in as `keyboardVerticalOffset`
-  // re-registers the two in the one place the formula lets us. `sheetHeight` is the
-  // Modal root's own measured height (the onLayout below), so the term is 0 until
-  // the first layout — an under-lift for that frame, never an over-lift.
-  //
-  // iOS-only on purpose: Android's Modal is full-screen, so the sheet IS the screen
-  // and the correction is a no-op there in theory — but only in theory, since that
-  // screen height counts system bars whose relationship to the modal's decorView is
-  // an edge-to-edge detail we'd rather not bet a working surface on.
-  const { height: screenHeight } = useScreenDimensions();
-  const [sheetHeight, setSheetHeight] = useState(0);
-  const keyboardVerticalOffset =
-    Platform.OS === 'ios' && sheetHeight > 0 ? Math.max(screenHeight - sheetHeight, 0) : 0;
-
   // Snapshot the committed query into the draft each time the sheet opens, so
   // it edits the CURRENT query rather than a stale one (web's onOpenChange).
   const openSheet = () => {
@@ -467,224 +442,235 @@ function AdvancedSearch() {
         presentationStyle="pageSheet"
         onRequestClose={() => setOpen(false)}
       >
-        <StyledSafeAreaView
-          className="flex-1 bg-background"
-          onLayout={(e) => setSheetHeight(e.nativeEvent.layout.height)}
-        >
-          {/* keyboard-controller's KeyboardAvoidingView, NOT react-native's —
-              the same component ui/dialog.tsx uses, so the app tree runs on ONE
-              keyboard library. The share sheet is the only exception left and it
-              is a hard one: keyboard-controller's iOS layer is built on
-              `UIApplication.shared`, which does not exist in an extension
-              process (share/share-kit.tsx).
+        <StyledSafeAreaView className="flex-1 bg-background">
+          {/* Match the edit-link system-modal header rather than the app's
+              fixed-height topbar. Android is full-screen and SafeAreaView has
+              already cleared the status bar, so 8pt above and below the 40pt
+              close control preserves the ordinary 56pt bar. iOS pageSheet
+              reports almost no top inset despite its prominent system arc, so
+              that presentation alone pays for optical clearance.
+
+              THE iOS NUMBER IS DERIVED FROM THE TITLE'S CAPS, NOT FROM THE
+              PADDING, which is why this header's step is 2pt where
+              link-edit-screen.tsx's is 8. The row here is 40 because the close
+              BUTTON sets it — `text-lg` is a 28pt line box, so the title
+              floats with 6pt of slack above and below — while the edit
+              header's row IS its 44pt title/URL stack, where the padding is
+              the whole gap. Add Inter's 7.4pt from line-box top to cap top
+              (docs/theme.md, _extending_, carries the metrics) and `ios:pt-2.5`
+              puts these caps 23.4pt under the sheet's edge, exactly where
+              `ios:pt-4` puts the edit screen's. The shared `ios:pt-5` both
+              headers used to carry had them 6pt apart and both loose.
+
+              These two headers are the app's ONLY `ios:` variants, and the
+              fork is the ARC — so nothing below the title is forked. `pb-2`
+              here and `pb-2.5` there each answer their own content on both
+              platforms (a subtitle line sits closer to the border than a
+              floating title does); an `ios:` on a bottom padding would be a
+              fork with no cause. Android is still 6pt apart on the cap-top
+              measure, because the 8pt base can't see the button's slack — the
+              correction would be here, not there, and it has not been
+              eyeballed on the AVD yet.
+
+              `pr-1.5` plus the button's own 10pt glyph margin puts the ✕ on
+              the same 16pt optical edge as the title's `pl-4`, which is where
+              both topbars put theirs (features/links/topbar.tsx). */}
+          <View className="shrink-0 flex-row items-center justify-between border-b border-border pt-2 pr-1.5 pb-2 pl-4 ios:pt-2.5">
+            {/* Owns the row's remaining width — the topbars' title idiom, and
+                the shape link-add-panel.tsx's title needed when its header
+                was a row relaid out by a keyboard avoider (Android kept a
+                stale paint clip on the intrinsically sized text). */}
+            <Text className="min-w-0 flex-1 text-lg font-semibold">Advanced search</Text>
+            <Button
+              variant="ghost"
+              size="icon"
+              onPress={() => setOpen(false)}
+              aria-label="Close advanced search"
+              // 54x48 effective. The box stays 40 and the slop makes up the
+              // difference — docs/accessibility.md, _a 36dp box is not a 44pt
+              // target_, where the lever is never a bigger box. 4 above and
+              // below clears both platform floors and still lands inside the
+              // header's own padding; `right: 6` runs out to the row's
+              // `pr-1.5` frame edge; the full 8 on the left is free because
+              // the title beside it is a Text and a Text takes no touches.
+              hitSlop={{ top: 4, bottom: 4, left: 8, right: 6 }}
+            >
+              <Icon as={X} className="size-5 text-foreground" />
+            </Button>
+          </View>
+          {/* keyboard-controller's KeyboardAwareScrollView — the header +
+              scroller shape link-edit-screen.tsx has, and the same library the
+              rest of the app tree runs on. The share sheet is the only
+              exception left and it is a hard one: keyboard-controller's iOS
+              layer is built on `UIApplication.shared`, which does not exist in
+              an extension process (share/share-kit.tsx).
 
               A Modal being its own native window used to be the reason to keep
-              RN's here. It stopped being one: at 1.18.5 the lib handles that
-              window explicitly — `ModalAttachedWatcher` listens for the Modal's
-              `topShow`, attaches a WindowInsetsAnimationCallback to the dialog's
-              own decorView, puts it in SOFT_INPUT_ADJUST_NOTHING, and feeds the
-              values back through the root KeyboardProvider. On iOS nothing is
-              needed: keyboard notifications are app-wide and this KAV is
-              Reanimated over context, owning no native view that would have to
-              wrap the window. Both were driven — the lib reports the keyboard's
-              height inside this sheet (335 on an iPhone 17 Pro) and the
-              ScrollView shrinks by the lift.
+              RN's KeyboardAvoidingView here. It stopped being one: at 1.18.5
+              the lib handles that window explicitly — `ModalAttachedWatcher`
+              listens for the Modal's `topShow`, attaches a
+              WindowInsetsAnimationCallback to the dialog's own decorView, puts
+              it in SOFT_INPUT_ADJUST_NOTHING, and feeds the values back through
+              the root KeyboardProvider. On iOS nothing is needed: keyboard
+              notifications are app-wide. Driven on both — the lib reports the
+              keyboard's height inside this sheet (335 on an iPhone 17 Pro).
 
-              This was NOT a bug fix, and the doc's Modal row says so: RN's KAV
-              avoids correctly in THIS Modal on both platforms, unlike in the
-              portal ui/dialog.tsx sits in, where Android edge-to-edge leaves it
-              inert. What the swap buys is one library and a lift synced to the
-              keyboard's own animation.
+              WHY THE AWARE SCROLLER AND NOT AN AVOIDER, which is what this used
+              to be: an avoider only pads the CONTAINER by its overlap with the
+              keyboard. The scroll that then brings a focused field into view is
+              the platform's own, and on iOS that scroll is measured against the
+              KEYBOARD, not against the shrunken container — so a field summoned
+              from below the fold comes to rest flush on the keys with no air
+              between the two. The specimen is the tri-state checklists' filter
+              box (TriCheckList past FILTER_THRESHOLD, which the Tags tree is
+              first to cross). Paying the avoider a 16pt
+              `keyboardVerticalOffset` to buy that air does NOT work, and the
+              failure is worth knowing: the field stayed on the keyboard and the
+              container's bottom edge rose 16pt over its bottom border instead,
+              measured on a real iPhone. The gutter has to come from whatever
+              computes the scroll, and here that is `bottomOffset` — the lib
+              scrolls until the field's bottom clears the keyboard by it. 16 is
+              the number every other scroller in the app passes
+              (auth-screen.tsx, link-edit-screen.tsx, settings/scroll-host.tsx,
+              lock-pane.tsx); ui/dialog.tsx's 8 is a different measurement, a
+              floating card's corner off the keys.
 
-              What the swap did NOT answer, and `keyboardVerticalOffset` does:
-              under `presentationStyle="pageSheet"` the KAV's onLayout frame is
-              sheet-relative while the `screenHeight` it subtracts from is not,
-              so the lift fell short by the sheet's top offset (~60pt on an
-              iPhone 17 Pro) and the Clear/Search row sat behind the keyboard
-              once the body was tall enough to scroll. Android's modal is
-              full-screen — offset 0 — and always cleared it (docs/safe-area.md,
-              docs/soft-keyboard.md, _avoidance_). */}
-          <StyledKeyboardAvoidingView
-            behavior="padding"
-            keyboardVerticalOffset={keyboardVerticalOffset}
+              The swap also retired the pageSheet under-lift correction this
+              surface carried — an onLayout-measured sheet height, subtracted
+              from keyboard-controller's screen height and fed back as
+              `keyboardVerticalOffset`, because an avoider's onLayout frame is
+              sheet-relative while the screen height it subtracts from is not.
+              Both of this component's terms are already screen-absolute: the
+              focused field's `absoluteY` is its frame converted to the root
+              view controller's view (the lib's `globalFrame`), so the sheet's
+              ~60pt top offset is inside it. Nothing to re-register.
+
+              NEVER nest this inside a KeyboardAvoidingView: it pads its own
+              content by the keyboard's full height, which an outer avoider has
+              already removed from the container — they double-compensate
+              (docs/soft-keyboard.md, _avoidance_). */}
+          <StyledKeyboardAwareScrollView
             className="flex-1"
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            contentContainerClassName="gap-4 p-4"
+            bottomOffset={16}
           >
-            {/* Match the edit-link system-modal header rather than the app's
-                fixed-height topbar. Android is full-screen and SafeAreaView has
-                already cleared the status bar, so 8pt above and below the 40pt
-                close control preserves the ordinary 56pt bar. iOS pageSheet
-                reports almost no top inset despite its prominent system arc, so
-                that presentation alone pays for optical clearance.
-
-                THE iOS NUMBER IS DERIVED FROM THE TITLE'S CAPS, NOT FROM THE
-                PADDING, which is why this header's step is 2pt where
-                link-edit-screen.tsx's is 8. The row here is 40 because the close
-                BUTTON sets it — `text-lg` is a 28pt line box, so the title
-                floats with 6pt of slack above and below — while the edit
-                header's row IS its 44pt title/URL stack, where the padding is
-                the whole gap. Add Inter's 7.4pt from line-box top to cap top
-                (docs/theme.md, _extending_, carries the metrics) and `ios:pt-2.5`
-                puts these caps 23.4pt under the sheet's edge, exactly where
-                `ios:pt-4` puts the edit screen's. The shared `ios:pt-5` both
-                headers used to carry had them 6pt apart and both loose.
-
-                These two headers are the app's ONLY `ios:` variants, and the
-                fork is the ARC — so nothing below the title is forked. `pb-2`
-                here and `pb-2.5` there each answer their own content on both
-                platforms (a subtitle line sits closer to the border than a
-                floating title does); an `ios:` on a bottom padding would be a
-                fork with no cause. Android is still 6pt apart on the cap-top
-                measure, because the 8pt base can't see the button's slack — the
-                correction would be here, not there, and it has not been
-                eyeballed on the AVD yet.
-
-                `pr-1.5` plus the button's own 10pt glyph margin puts the ✕ on
-                the same 16pt optical edge as the title's `pl-4`, which is where
-                both topbars put theirs (features/links/topbar.tsx). */}
-            <View className="shrink-0 flex-row items-center justify-between border-b border-border pt-2 pr-1.5 pb-2 pl-4 ios:pt-2.5">
-              {/* Owns the row's remaining width — the topbars' title idiom, and
-                  the shape link-add-panel.tsx's title needed when its header
-                  was a row relaid out by a keyboard avoider (Android kept a
-                  stale paint clip on the intrinsically sized text). */}
-              <Text className="min-w-0 flex-1 text-lg font-semibold">Advanced search</Text>
-              <Button
-                variant="ghost"
-                size="icon"
-                onPress={() => setOpen(false)}
-                aria-label="Close advanced search"
-                // 54x48 effective. The box stays 40 and the slop makes up the
-                // difference — docs/accessibility.md, _a 36dp box is not a 44pt
-                // target_, where the lever is never a bigger box. 4 above and
-                // below clears both platform floors and still lands inside the
-                // header's own padding; `right: 6` runs out to the row's
-                // `pr-1.5` frame edge; the full 8 on the left is free because
-                // the title beside it is a Text and a Text takes no touches.
-                hitSlop={{ top: 4, bottom: 4, left: 8, right: 6 }}
-              >
-                <Icon as={X} className="size-5 text-foreground" />
-              </Button>
-            </View>
-            <ScrollView
-              keyboardShouldPersistTaps="handled"
-              keyboardDismissMode="on-drag"
-              contentContainerClassName="gap-4 p-4"
-            >
-              {!entitlements.searchEditor && (
-                <LockedBanner
-                  onSeePlans={() => {
-                    setOpen(false);
-                    router.push('/settings/subscription');
-                  }}
-                />
-              )}
-              {/* The word trio (Google-advanced-search shape) over the combined
-                  url⊕title haystack — text.all / text.any / text.none. Because
-                  the haystack contains the url, "None of these words" also
-                  covers the practical exclude-a-domain case. */}
-              <WordField
-                label="All of these words (URL or title)"
-                value={draft.textAll}
-                placeholder="every word must match"
-                onChangeText={(v) => setDraft((d) => ({ ...d, textAll: v }))}
+            {!entitlements.searchEditor && (
+              <LockedBanner
+                onSeePlans={() => {
+                  setOpen(false);
+                  router.push('/settings/subscription');
+                }}
               />
-              <WordField
-                label="Any of these words"
-                value={draft.textAny}
-                placeholder="at least one matches"
-                onChangeText={(v) => setDraft((d) => ({ ...d, textAny: v }))}
-              />
-              <WordField
-                label="None of these words"
-                value={draft.textNone}
-                placeholder="exclude matches"
-                onChangeText={(v) => setDraft((d) => ({ ...d, textNone: v }))}
-              />
-              <WordField
-                label="URL contains"
-                value={draft.url}
-                onChangeText={(v) => setDraft((d) => ({ ...d, url: v }))}
-              />
-              <WordField
-                label="Title contains"
-                value={draft.title}
-                onChangeText={(v) => setDraft((d) => ({ ...d, title: v }))}
-              />
-              {/* The one searchable field with no basic counterpart — the word
-                  trio above runs over url⊕title only, so this is the only way to
-                  reach what you wrote about a link. */}
-              <WordField
-                label="Note contains"
-                value={draft.note}
-                onChangeText={(v) => setDraft((d) => ({ ...d, note: v }))}
-              />
-              <TriCheckList
-                label="Lists"
-                options={listOptions}
-                include={draft.listsAny}
-                exclude={draft.listsNone}
-                onChange={(include, exclude) =>
-                  setDraft((d) => ({ ...d, listsAny: include, listsNone: exclude }))
-                }
-              />
-              <TriCheckList
-                label="Tags"
-                options={tagOptions}
-                include={draft.tagsInclude}
-                exclude={draft.tagsNone}
-                onChange={(include, exclude) =>
-                  setDraft((d) => ({ ...d, tagsInclude: include, tagsNone: exclude }))
-                }
-                // The match toggle only matters once ≥2 tags are included (any ≡
-                // all for one tag); below that the ✓/− legend takes the slot.
-                action={
-                  draft.tagsInclude.length >= 2 ? (
-                    <View className="flex-row items-center gap-1">
-                      <Text className="text-[10px] text-muted-foreground">Match</Text>
-                      {(['any', 'all'] as const).map((mode) => (
-                        <Pressable
-                          // A two-option exclusive picker, so `radio` rather than
-                          // `button` — and `aria-checked`, which is the state
-                          // `radio` carries (`aria-selected` belongs to tabs and
-                          // options; jsx-a11y rejects it here).
-                          role="radio"
-                          key={mode}
-                          onPress={() => setDraft((d) => ({ ...d, tagsMode: mode }))}
-                          aria-checked={draft.tagsMode === mode}
-                          // The visible word is just "any"/"all"; the "Match"
-                          // label beside it is a sibling node, so each option
-                          // has to carry the whole phrase itself.
-                          aria-label={`Match ${mode}`}
+            )}
+            {/* The word trio (Google-advanced-search shape) over the combined
+                url⊕title haystack — text.all / text.any / text.none. Because
+                the haystack contains the url, "None of these words" also
+                covers the practical exclude-a-domain case. */}
+            <WordField
+              label="All of these words (URL or title)"
+              value={draft.textAll}
+              placeholder="every word must match"
+              onChangeText={(v) => setDraft((d) => ({ ...d, textAll: v }))}
+            />
+            <WordField
+              label="Any of these words"
+              value={draft.textAny}
+              placeholder="at least one matches"
+              onChangeText={(v) => setDraft((d) => ({ ...d, textAny: v }))}
+            />
+            <WordField
+              label="None of these words"
+              value={draft.textNone}
+              placeholder="exclude matches"
+              onChangeText={(v) => setDraft((d) => ({ ...d, textNone: v }))}
+            />
+            <WordField
+              label="URL contains"
+              value={draft.url}
+              onChangeText={(v) => setDraft((d) => ({ ...d, url: v }))}
+            />
+            <WordField
+              label="Title contains"
+              value={draft.title}
+              onChangeText={(v) => setDraft((d) => ({ ...d, title: v }))}
+            />
+            {/* The one searchable field with no basic counterpart — the word
+                trio above runs over url⊕title only, so this is the only way to
+                reach what you wrote about a link. */}
+            <WordField
+              label="Note contains"
+              value={draft.note}
+              onChangeText={(v) => setDraft((d) => ({ ...d, note: v }))}
+            />
+            <TriCheckList
+              label="Lists"
+              options={listOptions}
+              include={draft.listsAny}
+              exclude={draft.listsNone}
+              onChange={(include, exclude) =>
+                setDraft((d) => ({ ...d, listsAny: include, listsNone: exclude }))
+              }
+            />
+            <TriCheckList
+              label="Tags"
+              options={tagOptions}
+              include={draft.tagsInclude}
+              exclude={draft.tagsNone}
+              onChange={(include, exclude) =>
+                setDraft((d) => ({ ...d, tagsInclude: include, tagsNone: exclude }))
+              }
+              // The match toggle only matters once ≥2 tags are included (any ≡
+              // all for one tag); below that the ✓/− legend takes the slot.
+              action={
+                draft.tagsInclude.length >= 2 ? (
+                  <View className="flex-row items-center gap-1">
+                    <Text className="text-[10px] text-muted-foreground">Match</Text>
+                    {(['any', 'all'] as const).map((mode) => (
+                      <Pressable
+                        // A two-option exclusive picker, so `radio` rather than
+                        // `button` — and `aria-checked`, which is the state
+                        // `radio` carries (`aria-selected` belongs to tabs and
+                        // options; jsx-a11y rejects it here).
+                        role="radio"
+                        key={mode}
+                        onPress={() => setDraft((d) => ({ ...d, tagsMode: mode }))}
+                        aria-checked={draft.tagsMode === mode}
+                        // The visible word is just "any"/"all"; the "Match"
+                        // label beside it is a sibling node, so each option
+                        // has to carry the whole phrase itself.
+                        aria-label={`Match ${mode}`}
+                        className={cn(
+                          'h-6 items-center justify-center rounded-md px-2',
+                          draft.tagsMode === mode ? 'bg-secondary' : 'active:bg-muted',
+                        )}
+                      >
+                        <Text
                           className={cn(
-                            'h-6 items-center justify-center rounded-md px-2',
-                            draft.tagsMode === mode ? 'bg-secondary' : 'active:bg-muted',
+                            'text-xs',
+                            draft.tagsMode === mode
+                              ? 'font-medium text-secondary-foreground'
+                              : 'text-muted-foreground',
                           )}
                         >
-                          <Text
-                            className={cn(
-                              'text-xs',
-                              draft.tagsMode === mode
-                                ? 'font-medium text-secondary-foreground'
-                                : 'text-muted-foreground',
-                            )}
-                          >
-                            {mode}
-                          </Text>
-                        </Pressable>
-                      ))}
-                    </View>
-                  ) : undefined
-                }
-              />
-              <View className="flex-row justify-end gap-2">
-                <Button variant="ghost" size="sm" onPress={() => setDraft(initDraft(emptyQuery()))}>
-                  <Text>Clear</Text>
-                </Button>
-                <Button size="sm" onPress={apply}>
-                  <Text>Search</Text>
-                </Button>
-              </View>
-            </ScrollView>
-          </StyledKeyboardAvoidingView>
+                          {mode}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                ) : undefined
+              }
+            />
+            <View className="flex-row justify-end gap-2">
+              <Button variant="ghost" size="sm" onPress={() => setDraft(initDraft(emptyQuery()))}>
+                <Text>Clear</Text>
+              </Button>
+              <Button size="sm" onPress={apply}>
+                <Text>Search</Text>
+              </Button>
+            </View>
+          </StyledKeyboardAwareScrollView>
         </StyledSafeAreaView>
       </Modal>
     </>
