@@ -328,20 +328,35 @@ function Row({
       </View>
 
       {/* Lock chrome: locked/unlocked state, plus the collapse flag while it's
-          relevant (a list is only hidden from the sidebar while locked). */}
+          relevant (a list is only hidden from the sidebar while locked). Each
+          icon is `accessible` + `accessibilityLabel`: no press target wraps them
+          to fold the label into, so without `accessible` VoiceOver never lands
+          on them, and `aria-label` never reaches an Icon at all
+          (docs/accessibility.md). */}
       {lock && (
         <View className="shrink-0 flex-row items-center gap-1.5 px-1">
           {lock.hideList && lock.locked && (
             <Icon
               as={EyeOff}
               className="size-3.5 text-muted-foreground"
-              aria-label="Hidden from sidebar"
+              accessible
+              accessibilityLabel="Hidden from sidebar"
             />
           )}
           {lock.locked ? (
-            <Icon as={Lock} className="size-3.5 text-muted-foreground" aria-label="Locked" />
+            <Icon
+              as={Lock}
+              className="size-3.5 text-muted-foreground"
+              accessible
+              accessibilityLabel="Locked"
+            />
           ) : (
-            <Icon as={LockOpen} className="size-3.5 text-muted-foreground" aria-label="Unlocked" />
+            <Icon
+              as={LockOpen}
+              className="size-3.5 text-muted-foreground"
+              accessible
+              accessibilityLabel="Unlocked"
+            />
           )}
         </View>
       )}

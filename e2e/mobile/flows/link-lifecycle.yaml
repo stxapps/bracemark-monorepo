@@ -32,9 +32,10 @@ tags: [LINK-LIFECYCLE-002, full, online, destructive, ios, android]
     timeout: 20000
 
 # --- pin / unpin ----------------------------------------------------------------------
-# The row's pinned badge is an icon, and its label does not reach the row's
-# composite accessible name, so the menu is the readable proof: a pinned link's
-# menu offers Unpin where Pin to top was, and the reverse after unpinning.
+# Read back twice: off the row, whose composite accessible name carries the
+# pinned badge's label ("…, <host>, Pinned"), and off the menu, which offers Unpin
+# where Pin to top was, and the reverse after unpinning. The row is the state a
+# screen reader hears; the menu is the state the next action acts on.
 #
 # ⚠ The unpin is also what keeps every later menu SHORT, and on Android that is
 # load-bearing in a development build. A menu item that removes its own row
@@ -51,6 +52,9 @@ tags: [LINK-LIFECYCLE-002, full, online, destructive, ios, android]
     id: 'link-options'
 - tapOn:
     id: 'link-menu-pin'
+- extendedWaitUntil:
+    visible: ".*${LINK_URL.replace('https://', '').split('/')[0]}, Pinned.*"
+    timeout: 10000
 - tapOn:
     id: 'link-options'
 - assertVisible:
@@ -59,6 +63,9 @@ tags: [LINK-LIFECYCLE-002, full, online, destructive, ios, android]
     id: 'link-menu-pin'
 - tapOn:
     id: 'link-menu-unpin'
+- extendedWaitUntil:
+    notVisible: '.*, Pinned.*'
+    timeout: 10000
 - tapOn:
     id: 'link-options'
 - assertVisible:

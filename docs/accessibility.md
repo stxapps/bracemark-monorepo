@@ -30,6 +30,29 @@ accessibility that only makes sense in context stays with its own doc —
 > inert `aria-current` that way. When in doubt, reach for `accessibilityState`,
 > whose shape (`{disabled, selected, checked, busy, expanded}`) is the honest
 > list of what native actually models.
+>
+> **A supported `aria-*` prop is only supported on RN's own components.** The
+> translation into `accessibility*` happens in RN's JS components, not in native,
+> so a third-party host component skips it. A lucide `Icon` is
+> react-native-svg's `Svg`, which passes its props straight to the native view:
+> `aria-label` on an `Icon` is dropped on both platforms, and
+> `accessibilityLabel` is the prop that lands. That is how the link row's pinned
+> and note badges stayed out of the row's composite name while looking labelled in
+> the diff — A/B on the iPhone 17 Pro simulator and the Pixel 8 AVD, one prop
+> apart: "…, journal.example.net, Pinned" against "…, journal.example.net"
+> (`features/links/shared.tsx`). `aria-hidden` on a `Text`, below, is the same
+> trap on a built-in.
+>
+> **Where the labelled icon sits decides what else it needs.** Inside a press
+> target (the link row's badges, the sidebar's own-lock badge) the label alone is
+> right: the `Pressable` is the one accessible node and folds the icon's label into
+> its name ("My List, Locked"), and marking the icon `accessible` too would split
+> it off as a node of its own. Standing alone (the lock chrome in Settings → Lists)
+> it needs `accessible` as well — without it Android happens to expose the label,
+> but on iOS the view is not an accessibility element and VoiceOver never lands on
+> it. Checked on both: the standalone icon becomes one focusable node in
+> `uiautomator dump --compressed`, and on iOS its svg + path nodes collapse into
+> one.
 
 ### the one rule: an error that appears must announce
 

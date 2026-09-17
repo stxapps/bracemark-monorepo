@@ -76,8 +76,20 @@ export type LinkItemProps = {
   onToggle: (link: LinkView) => void;
 };
 
+// Both badges are labelled with `accessibilityLabel`, NOT web's `aria-label`: an
+// `Icon` is react-native-svg's `Svg`, which hands its props to the native view
+// without RN's aria → accessibility translation, so `aria-label` is silently
+// dropped. The label is what the row's Pressable folds into its composite name
+// ("…, journal.example.net, Pinned") — the only way a screen reader learns a
+// row is pinned, since the pinned block has no header (docs/accessibility.md).
 export function PinnedBadge() {
-  return <Icon as={Pin} className="size-3.5 shrink-0 text-muted-foreground" aria-label="Pinned" />;
+  return (
+    <Icon
+      as={Pin}
+      className="size-3.5 shrink-0 text-muted-foreground"
+      accessibilityLabel="Pinned"
+    />
+  );
 }
 
 // Badge only — the note text stays behind the (future) edit dialog (web's "View
@@ -90,7 +102,7 @@ export function PinnedBadge() {
 // being in the result. `hasPositiveNoteClause` is the shared derivation — a
 // property of the query, not of the item, and false for a `none`-only clause
 // (which matches by absence). Muted → full ink rather than a hue, since this
-// theme's `--primary` sits next to `--foreground`; the `aria-label` moves with the
+// theme's `--primary` sits next to `--foreground`; the label moves with the
 // colour, since a colour alone is not a state for a screen reader
 // (docs/accessibility.md).
 //
@@ -104,7 +116,7 @@ export function NoteBadge() {
     <Icon
       as={StickyNote}
       className={cn('size-3.5 shrink-0', matched ? 'text-foreground' : 'text-muted-foreground')}
-      aria-label={matched ? 'Note matches search' : 'Has note'}
+      accessibilityLabel={matched ? 'Note matches search' : 'Has note'}
     />
   );
 }

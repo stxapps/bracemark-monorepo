@@ -546,10 +546,13 @@ named plain `List`, which overrode the child text, so neither VoiceOver nor a fl
 could read which list a link was filed in. It now reads `List: Work / Reading`,
 as `TagsField` already read `Tags: reading, work` ([accessibility.md](./accessibility.md),
 _naming things that have no visible label_), and the editor flows assert the
-persisted list and tags through those two names. The pinned badge is the one
-state that still does not reach a row's composite name — the label sits on an
-icon, and only child text is folded in — so `link-lifecycle.yaml` reads a pin off
-the menu instead (`link-menu-unpin` replacing `link-menu-pin`).
+persisted list and tags through those two names. A pin reaches the row's name the
+same way: the pinned badge's label is folded into it ("…, journal.example.net,
+Pinned"), so `link-lifecycle.yaml` asserts the pin on the row itself as well as
+off the menu (`link-menu-unpin` replacing `link-menu-pin`). It did not for a long
+time, and the flow read the menu alone: the label was an `aria-label` on an icon,
+which react-native-svg drops ([accessibility.md](./accessibility.md), the note at
+the top).
 
 `add-link-save` is the sharpest case for why these are ids and not text: its label
 is `Save` until a malformed/duplicate/trashed warning relabels it `Confirm`, so

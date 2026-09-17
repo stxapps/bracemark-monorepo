@@ -493,7 +493,7 @@ export function Sidebar({ closeDrawer }: { closeDrawer: () => void }) {
   // merely covers stay unmarked — the locked ancestor is the visual cue).
   const listBadge = (id: string) =>
     listLocks.get(id)?.locked ? (
-      <Icon as={Lock} className="size-3.5 text-muted-foreground" aria-label="Locked" />
+      <Icon as={Lock} className="size-3.5 text-muted-foreground" accessibilityLabel="Locked" />
     ) : undefined;
 
   // A one-tap "Lock now" for a row's OWN lock while it's currently UNLOCKED —
