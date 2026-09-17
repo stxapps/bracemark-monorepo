@@ -323,7 +323,7 @@ accessible identity is untestable as well as inaccessible. Flows bind to `testID
 and accessible labels, **never to body copy** — copy in this repo changes often,
 and a flow keyed to a sentence turns every wording edit into a red run.
 
-Five repo-specific gotchas:
+Six repo-specific gotchas:
 
 - **`launchApp` resumes, it does not cold-start.** Every flow that assumes a root
   screen needs its state wiped first, or it passes alone and fails in a directory
@@ -370,6 +370,15 @@ Five repo-specific gotchas:
   screen after a row-removing menu action owes it the same call. Release builds
   carry no LogBox, so this is harness-only — but the focus-return failure it
   announces is TalkBack's.
+- **A flow's `env:` block is not a default — it wins.** Measured on Maestro
+  2.8.0: a value in a flow's own `env:` beats `-e` from the command line, and a
+  subflow's `env:` beats both `-e` and the caller's `runFlow: env:`. A default
+  written there turns the runner's per-run value into a silent no-op, while
+  `command.json` still lists the key the runner passed — so no flow carries
+  `env:` defaults. A parameter a hand run may omit takes its default inside the
+  expression instead, `${NAME || 'default'}`: an unset variable is `undefined`,
+  not an error. `flows/subflows/cold-launch.yaml` does this for
+  `EXPO_DEV_CLIENT_LINK`; every other parameter is required.
 - **Maestro's `PATH` entry is in `.zshenv`, not `.zshrc`.** `runner/lib.ts` falls
   back to `~/.maestro/bin/maestro` anyway, so a shell that lost it gets a working
   run instead of `ENOENT`.

@@ -11,7 +11,7 @@
 #     -e LINK_URL=https://e2e-local.invalid/editor …
 #
 # NO flow-level `env:` defaults, deliberately: on Maestro 2.8.0 a flow's `env:`
-# value BEATS `-e` (docs/e2e.md, _the published screenshots_), so defaults here
+# value BEATS `-e` (docs/e2e.md, _driving the native apps_), so defaults here
 # would silently replace the runner's namespaced values. Every parameter above
 # is required; runner/mobile.ts supplies them.
 #

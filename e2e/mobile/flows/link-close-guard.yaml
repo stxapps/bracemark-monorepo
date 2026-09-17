@@ -13,7 +13,8 @@
 #     -e DISCARDED_URL=https://e2e-local.invalid/discarded -e DRAFT_NOTE=…
 #
 # No flow-level `env:` defaults: on Maestro 2.8.0 they beat `-e`, so the
-# runner's values would be silently replaced (link-editor.yaml).
+# runner's values would be silently replaced (docs/e2e.md, _driving the native
+# apps_).
 appId: com.bracemark.app
 tags: [LINK-CLOSE-001, full, online, ios, android]
 ---

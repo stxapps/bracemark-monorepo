@@ -29,13 +29,19 @@
 # assumes a DEV build with Metro up, which the mobile legs already require
 # (e2e/README.md). The hand-driven twins are `npm run expo:ios:open` and
 # `expo:android:open`.
+#
+# The link's default lives IN the expression, not in an `env:` block. A
+# subflow's own `env:` beats both `-e` and the caller's `runFlow: env:` (measured
+# on Maestro 2.8.0 — docs/e2e.md, _driving the native apps_), so a default there
+# made runner/native-run.ts's EXPO_DEV_CLIENT_LINK override a silent no-op while
+# run.json recorded it. An unset variable is `undefined` rather than an error, so
+# `||` falls back only for a hand-run `maestro test` that passes no link; keep
+# the literal in step with DEFAULT_DEV_CLIENT_LINK there.
 appId: com.bracemark.app
-env:
-  EXPO_DEV_CLIENT_LINK: 'bracemark://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081%2F%3FdisableOnboarding%3D1'
 ---
 - clearState
 - openLink:
-    link: ${EXPO_DEV_CLIENT_LINK}
+    link: "${EXPO_DEV_CLIENT_LINK || 'bracemark://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081%2F%3FdisableOnboarding%3D1'}"
     autoVerify: false
 
 # iOS 26.5 confirms custom-scheme handoff after app state is cleared. Older iOS

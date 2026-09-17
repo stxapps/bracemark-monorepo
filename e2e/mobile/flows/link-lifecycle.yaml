@@ -13,7 +13,8 @@
 # ambiguous — the Trash anchor is only added once the lifecycle link is gone.
 #
 # No flow-level `env:` defaults: on Maestro 2.8.0 they beat `-e`, so the
-# runner's values would be silently replaced (link-editor.yaml).
+# runner's values would be silently replaced (docs/e2e.md, _driving the native
+# apps_).
 appId: com.bracemark.app
 tags: [LINK-LIFECYCLE-002, full, online, destructive, ios, android]
 ---

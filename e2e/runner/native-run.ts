@@ -20,6 +20,7 @@ import { assertOriginOwnedByRepo, assertStackOwnedByRepo } from './stack';
 
 const APP_ID = 'com.bracemark.app';
 const REPO_ROOT = join(E2E_ROOT, '..');
+// Twin of the fallback in mobile/flows/subflows/cold-launch.yaml; keep them in step.
 const DEFAULT_DEV_CLIENT_LINK =
   'bracemark://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081%2F%3FdisableOnboarding%3D1';
 

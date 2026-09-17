@@ -2,12 +2,16 @@
 # test replaces: expo-sqlite's real update hook, a links route that stays mounted
 # behind Settings, useLiveRead's explicit invalidation, and the staged links
 # repaint. The same flow runs on iOS and Android; run one platform at a time.
+#
+#   maestro test mobile/flows/delete-all-data.yaml -e USERNAME=… -e PASSWORD=… \
+#     -e LINK_URL=https://e2e-local.invalid/delete-all \
+#     -e LIST_NAME='Delete test list' -e TAG_NAME='Delete test tag'
+#
+# No flow-level `env:` defaults: on Maestro 2.8.0 they beat `-e`, so the
+# runner's values would be silently replaced (docs/e2e.md, _driving the native
+# apps_).
 appId: com.bracemark.app
 tags: [NATIVE-DATA-001, full, online, destructive, ios, android]
-env:
-  LINK_URL: 'https://delete-all.invalid/saved-link'
-  LIST_NAME: 'Delete test list'
-  TAG_NAME: 'Delete test tag'
 ---
 - runFlow:
     file: subflows/sign-in.yaml
