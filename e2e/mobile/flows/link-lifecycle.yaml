@@ -38,10 +38,14 @@ tags: [LINK-LIFECYCLE-002, full, online, destructive, ios, android]
 # screen reader hears; the menu is the state the next action acts on.
 #
 # ⚠ The unpin is also what keeps every later menu SHORT, and on Android that is
-# load-bearing in a development build. A menu item that removes its own row
-# (Archive, Unarchive) closes the menu, and @rn-primitives then tries to return
-# accessibility focus to the row's trigger — which is gone — so Android logs a
-# `console.error` and LogBox raises its toast. The toast's container is a
+# load-bearing in a development build. When a row menu closes, @rn-primitives
+# returns accessibility focus to the row's ⋯ trigger 50ms later, and when the
+# list has re-rendered under it by then Android logs a `console.error`
+# ("sendAccessibilityEvent() dropping event: Cannot find view with tag") and
+# LogBox raises its toast. In this flow that is Pin, Archive, Unarchive and
+# Restore — the same four on every run — and not Unpin or Remove, so it is a
+# race with the re-render, not "the item removed its row" (docs/e2e.md,
+# _driving the native apps_). The toast's container is a
 # SafeAreaView whose inset padding leaves a transparent strip ABOVE the visible
 # toast that takes touches: measured on the Pixel 8 AVD, a pinned link's menu put
 # Remove at y 2019–2114px, inside that strip, and the tap was swallowed with the
@@ -171,7 +175,7 @@ tags: [LINK-LIFECYCLE-002, full, online, destructive, ios, android]
 - tapOn:
     id: 'links-nav-list-my-list'
 # The FAB sits under where Android's LogBox toast lands (see _pin / unpin_
-# above): by now Archive and Unarchive have raised it, and a FAB press on top of
+# above): by now the earlier menu actions have raised it, and a FAB press on top of
 # it left no panel, and no toast either — its ✕ sits under the FAB's centre. Put
 # it away first.
 - runFlow:

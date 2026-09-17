@@ -599,6 +599,37 @@ The rule for a new overlay: set `accessibilityViewIsModal` on its root and hide
 the covered subtree, then CHECK the tree rather than assuming — a dump is the
 only instrument that shows either half.
 
+### focus after a row leaves the list (expo) — not handled
+
+A row-menu action that takes its row out of the view (Archive, Unarchive,
+Remove, Restore; Move to goes through a dialog and was not checked) leaves a
+screen-reader user nowhere. `@rn-primitives`'
+dropdown returns focus to the ⋯ trigger when the menu closes — which is right for
+Copy link or Pin, and is what happens — but that trigger went with the row, so
+the platform picks a fallback. Measured with TalkBack on the Pixel 8 AVD, focus
+on the row's ⋯ before the press: after **Copy link** it came back to that ⋯;
+after **Archive** it landed on the topbar's ☰, so the user swipes back through the
+topbar and anything above the list before reaching the rows again — on every item
+of a triage pass. VoiceOver was not checked.
+
+It is not the `sendAccessibilityEvent() dropping event` error the e2e flows see
+([e2e.md](./e2e.md), _driving the native apps_): that run logged nothing. The
+error is a timing symptom of the same close hook; this is the design gap, and
+silencing the error would not touch it. The fix is to move focus on purpose once
+the list has re-rendered — to the row that took the removed row's place, else the
+one above, else the empty state — which the item renderers cannot do alone
+(FlashList recycles them) and which the library's own 50ms restore has to lose
+to. Nothing does that yet.
+
+To look at it again: `adb shell settings put secure
+enabled_accessibility_services
+com.google.android.marvin.talkback/com.google.android.marvin.talkback.TalkBackService`
+(set it to `null` to turn it off), and read focus off a screenshot — TalkBack's
+green rectangle. `adb shell input tap` is not a TalkBack gesture: it activates
+directly, without moving TalkBack focus, so put focus where a user's would be
+first (closing a menu with a second tap on its ⋯ does it) before pressing the
+item.
+
 ### web / expo parity
 
 The two platforms do **not** share component shapes here — web composes the Field

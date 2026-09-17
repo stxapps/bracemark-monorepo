@@ -360,16 +360,27 @@ Six repo-specific gotchas:
   Pixel 8 AVD, from y≈2019px down. A tap there reports COMPLETED and does nothing.
   The toast that raised it in `link-lifecycle.yaml` is a `console.error` from
   `@rn-primitives`' close hook: 50ms after a row menu closes it returns
-  accessibility focus to the trigger, and when the chosen item removed that row
-  (Archive, Unarchive) the view is gone. That flow unpins its link so the menus it
+  accessibility focus to the ⋯ trigger, and RN's bridgeless UIManager logs
+  `sendAccessibilityEvent() dropping event: Cannot find view with tag #…` when
+  that view is no longer in the committed tree. It runs whether or not a screen
+  reader is on. **It is a race with the list's re-render, not "the item removed
+  its row"**: across two runs of that flow on the Pixel 8 AVD it fired on exactly
+  Pin, Archive, Unarchive and Restore — Pin removes nothing — and never on Unpin or
+  Remove, while the same six actions driven one flow at a time in a long-lived
+  session logged it 0 times in 30. What decides it was not pinned down; the step
+  that raises it is read off `device-logcat.txt` against `commands.json`'s
+  timestamps plus durations (start times alone put it a step late). That flow
+  unpins its link so the menus it
   presses stay short of the strip, and runs `flows/subflows/dismiss-logbox.yaml`
   before pressing the FAB, which the toast covers outright — a FAB press there
   left no add panel, and no toast either — its ✕ sits under the FAB's centre. The
   subflow is a no-op without a toast and presses the ✕ as a point inside the
   toast's own bounds, not the screen's; a flow that presses low on an Android
   screen after a row-removing menu action owes it the same call. Release builds
-  carry no LogBox, so this is harness-only — but the focus-return failure it
-  announces is TalkBack's.
+  carry no LogBox, so this is harness-only — and the logged error is not what a
+  TalkBack user meets either: with TalkBack on, Archive logged nothing and still
+  lost focus, which is its own problem ([accessibility.md](./accessibility.md),
+  _focus after a row leaves the list_).
 - **A flow's `env:` block is not a default — it wins.** Measured on Maestro
   2.8.0: a value in a flow's own `env:` beats `-e` from the command line, and a
   subflow's `env:` beats both `-e` and the caller's `runFlow: env:`. A default
