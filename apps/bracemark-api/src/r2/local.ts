@@ -42,7 +42,7 @@ export function isLocalR2(env: Bindings | undefined): boolean {
 // lint error, no type error, and every spec still passes, because the test runner
 // and the simulator are on loopback like everything else. Echoing the request
 // origin also keeps the Mac's LAN address in exactly ONE file, bracemark-expo's
-// gitignored `.env.development.local`, rather than needing a matching edit here.
+// gitignored `.env.local`, rather than needing a matching edit here.
 //
 // Trusting a caller-supplied Host would be host-header injection anywhere else;
 // here it is confined behind the isLocalR2 gate — the same gate that makes the

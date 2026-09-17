@@ -294,31 +294,85 @@ start` is `development`, `expo export` / a release build is `production`. Expo h
 | `npm run expo:start` (`expo start`) | `development` | `.env.development` |
 | release build / `expo export`       | `production`  | `.env.production`  |
 
-`staging` is the same wrinkle it is for bracemark-web: a staging build is a
-_production-mode_ build (`NODE_ENV=production`), so Expo won't pick `.env.staging`
-by mode. And unlike bracemark-web there's no Nx `envFile` seam to lean on — the Expo
-build isn't an `nx build` running a bundler in `process.env`. **We don't use EAS**
-— there is no `eas.json` and none is needed; builds are local (`npx expo
-prebuild` + Xcode / Gradle, or `expo export`). So a staging build is made by
-supplying the var inline (`EXPO_PUBLIC_API_URL=… expo export`), which takes
-precedence over `.env.production`; `.env.staging` is committed as the single
-source of that URL to paste from. `.env.development` and `.env.production` are
-the two that work by auto-selection today.
+**The domain is a second axis, and Expo only knows the first.** The variant
+(dev / release) decides the mode, but which stack the build talks to —
+localhost, staging, production — is independent of it: a dev build against
+staging and a release build against staging are both real needs. `staging` is
+the wrinkle it is for bracemark-web — a _production-mode_ build, so no file is
+picked for it by mode — and unlike bracemark-web there's no Nx `envFile` seam to
+lean on, because the Expo build isn't an `nx build`. **We don't use EAS** — there
+is no `eas.json` and none is needed; builds are local (`npx expo prebuild` +
+Xcode / Gradle).
 
-Files in `apps/bracemark-expo/` (committed except the two `*.local`):
+**So the domain is chosen in ONE gitignored file, `.env.local`, and the committed
+files are only the per-variant defaults.** `.env.local` is the one file
+`@expo/env` loads in every mode and ranks above both `.env.<mode>` files, so a
+pair of URLs uncommented there wins in the dev and the release variant alike.
+It holds three commented pairs — physical iPhone (the Mac's LAN name), staging,
+production — and all-commented means the default.
 
-| file                     | used by                                        | loaded by   |
-| ------------------------ | ---------------------------------------------- | ----------- |
-| `.env.development`       | `npm run expo:start`, `npm run expo:prebuild`  | Expo (auto) |
-| `.env.production`        | release build / `expo export`                  | Expo (auto) |
-| `.env.staging`           | a staging build (var supplied inline)          | you         |
-| `.env.local`             | every mode — `APPLE_TEAM_ID` only (gitignored) | Expo (auto) |
-| `.env.development.local` | dev mode, per-machine overrides (gitignored)   | Expo (auto) |
+**Not the shell, and not the committed files.** Both were the obvious spelling
+and each fails silently on one path:
 
-`@expo/env` resolves those in a fixed priority order — `.env.<mode>.local`,
+- **An inline var (`EXPO_PUBLIC_API_URL=… <build>`) never reaches an Xcode
+  build started from its UI.** A GUI app does not inherit your shell's
+  environment, so the _Bundle React Native code and images_ phase bakes
+  `.env.production` into an Archive meant for staging. A file works on every
+  path because every path ends in the same loader: the dev server, and
+  `expo export:embed`, which both Xcode (`react-native-xcode.sh`) and the Gradle
+  plugin run for a release build, with `setNodeEnv('production')` then
+  `@expo/env.load(projectRoot)`. Both also pass `--reset-cache`, so a release
+  build always re-reads the file; there is no stale-cache trap on that side.
+- **Switching by editing `.env.development` / `.env.production` puts the switch
+  in git.** Every staging session becomes a diff to keep out of a commit, and it
+  travels between clones.
+
+This replaced a committed `.env.staging` (a paste source for the inline spelling
+above) and a gitignored `.env.development.local` (the physical-iPhone override).
+**Don't bring the latter back:** `.env.development.local` outranks `.env.local`
+in dev mode, so a leftover pair in it silently beats the switch.
+
+Files in `apps/bracemark-expo/` (the two committed ones never change to switch):
+
+| file               | used by                                                    | loaded by   |
+| ------------------ | ---------------------------------------------------------- | ----------- |
+| `.env.development` | dev default — `npm run ios`/`android`, `expo:start`        | Expo (auto) |
+| `.env.production`  | release default — Xcode Archive, `./gradlew *Release`      | Expo (auto) |
+| `.env.local`       | every mode — `APPLE_TEAM_ID` + the domain switch (ignored) | Expo (auto) |
+
+`@expo/env` resolves files in a fixed priority order — `.env.<mode>.local`,
 `.env.local`, `.env.<mode>`, `.env` — and the **first** file to define a key
-wins, so `.env.development.local` overrides `.env.development` and nothing
-overrides it but a var already exported in the shell.
+wins; only a var already exported in the shell beats them all.
+
+| domain \ variant | development                     | release                                   |
+| ---------------- | ------------------------------- | ----------------------------------------- |
+| localhost        | default                         | not supported (Android refuses cleartext) |
+| dryrunbase.com   | staging pair in `.env.local`    | staging pair in `.env.local`              |
+| bracemark.com    | production pair in `.env.local` | default                                   |
+
+A dev build takes the switch from Metro, so it needs no native rebuild — only
+`npm run expo:start -- --clear`, because a reload replays the old value. A
+release build bakes it, so it needs rebuilding (and nothing more).
+
+⚠ **Check the bundle before uploading a store build.** `.env.local` applies to
+release too, which is the point — and it means a staging pair left uncommented
+goes into the App Store / Play upload with nothing to flag it: no lint, no type
+error, no test, and the app works. The bundle is Hermes bytecode, but its
+string table holds the URLs verbatim:
+
+```sh
+# Android
+unzip -p app-release.aab base/assets/index.android.bundle | grep -aoE 'https://api\.[a-z]+\.com' | sort -u
+# iOS — inside the archive's app bundle
+grep -aoE 'https://api\.[a-z]+\.com' <archive>.xcarchive/Products/Applications/Bracemark.app/main.jsbundle | sort -u
+```
+
+Either should print `https://api.bracemark.com` and nothing else. **Keep the
+`-a`:** without it grep treats the bytecode as binary and `-o` prints NOTHING —
+which reads as "no staging URL in here" when the file was never searched. Empty
+output is a failed check, not a pass. The build log
+says the same thing earlier: `export:embed` prints the env files it loaded and
+the vars it exported.
 
 Current public vars:
 
@@ -333,34 +387,33 @@ Current public vars:
   the marketing site. (This var was `EXPO_PUBLIC_WEB_URL` and pointed at
   `app.*`, which was wrong — bracemark-web has no `/support` route.)
 
-**A physical phone is the one target `localhost` cannot serve, and
-`.env.development.local` is where that is fixed.** Both URLs above are
-`localhost` because one bundle has to serve the iOS simulator, which shares the
-host's loopback, and the Android emulator, which is taught the same by `adb
-reverse` (`npm run expo:android:reverse` — see [e2e.md](./e2e.md)). A real
-iPhone is a separate host: there is no `adb reverse` for iOS, so it has to
-address the Mac by LAN IP (`ipconfig getifaddr en0`) or by its Bonjour
-`<name>.local`, and the Worker has to be listening on more than loopback — see
-[_the local port map_](#the-local-port-map). Put the two rewritten URLs in the
-gitignored `.env.development.local` rather than editing the committed file: the
-IP is per-machine and per-network, and baking it in breaks the simulator, the
-emulator and the e2e runs for everyone. `EXPO_PUBLIC_*` is inlined by Metro at
-bundle time, so a change there needs `npm run expo:start -- --clear`, not a
-reload. The device also needs a dev build signed for its UDID
+**A physical iPhone is the one target `localhost` cannot serve, and the
+`.env.local` switch is where that is fixed.** Both default URLs are `localhost`
+because one bundle has to serve the iOS simulator, which shares the host's
+loopback, and the Android emulator (or an Android phone over USB / wireless
+debugging), which is taught the same by `adb reverse`
+(`npm run expo:android:reverse` — see [e2e.md](./e2e.md)). A real iPhone is a
+separate host: there is no `adb reverse` for iOS, so it has to address the Mac by
+LAN IP (`ipconfig getifaddr en0`) or by its Bonjour `<name>.local`, and the Worker
+has to be listening on more than loopback — see
+[_the local port map_](#the-local-port-map). That pair is the first of the three
+in `.env.local` rather than a line in the committed file: the address is
+per-machine and per-network, and baking it in breaks the simulator, the emulator
+and the e2e runs. The device also needs a dev build signed for its UDID
 (`npm run expo:ios -- --device`); Expo Go cannot load this app. The full
 device/app/environment matrix — including the secure-context rule that decides
 what `bracemark-web` can do from a phone — is
 [device-testing.md](./device-testing.md).
 
-**Comment it back out when you leave the device.** The override has no per-target
-scope — it is simply the highest-precedence dev file — so one left in place takes
-the simulator, the emulator and `npm run e2e:mobile` off loopback too, and the
-`--clear` above is what decides when the fix takes effect. The failure that
-produces, and why it is intermittent rather than reliable, is
-[device-testing.md](./device-testing.md), _one bundle, one set of origins_.
+**Comment it back out when you are done — any pair, not just the iPhone one.** The
+switch has no per-target scope, so one left in place takes the simulator, the
+emulator and `npm run e2e:mobile` off loopback too, and the `--clear` above is
+what decides when the fix takes effect. The failure that produces, and why it is
+intermittent rather than reliable, is [device-testing.md](./device-testing.md),
+_one bundle, one set of origins_.
 
-Adding a new var = add the line to all three files, same deliberate symmetry as
-the other frontends.
+Adding a new var = add the line to both committed files, and a commented line to
+each pair in `.env.local` — same deliberate symmetry as the other frontends.
 
 **The `expo:*` root scripts call `npm run -w`, not `nx` — which also keeps this
 the only loader.** The visible reason is the terminal UI
@@ -526,9 +579,10 @@ browser frontends — bracemark-web and bracemark-site — need an allowed origi
 ### what's committed vs ignored
 
 - **committed:** `.env.development`, `.env.test`, `.env.staging`, `.env.production`
-  for the frontends — every value in them is public.
+  for the frontends (bracemark-expo: the first and last only) — every value in
+  them is public.
 - **gitignored:** `.env*.local` (frontend personal overrides — and bracemark-expo's
-  `APPLE_TEAM_ID`, above), `.dev.vars` (bracemark-api Workers local), and all real
+  `APPLE_TEAM_ID` and domain switch, above), `.dev.vars` (bracemark-api Workers local), and all real
   secrets. These never enter git.
 - **in no env file at all:** the per-tier **Cloudflare API token**. Wrangler
   would happily read `CLOUDFLARE_API_TOKEN` out of the same `.env.<tier>.local`

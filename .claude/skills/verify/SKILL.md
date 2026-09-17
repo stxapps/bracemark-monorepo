@@ -414,20 +414,22 @@ this watch 1 time, most recently because: MustScanSubDirs`. With the watch
   relaunch the app before reading anything into it. (It is also what a real
   a11y-modality bug looks like, which is why relaunching first is the way to
   tell them apart → `docs/soft-keyboard.md`, _the add panel_.)
-- **Nothing native reaching the api? Read
-  `apps/bracemark-expo/.env.development.local` before anything else.** It is
-  gitignored, dev-only and highest precedence, and the two `EXPO_PUBLIC_*` lines
-  at its foot are meant to stay COMMENTED — they exist for a physical phone,
-  which is the one target that cannot use loopback. Uncommented, they take the
-  simulator and the emulator off loopback as well, onto the Mac's LAN name, where
+- **Nothing native reaching the api? Read `apps/bracemark-expo/.env.local`
+  before anything else.** It is gitignored, loaded in every mode and outranks
+  both committed env files, and the `EXPO_PUBLIC_*` pairs at its foot — physical
+  iPhone, staging, production — are meant to stay COMMENTED outside the session
+  that needed one. Uncommented, the iPhone pair takes the simulator and the
+  emulator off loopback as well, onto the Mac's LAN name, where
   `adb reverse` no longer applies (it maps `localhost`, and the bundle has
   stopped saying localhost — so re-running `expo:android:reverse` changes
   nothing). The app still launches and Metro is still fine, because both address
   :8081 and these vars don't touch it; only api traffic fails, which reads as the
   api being down. It is also intermittent rather than broken — it works on a
   network whose mDNS cooperates — so "it worked yesterday" is not evidence
-  against it. Commenting them back out needs `npm run expo:start -- --clear`; a
-  reload replays the old inlined value. → `docs/device-testing.md`
+  against it. (A staging or production pair fails more quietly still: the api
+  answers, just not the local one, so the seeded dev account "does not exist".)
+  Commenting them back out needs `npm run expo:start -- --clear`; a reload
+  replays the old inlined value. → `docs/device-testing.md`
 - **`hideKeyboard` taps a blank area on iOS**, so on a surface with a
   tap-to-close backdrop it closes the surface. If a flow loses its buttons right
   after that step, this is why.

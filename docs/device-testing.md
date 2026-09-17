@@ -51,11 +51,11 @@ Staging and production answer on `dryrunbase.com` and `bracemark.com`
 Every device reaches them the same way it reaches any other website, and
 `bracemark-expo` reaches them the same way it will in the store. So:
 
-| environment   | what a device needs                                          |
-| ------------- | ------------------------------------------------------------ |
-| `development` | everything in this doc                                       |
-| `staging`     | the URL; for expo, a staging build (the var supplied inline) |
-| `production`  | the URL; for expo, a release build                           |
+| environment   | what a device needs                                              |
+| ------------- | ---------------------------------------------------------------- |
+| `development` | everything in this doc                                           |
+| `staging`     | the URL; for expo, a build with the staging pair in `.env.local` |
+| `production`  | the URL; for expo, a release build                               |
 
 That is worth stating plainly because it makes staging the cheap way to answer
 "does this work on my iPad" — no certificates, no LAN addresses, no overrides.
@@ -139,8 +139,8 @@ used. There is one such URL, the local blob proxy that stands in for R2 in dev
 presignable S3 endpoint, so `files/sign` hands out URLs back to the Worker itself).
 It builds its origin from the incoming request, which is what keeps the Mac's
 address out of the api entirely: **the only file that carries it is
-`apps/bracemark-expo/.env.development.local`**, the gitignored override in the
-table above.
+`apps/bracemark-expo/.env.local`**, the gitignored domain switch
+([env-files.md](./env-files.md), _bracemark-expo_).
 
 ⚠ Hardcoding that origin instead is the silent failure this arrangement exists to
 prevent. It is right for every caller except the phone, and on the phone
@@ -159,8 +159,11 @@ by Next, `EXPO_PUBLIC_*` by Metro. There is one value per dev-server session, so
 **you cannot serve the localhost devices and the LAN devices simultaneously**.
 Working on the iPad is a mode you switch into and back out of.
 
-The switch is a gitignored `.env.development.local` in each app, which both
-loaders resolve **first** and let win — verified in `@next/env` and `@expo/env`,
+The switch is a gitignored `.env.development.local` in each Next app, and
+`.env.local` in `bracemark-expo` — expo's is not dev-only, because the same file
+also picks staging for a release build ([env-files.md](./env-files.md),
+_bracemark-expo_). Both loaders resolve these ahead of the committed files and
+let them win — verified in `@next/env` and `@expo/env`,
 which implement the identical order (`.env.<mode>.local`, `.env.local`,
 `.env.<mode>`, `.env`) and both keep the first definition of a key. `.env*.local`
 is gitignored at the root, so the committed files stay on `localhost` and the
@@ -189,8 +192,8 @@ Two consequences of the bake:
   CORS-bound, which the `wrangler.jsonc` comment already says.
 
 ⚠ **Switching back OUT is the half that gets forgotten, and it breaks the two
-targets that never needed this file.** Left uncommented, the override is still
-the highest-precedence dev file, so the iOS simulator and the Android emulator
+targets that never needed this file.** Left uncommented, the override still
+outranks the committed `.env.development`, so the iOS simulator and the Android emulator
 stop using loopback and start addressing the Mac across the network — and the
 emulator's `adb reverse` goes with them, because the reverse maps `localhost`
 and the bundle no longer says localhost. `npm run expo:android:reverse` then
