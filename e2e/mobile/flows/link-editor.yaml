@@ -1,0 +1,203 @@
+# Create a link with a list, tags and a note in the add panel, edit every
+# user-authored field in the modal edit screen, then COLD START and read each
+# field back.
+#
+# What only a device shows: both editors writing through expo-sqlite, the
+# pickers minting a list and tags immediately in-process, and the edited record
+# surviving a restart. Validation and the minimal-patch rule stay in jest
+# (docs/editors.md, _invariants every editor must uphold_).
+#
+#   maestro test mobile/flows/link-editor.yaml -e USERNAME=… -e PASSWORD=… \
+#     -e LINK_URL=https://e2e-local.invalid/editor …
+#
+# NO flow-level `env:` defaults, deliberately: on Maestro 2.8.0 a flow's `env:`
+# value BEATS `-e` (docs/e2e.md, _the published screenshots_), so defaults here
+# would silently replace the runner's namespaced values. Every parameter above
+# is required; runner/mobile.ts supplies them.
+#
+# Every picker and field is addressed by id: each control's accessible name is
+# also the text of the Field label drawn above it ("List" over a combobox named
+# "List: …"), so a label match resolves to the label first (docs/e2e.md, _the
+# testID contract_). Fixture values are matched by name — user data is what the
+# assertions are about.
+appId: com.bracemark.app
+tags: [LINK-EDITOR-002, full, online, ios, android]
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+
+# --- create ---------------------------------------------------------------------
+- tapOn: 'Add link'
+- tapOn:
+    id: 'add-link-url'
+- inputText: ${LINK_URL}
+- tapOn:
+    id: 'add-link-optional'
+
+- tapOn:
+    id: 'add-link-list'
+- tapOn:
+    id: 'list-picker-search'
+- inputText: ${LIST_NAME}
+- tapOn:
+    id: 'list-picker-create'
+# Creating selects the new list and closes the picker.
+- assertVisible:
+    id: 'add-link-list'
+    text: 'List: ${LIST_NAME}'
+
+# One picker session for both tags: the dialog stays open across picks.
+- tapOn:
+    id: 'add-link-tags'
+- tapOn:
+    id: 'tag-picker-search'
+- inputText: ${KEPT_TAG}
+- tapOn:
+    id: 'tag-picker-create'
+- tapOn:
+    id: 'tag-picker-search'
+- inputText: ${DROPPED_TAG}
+- tapOn:
+    id: 'tag-picker-create'
+- tapOn:
+    id: 'tag-picker-done'
+# The trigger's name carries the chosen tags in chosen order.
+- assertVisible:
+    id: 'add-link-tags'
+    text: 'Tags: ${KEPT_TAG}, ${DROPPED_TAG}'
+
+- tapOn:
+    id: 'add-link-note'
+- inputText: ${NOTE}
+# No `hideKeyboard`: the panel rides the keyboard, so Save is on screen, and on
+# iOS the command would tap the backdrop (add-link.yaml carries the reason).
+- tapOn:
+    id: 'add-link-save'
+- extendedWaitUntil:
+    notVisible:
+      id: 'add-link-url'
+    timeout: 10000
+
+# Filed into the new list. The drawer row is matched on its id SHAPE and the
+# list's name together, so it cannot resolve to anything under the open drawer
+# (docs/app-drivers.md, _a text match can resolve to a node under the drawer_).
+- tapOn:
+    id: 'links-open-navigation'
+- tapOn:
+    id: 'links-nav-list-.*'
+    text: ${LIST_NAME}
+# A row's accessible name is a composite, so the `.*` make it a substring match
+# (add-link.yaml). The url has no regex metacharacters beyond `.`.
+- extendedWaitUntil:
+    visible: ".*${LINK_URL.replace('https://', '')}.*"
+    timeout: 20000
+
+# --- edit -----------------------------------------------------------------------
+# One link on this account, so the row menu's trigger is unambiguous.
+- tapOn:
+    id: 'link-options'
+- tapOn:
+    id: 'link-menu-edit'
+- extendedWaitUntil:
+    visible:
+      id: 'edit-link-note'
+      text: ${NOTE}
+    timeout: 10000
+
+# The title starts blank (no override yet), so typing sets it outright.
+- tapOn:
+    id: 'edit-link-title'
+- inputText: ${TITLE}
+
+- tapOn:
+    id: 'edit-link-list'
+- tapOn:
+    id: 'list-picker-search'
+- inputText: ${MOVED_LIST_NAME}
+- tapOn:
+    id: 'list-picker-create'
+- assertVisible:
+    id: 'edit-link-list'
+    text: 'List: ${MOVED_LIST_NAME}'
+
+# A tag row is one checkbox named by the tag, and toggling it off removes the
+# tag. The tap is SCOPED to the picker's rows, and on Android it has to be:
+# Android's tree keeps the edit screen behind a portaled dialog
+# (docs/accessibility.md, _modality_), and the Tags trigger back there renders
+# each chosen name as its own text node. Measured: an unscoped `tapOn` on the
+# name resolved to that node, the tap landed on the dialog instead, and the tag
+# stayed chosen.
+- tapOn:
+    id: 'edit-link-tags'
+- tapOn:
+    text: ${DROPPED_TAG}
+    childOf:
+      id: 'tag-picker-rows'
+- tapOn:
+    id: 'tag-picker-search'
+- inputText: ${ADDED_TAG}
+- tapOn:
+    id: 'tag-picker-create'
+- tapOn:
+    id: 'tag-picker-done'
+- assertVisible:
+    id: 'edit-link-tags'
+    text: 'Tags: ${KEPT_TAG}, ${ADDED_TAG}'
+
+# Replace the note. The erase is followed by an assertion that the field IS
+# empty, because `eraseText` deletes backwards from the caret and a caret that
+# did not land at the end leaves text behind silently (recovery-sign-in.yaml).
+- tapOn:
+    id: 'edit-link-note'
+- eraseText: 200
+- assertNotVisible:
+    id: 'edit-link-note'
+    text: '.*${NOTE}.*'
+- inputText: ${EDITED_NOTE}
+
+- tapOn:
+    id: 'edit-link-save'
+- extendedWaitUntil:
+    visible:
+      id: 'links-screen'
+    timeout: 10000
+- takeScreenshot: link-edited
+
+# --- persistence: a cold start, then every field read back ----------------------
+# `stopApp` first, because `launchApp` alone resumes.
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible:
+      id: 'links-screen'
+    timeout: 30000
+
+- tapOn:
+    id: 'links-open-navigation'
+- tapOn:
+    id: 'links-nav-list-.*'
+    text: ${MOVED_LIST_NAME}
+# The custom title now leads the row's name in place of the url fallback.
+- extendedWaitUntil:
+    visible: '.*${TITLE}.*'
+    timeout: 20000
+
+- tapOn:
+    id: 'link-options'
+- tapOn:
+    id: 'link-menu-edit'
+- extendedWaitUntil:
+    visible:
+      id: 'edit-link-title'
+      text: ${TITLE}
+    timeout: 10000
+- assertVisible:
+    id: 'edit-link-list'
+    text: 'List: ${MOVED_LIST_NAME}'
+- assertVisible:
+    id: 'edit-link-tags'
+    text: 'Tags: ${KEPT_TAG}, ${ADDED_TAG}'
+- assertVisible:
+    id: 'edit-link-note'
+    text: ${EDITED_NOTE}
+- takeScreenshot: link-edited-after-cold-restart

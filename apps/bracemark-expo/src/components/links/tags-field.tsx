@@ -39,10 +39,13 @@ const MAX_VISIBLE_SELECTED_TAGS = 2;
 export function TagsField({
   value,
   onChange,
+  testID,
 }: {
   // The chosen tag ids, in chosen order.
   value: string[];
   onChange: (tagIds: string[]) => void;
+  // The trigger's e2e handle — ListSelect's reason: "Tags" is also its label.
+  testID?: string;
 }) {
   const [open, setOpen] = useState(false);
   const tags = useTags();
@@ -89,6 +92,7 @@ export function TagsField({
           accessible name still carries every chosen tag. */}
       <Button
         variant="outline"
+        testID={testID}
         onPress={openPicker}
         // Button's default role is spread before caller props, so this replaces
         // it with the field's actual composite-control role.
@@ -135,7 +139,7 @@ export function TagsField({
           </DialogHeader>
           <TagsCommand value={value} onToggle={toggle} onCreate={create} />
           <DialogFooter>
-            <Button size="sm" onPress={() => setOpen(false)}>
+            <Button size="sm" testID="tag-picker-done" onPress={() => setOpen(false)}>
               <Text>Done</Text>
             </Button>
           </DialogFooter>

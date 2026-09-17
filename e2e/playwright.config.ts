@@ -55,6 +55,12 @@ export default defineConfig({
 
   use: {
     baseURL: WEB_URL,
+    // Without this a click on a control that never appears waits out the whole
+    // 90s TEST budget and then reports "Target page, context or browser has been
+    // closed" — naming no step. Actions resolve against an already-rendered page;
+    // the genuinely slow waits (Argon2id, a sync) are `expect`s with their own
+    // explicit timeouts, which this does not touch.
+    actionTimeout: 15_000,
     // Retained only on failure: a trace per passing test fills .artifacts fast,
     // and the failing one is the only one anybody opens.
     trace: 'retain-on-failure',

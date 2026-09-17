@@ -1,0 +1,22 @@
+# Put away a development build's LogBox toast, if one is up. Pulled in with
+# `runFlow` before a press low on an Android screen; a no-op when there is none.
+#
+# The toast is harness chrome, not product: release builds have no LogBox. But on
+# Android it covers the bottom of the screen AND a transparent strip above
+# itself, and both take touches (docs/e2e.md, _driving the native apps_). Its
+# accessible name is "<count>, <message>"; its dismiss ✕ has no name of its own
+# and sits at the toast's right edge, so it is pressed as a point INSIDE the
+# toast's bounds rather than as a screen coordinate.
+appId: com.bracemark.app
+---
+- runFlow:
+    when:
+      platform: Android
+      visible: '[0-9]+, .+'
+    commands:
+      - tapOn:
+          text: '[0-9]+, .+'
+          point: '96%,50%'
+      - extendedWaitUntil:
+          notVisible: '[0-9]+, .+'
+          timeout: 5000

@@ -50,6 +50,36 @@
     "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
   },
   {
+    "id": "LINK-EDITOR-001",
+    "title": "A link created with list, tags and note keeps its edited values after reload",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online"],
+    "fixture": "empty",
+    "path": "web/link-editor.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
+    "id": "LINK-CLOSE-001",
+    "title": "A dirty link editor refuses an accidental close and permits an explicit discard",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online"],
+    "fixture": "empty",
+    "path": "web/link-editor.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
+    "id": "LINK-LIFECYCLE-001",
+    "title": "One link is pinned, archived, unarchived, removed, restored and permanently deleted",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online", "destructive"],
+    "fixture": "empty",
+    "path": "web/link-lifecycle.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
     "id": "WEB-TAXONOMY-001",
     "title": "A list created in Settings appears in the links sidebar",
     "surface": "web",
@@ -217,6 +247,36 @@
     "traits": ["online", "ios", "android"],
     "fixture": "empty",
     "path": "mobile/flows/add-link.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "LINK-EDITOR-002",
+    "title": "A native link created with list, tags and note keeps its edited values after a cold start",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "ios", "android"],
+    "fixture": "empty",
+    "path": "mobile/flows/link-editor.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "LINK-CLOSE-001",
+    "title": "A dirty native link editor refuses an accidental close and permits an explicit discard",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "ios", "android"],
+    "fixture": "empty",
+    "path": "mobile/flows/link-close-guard.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "LINK-LIFECYCLE-002",
+    "title": "One native link is pinned, archived, unarchived, removed, restored and permanently deleted",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "destructive", "ios", "android"],
+    "fixture": "empty",
+    "path": "mobile/flows/link-lifecycle.yaml",
     "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
   },
   {

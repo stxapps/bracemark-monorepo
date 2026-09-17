@@ -130,7 +130,9 @@ export function ListCommand({
   return (
     <>
       {searchable && (
+        // Fixed ids, as in tags-command.tsx: one picker is mounted at a time.
         <Input
+          testID="list-picker-search"
           value={query}
           onChangeText={setQuery}
           placeholder={onCreate ? 'Search or create lists…' : 'Search lists…'}
@@ -214,6 +216,7 @@ export function ListCommand({
         })}
         {canCreate && (
           <Pressable
+            testID="list-picker-create"
             disabled={creating}
             onPress={() => void create()}
             accessibilityRole="menuitem"

@@ -39,14 +39,14 @@ not itself completeness.
 Present in the tree today; this table is an inventory, not a claim that every row
 has just passed on every platform.
 
-| Surface           | Current coverage                                                                                                                                                          |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Web               | Seven Playwright cases: session reload, sign-out teardown, delete account, one-link persistence, two mounted writes, list creation round trip, mounted delete-all repaint |
-| Native            | Five Maestro flows: password sign-in/cold start, recovery sign-in, delete account/cold start, two mounted link inserts, mounted delete-all repaint                        |
-| Contract          | Frozen device vectors plus web to mobile and mobile to web encrypted round trips                                                                                          |
-| Browser extension | Nine Playwright cases: profile auth, save/saved/restore/boundary states, two-way sync, live extraction, and MV3 worker restart                                            |
-| PWA               | Unit/component coverage around registration and navigation; no production-build offline E2E target                                                                        |
-| Automation        | No CI workflow currently runs these targets                                                                                                                               |
+| Surface           | Current coverage                                                                                                                                                                                                                     |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Web               | Ten Playwright cases: session reload, sign-out teardown, delete account, one-link persistence, two mounted writes, editor round trip, dirty-editor close guard, link lifecycle, list creation round trip, mounted delete-all repaint |
+| Native            | Eight Maestro flows: password sign-in/cold start, recovery sign-in, delete account/cold start, two mounted link inserts, editor round trip/cold start, dirty-editor close guard, link lifecycle, mounted delete-all repaint          |
+| Contract          | Frozen device vectors plus web to mobile and mobile to web encrypted round trips                                                                                                                                                     |
+| Browser extension | Nine Playwright cases: profile auth, save/saved/restore/boundary states, two-way sync, live extraction, and MV3 worker restart                                                                                                       |
+| PWA               | Unit/component coverage around registration and navigation; no production-build offline E2E target                                                                                                                                   |
+| Automation        | No CI workflow currently runs these targets                                                                                                                                                                                          |
 
 Before adding broad new coverage, capture a fresh result for every existing case:
 
@@ -223,20 +223,20 @@ below E2E.
 
 ### Link lifecycle and editors
 
-- [ ] `WEB-LINK-001` Existing: a link added through quick-add survives reload.
-- [ ] `WEB-LINK-002` Existing: two links added to an already-mounted view both
+- [x] `WEB-LINK-001` Existing: a link added through quick-add survives reload.
+- [x] `WEB-LINK-002` Existing: two links added to an already-mounted view both
       remain visible.
-- [ ] `NATIVE-LINK-001` Existing: two links added to an already-mounted FlashList
+- [x] `NATIVE-LINK-001` Existing: two links added to an already-mounted FlashList
       both remain visible; run on iOS and Android.
-- [ ] `LINK-EDITOR-001` Web: create with list/tags/note, edit title/note/list/tags,
+- [x] `LINK-EDITOR-001` Web: create with list/tags/note, edit title/note/list/tags,
       reload, and assert the edited values.
-- [ ] `LINK-EDITOR-002` Native: the same persistence boundary through the native
+- [x] `LINK-EDITOR-002` Native: the same persistence boundary through the native
       add and modal edit surfaces; run on iOS and Android.
-- [ ] `LINK-CLOSE-001` Web and native: a dirty editor refuses an accidental close
+- [x] `LINK-CLOSE-001` Web and native: a dirty editor refuses an accidental close
       and permits an explicit discard. Keep field validation at component level.
-- [ ] `LINK-LIFECYCLE-001` Web: pin, archive, unarchive, move to Trash, restore,
+- [x] `LINK-LIFECYCLE-001` Web: pin, archive, unarchive, move to Trash, restore,
       then permanently delete one deterministic link.
-- [ ] `LINK-LIFECYCLE-002` Native: exercise the same state boundaries through
+- [x] `LINK-LIFECYCLE-002` Native: exercise the same state boundaries through
       native menus and confirmation surfaces on iOS and Android.
 
 ### Lists, tags, filters, and search

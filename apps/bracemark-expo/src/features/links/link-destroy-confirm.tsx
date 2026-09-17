@@ -107,7 +107,12 @@ export function LinkDestroyConfirm() {
           <AlertDialogCancel disabled={deleting}>
             <Text>Cancel</Text>
           </AlertDialogCancel>
-          <Button variant="destructive" disabled={deleting} onPress={() => void onConfirm()}>
+          <Button
+            variant="destructive"
+            testID="link-destroy-submit"
+            disabled={deleting}
+            onPress={() => void onConfirm()}
+          >
             <Text>{deleting ? 'Deleting…' : 'Delete permanently'}</Text>
           </Button>
         </AlertDialogFooter>

@@ -87,7 +87,10 @@ export function TagsCommand({
     // pushes the dialog's title off the top of a short phone instead of
     // scrolling (list-command.tsx says the same).
     <View className="shrink gap-2">
+      {/* The `tag-picker-*` ids are fixed rather than props: every host mounts
+          one picker at a time (docs/e2e.md, _the testID contract_). */}
       <Input
+        testID="tag-picker-search"
         value={query}
         onChangeText={setQuery}
         onSubmitEditing={() => void create()}
@@ -105,6 +108,7 @@ export function TagsCommand({
           DialogContent's chrome tap, `"handled"` here, and (iOS) a drag down
           into the keys. */}
       <ScrollView
+        testID="tag-picker-rows"
         className={cn('max-h-80 shrink', className)}
         nestedScrollEnabled
         keyboardShouldPersistTaps="handled"
@@ -117,6 +121,7 @@ export function TagsCommand({
           createName={canCreate ? trimmed : undefined}
           creating={creating}
           onCreate={canCreate ? () => void create() : undefined}
+          createTestID="tag-picker-create"
         />
       </ScrollView>
     </View>

@@ -86,7 +86,19 @@ function AlertDialogOverlay({
         {...props}
         asChild={Platform.OS !== 'web'}
       >
-        <NativeOnlyAnimatedView entering={FADE_IN} exiting={FADE_OUT} as="Pressable">
+        {/* `accessible={false}` is not optional. A Pressable is an accessibility
+            element by default, and an element hides its children: without this
+            the WHOLE alert — title, description, Cancel and the confirm — reached
+            VoiceOver as one node, with neither button separately operable.
+            dialog.tsx never showed it because @rn-primitives' Dialog.Overlay
+            passes `accessible={false}` down through its Slot; AlertDialog.Overlay
+            is a bare View and passes nothing (docs/accessibility.md, _modality_). */}
+        <NativeOnlyAnimatedView
+          entering={FADE_IN}
+          exiting={FADE_OUT}
+          as="Pressable"
+          accessible={false}
+        >
           {children}
         </NativeOnlyAnimatedView>
       </AlertDialogPrimitive.Overlay>

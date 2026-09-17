@@ -340,7 +340,11 @@ function LinkEditForm({ link, focus }: { link: LinkItem; focus?: EditFocus }) {
         bottomOffset={16 + footerHeight}
       >
         <Field label="Title">
+          {/* The field ids here are the add panel's, for its reason: every
+              control's accessible name repeats its Field label
+              (docs/e2e.md, _the testID contract_). */}
           <Input
+            testID="edit-link-title"
             value={title}
             onChangeText={setTitle}
             maxLength={LINK_TITLE_MAX}
@@ -372,6 +376,7 @@ function LinkEditForm({ link, focus }: { link: LinkItem; focus?: EditFocus }) {
             drawer, it never blocks filing into a list you know exists. */}
         <Field label="List">
           <ListSelect
+            testID="edit-link-list"
             value={listId}
             onValueChange={setListId}
             excludeIds={[TRASH_ID]}
@@ -380,7 +385,7 @@ function LinkEditForm({ link, focus }: { link: LinkItem; focus?: EditFocus }) {
         </Field>
 
         <Field label="Tags" onLayout={focus === 'tags' ? onFocusFieldLayout : undefined}>
-          <TagsField value={tagIds} onChange={setTagIds} />
+          <TagsField testID="edit-link-tags" value={tagIds} onChange={setTagIds} />
         </Field>
 
         {/* The row menu's "Edit note" lands here (focus === 'note'): the note
@@ -389,6 +394,7 @@ function LinkEditForm({ link, focus }: { link: LinkItem; focus?: EditFocus }) {
             any viewer would, with the edit already in hand. */}
         <Field label="Note" onLayout={focus === 'note' ? onFocusFieldLayout : undefined}>
           <Textarea
+            testID="edit-link-note"
             value={note}
             onChangeText={setNote}
             maxLength={LINK_NOTE_MAX}
@@ -447,10 +453,10 @@ function LinkEditForm({ link, focus }: { link: LinkItem; focus?: EditFocus }) {
         </Field>
       </StyledKeyboardAwareScrollView>
       <StickyFooter onHeight={setFooterHeight}>
-        <Button variant="ghost" size="sm" onPress={close}>
+        <Button variant="ghost" size="sm" testID="edit-link-cancel" onPress={close}>
           <Text>Cancel</Text>
         </Button>
-        <Button size="sm" disabled={saving} onPress={() => void onSubmit()}>
+        <Button size="sm" testID="edit-link-save" disabled={saving} onPress={() => void onSubmit()}>
           <Text>{saving ? 'Saving…' : 'Save'}</Text>
         </Button>
       </StickyFooter>

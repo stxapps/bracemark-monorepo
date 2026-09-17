@@ -677,6 +677,7 @@ export function LinkAddPanel({ onClose }: { onClose: () => void }) {
                 <Button
                   variant="ghost"
                   size="sm"
+                  testID="add-link-optional"
                   onPress={() => setOpenOptional((v) => !v)}
                   aria-expanded={openOptional}
                   aria-label={
@@ -709,8 +710,12 @@ export function LinkAddPanel({ onClose }: { onClose: () => void }) {
                     to add new links (same rule as the default-list fallback).
                     Locked/hidden lists stay pickable — hiding only declutters the
                     drawer, it never blocks filing into a list you know exists. */}
+                    {/* The three field ids exist because each control's
+                        accessible name is also its Field label's text
+                        (docs/e2e.md, _the testID contract_). */}
                     <Field label="List">
                       <ListSelect
+                        testID="add-link-list"
                         value={listId}
                         onValueChange={setListId}
                         excludeIds={[TRASH_ID]}
@@ -719,11 +724,12 @@ export function LinkAddPanel({ onClose }: { onClose: () => void }) {
                     </Field>
 
                     <Field label="Tags">
-                      <TagsField value={tagIds} onChange={setTagIds} />
+                      <TagsField testID="add-link-tags" value={tagIds} onChange={setTagIds} />
                     </Field>
 
                     <Field label="Note">
                       <Textarea
+                        testID="add-link-note"
                         value={note}
                         onChangeText={setNote}
                         onFocus={(e) => {
@@ -763,7 +769,7 @@ export function LinkAddPanel({ onClose }: { onClose: () => void }) {
               keyboard. Gone with the quota banner, which replaces the form. */}
           {!(atLimit && max !== null) && (
             <View className="flex-row justify-end gap-2 px-4 pt-4 pb-4">
-              <Button variant="ghost" size="sm" onPress={close}>
+              <Button variant="ghost" size="sm" testID="add-link-cancel" onPress={close}>
                 <Text>Cancel</Text>
               </Button>
               {/* Only on the trashed ground — the one already-saved case where the

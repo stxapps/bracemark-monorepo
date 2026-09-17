@@ -114,6 +114,10 @@ export function LinkRowMenu({
             variant="ghost"
             size="icon-sm"
             aria-label="Link options"
+            // The e2e handle (docs/e2e.md, _the testID contract_). Every row
+            // renders one, so like the label it names A row's trigger — the
+            // flows keep a single row on screen wherever they press it.
+            testID="link-options"
             // 32, not the size's own 36 — the web twin pins the same box, and
             // for the same reason: growing it would push the 44pt target past
             // the gap into the row's title anchor.
@@ -126,16 +130,28 @@ export function LinkRowMenu({
             <Icon as={MoreHorizontal} className="size-5 text-muted-foreground" />
           </Button>
         </DropdownMenuTrigger>
+        {/* `link-menu-*` ids: the menu is a portal over the list, and a label
+            match under an open overlay can resolve to the view beneath it —
+            "Archive" is also a drawer row and, once there, the topbar's title
+            (docs/app-drivers.md, _a text match can resolve to a node under the
+            drawer_). */}
         <DropdownMenuContent align="end" className="w-52">
           {inTrash ? (
             <>
               {copyLink}
-              <DropdownMenuItem onPress={() => void update(link, { listId: DEFAULT_LIST_ID })}>
+              <DropdownMenuItem
+                testID="link-menu-restore"
+                onPress={() => void update(link, { listId: DEFAULT_LIST_ID })}
+              >
                 <Icon as={Undo2} className="size-4" />
                 <Text>Restore</Text>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem variant="destructive" onPress={() => requestDestroy([link])}>
+              <DropdownMenuItem
+                variant="destructive"
+                testID="link-menu-delete"
+                onPress={() => requestDestroy([link])}
+              >
                 <Icon as={Trash2} className="size-4" />
                 <Text>Delete permanently</Text>
               </DropdownMenuItem>
@@ -143,7 +159,7 @@ export function LinkRowMenu({
           ) : (
             <>
               {copyLink}
-              <DropdownMenuItem onPress={() => openEditor()}>
+              <DropdownMenuItem testID="link-menu-edit" onPress={() => openEditor()}>
                 <Icon as={Pencil} className="size-4" />
                 <Text>Edit</Text>
               </DropdownMenuItem>
@@ -181,31 +197,38 @@ export function LinkRowMenu({
                     <Icon as={ArrowDown} className="size-4" />
                     <Text>Move down</Text>
                   </DropdownMenuItem>
-                  <DropdownMenuItem onPress={() => void unpin(link)}>
+                  <DropdownMenuItem testID="link-menu-unpin" onPress={() => void unpin(link)}>
                     <Icon as={PinOff} className="size-4" />
                     <Text>Unpin</Text>
                   </DropdownMenuItem>
                 </>
               ) : (
-                <DropdownMenuItem onPress={() => void pin(link)}>
+                <DropdownMenuItem testID="link-menu-pin" onPress={() => void pin(link)}>
                   <Icon as={Pin} className="size-4" />
                   <Text>Pin to top</Text>
                 </DropdownMenuItem>
               )}
               <DropdownMenuSeparator />
               {inArchive ? (
-                <DropdownMenuItem onPress={() => void update(link, { listId: DEFAULT_LIST_ID })}>
+                <DropdownMenuItem
+                  testID="link-menu-unarchive"
+                  onPress={() => void update(link, { listId: DEFAULT_LIST_ID })}
+                >
                   <Icon as={ArchiveRestore} className="size-4" />
                   <Text>Unarchive</Text>
                 </DropdownMenuItem>
               ) : (
-                <DropdownMenuItem onPress={() => void update(link, { listId: ARCHIVE_ID })}>
+                <DropdownMenuItem
+                  testID="link-menu-archive"
+                  onPress={() => void update(link, { listId: ARCHIVE_ID })}
+                >
                   <Icon as={Archive} className="size-4" />
                   <Text>Archive</Text>
                 </DropdownMenuItem>
               )}
               <DropdownMenuItem
                 variant="destructive"
+                testID="link-menu-remove"
                 onPress={() => void update(link, { listId: TRASH_ID })}
               >
                 <Icon as={Trash2} className="size-4" />

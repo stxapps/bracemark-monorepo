@@ -61,11 +61,16 @@ export function validateCaseRegistry(cases = readCaseRegistry()): void {
     }
   }
 
+  // Unique per SURFACE, not globally. A claim such as LINK-CLOSE-001 is one
+  // journey proven on web and on native, and keeping its one id on both entries
+  // is what lets a report line the two results up; every runner selects within
+  // its own surface, so the pair can never be picked up by the same invocation.
   const ids = new Set<string>();
   for (const testCase of cases) {
     if (!CASE_ID.test(testCase.id)) throw new Error(`invalid E2E case id: ${testCase.id}`);
-    if (ids.has(testCase.id)) throw new Error(`duplicate E2E case id: ${testCase.id}`);
-    ids.add(testCase.id);
+    const key = `${testCase.surface}:${testCase.id}`;
+    if (ids.has(key)) throw new Error(`duplicate E2E case id: ${key}`);
+    ids.add(key);
     if (!['web', 'extension', 'native', 'contract'].includes(testCase.surface)) {
       throw new Error(`${testCase.id}: invalid surface ${testCase.surface}`);
     }

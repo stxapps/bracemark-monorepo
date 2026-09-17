@@ -33,6 +33,26 @@ async function main(): Promise<void> {
         env.LINK_URL = unresolvableUrl(`${run.runId}-first-on-device`);
         env.LINK_URL_2 = unresolvableUrl(`${run.runId}-second-on-device`);
       }
+      if (testCase.id === 'LINK-EDITOR-002') {
+        env.LINK_URL = unresolvableUrl(`${run.runId}-editor`);
+        env.LIST_NAME = unique('E2E list');
+        env.MOVED_LIST_NAME = unique('E2E moved list');
+        env.KEPT_TAG = unique('e2e-kept');
+        env.DROPPED_TAG = unique('e2e-dropped');
+        env.ADDED_TAG = unique('e2e-added');
+        env.NOTE = unique('E2E note');
+        env.TITLE = unique('E2E title');
+        env.EDITED_NOTE = unique('E2E edited note');
+      }
+      if (testCase.id === 'LINK-CLOSE-001') {
+        env.ANCHOR_URL = unresolvableUrl(`${run.runId}-close-anchor`);
+        env.DISCARDED_URL = unresolvableUrl(`${run.runId}-close-discarded`);
+        env.DRAFT_NOTE = unique('E2E draft note');
+      }
+      if (testCase.id === 'LINK-LIFECYCLE-002') {
+        env.LINK_URL = unresolvableUrl(`${run.runId}-lifecycle`);
+        env.ANCHOR_URL = unresolvableUrl(`${run.runId}-trash-anchor`);
+      }
       if (testCase.id === 'NATIVE-DATA-001') {
         env.LINK_URL = unresolvableUrl(`${run.runId}-delete-all`);
         env.LIST_NAME = unique(`${run.runId} delete list`);

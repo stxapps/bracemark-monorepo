@@ -1,0 +1,140 @@
+# A dirty editor refuses an ACCIDENTAL close and permits an EXPLICIT discard, in
+# both native editors: the add panel (an absolute layer over the links screen)
+# and the edit screen (a modal router screen under usePreventRemove).
+#
+# The accidental vectors are platform ones, which is why this is a device case:
+# the add panel's backdrop tap on both platforms plus Android's hardware back
+# (its own BackHandler), and the edit screen's iOS sheet swipe-down plus Android
+# back (usePreventRemove). What "dirty" means stays in jest
+# (docs/editors.md, _invariant 3_).
+#
+#   maestro test mobile/flows/link-close-guard.yaml -e USERNAME=… -e PASSWORD=… \
+#     -e ANCHOR_URL=https://e2e-local.invalid/anchor \
+#     -e DISCARDED_URL=https://e2e-local.invalid/discarded -e DRAFT_NOTE=…
+#
+# No flow-level `env:` defaults: on Maestro 2.8.0 they beat `-e`, so the
+# runner's values would be silently replaced (link-editor.yaml).
+appId: com.bracemark.app
+tags: [LINK-CLOSE-001, full, online, ios, android]
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+
+# A saved link: what the edit screen opens on, and what makes the absence
+# assertions after the restart mean something.
+- tapOn: 'Add link'
+- tapOn:
+    id: 'add-link-url'
+- inputText: ${ANCHOR_URL}
+- tapOn:
+    id: 'add-link-save'
+- extendedWaitUntil:
+    visible: ".*${ANCHOR_URL.replace('https://', '')}.*"
+    timeout: 20000
+
+# --- the add panel ----------------------------------------------------------------
+# A bare typed URL is deliberately NOT dirty; the note makes it so.
+- tapOn: 'Add link'
+- tapOn:
+    id: 'add-link-url'
+- inputText: ${DISCARDED_URL}
+- tapOn:
+    id: 'add-link-optional'
+- tapOn:
+    id: 'add-link-note'
+- inputText: ${DRAFT_NOTE}
+
+# The backdrop has no accessible node (it is `accessible={false}`), so it is a
+# point: the horizontal centre, 15% down. It is TAPPED TWICE, and the first tap is
+# the reason. With the keyboard up the panel is parked on it and reaches nearly
+# to the top gutter, so the first tap may land on the panel's own chrome — which
+# only dismisses the keyboard — and a single tap would pass having never touched
+# the backdrop. Once the keyboard is down the panel sits on the bottom edge, well
+# below 15%, so the second tap is the backdrop whichever the first one was.
+- tapOn:
+    point: '50%,15%'
+- tapOn:
+    point: '50%,15%'
+- assertVisible:
+    id: 'add-link-note'
+    text: ${DRAFT_NOTE}
+
+# Hardware back, twice for the same reason: the first press only closes the IME
+# when one is up; the second reaches the panel's BackHandler.
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - back
+      - back
+      - assertVisible:
+          id: 'add-link-note'
+          text: ${DRAFT_NOTE}
+- takeScreenshot: dirty-add-panel-held
+
+# The explicit discard.
+- tapOn:
+    id: 'add-link-cancel'
+- extendedWaitUntil:
+    notVisible:
+      id: 'add-link-url'
+    timeout: 10000
+
+# --- the edit screen ----------------------------------------------------------------
+- tapOn:
+    id: 'link-options'
+- tapOn:
+    id: 'link-menu-edit'
+- tapOn:
+    id: 'edit-link-note'
+- inputText: ${DRAFT_NOTE}
+
+# iOS: the page sheet's own dismissal gesture, dragged down from its header. The
+# header's title is plain text, so the drag starts on nothing pressable.
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - swipe:
+          start: '50%,12%'
+          end: '50%,90%'
+          duration: 400
+# Android: back, twice — the first may only close the IME.
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - back
+      - back
+- assertVisible:
+    id: 'edit-link-note'
+    text: ${DRAFT_NOTE}
+- takeScreenshot: dirty-edit-screen-held
+
+- tapOn:
+    id: 'edit-link-cancel'
+- extendedWaitUntil:
+    visible:
+      id: 'links-screen'
+    timeout: 10000
+
+# --- nothing was written, as seen after a cold start ----------------------------------
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible: ".*${ANCHOR_URL.replace('https://', '')}.*"
+    timeout: 30000
+- assertNotVisible: ".*${DISCARDED_URL.replace('https://', '')}.*"
+
+- tapOn:
+    id: 'link-options'
+- tapOn:
+    id: 'link-menu-edit'
+- extendedWaitUntil:
+    visible:
+      id: 'edit-link-note'
+    timeout: 10000
+- assertNotVisible:
+    id: 'edit-link-note'
+    text: '.*${DRAFT_NOTE}.*'
+- takeScreenshot: discarded-drafts-after-cold-restart

@@ -1,0 +1,203 @@
+# One link walked through every state a user can put it in, through the native
+# row menu and the permanent-delete confirmation: pin, unpin, archive, unarchive,
+# remove, restore, delete permanently — each read back off the system list it
+# should now be in, on the mounted links screen, and the deletion read back
+# again after a cold start.
+#
+#   maestro test mobile/flows/link-lifecycle.yaml -e USERNAME=… -e PASSWORD=… \
+#     -e LINK_URL=https://e2e-local.invalid/lifecycle \
+#     -e ANCHOR_URL=https://e2e-local.invalid/trash-anchor
+#
+# Destructive: the runner provisions a fresh account for this flow alone. That
+# also keeps exactly ONE row on screen at every step, so `link-options` is never
+# ambiguous — the Trash anchor is only added once the lifecycle link is gone.
+#
+# No flow-level `env:` defaults: on Maestro 2.8.0 they beat `-e`, so the
+# runner's values would be silently replaced (link-editor.yaml).
+appId: com.bracemark.app
+tags: [LINK-LIFECYCLE-002, full, online, destructive, ios, android]
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+
+- tapOn: 'Add link'
+- tapOn:
+    id: 'add-link-url'
+- inputText: ${LINK_URL}
+- tapOn:
+    id: 'add-link-save'
+- extendedWaitUntil:
+    visible: ".*${LINK_URL.replace('https://', '')}.*"
+    timeout: 20000
+
+# --- pin / unpin ----------------------------------------------------------------------
+# The row's pinned badge is an icon, and its label does not reach the row's
+# composite accessible name, so the menu is the readable proof: a pinned link's
+# menu offers Unpin where Pin to top was, and the reverse after unpinning.
+#
+# ⚠ The unpin is also what keeps every later menu SHORT, and on Android that is
+# load-bearing in a development build. A menu item that removes its own row
+# (Archive, Unarchive) closes the menu, and @rn-primitives then tries to return
+# accessibility focus to the row's trigger — which is gone — so Android logs a
+# `console.error` and LogBox raises its toast. The toast's container is a
+# SafeAreaView whose inset padding leaves a transparent strip ABOVE the visible
+# toast that takes touches: measured on the Pixel 8 AVD, a pinned link's menu put
+# Remove at y 2019–2114px, inside that strip, and the tap was swallowed with the
+# menu left open; dismissing the toast made the same tap work. An unpinned
+# link's menu is three items shorter and ends well above it. Release builds have
+# no LogBox (docs/e2e.md, _driving the native apps_).
+- tapOn:
+    id: 'link-options'
+- tapOn:
+    id: 'link-menu-pin'
+- tapOn:
+    id: 'link-options'
+- assertVisible:
+    id: 'link-menu-unpin'
+- assertNotVisible:
+    id: 'link-menu-pin'
+- tapOn:
+    id: 'link-menu-unpin'
+- tapOn:
+    id: 'link-options'
+- assertVisible:
+    id: 'link-menu-pin'
+- assertNotVisible:
+    id: 'link-menu-unpin'
+
+# --- archive / unarchive --------------------------------------------------------------
+# The menu is still open from the unpin check.
+- tapOn:
+    id: 'link-menu-archive'
+- extendedWaitUntil:
+    notVisible: ".*${LINK_URL.replace('https://', '')}.*"
+    timeout: 10000
+- tapOn:
+    id: 'links-open-navigation'
+- tapOn:
+    id: 'links-nav-list-archive'
+- extendedWaitUntil:
+    visible: ".*${LINK_URL.replace('https://', '')}.*"
+    timeout: 10000
+
+- tapOn:
+    id: 'link-options'
+- tapOn:
+    id: 'link-menu-unarchive'
+- extendedWaitUntil:
+    notVisible: ".*${LINK_URL.replace('https://', '')}.*"
+    timeout: 10000
+- tapOn:
+    id: 'links-open-navigation'
+- tapOn:
+    id: 'links-nav-list-my-list'
+- extendedWaitUntil:
+    visible: ".*${LINK_URL.replace('https://', '')}.*"
+    timeout: 10000
+
+# --- remove / restore -------------------------------------------------------------------
+- tapOn:
+    id: 'link-options'
+- tapOn:
+    id: 'link-menu-remove'
+- extendedWaitUntil:
+    notVisible: ".*${LINK_URL.replace('https://', '')}.*"
+    timeout: 10000
+- tapOn:
+    id: 'links-open-navigation'
+- tapOn:
+    id: 'links-nav-list-trash'
+- extendedWaitUntil:
+    visible: ".*${LINK_URL.replace('https://', '')}.*"
+    timeout: 10000
+
+- tapOn:
+    id: 'link-options'
+- tapOn:
+    id: 'link-menu-restore'
+- extendedWaitUntil:
+    notVisible: ".*${LINK_URL.replace('https://', '')}.*"
+    timeout: 10000
+- tapOn:
+    id: 'links-open-navigation'
+- tapOn:
+    id: 'links-nav-list-my-list'
+- extendedWaitUntil:
+    visible: ".*${LINK_URL.replace('https://', '')}.*"
+    timeout: 10000
+
+# --- permanent delete, through the confirmation -----------------------------------------
+- tapOn:
+    id: 'link-options'
+- tapOn:
+    id: 'link-menu-remove'
+- extendedWaitUntil:
+    notVisible: ".*${LINK_URL.replace('https://', '')}.*"
+    timeout: 10000
+- tapOn:
+    id: 'links-open-navigation'
+- tapOn:
+    id: 'links-nav-list-trash'
+- extendedWaitUntil:
+    visible: ".*${LINK_URL.replace('https://', '')}.*"
+    timeout: 10000
+- tapOn:
+    id: 'link-options'
+- tapOn:
+    id: 'link-menu-delete'
+- takeScreenshot: delete-permanently-confirmation
+- tapOn:
+    id: 'link-destroy-submit'
+- extendedWaitUntil:
+    notVisible:
+      id: 'link-destroy-submit'
+    timeout: 10000
+- extendedWaitUntil:
+    notVisible: ".*${LINK_URL.replace('https://', '')}.*"
+    timeout: 10000
+
+# The anchor goes into Trash only now, so that after the restart "the deleted link
+# is absent" is read off a Trash that has visibly loaded.
+- tapOn:
+    id: 'links-open-navigation'
+- tapOn:
+    id: 'links-nav-list-my-list'
+# The FAB sits under where Android's LogBox toast lands (see _pin / unpin_
+# above): by now Archive and Unarchive have raised it, and a FAB press on top of
+# it left no panel, and no toast either — its ✕ sits under the FAB's centre. Put
+# it away first.
+- runFlow:
+    file: subflows/dismiss-logbox.yaml
+- tapOn: 'Add link'
+- tapOn:
+    id: 'add-link-url'
+- inputText: ${ANCHOR_URL}
+- tapOn:
+    id: 'add-link-save'
+- extendedWaitUntil:
+    visible: ".*${ANCHOR_URL.replace('https://', '')}.*"
+    timeout: 20000
+- tapOn:
+    id: 'link-options'
+- tapOn:
+    id: 'link-menu-remove'
+- extendedWaitUntil:
+    notVisible: ".*${ANCHOR_URL.replace('https://', '')}.*"
+    timeout: 10000
+
+# --- still gone after a cold start ----------------------------------------------------------
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible:
+      id: 'links-screen'
+    timeout: 30000
+- tapOn:
+    id: 'links-open-navigation'
+- tapOn:
+    id: 'links-nav-list-trash'
+- extendedWaitUntil:
+    visible: ".*${ANCHOR_URL.replace('https://', '')}.*"
+    timeout: 20000
+- assertNotVisible: ".*${LINK_URL.replace('https://', '')}.*"
+- takeScreenshot: trash-after-permanent-delete-and-cold-restart

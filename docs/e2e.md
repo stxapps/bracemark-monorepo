@@ -323,7 +323,7 @@ accessible identity is untestable as well as inaccessible. Flows bind to `testID
 and accessible labels, **never to body copy** — copy in this repo changes often,
 and a flow keyed to a sentence turns every wording edit into a red run.
 
-Four repo-specific gotchas:
+Five repo-specific gotchas:
 
 - **`launchApp` resumes, it does not cold-start.** Every flow that assumes a root
   screen needs its state wiped first, or it passes alone and fails in a directory
@@ -354,6 +354,22 @@ Four repo-specific gotchas:
   specifically to avoid. The same reversal is what lets a PHYSICAL Android device
   run `bracemark-web` without a certificate —
   [device-testing.md](./device-testing.md).
+- **On Android a dev build's LogBox toast takes taps ABOVE itself.** Its container
+  is a `SafeAreaView` pinned 20px off the bottom, and the inset padding leaves a
+  transparent strip over the visible toast that swallows touches — measured on the
+  Pixel 8 AVD, from y≈2019px down. A tap there reports COMPLETED and does nothing.
+  The toast that raised it in `link-lifecycle.yaml` is a `console.error` from
+  `@rn-primitives`' close hook: 50ms after a row menu closes it returns
+  accessibility focus to the trigger, and when the chosen item removed that row
+  (Archive, Unarchive) the view is gone. That flow unpins its link so the menus it
+  presses stay short of the strip, and runs `flows/subflows/dismiss-logbox.yaml`
+  before pressing the FAB, which the toast covers outright — a FAB press there
+  left no add panel, and no toast either — its ✕ sits under the FAB's centre. The
+  subflow is a no-op without a toast and presses the ✕ as a point inside the
+  toast's own bounds, not the screen's; a flow that presses low on an Android
+  screen after a row-removing menu action owes it the same call. Release builds
+  carry no LogBox, so this is harness-only — but the focus-return failure it
+  announces is TalkBack's.
 - **Maestro's `PATH` entry is in `.zshenv`, not `.zshrc`.** `runner/lib.ts` falls
   back to `~/.maestro/bin/maestro` anyway, so a shell that lost it gets a working
   run instead of `ENOENT`.
@@ -412,41 +428,61 @@ a missing element rather than as anything that names the cause.
 
 All of them are in the app:
 
-| testID                      | where                                           |
-| --------------------------- | ----------------------------------------------- |
-| `sign-in-username`          | `src/features/auth/sign-in-form.tsx`            |
-| `sign-in-password`          | `src/features/auth/sign-in-form.tsx`            |
-| `sign-in-submit`            | `src/features/auth/sign-in-form.tsx`            |
-| `sign-in-error`             | ” — the submit-level `root` error               |
-| `sign-in-use-recovery`      | ” — the toggle into the recovery door           |
-| `sign-in-recovery-username` | ” — `RecoverySignIn`                            |
-| `sign-in-recovery-code`     | ” — `RecoverySignIn`                            |
-| `sign-in-recovery-submit`   | ” — `RecoverySignIn`                            |
-| `sign-in-recovery-error`    | ” — `RecoverySignIn`                            |
-| `sign-in-use-password`      | ” — the toggle back out                         |
-| `links-screen`              | `src/app/(app)/links/index.tsx` (a root marker) |
-| `links-open-navigation`     | `src/features/links/topbar.tsx`                 |
-| `links-nav-list-<id>`       | `src/features/links/sidebar.tsx` — a drawer row |
-| `links-nav-tag-<id>`        | ” — the tag rows                                |
-| `links-nav-all`             | ” — Show All                                    |
-| `links-more-options`        | `src/features/links/more-options-menu.tsx`      |
-| `links-open-settings`       | ” — the Settings menu item                      |
-| `add-link-url`              | `src/features/links/link-add-panel.tsx`         |
-| `add-link-save`             | ” — the submit, whose label flips Save→Confirm  |
-| `settings-open-navigation`  | `src/features/settings/topbar.tsx`              |
-| `settings-close`            | ” — returns to the links route                  |
-| `settings-nav-<section>`    | `src/features/settings/sidebar.tsx`             |
-| `delete-all-open`           | `src/features/settings/data-section.tsx`        |
-| `delete-all-confirm`        | ” — the confirmation checkbox row               |
-| `delete-all-submit`         | ” — the destructive action                      |
-| `delete-all-complete`       | ” — renders only after a successful wipe        |
-| `delete-account-open`       | `src/features/settings/account-section.tsx`     |
-| `delete-account-password`   | ” — the fresh-proof password re-entry           |
-| `delete-account-confirm`    | ” — the confirmation checkbox row               |
-| `delete-account-submit`     | ” — the destructive action                      |
-| `contract-vectors-pass`     | `src/app/contract-vectors.tsx` (dev-only)       |
-| `contract-vectors-fail`     | ” — carries the failing check names in its text |
-| `vector-<check>`            | ” — one per vector, `PASS`/`FAIL`/`RUNNING`     |
+| testID                      | where                                                                      |
+| --------------------------- | -------------------------------------------------------------------------- |
+| `sign-in-username`          | `src/features/auth/sign-in-form.tsx`                                       |
+| `sign-in-password`          | `src/features/auth/sign-in-form.tsx`                                       |
+| `sign-in-submit`            | `src/features/auth/sign-in-form.tsx`                                       |
+| `sign-in-error`             | ” — the submit-level `root` error                                          |
+| `sign-in-use-recovery`      | ” — the toggle into the recovery door                                      |
+| `sign-in-recovery-username` | ” — `RecoverySignIn`                                                       |
+| `sign-in-recovery-code`     | ” — `RecoverySignIn`                                                       |
+| `sign-in-recovery-submit`   | ” — `RecoverySignIn`                                                       |
+| `sign-in-recovery-error`    | ” — `RecoverySignIn`                                                       |
+| `sign-in-use-password`      | ” — the toggle back out                                                    |
+| `links-screen`              | `src/app/(app)/links/index.tsx` (a root marker)                            |
+| `links-open-navigation`     | `src/features/links/topbar.tsx`                                            |
+| `links-nav-list-<id>`       | `src/features/links/sidebar.tsx` — a drawer row                            |
+| `links-nav-tag-<id>`        | ” — the tag rows                                                           |
+| `links-nav-all`             | ” — Show All                                                               |
+| `links-more-options`        | `src/features/links/more-options-menu.tsx`                                 |
+| `links-open-settings`       | ” — the Settings menu item                                                 |
+| `add-link-url`              | `src/features/links/link-add-panel.tsx`                                    |
+| `add-link-save`             | ” — the submit, whose label flips Save→Confirm                             |
+| `add-link-optional`         | ” — the "List, tags & note" disclosure                                     |
+| `add-link-list`             | ” — the optional fields, each named like its label                         |
+| `add-link-tags`             | ”                                                                          |
+| `add-link-note`             | ”                                                                          |
+| `add-link-cancel`           | ” — the explicit discard                                                   |
+| `edit-link-title`           | `src/features/links/link-edit-screen.tsx`                                  |
+| `edit-link-list`            | ”                                                                          |
+| `edit-link-tags`            | ”                                                                          |
+| `edit-link-note`            | ”                                                                          |
+| `edit-link-save`            | ”                                                                          |
+| `edit-link-cancel`          | ” — the explicit discard                                                   |
+| `list-picker-search`        | `src/components/links/list-command.tsx`                                    |
+| `list-picker-create`        | ” — the Create row                                                         |
+| `tag-picker-search`         | `src/components/links/tags-command.tsx`                                    |
+| `tag-picker-create`         | ” — the Create row                                                         |
+| `tag-picker-rows`           | ” — the rows' scroller, for `childOf`                                      |
+| `tag-picker-done`           | `src/components/links/tags-field.tsx`                                      |
+| `link-options`              | `src/features/links/link-row-menu.tsx` — a row's ⋯                         |
+| `link-menu-<action>`        | ” — `edit` `pin` `unpin` `archive` `unarchive` `remove` `restore` `delete` |
+| `link-destroy-submit`       | `src/features/links/link-destroy-confirm.tsx`                              |
+| `settings-open-navigation`  | `src/features/settings/topbar.tsx`                                         |
+| `settings-close`            | ” — returns to the links route                                             |
+| `settings-nav-<section>`    | `src/features/settings/sidebar.tsx`                                        |
+| `delete-all-open`           | `src/features/settings/data-section.tsx`                                   |
+| `delete-all-confirm`        | ” — the confirmation checkbox row                                          |
+| `delete-all-submit`         | ” — the destructive action                                                 |
+| `delete-all-complete`       | ” — renders only after a successful wipe                                   |
+| `delete-account-open`       | `src/features/settings/account-section.tsx`                                |
+| `delete-account-password`   | ” — the fresh-proof password re-entry                                      |
+| `delete-account-confirm`    | ” — the confirmation checkbox row                                          |
+| `delete-account-submit`     | ” — the destructive action                                                 |
+| `contract-vectors-pass`     | `src/app/contract-vectors.tsx` (dev-only)                                  |
+| `contract-vectors-fail`     | ” — carries the failing check names in its text                            |
+| `vector-<check>`            | ” — one per vector, `PASS`/`FAIL`/`RUNNING`                                |
 
 The three `contract-vectors` ids are the one group NOT in the shipped app: the
 screen returns a `<Redirect>` in production. Exactly one of `-pass`/`-fail` ever
@@ -474,6 +510,37 @@ still in Android's hierarchy behind it showing the current list's name, so
 `tapOn: 'My List'` is ambiguous there and resolves to the node underneath:
 [app-drivers.md](./app-drivers.md), _a text match can resolve to a node under the
 drawer_.
+
+A user list or tag row is reached without knowing its uuid by requiring BOTH
+halves on one element — `id: 'links-nav-list-.*'` (Maestro's `id` is a regex) and
+`text:` the fixture's name. The pair cannot resolve to the topbar title, which
+carries the name and no id, and the flows use it wherever a list they created is
+the destination (`link-editor.yaml`).
+
+**The editor field ids exist because the fields' names repeat their labels.**
+Every native editor draws a muted `<Text>` label over each control, and the
+control's accessible name starts with the same word — measured on iOS, the add
+panel exposes a `List` label node ahead of the `List: …` combobox, and a `Note`
+label ahead of the textarea — so `tapOn: 'List'` resolves to the label. The picker
+ids are FIXED rather than props: every host (both editors, the move-to and bulk
+dialogs) mounts one picker at a time, which is the same bargain the share sheet's
+`share-tag-create` makes. Tag rows inside a picker take no id; they are checkboxes
+named by the tag, and a removal is scoped to the picker's rows with `childOf: {
+id: 'tag-picker-rows' }` — required on Android, whose tree keeps the editor behind
+the portaled picker, where the Tags trigger renders each chosen name as its own
+text node; an unscoped tap on the name hit that node. The row menu's `link-menu-*`
+ids are the drawer rule again: the menu is a portal over the list, and "Archive"
+is also a drawer row and, once there, the topbar's title.
+
+**A combobox's name carries its value.** The native `ListSelect` trigger was
+named plain `List`, which overrode the child text, so neither VoiceOver nor a flow
+could read which list a link was filed in. It now reads `List: Work / Reading`,
+as `TagsField` already read `Tags: reading, work` ([accessibility.md](./accessibility.md),
+_naming things that have no visible label_), and the editor flows assert the
+persisted list and tags through those two names. The pinned badge is the one
+state that still does not reach a row's composite name — the label sits on an
+icon, and only child text is folded in — so `link-lifecycle.yaml` reads a pin off
+the menu instead (`link-menu-unpin` replacing `link-menu-pin`).
 
 `add-link-save` is the sharpest case for why these are ids and not text: its label
 is `Save` until a malformed/duplicate/trashed warning relabels it `Confirm`, so
@@ -546,7 +613,10 @@ On Android, run `npm run expo:android:reverse` after each emulator boot.
 [`e2e/cases.json`](../e2e/cases.json) is the machine-readable registry. Every
 case has an id, surface, primary `smoke`, `full`, or `release` tier, traits,
 fixture size, path, and expected artifacts. `npm run check:registry -w
-@stxapps/e2e` rejects duplicate ids, missing paths, and tag drift. Automated
+@stxapps/e2e` rejects duplicate ids, missing paths, and tag drift. Ids are unique
+**per surface**: a journey proven on web and on native (`LINK-CLOSE-001`) keeps one
+id on both entries so their results line up, and every runner selects within its
+own surface, so one invocation never picks up both. Automated
 `full` includes smoke and full but never release qualification; `smoke` selects
 only smoke. `--case`, `--include-trait`, and `--exclude-trait` are repeatable or
 comma-separated and work across the wrappers:
@@ -1160,6 +1230,24 @@ working tree, on the same browser, simulator, emulator and Maestro as above:
 Both delete-account cases were also run against a client that skipped the
 delete-account POST but still ended its local session. Each failed at its
 refused-sign-in assertion, which is the half a local sign-out cannot fake.
+
+The Phase 3 link lifecycle and editor cases were measured 2026-09-16 from commit
+`ca3c815b96d7d9d2a0d6fbbbcab7a6683b18b76e` with their changes present in the
+working tree, on the same browser, simulator, emulator and Maestro as above:
+
+| surface        | measured result                                                                                                             |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| web            | **15/15 passed** — `WEB-LINK-001`/`002`, `LINK-EDITOR-001`, `LINK-CLOSE-001`, `LINK-LIFECYCLE-001`, three repeats, no retry |
+| iOS native     | **4/4 passed** — `NATIVE-LINK-001`, `LINK-EDITOR-002`, `LINK-CLOSE-001`, `LINK-LIFECYCLE-002`                               |
+| Android native | **4/4 passed** — the same four flows                                                                                        |
+
+The three new web cases were each run against a deliberately broken client and
+failed at the step that guards the break: quick-add's dirty guard removed (at the
+Escape check), the edit dialog's guard removed (at its Escape check), the edit
+dropping the list change (at the moved-list read after reload), Restore sending
+the link back to Trash, Pin as a no-op, and the delete confirmation skipping the
+delete. The native flows have **not** yet had that check; it is the open half of
+their definition of done.
 
 Nothing here runs automatically. There is still no CI ([testing.md](./testing.md)),
 and the only git hook guards `internal/`.

@@ -32,6 +32,7 @@ export function ListSelect({
   onValueChange,
   excludeIds,
   allowCreate,
+  testID,
 }: {
   value: string;
   onValueChange: (listId: string) => void;
@@ -41,6 +42,10 @@ export function ListSelect({
   // Offer the Create row (see the header) — the editors opt in; a picker that
   // only reassigns an existing link must not.
   allowCreate?: boolean;
+  // The trigger's e2e handle. Its accessible name starts with "List", which is
+  // also the text of the Field label every editor renders above it, so a flow
+  // matching by name reaches the label first (docs/e2e.md, _the testID contract_).
+  testID?: string;
 }) {
   const [open, setOpen] = useState(false);
   const lists = useLists();
@@ -97,10 +102,18 @@ export function ListSelect({
         // No Keyboard.dismiss: DialogContent drops the keyboard on open, so
         // the field focused before this press (the add panel's URL, most often)
         // can't take keystrokes unseen behind the dialog (ui/dialog.tsx).
+        testID={testID}
         onPress={() => setOpen(true)}
         accessibilityRole="combobox"
         aria-expanded={open}
-        aria-label="List"
+        // The name says what the field IS and what it holds — "List: Work /
+        // Reading" — the way TagsField's does and ShareRow's does
+        // (docs/accessibility.md, _naming things that have no visible label_).
+        // A bare "List" overrode the child Texts, so VoiceOver never announced
+        // which list a link was filed in.
+        aria-label={
+          selected ? `List: ${[...selected.ancestors, selected.item.name].join(' / ')}` : 'List'
+        }
         className="justify-between px-3"
       >
         {selected ? (

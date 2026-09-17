@@ -312,7 +312,11 @@ halves; a picker built on a `Button` (`ListSelect`) needs neither.
 **Native avoids that nested-control trap.** bracemark-expo's `TagsField` is one
 fixed-height `Button` combobox: its first two visible names may truncate
 independently and `+N` counts the remainder, while its accessible name carries
-every chosen tag ("Tags: reading, work"). Selection and removal happen in
+every chosen tag ("Tags: reading, work"). Its sibling `ListSelect` says the same
+kind of thing — "List: Work / Reading", the whole path. It used to be named a bare
+"List", and because an `aria-label` replaces the children's text rather than
+joining it, the list a link was filed in was never announced at all; the
+`ShareRow` rule above is the one it had missed. Selection and removal happen in
 `TagPickerRows`, where each full-width 44pt row is one checkbox with a real
 checked state. There are no nested chip-removal Pressables, so VoiceOver does not
 need custom removal actions and activation cannot land on the wrong child. The
@@ -553,6 +557,20 @@ add panel_) is the case that proves the two halves are not equal:
   open shows the whole screen behind it too, so every portaled dialog in this app
   has the same gap. The panel keeps the props anyway — they cost nothing and they
   are what will start working when RN fixes it — and the iOS half is real today.
+
+**The opposite failure is just as silent: an overlay that swallows its own
+children.** `ui/alert-dialog.tsx` renders its overlay into a `Pressable` (to claim
+the touches around the alert), and a `Pressable` is an accessibility element by
+default — which hides everything inside it. Measured on the iOS simulator with
+Trash's "Delete permanently?" open: the hierarchy held ONE node,
+`Delete permanently?, … This can’t be undone., …, Cancel, Delete permanently`,
+and no separate Cancel or confirm to focus or activate — in every alert dialog in
+the app. `ui/dialog.tsx` never had it, for a reason nothing in our code showed:
+`@rn-primitives`' `Dialog.Overlay` passes `accessible={false}` down through its
+Slot, and `AlertDialog.Overlay` is a bare `View` that passes nothing. The alert's
+overlay now says `accessible={false}` itself. It surfaced as an e2e flow that
+could not find its confirm button by id (`link-lifecycle.yaml`), which is the only
+reason it surfaced at all — no spec renders the native tree.
 
 The rule for a new overlay: set `accessibilityViewIsModal` on its root and hide
 the covered subtree, then CHECK the tree rather than assuming — a dump is the
