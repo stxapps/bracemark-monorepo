@@ -69,7 +69,7 @@ that reading comes _before_ the edit; nothing downstream will tell you.
 | ------------------------------------------------------------------------------ | ------------------------------- |
 | workspace layout, package boundaries; an import _inside_ a package             | `architecture.md` ⚠             |
 | **any dependency version / `package.json` / Expo SDK bump**                    | `architecture.md` ⚠             |
-| **running `nx migrate`; when the Expo SDK ceiling lifts**                      | `upgrades.md` ⚠                 |
+| **running `nx migrate`; when the Expo SDK ceiling lifts**                      | `dependency-upgrades.md` ⚠      |
 | local store + encrypted file sync (the data path); what the server still holds | `local-first-sync.md` ⚠         |
 | **a schema — Dexie, expo-sqlite, an R2 payload, D1, the DO**                   | `local-first-sync.md` ⚠         |
 | the read edge — indexes, liveQuery, virtual scrolling, paging                  | `client-queries.md` ⚠           |
@@ -87,7 +87,7 @@ that reading comes _before_ the edit; nothing downstream will tell you.
 | **the soft keyboard** — avoidance, dismissal, why a field is stuck             | `soft-keyboard.md` ⚠            |
 | `bracemark-extension` auth flow                                                | `browser-extension.md`          |
 | the iOS **share extension** — its process, its imports, its sheet              | `share-sheet.md` ⚠              |
-| an expo dependency — router, uniwind, expo-image, fonts, IAP                   | `expo-native-deps.md`           |
+| an expo dependency — router, uniwind, expo-image, fonts, IAP                   | `expo-dependencies.md`          |
 | prebuild, `app.config.ts`, the npm scripts, R8, signing, any native change     | `expo-build.md` ⚠               |
 | **writing or reviewing a spec**; test layers, jest vs vitest                   | `testing.md` ⚠                  |
 | driving an app to see it run — the browser, the AVD, Maestro, simctl/adb       | `app-drivers.md` ⚠              |

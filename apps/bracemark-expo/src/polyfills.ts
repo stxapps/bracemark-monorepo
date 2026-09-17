@@ -122,7 +122,7 @@ if (__DEV__) {
       `bracemark-expo: missing ${missing.length === 1 ? 'global' : 'globals'} ${missing.join(', ')} on this engine. ` +
         'Platform-agnostic code (@stxapps/shared, @stxapps/react) assumes these exist — ' +
         'install them in src/polyfills.ts, or stop assuming them (tools/eslint/agnostic-globals.mjs). ' +
-        'See docs/expo-native-deps.md, "runtime polyfills".',
+        'See docs/expo-dependencies.md, "runtime polyfills".',
     );
   }
 }

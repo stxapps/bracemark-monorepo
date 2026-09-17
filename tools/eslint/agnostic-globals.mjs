@@ -30,7 +30,7 @@
 // here. `atob`/`btoa` are installed by our own polyfills. `Blob`/`File`/
 // `FileReader` exist on all three but with materially different capabilities —
 // they're not banned, they're just never portable in the details.
-// See docs/expo-native-deps.md, _runtime polyfills_.
+// See docs/expo-dependencies.md, _runtime polyfills_.
 
 const NODE_ONLY = 'is a Node/CJS global — absent on browsers, on workerd and on Hermes.';
 const BROWSER_ONLY = 'is a browser/worker global — Hermes (bracemark-expo) has no such thing.';

@@ -1,4 +1,4 @@
-## expo native deps (bracemark-expo)
+## expo dependencies (bracemark-expo)
 
 What bracemark-expo is built out of — one section per dependency (or cluster):
 what it's for, why it beat the alternative, and the wiring and gotchas that

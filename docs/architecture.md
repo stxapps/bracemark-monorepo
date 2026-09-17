@@ -9,7 +9,7 @@ in `docs/` covers which subject — lives in the workspace `CLAUDE.md`, so it si
 in context from the start of a session instead of at the top of a long file you
 have to already be reading. Sections below link to their neighbours directly;
 the ones that come up most from here are [setup.md](./setup.md) (the one-time
-scaffold commands), [expo-native-deps.md](./expo-native-deps.md) and
+scaffold commands), [expo-dependencies.md](./expo-dependencies.md) and
 [expo-build.md](./expo-build.md) (how bracemark-expo's dependencies are wired, and
 how it's built), and [hosting.md](./hosting.md) (which host each app answers).
 
@@ -91,12 +91,12 @@ convention: the site has no auth stack, no data layer, and its own origin (see
   `_`-private-folder convention, so unlike bracemark-web's colocated
   `_components`/`_panes`, screen code lives **outside** `src/app/` in
   `src/components`/`src/features` — every file under the app root is a route.
-  See expo-native-deps.md — _expo-router_), **Uniwind**
+  See expo-dependencies.md — _expo-router_), **Uniwind**
   for Tailwind classes (styling — a Metro-plugin, Tailwind **v4** CSS-first
   binding; see the version note below), **react-native-reusables** for
   shadcn-style components (copied into the app like shadcn on web — into
   `src/components/ui/`, by hand from the Uniwind registry variant, since its
-  CLI needs tsconfig path aliases this app doesn't have; see expo-native-deps.md — there
+  CLI needs tsconfig path aliases this app doesn't have; see expo-dependencies.md — there
   is no `expo-ui` package: with a single expo app, components live in the app
   until a second expo surface exists), **expo-sqlite + drizzle**
   as the Dexie analogue (drizzle's `useLiveQuery` ≈ Dexie `liveQuery`),
@@ -109,7 +109,7 @@ convention: the site has no auth stack, no data layer, and its own origin (see
   and forced a version split), so every Tailwind consumer — bracemark-expo plus
   each web project (`bracemark-web`, `bracemark-extension`, `web-ui`) — pins
   `tailwindcss@^4.x` itself; there is no root `overrides` split anymore
-  (see expo-native-deps.md — _uniwind_).
+  (see expo-dependencies.md — _uniwind_).
 
 A separate **bracemark-docs** app was planned here once. It's gone:
 `bracemark-site` owns `/docs` as a path on the apex, so the docs accrue SEO
@@ -403,7 +403,7 @@ unused.
 
 The runtime counterpart is a `__DEV__` boot audit in `src/polyfills.ts` that
 fails the native app at launch, naming any global from this contract that Hermes
-turns out not to have — see [expo-native-deps.md](./expo-native-deps.md),
+turns out not to have — see [expo-dependencies.md](./expo-dependencies.md),
 _runtime polyfills_. Lint refuses globals that **aren't** portable; the audit
 catches ones that are **supposed** to be and aren't. Neither can see import
 **order** — a module that reads `globalThis.crypto` at its own init (as
@@ -437,7 +437,7 @@ Hence: **a version is chosen in exactly one place, and everyone else defers.**
 
 - **Root pins; the app declares `*`.** The app is private and never published, so
   a range in it can only ever disagree with root. (One deliberate exception:
-  `tailwindcss@^4.x`, which root does _not_ pin — see expo-native-deps.md, _uniwind_.)
+  `tailwindcss@^4.x`, which root does _not_ pin — see expo-dependencies.md, _uniwind_.)
 - **A workspace sibling — any `@stxapps/*` — is `"*"` in `dependencies`, and
   whoever imports one has to declare it by hand — an app and a package alike.**
   Nothing checks either half, and both silences trace to `@nx/dependency-checks`

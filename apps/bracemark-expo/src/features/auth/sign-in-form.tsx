@@ -46,7 +46,7 @@ import { PasswordInput } from './password-input';
 // label is always the smaller of the two here, on a tablet as much as on a
 // phone. Position and the size gap carry the distinction; weight was a third
 // signal doing the same job twice. The `wght` axis of InterVariable really does
-// back these utilities (docs/expo-native-deps.md, _font_), so this is a visible
+// back these utilities (docs/expo-dependencies.md, _font_), so this is a visible
 // 500 → 400, not a no-op. It holds for create-account-form.tsx and
 // new-password-field.tsx too.
 // The one `font-medium` that STAYS in this folder is auth-alt-action.tsx's link,

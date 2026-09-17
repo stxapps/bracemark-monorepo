@@ -1,11 +1,11 @@
-## upgrades
+## dependency upgrades
 
 Version bumps that are a **plan** rather than a rule — what currently caps the
 Expo SDK, when that cap is expected to lift, and how to run `nx migrate` without
 letting it drag the SDK along with it. For which manifest is allowed to state a
 version at all, see [architecture.md](./architecture.md) — _dependency
 versions_; for what each expo dependency is and how it's wired,
-[expo-native-deps.md](./expo-native-deps.md); for the build itself,
+[expo-dependencies.md](./expo-dependencies.md); for the build itself,
 [expo-build.md](./expo-build.md).
 
 **Everything here is dated on purpose.** The invariants in `architecture.md`

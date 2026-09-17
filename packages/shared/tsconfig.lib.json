@@ -14,7 +14,7 @@
     // and `__dirname`, none of which Hermes has. That's how a bare
     // `crypto.getRandomValues` in crypto/passphrase.ts typechecked and shipped,
     // then threw `ReferenceError: Property 'crypto' doesn't exist` on the expo
-    // create-account screen (docs/expo-native-deps.md, _runtime polyfills_).
+    // create-account screen (docs/expo-dependencies.md, _runtime polyfills_).
     //
     // `webworker` is the closest published lib to the intersection of the three
     // runtimes: it has fetch/Response/URL/TextEncoder/AbortSignal/setTimeout and

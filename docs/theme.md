@@ -195,7 +195,7 @@ plain JS. Single source, no hand-copied duplicate of the resolver.
   mid-edit). RN's stand-in is the platform's native time picker, wrapped in
   `features/settings/time-field.tsx` — a button showing the time, opening
   Android's dialog or, on iOS, a spinner in our `Dialog`. See
-  [expo-native-deps.md](./expo-native-deps.md) —
+  [expo-dependencies.md](./expo-dependencies.md) —
   _@react-native-community/datetimepicker_.
 
   The second is the **read/apply half**, because RN has no DOM class and no
@@ -235,7 +235,7 @@ dark` token sets (the native mirror of web-ui's `:root`/`.dark`).
     `src/components/splash-hold.tsx` keeps it up until `AuthProvider` has read the
     session back, since expo-router would otherwise drop it one frame after the
     navigator is ready, which is before any of our reads land
-    ([expo-native-deps.md](./expo-native-deps.md), _expo-splash-screen_). Under it,
+    ([expo-dependencies.md](./expo-dependencies.md), _expo-splash-screen_). Under it,
     Uniwind's own startup default is `system` — which matches `DEFAULT_THEME`, so
     first paint is consistent with the default exactly like web's cold-load
     fallback. The hold is on AUTH, not on settings, so a **pinned** theme can still

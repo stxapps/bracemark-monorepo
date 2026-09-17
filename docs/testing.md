@@ -207,7 +207,7 @@ _says_. These two check what an engine actually _does_:
   enforced at runtime instead, by the `__DEV__` audit in
   `apps/bracemark-expo/src/polyfills.ts` that throws at launch naming any missing
   global — so every dev launch and every Maestro run checks it for free
-  (docs/expo-native-deps.md, _runtime polyfills_).
+  (docs/expo-dependencies.md, _runtime polyfills_).
 
 Keep the two global lists in step; together they're one contract checked on the
 two engines that can't be taken for granted. Neither sees import **order**, which

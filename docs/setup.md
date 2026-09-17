@@ -5,7 +5,7 @@
 >
 > This file used to also carry bracemark-expo's whole native story; that moved out
 > when it outgrew "setup". The living references are
-> [expo-native-deps.md](./expo-native-deps.md) (what each expo dependency is
+> [expo-dependencies.md](./expo-dependencies.md) (what each expo dependency is
 > for and how it's wired) and [expo-build.md](./expo-build.md) (prebuild,
 > app config, the npm scripts, R8, signing). For libs & dependency rules, see
 > [architecture.md](./architecture.md).

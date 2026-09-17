@@ -3,7 +3,7 @@
 How bracemark-expo gets **built** — the local prebuild/Xcode/gradle workflow, the
 app config that feeds it, and the two release-only Android concerns (R8
 minification, Play upload signing). For what each dependency _is_ and how it's
-wired, see [expo-native-deps.md](./expo-native-deps.md); for the one-time
+wired, see [expo-dependencies.md](./expo-dependencies.md); for the one-time
 scaffold commands, [setup.md](./setup.md); for which manifest declares which
 version, [architecture.md](./architecture.md) — _dependency versions_.
 

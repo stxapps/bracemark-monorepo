@@ -547,7 +547,7 @@ _the stance_. Per-client notes:
   an anchor a magic-byte check doesn't: the root tag must be the document's FIRST
   tag, or the HTML error page a misconfigured host serves at `/favicon.ico` would
   pass on an inline `<svg>` somewhere in its body. The renderer has to hold up its
-  end, which is why bracemark-expo's link media is **expo-image** (expo-native-deps.md —
+  end, which is why bracemark-expo's link media is **expo-image** (expo-dependencies.md —
   _expo-image_).
 
   Both sniffs are `@stxapps/shared` `image/sniff.ts` (`sniffImageMime` +
