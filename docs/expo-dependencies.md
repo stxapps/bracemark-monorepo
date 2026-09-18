@@ -384,11 +384,33 @@ no splash gate, and no flash. Wiring (already done):
   **"Inter"** (run once per downloaded release; needs `brew install fonttools` or
   `pip install fonttools`). This is why the committed TTF isn't byte-identical to
   upstream. Without it, iOS would need `fontFamily: 'Inter Variable'`.
-- **plugin**: `["expo-font", { fonts: ["./assets/fonts/InterVariable.ttf"] }]`
+- **plugin (iOS)**: `["expo-font", { fonts: ["./assets/fonts/InterVariable.ttf"] }]`
   in `app.config.ts` — picked up on `npx expo prebuild` (the dev client is already
   required for the expo-crypto native module). Keep `expo-font` in
   `package.json` dependencies even though nothing imports it in JS: the config
-  plugin resolves from the package.
+  plugin resolves from the package. It must stay the **top-level `fonts`** key,
+  not `ios.fonts`: `expo-share-extension` reads exactly that key to embed Inter
+  in the iOS share extension target ([share-sheet.md](./share-sheet.md)), and
+  finds nothing under `ios`.
+- **plugin (Android)**: `plugins/with-android-variable-font.js`, because the
+  expo-font path form does **not work on Android** — silently. It copies the
+  file to `assets/fonts/`, and React Native resolves an asset font by **file
+  name**: `fontFamily: 'Inter'` looks for `assets/fonts/Inter.ttf`, misses, and
+  `Typeface.create` hands back the system face (Roboto). No error, no warning —
+  just no Inter, and since Roboto is resolved at regular or bold only, every
+  `font-medium`/`font-semibold` (nearly all the weights this app uses) drew at
+  400: "no bold text anywhere on Android", while iOS was fine. Renaming the file
+  to `Inter.ttf` would restore the face but not the weights — the asset path
+  only knows `NORMAL` and a separate `_bold` file. The plugin instead writes a
+  `res/font` XML family (`inter.xml`) with one `<font>` per weight 100–900, each
+  pinning `app:fontVariationSettings="'wght' N"` on the one TTF, and registers
+  it under `"Inter"` with `ReactFontManager.addCustomFont` in `MainApplication`;
+  RN then asks `Typeface.create(family, weight, italic)` for the right entry.
+  expo-font's own object form writes that XML too, but without
+  `fontVariationSettings`, so every entry would draw the file's default
+  instance. The plugin also deletes the dead `assets/fonts/` copy the top-level
+  expo-font key leaves on Android (a `finalized` mod, so plugin order doesn't
+  matter).
 - **Uniwind binding**: `global.css` sets `--font-sans: 'Inter'`, so the
   `font-sans` utility emits `fontFamily: 'Inter'`. RN has no CSS cascade, so
   `font-sans` must be applied where text renders — it lives in the
@@ -398,7 +420,11 @@ no splash gate, and no flash. Wiring (already done):
   explicit `font-sans`.
 - **verify a real build**: the embed only takes effect after a native build
   (`npx expo prebuild` + run on device/simulator) — it can't be exercised by
-  jest or Metro alone.
+  jest or Metro alone. Check **both** platforms: a missing family falls back to
+  the system face without complaint, so Roboto on Android looks like "a font"
+  unless you compare it with iOS. The quick tell is weight: the links screen's
+  empty-state heading ("No links yet", `font-medium`) must read heavier than the
+  body line under it.
 
 #### runtime polyfills
 

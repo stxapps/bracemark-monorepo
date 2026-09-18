@@ -61,7 +61,24 @@ const config: ExpoConfig = {
     favicon: './assets/images/favicon.png',
   },
   plugins: [
+    // Does the job on iOS only; the Android half is the plugin right after it.
+    // On iOS the file registers under its internal family name ("Inter",
+    // tools/scripts/rename-inter.py) and CoreText walks the `wght` axis by
+    // itself. On Android this plugin drops it into assets/fonts/, where React
+    // Native looks a family up by FILE name — `Inter.ttf`, which doesn't exist —
+    // and silently falls back to the system face at regular or bold only: no
+    // Inter, and no font-medium/font-semibold anywhere.
+    //
+    // It stays the TOP-LEVEL `fonts` key rather than `ios.fonts`, even though
+    // `ios.fonts` would describe it better: expo-share-extension reads exactly
+    // `fonts` off this entry to embed Inter in the iOS share extension target,
+    // and would silently get nothing. The Android copy that comes with it is
+    // deleted again by the plugin below.
     ['expo-font', { fonts: ['./assets/fonts/InterVariable.ttf'] }],
+    [
+      './plugins/with-android-variable-font',
+      { fontFamily: 'Inter', path: './assets/fonts/InterVariable.ttf' },
+    ],
     [
       'expo-splash-screen',
       {

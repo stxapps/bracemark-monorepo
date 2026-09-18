@@ -22,12 +22,13 @@ import '../../global.css';
 // root (no EXPO_ROUTER_APP_ROOT needed), and `expo-router/entry` (package.json
 // `main`) is the native entry — there is no registerRootComponent/index.js.
 //
-// Inter is embedded natively at build time via the expo-font config plugin
-// (app.config.ts), under the family name "Inter" (the file's name table was
-// renamed from "Inter Variable" by tools/scripts/rename-inter.py). So `fontFamily:
-// 'Inter'` / the `font-sans` utility resolve at first paint on both iOS and
-// Android with no runtime load — no useFonts, and nothing the splash hold below
-// has to wait for. Single variable
+// Inter is embedded natively at build time under the family name "Inter" — by
+// the expo-font config plugin on iOS (the file's name table was renamed from
+// "Inter Variable" by tools/scripts/rename-inter.py) and by
+// plugins/with-android-variable-font.js on Android (app.config.ts). So
+// `fontFamily: 'Inter'` / the `font-sans` utility resolve at first paint on both
+// iOS and Android with no runtime load — no useFonts, and nothing the splash
+// hold below has to wait for. Single variable
 // file, mirroring the web/extension build; the `wght` axis backs the
 // font-weight utilities. `global.css` is imported here (once, at the top of the
 // app tree) as Uniwind wants.

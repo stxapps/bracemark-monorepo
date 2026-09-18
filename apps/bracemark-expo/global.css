@@ -30,8 +30,8 @@
  *   • web-only chrome is intentionally dropped: safe-area utilities (use
  *     react-native-safe-area-context), scrollbar-gutter, the button cursor
  *     opt-in. Inter is handled the native way instead of web's `@font-face`:
- *     the file is embedded natively via the expo-font config plugin (app.json)
- *     and named for the `font-sans` utility by the `--font-sans` token below.
+ *     the file is embedded natively by config plugins (app.config.ts) and
+ *     named for the `font-sans` utility by the `--font-sans` token below.
  *     `sidebar-*` tokens are mirrored for shadcn parity even though
  *     mobile has no sidebar, so react-native-reusables components resolve.
  * ─────────────────────────────────────────────────────────────────────────
@@ -40,9 +40,11 @@
 /* Invariant tokens (same in every theme) register the utility scale. */
 @theme {
   /* Names the family for the `font-sans` utility → fontFamily: 'Inter'. The
-     font FILE itself is embedded natively via the expo-font config plugin
-     (app.json), under the key "Inter"; this token only tells Tailwind/Uniwind
-     which family that utility should emit. Keep the key and this name in sync. */
+     font FILE itself is embedded natively by config plugins (app.config.ts):
+     on iOS under its internal family name "Inter", on Android under the
+     `fontFamily` given to plugins/with-android-variable-font.js. This token
+     only tells Tailwind/Uniwind which family that utility should emit. Keep
+     all three names in sync. */
   --font-sans: 'Inter';
   --radius: 0.625rem;
   --radius-sm: calc(var(--radius) - 4px);
