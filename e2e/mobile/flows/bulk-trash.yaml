@@ -1,0 +1,115 @@
+# Move links to Trash in bulk, then restore two and permanently delete one from
+# the Trash view through the bulk confirmation, and read all of it back after a
+# cold start.
+#
+# What only a device shows: each action is one batched expo-sqlite write that the
+# mounted Trash view re-reads (docs/editors.md, _a bulk action is ONE write_), and
+# the destroy confirmation is the portaled dialog in front of it.
+#
+#   maestro test mobile/flows/bulk-trash.yaml -e USERNAME=… -e PASSWORD=… \
+#     -e RESTORED_A=… -e RESTORED_B=… -e DELETED_URL=… -e KEPT_URL=…
+appId: com.bracemark.app
+tags: [BULK-TRASH-001, full, online, destructive, ios, android]
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+- runFlow:
+    file: subflows/add-link.yaml
+    env:
+      URL: ${KEPT_URL}
+- runFlow:
+    file: subflows/add-link.yaml
+    env:
+      URL: ${DELETED_URL}
+- runFlow:
+    file: subflows/add-link.yaml
+    env:
+      URL: ${RESTORED_B}
+- runFlow:
+    file: subflows/add-link.yaml
+    env:
+      URL: ${RESTORED_A}
+
+# --- all four to Trash ------------------------------------------------------------------
+- tapOn:
+    id: 'links-more-options'
+- tapOn:
+    id: 'links-select-links'
+- tapOn:
+    id: 'bulk-select-all'
+- assertVisible:
+    id: 'bulk-count'
+    text: '4 selected'
+- tapOn:
+    id: 'bulk-remove'
+- extendedWaitUntil:
+    notVisible: ".*${KEPT_URL.replace('https://', '')}.*"
+    timeout: 10000
+- tapOn:
+    id: 'links-open-navigation'
+- tapOn:
+    id: 'links-nav-list-trash'
+- extendedWaitUntil:
+    visible: ".*${KEPT_URL.replace('https://', '')}.*"
+    timeout: 20000
+- assertVisible: ".*${RESTORED_A.replace('https://', '')}.*"
+- assertVisible: ".*${RESTORED_B.replace('https://', '')}.*"
+- assertVisible: ".*${DELETED_URL.replace('https://', '')}.*"
+
+# --- Restore two --------------------------------------------------------------------------
+- tapOn:
+    id: 'links-more-options'
+- tapOn:
+    id: 'links-select-links'
+- tapOn: "Select .*${RESTORED_A.replace('https://', '')}(,.*)?"
+- tapOn: "Select .*${RESTORED_B.replace('https://', '')}(,.*)?"
+- tapOn:
+    id: 'bulk-restore'
+- extendedWaitUntil:
+    notVisible: ".*${RESTORED_A.replace('https://', '')}.*"
+    timeout: 10000
+- assertNotVisible: ".*${RESTORED_B.replace('https://', '')}.*"
+- assertVisible: ".*${DELETED_URL.replace('https://', '')}.*"
+
+# --- Delete one permanently, through the confirmation ---------------------------------------
+- tapOn:
+    id: 'links-more-options'
+- tapOn:
+    id: 'links-select-links'
+- tapOn: "Select .*${DELETED_URL.replace('https://', '')}(,.*)?"
+- tapOn:
+    id: 'bulk-delete'
+- takeScreenshot: bulk-delete-confirmation
+- tapOn:
+    id: 'link-destroy-submit'
+- extendedWaitUntil:
+    notVisible:
+      id: 'link-destroy-submit'
+    timeout: 10000
+- extendedWaitUntil:
+    notVisible: ".*${DELETED_URL.replace('https://', '')}.*"
+    timeout: 10000
+- assertVisible: ".*${KEPT_URL.replace('https://', '')}.*"
+
+# --- after a cold start ---------------------------------------------------------------------
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible:
+      id: 'links-screen'
+    timeout: 30000
+- extendedWaitUntil:
+    visible: ".*${RESTORED_A.replace('https://', '')}.*"
+    timeout: 20000
+- assertVisible: ".*${RESTORED_B.replace('https://', '')}.*"
+- assertNotVisible: ".*${DELETED_URL.replace('https://', '')}.*"
+- tapOn:
+    id: 'links-open-navigation'
+- tapOn:
+    id: 'links-nav-list-trash'
+- extendedWaitUntil:
+    visible: ".*${KEPT_URL.replace('https://', '')}.*"
+    timeout: 20000
+- assertNotVisible: ".*${DELETED_URL.replace('https://', '')}.*"
+- assertNotVisible: ".*${RESTORED_A.replace('https://', '')}.*"
+- takeScreenshot: trash-after-cold-restart

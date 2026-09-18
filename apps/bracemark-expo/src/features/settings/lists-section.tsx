@@ -171,7 +171,7 @@ function RowActions({
           <Icon as={ChevronDown} className="size-4" />
           <Text>Move down</Text>
         </DropdownMenuItem>
-        <DropdownMenuItem onPress={onMoveTo}>
+        <DropdownMenuItem testID="list-menu-move-to" onPress={onMoveTo}>
           <Icon as={CornerUpRight} className="size-4" />
           <Text>Move to…</Text>
         </DropdownMenuItem>
@@ -191,14 +191,14 @@ function RowActions({
         {/* Lock inventory: no lock → offer one; locked → unlock (reveals a
             hidden list until relaunch); any lock → remove (password-gated). */}
         {lock === undefined ? (
-          <DropdownMenuItem onPress={onAddLock}>
+          <DropdownMenuItem testID="list-menu-lock" onPress={onAddLock}>
             <Icon as={Lock} className="size-4" />
             <Text>Lock list…</Text>
           </DropdownMenuItem>
         ) : (
           <>
             {lock.locked && (
-              <DropdownMenuItem onPress={onUnlock}>
+              <DropdownMenuItem testID="list-menu-unlock" onPress={onUnlock}>
                 <Icon as={LockOpen} className="size-4" />
                 <Text>Unlock…</Text>
               </DropdownMenuItem>
@@ -214,7 +214,7 @@ function RowActions({
                 </Text>
               </DropdownMenuItem>
             )}
-            <DropdownMenuItem onPress={onRemoveLock}>
+            <DropdownMenuItem testID="list-menu-remove-lock" onPress={onRemoveLock}>
               <Icon as={KeyRound} className="size-4" />
               <Text>Remove lock…</Text>
             </DropdownMenuItem>

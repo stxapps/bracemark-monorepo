@@ -1,0 +1,63 @@
+# Commit a text search from the summoned search row, then clear it, and read the
+# view the route projects (the topbar title) against the rows each time.
+#
+# What only a device shows: a committed query is a router push the links screen
+# re-reads through `useGlobalSearchParams`, and the clear is `restorePreSearch`
+# navigating back to the view the search started from (docs/search.md, _on
+# native_). On native the route has no address bar; the title is its projection
+# — "Search" for a query, the list's name for a list.
+#
+#   maestro test mobile/flows/search.yaml -e USERNAME=… -e PASSWORD=… \
+#     -e WORD=… -e MATCH_URL=… -e MISS_URL=…
+appId: com.bracemark.app
+tags: [SEARCH-001, full, online, ios, android]
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+- runFlow:
+    file: subflows/add-link.yaml
+    env:
+      URL: ${MATCH_URL}
+- runFlow:
+    file: subflows/add-link.yaml
+    env:
+      URL: ${MISS_URL}
+- extendedWaitUntil:
+    visible: ".*${MATCH_URL.replace('https://', '')}.*"
+    timeout: 20000
+- assertVisible: ".*${MISS_URL.replace('https://', '')}.*"
+- assertVisible:
+    id: 'links-title'
+    text: 'My List'
+
+# --- commit ---------------------------------------------------------------------------
+- tapOn:
+    id: 'links-search-toggle'
+- tapOn:
+    id: 'links-search-input'
+- inputText: ${WORD}
+- pressKey: Enter
+- extendedWaitUntil:
+    visible:
+      id: 'links-title'
+      text: 'Search'
+    timeout: 10000
+- extendedWaitUntil:
+    notVisible: ".*${MISS_URL.replace('https://', '')}.*"
+    timeout: 10000
+- assertVisible: ".*${MATCH_URL.replace('https://', '')}.*"
+- takeScreenshot: search-committed
+
+# --- clear ----------------------------------------------------------------------------
+- tapOn:
+    id: 'links-search-clear'
+- extendedWaitUntil:
+    visible:
+      id: 'links-title'
+      text: 'My List'
+    timeout: 10000
+- extendedWaitUntil:
+    visible: ".*${MISS_URL.replace('https://', '')}.*"
+    timeout: 10000
+- assertVisible: ".*${MATCH_URL.replace('https://', '')}.*"
+- takeScreenshot: search-cleared

@@ -1,0 +1,190 @@
+# Lock a parent list and prove a child list's link is absent from browsing the
+# child, Show All, its tag and a search — then open it through the parent's
+# covering lock from the child's own pane.
+#
+# What only a device shows: `computeCoverage` folded into expo's read edge
+# (`lockedListIds` → `lists.none`) on every path at once, the child's lock pane
+# swapped in before its link query mounts, and `unlockList` resolving the
+# COVERING lock for a list that has none of its own (docs/locks.md). Absence is
+# read off the accessibility tree — what VoiceOver and TalkBack would reach.
+#
+#   maestro test mobile/flows/lock-list.yaml -e USERNAME=… -e PASSWORD=… \
+#     -e PARENT_LIST=… -e CHILD_LIST=… -e TAG_NAME=… -e WORD=… \
+#     -e COVERED_URL=… -e OPEN_URL=… -e LOCK_PASSWORD=…
+#
+# The account is on Plus: nesting and locks are both levers.
+appId: com.bracemark.app
+tags: [LOCK-LIST-001, full, online, destructive, ios, android]
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+
+# --- parent > child, and a tag ---------------------------------------------------------
+- runFlow:
+    file: subflows/open-settings.yaml
+    env:
+      SECTION: lists
+- runFlow:
+    file: subflows/settings-create.yaml
+    env:
+      NOUN: list
+      NAME: ${PARENT_LIST}
+- runFlow:
+    file: subflows/settings-create.yaml
+    env:
+      NOUN: list
+      NAME: ${CHILD_LIST}
+- tapOn:
+    text: 'List actions'
+    rightOf: ${CHILD_LIST}
+- tapOn:
+    id: 'list-menu-move-to'
+- tapOn:
+    text: ${PARENT_LIST}
+    childOf:
+      id: 'list-picker-rows'
+- extendedWaitUntil:
+    visible: 'Collapse'
+    timeout: 10000
+- tapOn:
+    id: 'settings-open-navigation'
+- tapOn:
+    id: 'settings-nav-tags'
+- runFlow:
+    file: subflows/settings-create.yaml
+    env:
+      NOUN: tag
+      NAME: ${TAG_NAME}
+- tapOn:
+    id: 'settings-close'
+
+# The covered link is in the child; the open one shares the tag and the word and
+# is in no locked list — the positive control that each read below ran.
+- runFlow:
+    file: subflows/add-link-filed.yaml
+    env:
+      URL: ${COVERED_URL}
+      LIST: ${CHILD_LIST}
+      TAGS: ${TAG_NAME}
+- runFlow:
+    file: subflows/add-link-filed.yaml
+    env:
+      URL: ${OPEN_URL}
+      LIST: ''
+      TAGS: ${TAG_NAME}
+
+# --- lock only the parent -------------------------------------------------------------------
+- runFlow:
+    file: subflows/open-settings.yaml
+    env:
+      SECTION: lists
+- tapOn:
+    text: 'List actions'
+    rightOf: ${PARENT_LIST}
+- tapOn:
+    id: 'list-menu-lock'
+- tapOn:
+    id: 'lock-dialog-password'
+- inputText: ${LOCK_PASSWORD}
+- tapOn:
+    id: 'lock-dialog-submit'
+- extendedWaitUntil:
+    visible: 'Locked'
+    timeout: 20000
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - tapOn:
+          text: 'Not Now'
+          optional: true
+- tapOn:
+    id: 'settings-close'
+
+# --- browse the child: its pane, and no link ---------------------------------------------------
+- tapOn:
+    id: 'links-open-navigation'
+- tapOn:
+    id: 'links-nav-list-.*'
+    text: ${CHILD_LIST}
+- extendedWaitUntil:
+    visible:
+      id: 'list-lock-pane'
+    timeout: 10000
+- assertNotVisible: ".*${COVERED_URL.replace('https://', '')}.*"
+- takeScreenshot: child-list-locked-by-parent
+
+# --- Show All, the tag, a search ---------------------------------------------------------------
+- tapOn:
+    id: 'links-open-navigation'
+- tapOn:
+    id: 'links-nav-all'
+- extendedWaitUntil:
+    visible: ".*${OPEN_URL.replace('https://', '')}.*"
+    timeout: 10000
+- assertNotVisible: ".*${COVERED_URL.replace('https://', '')}.*"
+
+- tapOn:
+    id: 'links-open-navigation'
+- tapOn:
+    id: 'links-nav-tag-.*'
+    text: ${TAG_NAME}
+- extendedWaitUntil:
+    visible: ".*${OPEN_URL.replace('https://', '')}.*"
+    timeout: 10000
+- assertNotVisible: ".*${COVERED_URL.replace('https://', '')}.*"
+
+- tapOn:
+    id: 'links-search-toggle'
+- tapOn:
+    id: 'links-search-input'
+- inputText: ${WORD}
+- pressKey: Enter
+- extendedWaitUntil:
+    visible:
+      id: 'links-title'
+      text: 'Search'
+    timeout: 10000
+- extendedWaitUntil:
+    visible: ".*${OPEN_URL.replace('https://', '')}.*"
+    timeout: 10000
+- assertNotVisible: ".*${COVERED_URL.replace('https://', '')}.*"
+- tapOn:
+    id: 'links-search-clear'
+
+# --- open the covering lock from the child's pane ------------------------------------------------
+- tapOn:
+    id: 'links-open-navigation'
+- tapOn:
+    id: 'links-nav-list-.*'
+    text: ${CHILD_LIST}
+- extendedWaitUntil:
+    visible:
+      id: 'list-lock-pane'
+    timeout: 10000
+- runFlow:
+    file: subflows/unlock-pane.yaml
+    env:
+      PASSWORD: '${LOCK_PASSWORD}-wrong'
+- extendedWaitUntil:
+    visible:
+      id: 'lock-pane-error'
+    timeout: 20000
+- assertNotVisible: ".*${COVERED_URL.replace('https://', '')}.*"
+- runFlow:
+    file: subflows/unlock-pane.yaml
+    env:
+      PASSWORD: ${LOCK_PASSWORD}
+- extendedWaitUntil:
+    visible: ".*${COVERED_URL.replace('https://', '')}.*"
+    timeout: 20000
+
+# The parent's lock is what opened, so the other reads have the link back too.
+- tapOn:
+    id: 'links-open-navigation'
+- tapOn:
+    id: 'links-nav-all'
+- extendedWaitUntil:
+    visible: ".*${COVERED_URL.replace('https://', '')}.*"
+    timeout: 10000
+- takeScreenshot: covered-link-after-unlock

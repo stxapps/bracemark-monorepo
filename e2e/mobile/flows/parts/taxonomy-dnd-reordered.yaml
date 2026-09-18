@@ -1,0 +1,20 @@
+# Part of TAXONOMY-DND-002 (mobile/flows/taxonomy-dnd.yaml carries the case).
+# Runs after the runner's first drag — A's grip into C's slot — and asserts the
+# sibling order it produced: A, C, B.
+#
+# `below` is a relation, not a row index, so each pair is checked both ways
+# round the one that moved.
+appId: com.bracemark.app
+---
+- extendedWaitUntil:
+    visible:
+      text: ${LIST_C}
+      below: ${LIST_A}
+    timeout: 10000
+- assertVisible:
+    text: ${LIST_B}
+    below: ${LIST_C}
+- assertNotVisible:
+    text: ${LIST_A}
+    below: ${LIST_C}
+- takeScreenshot: lists-after-reorder

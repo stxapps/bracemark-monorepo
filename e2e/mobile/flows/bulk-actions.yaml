@@ -1,0 +1,429 @@
+# Batch pin, unpin, retag, move, archive and remove over mixed selections, and read
+# that only the eligible links changed.
+#
+# What only a device shows: each action lands as expo-sqlite writes the mounted
+# views re-read — the pinned block's order, the rows' tag chips, three list views —
+# through the native bulk bar, its ⋯ menu and its two dialogs. The eligibility
+# filters and the retag diff are unit-tested; the order of the pinned block is the
+# one place a wrong filter becomes visible here, because re-pinning an already
+# pinned link moves it to the top.
+#
+#   maestro test mobile/flows/bulk-actions.yaml -e USERNAME=… -e PASSWORD=… \
+#     -e KEEP_URL=… -e PINNED_FIRST_URL=… -e PINNED_SECOND_URL=… \
+#     -e UNPINNED_URL=… -e ONE_URL=… -e TWO_URL=… -e ARCHIVED_URL=… \
+#     -e LIST_NAME=… -e SHARED_TAG=… -e PARTIAL_TAG=… -e ADDED_TAG=…
+#
+# A row's accessible name is a composite — title, host, its first tag, ", Pinned" —
+# so pins are read through `.*<url>.*, Pinned.*` — with the comma, because
+# Maestro's text regex is case-insensitive and a url slug saying "pinned" matched
+# the bare word before any pin existed. Tags are read through the tag
+# views instead: past one chip the name says "Show 1 more tag", not the tag.
+appId: com.bracemark.app
+tags: [BULK-ACTIONS-001, full, online, destructive, ios, android]
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+- runFlow:
+    file: subflows/open-settings.yaml
+    env:
+      SECTION: lists
+- runFlow:
+    file: subflows/settings-create.yaml
+    env:
+      NOUN: list
+      NAME: ${LIST_NAME}
+- tapOn:
+    id: 'settings-open-navigation'
+- tapOn:
+    id: 'settings-nav-tags'
+- runFlow:
+    file: subflows/settings-create.yaml
+    env:
+      NOUN: tag
+      NAME: ${SHARED_TAG}
+- runFlow:
+    file: subflows/settings-create.yaml
+    env:
+      NOUN: tag
+      NAME: ${PARTIAL_TAG}
+- tapOn:
+    id: 'settings-close'
+
+# --- the library ------------------------------------------------------------------------
+- runFlow:
+    file: subflows/add-link.yaml
+    env:
+      URL: ${ARCHIVED_URL}
+- tapOn:
+    id: 'links-more-options'
+- tapOn:
+    id: 'links-select-links'
+- runFlow:
+    file: subflows/select-row.yaml
+    env:
+      ROW: ".*${ARCHIVED_URL.replace('https://', '')}"
+- assertVisible:
+    id: 'bulk-count'
+    text: '1 selected'
+- tapOn:
+    id: 'bulk-more'
+- tapOn:
+    id: 'bulk-menu-archive'
+- extendedWaitUntil:
+    visible:
+      id: 'links-more-options'
+    timeout: 10000
+- extendedWaitUntil:
+    notVisible: ".*${ARCHIVED_URL.replace('https://', '')}.*"
+    timeout: 10000
+
+# Put the "links without a preview" prompt away. It holds the top half of the
+# screen over the list, and the middle of the screen — where a row is scrolled
+# before it is pressed (subflows/select-row.yaml) — falls inside it: measured,
+# the press went to the prompt and selected nothing.
+- tapOn:
+    text: 'Dismiss'
+    optional: true
+- runFlow:
+    file: subflows/add-link.yaml
+    env:
+      URL: ${KEEP_URL}
+- runFlow:
+    file: subflows/add-link.yaml
+    env:
+      URL: ${PINNED_FIRST_URL}
+- runFlow:
+    file: subflows/add-link.yaml
+    env:
+      URL: ${PINNED_SECOND_URL}
+- runFlow:
+    file: subflows/add-link.yaml
+    env:
+      URL: ${UNPINNED_URL}
+- runFlow:
+    file: subflows/add-link-filed.yaml
+    env:
+      URL: ${ONE_URL}
+      LIST: ''
+      TAGS: ${SHARED_TAG}
+- runFlow:
+    file: subflows/add-link-filed.yaml
+    env:
+      URL: ${TWO_URL}
+      LIST: ''
+      TAGS: ${SHARED_TAG}
+# TWO carries the partial tag as well.
+- tapOn:
+    id: 'links-more-options'
+- tapOn:
+    id: 'links-select-links'
+- runFlow:
+    file: subflows/select-row.yaml
+    env:
+      ROW: ".*${TWO_URL.replace('https://', '')}"
+- assertVisible:
+    id: 'bulk-count'
+    text: '1 selected'
+- tapOn:
+    id: 'bulk-more'
+- tapOn:
+    id: 'bulk-menu-edit-tags'
+- tapOn:
+    id: 'tag-picker-search'
+- inputText: ${PARTIAL_TAG}
+- tapOn:
+    text: ${PARTIAL_TAG}
+    childOf:
+      id: 'tag-picker-rows'
+- tapOn:
+    id: 'bulk-tags-save'
+- extendedWaitUntil:
+    notVisible:
+      id: 'bulk-count'
+    timeout: 10000
+
+# Two pins, one at a time: the second lands on top.
+- runFlow:
+    file: parts/bulk-pin-one.yaml
+    env:
+      URL: ${PINNED_FIRST_URL}
+- runFlow:
+    file: parts/bulk-pin-one.yaml
+    env:
+      URL: ${PINNED_SECOND_URL}
+- assertVisible:
+    text: ".*${PINNED_SECOND_URL.replace('https://', '')}.*, Pinned.*"
+    above: ".*${PINNED_FIRST_URL.replace('https://', '')}.*, Pinned.*"
+
+# --- Pin over a mixed selection -------------------------------------------------------------
+- tapOn:
+    id: 'links-more-options'
+- tapOn:
+    id: 'links-select-links'
+- runFlow:
+    file: subflows/select-row.yaml
+    env:
+      ROW: ".*${PINNED_FIRST_URL.replace('https://', '')}"
+- runFlow:
+    file: subflows/select-row.yaml
+    env:
+      ROW: ".*${UNPINNED_URL.replace('https://', '')}"
+- assertVisible:
+    id: 'bulk-count'
+    text: '2 selected'
+- tapOn:
+    id: 'bulk-more'
+- tapOn:
+    id: 'bulk-menu-pin'
+- extendedWaitUntil:
+    visible:
+      id: 'links-more-options'
+    timeout: 10000
+- extendedWaitUntil:
+    visible: ".*${UNPINNED_URL.replace('https://', '')}.*, Pinned.*"
+    timeout: 10000
+- assertVisible:
+    text: ".*${UNPINNED_URL.replace('https://', '')}.*, Pinned.*"
+    above: ".*${PINNED_SECOND_URL.replace('https://', '')}.*, Pinned.*"
+- assertVisible:
+    text: ".*${PINNED_SECOND_URL.replace('https://', '')}.*, Pinned.*"
+    above: ".*${PINNED_FIRST_URL.replace('https://', '')}.*, Pinned.*"
+- takeScreenshot: pinned-after-mixed-pin
+
+# --- Unpin over a mixed selection -----------------------------------------------------------
+- tapOn:
+    id: 'links-more-options'
+- tapOn:
+    id: 'links-select-links'
+- runFlow:
+    file: subflows/select-row.yaml
+    env:
+      ROW: ".*${UNPINNED_URL.replace('https://', '')}"
+- runFlow:
+    file: subflows/select-row.yaml
+    env:
+      ROW: ".*${KEEP_URL.replace('https://', '')}"
+- assertVisible:
+    id: 'bulk-count'
+    text: '2 selected'
+- tapOn:
+    id: 'bulk-more'
+- tapOn:
+    id: 'bulk-menu-unpin'
+- extendedWaitUntil:
+    visible:
+      id: 'links-more-options'
+    timeout: 10000
+- extendedWaitUntil:
+    notVisible: ".*${UNPINNED_URL.replace('https://', '')}.*, Pinned.*"
+    timeout: 10000
+- assertNotVisible: ".*${KEEP_URL.replace('https://', '')}.*, Pinned.*"
+- assertVisible:
+    text: ".*${PINNED_SECOND_URL.replace('https://', '')}.*, Pinned.*"
+    above: ".*${PINNED_FIRST_URL.replace('https://', '')}.*, Pinned.*"
+
+# --- Retag: the shared tag is editable, the partial one untouched ----------------------------
+- tapOn:
+    id: 'links-more-options'
+- tapOn:
+    id: 'links-select-links'
+- runFlow:
+    file: subflows/select-row.yaml
+    env:
+      ROW: ".*${ONE_URL.replace('https://', '')}"
+- runFlow:
+    file: subflows/select-row.yaml
+    env:
+      ROW: ".*${TWO_URL.replace('https://', '')}"
+- assertVisible:
+    id: 'bulk-count'
+    text: '2 selected'
+- tapOn:
+    id: 'bulk-more'
+- tapOn:
+    id: 'bulk-menu-edit-tags'
+# Only the tag every selected link carries starts chosen.
+- tapOn:
+    text: ${SHARED_TAG}
+    childOf:
+      id: 'tag-picker-rows'
+- tapOn:
+    id: 'tag-picker-search'
+- inputText: ${ADDED_TAG}
+- tapOn:
+    id: 'tag-picker-create'
+- tapOn:
+    id: 'bulk-tags-save'
+- extendedWaitUntil:
+    notVisible:
+      id: 'bulk-count'
+    timeout: 10000
+# The added tag is on both, the partial one still on TWO alone, and the shared
+# one on neither.
+- tapOn:
+    id: 'links-open-navigation'
+- tapOn:
+    id: 'links-nav-tag-.*'
+    text: ${ADDED_TAG}
+- extendedWaitUntil:
+    visible: ".*${ONE_URL.replace('https://', '')}.*"
+    timeout: 10000
+- assertVisible: ".*${TWO_URL.replace('https://', '')}.*"
+- assertNotVisible: ".*${KEEP_URL.replace('https://', '')}.*"
+- takeScreenshot: added-tag-after-retag
+- tapOn:
+    id: 'links-open-navigation'
+- tapOn:
+    id: 'links-nav-tag-.*'
+    text: ${PARTIAL_TAG}
+- extendedWaitUntil:
+    visible: ".*${TWO_URL.replace('https://', '')}.*"
+    timeout: 10000
+- assertNotVisible: ".*${ONE_URL.replace('https://', '')}.*"
+- tapOn:
+    id: 'links-open-navigation'
+- tapOn:
+    id: 'links-nav-tag-.*'
+    text: ${SHARED_TAG}
+- extendedWaitUntil:
+    visible:
+      id: 'links-title'
+      text: ${SHARED_TAG}
+    timeout: 10000
+- assertNotVisible: ".*${ONE_URL.replace('https://', '')}.*"
+- assertNotVisible: ".*${TWO_URL.replace('https://', '')}.*"
+- tapOn:
+    id: 'links-open-navigation'
+- tapOn:
+    id: 'links-nav-list-my-list'
+- extendedWaitUntil:
+    visible: ".*${ONE_URL.replace('https://', '')}.*"
+    timeout: 10000
+
+# --- Move -----------------------------------------------------------------------------------
+- tapOn:
+    id: 'links-more-options'
+- tapOn:
+    id: 'links-select-links'
+- runFlow:
+    file: subflows/select-row.yaml
+    env:
+      ROW: ".*${ONE_URL.replace('https://', '')}"
+- runFlow:
+    file: subflows/select-row.yaml
+    env:
+      ROW: ".*${TWO_URL.replace('https://', '')}"
+- assertVisible:
+    id: 'bulk-count'
+    text: '2 selected'
+- tapOn:
+    id: 'bulk-move'
+- tapOn:
+    text: ${LIST_NAME}
+    childOf:
+      id: 'list-picker-rows'
+- extendedWaitUntil:
+    notVisible: ".*${ONE_URL.replace('https://', '')}.*"
+    timeout: 10000
+- assertNotVisible: ".*${TWO_URL.replace('https://', '')}.*"
+- assertVisible: ".*${KEEP_URL.replace('https://', '')}.*"
+- tapOn:
+    id: 'links-open-navigation'
+- tapOn:
+    id: 'links-nav-list-.*'
+    text: ${LIST_NAME}
+- extendedWaitUntil:
+    visible: ".*${ONE_URL.replace('https://', '')}.*"
+    timeout: 10000
+- assertVisible: ".*${TWO_URL.replace('https://', '')}.*"
+
+# --- Archive over a mixed selection, from Show All --------------------------------------------
+- tapOn:
+    id: 'links-open-navigation'
+- tapOn:
+    id: 'links-nav-all'
+- extendedWaitUntil:
+    visible: ".*${ARCHIVED_URL.replace('https://', '')}.*"
+    timeout: 10000
+- tapOn:
+    id: 'links-more-options'
+- tapOn:
+    id: 'links-select-links'
+- runFlow:
+    file: subflows/select-row.yaml
+    env:
+      ROW: ".*${ONE_URL.replace('https://', '')}"
+- runFlow:
+    file: subflows/select-row.yaml
+    env:
+      ROW: ".*${ARCHIVED_URL.replace('https://', '')}"
+- assertVisible:
+    id: 'bulk-count'
+    text: '2 selected'
+- tapOn:
+    id: 'bulk-more'
+- tapOn:
+    id: 'bulk-menu-archive'
+- extendedWaitUntil:
+    visible:
+      id: 'links-more-options'
+    timeout: 10000
+- extendedWaitUntil:
+    notVisible:
+      id: 'bulk-count'
+    timeout: 10000
+- tapOn:
+    id: 'links-open-navigation'
+- tapOn:
+    id: 'links-nav-list-archive'
+- extendedWaitUntil:
+    visible: ".*${ONE_URL.replace('https://', '')}.*"
+    timeout: 10000
+- assertVisible: ".*${ARCHIVED_URL.replace('https://', '')}.*"
+- assertNotVisible: ".*${TWO_URL.replace('https://', '')}.*"
+
+# --- Remove ------------------------------------------------------------------------------------
+- tapOn:
+    id: 'links-open-navigation'
+- tapOn:
+    id: 'links-nav-list-.*'
+    text: ${LIST_NAME}
+- extendedWaitUntil:
+    visible: ".*${TWO_URL.replace('https://', '')}.*"
+    timeout: 10000
+- assertNotVisible: ".*${ONE_URL.replace('https://', '')}.*"
+- tapOn:
+    id: 'links-more-options'
+- tapOn:
+    id: 'links-select-links'
+- runFlow:
+    file: subflows/select-row.yaml
+    env:
+      ROW: ".*${TWO_URL.replace('https://', '')}"
+- assertVisible:
+    id: 'bulk-count'
+    text: '1 selected'
+- tapOn:
+    id: 'bulk-remove'
+- extendedWaitUntil:
+    notVisible: ".*${TWO_URL.replace('https://', '')}.*"
+    timeout: 10000
+- tapOn:
+    id: 'links-open-navigation'
+- tapOn:
+    id: 'links-nav-list-trash'
+- extendedWaitUntil:
+    visible: ".*${TWO_URL.replace('https://', '')}.*"
+    timeout: 10000
+- assertNotVisible: ".*${KEEP_URL.replace('https://', '')}.*"
+
+# The untouched link came through every step unchanged.
+- tapOn:
+    id: 'links-open-navigation'
+- tapOn:
+    id: 'links-nav-list-my-list'
+- extendedWaitUntil:
+    visible: ".*${KEEP_URL.replace('https://', '')}.*"
+    timeout: 10000
+- assertNotVisible: ".*${KEEP_URL.replace('https://', '')}.*, Pinned.*"
+- takeScreenshot: my-list-after-bulk-actions

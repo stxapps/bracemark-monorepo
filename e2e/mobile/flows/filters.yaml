@@ -1,0 +1,143 @@
+# Choose a user list, a tag, Show All, Archive and Trash from the drawer, and read
+# one member and one non-member in each view.
+#
+# What only a device shows: each drawer pick becomes route params the links
+# screen re-reads against expo-sqlite (docs/search.md, _on native_ — a params hook
+# that silently parses an empty bag is the specimen), with Trash suppressed from
+# Show All and Archive kept in it (use-links.ts).
+#
+#   maestro test mobile/flows/filters.yaml -e USERNAME=… -e PASSWORD=… \
+#     -e FILED_URL=… -e INBOX_URL=… -e ARCHIVED_URL=… -e TRASHED_URL=… \
+#     -e LIST_NAME=… -e TAG_NAME=…
+#
+# The links are added in an order that keeps exactly one row on My List whenever
+# a row menu is opened, so `link-options` is never ambiguous.
+appId: com.bracemark.app
+tags: [FILTER-001, full, online, destructive, ios, android]
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+
+- runFlow:
+    file: subflows/add-link.yaml
+    env:
+      URL: ${ARCHIVED_URL}
+- extendedWaitUntil:
+    visible: ".*${ARCHIVED_URL.replace('https://', '')}.*"
+    timeout: 20000
+- tapOn:
+    id: 'link-options'
+- tapOn:
+    id: 'link-menu-archive'
+- extendedWaitUntil:
+    notVisible: ".*${ARCHIVED_URL.replace('https://', '')}.*"
+    timeout: 10000
+
+- runFlow:
+    file: subflows/add-link.yaml
+    env:
+      URL: ${TRASHED_URL}
+- extendedWaitUntil:
+    visible: ".*${TRASHED_URL.replace('https://', '')}.*"
+    timeout: 20000
+- tapOn:
+    id: 'link-options'
+- tapOn:
+    id: 'link-menu-remove'
+- extendedWaitUntil:
+    notVisible: ".*${TRASHED_URL.replace('https://', '')}.*"
+    timeout: 10000
+
+- runFlow:
+    file: subflows/add-link.yaml
+    env:
+      URL: ${INBOX_URL}
+- extendedWaitUntil:
+    visible: ".*${INBOX_URL.replace('https://', '')}.*"
+    timeout: 20000
+
+# Filed into a new list and a new tag, minted by the pickers.
+- runFlow:
+    file: subflows/dismiss-logbox.yaml
+- tapOn: 'Add link'
+- tapOn:
+    id: 'add-link-url'
+- inputText: ${FILED_URL}
+- tapOn:
+    id: 'add-link-optional'
+- tapOn:
+    id: 'add-link-list'
+- tapOn:
+    id: 'list-picker-search'
+- inputText: ${LIST_NAME}
+- tapOn:
+    id: 'list-picker-create'
+- tapOn:
+    id: 'add-link-tags'
+- tapOn:
+    id: 'tag-picker-search'
+- inputText: ${TAG_NAME}
+- tapOn:
+    id: 'tag-picker-create'
+- tapOn:
+    id: 'tag-picker-done'
+- tapOn:
+    id: 'add-link-save'
+- extendedWaitUntil:
+    notVisible:
+      id: 'add-link-url'
+    timeout: 10000
+
+# --- the user list ------------------------------------------------------------------
+- tapOn:
+    id: 'links-open-navigation'
+- tapOn:
+    id: 'links-nav-list-.*'
+    text: ${LIST_NAME}
+- extendedWaitUntil:
+    visible: ".*${FILED_URL.replace('https://', '')}.*"
+    timeout: 20000
+- assertNotVisible: ".*${INBOX_URL.replace('https://', '')}.*"
+
+# --- the tag ------------------------------------------------------------------------
+- tapOn:
+    id: 'links-open-navigation'
+- tapOn:
+    id: 'links-nav-tag-.*'
+    text: ${TAG_NAME}
+- extendedWaitUntil:
+    visible: ".*${FILED_URL.replace('https://', '')}.*"
+    timeout: 20000
+- assertNotVisible: ".*${INBOX_URL.replace('https://', '')}.*"
+
+# --- Show All: Archive is in it, Trash is not --------------------------------------
+- tapOn:
+    id: 'links-open-navigation'
+- tapOn:
+    id: 'links-nav-all'
+- extendedWaitUntil:
+    visible: ".*${ARCHIVED_URL.replace('https://', '')}.*"
+    timeout: 20000
+- assertVisible: ".*${INBOX_URL.replace('https://', '')}.*"
+- assertNotVisible: ".*${TRASHED_URL.replace('https://', '')}.*"
+
+# --- Archive ------------------------------------------------------------------------
+- tapOn:
+    id: 'links-open-navigation'
+- tapOn:
+    id: 'links-nav-list-archive'
+- extendedWaitUntil:
+    visible: ".*${ARCHIVED_URL.replace('https://', '')}.*"
+    timeout: 20000
+- assertNotVisible: ".*${INBOX_URL.replace('https://', '')}.*"
+
+# --- Trash --------------------------------------------------------------------------
+- tapOn:
+    id: 'links-open-navigation'
+- tapOn:
+    id: 'links-nav-list-trash'
+- extendedWaitUntil:
+    visible: ".*${TRASHED_URL.replace('https://', '')}.*"
+    timeout: 20000
+- assertNotVisible: ".*${ARCHIVED_URL.replace('https://', '')}.*"
+- takeScreenshot: trash-view

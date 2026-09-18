@@ -151,7 +151,7 @@ function BulkTagsForm({ links, onClose }: { links: LinkView[]; onClose: () => vo
           <Button variant="ghost" size="sm" onPress={onClose}>
             <Text>Cancel</Text>
           </Button>
-          <Button size="sm" disabled={saving} onPress={() => void onSave()}>
+          <Button size="sm" testID="bulk-tags-save" disabled={saving} onPress={() => void onSave()}>
             <Text>{saving ? 'Saving…' : 'Save'}</Text>
           </Button>
         </DialogFooter>

@@ -1,0 +1,57 @@
+# Save one link through the add panel into an EXISTING list and/or with EXISTING
+# tags, picked by name. Pulled in with `runFlow`; never run directly.
+#
+# Parameters (the caller's `runFlow: env:`): URL; LIST — a list name, or '' to
+# leave the panel's default; TAGS — one tag name, or '' for none. Tested for
+# truthiness: an empty `env:` value reaches the subflow as undefined, not ''.
+#
+# Picks are scoped to the pickers' rows: Android keeps the panel behind a portaled
+# dialog in its tree, where the trigger renders the chosen names as text too
+# (docs/e2e.md, _the testID contract_). A filtered list picker names a nested list
+# by its path ("Parent / Child"), so the list row is matched as a suffix.
+appId: com.bracemark.app
+---
+- runFlow:
+    file: dismiss-logbox.yaml
+- tapOn: 'Add link'
+- tapOn:
+    id: 'add-link-url'
+- inputText: ${URL}
+- tapOn:
+    id: 'add-link-optional'
+- runFlow:
+    when:
+      true: ${!!LIST}
+    commands:
+      - tapOn:
+          id: 'add-link-list'
+      - tapOn:
+          id: 'list-picker-search'
+      - inputText: ${LIST}
+      - tapOn:
+          text: '(.* / )?${LIST}'
+          childOf:
+            id: 'list-picker-rows'
+- runFlow:
+    when:
+      true: ${!!TAGS}
+    commands:
+      - tapOn:
+          id: 'add-link-tags'
+      - tapOn:
+          id: 'tag-picker-search'
+      - inputText: ${TAGS}
+      - tapOn:
+          text: ${TAGS}
+          childOf:
+            id: 'tag-picker-rows'
+      - tapOn:
+          id: 'tag-picker-done'
+- tapOn:
+    id: 'add-link-save'
+- extendedWaitUntil:
+    notVisible:
+      id: 'add-link-url'
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 5000

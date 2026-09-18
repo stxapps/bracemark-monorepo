@@ -90,6 +90,136 @@
     "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
   },
   {
+    "id": "TAXONOMY-EDITOR-001",
+    "title": "A list and tag created and renamed in Settings are live in an open editor's pickers",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online"],
+    "fixture": "small",
+    "path": "web/taxonomy.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
+    "id": "TAXONOMY-DND-001",
+    "title": "A pointer-drag sibling reorder and list reparent survive a reload",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online", "destructive"],
+    "fixture": "small",
+    "path": "web/taxonomy.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
+    "id": "FILTER-001",
+    "title": "A user list, a tag, Show All, Archive and Trash each hold their member and not their non-member",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online", "destructive"],
+    "fixture": "small",
+    "path": "web/taxonomy.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
+    "id": "FILTER-HIDDEN-LOCKED-001",
+    "title": "Hidden and locked lists stay editor destinations while their links stay out of every read",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online", "destructive"],
+    "fixture": "small",
+    "path": "web/taxonomy.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
+    "id": "SEARCH-001",
+    "title": "A committed text search and its clearing keep the URL and the visible rows in agreement",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online"],
+    "fixture": "small",
+    "path": "web/search.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
+    "id": "SEARCH-002",
+    "title": "An advanced list, tag and text query is restored by history and by the Settings round trip",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online", "destructive"],
+    "fixture": "small",
+    "path": "web/search.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
+    "id": "SEARCH-SCROLL-001",
+    "title": "A changed query or view starts at its top rather than at the paged view's offset",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online", "destructive", "scale"],
+    "fixture": "scale",
+    "path": "web/search.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
+    "id": "BULK-001",
+    "title": "A clicked, range-extended and select-all selection survives virtualization while the view stays fixed",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online", "destructive", "scale"],
+    "fixture": "scale",
+    "path": "web/bulk-edit.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
+    "id": "BULK-ACTIONS-001",
+    "title": "Batch pin, unpin, retag, move, archive and remove change only the eligible links",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online", "destructive"],
+    "fixture": "small",
+    "path": "web/bulk-edit.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
+    "id": "BULK-TRASH-001",
+    "title": "Trash restores and permanently deletes a selection through the bulk confirmation",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online", "destructive"],
+    "fixture": "small",
+    "path": "web/bulk-edit.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
+    "id": "BULK-COPY-001",
+    "title": "Copy puts the selection's URLs on the clipboard in display order without leaving bulk mode",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online"],
+    "fixture": "small",
+    "path": "web/bulk-edit.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
+    "id": "LOCK-APP-001",
+    "title": "The app lock gates a reload without an app-content flash, rejects a wrong password and unlocks with the real one",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online", "destructive"],
+    "fixture": "small",
+    "path": "web/locks.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
+    "id": "LOCK-LIST-001",
+    "title": "A locked parent list keeps its descendants' links out of browse, search, tag views and the DOM until the covering lock opens",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online", "destructive"],
+    "fixture": "small",
+    "path": "web/locks.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
     "id": "WEB-DATA-001",
     "title": "Delete all repaints an already-mounted links page",
     "surface": "web",
@@ -278,6 +408,146 @@
     "fixture": "empty",
     "path": "mobile/flows/link-lifecycle.yaml",
     "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "TAXONOMY-EDITOR-002",
+    "title": "A native list and tag created and renamed in Settings are what the add panel's pickers offer",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "ios", "android"],
+    "fixture": "small",
+    "path": "mobile/flows/taxonomy-editor.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "TAXONOMY-DND-002",
+    "title": "Native touch drags reorder and reparent lists, and the order and tree survive a cold start",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "destructive", "ios", "android"],
+    "fixture": "small",
+    "path": "mobile/flows/taxonomy-dnd.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "FILTER-001",
+    "title": "A native user list, tag, Show All, Archive and Trash each hold their member and not their non-member",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "destructive", "ios", "android"],
+    "fixture": "small",
+    "path": "mobile/flows/filters.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "SEARCH-001",
+    "title": "A native committed text search and its clearing keep the route's view and the visible rows in agreement",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "ios", "android"],
+    "fixture": "small",
+    "path": "mobile/flows/search.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "SEARCH-002",
+    "title": "A native advanced list, tag and text query survives the Settings round trip",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "destructive", "ios", "android"],
+    "fixture": "small",
+    "path": "mobile/flows/search-advanced.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "BULK-002",
+    "title": "A native bulk selection survives FlashList recycling as its rows scroll off and back on",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "destructive", "scale", "ios", "android"],
+    "fixture": "scale",
+    "path": "mobile/flows/bulk-select.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "BULK-ACTIONS-001",
+    "title": "Native batch pin, unpin, retag, move, archive and remove change only the eligible links",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "destructive", "ios", "android"],
+    "fixture": "small",
+    "path": "mobile/flows/bulk-actions.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "BULK-TRASH-001",
+    "title": "Native Trash restores and permanently deletes a selection through the bulk confirmation",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "destructive", "ios", "android"],
+    "fixture": "small",
+    "path": "mobile/flows/bulk-trash.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "BULK-COPY-001",
+    "title": "Native Copy writes the selection's URLs to the system clipboard in display order without leaving bulk mode",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "ios", "android"],
+    "fixture": "small",
+    "path": "mobile/flows/bulk-copy.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "LOCK-APP-002",
+    "title": "The native app lock gates a cold start, rejects a wrong password, unlocks, and relocks from the menu",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "destructive", "ios", "android"],
+    "fixture": "small",
+    "path": "mobile/flows/lock-app.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "LOCK-LIST-001",
+    "title": "A native locked parent list keeps its descendants' links out of browse, search, tag views and the accessibility tree until the covering lock opens",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "destructive", "ios", "android"],
+    "fixture": "small",
+    "path": "mobile/flows/lock-list.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "LOCK-AUTORELOCK-001",
+    "title": "A native unlock survives a brief background and re-engages after the grace window",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "destructive", "ios", "android"],
+    "fixture": "small",
+    "path": "mobile/flows/lock-autorelock.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "LOCK-BIOMETRIC-RELEASE-001",
+    "title": "Real-iPhone biometric opt-in, success, cancel-to-password, disable, and enrolment changes",
+    "surface": "native",
+    "tier": "release",
+    "traits": ["online", "ios"],
+    "fixture": "small",
+    "path": "mobile/RELEASE.md",
+    "artifacts": ["manual-checklist"]
+  },
+  {
+    "id": "LOCK-BIOMETRIC-RELEASE-002",
+    "title": "Real-Android-device biometric opt-in, success, cancel-to-password, disable, and enrolment changes",
+    "surface": "native",
+    "tier": "release",
+    "traits": ["online", "android"],
+    "fixture": "small",
+    "path": "mobile/RELEASE.md",
+    "artifacts": ["manual-checklist"]
   },
   {
     "id": "NATIVE-DATA-001",

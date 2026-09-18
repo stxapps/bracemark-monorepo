@@ -156,6 +156,7 @@ export function ListCommand({
           `none`. The tap-outside exit is DialogContent's chrome tap plus
           `"handled"` here (docs/soft-keyboard.md, _dismissal_). */}
       <ScrollView
+        testID="list-picker-rows"
         className="max-h-80 shrink"
         nestedScrollEnabled
         keyboardShouldPersistTaps="handled"

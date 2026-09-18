@@ -1,0 +1,31 @@
+# Toggle one link row's bulk-edit selection. Pulled in with `runFlow`; never run
+# directly. Parameter: ROW — a regex fragment ending the row's name, e.g.
+# `.*example.invalid/path`.
+#
+# The row is scrolled toward the middle of the screen first. In bulk-edit mode
+# the bar takes the bottom of the screen, and a row the list has laid out under
+# it stays in the tree: measured on iOS, a row at y 840–927 beneath the bar
+# (744–840) took a tap that selected nothing (docs/e2e.md, _"visible" is not
+# "unobstructed"_). The name carries its optional tail because iOS does not
+# always expose the inner checkbox beside the pressable row.
+appId: com.bracemark.app
+---
+#
+# Up first, then down, because the row may be on either side of the viewport —
+# a pinned row sits above whatever the last action left in view, and a scroll
+# the wrong way only moves it further off. Either scroll returns at once for a
+# row already near the middle.
+- scrollUntilVisible:
+    element: 'Select ${ROW}(,.*)?'
+    direction: UP
+    centerElement: true
+    timeout: 8000
+    optional: true
+- scrollUntilVisible:
+    element: 'Select ${ROW}(,.*)?'
+    direction: DOWN
+    centerElement: true
+    timeout: 20000
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn: 'Select ${ROW}(,.*)?'

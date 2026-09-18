@@ -1,0 +1,64 @@
+# Reorder and reparent lists with real touch drags on Settings → Lists, then read
+# the order and the tree back after a cold start.
+#
+# THIS FILE IS THE FIRST STEP OF A RUNNER-DRIVEN CASE, not a whole journey. It
+# creates the three lists and stops on the table. runner/mobile.ts then reads the
+# hierarchy, measures the rows' grips, and has the device perform each drag as a
+# generated one-command flow (runner/hierarchy.ts, `writeDragFlow`), with the
+# assertions in `parts/taxonomy-dnd-reordered.yaml` and
+# `parts/taxonomy-dnd-nested.yaml` between and after them. The split is forced:
+# Maestro's `swipe` takes only literal coordinates, checked when the YAML is
+# parsed, and its element-anchored form ends at the screen edge — which on this
+# table lands in the auto-scroll band and drops nothing. Run it through the
+# runner; alone it only sets the stage.
+#
+# What only a device shows: the grip's long-press activation, the drag riding a
+# page ScrollView (settings/drag-sort.tsx), and the move landing in expo-sqlite
+# as one rank/parent write that survives a restart. The projection maths is the
+# shared, unit-tested `sync/tree-dnd.ts`.
+#
+# Parameters: LIST_A, LIST_B, LIST_C. The account is on Plus: the reparent is
+# the `nestedLists` lever, and a free drop routes to the paywall instead.
+appId: com.bracemark.app
+tags: [TAXONOMY-DND-002, full, online, destructive, ios, android]
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+- runFlow:
+    file: subflows/open-settings.yaml
+    env:
+      SECTION: lists
+# Every create lands at the top of the root group, so the table reads C, B, A.
+- runFlow:
+    file: subflows/settings-create.yaml
+    env:
+      NOUN: list
+      NAME: ${LIST_A}
+- runFlow:
+    file: subflows/settings-create.yaml
+    env:
+      NOUN: list
+      NAME: ${LIST_B}
+- runFlow:
+    file: subflows/settings-create.yaml
+    env:
+      NOUN: list
+      NAME: ${LIST_C}
+# Put the create row's keyboard away before the rows are measured: a drag's
+# pick-up dismisses it (drag-sort.tsx), and the page would move under a finger
+# placed against the old layout. iOS only, and not as a nicety — Android's
+# `hideKeyboard` is a BACK press that reaches the app whenever the IME is not
+# what answers it (docs/e2e.md, _what e2e may not assert_), and there the
+# keyboard sits below these rows anyway.
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - hideKeyboard
+- assertVisible:
+    text: ${LIST_B}
+    below: ${LIST_C}
+- assertVisible:
+    text: ${LIST_A}
+    below: ${LIST_B}
+- takeScreenshot: lists-before-drag

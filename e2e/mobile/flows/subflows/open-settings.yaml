@@ -1,0 +1,19 @@
+# Open one Settings section from the links screen. Pulled in with `runFlow`;
+# never run directly.
+#
+# Parameters (the caller's `runFlow: env:`): SECTION — a section id, as in
+# `settings-nav-<section>` (lists, tags, misc, data, account, …).
+#
+# The route is the one a person takes: the topbar's ⋯, Settings, then the
+# settings drawer. The links screen stays mounted under Settings, which is what
+# `settings-close` returns to (docs/search.md, _leaving the page and coming back_).
+appId: com.bracemark.app
+---
+- tapOn:
+    id: 'links-more-options'
+- tapOn:
+    id: 'links-open-settings'
+- tapOn:
+    id: 'settings-open-navigation'
+- tapOn:
+    id: 'settings-nav-${SECTION}'

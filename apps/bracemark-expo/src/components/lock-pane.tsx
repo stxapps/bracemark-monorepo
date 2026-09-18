@@ -32,6 +32,7 @@ export function LockPane({
   onUnlock,
   className,
   biometric,
+  testID,
 }: {
   title: string;
   description: string;
@@ -45,6 +46,9 @@ export function LockPane({
   // and resolves true when it opened the lock — the gate then unmounts. The
   // password field below is always the fallback (docs/locks.md).
   biometric?: { label: string; onUnlock: () => Promise<boolean> };
+  // The pane's root marker for the mobile flows. Each host passes its own
+  // (`app-lock-pane`, `list-lock-pane`): which gate is up is the assertion.
+  testID?: string;
 }) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -119,6 +123,7 @@ export function LockPane({
   // keyboard, and so does dragging the pane.
   return (
     <StyledKeyboardAwareScrollView
+      testID={testID}
       className={className}
       contentContainerClassName="grow items-center justify-center gap-4 px-6 py-8"
       keyboardShouldPersistTaps="handled"
@@ -148,6 +153,7 @@ export function LockPane({
         )}
         <View className="gap-2">
           <PasswordInput
+            testID="lock-pane-password"
             autoFocus={!biometric}
             placeholder={LOCK_COPY.passwordLabel}
             aria-label={LOCK_COPY.passwordLabel}
@@ -159,9 +165,9 @@ export function LockPane({
             }}
             onSubmitEditing={() => void submit()}
           />
-          {error && <ErrorText>{error}</ErrorText>}
+          {error && <ErrorText testID="lock-pane-error">{error}</ErrorText>}
         </View>
-        <Button onPress={() => void submit()} disabled={busy}>
+        <Button testID="lock-pane-unlock" onPress={() => void submit()} disabled={busy}>
           <Text>{busy ? LOCK_COPY.unlocking : LOCK_COPY.unlock}</Text>
         </Button>
       </View>

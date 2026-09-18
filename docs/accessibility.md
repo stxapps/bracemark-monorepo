@@ -300,7 +300,12 @@ A control with no accessible name is announced as its type and nothing else
   nothing_.
 - **`aria-label` where there is genuinely no text to keep** — icon-only controls,
   and the lock surfaces' password field, whose placeholder is not a label.
-  This is the bulk of expo's usage.
+  This is the bulk of expo's usage. RN also has no `<label for>`, so on expo a
+  field under a visible `<Text>` label repeats that label as its `aria-label`:
+  the advanced-search sheet's six word fields sat under their labels announced as
+  bare text fields until `WordField` passed its `label` through
+  (`features/links/search-bar.tsx`), while web's `FieldLabel htmlFor` had always
+  named them.
 - **Say what the row IS, not just its value.** `ShareRow` takes a `label` plus a
   `value` and announces "List: Reading" rather than "Reading". Dropping a word of
   chrome from a 520pt sheet is a visual decision and does not extend to dropping

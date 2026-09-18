@@ -156,7 +156,7 @@ export function MoreOptionsMenu() {
             </View>
           </DropdownMenuItem>
         )}
-        <DropdownMenuItem onPress={enterBulkEdit}>
+        <DropdownMenuItem testID="links-select-links" onPress={enterBulkEdit}>
           <Icon as={SquareCheckBig} className="size-4" />
           <Text>Select links</Text>
         </DropdownMenuItem>
@@ -174,7 +174,7 @@ export function MoreOptionsMenu() {
             drawer, is its home). AppLockGate closes on the spot. Web parity:
             MoreOptionsMenu's "Lock app". */}
         {appLock.exists && appLock.unlocked && (
-          <DropdownMenuItem onPress={lockApp}>
+          <DropdownMenuItem testID="links-lock-app" onPress={lockApp}>
             <Icon as={Lock} className="size-4" />
             <Text>Lock app</Text>
           </DropdownMenuItem>

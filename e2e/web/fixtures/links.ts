@@ -60,8 +60,9 @@ export async function chooseRowMenuItem(page: Page, url: string, item: string): 
 // reload, so a spec that uses it is still asserting on the mounted page. Names
 // are exact because namespaced fixture names can share a prefix; `aria-current`
 // is the settled state, since the rows below repaint a beat after the click.
+// Scoped to the rail's `nav`: a row's tag chips are buttons named by the tag too.
 export async function openSidebarItem(page: Page, name: string): Promise<void> {
-  const item = page.getByRole('button', { name, exact: true });
+  const item = page.getByRole('navigation').getByRole('button', { name, exact: true });
   await item.click();
   await expect(item).toHaveAttribute('aria-current', 'true');
 }

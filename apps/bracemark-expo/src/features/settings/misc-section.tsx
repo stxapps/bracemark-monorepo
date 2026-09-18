@@ -402,7 +402,11 @@ export function MiscSection() {
           {appLock.exists ? (
             // Remove stays open even for a free (downgraded) account, so an
             // existing lock is never stranded — mirrors list unlock/remove.
-            <Button variant="outline" onPress={() => setLockDialog('remove')}>
+            <Button
+              variant="outline"
+              testID="app-lock-remove"
+              onPress={() => setLockDialog('remove')}
+            >
               <Text>Remove app lock…</Text>
             </Button>
           ) : (
@@ -410,6 +414,7 @@ export function MiscSection() {
             // before any password dialog (nothing sensitive is typed then thrown).
             <Button
               variant="outline"
+              testID="app-lock-set"
               onPress={() => (entitlements.locks ? setLockDialog('set') : paywall.show('locks'))}
             >
               <Text>Set app lock…</Text>

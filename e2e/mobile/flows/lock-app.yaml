@@ -1,0 +1,114 @@
+# Set the app lock in Settings, cold-start into its gate, refuse a wrong password,
+# open with the real one, then relock from the topbar menu without a restart.
+#
+# What only a device shows: the verifier row in expo-sqlite, the gate winning the
+# cold start (AppLockGate renders nothing while `checking`, then the pane — never
+# the links screen first), quick-crypto's PBKDF2 behind the unlock, and the
+# in-memory unlock dropped by "Lock app" (docs/locks.md). The links screen and the
+# anchor link are asserted absent from the accessibility tree while locked.
+#
+#   maestro test mobile/flows/lock-app.yaml -e USERNAME=… -e PASSWORD=… \
+#     -e ANCHOR_URL=… -e LOCK_PASSWORD=…
+#
+# The account is on Plus: setting a lock is the `locks` lever.
+appId: com.bracemark.app
+tags: [LOCK-APP-002, full, online, destructive, ios, android]
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+- runFlow:
+    file: subflows/add-link.yaml
+    env:
+      URL: ${ANCHOR_URL}
+
+# --- set it ---------------------------------------------------------------------------
+- runFlow:
+    file: subflows/open-settings.yaml
+    env:
+      SECTION: misc
+# Not `centerElement`: the button ends the page, which cannot scroll it to the
+# middle, and nothing is pinned over the bottom of Settings.
+- scrollUntilVisible:
+    element:
+      id: 'app-lock-set'
+    direction: DOWN
+- tapOn:
+    id: 'app-lock-set'
+- tapOn:
+    id: 'lock-dialog-password'
+- inputText: ${LOCK_PASSWORD}
+- tapOn:
+    id: 'lock-dialog-submit'
+- extendedWaitUntil:
+    visible:
+      id: 'app-lock-remove'
+    timeout: 20000
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - tapOn:
+          text: 'Not Now'
+          optional: true
+# Setting it does not slam the gate shut on the spot; it engages next launch.
+- tapOn:
+    id: 'settings-close'
+- extendedWaitUntil:
+    visible: ".*${ANCHOR_URL.replace('https://', '')}.*"
+    timeout: 10000
+
+# --- a cold start: the gate, and nothing behind it ----------------------------------------
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible:
+      id: 'app-lock-pane'
+    timeout: 30000
+- assertNotVisible:
+    id: 'links-screen'
+- assertNotVisible: ".*${ANCHOR_URL.replace('https://', '')}.*"
+- takeScreenshot: app-lock-after-cold-start
+
+- runFlow:
+    file: subflows/unlock-pane.yaml
+    env:
+      PASSWORD: '${LOCK_PASSWORD}-wrong'
+- extendedWaitUntil:
+    visible:
+      id: 'lock-pane-error'
+    timeout: 20000
+- assertVisible:
+    id: 'app-lock-pane'
+- assertNotVisible:
+    id: 'links-screen'
+
+- runFlow:
+    file: subflows/unlock-pane.yaml
+    env:
+      PASSWORD: ${LOCK_PASSWORD}
+- extendedWaitUntil:
+    visible: ".*${ANCHOR_URL.replace('https://', '')}.*"
+    timeout: 20000
+- assertNotVisible:
+    id: 'app-lock-pane'
+
+# --- relock by hand ---------------------------------------------------------------------------
+- tapOn:
+    id: 'links-more-options'
+- tapOn:
+    id: 'links-lock-app'
+- extendedWaitUntil:
+    visible:
+      id: 'app-lock-pane'
+    timeout: 10000
+- assertNotVisible:
+    id: 'links-screen'
+- assertNotVisible: ".*${ANCHOR_URL.replace('https://', '')}.*"
+- takeScreenshot: app-lock-after-manual-relock
+- runFlow:
+    file: subflows/unlock-pane.yaml
+    env:
+      PASSWORD: ${LOCK_PASSWORD}
+- extendedWaitUntil:
+    visible: ".*${ANCHOR_URL.replace('https://', '')}.*"
+    timeout: 20000

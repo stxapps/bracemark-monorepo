@@ -293,6 +293,19 @@ proceeds behind it. Its `'checking'` phase (the first locks read) renders
 **nothing** — the same no-flash guarantee as the sync gate: a device with no app
 lock must never flash a lock screen, and a locked one must never flash the app.
 
+**On bracemark-expo a relock hides the app; it does not unmount it.** The gate
+sits inside the `(app)` route with that group's `Stack` as its child, and "Lock
+app" and the background auto-relock both engage it while that navigator is live.
+Swapping it out there and back in on unlock left a navigator with no screen — a
+blank app on iOS and Android, found by `LOCK-APP-002` — so once the app has been
+shown, the gate keeps its subtree mounted inside a `display: none` wrapper while
+the pane is up. That is not painted and is dropped from the accessibility tree on
+both platforms, which is the absence the swap gave; the links stay in memory,
+which the threat model above already concedes. A cold start is unchanged — the
+app is not mounted before the first unlock — and `app-lock-gate.spec.tsx` pins
+both halves. Web keeps the plain swap, and its menu relock followed by an unlock
+lands back on the page it left (`LOCK-APP-001`).
+
 ### web / expo parity
 
 The providers are mirrored; the shared coverage math and verifier parameters keep

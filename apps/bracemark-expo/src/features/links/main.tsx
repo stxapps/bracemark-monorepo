@@ -171,6 +171,7 @@ export function Main() {
     return (
       <View className="min-h-0 flex-1">
         <LockPane
+          testID="list-lock-pane"
           className="flex-1"
           title={LOCK_COPY.list.title}
           description={LOCK_COPY.list.description}

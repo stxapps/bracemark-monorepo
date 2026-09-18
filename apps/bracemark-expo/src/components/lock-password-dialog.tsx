@@ -86,6 +86,7 @@ export function LockPasswordDialog({
         <View className="gap-4">
           <View className="gap-2">
             <PasswordInput
+              testID="lock-dialog-password"
               autoFocus
               placeholder="Password"
               aria-label="Password"
@@ -97,11 +98,12 @@ export function LockPasswordDialog({
               }}
               onSubmitEditing={() => void submit()}
             />
-            {error && <ErrorText>{error}</ErrorText>}
+            {error && <ErrorText testID="lock-dialog-error">{error}</ErrorText>}
           </View>
 
           {checkboxLabel && (
             <Pressable
+              testID="lock-dialog-checkbox"
               role="checkbox"
               aria-checked={checked}
               className="flex-row items-center gap-2"
@@ -116,7 +118,7 @@ export function LockPasswordDialog({
             <Button variant="outline" onPress={() => onOpenChange(false)}>
               <Text>Cancel</Text>
             </Button>
-            <Button onPress={() => void submit()} disabled={busy}>
+            <Button testID="lock-dialog-submit" onPress={() => void submit()} disabled={busy}>
               <Text>{busy ? `${submitLabel}…` : submitLabel}</Text>
             </Button>
           </DialogFooter>

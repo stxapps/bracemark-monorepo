@@ -1,0 +1,27 @@
+# Type a password into the lock pane that is up and submit it. Pulled in with
+# `runFlow`; never run directly. Parameter: PASSWORD.
+#
+# Submitted with the keyboard's return key (the field's `onSubmitEditing` runs the
+# same submit as the button), not a tap on Unlock: a locked LIST's pane sits below
+# the topbar, the search row and the previews prompt, and measured on iOS its
+# Unlock button (y 536–576) was under the keyboard (from 539), so the tap went to
+# the keyboard and the password was never submitted.
+#
+# The field is emptied first and read back empty-by-placeholder, because a
+# rejected attempt leaves its text in place and `eraseText` deletes backwards from
+# the caret (recovery-sign-in.yaml). Then the iOS "Save Password?" sheet, which a
+# submitted secure field can raise over the app, is waved off if it comes.
+appId: com.bracemark.app
+---
+- tapOn:
+    id: 'lock-pane-password'
+- eraseText: 100
+- inputText: ${PASSWORD}
+- pressKey: Enter
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - tapOn:
+          text: 'Not Now'
+          optional: true

@@ -39,14 +39,14 @@ not itself completeness.
 Present in the tree today; this table is an inventory, not a claim that every row
 has just passed on every platform.
 
-| Surface           | Current coverage                                                                                                                                                                                                                     |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Web               | Ten Playwright cases: session reload, sign-out teardown, delete account, one-link persistence, two mounted writes, editor round trip, dirty-editor close guard, link lifecycle, list creation round trip, mounted delete-all repaint |
-| Native            | Eight Maestro flows: password sign-in/cold start, recovery sign-in, delete account/cold start, two mounted link inserts, editor round trip/cold start, dirty-editor close guard, link lifecycle, mounted delete-all repaint          |
-| Contract          | Frozen device vectors plus web to mobile and mobile to web encrypted round trips                                                                                                                                                     |
-| Browser extension | Nine Playwright cases: profile auth, save/saved/restore/boundary states, two-way sync, live extraction, and MV3 worker restart                                                                                                       |
-| PWA               | Unit/component coverage around registration and navigation; no production-build offline E2E target                                                                                                                                   |
-| Automation        | No CI workflow currently runs these targets                                                                                                                                                                                          |
+| Surface           | Current coverage                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Web               | Twenty-three Playwright cases: session reload, sign-out teardown, delete account, one-link persistence, two mounted writes, editor round trip, dirty-editor close guard, link lifecycle, list creation round trip, live picker taxonomy, pointer drag reorder/reparent, filtered views, hidden/locked destinations, text search, advanced search restore, scroll reset, bulk selection, bulk actions, bulk Trash, bulk copy, app lock, covering list lock, mounted delete-all repaint |
+| Native            | Twenty Maestro flows: password sign-in/cold start, recovery sign-in, delete account/cold start, two mounted link inserts, editor round trip/cold start, dirty-editor close guard, link lifecycle, settings-to-picker taxonomy, touch drag reorder/reparent, filtered views, text search, advanced search round trip, bulk selection recycling, bulk actions, bulk Trash, bulk copy, app lock/relock, covering list lock, auto-relock window, mounted delete-all repaint               |
+| Contract          | Frozen device vectors plus web to mobile and mobile to web encrypted round trips                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Browser extension | Nine Playwright cases: profile auth, save/saved/restore/boundary states, two-way sync, live extraction, and MV3 worker restart                                                                                                                                                                                                                                                                                                                                                        |
+| PWA               | Unit/component coverage around registration and navigation; no production-build offline E2E target                                                                                                                                                                                                                                                                                                                                                                                    |
+| Automation        | No CI workflow currently runs these targets                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 
 Before adding broad new coverage, capture a fresh result for every existing case:
 
@@ -241,60 +241,60 @@ below E2E.
 
 ### Lists, tags, filters, and search
 
-- [ ] `WEB-TAXONOMY-001` Existing: a list created in Settings appears in the links
+- [x] `WEB-TAXONOMY-001` Existing: a list created in Settings appears in the links
       sidebar.
-- [ ] `TAXONOMY-EDITOR-001` Web: create and rename one list and tag; verify editor
+- [x] `TAXONOMY-EDITOR-001` Web: create and rename one list and tag; verify editor
       pickers immediately see them.
-- [ ] `TAXONOMY-EDITOR-002` Native: repeat the cross-surface read on iOS and
+- [x] `TAXONOMY-EDITOR-002` Native: repeat the cross-surface read on iOS and
       Android.
-- [ ] `TAXONOMY-DND-001` Web: perform one sibling reorder and one list reparent
+- [x] `TAXONOMY-DND-001` Web: perform one sibling reorder and one list reparent
       with real pointer drag-and-drop; verify order/tree after reload.
-- [ ] `TAXONOMY-DND-002` Native: perform the corresponding real touch gestures on
+- [x] `TAXONOMY-DND-002` Native: perform the corresponding real touch gestures on
       iOS and Android; verify order/tree after cold restart.
-- [ ] `FILTER-001` Web and native: choose a user list, a tag, Show All, Archive,
+- [x] `FILTER-001` Web and native: choose a user list, a tag, Show All, Archive,
       and Trash and assert a deterministic member/non-member pair in each view.
-- [ ] `FILTER-HIDDEN-LOCKED-001` Prove hidden/locked lists remain valid editor
+- [x] `FILTER-HIDDEN-LOCKED-001` Prove hidden/locked lists remain valid editor
       destinations while their contents remain absent from unauthorized reads.
-- [ ] `SEARCH-001` Web and native: commit a text search, clear it, and verify the
+- [x] `SEARCH-001` Web and native: commit a text search, clear it, and verify the
       URL/route and visible result set agree.
-- [ ] `SEARCH-002` Web and native: commit representative advanced list/tag/text
+- [x] `SEARCH-002` Web and native: commit representative advanced list/tag/text
       clauses, leave the page, and restore the search through history/navigation.
-- [ ] `SEARCH-SCROLL-001` After paging and scrolling one view, change query/sort
+- [x] `SEARCH-SCROLL-001` After paging and scrolling one view, change query/sort
       and prove the new view starts at its top rather than inheriting the old
       offset.
 
 ### Bulk editing
 
-- [ ] `BULK-001` Web: select links, extend a range, Select all, and prove selection
+- [x] `BULK-001` Web: select links, extend a range, Select all, and prove selection
       survives virtualization while the view remains fixed.
-- [ ] `BULK-002` Native: select multiple links, scroll them off/on screen, and
+- [x] `BULK-002` Native: select multiple links, scroll them off/on screen, and
       prove selection survives FlashList recycling on iOS and Android.
-- [ ] `BULK-ACTIONS-001` Web and native: batch move, retag, archive/remove, and
+- [x] `BULK-ACTIONS-001` Web and native: batch move, retag, archive/remove, and
       pin/unpin representative mixed-state links; assert only eligible rows
       change.
-- [ ] `BULK-TRASH-001` Web and native: restore and permanently delete from Trash
+- [x] `BULK-TRASH-001` Web and native: restore and permanently delete from Trash
       through the bulk confirmation path.
-- [ ] `BULK-COPY-001` Web and native: copy ordered URLs without leaving bulk mode.
+- [x] `BULK-COPY-001` Web and native: copy ordered URLs without leaving bulk mode.
       Clipboard formatting remains unit-tested; E2E proves platform permission and
       feedback.
 
 ### Locks
 
-- [ ] `LOCK-APP-001` Web: configure an app lock, reload, prove no app content
+- [x] `LOCK-APP-001` Web: configure an app lock, reload, prove no app content
       flashes, reject a wrong password, and unlock with the real password.
-- [ ] `LOCK-APP-002` Native: configure, cold-start, reject/unlock, and manually
+- [x] `LOCK-APP-002` Native: configure, cold-start, reject/unlock, and manually
       relock on iOS and Android.
-- [ ] `LOCK-LIST-001` Web and native: lock a parent list, prove descendant content
+- [x] `LOCK-LIST-001` Web and native: lock a parent list, prove descendant content
       is absent from browse/search/tag views and from the DOM/accessibility tree,
       then unlock through the covering lock.
-- [ ] `LOCK-AUTORELOCK-001` Native: unlock, background beyond the grace period,
+- [x] `LOCK-AUTORELOCK-001` Native: unlock, background beyond the grace period,
       foreground, and prove the lock re-engages; separately prove a brief
       background does not relock.
 - [ ] `LOCK-BIOMETRIC-RELEASE-001` On a real iPhone with enrolled biometry, verify
       opt-in, success, cancel-to-password fallback, disable, and re-enrollment or
       unavailable behavior.
 - [ ] `LOCK-BIOMETRIC-RELEASE-002` Repeat the supported biometric path on a real
-      Android device.
+      Android device. Both biometric checklists: `e2e/mobile/RELEASE.md`.
 
 ## Phase 4 — cross-client sync and viewport behavior
 

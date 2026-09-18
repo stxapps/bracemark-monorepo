@@ -323,12 +323,17 @@ accessible identity is untestable as well as inaccessible. Flows bind to `testID
 and accessible labels, **never to body copy** — copy in this repo changes often,
 and a flow keyed to a sentence turns every wording edit into a red run.
 
-Six repo-specific gotchas:
+Seventeen repo-specific gotchas:
 
 - **`launchApp` resumes, it does not cold-start.** Every flow that assumes a root
   screen needs its state wiped first, or it passes alone and fails in a directory
   run because the previous flow left the app deep in a navigation stack. That
   failure looks exactly like Maestro's batch-mode driver bug and is not one.
+- **…though "resumes" means the STORED state, not the process.** A bare
+  `launchApp` on an app that is already running stops it first. Measured on both
+  platforms by `LOCK-AUTORELOCK-001`: Home then `launchApp` relocked the app after
+  a few seconds away, because the in-memory unlock went with the process. A flow
+  that means "bring it back to the foreground" says `launchApp: stopApp: false`.
 - **…but `clearState: true` wipes expo-dev-client's state too**, which is why the
   wipe goes through `flows/subflows/cold-launch.yaml` rather than `launchApp`.
   `clearState` is `pm clear`: it takes the dev launcher's
@@ -390,9 +395,93 @@ Six repo-specific gotchas:
   expression instead, `${NAME || 'default'}`: an unset variable is `undefined`,
   not an error. `flows/subflows/cold-launch.yaml` does this for
   `EXPO_DEV_CLIENT_LINK`; every other parameter is required.
+- **…and an EMPTY `runFlow: env:` value arrives as `undefined`, not `''`.**
+  `flows/subflows/add-link-filed.yaml` takes `LIST: ''` to mean "leave the default",
+  and its first guard, `${LIST !== ''}`, was true for the empty value: the branch
+  ran and a link the case needed tag-less was tagged, which surfaced three screens
+  later as a search result that should not have matched. Guards on optional
+  parameters test truthiness (`${!!LIST}`).
+- **iOS keeps checkbox state in the accessibility VALUE, where `checked:` does not
+  look.** RN maps `aria-checked` to Android's `checked` attribute, which Maestro's
+  `checked: true` reads, and on iOS to the value "checkbox, checked", which it
+  does not — the selector fails on a row that is plainly checked.
+  `flows/subflows/assert-selection.yaml` asserts `checked` on Android and copies
+  the value off the named node on iOS.
+- **A composite row name is not an inventory.** A link row's accessible name
+  folds in its first tag chip and then "Show 1 more tag", not the second tag, so
+  tags past the first are read through the tag views
+  (`flows/bulk-actions.yaml`). And on iOS the tree does not always carry the row's
+  inner checkbox ("Select <url>") beside the pressable row ("Select <url>, <monogram>,
+  <url>, <host>"): the flows match the name with its optional tail,
+  `Select .*<url>(,.*)?`.
+- **"Visible" is not "unobstructed".** A scroller's rows stay in the tree under a
+  pinned footer or header, count as visible, and take a tap that lands on the bar
+  instead — reported COMPLETED, changing nothing. Measured in the advanced-search
+  sheet: the Tags row at y 800–836 under the footer at 794–830. Scroll such a row
+  with `scrollUntilVisible: centerElement: true` before pressing it
+  (`flows/search-advanced.yaml`); the one field that cannot be centred, the first,
+  is filled before anything scrolls.
+- **Maestro's text regex is case-insensitive.** `.*<url>.*Pinned.*` matched a url
+  whose slug said "bulk-pinned-first" before any pin existed, and every pin wait in
+  the flow passed on it. Anchor on what only the state adds — `, Pinned` with its
+  comma — and keep state words out of fixture slugs.
+- **An open menu or dialog empties iOS's tree, so `assertNotVisible` passes.**
+  `@rn-primitives`' portals are `accessibilityViewIsModal`, which hides every other
+  node from XCUITest while they are up. A menu item whose tap did not register
+  left its menu open, and the two "this row is no longer pinned" assertions after
+  it passed against a tree with no rows in it. After a menu or dialog action, wait
+  for something the screen always shows (`links-more-options`) before asserting
+  absence, and assert the selection count before acting on a selection.
+- **The "links without a preview" prompt covers the middle of the links screen.**
+  Every `.invalid` link lacks a preview, so the prompt is up in these flows, and it
+  holds the upper half of the screen over the list — where `centerElement` parks a
+  row. `flows/bulk-actions.yaml` dismisses it before selecting rows.
+- **Android 13+ floats its clipboard preview over the bottom-left corner.** After
+  a copy, a tap on the bulk bar's ✕ opened the system clipboard editor ("From
+  Bracemark") instead of leaving the mode. `flows/bulk-copy.yaml` leaves the mode
+  with the hardware back press there.
+- **A press made while a surface is still leaving is swallowed.** A row's ⋯
+  pressed as soon as the add panel dropped out of the tree opened no menu on iOS,
+  so `flows/subflows/add-link.yaml` waits for the saved row and for animations to
+  end before handing the screen back.
+- **A Maestro tap on the Pixel 8 AVD returns about six seconds after it presses.**
+  Feedback shorter than that — bulk Copy's 1.5s "Copied" — has reverted before any
+  assertion can run, so `flows/bulk-copy.yaml` asserts it on iOS only and proves
+  the clipboard write on both through the system Paste.
 - **Maestro's `PATH` entry is in `.zshenv`, not `.zshrc`.** `runner/lib.ts` falls
   back to `~/.maestro/bin/maestro` anyway, so a shell that lost it gets a working
   run instead of `ENOENT`.
+
+#### gestures and waits the runner performs
+
+Two native cases need something between flows that no flow can express, so a
+case may be a sequence of steps (`CaseStep` in `runner/native-run.ts`): its
+registered flow first, then committed part flows in `mobile/flows/parts/` — outside
+the directory glob, since each assumes the state the previous step left — and
+host-side steps between them. Every assertion stays in a committed flow; a host
+step only measures, waits, or synthesizes a gesture, and the flows it generates
+are written under the case's artifacts so the exact gesture is on record.
+
+- **A touch drag measured off the screen** (`TAXONOMY-DND-002`). A native settings
+  row lifts on a long press of its grip (gesture-handler `activateAfterLongPress`,
+  200ms — `settings/drag-sort.tsx`). Maestro's `swipe` presses and moves at once,
+  so the finger has to stay inside the touch slop for that long: measured on the
+  Pixel 8 AVD, 3s and 6s swipes over ~250px never lifted the row and 15s did; the
+  iPhone 17 Pro simulator lifted at 3s and still does at 15s. A swipe also takes
+  only literal coordinates, validated when the YAML is parsed (`${…}` and
+  percentages with variables both fail to parse), and its element-anchored form
+  ends at 10% from the screen edge — inside the table's auto-scroll band, where the
+  drop never lands. So `runner/hierarchy.ts` reads `maestro hierarchy`, finds the
+  grip on the same row as the named rename field, and writes a one-command
+  15-second swipe in the driver's own units (points on iOS, pixels on Android). A
+  reorder is a vertical drag onto the target row's centre; a reparent is a purely
+  horizontal drag two grips wide, which keeps the slot and projects the row one
+  level under the row above.
+- **Real time as the stimulus** (`LOCK-AUTORELOCK-001`). expo's lock provider
+  relocks after 60s in the background, and there is no settled state to poll while
+  the app is away and no simulator clock to advance. The runner waits 75s between
+  the flow that backgrounds the app and the part that foregrounds it — rather than
+  a flow spelling a minute as an assertion expected to fail.
 
 #### accounts for a mobile run
 
@@ -402,6 +491,16 @@ create-account flow would be a second copy of a form jest already covers. So
 flow** and hands the credentials to `maestro test` as `-e` parameters. Accounts
 are not shared across flows: a destructive or failed case cannot change the
 starting state of the next case.
+
+Two things are done to that account before the device signs in, while the
+browser that created it is still open (`provisionAccount`'s `prepare`). A case
+whose subject is a Plus lever — nesting, the search editor, locks — gets the
+existing `manual` grant (`web/fixtures/plan.ts` over `seed/plan.ts`), so the
+device's sign-in reads the entitlement; the web specs take the same grant. And a
+`scale` case gets its paged library imported through Settings → Data and synced
+(`web/fixtures/library.ts`), so the device pulls it on sign-in. The grant goes
+through `wrangler d1 execute --local`, which retries `SQLITE_BUSY` and nothing else:
+parallel web workers granting at once contend for the one local SQLite file.
 
 That is not a shortcut around native key derivation — signing in on the device
 runs the full Argon2id + HKDF path there, which is the thing under test. It is
@@ -448,61 +547,81 @@ a missing element rather than as anything that names the cause.
 
 All of them are in the app:
 
-| testID                      | where                                                                      |
-| --------------------------- | -------------------------------------------------------------------------- |
-| `sign-in-username`          | `src/features/auth/sign-in-form.tsx`                                       |
-| `sign-in-password`          | `src/features/auth/sign-in-form.tsx`                                       |
-| `sign-in-submit`            | `src/features/auth/sign-in-form.tsx`                                       |
-| `sign-in-error`             | ” — the submit-level `root` error                                          |
-| `sign-in-use-recovery`      | ” — the toggle into the recovery door                                      |
-| `sign-in-recovery-username` | ” — `RecoverySignIn`                                                       |
-| `sign-in-recovery-code`     | ” — `RecoverySignIn`                                                       |
-| `sign-in-recovery-submit`   | ” — `RecoverySignIn`                                                       |
-| `sign-in-recovery-error`    | ” — `RecoverySignIn`                                                       |
-| `sign-in-use-password`      | ” — the toggle back out                                                    |
-| `links-screen`              | `src/app/(app)/links/index.tsx` (a root marker)                            |
-| `links-open-navigation`     | `src/features/links/topbar.tsx`                                            |
-| `links-nav-list-<id>`       | `src/features/links/sidebar.tsx` — a drawer row                            |
-| `links-nav-tag-<id>`        | ” — the tag rows                                                           |
-| `links-nav-all`             | ” — Show All                                                               |
-| `links-more-options`        | `src/features/links/more-options-menu.tsx`                                 |
-| `links-open-settings`       | ” — the Settings menu item                                                 |
-| `add-link-url`              | `src/features/links/link-add-panel.tsx`                                    |
-| `add-link-save`             | ” — the submit, whose label flips Save→Confirm                             |
-| `add-link-optional`         | ” — the "List, tags & note" disclosure                                     |
-| `add-link-list`             | ” — the optional fields, each named like its label                         |
-| `add-link-tags`             | ”                                                                          |
-| `add-link-note`             | ”                                                                          |
-| `add-link-cancel`           | ” — the explicit discard                                                   |
-| `edit-link-title`           | `src/features/links/link-edit-screen.tsx`                                  |
-| `edit-link-list`            | ”                                                                          |
-| `edit-link-tags`            | ”                                                                          |
-| `edit-link-note`            | ”                                                                          |
-| `edit-link-save`            | ”                                                                          |
-| `edit-link-cancel`          | ” — the explicit discard                                                   |
-| `list-picker-search`        | `src/components/links/list-command.tsx`                                    |
-| `list-picker-create`        | ” — the Create row                                                         |
-| `tag-picker-search`         | `src/components/links/tags-command.tsx`                                    |
-| `tag-picker-create`         | ” — the Create row                                                         |
-| `tag-picker-rows`           | ” — the rows' scroller, for `childOf`                                      |
-| `tag-picker-done`           | `src/components/links/tags-field.tsx`                                      |
-| `link-options`              | `src/features/links/link-row-menu.tsx` — a row's ⋯                         |
-| `link-menu-<action>`        | ” — `edit` `pin` `unpin` `archive` `unarchive` `remove` `restore` `delete` |
-| `link-destroy-submit`       | `src/features/links/link-destroy-confirm.tsx`                              |
-| `settings-open-navigation`  | `src/features/settings/topbar.tsx`                                         |
-| `settings-close`            | ” — returns to the links route                                             |
-| `settings-nav-<section>`    | `src/features/settings/sidebar.tsx`                                        |
-| `delete-all-open`           | `src/features/settings/data-section.tsx`                                   |
-| `delete-all-confirm`        | ” — the confirmation checkbox row                                          |
-| `delete-all-submit`         | ” — the destructive action                                                 |
-| `delete-all-complete`       | ” — renders only after a successful wipe                                   |
-| `delete-account-open`       | `src/features/settings/account-section.tsx`                                |
-| `delete-account-password`   | ” — the fresh-proof password re-entry                                      |
-| `delete-account-confirm`    | ” — the confirmation checkbox row                                          |
-| `delete-account-submit`     | ” — the destructive action                                                 |
-| `contract-vectors-pass`     | `src/app/contract-vectors.tsx` (dev-only)                                  |
-| `contract-vectors-fail`     | ” — carries the failing check names in its text                            |
-| `vector-<check>`            | ” — one per vector, `PASS`/`FAIL`/`RUNNING`                                |
+| testID                      | where                                                                               |
+| --------------------------- | ----------------------------------------------------------------------------------- |
+| `sign-in-username`          | `src/features/auth/sign-in-form.tsx`                                                |
+| `sign-in-password`          | `src/features/auth/sign-in-form.tsx`                                                |
+| `sign-in-submit`            | `src/features/auth/sign-in-form.tsx`                                                |
+| `sign-in-error`             | ” — the submit-level `root` error                                                   |
+| `sign-in-use-recovery`      | ” — the toggle into the recovery door                                               |
+| `sign-in-recovery-username` | ” — `RecoverySignIn`                                                                |
+| `sign-in-recovery-code`     | ” — `RecoverySignIn`                                                                |
+| `sign-in-recovery-submit`   | ” — `RecoverySignIn`                                                                |
+| `sign-in-recovery-error`    | ” — `RecoverySignIn`                                                                |
+| `sign-in-use-password`      | ” — the toggle back out                                                             |
+| `links-screen`              | `src/app/(app)/links/index.tsx` (a root marker)                                     |
+| `links-open-navigation`     | `src/features/links/topbar.tsx`                                                     |
+| `links-nav-list-<id>`       | `src/features/links/sidebar.tsx` — a drawer row                                     |
+| `links-nav-tag-<id>`        | ” — the tag rows                                                                    |
+| `links-nav-all`             | ” — Show All                                                                        |
+| `links-more-options`        | `src/features/links/more-options-menu.tsx`                                          |
+| `links-open-settings`       | ” — the Settings menu item                                                          |
+| `add-link-url`              | `src/features/links/link-add-panel.tsx`                                             |
+| `add-link-save`             | ” — the submit, whose label flips Save→Confirm                                      |
+| `add-link-optional`         | ” — the "List, tags & note" disclosure                                              |
+| `add-link-list`             | ” — the optional fields, each named like its label                                  |
+| `add-link-tags`             | ”                                                                                   |
+| `add-link-note`             | ”                                                                                   |
+| `add-link-cancel`           | ” — the explicit discard                                                            |
+| `edit-link-title`           | `src/features/links/link-edit-screen.tsx`                                           |
+| `edit-link-list`            | ”                                                                                   |
+| `edit-link-tags`            | ”                                                                                   |
+| `edit-link-note`            | ”                                                                                   |
+| `edit-link-save`            | ”                                                                                   |
+| `edit-link-cancel`          | ” — the explicit discard                                                            |
+| `list-picker-search`        | `src/components/links/list-command.tsx`                                             |
+| `list-picker-create`        | ” — the Create row                                                                  |
+| `tag-picker-search`         | `src/components/links/tags-command.tsx`                                             |
+| `tag-picker-create`         | ” — the Create row                                                                  |
+| `tag-picker-rows`           | ” — the rows' scroller, for `childOf`                                               |
+| `tag-picker-done`           | `src/components/links/tags-field.tsx`                                               |
+| `link-options`              | `src/features/links/link-row-menu.tsx` — a row's ⋯                                  |
+| `link-menu-<action>`        | ” — `edit` `pin` `unpin` `archive` `unarchive` `remove` `restore` `delete`          |
+| `link-destroy-submit`       | `src/features/links/link-destroy-confirm.tsx`                                       |
+| `links-title`               | `src/features/links/topbar.tsx` — the view the route projects                       |
+| `links-search-toggle`       | ” — summons the search row                                                          |
+| `links-search-input`        | `src/features/links/search-bar.tsx`                                                 |
+| `links-search-clear`        | ”                                                                                   |
+| `links-search-advanced`     | ” — opens the advanced sheet                                                        |
+| `advanced-search-<field>`   | ” — `text-all` `text-any` `text-none` `url` `title` `note`                          |
+| `advanced-search-submit`    | ” — also `-clear`, `-close`                                                         |
+| `links-select-links`        | `src/features/links/more-options-menu.tsx` — enters bulk edit                       |
+| `links-lock-app`            | ” — relocks the app                                                                 |
+| `bulk-count`                | `src/features/links/bulk-edit-bar.tsx`                                              |
+| `bulk-<action>`             | ” — `exit` `select-all` `copy` `move` `more` `remove` `restore` `delete`            |
+| `bulk-menu-<action>`        | ” — `edit-tags` `pin` `unpin` `archive` `unarchive`                                 |
+| `bulk-tags-save`            | `src/features/links/bulk-tags-dialog.tsx`                                           |
+| `list-picker-rows`          | `src/components/links/list-command.tsx` — the rows' scroller, for `childOf`         |
+| `list-menu-<action>`        | `src/features/settings/lists-section.tsx` — `move-to` `lock` `unlock` `remove-lock` |
+| `app-lock-set`              | `src/features/settings/misc-section.tsx` — also `app-lock-remove`                   |
+| `lock-dialog-<part>`        | `src/components/lock-password-dialog.tsx` — `password` `checkbox` `submit` `error`  |
+| `app-lock-pane`             | `src/components/app-lock-gate.tsx` — the gate is up                                 |
+| `list-lock-pane`            | `src/features/links/main.tsx` — a locked list's pane is up                          |
+| `lock-pane-<part>`          | `src/components/lock-pane.tsx` — `password` `unlock` `error`                        |
+| `settings-open-navigation`  | `src/features/settings/topbar.tsx`                                                  |
+| `settings-close`            | ” — returns to the links route                                                      |
+| `settings-nav-<section>`    | `src/features/settings/sidebar.tsx`                                                 |
+| `delete-all-open`           | `src/features/settings/data-section.tsx`                                            |
+| `delete-all-confirm`        | ” — the confirmation checkbox row                                                   |
+| `delete-all-submit`         | ” — the destructive action                                                          |
+| `delete-all-complete`       | ” — renders only after a successful wipe                                            |
+| `delete-account-open`       | `src/features/settings/account-section.tsx`                                         |
+| `delete-account-password`   | ” — the fresh-proof password re-entry                                               |
+| `delete-account-confirm`    | ” — the confirmation checkbox row                                                   |
+| `delete-account-submit`     | ” — the destructive action                                                          |
+| `contract-vectors-pass`     | `src/app/contract-vectors.tsx` (dev-only)                                           |
+| `contract-vectors-fail`     | ” — carries the failing check names in its text                                     |
+| `vector-<check>`            | ” — one per vector, `PASS`/`FAIL`/`RUNNING`                                         |
 
 The three `contract-vectors` ids are the one group NOT in the shipped app: the
 screen returns a `<Redirect>` in production. Exactly one of `-pass`/`-fail` ever

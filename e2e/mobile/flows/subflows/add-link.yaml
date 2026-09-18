@@ -1,0 +1,29 @@
+# Save one link through the add panel, into whatever list the links screen is
+# showing. Pulled in with `runFlow`; never run directly.
+#
+# Parameters (the caller's `runFlow: env:`): URL.
+#
+# The FAB is pressed only after a development build's LogBox toast is put away:
+# on Android it covers the FAB (subflows/dismiss-logbox.yaml).
+appId: com.bracemark.app
+---
+- runFlow:
+    file: dismiss-logbox.yaml
+- tapOn: 'Add link'
+- tapOn:
+    id: 'add-link-url'
+- inputText: ${URL}
+- tapOn:
+    id: 'add-link-save'
+- extendedWaitUntil:
+    notVisible:
+      id: 'add-link-url'
+    timeout: 10000
+# The saved row, and the panel's exit settled behind it. A row press made while
+# the panel and its keyboard are still leaving is swallowed: measured on iOS, a
+# row's ⋯ pressed straight after the panel dropped out of the tree opened no menu.
+- extendedWaitUntil:
+    visible: ".*${URL.replace('https://', '')}.*"
+    timeout: 20000
+- waitForAnimationToEnd:
+    timeout: 5000

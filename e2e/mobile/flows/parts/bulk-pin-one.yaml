@@ -1,0 +1,22 @@
+# Part of BULK-ACTIONS-001 (mobile/flows/bulk-actions.yaml), pulled in with
+# `runFlow`: pin one link through the bulk bar. Parameter: URL.
+appId: com.bracemark.app
+---
+- tapOn:
+    id: 'links-more-options'
+- tapOn:
+    id: 'links-select-links'
+- runFlow:
+    file: ../subflows/select-row.yaml
+    env:
+      ROW: ".*${URL.replace('https://', '')}"
+- assertVisible:
+    id: 'bulk-count'
+    text: '1 selected'
+- tapOn:
+    id: 'bulk-more'
+- tapOn:
+    id: 'bulk-menu-pin'
+- extendedWaitUntil:
+    visible: ".*${URL.replace('https://', '')}.*, Pinned.*"
+    timeout: 10000

@@ -8,7 +8,7 @@ import { dirname, join } from 'node:path';
 import { E2E_ROOT, profileDir } from '../paths';
 import { type Credentials } from '../web/fixtures/account';
 import { API_URL } from '../web/fixtures/env';
-import { launchApp } from '../web/fixtures/launch';
+import { launchApp, type LaunchedApp } from '../web/fixtures/launch';
 import { type NativePlatform } from './cli';
 
 // --- the dev stack ----------------------------------------------------------
@@ -64,6 +64,11 @@ export interface ProvisionOptions {
   // CSPRNG-minted by the client and shown once, so the ceremony is the only place
   // to capture it (createAccountWithRecovery carries the full reasoning).
   withRecovery?: boolean;
+  // Put the account in the state a case starts from, while the browser that
+  // created it is still signed in: a Plus grant, an imported library that has
+  // to reach the server before the device signs in and pulls it. Anything the
+  // case itself is about stays in the flow.
+  prepare?: (app: LaunchedApp) => Promise<void>;
 }
 
 export interface ProvisionedAccount extends Credentials {
@@ -79,6 +84,7 @@ export async function provisionAccount(
     withRecovery: options.withRecovery,
   });
   try {
+    await options.prepare?.(app);
     return { ...app.credentials, recoveryCode: app.recoveryCode };
   } finally {
     await app.close();

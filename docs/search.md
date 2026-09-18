@@ -421,6 +421,14 @@ comments — not re-derived here:
   bag while another screen is focused (above) — this tree stays mounted under
   Settings and the modal editors, and an unheld bag would parse the no-filter
   default there and overwrite the very view the round trip exists to preserve.
+  **The same mounted tree is why the Android back handler is gated on focus**
+  (`topbar.tsx`, and `bulk-edit-bar.tsx` for its mode exit). `BackHandler` is
+  app-global and runs listeners newest-first, so a handler registered while the
+  search row showed still answered a back press made in Settings: it ran
+  `restorePreSearch`, and the user came back to My List with the search they had
+  left discarded. Nothing but a device shows it — found by SEARCH-002 on the
+  Pixel 8 AVD. The handlers now register only while the links screen is focused
+  (`useIsFocused`).
 - **The advanced editor is a full-height page-sheet `Modal`**, not an anchored
   popover — five inputs plus two checklists and a keyboard don't fit a 320px
   panel on a phone. The tri-state box is **hand-rolled** (check/minus), because

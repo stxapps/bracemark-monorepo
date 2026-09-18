@@ -1,0 +1,25 @@
+# Part of LOCK-AUTORELOCK-001 (mobile/flows/lock-autorelock.yaml carries the
+# case). Runs after the runner has left the app in the background past the relock
+# window: foreground it — `stopApp: false`, since a bare `launchApp` terminates
+# the app first and a cold start would relock whatever the provider does — and
+# read the gate back; then unlock, so the lock is proven to be the same lock
+# rather than a signed-out app.
+appId: com.bracemark.app
+---
+- launchApp:
+    stopApp: false
+- extendedWaitUntil:
+    visible:
+      id: 'app-lock-pane'
+    timeout: 20000
+- assertNotVisible:
+    id: 'links-screen'
+- assertNotVisible: ".*${ANCHOR_URL.replace('https://', '')}.*"
+- takeScreenshot: relocked-after-long-background
+- runFlow:
+    file: ../subflows/unlock-pane.yaml
+    env:
+      PASSWORD: ${LOCK_PASSWORD}
+- extendedWaitUntil:
+    visible: ".*${ANCHOR_URL.replace('https://', '')}.*"
+    timeout: 20000

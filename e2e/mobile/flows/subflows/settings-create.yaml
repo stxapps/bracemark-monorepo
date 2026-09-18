@@ -1,0 +1,20 @@
+# Create one list or tag from an open Settings → Lists / Tags table. Pulled in
+# with `runFlow`; never run directly.
+#
+# Parameters (the caller's `runFlow: env:`): NOUN — `list` or `tag`; NAME.
+#
+# The create row is addressed by its accessible name ("New list name"), which is
+# unique on the screen. Enter submits it (`onSubmitEditing`). The settled state
+# is the new ROW: a rename field carrying NAME below the create row — asserting
+# the bare name would pass on the create field itself, which holds the same text
+# until the write lands and clears it.
+appId: com.bracemark.app
+---
+- tapOn: 'New ${NOUN} name'
+- inputText: ${NAME}
+- pressKey: Enter
+- extendedWaitUntil:
+    visible:
+      text: ${NAME}
+      below: 'New ${NOUN} name'
+    timeout: 10000

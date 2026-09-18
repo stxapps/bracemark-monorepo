@@ -1,0 +1,160 @@
+# Create and rename a list and a tag in Settings, then read them through the add
+# panel's pickers on the links screen that stayed mounted underneath — and file a
+# link under the renamed pair.
+#
+# What only a device shows: the settings tables and the pickers are separate
+# live reads over one expo-sqlite store, and the links screen is not remounted by
+# the round trip (Settings is a card over it; `settings-close` dismisses back).
+# A picker that cached the taxonomy at mount would still offer the old names.
+#
+#   maestro test mobile/flows/taxonomy-editor.yaml -e USERNAME=… -e PASSWORD=… \
+#     -e LINK_URL=https://e2e-local.invalid/taxonomy -e LIST_NAME=… \
+#     -e RENAMED_LIST=… -e TAG_NAME=… -e RENAMED_TAG=…
+#
+# No flow-level `env:` defaults: on Maestro 2.8.0 they beat `-e` (docs/e2e.md,
+# _driving the native apps_).
+appId: com.bracemark.app
+tags: [TAXONOMY-EDITOR-002, full, online, ios, android]
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+
+# --- settings: create, then rename, one list and one tag ------------------------
+- runFlow:
+    file: subflows/open-settings.yaml
+    env:
+      SECTION: lists
+- runFlow:
+    file: subflows/settings-create.yaml
+    env:
+      NOUN: list
+      NAME: ${LIST_NAME}
+# Rename from the row's kebab, which focuses the field with the caret at its
+# end — a tap on the text would drop the caret mid-name, and `eraseText` deletes
+# backwards from wherever it is. `rightOf` resolves to the nearest match, i.e.
+# the kebab on the same row.
+- tapOn:
+    text: 'List actions'
+    rightOf: ${LIST_NAME}
+- tapOn: 'Rename'
+- eraseText: 100
+- assertNotVisible: ${LIST_NAME}
+- inputText: ${RENAMED_LIST}
+- pressKey: Enter
+- extendedWaitUntil:
+    visible:
+      text: ${RENAMED_LIST}
+      below: 'New list name'
+    timeout: 10000
+
+- tapOn:
+    id: 'settings-open-navigation'
+- tapOn:
+    id: 'settings-nav-tags'
+- runFlow:
+    file: subflows/settings-create.yaml
+    env:
+      NOUN: tag
+      NAME: ${TAG_NAME}
+- tapOn:
+    text: 'Tag actions'
+    rightOf: ${TAG_NAME}
+- tapOn: 'Rename'
+- eraseText: 100
+- assertNotVisible: ${TAG_NAME}
+- inputText: ${RENAMED_TAG}
+- pressKey: Enter
+- extendedWaitUntil:
+    visible:
+      text: ${RENAMED_TAG}
+      below: 'New tag name'
+    timeout: 10000
+- takeScreenshot: taxonomy-renamed-in-settings
+
+# --- back to the mounted links screen, into the add panel ------------------------
+- tapOn:
+    id: 'settings-close'
+- extendedWaitUntil:
+    visible:
+      id: 'links-screen'
+    timeout: 10000
+- runFlow:
+    file: subflows/dismiss-logbox.yaml
+- tapOn: 'Add link'
+- tapOn:
+    id: 'add-link-url'
+- inputText: ${LINK_URL}
+- tapOn:
+    id: 'add-link-optional'
+
+# The list picker: the old name is gone (typing it offers only Create), the new
+# one is a row. Rows are scoped to the picker, since Android keeps the panel
+# behind the portaled dialog in its tree (docs/e2e.md, _the testID contract_).
+- tapOn:
+    id: 'add-link-list'
+- tapOn:
+    id: 'list-picker-search'
+- inputText: ${LIST_NAME}
+- assertVisible:
+    id: 'list-picker-create'
+- assertNotVisible:
+    text: ${LIST_NAME}
+    childOf:
+      id: 'list-picker-rows'
+- eraseText: 100
+- inputText: ${RENAMED_LIST}
+- assertNotVisible:
+    id: 'list-picker-create'
+- tapOn:
+    text: ${RENAMED_LIST}
+    childOf:
+      id: 'list-picker-rows'
+- assertVisible:
+    id: 'add-link-list'
+    text: 'List: ${RENAMED_LIST}'
+
+- tapOn:
+    id: 'add-link-tags'
+- tapOn:
+    id: 'tag-picker-search'
+- inputText: ${TAG_NAME}
+- assertVisible:
+    id: 'tag-picker-create'
+- eraseText: 100
+- inputText: ${RENAMED_TAG}
+- assertNotVisible:
+    id: 'tag-picker-create'
+- tapOn:
+    text: ${RENAMED_TAG}
+    childOf:
+      id: 'tag-picker-rows'
+- tapOn:
+    id: 'tag-picker-done'
+- assertVisible:
+    id: 'add-link-tags'
+    text: 'Tags: ${RENAMED_TAG}'
+- tapOn:
+    id: 'add-link-save'
+- extendedWaitUntil:
+    notVisible:
+      id: 'add-link-url'
+    timeout: 10000
+
+# --- filed under the renamed list, as the drawer reads it -------------------------
+- tapOn:
+    id: 'links-open-navigation'
+- tapOn:
+    id: 'links-nav-list-.*'
+    text: ${RENAMED_LIST}
+- extendedWaitUntil:
+    visible: ".*${LINK_URL.replace('https://', '')}.*"
+    timeout: 20000
+- tapOn:
+    id: 'links-open-navigation'
+- tapOn:
+    id: 'links-nav-tag-.*'
+    text: ${RENAMED_TAG}
+- extendedWaitUntil:
+    visible: ".*${LINK_URL.replace('https://', '')}.*"
+    timeout: 20000
+- takeScreenshot: link-filed-under-renamed-taxonomy

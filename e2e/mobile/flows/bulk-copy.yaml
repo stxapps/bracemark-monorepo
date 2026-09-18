@@ -1,0 +1,117 @@
+# Copy a bulk selection's URLs, stay in bulk-edit mode, and paste the clipboard
+# back through the OS edit menu to read what was written.
+#
+# What only a device shows: the write goes through expo-clipboard to the system
+# pasteboard, and the only honest reader of that is the system paste — Maestro's
+# own `pasteText` replays text Maestro copied, not the device's clipboard. The
+# URL order and newline format are unit-tested; this proves the platform write
+# landed, in display order, and that the mode survived it (docs/editors.md, _bulk
+# edit_ — Copy is the one action that does not exit).
+#
+# The "Copied" flash is asserted on iOS only. It lasts 1.5s, and measured on the
+# Pixel 8 AVD a Maestro tap returns about six seconds after it presses, so the
+# label has reverted before any assertion can run there.
+#
+#   maestro test mobile/flows/bulk-copy.yaml -e USERNAME=… -e PASSWORD=… \
+#     -e OLDEST_URL=… -e MIDDLE_URL=… -e NEWEST_URL=…
+appId: com.bracemark.app
+tags: [BULK-COPY-001, full, online, ios, android]
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+- runFlow:
+    file: subflows/add-link.yaml
+    env:
+      URL: ${OLDEST_URL}
+- runFlow:
+    file: subflows/add-link.yaml
+    env:
+      URL: ${MIDDLE_URL}
+- runFlow:
+    file: subflows/add-link.yaml
+    env:
+      URL: ${NEWEST_URL}
+
+# Selected bottom-up, so selection order and display order disagree.
+- tapOn:
+    id: 'links-more-options'
+- tapOn:
+    id: 'links-select-links'
+- tapOn: "Select .*${OLDEST_URL.replace('https://', '')}(,.*)?"
+- tapOn: "Select .*${NEWEST_URL.replace('https://', '')}(,.*)?"
+- tapOn:
+    id: 'bulk-copy'
+    waitToSettleTimeoutMs: 1
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - assertVisible:
+          id: 'bulk-copy'
+          text: 'Copied'
+- extendedWaitUntil:
+    visible:
+      id: 'bulk-copy'
+      text: 'Copy'
+    timeout: 10000
+
+# Still in the mode, with the same selection.
+- assertVisible:
+    id: 'bulk-count'
+    text: '2 selected'
+- runFlow:
+    file: subflows/assert-selection.yaml
+    env:
+      ROW: ".*${OLDEST_URL.replace('https://', '')}"
+      SELECTED: 'true'
+- runFlow:
+    file: subflows/assert-selection.yaml
+    env:
+      ROW: ".*${NEWEST_URL.replace('https://', '')}"
+      SELECTED: 'true'
+- runFlow:
+    file: subflows/assert-selection.yaml
+    env:
+      ROW: ".*${MIDDLE_URL.replace('https://', '')}"
+      SELECTED: 'false'
+- takeScreenshot: bulk-copied-still-selecting
+
+# --- read the clipboard back, through the system paste ----------------------------------
+# Into the add panel's note: a multiline field, so the newline between the two
+# URLs survives the paste. The panel is then discarded.
+#
+# The mode is left differently per platform, and Android's way is forced. After a
+# copy, Android 13+ floats its clipboard preview over the bottom-left corner of the
+# screen — exactly where the bulk bar's ✕ sits — and a tap there opened the
+# system clipboard editor ("From Bracemark") instead of leaving the mode. The
+# hardware back press is the mode's other exit (bulk-edit-bar.tsx) and is not a
+# touch.
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - tapOn:
+          id: 'bulk-exit'
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - back
+- extendedWaitUntil:
+    notVisible:
+      id: 'bulk-count'
+    timeout: 10000
+- runFlow:
+    file: subflows/dismiss-logbox.yaml
+- tapOn: 'Add link'
+- tapOn:
+    id: 'add-link-optional'
+- longPressOn:
+    id: 'add-link-note'
+- tapOn: 'Paste'
+- assertVisible:
+    id: 'add-link-note'
+    text: "${NEWEST_URL}\\n${OLDEST_URL}"
+- takeScreenshot: clipboard-pasted
+- tapOn:
+    id: 'add-link-cancel'

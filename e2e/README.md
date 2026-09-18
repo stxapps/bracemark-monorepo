@@ -118,21 +118,23 @@ terminal.
 
 ## layout
 
-| path               | what                                                                  |
-| ------------------ | --------------------------------------------------------------------- |
-| `cases.json`       | case ids, tiers, traits, fixtures, paths, artifact expectations       |
-| `fixtures.json`    | empty/small/scale and deterministic/online URL fixture contracts      |
-| `paths.ts`         | where a run writes — the only source of `.artifacts` paths            |
-| `web/`             | Playwright specs (`*.e2e.ts`) and their fixtures                      |
-| `extension/`       | unpacked MV3 specs, shared driver, and release qualification          |
-| `mobile/flows/`    | Maestro flows that run standalone                                     |
-| `mobile/shots/`    | Maestro flows for native store-listing captures                       |
-| `mobile/contract/` | Maestro legs of a contract run — driven by a `runner/`, never by hand |
-| `runner/`          | web/native orchestrators, filters, preflights, manifests              |
-| `seed/`            | the four dev accounts and their archives — not a test (above)         |
-| `shot/`            | the published screenshots: the fixture, the producer, the four legs   |
-| `.artifacts/`      | gitignored — traces, reports, run manifests, browser profiles         |
-| `credentials/`     | gitignored — the accounts `npm run seed:accounts` created             |
+| path                  | what                                                                  |
+| --------------------- | --------------------------------------------------------------------- |
+| `cases.json`          | case ids, tiers, traits, fixtures, paths, artifact expectations       |
+| `fixtures.json`       | empty/small/scale and deterministic/online URL fixture contracts      |
+| `paths.ts`            | where a run writes — the only source of `.artifacts` paths            |
+| `web/`                | Playwright specs (`*.e2e.ts`) and their fixtures                      |
+| `extension/`          | unpacked MV3 specs, shared driver, and release qualification          |
+| `mobile/flows/`       | Maestro flows that run standalone                                     |
+| `mobile/flows/parts/` | the later steps of a runner-driven case — never run alone             |
+| `mobile/RELEASE.md`   | real-device biometric lock checks (release qualification)             |
+| `mobile/shots/`       | Maestro flows for native store-listing captures                       |
+| `mobile/contract/`    | Maestro legs of a contract run — driven by a `runner/`, never by hand |
+| `runner/`             | web/native orchestrators, filters, preflights, manifests              |
+| `seed/`               | the four dev accounts and their archives — not a test (above)         |
+| `shot/`               | the published screenshots: the fixture, the producer, the four legs   |
+| `.artifacts/`         | gitignored — traces, reports, run manifests, browser profiles         |
+| `credentials/`        | gitignored — the accounts `npm run seed:accounts` created             |
 
 ## the published screenshots
 
@@ -170,12 +172,18 @@ accounts are a HUMAN's fixture: you sign into them, edit them, and leave them in
 whatever state you left them in, so a spec asserting on one would be asserting on
 something a person changes by hand.
 
-The **archives** are the other half of that rule and the useful half: they are
-pure functions of `seed/library.ts`, so a spec that genuinely needs a library at
-scale — paging, virtual scrolling, search over a thousand links — should build one
-with `generateArchives()` into its own fresh account rather than clicking a
-thousand links into being or reaching for `seed_plus_full`. Nothing does this
-today; it is where to start if something needs to.
+The **archives** are the other half of that rule and the useful half: a spec
+that genuinely needs a library past the first page builds one into its own fresh
+account rather than clicking links into being or reaching for `seed_plus_full`.
+`web/fixtures/library.ts` writes a paged library whose row order is known — every
+link in one list, newest first, at `.invalid` URLs — and the scroll, bulk-selection
+and native recycling cases import it through Settings → Data. `seed/library.ts`'s
+`generateArchives()` is the realistic one, for a case that needs a real spread of
+lists, pins and trash.
+
+A case whose subject is a Plus lever (nesting, the search editor, locks) grants
+the account the existing `manual` plan through local D1 (`web/fixtures/plan.ts`).
+It is the same plaintext row the seed writes, not a test endpoint.
 
 ## four things that will surprise you
 

@@ -7,9 +7,10 @@
       "description": "Only the deterministic entities created by one journey; no shared seed account."
     },
     "scale": {
-      "description": "A generated seed/library.ts archive imported through Settings into a fresh disposable account.",
+      "description": "A generated library imported through Settings → Data into a fresh disposable account: seed/library.ts for a realistic library, web/fixtures/library.ts for a paged journey whose row order is known.",
       "generator": "seed/fixtures.ts",
-      "importDriver": "seed/steps.ts"
+      "importDriver": "seed/steps.ts",
+      "pagedGenerator": "web/fixtures/library.ts"
     }
   },
   "urls": {

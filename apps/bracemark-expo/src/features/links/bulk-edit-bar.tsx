@@ -37,6 +37,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { BackHandler, Pressable, View } from 'react-native';
+import { useIsFocused } from '@react-navigation/native';
 import * as Clipboard from 'expo-clipboard';
 import {
   Archive,
@@ -108,14 +109,17 @@ export function BulkEditBar({ links }: { links: LinkView[] }) {
   // Android back exits the mode before it navigates — registered only while the
   // mode is on, so back keeps its navigation meaning otherwise (and newest-first
   // ordering puts this ahead of the navigator's own handler). Inert on iOS.
+  // Gated on focus for topbar.tsx's reason: this screen stays mounted under
+  // Settings, and an ungated handler would take the back press meant for it.
+  const focused = useIsFocused();
   useEffect(() => {
-    if (!bulkEditing) return;
+    if (!bulkEditing || !focused) return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
       exitBulkEdit();
       return true; // consumed — don't navigate
     });
     return () => sub.remove();
-  }, [bulkEditing, exitBulkEdit]);
+  }, [bulkEditing, focused, exitBulkEdit]);
 
   if (!bulkEditing) return null;
 
@@ -205,13 +209,22 @@ export function BulkEditBar({ links }: { links: LinkView[] }) {
     <View className="shrink-0 border-t border-border bg-background px-3 pt-2 pb-1">
       <View className="h-10 flex-row items-center justify-between">
         <View className="flex-row items-center gap-3">
-          <Button variant="ghost" size="icon" aria-label="Exit bulk edit" onPress={exitBulkEdit}>
+          <Button
+            variant="ghost"
+            size="icon"
+            testID="bulk-exit"
+            aria-label="Exit bulk edit"
+            onPress={exitBulkEdit}
+          >
             <Icon as={X} className="size-5 text-foreground" />
           </Button>
-          <Text className="text-sm text-muted-foreground">{count} selected</Text>
+          <Text testID="bulk-count" className="text-sm text-muted-foreground">
+            {count} selected
+          </Text>
         </View>
         <Pressable
           role="button"
+          testID="bulk-select-all"
           aria-label="Select all"
           disabled={links.length === 0}
           onPress={() => (allSelected ? clearSelected() : selectAll(links))}
@@ -227,7 +240,13 @@ export function BulkEditBar({ links }: { links: LinkView[] }) {
         </Pressable>
       </View>
       <View className="flex-row items-center justify-between gap-2 py-2">
-        <Button variant="outline" size="sm" disabled={disabled} onPress={() => void onCopy()}>
+        <Button
+          variant="outline"
+          size="sm"
+          testID="bulk-copy"
+          disabled={disabled}
+          onPress={() => void onCopy()}
+        >
           <Icon as={copied ? Check : Copy} className={cn('size-4', copied && 'text-primary')} />
           <Text>{copied ? 'Copied' : 'Copy'}</Text>
         </Button>
@@ -236,6 +255,7 @@ export function BulkEditBar({ links }: { links: LinkView[] }) {
             <Button
               variant="outline"
               size="sm"
+              testID="bulk-restore"
               disabled={disabled}
               onPress={() => void runMove('restore', selected, DEFAULT_LIST_ID)}
             >
@@ -245,6 +265,7 @@ export function BulkEditBar({ links }: { links: LinkView[] }) {
             <Button
               variant="destructive"
               size="sm"
+              testID="bulk-delete"
               disabled={disabled}
               onPress={() => requestDestroy(selected)}
             >
@@ -257,6 +278,7 @@ export function BulkEditBar({ links }: { links: LinkView[] }) {
             <Button
               variant="outline"
               size="sm"
+              testID="bulk-move"
               disabled={disabled || actionable.length === 0}
               onPress={() => setMoveOpen(true)}
             >
@@ -268,6 +290,7 @@ export function BulkEditBar({ links }: { links: LinkView[] }) {
                 <Button
                   variant="outline"
                   size="sm"
+                  testID="bulk-more"
                   aria-label="More actions"
                   disabled={disabled || actionable.length === 0}
                 >
@@ -282,11 +305,15 @@ export function BulkEditBar({ links }: { links: LinkView[] }) {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-44">
-                <DropdownMenuItem onPress={() => requestRetag(actionable)}>
+                <DropdownMenuItem
+                  testID="bulk-menu-edit-tags"
+                  onPress={() => requestRetag(actionable)}
+                >
                   <Icon as={Tags} className="size-4" />
                   <Text>Edit tags</Text>
                 </DropdownMenuItem>
                 <DropdownMenuItem
+                  testID="bulk-menu-pin"
                   disabled={toPin.length === 0}
                   // Reversed so the first-selected link ends up topmost: pin()
                   // inserts each at the top of the pinned section.
@@ -302,6 +329,7 @@ export function BulkEditBar({ links }: { links: LinkView[] }) {
                   <Text>Pin</Text>
                 </DropdownMenuItem>
                 <DropdownMenuItem
+                  testID="bulk-menu-unpin"
                   disabled={toUnpin.length === 0}
                   onPress={() =>
                     void runBulk('unpin', async () => {
@@ -314,6 +342,7 @@ export function BulkEditBar({ links }: { links: LinkView[] }) {
                 </DropdownMenuItem>
                 {inArchive ? (
                   <DropdownMenuItem
+                    testID="bulk-menu-unarchive"
                     onPress={() => void runMove('archive', actionable, DEFAULT_LIST_ID)}
                   >
                     <Icon as={ArchiveRestore} className="size-4" />
@@ -321,6 +350,7 @@ export function BulkEditBar({ links }: { links: LinkView[] }) {
                   </DropdownMenuItem>
                 ) : (
                   <DropdownMenuItem
+                    testID="bulk-menu-archive"
                     disabled={toArchive.length === 0}
                     onPress={() => void runMove('archive', toArchive, ARCHIVE_ID)}
                   >
@@ -333,6 +363,7 @@ export function BulkEditBar({ links }: { links: LinkView[] }) {
             <Button
               variant="destructive"
               size="sm"
+              testID="bulk-remove"
               disabled={disabled || actionable.length === 0}
               onPress={() => void runMove('remove', actionable, TRASH_ID)}
             >

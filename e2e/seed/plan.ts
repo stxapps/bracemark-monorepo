@@ -30,7 +30,30 @@ const API_DIR = join(E2E_ROOT, '..', 'apps', 'bracemark-api');
 
 // One statement against a local D1 binding, via the wrangler CLI. `--json`
 // suppresses wrangler's banner, so the whole of stdout parses.
+//
+// SQLITE_BUSY is retried, and only that. The local database is one SQLite file
+// shared by the running `wrangler dev` and every CLI invocation, and the parallel
+// e2e workers each grant a plan: two `d1 execute`s landing together fail one of
+// them with "database is locked" before either statement ran. That is contention
+// for a file, not an outcome of the grant, so it is waited out rather than
+// reported; every other failure still throws on the first attempt.
+const D1_BUSY_ATTEMPTS = 20;
+
 async function d1(binding: string, sql: string): Promise<Record<string, unknown>[]> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await d1Once(binding, sql);
+    } catch (error) {
+      const busy = error instanceof Error && /SQLITE_BUSY|database is locked/.test(error.message);
+      if (!busy || attempt >= D1_BUSY_ATTEMPTS) throw error;
+      await new Promise((resolve) =>
+        setTimeout(resolve, Math.min(250 * attempt, 2000) + Math.random() * 250),
+      );
+    }
+  }
+}
+
+async function d1Once(binding: string, sql: string): Promise<Record<string, unknown>[]> {
   const { stdout } = await run(
     'npx',
     [

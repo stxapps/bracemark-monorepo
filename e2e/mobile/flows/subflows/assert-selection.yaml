@@ -1,0 +1,40 @@
+# Assert one link row's bulk-edit selection. Pulled in with `runFlow`; never run
+# directly.
+#
+# Parameters (the caller's `runFlow: env:`): ROW — a regex fragment that ends the
+# row checkbox's name ("Select <title or url>"), e.g. `.*row-001`; SELECTED —
+# 'true' or 'false'.
+#
+# One claim, two spellings, because the platforms expose checkbox state
+# differently and Maestro reads only one of them. Android reports it as the
+# node's `checked` attribute. iOS does not: RN puts an `accessibilityState` of
+# checked into the accessibility VALUE ("checkbox, checked"), and Maestro's
+# `checked` selector reads XCUIElement's selection instead, so `checked: true`
+# fails on a row that is plainly checked. On iOS the value is copied off the
+# named node and compared. Either node will do — the pressable row
+# ("Select <url>, …") and the checkbox inside it ("Select <url>") carry the same
+# value, and the tree does not always include the inner one.
+appId: com.bracemark.app
+---
+- runFlow:
+    when:
+      platform: Android
+      true: ${SELECTED === 'true'}
+    commands:
+      - assertVisible:
+          text: 'Select ${ROW}'
+          checked: true
+- runFlow:
+    when:
+      platform: Android
+      true: ${SELECTED !== 'true'}
+    commands:
+      - assertVisible:
+          text: 'Select ${ROW}'
+          checked: false
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - copyTextFrom: 'Select ${ROW}(,.*)?'
+      - assertTrue: "${maestro.copiedText === (SELECTED === 'true' ? 'checkbox, checked' : 'checkbox, unchecked')}"

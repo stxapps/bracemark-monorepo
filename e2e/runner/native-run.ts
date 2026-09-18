@@ -71,13 +71,41 @@ interface RunManifest {
   cases: CaseResult[];
 }
 
+// A case is one flow — its registered path — unless the runner hands `runCase`
+// steps. A step is either a committed flow path, or a host-side action that runs
+// BETWEEN flows and may return a flow it generated for the device to run next.
+//
+// Two things need that and nothing in a flow can do: a real touch gesture whose
+// coordinates come from the screen (Maestro's `swipe` takes literal numbers only,
+// validated at parse time, and its element-anchored form ends at the screen edge),
+// and a wall-clock interval that IS the behaviour under test (the auto-relock
+// grace window). Every assertion still lives in a committed flow; a host step only
+// measures, waits, or synthesizes the gesture.
+export interface CaseStepContext {
+  platform: NativePlatform;
+  deviceId: string;
+  // This case's artifact directory; generated flows are written under it.
+  caseDir: string;
+  // 1-based position of the step, for naming what it writes.
+  index: number;
+  // The device's accessibility hierarchy right now, as Maestro sees it.
+  hierarchy(): Promise<string>;
+}
+
+export type CaseStep = string | ((context: CaseStepContext) => Promise<string | null>);
+
 export interface NativeRun {
   runId: string;
   runDir: string;
   platform: NativePlatform;
   deviceId: string;
   devClientLink: string;
-  runCase(testCase: E2ECase, env?: Record<string, string>, secretValues?: string[]): Promise<void>;
+  runCase(
+    testCase: E2ECase,
+    env?: Record<string, string>,
+    secretValues?: string[],
+    steps?: CaseStep[],
+  ): Promise<void>;
   finish(status: 'passed' | 'failed'): Promise<void>;
 }
 
@@ -320,39 +348,70 @@ export async function prepareNativeRun(
     platform: options.platform,
     deviceId: options.deviceId,
     devClientLink,
-    async runCase(testCase, env = {}, secretValues = []) {
+    async runCase(testCase, env = {}, secretValues = [], steps = [testCase.path]) {
       const result = manifest.cases.find((candidate) => candidate.id === testCase.id);
       if (!result) throw new Error(`${testCase.id} was not selected for this run`);
+      if (steps[0] !== testCase.path) {
+        throw new Error(`${testCase.id}: the first step must be the registered flow`);
+      }
       const started = Date.now();
       result.status = 'running';
       result.startedAt = new Date(started).toISOString();
       await writeJson(manifestPath, manifest);
 
       const caseDir = join(runDir, 'cases', testCase.id);
-      const maestroOptions: MaestroOptions = {
-        platform: options.platform,
-        deviceId: options.deviceId,
-        env: { EXPO_DEV_CLIENT_LINK: devClientLink, ...env },
-        reportPath: join(caseDir, 'junit.xml'),
-        testOutputDir: join(caseDir, 'maestro'),
-        debugOutputDir: join(caseDir, 'debug'),
-        includeTags: [testCase.tier, ...options.includeTraits],
-        excludeTags: options.excludeTraits,
+      const hierarchy = () =>
+        maestroHierarchy({ platform: options.platform, deviceId: options.deviceId });
+
+      // One Maestro invocation per flow step. A single-flow case keeps the
+      // original artifact names; a multi-step case numbers them. Only the
+      // registered flow carries the suite's tags, so only it is filtered by them —
+      // a part flow would otherwise be skipped as untagged.
+      const runFlow = async (flow: string, index: number) => {
+        const suffix = steps.length === 1 ? '' : `-${index}`;
+        const maestroOptions: MaestroOptions = {
+          platform: options.platform,
+          deviceId: options.deviceId,
+          env: { EXPO_DEV_CLIENT_LINK: devClientLink, ...env },
+          reportPath: join(caseDir, `junit${suffix}.xml`),
+          testOutputDir: join(caseDir, `maestro${suffix}`),
+          debugOutputDir: join(caseDir, `debug${suffix}`),
+          ...(flow === testCase.path
+            ? {
+                includeTags: [testCase.tier, ...options.includeTraits],
+                excludeTags: options.excludeTraits,
+              }
+            : {}),
+        };
+        const command = maestroCommand(flow, maestroOptions);
+        await writeJson(join(caseDir, `command${suffix}.json`), {
+          command: command.command,
+          args: command.args.map((argument) =>
+            argument.includes('=') &&
+            command.environmentKeys.includes(argument.slice(0, argument.indexOf('=')))
+              ? `${argument.slice(0, argument.indexOf('='))}=[REDACTED]`
+              : argument,
+          ),
+          environmentKeys: command.environmentKeys,
+        });
+        await maestro(flow, maestroOptions);
       };
-      const command = maestroCommand(testCase.path, maestroOptions);
-      await writeJson(join(caseDir, 'command.json'), {
-        command: command.command,
-        args: command.args.map((argument) =>
-          argument.includes('=') &&
-          command.environmentKeys.includes(argument.slice(0, argument.indexOf('=')))
-            ? `${argument.slice(0, argument.indexOf('='))}=[REDACTED]`
-            : argument,
-        ),
-        environmentKeys: command.environmentKeys,
-      });
 
       try {
-        await maestro(testCase.path, maestroOptions);
+        for (const [position, step] of steps.entries()) {
+          const index = position + 1;
+          const flow =
+            typeof step === 'string'
+              ? step
+              : await step({
+                  platform: options.platform,
+                  deviceId: options.deviceId,
+                  caseDir,
+                  index,
+                  hierarchy,
+                });
+          if (flow) await runFlow(flow, index);
+        }
         result.status = 'passed';
       } catch (error) {
         result.status = 'failed';

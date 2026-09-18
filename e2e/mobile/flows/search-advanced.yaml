@@ -1,0 +1,166 @@
+# Commit an advanced query — one list, one tag, one word — then leave the links
+# screen for Settings and come back, and read the same query and the same rows.
+#
+# What only a device shows: the query is route params held by the links provider
+# while another screen is focused, and Settings is a card that dismisses back to
+# it (docs/search.md, _on native_ and _leaving the page and coming back_) — a
+# provider that re-parsed the focused route's empty params would come back as My
+# List.
+#
+#   maestro test mobile/flows/search-advanced.yaml -e USERNAME=… -e PASSWORD=… \
+#     -e LIST_NAME=… -e TAG_NAME=… -e WORD=… -e ALL_URL=… -e NO_WORD_URL=… \
+#     -e NO_TAG_URL=… -e NO_LIST_URL=…
+#
+# The account is on Plus: the structured editor is the `searchEditor` lever.
+appId: com.bracemark.app
+tags: [SEARCH-002, full, online, destructive, ios, android]
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+- runFlow:
+    file: subflows/open-settings.yaml
+    env:
+      SECTION: lists
+- runFlow:
+    file: subflows/settings-create.yaml
+    env:
+      NOUN: list
+      NAME: ${LIST_NAME}
+- tapOn:
+    id: 'settings-open-navigation'
+- tapOn:
+    id: 'settings-nav-tags'
+- runFlow:
+    file: subflows/settings-create.yaml
+    env:
+      NOUN: tag
+      NAME: ${TAG_NAME}
+- tapOn:
+    id: 'settings-close'
+
+# One link meets all three clauses; each of the others misses exactly one.
+- runFlow:
+    file: subflows/add-link-filed.yaml
+    env:
+      URL: ${ALL_URL}
+      LIST: ${LIST_NAME}
+      TAGS: ${TAG_NAME}
+- runFlow:
+    file: subflows/add-link-filed.yaml
+    env:
+      URL: ${NO_WORD_URL}
+      LIST: ${LIST_NAME}
+      TAGS: ${TAG_NAME}
+- runFlow:
+    file: subflows/add-link-filed.yaml
+    env:
+      URL: ${NO_TAG_URL}
+      LIST: ${LIST_NAME}
+      TAGS: ''
+- runFlow:
+    file: subflows/add-link.yaml
+    env:
+      URL: ${NO_LIST_URL}
+- tapOn:
+    id: 'link-options'
+- tapOn:
+    id: 'link-menu-edit'
+- tapOn:
+    id: 'edit-link-tags'
+- tapOn:
+    id: 'tag-picker-search'
+- inputText: ${TAG_NAME}
+- tapOn:
+    text: ${TAG_NAME}
+    childOf:
+      id: 'tag-picker-rows'
+- tapOn:
+    id: 'tag-picker-done'
+- tapOn:
+    id: 'edit-link-save'
+- extendedWaitUntil:
+    visible:
+      id: 'links-screen'
+    timeout: 10000
+
+# --- commit -----------------------------------------------------------------------------
+# The editor opens on the committed query, and bare My List IS a query, so its
+# row starts included; a row cycles include → exclude → off.
+#
+# The word goes in first, while its field is at the top of the open sheet (it
+# can never be scrolled to the middle, and scrolled back to "visible" it sat
+# under the sheet's header, where a tap focused nothing). The first checklist
+# scroll is a drag, which puts the keyboard away (`keyboardDismissMode`); the
+# pause after it lets the sheet settle before anything is pressed.
+#
+# Each checklist row is scrolled to the middle of the sheet before it is
+# pressed, and its new state read back. The rows exist in the tree below the
+# fold, and "on screen" is not enough: measured on iOS, the Tags row sat at
+# y 800–836 under the pinned footer (794–830), counted as visible, and the tap
+# went to the footer — reported COMPLETED, toggled nothing, and the query ran
+# without its tag. `centerElement` scrolls it clear.
+- tapOn:
+    id: 'links-search-toggle'
+- tapOn:
+    id: 'links-search-advanced'
+- tapOn:
+    id: 'advanced-search-text-all'
+- inputText: ${WORD}
+- assertVisible:
+    id: 'advanced-search-text-all'
+    text: ${WORD}
+- scrollUntilVisible:
+    element: 'My List: included'
+    direction: DOWN
+    centerElement: true
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn: 'My List: included'
+- tapOn: 'My List: excluded'
+- assertVisible: 'My List: not selected'
+- scrollUntilVisible:
+    element: '${LIST_NAME}: not selected'
+    direction: DOWN
+    centerElement: true
+- tapOn: '${LIST_NAME}: not selected'
+- assertVisible: '${LIST_NAME}: included'
+- scrollUntilVisible:
+    element: '${TAG_NAME}: not selected'
+    direction: DOWN
+    centerElement: true
+- tapOn: '${TAG_NAME}: not selected'
+- assertVisible: '${TAG_NAME}: included'
+- assertVisible:
+    id: 'advanced-search-text-all'
+    text: ${WORD}
+- tapOn:
+    id: 'advanced-search-submit'
+
+- runFlow:
+    file: parts/search-advanced-results.yaml
+- takeScreenshot: advanced-search-committed
+
+# --- leave for Settings, dismiss back -----------------------------------------------------
+- runFlow:
+    file: subflows/open-settings.yaml
+    env:
+      SECTION: lists
+- tapOn:
+    id: 'settings-close'
+- runFlow:
+    file: parts/search-advanced-results.yaml
+
+# --- the editor reopens on the restored query -------------------------------------------------
+- tapOn:
+    id: 'links-search-advanced'
+- assertVisible:
+    id: 'advanced-search-text-all'
+    text: ${WORD}
+- scrollUntilVisible:
+    element: '${TAG_NAME}: included'
+    direction: DOWN
+    centerElement: true
+- assertVisible: '${LIST_NAME}: included'
+- takeScreenshot: advanced-search-restored
+- tapOn:
+    id: 'advanced-search-close'

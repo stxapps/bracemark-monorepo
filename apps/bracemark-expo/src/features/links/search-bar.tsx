@@ -128,21 +128,30 @@ function initDraft(q: LinkQuery): Draft {
 
 // A labeled word field in the advanced editor (web's Field + FieldLabel pair).
 // Search terms, not prose — autocapitalize/autocorrect off.
+//
+// The label is ALSO the input's `aria-label`: RN has no `<label for>`, so the
+// visually adjacent Text named nothing, and VoiceOver announced six unnamed
+// text fields where web's `htmlFor` gives each its label (docs/accessibility.md,
+// _naming things that have no visible label_ — the sign-in fields' fix).
 function WordField({
   label,
   value,
   placeholder,
   onChangeText,
+  testID,
 }: {
   label: string;
   value: string;
   placeholder?: string;
   onChangeText: (value: string) => void;
+  testID?: string;
 }) {
   return (
     <View className="gap-1">
       <Text className="text-xs text-muted-foreground">{label}</Text>
       <Input
+        testID={testID}
+        aria-label={label}
         value={value}
         placeholder={placeholder}
         onChangeText={onChangeText}
@@ -413,6 +422,7 @@ function AdvancedSearch() {
         variant="ghost"
         size="icon"
         onPress={openSheet}
+        testID="links-search-advanced"
         aria-label="Advanced search"
         hitSlop={{ top: 4, bottom: 4, left: 2, right: 8 }}
         className="relative"
@@ -487,6 +497,7 @@ function AdvancedSearch() {
               variant="ghost"
               size="icon"
               onPress={() => setOpen(false)}
+              testID="advanced-search-close"
               aria-label="Close advanced search"
               // 54x48 effective. The box stays 40 and the slop makes up the
               // difference — docs/accessibility.md, _a 36dp box is not a 44pt
@@ -575,29 +586,34 @@ function AdvancedSearch() {
                 the haystack contains the url, "None of these words" also
                 covers the practical exclude-a-domain case. */}
             <WordField
+              testID="advanced-search-text-all"
               label="All of these words (URL or title)"
               value={draft.textAll}
               placeholder="every word must match"
               onChangeText={(v) => setDraft((d) => ({ ...d, textAll: v }))}
             />
             <WordField
+              testID="advanced-search-text-any"
               label="Any of these words"
               value={draft.textAny}
               placeholder="at least one matches"
               onChangeText={(v) => setDraft((d) => ({ ...d, textAny: v }))}
             />
             <WordField
+              testID="advanced-search-text-none"
               label="None of these words"
               value={draft.textNone}
               placeholder="exclude matches"
               onChangeText={(v) => setDraft((d) => ({ ...d, textNone: v }))}
             />
             <WordField
+              testID="advanced-search-url"
               label="URL contains"
               value={draft.url}
               onChangeText={(v) => setDraft((d) => ({ ...d, url: v }))}
             />
             <WordField
+              testID="advanced-search-title"
               label="Title contains"
               value={draft.title}
               onChangeText={(v) => setDraft((d) => ({ ...d, title: v }))}
@@ -606,6 +622,7 @@ function AdvancedSearch() {
                 trio above runs over url⊕title only, so this is the only way to
                 reach what you wrote about a link. */}
             <WordField
+              testID="advanced-search-note"
               label="Note contains"
               value={draft.note}
               onChangeText={(v) => setDraft((d) => ({ ...d, note: v }))}
@@ -670,10 +687,15 @@ function AdvancedSearch() {
             />
           </StyledKeyboardAwareScrollView>
           <StickyFooter onHeight={setFooterHeight}>
-            <Button variant="ghost" size="sm" onPress={() => setDraft(initDraft(emptyQuery()))}>
+            <Button
+              variant="ghost"
+              size="sm"
+              testID="advanced-search-clear"
+              onPress={() => setDraft(initDraft(emptyQuery()))}
+            >
               <Text>Clear</Text>
             </Button>
-            <Button size="sm" onPress={apply}>
+            <Button size="sm" testID="advanced-search-submit" onPress={apply}>
               <Text>Search</Text>
             </Button>
           </StickyFooter>
@@ -744,6 +766,7 @@ export function SearchBar() {
           <Icon as={Search} className="size-4 text-muted-foreground" />
         </View>
         <Input
+          testID="links-search-input"
           value={text}
           onChangeText={setText}
           onSubmitEditing={submitBasic}
@@ -759,6 +782,7 @@ export function SearchBar() {
           <View className="absolute inset-y-0 right-1 justify-center">
             <Pressable
               role="button"
+              testID="links-search-clear"
               onPress={clearBasic}
               aria-label="Clear search"
               className="size-7 items-center justify-center rounded"

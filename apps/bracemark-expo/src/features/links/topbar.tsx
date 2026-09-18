@@ -14,7 +14,7 @@
 
 import { useCallback, useEffect } from 'react';
 import { BackHandler, View } from 'react-native';
-import { DrawerActions } from '@react-navigation/native';
+import { DrawerActions, useIsFocused } from '@react-navigation/native';
 import { useNavigation } from 'expo-router';
 import { Menu, Search } from 'lucide-react-native';
 
@@ -82,14 +82,21 @@ export function Topbar() {
   // ahead of the navigator's own (BackHandler runs listeners newest-first).
   // Inert on iOS: hardwareBackPress never fires there, and the swipe-back
   // gesture deliberately stays navigation.
+  //
+  // …and only while the links screen is FOCUSED. It stays mounted under
+  // Settings (docs/search.md, _leaving the page and coming back_), and BackHandler
+  // is app-global: an ungated handler answered the back press meant for Settings,
+  // ran `restorePreSearch`, and the user came back to My List with the search
+  // they had left thrown away — found by SEARCH-002 on the Pixel 8 AVD.
+  const focused = useIsFocused();
   useEffect(() => {
-    if (!searchVisible) return;
+    if (!searchVisible || !focused) return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
       closeSearch();
       return true; // consumed — don't navigate
     });
     return () => sub.remove();
-  }, [searchVisible, closeSearch]);
+  }, [searchVisible, focused, closeSearch]);
 
   const toggleSearch = () => {
     if (!searchVisible) {
@@ -146,13 +153,14 @@ export function Topbar() {
           that one's dot comment argues about 4px vs 5px at all. Change a glyph
           rung without re-deriving the box and the dot is what breaks, silently
           (search-bar.tsx spells out the arithmetic for its own trigger). */}
-      <Text numberOfLines={1} className="min-w-0 flex-1 text-lg font-semibold">
+      <Text testID="links-title" numberOfLines={1} className="min-w-0 flex-1 text-lg font-semibold">
         {label}
       </Text>
       <View className="flex-row items-center gap-1">
         <Button
           variant={searchVisible ? 'secondary' : 'ghost'}
           size="icon-sm"
+          testID="links-search-toggle"
           onPress={toggleSearch}
           // The name states what pressing it DOES, which keeps every state
           // collision-free: closed it is the only "Search links" on screen; open,

@@ -1,0 +1,16 @@
+# Part of SEARCH-002 (mobile/flows/search-advanced.yaml), pulled in with `runFlow`
+# each time the query should hold: the route projects to "Search", the one link
+# meeting every clause is listed, and each link missing one clause is not.
+appId: com.bracemark.app
+---
+- extendedWaitUntil:
+    visible:
+      id: 'links-title'
+      text: 'Search'
+    timeout: 10000
+- extendedWaitUntil:
+    visible: ".*${ALL_URL.replace('https://', '')}.*"
+    timeout: 10000
+- assertNotVisible: ".*${NO_WORD_URL.replace('https://', '')}.*"
+- assertNotVisible: ".*${NO_TAG_URL.replace('https://', '')}.*"
+- assertNotVisible: ".*${NO_LIST_URL.replace('https://', '')}.*"

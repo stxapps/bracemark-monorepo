@@ -1,0 +1,109 @@
+# Select links in bulk-edit mode, scroll them far off screen and back, and read the
+# selection on the rows FlashList recycled in between.
+#
+# What only a device shows: FlashList reuses a small pool of native cells, so a
+# cell that drew a selected row is handed a different link when it scrolls back
+# in. A selection kept in the cell — or a checkbox whose state lags its new props —
+# shows up as the wrong row checked, which no jest render can produce. The
+# selection lives in view-state-provider, keyed by path (docs/editors.md, _bulk
+# edit_).
+#
+# The account arrives holding 60 links in My List, newest first, at
+# `https://HOST/row-000` … `row-059` (web/fixtures/library.ts), imported through
+# the web app and synced before the device signs in.
+#
+#   maestro test mobile/flows/bulk-select.yaml -e USERNAME=… -e PASSWORD=… \
+#     -e HOST=e2e-paged-….invalid
+appId: com.bracemark.app
+tags: [BULK-002, full, online, destructive, scale, ios, android]
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+- extendedWaitUntil:
+    visible: '.*${HOST}/row-000.*'
+    timeout: 60000
+
+- tapOn:
+    id: 'links-more-options'
+- tapOn:
+    id: 'links-select-links'
+# A row is named twice on iOS: the pressable row ("Select <url>, <monogram>,
+# <url>, <host>") and the checkbox inside it ("Select <url>"), and the tree does
+# not always carry the inner one — so the name is matched with its optional tail.
+- tapOn: 'Select .*${HOST}/row-000(,.*)?'
+- tapOn: 'Select .*${HOST}/row-002(,.*)?'
+- assertVisible:
+    id: 'bulk-count'
+    text: '2 selected'
+
+# --- far down: new rows, recycled cells ------------------------------------------------
+- scrollUntilVisible:
+    element: 'Select .*${HOST}/row-045(,.*)?'
+    direction: DOWN
+    centerElement: true
+    timeout: 60000
+# A press while the list is still decelerating lands on whatever moved under it.
+- waitForAnimationToEnd:
+    timeout: 5000
+- assertNotVisible: '.*${HOST}/row-000.*'
+- tapOn: 'Select .*${HOST}/row-045(,.*)?'
+- assertVisible:
+    id: 'bulk-count'
+    text: '3 selected'
+- runFlow:
+    file: subflows/assert-selection.yaml
+    env:
+      ROW: '.*${HOST}/row-044'
+      SELECTED: 'false'
+- runFlow:
+    file: subflows/assert-selection.yaml
+    env:
+      ROW: '.*${HOST}/row-046'
+      SELECTED: 'false'
+- takeScreenshot: bulk-selection-far-down
+
+# --- back to the top -----------------------------------------------------------------
+- scrollUntilVisible:
+    element: 'Select .*${HOST}/row-000(,.*)?'
+    direction: UP
+    centerElement: true
+    timeout: 60000
+- waitForAnimationToEnd:
+    timeout: 5000
+- assertNotVisible: '.*${HOST}/row-045.*'
+- runFlow:
+    file: subflows/assert-selection.yaml
+    env:
+      ROW: '.*${HOST}/row-000'
+      SELECTED: 'true'
+- runFlow:
+    file: subflows/assert-selection.yaml
+    env:
+      ROW: '.*${HOST}/row-001'
+      SELECTED: 'false'
+- runFlow:
+    file: subflows/assert-selection.yaml
+    env:
+      ROW: '.*${HOST}/row-002'
+      SELECTED: 'true'
+- runFlow:
+    file: subflows/assert-selection.yaml
+    env:
+      ROW: '.*${HOST}/row-003'
+      SELECTED: 'false'
+- assertVisible:
+    id: 'bulk-count'
+    text: '3 selected'
+- takeScreenshot: bulk-selection-back-at-top
+
+# --- and down once more ---------------------------------------------------------------
+- scrollUntilVisible:
+    element: 'Select .*${HOST}/row-045(,.*)?'
+    direction: DOWN
+    centerElement: true
+    timeout: 60000
+- runFlow:
+    file: subflows/assert-selection.yaml
+    env:
+      ROW: '.*${HOST}/row-045'
+      SELECTED: 'true'

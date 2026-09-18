@@ -1,0 +1,89 @@
+# Unlock the app, prove a brief trip to the background leaves it open, then leave
+# it in the background past the relock grace window — THIS FILE IS THE FIRST STEP
+# OF A RUNNER-DRIVEN CASE. It ends with the app backgrounded; runner/mobile.ts
+# waits out the window on the host and then runs
+# `parts/lock-autorelock-resume.yaml`, which foregrounds and asserts the gate.
+#
+# The wait is the stimulus, not a settle: expo's lock provider stamps the time on
+# the AppState `background` transition and drops every session unlock on the next
+# `active` one if more than AUTO_RELOCK_AFTER_MS (60s) passed (docs/locks.md,
+# _auto-relock_). There is no settled state to poll while the app is away, and no
+# way to advance a simulator's clock, so real time has to pass. It is spent on the
+# host between two Maestro runs rather than inside a flow, where the only way to
+# spell a minute is an assertion expected to fail.
+#
+# What only a device shows: the real AppState transitions a Home press produces,
+# on both platforms, around an in-memory unlock.
+#
+#   maestro test mobile/flows/lock-autorelock.yaml -e USERNAME=… -e PASSWORD=… \
+#     -e ANCHOR_URL=… -e LOCK_PASSWORD=…
+#
+# The account is on Plus: setting a lock is the `locks` lever.
+appId: com.bracemark.app
+tags: [LOCK-AUTORELOCK-001, full, online, destructive, ios, android]
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+- runFlow:
+    file: subflows/add-link.yaml
+    env:
+      URL: ${ANCHOR_URL}
+- runFlow:
+    file: subflows/open-settings.yaml
+    env:
+      SECTION: misc
+# Not `centerElement`: the button ends the page, which cannot scroll it to the
+# middle, and nothing is pinned over the bottom of Settings.
+- scrollUntilVisible:
+    element:
+      id: 'app-lock-set'
+    direction: DOWN
+- tapOn:
+    id: 'app-lock-set'
+- tapOn:
+    id: 'lock-dialog-password'
+- inputText: ${LOCK_PASSWORD}
+- tapOn:
+    id: 'lock-dialog-submit'
+- extendedWaitUntil:
+    visible:
+      id: 'app-lock-remove'
+    timeout: 20000
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - tapOn:
+          text: 'Not Now'
+          optional: true
+
+# A cold start, so the unlock below is a session unlock like any other.
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible:
+      id: 'app-lock-pane'
+    timeout: 30000
+- runFlow:
+    file: subflows/unlock-pane.yaml
+    env:
+      PASSWORD: ${LOCK_PASSWORD}
+- extendedWaitUntil:
+    visible: ".*${ANCHOR_URL.replace('https://', '')}.*"
+    timeout: 20000
+
+# --- a brief background: still open ---------------------------------------------------------
+# `stopApp: false`, or `launchApp` terminates the running app first — a cold
+# start, which relocks by construction and proves nothing about the window.
+- pressKey: Home
+- launchApp:
+    stopApp: false
+- extendedWaitUntil:
+    visible: ".*${ANCHOR_URL.replace('https://', '')}.*"
+    timeout: 20000
+- assertNotVisible:
+    id: 'app-lock-pane'
+- takeScreenshot: still-unlocked-after-brief-background
+
+# --- and away: the runner waits out the window ----------------------------------------------
+- pressKey: Home

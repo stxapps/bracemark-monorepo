@@ -1,0 +1,41 @@
+# Part of TAXONOMY-DND-002 (mobile/flows/taxonomy-dnd.yaml carries the case).
+# Runs after the runner's second drag — B's grip straight to the right, one row
+# below C — and asserts B became C's child; then cold-starts and reads the order
+# and the tree back.
+#
+# The tree is read by behaviour, not by indent pixels: only a list with children
+# gets a Collapse toggle, and collapsing C must take B with it and leave A.
+appId: com.bracemark.app
+---
+- extendedWaitUntil:
+    visible: 'Collapse'
+    timeout: 10000
+- takeScreenshot: lists-after-reparent
+
+# --- a cold start --------------------------------------------------------------------
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible:
+      id: 'links-screen'
+    timeout: 30000
+- runFlow:
+    file: ../subflows/open-settings.yaml
+    env:
+      SECTION: lists
+- extendedWaitUntil:
+    visible:
+      text: ${LIST_C}
+      below: ${LIST_A}
+    timeout: 10000
+- assertVisible:
+    text: ${LIST_B}
+    below: ${LIST_C}
+- tapOn: 'Collapse'
+- extendedWaitUntil:
+    notVisible: ${LIST_B}
+    timeout: 10000
+- assertVisible: ${LIST_A}
+- assertVisible: ${LIST_C}
+- assertVisible: 'Expand'
+- takeScreenshot: lists-tree-after-cold-restart
