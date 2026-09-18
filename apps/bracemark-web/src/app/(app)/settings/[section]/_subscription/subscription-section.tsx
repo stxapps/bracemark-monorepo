@@ -174,7 +174,7 @@ export function SubscriptionSection() {
         // still reads "Some changes aren't syncing" until they reload or make an
         // edit. Safe to fire eagerly — cycles single-flight per account.
         requestSync();
-        setNotice(`You’re on ${PLAN_LABELS[data.plan]} now — thank you!`);
+        setNotice(`You’re on ${PLAN_LABELS[data.plan]} now — thank you.`);
       },
       timeoutNotice:
         'Payment received — your upgrade is still processing. It activates automatically; check back in a minute.',

@@ -127,7 +127,7 @@ export function SubscriptionSection() {
           // single-flight per account.
           requestSync();
           setBusy(null);
-          setNotice(`You’re on ${PLAN_LABELS[status.plan]} now — thank you!`);
+          setNotice(`You’re on ${PLAN_LABELS[status.plan]} now — thank you.`);
         },
         onFailed: (message) => {
           if (unmounted.current) return;
