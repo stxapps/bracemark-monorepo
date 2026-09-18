@@ -31,6 +31,22 @@ export const TYPOGRAPHY_SYNTAX = [
   },
 ];
 
+// The root's `@typescript-eslint/no-restricted-imports` paths — the `zod` shim
+// rule below carries the why. Exported for the same reason as the typography
+// selectors above: flat config gives a rule's options to the LAST block that
+// matches a file, whole, so a project block that restricts its own imports
+// under this rule replaces these rather than adding to them. Spread them in.
+// apps/bracemark-expo's share-extension fence does; before it did, every file
+// in the share tree could import 'zod' bare with lint green.
+export const RESTRICTED_IMPORT_PATHS = [
+  {
+    name: 'zod',
+    message:
+      "Import { z } from '@stxapps/shared' (or '../zod' inside that package) — it sets `jitless` before any schema is built, which is what keeps 'unsafe-eval' out of the CSP. A type-only import may stay.",
+    allowTypeImports: true,
+  },
+];
+
 export default [
   ...nx.configs['flat/base'],
   ...nx.configs['flat/typescript'],
@@ -222,19 +238,7 @@ export default [
     // matches both is safe.
     files: ['**/*.ts', '**/*.tsx'],
     rules: {
-      '@typescript-eslint/no-restricted-imports': [
-        'error',
-        {
-          paths: [
-            {
-              name: 'zod',
-              message:
-                "Import { z } from '@stxapps/shared' (or '../zod' inside that package) — it sets `jitless` before any schema is built, which is what keeps 'unsafe-eval' out of the CSP. A type-only import may stay.",
-              allowTypeImports: true,
-            },
-          ],
-        },
-      ],
+      '@typescript-eslint/no-restricted-imports': ['error', { paths: RESTRICTED_IMPORT_PATHS }],
     },
   },
   {

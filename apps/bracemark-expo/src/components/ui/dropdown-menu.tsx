@@ -15,6 +15,7 @@ import { FullWindowOverlay as RNFullWindowOverlay } from 'react-native-screens';
 import * as DropdownMenuPrimitive from '@rn-primitives/dropdown-menu';
 import { Check, ChevronDown, ChevronRight, ChevronUp } from 'lucide-react-native';
 
+import { useAppCovered } from '../../contexts/app-covered-provider';
 import { cn } from '../../lib/utils';
 import { Icon } from './icon';
 import { NativeOnlyAnimatedView, POPUP_FADE_MS } from './native-only-animated-view';
@@ -50,7 +51,8 @@ import { Text, TextClassContext } from './text';
 // to the content's fade. The fade itself is web-ui's 100ms, not the
 // registry's undated FadeIn (Reanimated's 300) — POPUP_FADE_MS in
 // native-only-animated-view.tsx. Content renders through @rn-primitives/portal —
-// the root `_layout.tsx` mounts the default `<PortalHost />` it lands in.
+// the root `_layout.tsx` mounts the default `<PortalHost />` it lands in. It renders
+// nothing while a relock covers the app (contexts/app-covered-provider.tsx).
 
 const MENU_FADE_IN = FadeIn.duration(POPUP_FADE_MS).reduceMotion(ReduceMotion.System);
 
@@ -273,6 +275,10 @@ function DropdownMenuContent({
     [insets, safeAreaInsets.top, safeAreaInsets.bottom, safeAreaInsets.left, safeAreaInsets.right],
   );
   const { waitedOnKeyboard } = React.useContext(KeyboardHandOffContext);
+  const covered = useAppCovered();
+
+  // As DialogContent (dialog.tsx): unmounted while a relock covers the app.
+  if (covered) return null;
 
   return (
     <DropdownMenuPrimitive.Portal hostName={portalHost}>

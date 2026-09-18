@@ -6,6 +6,7 @@ import { FullWindowOverlay as RNFullWindowOverlay } from 'react-native-screens';
 import * as AlertDialogPrimitive from '@rn-primitives/alert-dialog';
 import type { VariantProps } from 'class-variance-authority';
 
+import { useAppCovered } from '../../contexts/app-covered-provider';
 import { cn } from '../../lib/utils';
 import { buttonTextVariants, buttonVariants } from './button';
 import { NativeOnlyAnimatedView, POPUP_FADE_MS } from './native-only-animated-view';
@@ -25,7 +26,8 @@ import { Text, TextClassContext } from './text';
 // fade is web-ui's 100ms both ways, not the registry's 200 (after a 50ms delay)
 // in and 150 out — POPUP_FADE_MS in native-only-animated-view.tsx. Content
 // renders through @rn-primitives/portal — the root `_layout.tsx` mounts the
-// default `<PortalHost />` it lands in.
+// default `<PortalHost />` it lands in. It renders
+// nothing while a relock covers the app (contexts/app-covered-provider.tsx).
 
 const AlertDialog = AlertDialogPrimitive.Root;
 
@@ -130,6 +132,10 @@ function AlertDialogContent({
   React.useEffect(() => {
     if (open && Platform.OS !== 'web') Keyboard.dismiss();
   }, [open]);
+  const covered = useAppCovered();
+
+  // As DialogContent (dialog.tsx): unmounted while a relock covers the app.
+  if (covered) return null;
 
   return (
     <AlertDialogPortal hostName={portalHost}>

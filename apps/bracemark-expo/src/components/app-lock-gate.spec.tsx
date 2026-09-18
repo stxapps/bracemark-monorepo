@@ -1,7 +1,9 @@
 import * as React from 'react';
 import { useEffect } from 'react';
+import { useKeyboardState } from 'react-native-keyboard-controller';
 import { render, screen } from '@testing-library/react-native';
 
+import { useAppCovered } from '../contexts/app-covered-provider';
 import { Text } from './ui/text';
 import { AppLockGate } from './app-lock-gate';
 
@@ -30,7 +32,12 @@ function App() {
   useEffect(() => {
     mounts++;
   }, []);
-  return <Text>The app</Text>;
+  return (
+    <>
+      <Text>The app</Text>
+      <Text>{useAppCovered() ? 'covered' : 'uncovered'}</Text>
+    </>
+  );
 }
 
 const tree = () => (
@@ -80,4 +87,49 @@ test('a relock hides the app without unmounting it, and the unlock shows the sam
   expect(screen.queryByText('Lock pane')).toBeNull();
   expect(screen.getByText('The app')).toBeTruthy();
   expect(mounts).toBe(1);
+});
+
+// The half of the relock the hide can't reach: overlays the app opened portal
+// OUT of this subtree, and only unmount because the kit reads this flag
+// (docs/locks.md, _overlays over a relock_; the kit's side is
+// ui/overlays-under-relock.spec.tsx). Drop the provider, or feed it a constant,
+// and a menu left open over a relock stays up over the pane — the gate spec
+// above stays green, since the app itself is still hidden.
+test('a relock tells what the app opened that it is covered, and the unlock that it is not', () => {
+  mockAppLock = { ...mockAppLock, unlocked: true };
+  const view = render(tree());
+  expect(screen.getByText('uncovered')).toBeTruthy();
+
+  mockAppLock = { ...mockAppLock, unlocked: false };
+  view.rerender(tree());
+  expect(screen.getByText('covered', { includeHiddenElements: true })).toBeTruthy();
+
+  mockAppLock = { ...mockAppLock, unlocked: true };
+  view.rerender(tree());
+  expect(screen.getByText('uncovered')).toBeTruthy();
+});
+
+// ...and it stays covered until the pane's keyboard is down. A password unlock
+// uncovers the app in the same commit the keyboard starts to hide, and an
+// overlay re-presented into that commit came back laid out around a keyboard
+// that then went away (the advanced-search sheet's footer, stranded a
+// keyboard's height up the screen on Android).
+test('an unlock keeps the app covered until the keyboard it was typed on is down', () => {
+  let keyboardUp = true;
+  (useKeyboardState as jest.Mock).mockImplementation((select: (s: object) => unknown) =>
+    select({ isVisible: keyboardUp }),
+  );
+  mockAppLock = { ...mockAppLock, unlocked: true };
+  const view = render(tree());
+  mockAppLock = { ...mockAppLock, unlocked: false };
+  view.rerender(tree());
+
+  mockAppLock = { ...mockAppLock, unlocked: true };
+  view.rerender(tree());
+  expect(screen.getByText('The app')).toBeTruthy();
+  expect(screen.getByText('covered')).toBeTruthy();
+
+  keyboardUp = false;
+  view.rerender(tree());
+  expect(screen.getByText('uncovered')).toBeTruthy();
 });

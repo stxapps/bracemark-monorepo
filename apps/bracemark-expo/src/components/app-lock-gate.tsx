@@ -1,11 +1,13 @@
-import { type ReactNode, useRef } from 'react';
+import { type ReactNode, useRef, useState } from 'react';
 import { View } from 'react-native';
+import { useKeyboardState } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { withUniwind } from 'uniwind';
 
 import { useLocks } from '@stxapps/expo-react';
 import { LOCK_COPY } from '@stxapps/react';
 
+import { AppCoveredProvider } from '../contexts/app-covered-provider';
 import { LockPane } from './lock-pane';
 
 const StyledSafeAreaView = withUniwind(SafeAreaView);
@@ -32,15 +34,42 @@ const StyledSafeAreaView = withUniwind(SafeAreaView);
 // gave. A cold start is unchanged — the app is never mounted until the first
 // unlock, so nothing can flash — and the wrapper is rendered from that first
 // unlock on, so relocking never changes the element tree above the navigator.
+//
+// `display: none` only reaches what is IN the subtree, and not every overlay the
+// app opens is (docs/locks.md, _overlays over a relock_). The kit's dialogs and
+// menus portal to the root PortalHost — on iOS inside a FullWindowOverlay — and
+// stayed up over the pane, so the provider below tells them to unmount while
+// covered (contexts/app-covered-provider.tsx). A react-native `Modal` is its
+// own window on Android and stayed up too; its one user gates `visible` on the
+// same flag. The router modal (`edit-link`) IS reached: hidden on both
+// platforms — though iOS dismisses it outright, so an unsaved edit there does
+// not survive the relock.
+// Lint confines new overlays to the kit (eslint.config.mjs).
+//
+// And the flag outlasts the pane until the pane's KEYBOARD is down. Unlocking
+// by password ends with the pane's field focused, so the keyboard is still up
+// — or mid-hide — in the commit that uncovers the app. An overlay that
+// re-presents in that commit mounts into it: the advanced-search sheet's
+// StickyFooter seeded its lift from the keyboard that was up and then missed
+// the hide, and stayed a keyboard's height up the screen (measured on Android).
+// Held until the keyboard reports hidden, everything returns into a settled
+// screen; a biometric unlock, with no keyboard, releases at once.
 export function AppLockGate({ children }: { children: ReactNode }) {
   const { status, appLock, unlockApp, biometricAvailable, biometricLabel, unlockAppWithBiometric } =
     useLocks();
   const shown = useRef(false);
+  const keyboardUp = useKeyboardState((state) => state.isVisible);
+  const [settling, setSettling] = useState(false);
 
   if (status === 'checking') return null;
 
   const locked = appLock.exists && !appLock.unlocked;
   if (!locked) shown.current = true;
+  // State adjusted during render (React's documented pattern), so the latch
+  // engages in the same commit the pane goes up and never lags a frame behind.
+  if (locked && !settling) setSettling(true);
+  if (!locked && settling && !keyboardUp) setSettling(false);
+  const covered = locked || settling;
 
   const pane = locked ? (
     <StyledSafeAreaView className="flex-1 bg-background">
@@ -63,7 +92,9 @@ export function AppLockGate({ children }: { children: ReactNode }) {
 
   return (
     <>
-      <View style={{ flex: 1, display: locked ? 'none' : 'flex' }}>{children}</View>
+      <View style={{ flex: 1, display: locked ? 'none' : 'flex' }}>
+        <AppCoveredProvider value={covered}>{children}</AppCoveredProvider>
+      </View>
       {pane}
     </>
   );

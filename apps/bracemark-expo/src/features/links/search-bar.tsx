@@ -25,6 +25,7 @@
 //    `apply`).
 
 import { useEffect, useMemo, useState } from 'react';
+// eslint-disable-next-line no-restricted-imports -- `visible` answers to useAppCovered below
 import { Modal, Pressable, ScrollView, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -40,6 +41,7 @@ import { Button } from '../../components/ui/button';
 import { Icon } from '../../components/ui/icon';
 import { Input } from '../../components/ui/input';
 import { Text } from '../../components/ui/text';
+import { useAppCovered } from '../../contexts/app-covered-provider';
 import { usePaywall } from '../../contexts/paywall-provider';
 import { cn } from '../../lib/utils';
 import { useLinksPage } from './page-provider';
@@ -347,6 +349,7 @@ function AdvancedSearch() {
   const { entitlements } = useEntitlements();
   const paywall = usePaywall();
   const router = useRouter();
+  const covered = useAppCovered();
 
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<Draft>(() => initDraft(query));
@@ -447,9 +450,13 @@ function AdvancedSearch() {
       </Button>
       {/* pageSheet on iOS (swipe-down fires onRequestClose too); Android gets a
           plain full-screen modal, where the SafeAreaView supplies the status-bar
-          inset the sheet shape makes unnecessary on iOS. */}
+          inset the sheet shape makes unnecessary on iOS.
+          `!covered`: on Android this Modal is its own dialog window, which
+          AppLockGate's `display: none` does not reach, so a relock with the
+          sheet up left it OVER the lock pane (measured; iOS already hid it).
+          The draft lives in this component, not the sheet, so it survives. */}
       <Modal
-        visible={open}
+        visible={open && !covered}
         animationType="slide"
         presentationStyle="pageSheet"
         onRequestClose={() => setOpen(false)}

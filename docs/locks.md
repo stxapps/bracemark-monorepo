@@ -306,6 +306,55 @@ app is not mounted before the first unlock — and `app-lock-gate.spec.tsx` pins
 both halves. Web keeps the plain swap, and its menu relock followed by an unlock
 lands back on the page it left (`LOCK-APP-001`).
 
+#### overlays over a relock
+
+**`display: none` hides the subtree, not what the subtree opened.** An overlay
+open when the relock lands — the usual case is the auto-relock, since the user
+backgrounded the app with it up — is drawn wherever its channel draws, and three
+channels were measured on the iOS simulator and the Android emulator by opening
+each, backgrounding past the grace window, and foregrounding:
+
+| channel                                             | iOS                    | Android                |
+| --------------------------------------------------- | ---------------------- | ---------------------- |
+| the kit's Dialog / AlertDialog / DropdownMenu       | **over the pane**      | **over the pane**      |
+| react-native `Modal` (the advanced-search sheet)    | hidden                 | **over the pane**      |
+| router modal (`edit-link`, `presentation: 'modal'`) | hidden — and dismissed | hidden, back on unlock |
+
+The kit's overlays portal to the root `PortalHost`, outside the gate — on iOS
+inside a `FullWindowOverlay`, where the leaked menu also hid the pane from the
+accessibility tree (Maestro could not find `app-lock-pane` behind it). An Android
+`Modal` is its own dialog window. Both stayed painted and tappable over "Bracemark
+is locked", which the swap had never allowed.
+
+The fix is per channel, not per call site, so a new dialog cannot miss it. The
+gate provides `useAppCovered()` (`contexts/app-covered-provider.tsx`) to its
+subtree, and the three kit content components render `null` while it is set; the
+caller still owns the open state, so the overlay comes back on unlock (a field
+typed into inside it does not — the content remounted). The one `Modal` gates `visible` on
+the same flag, keeping its draft in the component that owns the sheet. What makes
+it hold for the next overlay is lint: the app's ESLint config forbids
+`@rn-primitives/*` outside `src/components/ui` and a bare `Modal` from
+`react-native`, so an overlay has to come through the kit or say why not. Lint
+only routes it there; `components/ui/overlays-under-relock.spec.tsx` checks that
+the kit then honours the flag — one row per portaled surface, covered → gone and
+uncovered → back, so a new kit overlay joins by reading the flag and adding its
+row.
+
+The flag outlasts the pane by one thing: **the pane's keyboard.** A password
+unlock uncovers the app in the same commit the keyboard starts to hide, and the
+advanced-search sheet, re-presented into that commit, seeded its `StickyFooter`
+lift from the keyboard that was up, missed the hide, and left Clear/Search
+stranded a keyboard's height up an empty screen (Android, measured). So the gate
+holds `covered` until keyboard-controller reports the keyboard hidden; a
+biometric unlock, with no keyboard, releases at once. `app-lock-gate.spec.tsx`
+pins the hold.
+
+The router modal needs nothing, but iOS **dismisses** it rather than hiding it:
+an unsaved edit in the link editor is lost to an auto-relock there, while Android
+brings the editor back as it was. The navigator is consistent afterwards — the
+editor reopens and closes normally. Web has none of this: its swap unmounts the
+app, and a portaled Radix dialog with it.
+
 ### web / expo parity
 
 The providers are mirrored; the shared coverage math and verifier parameters keep

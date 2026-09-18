@@ -1,6 +1,10 @@
 import nx from '@nx/eslint-plugin';
 
-import baseConfig, { TYPOGRAPHY_IGNORES, TYPOGRAPHY_SYNTAX } from '../../eslint.config.mjs';
+import baseConfig, {
+  RESTRICTED_IMPORT_PATHS,
+  TYPOGRAPHY_IGNORES,
+  TYPOGRAPHY_SYNTAX,
+} from '../../eslint.config.mjs';
 
 export default [
   ...nx.configs['flat/react'],
@@ -63,6 +67,48 @@ export default [
     },
   },
   {
+    // OVERLAYS GO THROUGH THE KIT, mechanized. AppLockGate hides a relocked app
+    // with `display: none`, and an overlay drawn OUTSIDE that subtree stays up
+    // over the lock pane — painted, tappable, and on iOS hiding the pane from
+    // VoiceOver. Two channels escape it: @rn-primitives' portals (to the root
+    // PortalHost; on iOS a FullWindowOverlay) and a react-native `Modal` on
+    // Android (its own dialog window). The kit's portaled content answers to
+    // useAppCovered (contexts/app-covered-provider.tsx), so an overlay built
+    // from src/components/ui is covered by construction; one built on the
+    // primitives directly, or on a bare Modal, is not, and nothing but a device
+    // relock would show it (docs/locks.md, _overlays over a relock_). A router modal needs no
+    // rule — the gate's hide reaches it on both platforms.
+    //
+    // CORE `no-restricted-imports`, not the typescript-eslint one the blocks
+    // around it use: flat config hands the last matching block's options to a
+    // rule whole, so reusing that name here would drop the root's `zod` path for
+    // this app (or be dropped by the share fence below).
+    files: ['**/*.ts', '**/*.tsx'],
+    ignores: ['**/src/components/ui/**', '**/src/app/_layout.tsx', '**/*.spec.ts', '**/*.spec.tsx'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: 'react-native',
+              importNames: ['Modal'],
+              message:
+                'A react-native Modal is its own window on Android, which a relock cannot hide — it stays over the lock pane. Use the kit’s Dialog, or gate `visible` on useAppCovered() (search-bar.tsx) and disable this line with that reason. docs/locks.md, _overlays over a relock_.',
+            },
+          ],
+          patterns: [
+            {
+              group: ['@rn-primitives/*'],
+              message:
+                'Build overlays from src/components/ui — its portaled content unmounts while a relock covers the app (useAppCovered); a primitive used directly stays over the lock pane. docs/locks.md, _overlays over a relock_.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     // THE iOS SHARE-EXTENSION FENCE, mechanized. Everything this tree
     // transitively imports is executed on every cold share, in a separate
     // process with its own memory budget (docs/share-sheet.md, _keep
@@ -91,7 +137,10 @@ export default [
       '@typescript-eslint/no-restricted-imports': [
         'error',
         {
+          // The root's paths first: this block REPLACES the root's options for
+          // these files rather than adding to them (RESTRICTED_IMPORT_PATHS).
           paths: [
+            ...RESTRICTED_IMPORT_PATHS,
             {
               name: '@stxapps/expo-react',
               message:
