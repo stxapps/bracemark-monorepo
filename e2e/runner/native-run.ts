@@ -135,7 +135,28 @@ async function probeMetro(origin: string): Promise<void> {
   }
 }
 
+// With Simulator's _Connect Hardware Keyboard_ on, a focused field shows a caret
+// and no keyboard, so every flow would drive a screen no phone has and the
+// keyboard-shaped bugs in docs/soft-keyboard.md would pass unseen. It is one
+// Simulator.app-wide key, not a per-device one, and absent means on. The key is
+// only read at Simulator launch, so a `defaults write` without a restart passes
+// this check and still runs with the hardware keyboard.
+async function assertIosSoftwareKeyboard(): Promise<void> {
+  const result = await capture(
+    'defaults',
+    ['read', 'com.apple.iphonesimulator', 'ConnectHardwareKeyboard'],
+    { allowFailure: true },
+  );
+  if (result.stdout.trim() === '0') return;
+  throw new Error(
+    'Connect Hardware Keyboard is on in Simulator, so no software keyboard would appear. Run ' +
+      '`defaults write com.apple.iphonesimulator ConnectHardwareKeyboard -bool false`, restart ' +
+      'Simulator, and re-boot the device (docs/app-drivers.md, _the software keyboard_).',
+  );
+}
+
 async function iosDevice(deviceId: string): Promise<{ device: DeviceIdentity; app: AppIdentity }> {
+  await assertIosSoftwareKeyboard();
   const result = await capture('xcrun', ['simctl', 'list', 'devices', 'booted', '--json']);
   const parsed = JSON.parse(result.stdout) as {
     devices: Record<

@@ -147,6 +147,27 @@ toward 4 GB as the app writes and never past it. The cold-boot settings do hold
 — the shutdown log says `Snapshots have been disabled by the user, save request
 is ignored`, which is the ~2 GB that is _not_ on disk.
 
+#### ⚠ the software keyboard
+
+**Both platforms run with the on-screen keyboard up**, by hand and in e2e,
+because a phone always has one and every bug in
+[soft-keyboard.md](./soft-keyboard.md) is invisible without it. The flows are
+written against it: `flows/add-link.yaml` leaves out `hideKeyboard` because the
+panel rides the keyboard, so Save is on screen.
+
+Android gets it with no setting. `hw.keyboard = yes` (the table above) is
+what lets Maestro's `inputText` type, and the IME still appears on focus.
+
+iOS gets it from a **Simulator.app** setting, not a device one: _I/O → Keyboard →
+Connect Hardware Keyboard_ (⇧⌘K), stored as the single global key
+`ConnectHardwareKeyboard` in `com.apple.iphonesimulator`. When it is on or unset,
+a focused field shows a caret and **no keyboard at all**, and nothing fails. Maestro's
+`inputText` types either way, so a run stays green on a screen no iPhone has.
+`e2e/runner/native-run.ts` refuses an iOS run unless the key reads `0`. Simulator
+reads the key only at launch, so after changing it, restart Simulator and
+re-boot the device. The steps are in `.claude/skills/verify/SKILL.md`,
+_Gotchas_.
+
 **A real iPhone is possible and is the highest-friction path.** It needs a dev
 build signed with a profile carrying the device UDID, and WebDriverAgent
 installed on the phone for tap and query — which needs its own signing.

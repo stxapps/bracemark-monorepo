@@ -391,11 +391,15 @@ this watch 1 time, most recently because: MustScanSubDirs`. With the watch
   Resolve the listener's cwd first (Gotchas, _a port can belong to another
   clone_).
 
-- **The simulator may have no software keyboard at all.** With Simulator's
-  _Connect Hardware Keyboard_ on (the default here), a focused field shows a
-  caret and NO keyboard — so any keyboard-shaped change (avoidance, dismissal,
-  a sheet that sizes itself around the keys) photographs as if the keyboard did
-  not exist. Turn it off before driving one, and note it restarts Simulator:
+- **The simulator must show the software keyboard — check before trusting a
+  keyboard-shaped result.** It is set up that way here and the iOS e2e runner
+  refuses to start otherwise, but ⇧⌘K flips it in one keystroke. With
+  Simulator's _Connect Hardware Keyboard_ on (Apple's default when the key is
+  unset), a focused field shows a caret and NO keyboard — so any
+  keyboard-shaped change (avoidance, dismissal, a sheet that sizes itself around
+  the keys) photographs as if the keyboard did not exist.
+  `defaults read com.apple.iphonesimulator ConnectHardwareKeyboard` must print
+  `0`. If it does not, turn it off, and note that this restarts Simulator:
 
   ```sh
   defaults write com.apple.iphonesimulator ConnectHardwareKeyboard -bool false
@@ -405,8 +409,10 @@ this watch 1 time, most recently because: MustScanSubDirs`. With the watch
   Quitting Simulator SHUTS DOWN the booted device and boots its own default
   (an iPhone 17, not the 17 Pro these notes and `docs/app-drivers.md` measure
   against) — re-boot the right one and re-check `simctl list devices booted`
-  before reading a single pixel. Maestro's `inputText` works either way, which
-  is why the e2e flows never noticed.
+  before reading a single pixel. Maestro's `inputText` works either way, so a
+  flow never notices on its own. The key is read only at launch, so a
+  `defaults read` of `0` still lies until Simulator restarts
+  (`docs/app-drivers.md`, _the software keyboard_).
 
 - **An empty `maestro hierarchy` is not always a bug.** Editing a file while an
   overlay or a modal is on screen can leave the accessibility tree holding the
