@@ -3,7 +3,6 @@ export * from './contexts/extraction-provider';
 export * from './contexts/favicon-provider';
 export * from './contexts/file-content-provider';
 export * from './contexts/lock-provider';
-export * from './contexts/share-bridge';
 export * from './contexts/sync-provider';
 export * from './data/app-group';
 export * from './data/clear-data';

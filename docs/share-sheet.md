@@ -607,14 +607,17 @@ not by the in-sheet kick landing.
 
 ### the main app's half — ShareBridge
 
-`ShareBridge` (`@stxapps/expo-react` `contexts/share-bridge.tsx`) is a
-renderless component mounted inside `<SyncProvider>` in bracemark-expo's
-`(app)/_layout` — the app-side pump for both App Group artifacts:
+`ShareBridge` (bracemark-expo `components/share-bridge.tsx`) is a renderless
+component mounted inside `<ExtractionProvider>` — and so inside `<SyncProvider>`
+— in `(app)/_layout`, since it reads both `useSync` and `useExtraction`. It is
+the app-side pump for both App Group artifacts:
 
 - **inbound**: `drainShareOutbox()` on mount and on every return to foreground;
   a drain that landed drafts calls `requestSync()` so the pending ops push
   immediately and the read edge shows the user their own share without a
-  refresh pill.
+  refresh pill, and hands the landed links to `extractNow` — a share is a save
+  gesture made on this device, so its page fetch needs no opt-in
+  ([link-extraction.md](./link-extraction.md), _the stance_).
 - **outbound**: `refreshShareTaxonomy()` after every drain (a draft can mint
   new lists/tags), after every completed sync cycle (`lastSyncAt` — a pull may
   have changed lists/tags), and on every local edit (`localWriteNonce`). Locks
@@ -842,7 +845,7 @@ can neither see the share sheet nor anything in this process. →
 | snapshot + outbox + saveSharedDraft (with both post-Add kicks) + drain/refresh                                       | `@stxapps/expo-react` `data/share-store.ts`                                                                                                                                                                                                                                                                         |
 | theme mirror (app writes, sheet reads) + the sheet's apply step                                                      | `@stxapps/expo-react` `data/share-theme-store.ts` + `features/share/share-theme.ts`, written from `components/theme-provider.tsx` ([theme.md](./theme.md))                                                                                                                                                          |
 | best-effort upload (entities from the draft, sign → PUT → commit)                                                    | `@stxapps/expo-react` `data/share-upload.ts`                                                                                                                                                                                                                                                                        |
-| app-side pump: outbox drain on launch/foreground, snapshot refresh on sync/edit                                      | `@stxapps/expo-react` `contexts/share-bridge.tsx`, mounted in `(app)/_layout`                                                                                                                                                                                                                                       |
+| app-side pump: outbox drain on launch/foreground, snapshot refresh on sync/edit                                      | bracemark-expo `components/share-bridge.tsx`, mounted in `(app)/_layout`                                                                                                                                                                                                                                            |
 | session mirror in the shared Keychain (App Group id as access group) + `loadSharedSession`                           | `@stxapps/expo-react` `data/session-store.ts` over `@stxapps/expo-crypto` `lib/shared-keychain.ts` (BracemarkSharedKeychain, iOS Swift)                                                                                                                                                                             |
 | write edge (writeLink/writeTag/writeExtraction)                                                                      | `@stxapps/expo-react` `data/mutations.ts`                                                                                                                                                                                                                                                                           |
 | iOS extension target, App Group, preprocessing JS                                                                    | `expo-share-extension` plugin in `app.config.ts` + `share-extension/preprocessing.js` + `withShareExtension` in `metro.config.js`                                                                                                                                                                                   |

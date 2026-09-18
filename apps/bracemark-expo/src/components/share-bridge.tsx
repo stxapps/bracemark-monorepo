@@ -1,9 +1,12 @@
 import { useEffect } from 'react';
 import { AppState } from 'react-native';
 
-import { drainShareOutbox, refreshShareTaxonomy } from '../data/share-store';
-import { useExtraction } from './extraction-provider';
-import { useSync } from './sync-provider';
+import {
+  drainShareOutbox,
+  refreshShareTaxonomy,
+  useExtraction,
+  useSync,
+} from '@stxapps/expo-react';
 
 // The MAIN APP's half of the share sheet (docs/share-sheet.md), as a renderless
 // component mounted inside <SyncProvider> (it reads useSync): keeps the two App

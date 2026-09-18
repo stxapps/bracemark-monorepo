@@ -5,13 +5,13 @@ import {
   FaviconProvider,
   FileContentProvider,
   LockProvider,
-  ShareBridge,
   SyncProvider,
 } from '@stxapps/expo-react';
 
 import { AppLockGate } from '../../components/app-lock-gate';
 import { AuthGuard } from '../../components/auth-guard';
 import { InitialSyncGate } from '../../components/initial-sync-gate';
+import { ShareBridge } from '../../components/share-bridge';
 import { PaywallProvider } from '../../contexts/paywall-provider';
 
 // The signed-in app group — `/links`, `/settings`. Mirrors bracemark-web's
