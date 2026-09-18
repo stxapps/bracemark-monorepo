@@ -207,9 +207,15 @@ function NavItem({
   const { selection: current, setSimpleQuery } = useLinksPage();
   const active = isActive(current, selection);
 
+  // No `gap` on the row: the 4px that used to sit BETWEEN the chevron slot and
+  // the row is an `ml-1` BEFORE the slot instead (web twin, same move). The icon
+  // and label stay put; only the chevron moves, 4px right — closer to the icon
+  // it belongs to (16px to the glyph, was 20) and indented under the section
+  // header's chevron (centre 20 vs the header's 15) rather than stacking on it.
+  // The trailing action takes its own `ml-1` for the same 4px the gap gave it.
   return (
     <View
-      className="w-full flex-row items-center gap-1"
+      className="w-full flex-row items-center"
       style={depth > 0 ? { paddingLeft: depth * 16 } : undefined}
     >
       {onToggle ? (
@@ -221,7 +227,7 @@ function NavItem({
           aria-label={expanded ? 'Collapse' : 'Expand'}
           // 32, not the size's own 36: this is a row affordance in a dense tree
           // and its web twin pins the same box for the same reason.
-          className="size-8 shrink-0"
+          className="ml-1 size-8 shrink-0"
         >
           {/* The open state SWAPS THE GLYPH; it does NOT rotate one, which is
               what the web twin does (`rotate-90` on a ChevronRight). Uniwind
@@ -240,7 +246,7 @@ function NavItem({
           />
         </Button>
       ) : showSlot ? (
-        <View className="size-8 shrink-0" />
+        <View className="ml-1 size-8 shrink-0" />
       ) : null}
       <Pressable
         role="button"
@@ -514,7 +520,7 @@ export function Sidebar({ closeDrawer }: { closeDrawer: () => void }) {
         size="icon-sm"
         aria-label="Lock list"
         onPress={() => lockList(id)}
-        className="size-8 shrink-0"
+        className="ml-1 size-8 shrink-0"
       >
         <Icon as={LockOpen} className="size-3.5 text-muted-foreground" />
       </Button>

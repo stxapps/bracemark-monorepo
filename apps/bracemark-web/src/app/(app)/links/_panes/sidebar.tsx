@@ -240,9 +240,16 @@ function NavItem({
   const onNavigate = useContext(SidebarNavigateContext);
   const active = isActive(current, selection);
 
+  // No `gap` on the row: the 4px that used to sit BETWEEN the chevron slot and
+  // the row button is an `ml-1` BEFORE the slot instead. The icon and label
+  // stay put (icon at 36px, label at 60px); only the chevron moves, 4px right —
+  // so it sits closer to the icon it belongs to (13px to the glyph, was 17) and
+  // indents under the section header's chevron (centre 16 vs the header's 12)
+  // rather than stacking on it. The trailing action takes its own `ml-1` for
+  // the same 4px the gap gave it.
   return (
     <div
-      className="group/navitem flex w-full items-center gap-1"
+      className="group/navitem flex w-full items-center"
       style={depth > 0 ? { paddingLeft: `${depth * 16}px` } : undefined}
     >
       {onToggle ? (
@@ -252,14 +259,14 @@ function NavItem({
           aria-expanded={expanded}
           aria-label={expanded ? 'Collapse' : 'Expand'}
           className={cn(
-            'flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
+            'ml-1 flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
             FOCUS_RING,
           )}
         >
           <ChevronRight className={cn('size-3.5 transition-transform', expanded && 'rotate-90')} />
         </button>
       ) : showSlot ? (
-        <span className="size-6 shrink-0" />
+        <span className="ml-1 size-6 shrink-0" />
       ) : null}
       <button
         type="button"
@@ -380,12 +387,13 @@ function Section({
         onClick={() => onToggle(id)}
         aria-expanded={!isCollapsed}
         className={cn(
-          // `px-1.5`, not the `px-2` the rows below use: the header's chevron is
-          // `size-3` against the rows' `size-6` slot, so 6px + 6px puts its
-          // centre at 12px — exactly the rows' chevron centre (the slot sits at
-          // x=0, the row div carries no padding). At `px-2` it sat 2px right of
-          // every chevron under it. Both are children of the same `nav.px-2`,
-          // so that one origin is what makes the two numbers comparable.
+          // `px-1.5`, not the `px-2` the rows below use: the header's `size-3`
+          // chevron centres at 6px + 6px = 12px, 4px LEFT of the top-level
+          // rows' chevron centre (16px: NavItem's `ml-1` + half its `size-6`
+          // slot). That step is the point — a row's chevron indents under its
+          // section's rather than stacking on it, so the header reads as the
+          // parent. Both are children of the same `nav.px-2`, so that one
+          // origin is what makes the two numbers comparable.
           'flex w-full items-center gap-1 rounded-md px-1.5 py-1 text-muted-foreground transition-colors hover:text-foreground',
           FOCUS_RING,
         )}
@@ -476,7 +484,7 @@ export function SidebarBody({
         // which is worse than absent. Same "always shown, no hover" resolution
         // bracemark-expo reached for its drawer (docs/locks.md).
         className={cn(
-          'flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition',
+          'ml-1 flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition',
           'opacity-0 group-hover/navitem:opacity-100 hover:bg-muted hover:text-foreground',
           'focus-visible:opacity-100 pointer-coarse:opacity-100',
           FOCUS_RING,
