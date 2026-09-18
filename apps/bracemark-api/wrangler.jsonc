@@ -109,8 +109,9 @@
         "R2_SECRET_ACCESS_KEY": "local-secret-access-key",
         "R2_USER_FILES_BUCKET": "bracemark-user-files-dev",
         // Paddle Billing (routes/iap.ts). Local dev talks to the SANDBOX; the
-        // price ids are your sandbox catalog's pri_… ids (placeholders until the
-        // sandbox products exist). The webhook secret + API key are SECRETS —
+        // price ids are the sandbox catalog's pri_… ids (Plus exists; Pro is a
+        // placeholder until its sandbox product does). The webhook secret + API
+        // key are SECRETS —
         // put them in .dev.vars locally:
         //   PADDLE_WEBHOOK_SECRET=pdl_ntfset_…   PADDLE_API_KEY=pdl_sdbx_apikey_…
         "PADDLE_API_BASE": "https://sandbox-api.paddle.com",
@@ -118,7 +119,7 @@
         // on sale FIRST. The read side accepts them all (an unrecognized price
         // is a permanent drop — the subscriber pays and is never entitled), the
         // checkout sells the first. Add, never replace.
-        "PADDLE_PRICE_ID_PLUS": "TODO: sandbox pri_… id for Plus (yearly)",
+        "PADDLE_PRICE_ID_PLUS": "pri_01m2sbmvgv19d85spx9wbqgab8",
         "PADDLE_PRICE_ID_PRO": "TODO: sandbox pri_… id for Pro (yearly)",
         // Store IAP (routes/iap.ts verify + notify; lib/appstore.ts,
         // lib/playstore.ts). Local dev talks to the App Store SANDBOX host. The
@@ -235,7 +236,7 @@
         // on sale FIRST. The read side accepts them all (an unrecognized price
         // is a permanent drop — the subscriber pays and is never entitled), the
         // checkout sells the first. Add, never replace.
-        "PADDLE_PRICE_ID_PLUS": "TODO: sandbox pri_… id for Plus (yearly)",
+        "PADDLE_PRICE_ID_PLUS": "pri_01m2sbmvgv19d85spx9wbqgab8",
         "PADDLE_PRICE_ID_PRO": "TODO: sandbox pri_… id for Pro (yearly)",
         // Store IAP — staging verifies against the App Store SANDBOX. Secrets,
         // set separately:

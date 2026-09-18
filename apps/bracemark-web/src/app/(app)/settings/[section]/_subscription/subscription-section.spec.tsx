@@ -39,16 +39,19 @@ const PLUS = {
   willRenew: true,
 } as const;
 
+// Paid, but a renewal failed and Paddle is retrying — the fold's `grace`.
+const PLUS_GRACE = { ...PLUS, status: 'grace' } as const;
+
 // Read fresh on every render, so assigning it mid-test is how the webhook
 // "lands" — the next render after any state change picks up the new plan, which
 // is exactly what the real query does when refetch resolves with a wider fold.
-let mockSubscription: typeof FREE | typeof PLUS = FREE;
+let mockSubscription: typeof FREE | typeof PLUS | typeof PLUS_GRACE = FREE;
 const mockRefetch = jest.fn(() => Promise.resolve({ data: mockSubscription }));
 const mockRequestSync = jest.fn();
 const mockApiCall = jest.fn(() => Promise.resolve({ transactionId: 'txn_test' }));
-const mockOpenPaddleCheckout = jest.fn(
-  ({ onCompleted }: { onCompleted: () => void }) => void onCompleted(),
-);
+// What the section hands openPaddleCheckout — the slice these tests read.
+type OpenOptions = { transactionId: string; onCompleted: () => void };
+const mockOpenPaddleCheckout = jest.fn(({ onCompleted }: OpenOptions) => void onCompleted());
 
 jest.mock('@stxapps/web-react', () => ({
   useEntitlements: () => ({
@@ -64,7 +67,7 @@ jest.mock('@stxapps/react', () => ({
 }));
 
 jest.mock('@/lib/paddle', () => ({
-  openPaddleCheckout: (opts: { onCompleted: () => void }) => mockOpenPaddleCheckout(opts),
+  openPaddleCheckout: (opts: OpenOptions) => mockOpenPaddleCheckout(opts),
 }));
 
 jest.mock('./use-paddle-prices', () => ({
@@ -115,5 +118,87 @@ describe('SubscriptionSection', () => {
     // "still processing" a contradiction rather than merely stale.
     expect(screen.getByText('Plus')).toBeTruthy();
     expect(screen.queryByText(/still processing/)).toBeNull();
+  });
+
+  // Paddle's emails link to this page as `?_ptxn=txn_…` (it is the default
+  // payment link). Before this path existed the page opened nothing for a
+  // subscriber: Paddle.js only loaded for a free account's price preview, so a
+  // customer in dunning clicking "update your payment details" got a settings
+  // page and no way to pay from it.
+  describe('a Paddle payment link', () => {
+    // Hold the overlay open instead of completing it at once, so each test can
+    // decide what the webhook has done by the time payment finishes.
+    function holdOverlay(): { opts: () => OpenOptions | undefined } {
+      let captured: OpenOptions | undefined;
+      mockOpenPaddleCheckout.mockImplementationOnce((opts: OpenOptions) => {
+        captured = opts;
+      });
+      return { opts: () => captured };
+    }
+
+    // The dunning account renders the `grace` notice, an error-tone
+    // SettingsNotice that scrolls itself into view on mount — which jsdom, with
+    // no layout, doesn't implement (the settings-kit spec stubs it the same way).
+    beforeAll(() => {
+      Element.prototype.scrollIntoView = jest.fn();
+    });
+
+    afterEach(() => {
+      window.history.replaceState(null, '', '/');
+    });
+
+    it('opens its checkout on arrival and takes it out of the address bar', async () => {
+      window.history.replaceState(null, '', '/settings/subscription?_ptxn=txn_01abc&keep=1');
+      const overlay = holdOverlay();
+
+      await act(async () => {
+        render(<SubscriptionSection />);
+      });
+
+      expect(overlay.opts()?.transactionId).toBe('txn_01abc');
+      // Stripped, and only that parameter: a reload must not re-open the
+      // overlay, and Paddle.js must not find it to auto-open a second one.
+      expect(window.location.search).toBe('?keep=1');
+
+      // A free account completing it is a PURCHASE — the recovery email for an
+      // abandoned checkout — so it takes the activation poll.
+      mockSubscription = PLUS;
+      await act(async () => {
+        overlay.opts()?.onCompleted();
+      });
+      expect(screen.getByText(/You’re on Plus now/)).toBeTruthy();
+      expect(mockRequestSync).toHaveBeenCalled();
+    });
+
+    it('waits for a payment issue to clear when a subscriber in dunning pays', async () => {
+      mockSubscription = PLUS_GRACE;
+      window.history.replaceState(null, '', '/settings/subscription?_ptxn=txn_01dunning');
+      const overlay = holdOverlay();
+
+      await act(async () => {
+        render(<SubscriptionSection />);
+      });
+      expect(overlay.opts()?.transactionId).toBe('txn_01dunning');
+
+      // The plan never moves here, so the purchase poll's "plan changed" test
+      // would spin to its timeout. What the webhook moves is the status.
+      mockSubscription = PLUS;
+      await act(async () => {
+        overlay.opts()?.onCompleted();
+      });
+      expect(screen.getByText('Payment received — the payment issue is resolved.')).toBeTruthy();
+      expect(screen.queryByText(/You’re on/)).toBeNull();
+    });
+
+    it('ignores a value that is not a transaction id, and still strips it', async () => {
+      window.history.replaceState(null, '', '/settings/subscription?_ptxn=javascript:alert(1)');
+
+      await act(async () => {
+        render(<SubscriptionSection />);
+      });
+
+      expect(mockOpenPaddleCheckout).not.toHaveBeenCalled();
+      expect(window.location.search).toBe('');
+    });
   });
 });

@@ -4,6 +4,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   bytesToBase64Url,
   iapCheckoutEndpoint,
+  iapPortalEndpoint,
   iapPricesEndpoint,
   type IapPricesResponse,
   iapStatusEndpoint,
@@ -1179,6 +1180,59 @@ describe('iap', () => {
         env,
       );
       expect(res.status).toBe(200);
+    });
+  });
+
+  // "Manage billing". The stub is keyed on Paddle's real path — the customer
+  // is a path segment, `/customers/{ctm_…}/portal-sessions` — so a regression
+  // to any other URL leaves it unconsumed and fails the suite rather than
+  // shipping a button that 502s for every subscriber.
+  describe(`POST ${iapPortalEndpoint.path}`, () => {
+    beforeAll(stubOutboundFetch);
+    afterEach(assertNoPendingStubs);
+
+    async function postPortal(auth: Record<string, string>) {
+      return app.request(
+        iapPortalEndpoint.path,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', ...auth },
+          body: '{}',
+        },
+        env,
+      );
+    }
+
+    it('mints a session for the stored ctm_… and returns its overview url', async () => {
+      const { userId, auth } = await authFor('iap-portal-1');
+      await purchasesRepo(env.DIRECTORY_DB).upsertFromProvider({
+        id: newId(),
+        userId,
+        source: 'paddle',
+        externalId: 'sub_portal_1',
+        plan: 'plus',
+        status: 'active',
+        providerCustomerId: 'ctm_portal_1',
+        expiresAt: Date.now() + 30 * DAY_MS,
+        canceledAt: null,
+        eventOccurredAt: Date.now(),
+      });
+      const url = 'https://sandbox-customer-portal.paddle.com/cpl_x?action=overview&token=pga_x';
+      fetchStubs.push({
+        match: '/customers/ctm_portal_1/portal-sessions',
+        status: 201,
+        body: { data: { urls: { general: { overview: url }, subscriptions: [] } } },
+      });
+
+      const res = await postPortal(auth);
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ url });
+    });
+
+    it('404s an account with no Paddle customer, without asking Paddle', async () => {
+      const { auth } = await authFor('iap-portal-2');
+      const res = await postPortal(auth);
+      expect(res.status).toBe(404);
     });
   });
 

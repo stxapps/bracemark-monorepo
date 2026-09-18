@@ -11,6 +11,9 @@
 //    through this client);
 //  - "Manage billing" opens a server-minted Paddle customer-portal session
 //    (payment method, invoices, cancel);
+//  - this page is Paddle's default payment link, so a `?_ptxn=txn_…` link from
+//    one of Paddle's emails opens its checkout here on arrival
+//    (PAYMENT_LINK_PARAM);
 //  - store-bought subscriptions (future bracemark-expo) are managed in the store,
 //    so they get a note instead of the portal button.
 
@@ -28,6 +31,7 @@ import {
   PLAN_CARDS,
   PLAN_LABELS,
   PLAN_USD_PER_YEAR,
+  type SubscriptionStatus,
 } from '@stxapps/shared';
 import { useEntitlements, useSync } from '@stxapps/web-react';
 import { Button } from '@stxapps/web-ui/components/ui/button';
@@ -47,6 +51,40 @@ import { openPaddleCheckout } from '@/lib/paddle';
 const ACTIVATION_TRIES = 15;
 const ACTIVATION_INTERVAL_MS = 2000;
 
+// Paddle's checkout PAYMENT LINK: `<default payment link>?_ptxn=txn_…`. This
+// page is the default payment link (docs/iap.md, _the payment link_), so it is
+// where Paddle's own emails land: a failed renewal's "update your payment
+// details", and an abandoned checkout's recovery email. Paddle.js would open
+// such a link by itself on initialize, but only this page loads Paddle.js, and
+// only for a free account's price preview — a subscriber in dunning, the
+// customer this link exists for, would land on a page that never opened
+// anything. So the section opens it explicitly, which Paddle documents as
+// taking priority over the auto-open, and which is what gives the overlay the
+// same completed/closed handlers as an in-app checkout.
+const PAYMENT_LINK_PARAM = '_ptxn';
+
+// The id from the current URL, or null. Read-only — see stripPaymentLinkParam.
+// A value that isn't shaped like a transaction id is ignored rather than handed
+// to Paddle: the parameter is attacker-writable (anyone can send a link), and
+// an overlay that errors on junk is a worse page than one that opens nothing.
+function readPaymentLinkTransactionId(): string | null {
+  if (typeof window === 'undefined') return null;
+  const id = new URL(window.location.href).searchParams.get(PAYMENT_LINK_PARAM);
+  return id !== null && /^txn_[a-z\d]+$/.test(id) ? id : null;
+}
+
+// Drop `_ptxn` from the address bar, keeping everything else. Two reasons it
+// can't stay: a reload (or Back into this page) would open the same overlay
+// again, and Paddle.js — initialized by the price preview on a free account —
+// would auto-open it a SECOND time on its own. Native replaceState rather than
+// the Next router: it changes no route, and Next's router adopts it.
+function stripPaymentLinkParam() {
+  const url = new URL(window.location.href);
+  if (!url.searchParams.has(PAYMENT_LINK_PARAM)) return;
+  url.searchParams.delete(PAYMENT_LINK_PARAM);
+  window.history.replaceState(window.history.state, '', url);
+}
+
 function formatDate(epochMs: number): string {
   return new Date(epochMs).toLocaleDateString(undefined, {
     year: 'numeric',
@@ -62,8 +100,9 @@ export function SubscriptionSection() {
   const { requestSync } = useSync();
 
   // One busy flag drives every control: 'checkout:<plan>' while a checkout is
-  // being created/open, 'activating' while polling for the webhook, 'portal'
-  // while minting a portal session. Serializing them keeps double-clicks and
+  // being created/open ('checkout:link' for one a payment link opened),
+  // 'activating' / 'recovering' while polling for the webhook, 'portal' while
+  // minting a portal session. Serializing them keeps double-clicks and
   // overlapping flows out.
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -92,16 +131,40 @@ export function SubscriptionSection() {
     enabled: !isLoading && plan === 'free',
   });
 
-  // After a completed payment, poll until the webhook flips the plan. The plan
-  // upgrade case (plus → pro) polls for any CHANGE from the starting plan.
-  const pollActivation = async (fromPlan: Plan) => {
-    setBusy('activating');
+  // After a completed payment, re-read `iap/status` until the webhook has
+  // landed — `settled` says what "landed" looks like for this payment — then
+  // hand the fresh status to `onSettled`. Payment truth only ever arrives by
+  // webhook, so every completed overlay ends in one of these polls.
+  const pollStatus = async (options: {
+    busy: 'activating' | 'recovering';
+    settled: (status: SubscriptionStatus) => boolean;
+    onSettled: (status: SubscriptionStatus) => void;
+    timeoutNotice: string;
+  }) => {
+    setBusy(options.busy);
     setNotice(null);
     for (let i = 0; i < ACTIVATION_TRIES; i++) {
       const { data } = await refetch().catch(() => ({ data: undefined }));
       if (unmounted.current) return;
-      if (data && data.plan !== fromPlan) {
+      if (data && options.settled(data)) {
         setBusy(null);
+        options.onSettled(data);
+        return;
+      }
+      await new Promise((r) => setTimeout(r, ACTIVATION_INTERVAL_MS));
+      if (unmounted.current) return;
+    }
+    setBusy(null);
+    setNotice(options.timeoutNotice);
+  };
+
+  // A purchase: poll until the webhook flips the plan. The plan upgrade case
+  // (plus → pro) polls for any CHANGE from the starting plan.
+  const pollActivation = (fromPlan: Plan) =>
+    pollStatus({
+      busy: 'activating',
+      settled: (data) => data.plan !== fromPlan,
+      onSettled: (data) => {
         // The widened entitlement is the ONLY thing that unblocks a queue the
         // quota gate refused (engine signPushable / BgSyncStatus
         // 'blocked-capacity'): an upgrade raises maxBytes by orders of magnitude
@@ -112,16 +175,80 @@ export function SubscriptionSection() {
         // edit. Safe to fire eagerly — cycles single-flight per account.
         requestSync();
         setNotice(`You’re on ${PLAN_LABELS[data.plan]} now — thank you!`);
-        return;
-      }
-      await new Promise((r) => setTimeout(r, ACTIVATION_INTERVAL_MS));
-      if (unmounted.current) return;
+      },
+      timeoutNotice:
+        'Payment received — your upgrade is still processing. It activates automatically; check back in a minute.',
+    });
+
+  // A payment link completed on an account that is ALREADY paid — Paddle's
+  // "update your payment details". The plan doesn't move, so the activation
+  // poll's "plan changed" test would never settle. What moves, and only in
+  // dunning, is the status: paying the past_due renewal takes it from `grace`
+  // back to active once the webhook lands. In good standing the overlay was a
+  // zero-amount card swap and there is nothing to wait for.
+  //
+  // (A LAPSED dunning account never reaches here: its fold is already `free`,
+  // so its payment link takes the purchase branch, and "You're on Plus now" is
+  // the right sentence for it — the plan really does come back.)
+  const confirmPaymentLink = (from: SubscriptionStatus) => {
+    if (from.status !== 'grace') {
+      setNotice('Your payment details are updated.');
+      void refetch().catch(() => undefined);
+      return;
     }
-    setBusy(null);
-    setNotice(
-      'Payment received — your upgrade is still processing. It activates automatically; check back in a minute.',
-    );
+    void pollStatus({
+      busy: 'recovering',
+      settled: (data) => data.status !== 'grace',
+      onSettled: () => setNotice('Payment received — the payment issue is resolved.'),
+      timeoutNotice:
+        'Payment received — it can take a minute to show here. It updates automatically; check back shortly.',
+    });
   };
+
+  // Open the checkout a payment link names (see PAYMENT_LINK_PARAM). `from` is
+  // the fold at the moment it opens: a free account is BUYING (an abandoned
+  // checkout's recovery email, or a dunning account that has already lapsed),
+  // a paid one is fixing its card.
+  const openPaymentLink = async (transactionId: string, from: SubscriptionStatus) => {
+    setError(null);
+    setNotice(null);
+    setBusy('checkout:link');
+    try {
+      await openPaddleCheckout({
+        transactionId,
+        onCompleted: () =>
+          from.plan === 'free' ? void pollActivation(from.plan) : confirmPaymentLink(from),
+        onClosed: () => setBusy((b) => (b === 'checkout:link' ? null : b)),
+      });
+    } catch {
+      setBusy(null);
+      // Something they CAN act on — the link is still in their email — so it
+      // names the act (docs/brand-assets.md, _errors have a fixed shape_).
+      setError('Could not open the payment page. Open the link from your email again.');
+    }
+  };
+
+  // The payment link, captured ONCE per mount. Read in the state initializer
+  // (pure), stripped in an effect (a side effect) — never both in the
+  // initializer, which StrictMode calls twice: the second call would find the
+  // URL already stripped and win with null.
+  const [linkTransactionId] = useState(readPaymentLinkTransactionId);
+  useEffect(() => {
+    stripPaymentLinkParam();
+  }, []);
+  // Opened only once the fold is known, since `from` decides what completing
+  // it means — and once, which the ref holds across StrictMode's re-run and any
+  // later re-render.
+  const linkOpened = useRef(false);
+  useEffect(() => {
+    if (!linkTransactionId || isLoading || linkOpened.current) return;
+    linkOpened.current = true;
+    void openPaymentLink(linkTransactionId, subscription);
+    // Deliberately keyed on the gate alone: `subscription` is read at the moment
+    // the gate opens, and re-running on its later changes would be exactly the
+    // re-open the ref forbids.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linkTransactionId, isLoading]);
 
   const startCheckout = async (plan: AvailablePaidPlan) => {
     setError(null);
@@ -343,9 +470,9 @@ export function SubscriptionSection() {
           previews unavailable, auto-previews paused — and a spinner would promise
           progress that isn't happening), nor on `notice` below, which is a RESULT
           ("You're on Plus now") or the timeout's advice, never a wait. */}
-      {busy === 'activating' && (
+      {(busy === 'activating' || busy === 'recovering') && (
         <SettingsNotice tone="pending" icon={<Loader2 className="size-4 animate-spin" />}>
-          Finishing your upgrade…
+          {busy === 'activating' ? 'Finishing your upgrade…' : 'Confirming your payment…'}
         </SettingsNotice>
       )}
       {notice && <SettingsNotice tone="pending">{notice}</SettingsNotice>}

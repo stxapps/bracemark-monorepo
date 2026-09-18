@@ -312,7 +312,9 @@ export type AvailableCadence = (typeof AVAILABLE_CADENCES)[number];
 // Which is why "$48/yr" is still safe to print here and on the marketing site: a
 // country we have not priced locally IS billed this, in dollars. Paddle does not
 // convert at an exchange rate — a country is either given a price or given the
-// base. → docs/iap.md, _currency_.
+// base. The Paddle price is `tax_mode: 'location'`, so in VAT/GST markets this
+// figure is the TOTAL, and in sales-tax markets (the US) tax is added at
+// checkout. → docs/iap.md, _currency_ and its _tax_ note.
 export const PLAN_USD_PER_YEAR: Record<PaidPlan, number> = {
   plus: 48,
   pro: 96,

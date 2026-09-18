@@ -124,7 +124,56 @@ running past whatever the provider last promised.
 
 **Manage/cancel** — `POST /v1/iap/portal` mints a Paddle customer-portal
 session URL (needs the secret API key + stored `ctm_…` id, hence server-side).
+Its path is `POST /customers/{ctm_…}/portal-sessions` — the customer is a path
+segment. There is no top-level portal-sessions resource, and a spec pins the URL.
 Store-bought subscriptions (future) are managed in their store.
+
+#### the payment link — `/settings/subscription?_ptxn=txn_…`
+
+Paddle's account-level **default payment link** is required, not optional:
+without one, `POST /transactions` fails (`transaction_default_checkout_url_not_set`),
+and with it every checkout 502s. It is also where Paddle's **own emails** send
+the customer. Each transaction's `checkout.url` is the link plus
+`?_ptxn=<txn_…>`, and that URL is what the "update your payment details" email
+for a failed renewal carries, and what the recovery email for an abandoned
+checkout carries. We never send it ourselves, so nothing of ours surfaces it,
+but every subscriber in dunning is handed it.
+
+So the link is **`<app origin>/settings/subscription`** in every environment,
+and that page opens the checkout it names (`subscription-section.tsx`,
+`PAYMENT_LINK_PARAM`). Paddle.js would open it unaided on initialize. It isn't
+left to do that, because this page only loads Paddle.js for a **free** account's
+price preview: the subscriber in dunning — the customer the link exists for —
+would land on a settings page and nothing would open. The section instead reads
+`_ptxn`, strips it from the URL at once, and calls `Checkout.open()` itself. Paddle
+documents that as taking priority over the auto-open. That buys the in-app
+checkout's completed/closed handlers and rules out a second overlay once the
+price preview initializes Paddle.js. Stripping it also keeps a reload from
+reopening a paid checkout.
+
+What completing it means depends on the fold at the moment it opened:
+
+| fold when opened | what the link was                                                      | after `checkout.completed`                               |
+| ---------------- | ---------------------------------------------------------------------- | -------------------------------------------------------- |
+| `free`           | a purchase — abandoned-checkout recovery, or a dunning sub that lapsed | the activation poll, exactly as an in-app upgrade        |
+| paid, `grace`    | the past_due renewal, being paid                                       | poll until the webhook moves the status off `grace`      |
+| paid, otherwise  | a zero-amount card swap                                                | "Your payment details are updated." — nothing to wait on |
+
+Three things keep the link working, and nothing fails loudly if one breaks:
+
+- **It must be this page.** A default link at the origin root would go through
+  `/`'s redirect to `/links`, which drops the query, and the email would open the
+  app on its links page. The link is dashboard config per Paddle account (sandbox
+  and live), not something the repo can check.
+- **A signed-out customer still gets the link back.** `AuthGuard` carries the
+  full path _including the query_ through `/sign-in?next=`, so after signing in
+  they land on the same URL and the overlay opens. Anything that shortens `next`
+  to a bare pathname breaks this silently.
+- **Only a `txn_…`-shaped value is opened.** Anyone can send the link, so junk is
+  stripped and ignored rather than handed to an overlay that would error.
+
+It adds no third-party load the published pages don't already describe: Paddle.js
+still arrives only on Settings → Subscription.
 
 ### enforcement — who enforces which limit
 
@@ -436,6 +485,33 @@ The asymmetry is worth internalizing: **on Paddle, "local currency" only exists
 where we explicitly created it.** Leaving a country alone means charging it
 dollars, not converting for it.
 
+#### tax — `location`, so the printed number is the total where custom says it must be
+
+Every Paddle price carries **`tax_mode: 'location'`**, set on the price itself
+rather than inherited from the account default (`account_setting`). The account
+default was tax-**exclusive**, so a German buyer of the $48 plan was quoted
+$57.12 and a UK one $57.60. That broke the premise above: the marketing site
+prints "$48", and in Europe a consumer price is expected to _include_ VAT.
+`location` follows each country's convention instead:
+
+| where                                                    | the $48 base becomes                                           |
+| -------------------------------------------------------- | -------------------------------------------------------------- |
+| tax-inclusive markets (EU, UK, AU, …)                    | **$48.00 total** — VAT/GST comes out of our margin, not on top |
+| tax-exclusive markets (US, and others Paddle classes so) | $48 **plus** that jurisdiction's sales tax                     |
+
+So "$48/yr" is the exact charge where a shopper expects the tag to be the
+total, and the pre-tax figure where the shopper expects tax at the till. The
+latter is why every surface that prints the base price also says tax is settled
+at checkout. What we give up is margin in the inclusive markets: a UK sale nets
+$40 before Paddle's fee. That is the price of an honest tag, and a
+`unitPriceOverrides` anchor (`€49`) is priced as a **total** for the same reason.
+
+It is a property of the **price**, so it has to be set on every `pri_…` in
+every environment — including the live catalog, a monthly cadence, and any
+retirement replacement — or that price quietly falls back to the account
+default. Changing it later needs no new price id (`PATCH /prices/{id}`), but it
+does change what a market pays.
+
 #### which surface shows which number
 
 | surface                                       | shows                                                  | source                                                                   |
@@ -714,6 +790,12 @@ row as never-expiring and `needsRefresh` skips it outright.
   `PADDLE_WEBHOOK_SECRET` + `PADDLE_API_KEY` via `wrangler secret put`
   (`.dev.vars` locally). Register the webhook destination per env at
   `…/v1/iap/paddle/webhook`, subscribed to `subscription.*` events.
+- **Paddle dashboard → Checkout settings, per Paddle account**: the **default
+  payment link** is `<bracemark-web origin>/settings/subscription`. That's
+  `https://app.bracemark.com/settings/subscription` on live, and on the sandbox
+  staging's origin (or `http://localhost:3000/…` while developing alone — one
+  sandbox account serves both). Required: transaction creation fails without it
+  (see _the payment link_). Live needs the domain approved first.
 - **bracemark-api, store IAP** (`wrangler.jsonc`): `APPSTORE_API_BASE` (sandbox host
   for development/staging, production host for production — production also
   falls back to sandbox on 404 in code, for App Review),
@@ -736,6 +818,10 @@ row as never-expiring and `needsRefresh` skips it outright.
 - **The per-currency prices are catalog config in each provider, never env vars
   and never code** — Paddle `unitPriceOverrides`, App Store Connect / Play
   Console storefront prices. Nothing in this repo needs an edit to add one.
+- **Every Paddle price is created with `tax_mode: 'location'`**, in sandbox and
+  live alike (see _currency_, _tax_). It's catalog config like the overrides.
+  Omitting it makes the price inherit the account default instead, with no
+  error.
 - **CSP note**: when bracemark-web's CSP ships (it lives in the **CloudFront response
   headers policy**, not Next or Cloudflare — bracemark-web is a static export), it
   must allow Paddle's origins: `script-src`/`frame-src`/`connect-src`/`img-src`/

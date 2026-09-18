@@ -899,13 +899,26 @@ export async function createPaddlePortalSession(env: Bindings, userId: string): 
     throw new HttpError(404, 'no_paddle_subscription', 'No Paddle subscription on this account');
   }
 
-  const res = await fetch(`${env.PADDLE_API_BASE}/customer-portal-sessions`, {
+  // The customer is a PATH segment (`POST /customers/{customer_id}/portal-sessions`),
+  // not a body field — there is no top-level portal-sessions resource. So the
+  // id gets the same path-shape guard as the lib/paddle.ts fetchers, even
+  // though it came from our own row: it was written from a webhook payload.
+  const customerId = paddle.providerCustomerId;
+  if (!customerId || !/^[A-Za-z0-9._-]+$/.test(customerId)) {
+    console.error(`createPaddlePortalSession: unusable customer id for ${userId}`);
+    throw new HttpError(502, 'paddle_unavailable', 'Could not reach Paddle, please retry');
+  }
+
+  const res = await fetch(`${env.PADDLE_API_BASE}/customers/${customerId}/portal-sessions`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${env.PADDLE_API_KEY}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ customer_id: paddle.providerCustomerId }),
+    // An empty body is a session for the portal's overview page. Passing
+    // `subscription_ids` would add per-subscription cancel / update-payment
+    // deep links, which nothing renders yet.
+    body: JSON.stringify({}),
   });
   if (!res.ok) {
     console.error(`createPaddlePortalSession: Paddle API ${res.status}`);
