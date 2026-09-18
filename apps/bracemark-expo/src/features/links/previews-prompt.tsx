@@ -10,6 +10,12 @@
 // account with nothing saved gets no banner, and neither does a library that's
 // already fully previewed.
 //
+// And never over a LOCKED list. Main swaps the list for a LockPane there, and a
+// banner quoting a library-wide count above "this list is locked" is chrome for
+// content the user can't see — while its height comes out of the pane whose
+// password field has the soft keyboard to share the screen with. The lock folds
+// into `armed` rather than an early return so the count read stops too.
+//
 // It arms on `saves` SPECIFICALLY, not on "anything below `all`" (entities.ts
 // DEVICE_EXTRACTION_MODES): `saves` is the default nobody chose, which is exactly
 // what an offer is for, while `off` is a decision the user made — and re-asking
@@ -51,6 +57,7 @@ import {
   readRawPendingTitleImageCount,
   useExtraction,
   useLiveRead,
+  useLocks,
   useSettingMutations,
   useSettings,
 } from '@stxapps/expo-react';
@@ -58,6 +65,7 @@ import {
 import { Button } from '../../components/ui/button';
 import { Icon } from '../../components/ui/icon';
 import { Text } from '../../components/ui/text';
+import { useLinksPage } from './page-provider';
 
 // How long the residual must hold before the banner appears — see the header. Short
 // enough that a link synced from another device shows up promptly, long enough that
@@ -68,9 +76,12 @@ export function PreviewsPrompt() {
   const { deviceExtractionMode, previewsPromptDismissed } = useSettings();
   const { setDeviceExtractionMode, dismissPreviewsPrompt } = useSettingMutations();
   const { gesturedInFlightCount } = useExtraction();
+  const { selection } = useLinksPage();
+  const { isListLocked } = useLocks();
 
   // Inert unless the offer could actually be shown — see the header.
-  const armed = deviceExtractionMode === 'saves' && !previewsPromptDismissed;
+  const listLocked = selection.kind === 'list' && isListLocked(selection.id);
+  const armed = deviceExtractionMode === 'saves' && !previewsPromptDismissed && !listLocked;
   const pending =
     useLiveRead(
       () => (armed ? readRawPendingTitleImageCount() : Promise.resolve(0)),

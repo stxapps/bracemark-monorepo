@@ -5,7 +5,10 @@
 // (docs/link-extraction.md — _the links-page offer_). Same shape, same one-time
 // device-local dismissal, same "ask at the first moment it means something" rationale:
 // it shows only when links are actually waiting for a preview, so a fresh account with
-// nothing saved gets no banner and neither does a fully-previewed library.
+// nothing saved gets no banner and neither does a fully-previewed library. Also the
+// same: never over a LOCKED list, where Main has swapped the list for its lock pane
+// and a library-wide count above "this list is locked" is chrome for content the user
+// can't see. The lock folds into `armed`, so the count read stops with it.
 //
 // What differs is the ASK, because on web the thing being offered isn't free:
 //
@@ -46,12 +49,14 @@ import Link from 'next/link';
 import {
   readRawPendingTitleImageCount,
   useEntitlements,
+  useLocks,
   useSettingMutations,
   useSettings,
 } from '@stxapps/web-react';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 
 import { extensionStoreUrl } from '../../../../lib/extension-stores';
+import { useLinksPage } from '../_contexts/page-provider';
 
 export function PreviewsPrompt() {
   const { serverExtraction, previewsPromptDismissed } = useSettings();
@@ -60,13 +65,20 @@ export function PreviewsPrompt() {
   // matters here because the two variants ask different things: without it a Plus user
   // on a fresh browser would see the free/upsell copy flash before the plan lands.
   const { entitlements, isLoading: planLoading } = useEntitlements();
+  const { selection } = useLinksPage();
+  const { isListLocked } = useLocks();
 
   // The offer is inert unless it could actually be shown. For a paid account that's
   // "the opt-in is still off"; for a free one the synced preference is irrelevant
   // (the entitlement gate means nothing is being extracted either way), so what's
   // offered is the extension instead — see the header.
   const canServerExtract = entitlements.serverExtraction;
-  const armed = !previewsPromptDismissed && !planLoading && !(canServerExtract && serverExtraction);
+  const listLocked = selection.kind === 'list' && isListLocked(selection.id);
+  const armed =
+    !previewsPromptDismissed &&
+    !planLoading &&
+    !listLocked &&
+    !(canServerExtract && serverExtraction);
   const pending =
     useLiveQuery(() => (armed ? readRawPendingTitleImageCount() : Promise.resolve(0)), [armed]) ??
     0;

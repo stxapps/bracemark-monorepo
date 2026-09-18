@@ -68,8 +68,9 @@ export default function LinksScreen() {
           <Topbar />
           <SearchBar />
           {/* The first-run link-previews offer — renders null unless the opt-in
-              is off, undismissed, AND links are actually waiting (see the
-              component). Above Main so it reads as chrome, not a list item. */}
+              is off, undismissed, AND links are actually waiting, and never over
+              a locked list (see the component). Above Main so it reads as
+              chrome, not a list item. */}
           <PreviewsPrompt />
           <Main />
           {/* Screen-level, not in Main: the add affordance survives Main's

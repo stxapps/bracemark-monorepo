@@ -1198,7 +1198,9 @@ stretch.
 Both apps put a one-time, dismissible banner on the links screen, armed on nearly the
 same condition (previews still off, undismissed here, and a pending count above zero,
 from `readRawPendingTitleImageCount` — the over-count, since the exact tally is gated
-on the very thing being asked about) and retired by the same device-local flag
+on the very thing being asked about — and never over a locked list, where Main shows
+the lock pane and a library-wide count is chrome for content the user can't see) and
+retired by the same device-local flag
 (`previewsPromptDismissed` in each app's `localSettings`, so a second browser or phone
 still gets its one offer). What each banner OFFERS is not the same thing, and
 bracemark-web's `_components/previews-prompt.tsx` is therefore a sibling of

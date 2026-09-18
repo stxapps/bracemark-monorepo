@@ -23,8 +23,12 @@ jest.mock('@stxapps/expo-react', () => ({
   readRawPendingTitleImageCount: jest.fn(),
   useExtraction: jest.fn(),
   useLiveRead: jest.fn(),
+  useLocks: () => ({ isListLocked: () => false }),
   useSettingMutations: jest.fn(),
   useSettings: jest.fn(),
+}));
+jest.mock('./page-provider', () => ({
+  useLinksPage: () => ({ selection: { kind: 'all' } }),
 }));
 
 const useExtractionMock = useExtraction as jest.Mock;
