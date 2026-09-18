@@ -13,7 +13,7 @@ import {
 } from '@stxapps/shared';
 
 import { MailLink } from '../components/mail-link';
-import { SECURITY_EMAIL, SOURCE, SUPPORT_EMAIL } from '../lib/site';
+import { PADDLE_REFUND_POLICY_URL, SECURITY_EMAIL, SOURCE, SUPPORT_EMAIL } from '../lib/site';
 
 // The site's questions and answers, in ONE place, because two surfaces render
 // them: /faq shows every group, and /pricing shows the four billing questions a
@@ -851,11 +851,12 @@ export const FAQ_GROUPS: FaqGroup[] = [
         a: (
           <>
             Payments on the web go through Paddle, which acts as the merchant of record: it handles
-            any sales tax or VAT and we never see your card details. Purchases made in the iOS or
-            Android apps are handled by Apple and Google under their own refund rules. If something
-            has gone wrong, write to <MailLink address={SUPPORT_EMAIL} /> and we will sort it out —
-            and customers in the EU and UK have a statutory 14-day right of withdrawal on top of
-            anything we offer.
+            any sales tax or VAT, refunds follow{' '}
+            <ExternalLink href={PADDLE_REFUND_POLICY_URL}>Paddle’s refund policy</ExternalLink>, and
+            we never see your card details. Purchases made in the iOS or Android apps are handled by
+            Apple and Google under their own refund rules. If something has gone wrong, write to{' '}
+            <MailLink address={SUPPORT_EMAIL} /> and we will sort it out — and customers in the EU
+            and UK have a statutory 14-day right of withdrawal on top of anything we offer.
           </>
         ),
       },

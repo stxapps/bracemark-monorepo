@@ -54,7 +54,8 @@ const ACTIVATION_INTERVAL_MS = 2000;
 // Paddle's checkout PAYMENT LINK: `<default payment link>?_ptxn=txn_…`. This
 // page is the default payment link (docs/iap.md, _the payment link_), so it is
 // where Paddle's own emails land: a failed renewal's "update your payment
-// details", and an abandoned checkout's recovery email. Paddle.js would open
+// details". (Not checkout recovery — Paddle skips API-created transactions,
+// and all of ours are; docs/iap.md, _the payment link_.) Paddle.js would open
 // such a link by itself on initialize, but only this page loads Paddle.js, and
 // only for a free account's price preview — a subscriber in dunning, the
 // customer this link exists for, would land on a page that never opened
@@ -206,9 +207,8 @@ export function SubscriptionSection() {
   };
 
   // Open the checkout a payment link names (see PAYMENT_LINK_PARAM). `from` is
-  // the fold at the moment it opens: a free account is BUYING (an abandoned
-  // checkout's recovery email, or a dunning account that has already lapsed),
-  // a paid one is fixing its card.
+  // the fold at the moment it opens: a free account is BUYING (a dunning
+  // account that has already lapsed), a paid one is fixing its card.
   const openPaymentLink = async (transactionId: string, from: SubscriptionStatus) => {
     setError(null);
     setNotice(null);

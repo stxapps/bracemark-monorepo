@@ -339,7 +339,7 @@
         // https://api.bracemark.com/v1/iap/paddle/webhook.
         "PADDLE_API_BASE": "https://api.paddle.com",
         // COMMA-SEPARATED lists, on sale FIRST — see the development env.
-        "PADDLE_PRICE_ID_PLUS": "TODO: live pri_… id for Plus (yearly)",
+        "PADDLE_PRICE_ID_PLUS": "pri_01m2snpfpfe3e254kcehqjcf42",
         "PADDLE_PRICE_ID_PRO": "TODO: live pri_… id for Pro (yearly)",
         // Store IAP — production verifies against the PRODUCTION App Store host
         // (with the code-level sandbox fallback on 404 for App Review — see

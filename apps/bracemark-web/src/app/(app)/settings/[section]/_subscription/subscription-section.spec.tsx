@@ -160,8 +160,8 @@ describe('SubscriptionSection', () => {
       // overlay, and Paddle.js must not find it to auto-open a second one.
       expect(window.location.search).toBe('?keep=1');
 
-      // A free account completing it is a PURCHASE — the recovery email for an
-      // abandoned checkout — so it takes the activation poll.
+      // A free account completing it is a PURCHASE — a dunning sub that has
+      // already lapsed — so it takes the activation poll.
       mockSubscription = PLUS;
       await act(async () => {
         overlay.opts()?.onCompleted();

@@ -135,9 +135,18 @@ without one, `POST /transactions` fails (`transaction_default_checkout_url_not_s
 and with it every checkout 502s. It is also where Paddle's **own emails** send
 the customer. Each transaction's `checkout.url` is the link plus
 `?_ptxn=<txn_…>`, and that URL is what the "update your payment details" email
-for a failed renewal carries, and what the recovery email for an abandoned
-checkout carries. We never send it ourselves, so nothing of ours surfaces it,
-but every subscriber in dunning is handed it.
+for a failed renewal carries. We never send it ourselves, so nothing of ours
+surfaces it, but every subscriber in dunning is handed it.
+
+**Paddle's checkout recovery never fires here**, whatever the dashboard's
+Checkout settings → Recovery tab says. Paddle only emails abandoned checkouts
+whose transaction the checkout itself created. A transaction created through the
+API and then passed to `Checkout.open({ transactionId })` is ineligible, and every
+one of ours is created that way (step 1 above). The same goes for the recovery
+discount. So an abandoned checkout sends no email and never lands on this link.
+Moving transaction creation to the client (`Checkout.open({ items })`) would
+switch recovery on, but it would also give up the server-stamped
+`custom_data.userId` and the server-picked price.
 
 So the link is **`<app origin>/settings/subscription`** in every environment,
 and that page opens the checkout it names (`subscription-section.tsx`,
@@ -153,11 +162,11 @@ reopening a paid checkout.
 
 What completing it means depends on the fold at the moment it opened:
 
-| fold when opened | what the link was                                                      | after `checkout.completed`                               |
-| ---------------- | ---------------------------------------------------------------------- | -------------------------------------------------------- |
-| `free`           | a purchase — abandoned-checkout recovery, or a dunning sub that lapsed | the activation poll, exactly as an in-app upgrade        |
-| paid, `grace`    | the past_due renewal, being paid                                       | poll until the webhook moves the status off `grace`      |
-| paid, otherwise  | a zero-amount card swap                                                | "Your payment details are updated." — nothing to wait on |
+| fold when opened | what the link was                          | after `checkout.completed`                               |
+| ---------------- | ------------------------------------------ | -------------------------------------------------------- |
+| `free`           | a purchase — a dunning sub that has lapsed | the activation poll, exactly as an in-app upgrade        |
+| paid, `grace`    | the past_due renewal, being paid           | poll until the webhook moves the status off `grace`      |
+| paid, otherwise  | a zero-amount card swap                    | "Your payment details are updated." — nothing to wait on |
 
 Three things keep the link working, and nothing fails loudly if one breaks:
 
@@ -512,6 +521,13 @@ retirement replacement — or that price quietly falls back to the account
 default. Changing it later needs no new price id (`PATCH /prices/{id}`), but it
 does change what a market pays.
 
+The account default (dashboard → Checkout → Sales tax settings) is therefore
+not what prices our catalog, but it is set to **location** too, on both
+accounts, as the backstop. A price created without `tax_mode` inherits it with
+no error, and with the default at `location` that omission charges the same as
+setting it would have. Left tax-exclusive, the omission would put VAT on top of
+the printed "$48" in Europe again, and nothing would say so.
+
 #### which surface shows which number
 
 | surface                                       | shows                                                  | source                                                                   |
@@ -821,7 +837,16 @@ row as never-expiring and `needsRefresh` skips it outright.
 - **Every Paddle price is created with `tax_mode: 'location'`**, in sandbox and
   live alike (see _currency_, _tax_). It's catalog config like the overrides.
   Omitting it makes the price inherit the account default instead, with no
-  error.
+  error. That default (Checkout → Sales tax settings) is set to `location` on
+  both accounts as the backstop (see _tax_).
+- **Every Paddle product is `tax_category: 'saas'`**, in sandbox and live alike.
+  Plus is access to a hosted service (the web app, encrypted sync, server link
+  previews), which is Paddle's definition of `saas`. `standard` ("Standard
+  digital goods" in the dashboard) means pre-written software that is downloaded
+  and installed, and some jurisdictions tax the two at different rates. `saas`
+  is on every account without approval. It's catalog config like the overrides,
+  and the sandbox's Plus product was first created as `standard`, so check it
+  whenever a product is re-created (the live catalog is recreated, not copied).
 - **CSP note**: when bracemark-web's CSP ships (it lives in the **CloudFront response
   headers policy**, not Next or Cloudflare — bracemark-web is a static export), it
   must allow Paddle's origins: `script-src`/`frame-src`/`connect-src`/`img-src`/

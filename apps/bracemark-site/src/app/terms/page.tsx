@@ -5,7 +5,13 @@ import { PLAN_LABELS, TRIAL_DAYS } from '@stxapps/shared';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { PageShell } from '../../components/page-shell';
-import { COMPANY, SOURCE, SUPPORT_EMAIL, TERMS_UPDATED } from '../../lib/site';
+import {
+  COMPANY,
+  PADDLE_REFUND_POLICY_URL,
+  SOURCE,
+  SUPPORT_EMAIL,
+  TERMS_UPDATED,
+} from '../../lib/site';
 
 export const metadata: Metadata = {
   title: 'Terms of Service',
@@ -237,11 +243,14 @@ export default function Page() {
             already paid for.
           </li>
           <li>
-            <strong>Refunds.</strong> Refunds for web purchases are handled by Paddle, and refunds
-            for store purchases by Apple or Google, under their respective policies. If you are a
-            consumer in the EU or the UK you may also have a statutory right to withdraw within
-            fourteen days of the contract being formed. If something has gone wrong with a payment,
-            write to us at <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a> and we will help.
+            <strong>Refunds.</strong> Refunds for web purchases are handled by Paddle under{' '}
+            <a href={PADDLE_REFUND_POLICY_URL} rel="noreferrer">
+              Paddle’s refund policy
+            </a>
+            , and refunds for store purchases by Apple or Google under theirs. If you are a consumer
+            in the EU or the UK you may also have a statutory right to withdraw within fourteen days
+            of the contract being formed. If something has gone wrong with a payment, write to us at{' '}
+            <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a> and we will help.
           </li>
         </ol>
         <p>

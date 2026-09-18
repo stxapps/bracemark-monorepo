@@ -108,10 +108,18 @@ export { SOCIAL };
 // happens to the link if the domain ever stops answering.
 export { PREDECESSOR } from '@stxapps/shared';
 
+// Paddle's buyer refund policy — the one web purchases are refunded under, since
+// Paddle is the merchant of record. Linked, not paraphrased: Paddle's seller
+// review asks for either a link to it or a refund policy of our own with a
+// 14–90-day window, and restating theirs would be a copy that drifts. Three
+// surfaces name it — /terms (_Refunds_), /faq (`refunds`) and the footer's Legal
+// column (FOOTER_LINKS below).
+export const PADDLE_REFUND_POLICY_URL = 'https://www.paddle.com/legal/refund-policy';
+
 // The "last updated" line each policy carries. Dates live here rather than inline
 // so the two documents can never claim different vintages of the same rewrite —
 // and so bumping one after an edit is a deliberate act, not a forgotten one.
-export const TERMS_UPDATED = '21 August 2026';
+export const TERMS_UPDATED = '18 September 2026';
 export const PRIVACY_UPDATED = '21 August 2026';
 
 // `/about` earns a slot despite the header being the scarcest space on the site:
@@ -171,6 +179,12 @@ export const FOOTER_LINKS: { heading: string; links: FooterLink[] }[] = [
     links: [
       { href: '/terms', label: 'Terms' },
       { href: '/privacy', label: 'Privacy' },
+      // Paddle's, not a page of ours — see PADDLE_REFUND_POLICY_URL. It has to be
+      // in the navigation, not only inside /terms: Paddle's domain review wants
+      // terms, refund policy and privacy policy "clearly accessible via
+      // navigation", and a reviewer scanning this column for all three should
+      // find all three.
+      { href: PADDLE_REFUND_POLICY_URL, label: 'Refund policy', external: true },
       // Under Legal rather than Company, and it is the weaker fit of the two on
       // the merits: /security is a mechanism page, not a document anyone signed.
       // It sits here because of who goes looking for it. The reader who wants the
