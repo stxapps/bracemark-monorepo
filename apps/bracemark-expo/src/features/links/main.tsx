@@ -370,10 +370,39 @@ function UnlockedMain() {
     setScrolled(false);
   }, [query, setScrolled]);
 
+  // Promote, and scroll only once the promoted rows have committed and laid out.
+  // The held rows are usually a prepend, and FlashList's
+  // maintainVisibleContentPosition places a prepend by the offset at the moment
+  // it commits — a scrolled pane pins its old first row and puts the new one
+  // ABOVE the viewport — and corrects again when a row measures taller than its
+  // estimate. Scrolling in the same tick as the promotion raced both: measured
+  // on the iPhone 17 Pro simulator, an animated scroll left the list on the old
+  // first row with the new one hidden a whole row above it, and an unanimated
+  // scroll issued first still left a two-line row 20pt under the top edge
+  // (e2e SYNC-REFRESH-PILL-IOS-001). Mounted, in the accessibility tree, and
+  // not where the pill promised. The scroll is also UNANIMATED for the second
+  // correction: an animated one brings the new row into the render window while
+  // the offset is still far from the top, so it measures there, and its extra
+  // height is taken above the viewport — the same 20pt, even a frame later. At
+  // offset 0 the measurement lands under `autoscrollToTopThreshold` instead,
+  // which is the path a local save at the top already takes. Web has no such
+  // anchor and keeps its order.
+  const scrollTopAfterApplyRef = useRef(false);
   const applyAndScrollTop = () => {
+    scrollTopAfterApplyRef.current = true;
     applyPending();
-    listRef.current?.scrollToOffset({ offset: 0 });
   };
+  useEffect(() => {
+    if (!scrollTopAfterApplyRef.current) return;
+    // The next frame, after FlashList's own layout pass has measured the rows.
+    // The flag clears only when the scroll runs, so a newer result landing first
+    // re-arms it here rather than dropping it.
+    const frame = requestAnimationFrame(() => {
+      scrollTopAfterApplyRef.current = false;
+      listRef.current?.scrollToOffset({ offset: 0, animated: false });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [links]);
 
   return (
     <>
@@ -389,6 +418,9 @@ function UnlockedMain() {
             // place, keeping the scroll position.
             key={name}
             ref={listRef}
+            // The list's viewport, for e2e bounds checks (docs/e2e.md, _the testID
+            // contract_): a row's box means nothing without the box it scrolls in.
+            testID="links-list"
             data={links}
             extraData={itemExtra}
             numColumns={numColumns}
