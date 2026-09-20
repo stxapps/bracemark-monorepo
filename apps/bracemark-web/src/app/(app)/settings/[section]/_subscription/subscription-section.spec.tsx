@@ -51,7 +51,13 @@ const mockRequestSync = jest.fn();
 const mockApiCall = jest.fn(() => Promise.resolve({ transactionId: 'txn_test' }));
 // What the section hands openPaddleCheckout — the slice these tests read.
 type OpenOptions = { transactionId: string; onCompleted: () => void };
-const mockOpenPaddleCheckout = jest.fn(({ onCompleted }: OpenOptions) => void onCompleted());
+// Async like the real one, so a test can reject it the way a blocked Paddle.js
+// does — a stub that threw synchronously would reach the same catch by a route
+// the app never takes.
+const mockOpenPaddleCheckout = jest.fn(({ onCompleted }: OpenOptions): Promise<void> => {
+  onCompleted();
+  return Promise.resolve();
+});
 
 jest.mock('@stxapps/web-react', () => ({
   useEntitlements: () => ({
@@ -75,6 +81,14 @@ jest.mock('./use-paddle-prices', () => ({
 }));
 
 describe('SubscriptionSection', () => {
+  // Every error-tone SettingsNotice scrolls itself into view on mount — the
+  // dunning account's `grace` line, and both failed-upgrade messages below —
+  // and jsdom, having no layout, doesn't implement it (the settings-kit spec
+  // stubs it the same way).
+  beforeAll(() => {
+    Element.prototype.scrollIntoView = jest.fn();
+  });
+
   beforeEach(() => {
     jest.useFakeTimers();
     mockSubscription = FREE;
@@ -120,6 +134,58 @@ describe('SubscriptionSection', () => {
     expect(screen.queryByText(/still processing/)).toBeNull();
   });
 
+  // One button, two failures behind it, and they do not have the same remedy —
+  // which is the thing these two pin, since a single catch reading `e.message`
+  // satisfies neither and looks fine on screen.
+  describe('an upgrade that fails', () => {
+    it('sends the user to a reload when the payment overlay cannot load', async () => {
+      // Paddle.js blocked (an ad blocker, a dropped connection). The SDK caches
+      // that rejection for the life of the page — a second press cannot even
+      // re-fetch the script — so "Please try again" would be a button that
+      // provably does nothing, and the sentence has to name the reload instead.
+      mockOpenPaddleCheckout.mockRejectedValueOnce(new Error('Failed to load Paddle.js - v1'));
+
+      render(<SubscriptionSection />);
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Upgrade to Plus' }));
+      });
+
+      // role="alert", via the error-tone notice: this mounts while the user is
+      // waiting for an overlay that never appeared, so a silent one is a screen
+      // reader user staring at nothing (docs/accessibility.md).
+      expect(screen.getByRole('alert').textContent).toBe(
+        'Could not open the payment page. Reload the page and try again.',
+      );
+      // Never the thrown string — a vendor build id in front of a customer who
+      // was trying to pay (docs/brand-assets.md, _errors have a fixed shape_).
+      expect(screen.queryByText(/Paddle\.js/)).toBeNull();
+    });
+
+    it('offers another try when it is the checkout call that fails', async () => {
+      // The other half, and the reason the two catches are separate: this one
+      // IS retryable in place — `iap/checkout` is idempotent within its window,
+      // so pressing again re-uses the pending transaction rather than minting a
+      // second payable one — so it must not send the user off to reload.
+      mockApiCall.mockRejectedValueOnce(new Error('Request failed with status 500'));
+
+      render(<SubscriptionSection />);
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Upgrade to Plus' }));
+      });
+
+      expect(screen.getByRole('alert').textContent).toBe(
+        'Could not start the upgrade. Please try again.',
+      );
+      // No transaction was created, so nothing opened — and the busy flag is
+      // cleared, which is what puts the button back under the finger it asks.
+      expect(mockOpenPaddleCheckout).not.toHaveBeenCalled();
+      // No jest-dom in this workspace, so the attribute directly.
+      expect(screen.getByRole('button', { name: 'Upgrade to Plus' }).hasAttribute('disabled')).toBe(
+        false,
+      );
+    });
+  });
+
   // Paddle's emails link to this page as `?_ptxn=txn_…` (it is the default
   // payment link). Before this path existed the page opened nothing for a
   // subscriber: Paddle.js only loaded for a free account's price preview, so a
@@ -132,16 +198,10 @@ describe('SubscriptionSection', () => {
       let captured: OpenOptions | undefined;
       mockOpenPaddleCheckout.mockImplementationOnce((opts: OpenOptions) => {
         captured = opts;
+        return Promise.resolve();
       });
       return { opts: () => captured };
     }
-
-    // The dunning account renders the `grace` notice, an error-tone
-    // SettingsNotice that scrolls itself into view on mount — which jsdom, with
-    // no layout, doesn't implement (the settings-kit spec stubs it the same way).
-    beforeAll(() => {
-      Element.prototype.scrollIntoView = jest.fn();
-    });
 
     afterEach(() => {
       window.history.replaceState(null, '', '/');

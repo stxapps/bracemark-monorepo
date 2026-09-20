@@ -255,8 +255,28 @@ export function SubscriptionSection() {
     setNotice(null);
     setBusy(`checkout:${plan}`);
     const fromPlan = subscription.plan;
+
+    // Two steps, two catches, because only one of these failures has an act the
+    // user can take from this page — which is the whole choice the error shape
+    // asks for (docs/brand-assets.md, _errors have a fixed shape_).
+    //
+    // Neither sentence is the thrown one. `e.message` here reads "Request
+    // failed with status 409" (ApiError's, which is for logs) or "Failed to
+    // load Paddle.js - v1" (the SDK's) — a status code and a vendor's build
+    // string, in front of a customer at the one moment they were trying to pay.
+    let transactionId: string;
     try {
-      const { transactionId } = await api.call(iapCheckoutEndpoint, { plan });
+      ({ transactionId } = await api.call(iapCheckoutEndpoint, { plan }));
+    } catch {
+      setBusy(null);
+      // Ours, and worth pressing again: the endpoint is idempotent within
+      // CHECKOUT_REUSE_MS, so a second press hands back the same pending
+      // `txn_…` rather than minting a second payable one (docs/iap.md, step 1).
+      setError('Could not start the upgrade. Please try again.');
+      return;
+    }
+
+    try {
       await openPaddleCheckout({
         transactionId,
         onCompleted: () => void pollActivation(fromPlan),
@@ -264,9 +284,13 @@ export function SubscriptionSection() {
         // an in-flight activation poll.
         onClosed: () => setBusy((b) => (b === `checkout:${plan}` ? null : b)),
       });
-    } catch (e) {
+    } catch {
       setBusy(null);
-      setError(e instanceof Error ? e.message : String(e));
+      // NOT retryable in place, so it must not say "try again": a Paddle.js
+      // that failed to load stays failed for the life of the page, the SDK
+      // having cached its own rejection (lib/paddle.ts, getPaddle). A reload is
+      // the only thing that can work, which makes this the actionable form.
+      setError('Could not open the payment page. Reload the page and try again.');
     }
   };
 

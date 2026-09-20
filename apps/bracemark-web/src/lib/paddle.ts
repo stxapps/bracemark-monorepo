@@ -32,6 +32,15 @@ let paddlePromise: Promise<Paddle | undefined> | null = null;
 let onCompleted: (() => void) | null = null;
 let onClosed: (() => void) | null = null;
 
+// A FAILED load stays cached, and that is deliberate rather than an oversight:
+// clearing `paddlePromise` on rejection would LOOK like a retry without being
+// one. @paddle/paddle-js caches the same rejected promise a layer down — its
+// module-level `promiseMap` in `loadFromCDN` is keyed by version and is never
+// cleared on failure (1.6.4) — so a second `initializePaddle` hands back that
+// rejection immediately, without re-fetching the script. Nothing on this side
+// can reload Paddle.js; only a page load can. Hence the UI's sentence for this
+// failure names a RELOAD rather than another try (subscription-section.tsx,
+// startCheckout), and the two throws below stay internal — no user reads them.
 function getPaddle(): Promise<Paddle | undefined> {
   if (!paddlePromise) {
     const token = process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN;

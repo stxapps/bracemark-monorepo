@@ -128,6 +128,29 @@ Its path is `POST /customers/{ctm_…}/portal-sessions` — the customer is a pa
 segment. There is no top-level portal-sessions resource, and a spec pins the URL.
 Store-bought subscriptions (future) are managed in their store.
 
+#### when the upgrade button fails, there are two failures behind it
+
+`startCheckout` catches its two steps separately, because only one of them is
+worth pressing again and the other cannot be. A failed `POST /v1/iap/checkout`
+is ours and is retryable in place — the endpoint is idempotent within
+`CHECKOUT_REUSE_MS`, so the second press re-uses the pending `txn_…` rather than
+minting a second payable one — so it gets _"Could not start the upgrade. Please
+try again."_
+
+A **Paddle.js that fails to load is terminal for the page**, and nothing on
+screen would say so. `@paddle/paddle-js` caches its own rejected load promise
+(`promiseMap` in its `loadFromCDN`, never cleared on failure), so a second
+`initializePaddle` returns that rejection without re-fetching the script; our
+`getPaddle` singleton sits on top of that, and clearing it would look like a
+retry without being one. Only a page load clears either. So this half says
+_"Could not open the payment page. Reload the page and try again."_ — the
+actionable form naming the act that actually works
+([brand-assets.md](./brand-assets.md), _errors have a fixed shape_). The raw
+throw must never reach the user: it reads "Failed to load Paddle.js - v1", a
+vendor build string in front of someone trying to pay. The payment-link path has
+the same failure and a different act — its email link is a fresh page load, so
+it says to open that again.
+
 #### the payment link — `/settings/subscription?_ptxn=txn_…`
 
 Paddle's account-level **default payment link** is required, not optional:
