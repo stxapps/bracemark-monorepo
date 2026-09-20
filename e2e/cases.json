@@ -230,6 +230,26 @@
     "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
   },
   {
+    "id": "SYNC-REFRESH-PILL-WEB-001",
+    "title": "A pull under a scrolled reader moves no row and waits behind the refresh pill",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online", "scale"],
+    "fixture": "scale",
+    "path": "web/sync.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
+    "id": "SYNC-BLOCKED-001",
+    "title": "A push refused by the storage ceiling is reported as storage full, not as a failed sync",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online", "destructive", "scale"],
+    "fixture": "scale",
+    "path": "web/capacity.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
     "id": "EXT-AUTH-001",
     "title": "Extension sign-in survives popup and browser-profile reopen",
     "surface": "extension",
@@ -557,6 +577,46 @@
     "traits": ["online", "destructive", "ios", "android"],
     "fixture": "empty",
     "path": "mobile/flows/delete-all-data.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "SYNC-REFRESH-PILL-IOS-001",
+    "title": "A pull under a scrolled iOS list moves no row and waits behind the refresh pill",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "scale", "ios"],
+    "fixture": "scale",
+    "path": "mobile/flows/refresh-pill.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "SYNC-REFRESH-PILL-ANDROID-001",
+    "title": "A pull under a scrolled Android list moves no row and waits behind the refresh pill",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "scale", "android"],
+    "fixture": "scale",
+    "path": "mobile/flows/refresh-pill.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "SYNC-LOCAL-TOP-001",
+    "title": "A link saved at offset zero is painted at the top of the viewport, not above it",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "scale", "ios", "android"],
+    "fixture": "scale",
+    "path": "mobile/flows/local-top.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "SYNC-CONFLICT-001",
+    "title": "Concurrent offline edits on web and Android resolve to the later reconnect on both clients",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "android"],
+    "fixture": "small",
+    "path": "mobile/flows/sync-conflict.yaml",
     "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
   },
   {

@@ -43,7 +43,12 @@ test.describe('delete all data', () => {
       await settingsPage.getByRole('button', { name: /^Delete all data/ }).click();
       await settingsPage.locator('#delete-confirm').check();
       await settingsPage.getByRole('button', { name: 'Delete all data', exact: true }).click();
-      await expect(settingsPage.getByText(/All your data has been deleted/)).toBeVisible();
+      // The wipe is a server round trip over every object the account holds; alone
+      // it answers in seconds, but beside the other worker's imports it outlasted
+      // the 15s default. The claim here is the repaint below, not the wipe's speed.
+      await expect(settingsPage.getByText(/All your data has been deleted/)).toBeVisible({
+        timeout: 60_000,
+      });
 
       await expect(linksPage.getByText(displayUrl(url))).not.toBeVisible();
       await expect(linksPage.getByRole('button', { name: list })).not.toBeVisible();

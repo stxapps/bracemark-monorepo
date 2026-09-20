@@ -1,0 +1,31 @@
+# Save a link while an already-mounted, scrollable list sits at offset zero, and
+# leave the screen for the runner to measure (runner/mobile.ts,
+# SYNC-LOCAL-TOP-001).
+#
+# What only a device shows: FlashList v2 keeps the first visible row in place
+# when data is prepended, so without main.tsx's `autoscrollToTopThreshold` the
+# new row lands ABOVE the viewport — still mounted, still in the accessibility
+# tree, and so still "visible" to a selector. The runner reads its bounds
+# against the list's instead (docs/client-queries.md, _a newest-first insert
+# follows the list's top-edge state_).
+#
+#   maestro test mobile/flows/local-top.yaml -e USERNAME=… -e PASSWORD=… \
+#     -e HOST=e2e-paged-….invalid -e LINK_URL=https://….invalid/local-top
+appId: com.bracemark.app
+tags: [SYNC-LOCAL-TOP-001, full, online, scale, ios, android]
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+- extendedWaitUntil:
+    visible: '.*${HOST}/row-000.*'
+    timeout: 60000
+- tapOn:
+    text: 'Dismiss'
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 5000
+- runFlow:
+    file: subflows/add-link.yaml
+    env:
+      URL: ${LINK_URL}
+- takeScreenshot: local-top-saved

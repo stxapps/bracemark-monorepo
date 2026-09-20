@@ -1,0 +1,15 @@
+# Part three of SYNC-REFRESH-PILL-*: the pill promotes the held pull and takes
+# the list to its top, where the new row now leads. The runner checks the row's
+# bounds against the list's afterwards — in the tree is not on screen.
+appId: com.bracemark.app
+---
+- tapOn:
+    id: 'links-refresh-pill'
+- extendedWaitUntil:
+    visible: ".*${REMOTE_URL.replace('https://', '')}.*"
+    timeout: 20000
+- waitForAnimationToEnd:
+    timeout: 5000
+- assertNotVisible:
+    id: 'links-refresh-pill'
+- takeScreenshot: refresh-pill-applied

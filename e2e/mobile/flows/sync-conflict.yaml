@@ -1,0 +1,25 @@
+# Sign in to an account holding one link that both clients will edit while
+# neither can reach the api. The first step of a runner-driven case
+# (runner/mobile.ts, SYNC-CONFLICT-001); the edits and the reconnect order are
+# in parts/sync-conflict-*.yaml and the host steps between them.
+#
+# Android only, because only there can the runner take the device off the api
+# and put it back without touching the app: the emulator reaches the local api
+# through `adb reverse tcp:8787`, so removing that one mapping is a device that
+# cannot sync, while Metro (8081) keeps serving the bundle. The iOS simulator
+# shares the host's loopback, where nothing short of stopping the api would do.
+#
+#   maestro test mobile/flows/sync-conflict.yaml -e USERNAME=… -e PASSWORD=… \
+#     -e LINK_URL=https://….invalid/conflict
+appId: com.bracemark.app
+tags: [SYNC-CONFLICT-001, full, online, android]
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+- extendedWaitUntil:
+    visible: ".*${LINK_URL.replace('https://', '')}.*"
+    timeout: 60000
+- tapOn:
+    text: 'Dismiss'
+    optional: true
+- takeScreenshot: conflict-base

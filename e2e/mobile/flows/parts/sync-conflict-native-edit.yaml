@@ -1,0 +1,31 @@
+# Part two of SYNC-CONFLICT-001: with the api unreachable, retitle the link on
+# the device and see the edit held locally while the sync it kicks fails. The
+# runner has already taken the device off the api and retitled the same link in
+# an offline web profile.
+appId: com.bracemark.app
+---
+- tapOn:
+    id: 'link-options'
+- tapOn:
+    id: 'link-menu-edit'
+# The title starts blank (no override yet), so typing sets it outright.
+- tapOn:
+    id: 'edit-link-title'
+- inputText: ${NATIVE_TITLE}
+- tapOn:
+    id: 'edit-link-save'
+- extendedWaitUntil:
+    visible: '.*${NATIVE_TITLE}.*'
+    timeout: 10000
+# Proof the device really is offline: a sync it is asked for fails, so the edit
+# above is queued and not pushed.
+- tapOn:
+    id: 'links-more-options'
+- tapOn:
+    id: 'links-sync'
+- extendedWaitUntil:
+    visible:
+      id: 'links-more-options'
+      text: 'More options \(sync failed\)'
+    timeout: 30000
+- takeScreenshot: conflict-native-edit-offline

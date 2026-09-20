@@ -1,0 +1,23 @@
+# Part three of SYNC-CONFLICT-001: the device is back on the api and pushes
+# FIRST. The Data card is the settled signal — "Last synced" with nothing left
+# waiting — because the ⋯ trigger reads the same while a cycle runs as after it.
+appId: com.bracemark.app
+---
+- tapOn:
+    id: 'links-more-options'
+- tapOn:
+    id: 'links-sync'
+- runFlow:
+    file: ../subflows/open-settings.yaml
+    env:
+      SECTION: data
+- extendedWaitUntil:
+    visible: 'Last synced.*'
+    timeout: 30000
+- assertNotVisible: '.*waiting to sync.*'
+- tapOn:
+    id: 'settings-close'
+- extendedWaitUntil:
+    visible:
+      id: 'links-screen'
+    timeout: 10000

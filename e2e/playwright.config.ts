@@ -29,6 +29,16 @@ export default defineConfig({
   // jest config to this project.
   testMatch: '**/*.e2e.ts',
 
+  // The capacity case runs LAST and ALONE: it fills an account to the storage
+  // ceiling through the one local api and R2 and then wipes it, and a spec
+  // sharing the stack meanwhile timed out on its own sync and delete-all
+  // receipts. A dependent project starts only after `web` has finished — and is
+  // skipped if `web` failed, which a red run reports as "did not run".
+  projects: [
+    { name: 'web', testIgnore: '**/capacity.e2e.ts' },
+    { name: 'capacity', testMatch: '**/capacity.e2e.ts', dependencies: ['web'] },
+  ],
+
   // Waits for bracemark-api, which `webServer` below cannot express.
   globalSetup: './global-setup.ts',
 

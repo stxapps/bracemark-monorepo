@@ -1,0 +1,39 @@
+# Scroll an already-mounted list well past its top, so it is ENGAGED — the state
+# in which a pull must stage behind the refresh pill instead of repainting
+# (docs/client-queries.md, _the staged snapshot rule_). The first step of a
+# runner-driven case: runner/mobile.ts measures a row here, has a web profile
+# write and push a link, and continues with parts/refresh-pill-held.yaml.
+#
+# The account arrives holding 60 links in My List, newest first, at
+# `https://HOST/row-000` … `row-059` (web/fixtures/library.ts).
+#
+#   maestro test mobile/flows/refresh-pill.yaml -e USERNAME=… -e PASSWORD=… \
+#     -e HOST=e2e-paged-….invalid
+#
+# One flow for two registry ids, because the claim is registered per platform:
+# the iOS and Android results are separate lines of the Phase 4 matrix.
+appId: com.bracemark.app
+tags: [SYNC-REFRESH-PILL-IOS-001, SYNC-REFRESH-PILL-ANDROID-001, full, online, scale, ios, android]
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+- extendedWaitUntil:
+    visible: '.*${HOST}/row-000.*'
+    timeout: 60000
+# The "links without a preview" prompt sits above the list and moves it when it
+# goes. Put it away now, so nothing but the pull can move a row later.
+- tapOn:
+    text: 'Dismiss'
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 5000
+
+- scrollUntilVisible:
+    element: '.*${HOST}/row-020.*'
+    direction: DOWN
+    centerElement: true
+    timeout: 60000
+- waitForAnimationToEnd:
+    timeout: 5000
+- assertNotVisible: '.*${HOST}/row-000.*'
+- takeScreenshot: refresh-pill-engaged

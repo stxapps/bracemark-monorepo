@@ -1,0 +1,20 @@
+# Part two of SYNC-REFRESH-PILL-*: pull another client's write into the engaged
+# list and see it held. Never run alone — refresh-pill.yaml scrolls the list, and
+# the runner has a web profile push REMOTE_URL in between.
+#
+# The pull is the ⋯ menu's Sync, which is a user's request and NOT a local edit:
+# it must not open the grace window that applies this device's own writes at
+# once (sync-provider `syncNow`). The runner then compares a row's bounds with
+# the ones it measured before the pull.
+appId: com.bracemark.app
+---
+- tapOn:
+    id: 'links-more-options'
+- tapOn:
+    id: 'links-sync'
+- extendedWaitUntil:
+    visible:
+      id: 'links-refresh-pill'
+    timeout: 30000
+- assertNotVisible: ".*${REMOTE_URL.replace('https://', '')}.*"
+- takeScreenshot: refresh-pill-held

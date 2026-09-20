@@ -1,0 +1,15 @@
+# Part four of SYNC-CONFLICT-001: the web profile reconnected SECOND and its
+# local edit won the reconcile (docs/local-first-sync.md, _conflict policy_ —
+# file-level last-writer-wins, the shipped engine resolving local-wins). The
+# device's own edit is what that policy drops, and a pull must show it dropped.
+appId: com.bracemark.app
+---
+- tapOn:
+    id: 'links-more-options'
+- tapOn:
+    id: 'links-sync'
+- extendedWaitUntil:
+    visible: '.*${WEB_TITLE}.*'
+    timeout: 30000
+- assertNotVisible: '.*${NATIVE_TITLE}.*'
+- takeScreenshot: conflict-resolved-on-device

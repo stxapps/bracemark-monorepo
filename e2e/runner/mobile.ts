@@ -1,13 +1,33 @@
 import { join } from 'node:path';
 
+import { expect } from '@playwright/test';
+
+import { profileDir } from '../paths';
 import { importArchive, waitForSync } from '../seed/steps';
+import { type Credentials } from '../web/fixtures/account';
 import { unique, unresolvableUrl } from '../web/fixtures/data';
+import { launchApp, type LaunchedApp } from '../web/fixtures/launch';
 import { writePagedLibrary } from '../web/fixtures/library';
+import { addLink, chooseRowMenuItem, displayUrl, linkRow } from '../web/fixtures/links';
 import { grantPlus } from '../web/fixtures/plan';
+import { syncAndWait } from '../web/fixtures/sync';
 import { parseNativeCli } from './cli';
-import { boxOf, centerOf, onlyNode, parseHierarchy, sameRow, writeDragFlow } from './hierarchy';
+import {
+  type Box,
+  boxById,
+  boxOf,
+  centerOf,
+  formatBox,
+  isInside,
+  onlyNode,
+  parseHierarchy,
+  rowBoxByText,
+  sameRow,
+  writeDragFlow,
+} from './hierarchy';
 import { provisionAccount } from './lib';
 import { type CaseStep, type CaseStepContext, prepareNativeRun } from './native-run';
+import { capture } from './process';
 import { selectCasesForPlatform, validateCaseRegistry } from './registry';
 
 // Cases whose subject is a Plus lever get the existing `manual` grant before the
@@ -33,6 +53,50 @@ async function listGrip(context: CaseStepContext, name: string) {
   return { root, field, grip: sameRow(root, field, 'Drag to reorder', `"${name}" grip`) };
 }
 
+// Another client's write: a separate web profile signs in, saves `url`, and
+// pushes it, so the device can only learn of it by pulling.
+async function writeFromWeb(label: string, credentials: Credentials, url: string): Promise<void> {
+  const app = await launchApp(profileDir(label), { existing: credentials });
+  try {
+    await app.page.goto('/links');
+    await addLink(app.page, url);
+    await syncAndWait(app.page);
+  } finally {
+    await app.close();
+  }
+}
+
+// The list's box and one row's, read off the screen as it is now.
+async function rowInList(context: CaseStepContext, url: string) {
+  const root = parseHierarchy(await context.hierarchy());
+  return { root, list: boxById(root, 'links-list'), row: rowBoxByText(root, displayUrl(url)) };
+}
+
+// The row is painted inside the list and leads it: its top within one row's
+// height of the list's top edge, and `below` (the previous first row) under it.
+function assertLeadsList(list: Box, row: Box | null, below: Box | null, what: string): void {
+  if (!row) throw new Error(`${what}: the row is not mounted`);
+  if (!isInside(row, list)) {
+    throw new Error(`${what}: row ${formatBox(row)} is outside the list ${formatBox(list)}`);
+  }
+  if (row.top - list.top >= row.bottom - row.top) {
+    throw new Error(`${what}: row ${formatBox(row)} is not at the top of ${formatBox(list)}`);
+  }
+  if (below && below.top < row.bottom - 1) {
+    throw new Error(`${what}: the previous first row ${formatBox(below)} is not below it`);
+  }
+}
+
+// Take an Android device off the local api, or put it back, without touching the
+// app: the emulator reaches :8787 only through this reverse mapping, and Metro
+// (:8081) keeps its own (docs/e2e.md, _driving the native apps_).
+async function setApiReachable(deviceId: string, reachable: boolean): Promise<void> {
+  const args = reachable
+    ? ['reverse', 'tcp:8787', 'tcp:8787']
+    : ['reverse', '--remove', 'tcp:8787'];
+  await capture('adb', ['-s', deviceId, ...args], { allowFailure: !reachable });
+}
+
 // Standalone native journeys. Platform and device are deliberately mandatory:
 // a result that does not say which runtime it exercised is not a baseline.
 async function main(): Promise<void> {
@@ -48,6 +112,7 @@ async function main(): Promise<void> {
       // state observed by the next one.
       const withRecovery = testCase.id === 'NATIVE-ACCOUNT-002';
       let pagedUrls: string[] = [];
+      const conflictUrl = unresolvableUrl(`${run.runId}-conflict`);
       const account = await provisionAccount(`${run.runId}-${testCase.id}`, {
         withRecovery,
         prepare: async (app) => {
@@ -62,6 +127,12 @@ async function main(): Promise<void> {
             await importArchive(app.page, library.archivePath);
             await waitForSync(app.page);
             pagedUrls = library.urls;
+          }
+          if (testCase.id === 'SYNC-CONFLICT-001') {
+            // The one link both clients edit, on the server before either does.
+            await app.page.goto('/links');
+            await addLink(app.page, conflictUrl);
+            await syncAndWait(app.page);
           }
         },
       });
@@ -211,12 +282,142 @@ async function main(): Promise<void> {
         env.TAG_NAME = unique(`${run.runId} delete tag`);
       }
 
-      await run.runCase(
-        testCase,
-        env,
-        [account.password, account.recoveryCode ?? '', env.LOCK_PASSWORD ?? ''],
-        steps,
-      );
+      const credentials: Credentials = { username: account.username, password: account.password };
+      // Undone after the case whether it passed or not: a web profile a case
+      // kept open, a device a case took off the api.
+      let cleanup: (() => Promise<void>) | undefined;
+
+      if (
+        testCase.id === 'SYNC-REFRESH-PILL-IOS-001' ||
+        testCase.id === 'SYNC-REFRESH-PILL-ANDROID-001'
+      ) {
+        env.HOST = new URL(pagedUrls[0]).host;
+        env.REMOTE_URL = unresolvableUrl(`${run.runId}-written-on-web`);
+        let anchor: { url: string; box: Box } | undefined;
+        steps = [
+          testCase.path,
+          // Measure the first fixture row painted wholly inside the scrolled
+          // list, then have another client write.
+          async (context) => {
+            const root = parseHierarchy(await context.hierarchy());
+            const list = boxById(root, 'links-list');
+            for (const url of pagedUrls) {
+              const box = rowBoxByText(root, displayUrl(url));
+              if (box && isInside(box, list)) {
+                anchor = { url, box };
+                break;
+              }
+            }
+            if (!anchor) throw new Error('no fixture row is painted inside the list');
+            await writeFromWeb(`${run.runId}-${testCase.id}-writer`, credentials, env.REMOTE_URL);
+            return null;
+          },
+          'mobile/flows/parts/refresh-pill-held.yaml',
+          // The pull landed behind the pill: the anchor is exactly where it was,
+          // and the pulled row is not mounted at all — FlashList keeps a
+          // prepended row mounted above the viewport, so "not on screen" would
+          // pass a promoted snapshot too.
+          async (context) => {
+            if (!anchor) throw new Error('the anchor was never measured');
+            const { root, row } = await rowInList(context, anchor.url);
+            if (!row || formatBox(row) !== formatBox(anchor.box)) {
+              throw new Error(
+                `the engaged list moved under a pull: ${formatBox(anchor.box)} → ${row ? formatBox(row) : 'unmounted'}`,
+              );
+            }
+            if (rowBoxByText(root, displayUrl(env.REMOTE_URL))) {
+              throw new Error('the pulled row was mounted before the refresh pill was pressed');
+            }
+            return null;
+          },
+          'mobile/flows/parts/refresh-pill-applied.yaml',
+          async (context) => {
+            const { root, list, row } = await rowInList(context, env.REMOTE_URL);
+            const previous = rowBoxByText(root, displayUrl(pagedUrls[0]));
+            assertLeadsList(list, row, previous, 'after the refresh pill');
+            return null;
+          },
+        ];
+      }
+      if (testCase.id === 'SYNC-LOCAL-TOP-001') {
+        env.HOST = new URL(pagedUrls[0]).host;
+        env.LINK_URL = unresolvableUrl(`${run.runId}-local-top`);
+        steps = [
+          testCase.path,
+          async (context) => {
+            const { root, list, row } = await rowInList(context, env.LINK_URL);
+            const previous = rowBoxByText(root, displayUrl(pagedUrls[0]));
+            assertLeadsList(list, row, previous, 'a save at offset zero');
+            return null;
+          },
+        ];
+      }
+      if (testCase.id === 'SYNC-CONFLICT-001') {
+        env.LINK_URL = conflictUrl;
+        env.WEB_TITLE = unique('E2E web title');
+        env.NATIVE_TITLE = unique('E2E device title');
+        let web: LaunchedApp | undefined;
+        cleanup = async () => {
+          await web?.close();
+          await setApiReachable(run.deviceId, true);
+        };
+        steps = [
+          testCase.path,
+          // Both clients go offline and the web one retitles the link. The web
+          // profile stays open across the device's steps: its unpushed edit
+          // lives in this profile's Dexie and nowhere else.
+          async () => {
+            web = await launchApp(profileDir(`${run.runId}-conflict-web`), {
+              existing: credentials,
+            });
+            const { page } = web;
+            await page.goto('/links');
+            await expect(linkRow(page, conflictUrl)).toHaveCount(1);
+            await setApiReachable(run.deviceId, false);
+            await web.context.setOffline(true);
+            await chooseRowMenuItem(page, conflictUrl, 'Edit');
+            const dialog = page.getByRole('dialog', { name: 'Edit link' });
+            await dialog.getByRole('textbox', { name: 'Title' }).fill(env.WEB_TITLE);
+            await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+            await expect(dialog).toHaveCount(0);
+            await expect(linkRow(page, conflictUrl)).toContainText(env.WEB_TITLE);
+            return null;
+          },
+          'mobile/flows/parts/sync-conflict-native-edit.yaml',
+          // The device reconnects FIRST and pushes its title.
+          async () => {
+            await setApiReachable(run.deviceId, true);
+            return null;
+          },
+          'mobile/flows/parts/sync-conflict-native-push.yaml',
+          // The web profile reconnects SECOND: its reconcile finds the server
+          // changed since its base and resolves local-wins, so its title is
+          // pushed over the device's and survives a reload.
+          async () => {
+            if (!web) throw new Error('the web profile was never opened');
+            const { page } = web;
+            await web.context.setOffline(false);
+            await syncAndWait(page);
+            await page.reload();
+            const row = linkRow(page, conflictUrl);
+            await expect(row).toContainText(env.WEB_TITLE);
+            await expect(row).not.toContainText(env.NATIVE_TITLE);
+            return null;
+          },
+          'mobile/flows/parts/sync-conflict-native-pull.yaml',
+        ];
+      }
+
+      try {
+        await run.runCase(
+          testCase,
+          env,
+          [account.password, account.recoveryCode ?? '', env.LOCK_PASSWORD ?? ''],
+          steps,
+        );
+      } finally {
+        await cleanup?.();
+      }
     }
     await run.finish('passed');
   } catch (error) {

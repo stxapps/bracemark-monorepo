@@ -39,14 +39,14 @@ not itself completeness.
 Present in the tree today; this table is an inventory, not a claim that every row
 has just passed on every platform.
 
-| Surface           | Current coverage                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Web               | Twenty-three Playwright cases: session reload, sign-out teardown, delete account, one-link persistence, two mounted writes, editor round trip, dirty-editor close guard, link lifecycle, list creation round trip, live picker taxonomy, pointer drag reorder/reparent, filtered views, hidden/locked destinations, text search, advanced search restore, scroll reset, bulk selection, bulk actions, bulk Trash, bulk copy, app lock, covering list lock, mounted delete-all repaint |
-| Native            | Twenty Maestro flows: password sign-in/cold start, recovery sign-in, delete account/cold start, two mounted link inserts, editor round trip/cold start, dirty-editor close guard, link lifecycle, settings-to-picker taxonomy, touch drag reorder/reparent, filtered views, text search, advanced search round trip, bulk selection recycling, bulk actions, bulk Trash, bulk copy, app lock/relock, covering list lock, auto-relock window, mounted delete-all repaint               |
-| Contract          | Frozen device vectors plus web to mobile and mobile to web encrypted round trips                                                                                                                                                                                                                                                                                                                                                                                                      |
-| Browser extension | Nine Playwright cases: profile auth, save/saved/restore/boundary states, two-way sync, live extraction, and MV3 worker restart                                                                                                                                                                                                                                                                                                                                                        |
-| PWA               | Unit/component coverage around registration and navigation; no production-build offline E2E target                                                                                                                                                                                                                                                                                                                                                                                    |
-| Automation        | No CI workflow currently runs these targets                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| Surface           | Current coverage                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Web               | Twenty-five Playwright cases: session reload, sign-out teardown, delete account, one-link persistence, two mounted writes, editor round trip, dirty-editor close guard, link lifecycle, list creation round trip, live picker taxonomy, pointer drag reorder/reparent, filtered views, hidden/locked destinations, text search, advanced search restore, scroll reset, bulk selection, bulk actions, bulk Trash, bulk copy, app lock, covering list lock, mounted delete-all repaint, refresh pill under a scrolled reader, capacity-blocked push                                  |
+| Native            | Twenty-three Maestro flows: password sign-in/cold start, recovery sign-in, delete account/cold start, two mounted link inserts, editor round trip/cold start, dirty-editor close guard, link lifecycle, settings-to-picker taxonomy, touch drag reorder/reparent, filtered views, text search, advanced search round trip, bulk selection recycling, bulk actions, bulk Trash, bulk copy, app lock/relock, covering list lock, auto-relock window, mounted delete-all repaint, refresh pill under a scrolled list, save at offset zero in the viewport, offline conflict (Android) |
+| Contract          | Frozen device vectors plus web to mobile and mobile to web encrypted round trips                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Browser extension | Nine Playwright cases: profile auth, save/saved/restore/boundary states, two-way sync, live extraction, and MV3 worker restart                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| PWA               | Unit/component coverage around registration and navigation; no production-build offline E2E target                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| Automation        | No CI workflow currently runs these targets                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 
 Before adding broad new coverage, capture a fresh result for every existing case:
 
@@ -303,27 +303,33 @@ coverage: every client must write; at least one independent client must read; an
 both native operating systems must run the frozen crypto and web/mobile round
 trips.
 
-- [ ] `CONTRACT-VECTORS-001` Existing: frozen vectors pass on iOS.
-- [ ] `CONTRACT-VECTORS-002` Existing: frozen vectors pass on Android.
-- [ ] `CONTRACT-WEB-MOBILE-001` Existing: web writes, iOS reads.
-- [ ] `CONTRACT-WEB-MOBILE-002` Existing: web writes, Android reads.
-- [ ] `CONTRACT-MOBILE-WEB-001` Existing: iOS writes, web reads.
-- [ ] `CONTRACT-MOBILE-WEB-002` Existing: Android writes, web reads.
-- [ ] `SYNC-EXT-WEB-001` Covered by `EXT-SYNC-001`/`002`: browser extension and
+The `-002` contract lines are the Android runs of the registry's one
+`CONTRACT-*-001` id per leg, which carries both platform traits; the run
+manifest names the platform. `SYNC-CONFLICT-001` runs on Android only, the one
+platform whose route to the api the runner can cut and restore
+(`docs/e2e.md`, _cross-client sync_).
+
+- [x] `CONTRACT-VECTORS-001` Existing: frozen vectors pass on iOS.
+- [x] `CONTRACT-VECTORS-002` Existing: frozen vectors pass on Android.
+- [x] `CONTRACT-WEB-MOBILE-001` Existing: web writes, iOS reads.
+- [x] `CONTRACT-WEB-MOBILE-002` Existing: web writes, Android reads.
+- [x] `CONTRACT-MOBILE-WEB-001` Existing: iOS writes, web reads.
+- [x] `CONTRACT-MOBILE-WEB-002` Existing: Android writes, web reads.
+- [x] `SYNC-EXT-WEB-001` Covered by `EXT-SYNC-001`/`002`: browser extension and
       web each write and the other reads.
-- [ ] `SYNC-REFRESH-PILL-WEB-001` Keep one web profile scrolled and engaged, write
+- [x] `SYNC-REFRESH-PILL-WEB-001` Keep one web profile scrolled and engaged, write
       from a second profile, sync, prove rows do not jump, press the refresh pill,
       and prove the new row becomes the top state.
-- [ ] `SYNC-REFRESH-PILL-IOS-001` Repeat with an engaged iOS list and a web writer.
-- [ ] `SYNC-REFRESH-PILL-ANDROID-001` Repeat with an engaged Android list and a web
+- [x] `SYNC-REFRESH-PILL-IOS-001` Repeat with an engaged iOS list and a web writer.
+- [x] `SYNC-REFRESH-PILL-ANDROID-001` Repeat with an engaged Android list and a web
       writer.
-- [ ] `SYNC-LOCAL-TOP-001` At native offset zero, add a link and prove through
+- [x] `SYNC-LOCAL-TOP-001` At native offset zero, add a link and prove through
       bounds/pixels that the newest row is in the viewport rather than merely in
       the accessibility tree.
-- [ ] `SYNC-CONFLICT-001` Make concurrent offline edits to one link on web and one
+- [x] `SYNC-CONFLICT-001` Make concurrent offline edits to one link on web and one
       native client, reconnect in a controlled order, and prove the documented
       conflict result on both. Keep the conflict matrix itself at unit level.
-- [ ] `SYNC-BLOCKED-001` Exercise a real capacity-blocked push and prove the
+- [x] `SYNC-BLOCKED-001` Exercise a real capacity-blocked push and prove the
       client reports a capacity state rather than a generic network failure.
 
 ## Phase 5 — data lifecycle

@@ -122,3 +122,40 @@ export async function writeDragFlow(
   );
   return path;
 }
+
+// The one node carrying a `testID` — Maestro reports it as `resource-id` on both
+// platforms.
+export function boxById(root: HierarchyNode, id: string): Box {
+  const nodes = findNodes(root, (attributes) => attributes['resource-id'] === id);
+  if (nodes.length !== 1) throw new Error(`expected one #${id}, found ${nodes.length}`);
+  return boxOf(nodes[0]);
+}
+
+// A link row's box, found by the url it shows. A row's accessible name is a
+// composite that carries the url (docs/e2e.md, _a composite row name is not an
+// inventory_), and the row's inner nodes can carry it too, so the widest match
+// is the row itself. Null when no mounted node carries it.
+export function rowBoxByText(root: HierarchyNode, text: string): Box | null {
+  const boxes = findNodes(root, (attributes) =>
+    [attributes.accessibilityText, attributes.text].some((value) => value?.includes(text)),
+  ).map(boxOf);
+  if (boxes.length === 0) return null;
+  const area = (box: Box) => (box.right - box.left) * (box.bottom - box.top);
+  return boxes.reduce((widest, box) => (area(box) > area(widest) ? box : widest));
+}
+
+// Whether `inner` is painted wholly inside `outer`. Viewport claims need this
+// rather than a visibility assertion: FlashList keeps rows mounted past both
+// edges, and a mounted row is in the tree whether or not it is on screen.
+export function isInside(inner: Box, outer: Box): boolean {
+  return (
+    inner.top >= outer.top &&
+    inner.bottom <= outer.bottom &&
+    inner.left >= outer.left &&
+    inner.right <= outer.right
+  );
+}
+
+export function formatBox(box: Box): string {
+  return `[${box.left},${box.top}][${box.right},${box.bottom}]`;
+}

@@ -454,13 +454,16 @@ Seventeen repo-specific gotchas:
 
 #### gestures and waits the runner performs
 
-Two native cases need something between flows that no flow can express, so a
+Some native cases need something between flows that no flow can express, so a
 case may be a sequence of steps (`CaseStep` in `runner/native-run.ts`): its
 registered flow first, then committed part flows in `mobile/flows/parts/` — outside
 the directory glob, since each assumes the state the previous step left — and
-host-side steps between them. Every assertion stays in a committed flow; a host
-step only measures, waits, or synthesizes a gesture, and the flows it generates
-are written under the case's artifacts so the exact gesture is on record.
+host-side steps between them. A host step measures, waits, synthesizes a gesture,
+acts as ANOTHER client, or cuts the device off the api; the flows it generates
+are written under the case's artifacts so the exact gesture is on record. Every
+assertion about what the app shows stays in a committed flow, with one
+exception: a claim in BOUNDS — where a row is painted relative to the list — is
+checked by the host step that read them, since a flow can only say "visible".
 
 - **A touch drag measured off the screen** (`TAXONOMY-DND-002`). A native settings
   row lifts on a long press of its grip (gesture-handler `activateAfterLongPress`,
@@ -482,6 +485,22 @@ are written under the case's artifacts so the exact gesture is on record.
   the app is away and no simulator clock to advance. The runner waits 75s between
   the flow that backgrounds the app and the part that foregrounds it — rather than
   a flow spelling a minute as an assertion expected to fail.
+- **Another client's write** (`SYNC-REFRESH-PILL-IOS-001`/`-ANDROID-001`). A
+  separate web profile signs into the same account, saves a link and pushes it
+  (`writeFromWeb`), so the device can learn of it only by pulling.
+- **Bounds** (`SYNC-REFRESH-PILL-*`, `SYNC-LOCAL-TOP-001`). `runner/hierarchy.ts`
+  reads a row's box (`rowBoxByText`, the widest node whose name carries the url)
+  against the list's own (`links-list`). ⚠ **"In the tree" is not "on screen"
+  here, on either platform:** FlashList keeps a prepended row mounted ABOVE the
+  viewport, where every selector, `assertVisible` included, still finds it. The
+  refresh-pill case compares one fixture row's box before and after the pull
+  (it must be identical) and requires the pulled row to be unmounted until the
+  pill is pressed, then painted inside the list within one row of its top.
+- **Off the api and back** (`SYNC-CONFLICT-001`, Android only).
+  `adb reverse --remove tcp:8787` is a device that cannot sync while Metro's 8081
+  keeps serving the bundle; the runner restores the mapping after the case
+  whether it passed or not. The iOS simulator shares the host's loopback, so
+  there is no equivalent short of stopping the api under every other client.
 
 #### accounts for a mobile run
 
@@ -565,7 +584,10 @@ All of them are in the app:
 | `links-nav-tag-<id>`        | ” — the tag rows                                                                    |
 | `links-nav-all`             | ” — Show All                                                                        |
 | `links-more-options`        | `src/features/links/more-options-menu.tsx`                                          |
+| `links-sync`                | ” — the Sync menu item (`syncNow`)                                                  |
 | `links-open-settings`       | ” — the Settings menu item                                                          |
+| `links-list`                | `src/features/links/main.tsx` — the FlashList, the viewport bounds are read against |
+| `links-refresh-pill`        | `src/features/links/shared.tsx` — the "New updates" pill                            |
 | `add-link-url`              | `src/features/links/link-add-panel.tsx`                                             |
 | `add-link-save`             | ” — the submit, whose label flips Save→Confirm                                      |
 | `add-link-optional`         | ” — the "List, tags & note" disclosure                                              |
@@ -701,6 +723,53 @@ announced an unnamed text field. That is the same class of miss
 unlabelled control is untestable as well as inaccessible" is the framing above
 rather than a slogan. The fields now carry `aria-label` and `aria-invalid`
 alongside their ids, matching `new-password-field.tsx`.
+
+### cross-client sync
+
+Hub and spoke, not a complete graph: every client writes, at least one
+independent client reads, and both native platforms run the frozen vectors and
+both web ⇄ mobile directions. The contract legs keep ONE registry id each across
+iOS and Android (`CONTRACT-*-001`, with both platform traits); a result line
+names its platform from the run manifest.
+
+| case                                         | client that writes → client that reads                     |
+| -------------------------------------------- | ---------------------------------------------------------- |
+| `CONTRACT-WEB-MOBILE-001`                    | web → iOS, web → Android                                   |
+| `CONTRACT-MOBILE-WEB-001`                    | iOS → web, Android → web                                   |
+| `EXT-SYNC-001` / `-002`                      | web → browser extension, browser extension → web           |
+| `SYNC-REFRESH-PILL-WEB-001`                  | web profile → an engaged web profile                       |
+| `SYNC-REFRESH-PILL-IOS-001` / `-ANDROID-001` | web profile → an engaged native list                       |
+| `SYNC-CONFLICT-001`                          | web ⇄ Android, both offline, on one link                   |
+| `SYNC-BLOCKED-001`                           | web → the server's quota gate → an independent web profile |
+
+**The refresh pill is reached through the ⋯ menu's Sync, and that is the
+point.** The only non-local trigger a mounted list has is a user's request — no
+timer or focus event runs a cycle — so the case's pull is the path a real
+reader takes, and it caught that path promoting past the pill
+([client-queries.md](./client-queries.md), _the staged snapshot rule_).
+
+**`SYNC-CONFLICT-001` proves the documented LWW result, not a merge.** The device
+reconnects first and pushes its title; the web profile reconnects second, finds
+the server changed since its base, resolves local-wins, and pushes over it
+([local-first-sync.md](./local-first-sync.md), _conflict policy_). Both clients
+end on the web title; the device's edit is the one the policy drops, and the
+case asserts it is gone from the device after a pull. The conflict matrix itself
+(fast-forward vs conflict, apply-time re-reads) stays at unit level. The device's
+push is read off Settings → Data ("Last synced" with nothing waiting), because
+the ⋯ trigger's name reads the same during a cycle as after one.
+
+⚠ **`SYNC-BLOCKED-001` fills a real account with real bytes, and nothing lowers
+the ceiling for it.** Eleven 10 MiB preview files (`web/fixtures/heavy-library.ts`,
+random so they cannot compress) against the free plan's 100 MiB: content puts
+drain before metadata puts and the gate reads usage as it stood before each sign
+batch, so the one content chunk lands and the links behind it are refused. The
+case asserts the Data card's storage-full sentence and the ⋯ trigger's "storage
+full" name, that neither turns into "Sync failed" after a retry, and that an
+independent profile never receives the refused links. It ends by deleting all
+data, which is the only thing that gives the local R2 its 110 MiB back — a run
+that FAILS before that line leaves them in `apps/bracemark-api/.wrangler/`.
+Writing the size map directly, or a test-only ceiling, would prove the UI
+against a state the server never reached.
 
 ### running it
 
@@ -1390,6 +1459,41 @@ dropping the list change (at the moved-list read after reload), Restore sending
 the link back to Trash, Pin as a no-op, and the delete confirmation skipping the
 delete. The native flows have **not** yet had that check; it is the open half of
 their definition of done.
+
+The Phase 4 cross-client cases were measured 2026-09-18 from commit
+`1ea5a58b130d3d8c85396fb1fd70eea4ce285431` with their changes present in the
+working tree — system Chrome 153.0.8010.48, bundled Chromium 151.0.7922.34, the
+iPhone 17 Pro simulator on iOS 26.5, `sdk_gphone64_arm64` on Android 16, app
+1.0.0 (1), Maestro 2.8.0:
+
+| surface          | measured result                                                                                |
+| ---------------- | ---------------------------------------------------------------------------------------------- |
+| iOS contract     | **3/3 passed** — frozen vectors, web→mobile, mobile→web                                        |
+| Android contract | **3/3 passed** — the same three                                                                |
+| extension        | **2/2 passed** — `EXT-SYNC-001`/`002`                                                          |
+| web              | **6/6 passed** — `SYNC-REFRESH-PILL-WEB-001`, `SYNC-BLOCKED-001`, three repeats each, no retry |
+| iOS native       | **2/2 passed** — `SYNC-REFRESH-PILL-IOS-001`, `SYNC-LOCAL-TOP-001`                             |
+| Android native   | **3/3 passed** — `SYNC-REFRESH-PILL-ANDROID-001`, `SYNC-LOCAL-TOP-001`, `SYNC-CONFLICT-001`    |
+
+They found two app bugs, both fixed in the same change, and neither visible to
+any unit test (details in [client-queries.md](./client-queries.md), _the staged
+snapshot rule_):
+
+- **A user's Sync opened the local-write grace window**, so a pull landed
+  straight under a scrolled reader. On web every row moved down by one (80px),
+  on native the pill never lit. The menus and Data cards now call `syncNow`.
+- **The native pill hid the row it promoted.** Promotion and an animated
+  scroll-to-top raced FlashList's content anchor, leaving the new row a row
+  above the viewport on iOS — mounted, and "visible" to every selector.
+
+Each new case was also run against the behaviour it guards and failed: the web
+refresh-pill case at the anchor row's position with the menu on `requestSync`;
+the native one at its held step (Android); local-top without
+`autoscrollToTopThreshold` (Android); the capacity case with the engine
+rethrowing `quota_exceeded`, at "Sync failed — Retry" in 20s; and the iOS pill at
+its bounds check with each of the two earlier `applyAndScrollTop` orders.
+`SYNC-CONFLICT-001` has not had that check: breaking local-wins means changing
+the reconcile, which its unit specs own.
 
 Nothing here runs automatically. There is still no CI ([testing.md](./testing.md)),
 and the only git hook guards `internal/`.

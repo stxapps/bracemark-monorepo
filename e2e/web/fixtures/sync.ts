@@ -11,7 +11,10 @@ import { expect, type Page } from '@playwright/test';
 // the same control a user has. `requestSync` coalesces, so the click is safe to
 // repeat, and the Sync → Syncing… → Sync transition on the item IS the feedback
 // (the menu deliberately stays open for it).
-export async function syncAndWait(page: Page): Promise<void> {
+//
+// `timeoutMs` is for a cycle that genuinely moves a lot of bytes (the capacity
+// case's 110 MiB); the default suits every metadata-sized push.
+export async function syncAndWait(page: Page, timeoutMs = 60_000): Promise<void> {
   await page.getByRole('button', { name: /^More options/ }).click();
 
   const item = page.getByRole('menuitem', { name: /^(Sync|Syncing…|Sync failed)/ });
@@ -19,8 +22,11 @@ export async function syncAndWait(page: Page): Promise<void> {
 
   // Settled = back to the resting label. "Sync failed — Retry" is a real failure
   // and must not be waited through: a contract run that continued past it would
-  // fail on the phone and blame the wrong half.
-  await expect(item).toHaveText(/^Sync$/, { timeout: 60_000 });
+  // fail on the phone and blame the wrong half. So the wait ends on EITHER
+  // settled label and the resting one is asserted after, which fails a broken
+  // cycle at once instead of at the end of a long budget.
+  await expect(item).toHaveText(/^(Sync|Sync failed.*)$/, { timeout: timeoutMs });
+  await expect(item).toHaveText(/^Sync$/, { timeout: 1_000 });
 
   await page.keyboard.press('Escape');
 }
