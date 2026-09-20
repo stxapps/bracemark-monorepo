@@ -35,6 +35,7 @@ import {
 } from '@stxapps/shared';
 import { useEntitlements, useSync } from '@stxapps/web-react';
 import { Button } from '@stxapps/web-ui/components/ui/button';
+import { useTheme } from '@stxapps/web-ui/contexts/theme-provider';
 
 import { SettingsHeader, SettingsNotice, SettingsPane } from '../../_components/settings-kit';
 import { usePaddlePrices } from './use-paddle-prices';
@@ -97,6 +98,10 @@ function formatDate(epochMs: number): string {
 export function SubscriptionSection() {
   const api = useApiClient();
   const { subscription, isLoading, refetch } = useEntitlements();
+  // The RENDERED light/dark, handed to Paddle's overlay at each open — it is a
+  // third-party iframe, so nothing of ours styles it and the class on <html>
+  // does not reach it (lib/paddle.ts, openPaddleCheckout).
+  const { effectiveTheme } = useTheme();
   // Kicked the moment the plan actually widens — see pollActivation.
   const { requestSync } = useSync();
 
@@ -216,6 +221,7 @@ export function SubscriptionSection() {
     try {
       await openPaddleCheckout({
         transactionId,
+        theme: effectiveTheme,
         onCompleted: () =>
           from.plan === 'free' ? void pollActivation(from.plan) : confirmPaymentLink(from),
         onClosed: () => setBusy((b) => (b === 'checkout:link' ? null : b)),
@@ -279,6 +285,7 @@ export function SubscriptionSection() {
     try {
       await openPaddleCheckout({
         transactionId,
+        theme: effectiveTheme,
         onCompleted: () => void pollActivation(fromPlan),
         // Fires after completion too — only clear the checkout busy state, never
         // an in-flight activation poll.

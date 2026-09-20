@@ -1,5 +1,7 @@
 import { CheckoutEventNames, initializePaddle, type Paddle } from '@paddle/paddle-js';
 
+import type { EffectiveTheme } from '@stxapps/shared';
+
 // App-level Paddle Billing wrapper — bracemark-web is the ONLY checkout surface
 // (the extension deep-links here; the future Expo app uses store IAP), so this
 // lives in the app, not a package. It wraps @paddle/paddle-js with:
@@ -99,9 +101,12 @@ export async function previewPaddlePrices(priceIds: string[]): Promise<Record<st
 
 // Open the overlay checkout for a server-created transaction. `onCompleted`
 // fires when payment succeeds (start polling `iap/status`); `onClosed` when the
-// overlay goes away for any reason (clear busy state).
+// overlay goes away for any reason (clear busy state). `theme` is the app's
+// RENDERED light/dark (`useTheme().effectiveTheme`), not the user's mode — the
+// overlay only knows the resolved answer.
 export async function openPaddleCheckout(options: {
   transactionId: string;
+  theme: EffectiveTheme;
   onCompleted: () => void;
   onClosed: () => void;
 }): Promise<void> {
@@ -110,5 +115,21 @@ export async function openPaddleCheckout(options: {
 
   onCompleted = options.onCompleted;
   onClosed = options.onClosed;
-  paddle.Checkout.open({ transactionId: options.transactionId });
+  paddle.Checkout.open({
+    transactionId: options.transactionId,
+    // Paddle's checkout defaults to LIGHT, so without this a dark-mode account
+    // gets a white payment sheet thrown over a dark page. It is passed PER OPEN
+    // rather than once at initialize, and that is the load-bearing part: the
+    // initialize happens when the price preview first loads Paddle.js, which is
+    // as early as the section mounting and may be an entire theme away from the
+    // checkout — `system` following the OS, `custom` crossing its 19:00, or the
+    // user changing it in Settings in between. `Paddle.Update()` takes no
+    // checkout settings (only `pwCustomer`/`eventCallback`), so a theme baked in
+    // at initialize could not be corrected afterwards; read at open, it is
+    // always the theme on screen behind the overlay.
+    //
+    // The overlay keeps whatever it opened with — a theme change WHILE it is
+    // open doesn't reach it, and there is no API that would let it.
+    settings: { theme: options.theme },
+  });
 }

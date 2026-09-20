@@ -50,7 +50,7 @@ const mockRefetch = jest.fn(() => Promise.resolve({ data: mockSubscription }));
 const mockRequestSync = jest.fn();
 const mockApiCall = jest.fn(() => Promise.resolve({ transactionId: 'txn_test' }));
 // What the section hands openPaddleCheckout — the slice these tests read.
-type OpenOptions = { transactionId: string; onCompleted: () => void };
+type OpenOptions = { transactionId: string; theme: string; onCompleted: () => void };
 // Async like the real one, so a test can reject it the way a blocked Paddle.js
 // does — a stub that threw synchronously would reach the same catch by a route
 // the app never takes.
@@ -74,6 +74,13 @@ jest.mock('@stxapps/react', () => ({
 
 jest.mock('@/lib/paddle', () => ({
   openPaddleCheckout: (opts: OpenOptions) => mockOpenPaddleCheckout(opts),
+}));
+
+// Mocked rather than wrapped in a real <ThemeProvider>, which would drag in the
+// whole settings data layer for one string. 'dark' because it is the value that
+// can be wrong: light is also what a forgotten setting produces.
+jest.mock('@stxapps/web-ui/contexts/theme-provider', () => ({
+  useTheme: () => ({ effectiveTheme: 'dark' }),
 }));
 
 jest.mock('./use-paddle-prices', () => ({
@@ -132,6 +139,23 @@ describe('SubscriptionSection', () => {
     // "still processing" a contradiction rather than merely stale.
     expect(screen.getByText('Plus')).toBeTruthy();
     expect(screen.queryByText(/still processing/)).toBeNull();
+  });
+
+  // Paddle's overlay is a third-party iframe on their origin: no class of ours
+  // reaches inside it, and it opens LIGHT unless told otherwise — so a dark-mode
+  // account would get a white payment sheet thrown over a dark page. The setting
+  // rides on each OPEN, and has to: Paddle.js initializes much earlier (the
+  // price preview), `Paddle.Update()` carries no checkout settings, and the
+  // theme can move in between — the OS flipping under `system`, `custom`
+  // crossing its hour, or the user changing it in Settings.
+  it('opens the overlay in the theme the page is rendering', async () => {
+    render(<SubscriptionSection />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Upgrade to Plus' }));
+    });
+
+    expect(mockOpenPaddleCheckout).toHaveBeenCalledWith(expect.objectContaining({ theme: 'dark' }));
   });
 
   // One button, two failures behind it, and they do not have the same remedy —

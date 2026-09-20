@@ -159,6 +159,19 @@ plain JS. Single source, no hand-copied duplicate of the resolver.
   (`misc-section.tsx`): a Sync/Device tab, four mode radios, and two time inputs
   revealed in `custom` mode — the same tab shape as the link-layout section right
   above it.
+
+  Paddle's **overlay checkout** is the one surface here the `.dark` class cannot
+  reach — a third-party iframe on Paddle's origin, and it opens **light** unless
+  told otherwise, which is a white payment sheet thrown over a dark page. So
+  `openPaddleCheckout` passes `settings.theme` = the resolved `effectiveTheme`
+  on every open. **Per open, not at `initializePaddle`**: Paddle.js initializes
+  far earlier (the price preview, as the Subscription section mounts), and
+  `Paddle.Update()` carries no checkout settings — so a theme fixed at
+  initialize could not be corrected when the theme moves in between, which
+  `system` and `custom` both do on their own. A change while the overlay is
+  already open does not reach it, and no API would let it.
+  → [iap.md](./iap.md), _the purchase flow (Paddle Billing — web)_.
+
 - **bracemark-extension** — MV3 pages (popup, options). `wxt.config.ts` injects
   `themeInitScript()` into every page's `<head>` at build time via a Vite
   `transformIndexHtml` plugin (`themeFoucPlugin`) — a deferred module `main.tsx`

@@ -128,6 +128,12 @@ Its path is `POST /customers/{ctm_…}/portal-sessions` — the customer is a pa
 segment. There is no top-level portal-sessions resource, and a spec pins the URL.
 Store-bought subscriptions (future) are managed in their store.
 
+**The overlay's theme** is passed on each `Checkout.open`, never at
+`initializePaddle`: it defaults to light, our initialize happens far earlier (the
+price preview), and `Paddle.Update()` carries no checkout settings, so the
+resolved `effectiveTheme` is read at the moment the overlay opens —
+[theme.md](./theme.md), _per-app wiring_.
+
 #### when the upgrade button fails, there are two failures behind it
 
 `startCheckout` catches its two steps separately, because only one of them is
