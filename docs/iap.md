@@ -854,6 +854,68 @@ row as never-expiring and `needsRefresh` skips it outright.
   live). Concrete directives + the `connect-src` exfiltration-widening tradeoff
   are in [hosting.md](./hosting.md#security-headers--where-the-csp-has-to-live).
 
+### exercising Paddle locally
+
+`development` is the one tier Paddle cannot reach on its own: `wrangler dev`
+answers on `localhost:8787`, and a notification destination needs a public HTTPS
+URL. Four ways to exercise this flow, cheapest first — and the order is the
+point, because the expensive one proves the least about our code.
+
+1. **The specs sign their own events.** `routes/iap.spec.ts` MACs a body with a
+   test secret and posts it at the real route, so the signature, the ±5-minute
+   replay window, log-and-ACK, the upsert's three guards, the fold and the
+   missed-webhook recovery are all pinned offline, in milliseconds, under the
+   Workers pool. Any question about what WE do with an event is answered there.
+   Nothing below improves on that; they answer the other question — whether the
+   two accounts still hold the config this repo assumes.
+2. **`npm run check:paddle`** asks the dashboard directly
+   (`tools/scripts/check-paddle.ts`). It reads the tier's `PADDLE_API_BASE` and
+   price lists out of `wrangler.jsonc`, resolves every configured `pri_…`
+   against the catalog, and then mints ONE transaction and cancels it — the only
+   way to see `checkout.url`, and therefore the only way to catch a missing
+   default payment link before a customer does. What it fails on: a price
+   archived or 404, `tax_mode` back to the account default, a product's
+   `tax_category` reset, a one-time price where the cadence on sale is yearly,
+   one id configured for two plans, and a payment link whose path isn't
+   `/settings/subscription`. Each is dashboard state; none of them fails
+   anywhere else. Defaults to `development`; `-- staging` / `-- production`
+   for the deploy tiers (the live account prompts first), `-- --no-checkout`
+   to stay read-only. No money moves at any tier. It is a `check:` script and
+   not a spec because it needs the network and a real API key, which is exactly
+   what `npm run test` must not have; the key comes from `PADDLE_API_KEY`, then
+   the login keychain (`bracemark-paddle-key-<tier>`), and from `.dev.vars` for
+   `development` only — never from a file for a deploy tier
+   ([env-files.md](./env-files.md#whats-committed-vs-ignored)).
+3. **The dashboard replays.** Notifications → the simulator sends a synthetic
+   event at any destination, and a real delivery can be replayed from its log
+   (`POST /notifications/{id}/replay` is the API of the same button). Against
+   the deployed staging destination that needs no local wiring at all, and it is
+   the right tool for "did my handler change break an event shape".
+4. **A tunnel, when it has to be Paddle reaching THIS branch.** A public
+   hostname in front of `localhost:8787` plus a second notification destination
+   pointed at it — `subscription.*` only, and its own secret as
+   `PADDLE_WEBHOOK_SECRET` in `.dev.vars`, since each destination signs with its
+   own. Three things that are not obvious:
+   - **Expose only `/v1/iap/paddle/webhook`.** `localhost:8787` answers every
+     route the Worker has, authenticated ones included, so a whole-origin tunnel
+     publishes your dev API and its local R2 for as long as it is up. Restrict
+     by path, not by intention.
+   - **The default payment link is account-level.** One sandbox account serves
+     development and staging (_config per env_), so pointing it at
+     `http://localhost:3000/settings/subscription` retargets staging's checkouts
+     too, and nothing puts it back but you.
+   - **The tunnel is machine config, not repo config.** The hostname, its DNS
+     record and the ingress rules live outside this repo, and there is
+     deliberately no `npm run` alias for them: a script every clone of a public
+     repo fails on isn't a convenience, and the mapping would advertise which
+     hostname fronts a laptop.
+
+That last one is a **manual release check** — worth doing once after any change
+to the Paddle config, and not something to automate. Driving the checkout itself
+means driving a third-party iframe, a sandbox card and a webhook round trip, and
+it leaves a live subscription behind ([e2e.md](./e2e.md), _what e2e may not
+assert_).
+
 ### open follow-ups
 
 Three of these are one family — **plan change**, **cadence change**, and **the

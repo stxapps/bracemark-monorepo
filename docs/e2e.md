@@ -285,6 +285,20 @@ It lives at the unit layer instead, with a real zip container in both packages'
 it is ever wanted, is thin: that the button produces a download with the right
 name and that the receipt announces the right counts.
 
+**A real Paddle purchase.** Every paid state is reachable without one — the seed
+writes a `manual` purchase row straight into D1 (_seeding a dev account_ below),
+which is a real product state rather than a test hook. What a checkout run would
+add on top of that is Paddle's overlay: a third-party iframe on `*.paddle.com`
+whose DOM is not ours and changes without notice, a sandbox card, possibly a 3DS
+step, and then a wait of seconds to minutes for the webhook that actually flips
+the plan. Worse, it is not idempotent — a green run leaves a live sandbox
+subscription behind, and the next run's `already_subscribed` 409
+([iap.md](./iap.md), _checkout_) refuses to start, so the spec would have to
+cancel through Paddle's API in teardown to be runnable twice. The half of that
+flow that CAN go wrong silently is config rather than UI, and it is checked
+without a browser by `npm run check:paddle`; the delivery half is a manual
+release check ([iap.md](./iap.md), _exercising Paddle locally_).
+
 **Keyboard dismissal.** The flows reach for Maestro's `hideKeyboard`
 (`subflows/sign-in.yaml`, `flows/recovery-sign-in.yaml`), which is a **native**
 command — it puts the keyboard away without touching the app's own affordances.

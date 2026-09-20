@@ -603,6 +603,15 @@ browser frontends — bracemark-web and bracemark-site — need an allowed origi
   machine without the values ever entering the worktree. The keystore file
   itself lives outside the workspace, at whatever absolute path that file names.
   See [expo-build.md](./expo-build.md) — _android release signing_.
+- **in no env file at all, third case:** the **Paddle API key**, for the deploy
+  tiers. The Worker gets it as a `wrangler secret` and local dev reads the
+  sandbox one from `.dev.vars`, so nothing needed a third home until
+  `npm run check:paddle` ([iap.md](./iap.md), _exercising Paddle locally_) had to
+  ask the live catalog a question from a laptop. It resolves `PADDLE_API_KEY`
+  from the shell, then the login keychain (`bracemark-paddle-key-<tier>`), and
+  falls back to `.dev.vars` for `development` ONLY — a live Paddle key can issue
+  refunds and read every customer, so it gets the Cloudflare token's treatment,
+  not the account id's.
 
 **The workspace root has its own pair, and it belongs to no app.** Root `.env` is
 committed and holds non-secret Nx task-running defaults; root `.env.local` is
