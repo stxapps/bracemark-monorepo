@@ -99,6 +99,15 @@ interface SyncContextValue {
   // the engine single-flights per account (overlapping calls coalesce into one
   // trailing rerun). No-op until a session is usable.
   requestSync: () => void;
+  // The same cycle, asked for by the USER rather than by a write: the ⋯ menu's
+  // Sync and the Data card's Sync now / Retry. It does NOT bump
+  // `localWriteNonce`, because it is not a local edit — what it brings in is
+  // another device's writes, which the read edge must stage behind the refresh
+  // pill while the list is engaged, exactly as it would any other pull. Routed
+  // through requestSync, a press while scrolled promoted the pull inside the
+  // grace window and shifted every row under the reader
+  // (e2e SYNC-REFRESH-PILL-*, docs/client-queries.md).
+  syncNow: () => void;
 }
 
 const SyncContext = createContext<SyncContextValue | null>(null);
@@ -131,6 +140,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     setLocalWriteNonce((n) => n + 1);
     backgroundSyncRef.current();
   }, []);
+  const syncNow = useCallback(() => backgroundSyncRef.current(), []);
 
   const retryInitialSync = useCallback(() => {
     setStoreStatus('checking');
@@ -267,6 +277,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       localWriteNonce,
       retryInitialSync,
       requestSync,
+      syncNow,
     }),
     [
       storeStatus,
@@ -278,6 +289,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       localWriteNonce,
       retryInitialSync,
       requestSync,
+      syncNow,
     ],
   );
 
@@ -335,6 +347,8 @@ export function ExternalSyncProvider({
       localWriteNonce,
       retryInitialSync: () => undefined,
       requestSync: requestSyncWithNonce,
+      // The caller's own signal, unmarked — a user-asked cycle is not a write.
+      syncNow: requestSync,
     }),
     [
       storeStatus,
@@ -344,6 +358,7 @@ export function ExternalSyncProvider({
       blockedCount,
       localWriteNonce,
       requestSyncWithNonce,
+      requestSync,
     ],
   );
 

@@ -336,6 +336,7 @@ export function RefreshPill({ show, onPress }: { show: boolean; onPress: () => v
     >
       <Pressable
         role="button"
+        testID="links-refresh-pill"
         onPress={onPress}
         className="flex-row items-center gap-2 rounded-full bg-primary px-4 py-2 shadow-md"
       >

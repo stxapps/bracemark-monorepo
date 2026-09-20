@@ -15,7 +15,7 @@
 //  - Selecting Sync CLOSES the menu (web keeps it open so the Syncing… → settled
 //    transition is the click's feedback) — holding a native dropdown open works
 //    against the platform idiom, so the trigger's error dot (or its absence) is
-//    the outcome surface instead. requestSync coalesces, so re-taps are safe.
+//    the outcome surface instead. The engine coalesces, so re-taps are safe.
 //  - Web's Bulk edit lives OUTSIDE the menu (its own topbar toggle); a phone
 //    topbar has no slot to spare, so it lives here as "Select links" — entering
 //    the mode only (never a toggle: while the mode is on, the bulk bar's ✕ and
@@ -57,7 +57,7 @@ import { cn } from '../../lib/utils';
 import { useLinksViewActions } from './view-state-provider';
 
 export function MoreOptionsMenu() {
-  const { storeStatus, bgSyncStatus, requestSync } = useSync();
+  const { storeStatus, bgSyncStatus, syncNow } = useSync();
   const { appLock, lockApp } = useLocks();
   const { enterBulkEdit } = useLinksViewActions();
   const signOut = useSignOut();
@@ -127,7 +127,9 @@ export function MoreOptionsMenu() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">
-        <DropdownMenuItem onPress={requestSync}>
+        {/* syncNow, not requestSync: a press is not a local edit, so what it
+            pulls stages behind the refresh pill while the list is engaged. */}
+        <DropdownMenuItem testID="links-sync" onPress={syncNow}>
           {syncError ? (
             <>
               {/* No `text-destructive`, matching web: that colour is for actions

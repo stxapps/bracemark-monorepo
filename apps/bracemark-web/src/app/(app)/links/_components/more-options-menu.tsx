@@ -53,7 +53,7 @@ import { SUPPORT_URL } from '../../../../lib/site';
 import { DEFAULT_SECTION_ID } from '../../settings/sections';
 
 export function MoreOptionsMenu() {
-  const { storeStatus, bgSyncStatus, requestSync } = useSync();
+  const { storeStatus, bgSyncStatus, syncNow } = useSync();
   const { appLock, lockApp } = useLocks();
   const signOut = useSignOut();
   const phase = getSyncPhase(storeStatus, bgSyncStatus);
@@ -109,9 +109,11 @@ export function MoreOptionsMenu() {
         <DropdownMenuItem
           onSelect={(e) => {
             // Keep the menu open: the Syncing… → settled transition on this item
-            // IS the click's feedback (requestSync coalesces, so re-clicks are safe).
+            // IS the click's feedback (the engine coalesces, so re-clicks are safe).
+            // syncNow, not requestSync: a press is not a local edit, so what it
+            // pulls stages behind the refresh pill while the list is engaged.
             e.preventDefault();
-            requestSync();
+            syncNow();
           }}
         >
           {phase === 'syncing' ? (

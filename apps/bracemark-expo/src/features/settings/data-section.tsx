@@ -68,7 +68,7 @@ type DataView = 'overview' | 'import' | 'export' | 'delete';
 // Retry). Sync is status-based, not a percentage, so there's no progress bar;
 // the pending-changes line is the "how much is left" signal instead.
 function SyncStatus() {
-  const { storeStatus, bgSyncStatus, lastSyncAt, lastError, blockedCount, requestSync } = useSync();
+  const { storeStatus, bgSyncStatus, lastSyncAt, lastError, blockedCount, syncNow } = useSync();
   const pendingCount = usePendingChangesCount();
   const phase = getSyncPhase(storeStatus, bgSyncStatus);
   // Rendered inside InitialSyncGate, so storeStatus is never 'error' here —
@@ -103,9 +103,9 @@ function SyncStatus() {
   const detail = phase === 'cycle-error' ? lastError : null;
   const action =
     phase === 'cycle-error'
-      ? { label: 'Retry', onPress: requestSync }
+      ? { label: 'Retry', onPress: syncNow }
       : phase === 'idle'
-        ? { label: 'Sync now', onPress: requestSync }
+        ? { label: 'Sync now', onPress: syncNow }
         : null;
 
   return (

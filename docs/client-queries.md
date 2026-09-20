@@ -232,6 +232,31 @@ grace window (this device just edited, so it is the user's own change); or while
 idle (`engaged` false — [editors.md](./editors.md) for what engagement is). Held
 otherwise, and `hasPending` lights the refresh pill, which promotes on demand.
 
+⚠ **The grace window is for this device's WRITES, so a user's Sync must not open
+it.** The sync context has two triggers for the same cycle: `requestSync()`, which
+every mutation calls and which bumps `localWriteNonce`, and `syncNow()`, which
+does not. The ⋯ menu's Sync and the Data card's Sync now / Retry use `syncNow`
+on both platforms. They used to call `requestSync`, and since a local pull
+finishes well inside `LOCAL_WRITE_GRACE_MS`, another device's rows were promoted
+under a reader who had scrolled: on web every row moved down by one (measured at
+80px), and on expo — where FlashList's anchor keeps the rows still — the pill
+simply never lit. Nothing below e2e saw it: the promotion rule was correct for
+the input it was given. `SYNC-REFRESH-PILL-WEB-001` / `-IOS-001` /
+`-ANDROID-001` are the painted proof and `sync-provider.spec.tsx` in each
+package pins the rule. Pull-to-refresh still calls `requestSync`, after an
+explicit `applyPending`, because it happens at the top, where nothing is engaged.
+
+**On expo the pill promotes FIRST and scrolls on the next frame, unanimated.**
+The held rows are usually a prepend, and FlashList's
+`maintainVisibleContentPosition` places a prepend by the offset at the moment it
+commits: a scrolled pane pins its old first row and puts the new one above the
+viewport, then corrects again when a row measures taller than its estimate.
+`applyAndScrollTop` used to promote and start an animated scroll together; on
+the iPhone 17 Pro simulator it left the list on the old first row with the new
+row one whole row above the viewport, and scrolling first left a two-line row
+20pt under the top edge. Mounted and in the accessibility tree in both cases, so
+only a bounds check sees it (`main.tsx`'s comment, `SYNC-REFRESH-PILL-IOS-001`).
+
 **That decision has to be made during RENDER, not in an effect.** `hasPending` is
 derived from `displayed`, so a promotion made in an effect necessarily commits one
 render whose `displayed` is still the old snapshot — and every update here
