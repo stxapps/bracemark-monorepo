@@ -8,6 +8,7 @@
     "check:private": "node tools/scripts/check-private.mjs",
     "check:assets": "tsx tools/scripts/check-assets.ts",
     "check:paddle": "tsx tools/scripts/check-paddle.ts",
+    "replay:appstore": "tsx tools/scripts/replay-appstore.ts",
     "reset": "nx reset",
     "lint": "nx run-many -t lint --output-style=stream",
     "lint:fix": "nx run-many -t lint --output-style=stream -- --fix",
