@@ -2,7 +2,8 @@
 
 How bracemark-expo gets **built** — the local prebuild/Xcode/gradle workflow, the
 app config that feeds it, and the two release-only Android concerns (R8
-minification, Play upload signing). For what each dependency _is_ and how it's
+minification, Play upload signing), plus the Claude Code plugin for the iOS
+App Store Connect side. For what each dependency _is_ and how it's
 wired, see [expo-dependencies.md](./expo-dependencies.md); for the one-time
 scaffold commands, [setup.md](./setup.md); for which manifest declares which
 version, [architecture.md](./architecture.md) — _dependency versions_.
@@ -590,3 +591,21 @@ knowing about because neither is signing and both fail confusingly:
   unaffected, which is why it went unnoticed. If you hand-write another native
   module, copy the four-call preamble from one of these two rather than from an
   older SDK's template.
+
+#### ios release — the `asc` Claude Code plugin
+
+App Store Connect work — uploading a build, TestFlight, metadata, submission —
+has a Claude Code plugin, `asc@rorkai` (skills for the unofficial `asc` CLI).
+It is registered in `.claude/settings.json` but **off by default**: 25 skills
+cost every session context and would compete with these docs on signing and
+IAP. Turn it on in your own clone only while doing a release:
+
+```sh
+claude plugin enable asc@rorkai --scope local   # writes the gitignored settings.local.json
+claude plugin disable asc@rorkai --scope local  # when done
+```
+
+Start a new session after either. The skills drive the `asc` CLI, which needs
+installing and its own App Store Connect API key — that key is a credential and
+goes outside the worktree like every other (see [env-files.md](./env-files.md)).
+The same off-by-default pattern holds for `paddle@claude-community`.
