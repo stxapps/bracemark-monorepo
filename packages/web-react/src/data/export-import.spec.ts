@@ -169,7 +169,17 @@ function installAnchorDownload(): void {
 
 async function exportedText(format: Exclude<ExportFormat, 'bracemark'>): Promise<string> {
   downloads.length = 0;
-  await exportAllData({ format, deps: deps(), excludedListIds: new Set() });
+  // `downloadBlob` defers its revoke by a minute, which outlives the test and keeps
+  // the jest worker from exiting ("failed to exit gracefully"). Cancel every timer
+  // the export left pending — the revoke is stubbed anyway, and clearing a timer that
+  // already fired is a no-op.
+  const timeout = jest.spyOn(globalThis, 'setTimeout');
+  try {
+    await exportAllData({ format, deps: deps(), excludedListIds: new Set() });
+  } finally {
+    for (const { value } of timeout.mock.results) clearTimeout(value);
+    timeout.mockRestore();
+  }
   if (downloads.length !== 1) throw new Error(`expected one download, got ${downloads.length}`);
   return await downloads[0].text();
 }

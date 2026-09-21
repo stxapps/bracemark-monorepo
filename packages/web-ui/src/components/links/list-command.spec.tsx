@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { buildTree, LIST_NO_CHILDREN_IDS, type ListItem } from '@stxapps/shared';
 import { useLists } from '@stxapps/web-react';
@@ -260,7 +260,11 @@ describe('ListCommand — the Create row', () => {
       'true',
     );
 
-    await act(async () => release());
+    // Let the create land before the test ends: `create()` resumes a few microtasks
+    // after `release()`, and its state updates (clearing the query, which removes
+    // the Create row) would otherwise land after the test, outside act.
+    release();
+    await waitFor(() => expect((filterBox() as HTMLInputElement).value).toBe(''));
   });
 
   // The typed name has been consumed; leaving it in the box would leave the list

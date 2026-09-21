@@ -23,7 +23,7 @@
 // for real); everything the hook itself does — the resolution, the defaults, the coercion,
 // the memo — is the real code.
 
-import { renderHook } from '@testing-library/react';
+import { act, renderHook } from '@testing-library/react';
 
 import { DEFAULT_THEME, type ThemeState } from '@stxapps/shared';
 
@@ -65,11 +65,13 @@ beforeEach(() => {
   mockLocal = undefined;
 });
 
+// Let both liveQuery stand-ins answer. Inside act, so their state updates are flushed
+// as part of the test rather than landing after it.
+const answer = () => act(() => Promise.resolve());
+
 async function settings() {
   const { result, rerender } = renderHook(() => useSettings());
-  // One flush for each of the two liveQueries to answer.
-  await Promise.resolve();
-  await Promise.resolve();
+  await answer();
   rerender();
   return result;
 }
@@ -77,7 +79,7 @@ async function settings() {
 describe('before anything has been read', () => {
   // The very first render, before either source answers. Consumers must get a concrete
   // layout and theme rather than undefined — this is what runs on every cold load.
-  it('gives concrete defaults on the first render', () => {
+  it('gives concrete defaults on the first render', async () => {
     const { result } = renderHook(() => useSettings());
 
     expect(result.current.linksLayout).toBe('list');
@@ -85,15 +87,18 @@ describe('before anything has been read', () => {
     expect(result.current.theme).toEqual(DEFAULT_THEME);
     expect(result.current.sortOn).toBe('updatedAt');
     expect(result.current.sortOrder).toBe('desc');
+    // The reads are still in flight; let them land inside the test, not after it.
+    await answer();
   });
 
   // Off by DEFAULT: server extraction is the second, explicit opt-in, and an absent value
   // (an older client, or never toggled) must read as opted-OUT. The other direction sends
   // a saved URL to one of our servers for a user who never agreed to it.
-  it('reads an absent server-extraction opt-in as off', () => {
+  it('reads an absent server-extraction opt-in as off', async () => {
     const { result } = renderHook(() => useSettings());
 
     expect(result.current.serverExtraction).toBe(false);
+    await answer();
   });
 });
 
@@ -213,8 +218,7 @@ describe('identity stability', () => {
   it('keeps the theme object identity across renders while its source is unchanged', async () => {
     mockGeneral = { theme: theme('dark') };
     const { result, rerender } = renderHook(() => useSettings());
-    await Promise.resolve();
-    await Promise.resolve();
+    await answer();
     rerender();
 
     const first = result.current.theme;
