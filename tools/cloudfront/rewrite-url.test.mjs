@@ -124,6 +124,17 @@ const CASES = [
   // exactly, so a rule that grew a dotfolder case would take security.txt off the
   // air with a 404 that nobody on our side ever requests.
   [SITE, '/.well-known/security.txt', '', 'pass:/.well-known/security.txt'],
+  // The one real file with no dot, matched by exact path. Apple's servers fetch it
+  // to verify the domain for Apple Pay (Paddle checkout); rewritten to `.html` it
+  // 404s, and the only symptom is a failed Verify in Paddle's dashboard.
+  [
+    APP,
+    '/.well-known/apple-developer-merchantid-domain-association',
+    '',
+    'pass:/.well-known/apple-developer-merchantid-domain-association',
+  ],
+  // Exact, not a prefix: any other extensionless path there is still a page.
+  [APP, '/.well-known/nope', '', 'pass:/.well-known/nope.html'],
 
   // 6. A page, nested or not. A path matching no key 404s at S3 and the
   // distribution's custom error response takes it from there.

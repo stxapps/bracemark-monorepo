@@ -151,6 +151,9 @@ function handler(event) {
   //    in-app navigations, so appending .html here would break navigation itself,
   //    not just one asset.
   if (path.slice(path.lastIndexOf('/') + 1).includes('.')) return request;
+  // ...and the one real file with no dot: Apple Pay's domain check, via Paddle
+  // (bracemark-web only). As a page it 404s and verification fails silently.
+  if (path === '/.well-known/apple-developer-merchantid-domain-association') return request;
 
   // 6. A page. /settings/misc -> the key `settings/misc.html`. A path matching no
   //    key (/nope -> /nope.html) 404s at S3 and the distribution's custom error

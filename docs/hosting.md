@@ -261,15 +261,16 @@ semantics, no clean URLs. `next build` writes the page for `/support` to the key
 `support.html`, which means that without a function the only URL that works is
 `/support.html`. Everything either app's URL space assumes is this one file:
 
-| request                                   | what happens                                                       |
-| ----------------------------------------- | ------------------------------------------------------------------ |
-| `www.<domain>/x`                          | 301 to the apex (only the site has a `www.` alias)                 |
-| `/support/`, `/support///`                | 301, trailing slashes stripped                                     |
-| `/support.html`                           | 301 to `/support` — `/index.html` is exempt, see below             |
-| `/`                                       | rewritten to `/index.html`                                         |
-| `/favicon.ico`, `/_next/**`, `/links.txt` | passed through — a dot in the last segment means a real file       |
-| `/.well-known/security.txt`               | passed through by that same rule ([below](#well-knownsecuritytxt)) |
-| `/settings/misc`                          | rewritten to the key `settings/misc.html`                          |
+| request                                   | what happens                                                                    |
+| ----------------------------------------- | ------------------------------------------------------------------------------- |
+| `www.<domain>/x`                          | 301 to the apex (only the site has a `www.` alias)                              |
+| `/support/`, `/support///`                | 301, trailing slashes stripped                                                  |
+| `/support.html`                           | 301 to `/support` — `/index.html` is exempt, see below                          |
+| `/`                                       | rewritten to `/index.html`                                                      |
+| `/favicon.ico`, `/_next/**`, `/links.txt` | passed through — a dot in the last segment means a real file                    |
+| `/.well-known/security.txt`               | passed through by that same rule ([below](#well-knownsecuritytxt))              |
+| `/.well-known/apple-developer-merchant…`  | passed through by exact path — no dot ([below](#apple-pay-domain-verification)) |
+| `/settings/misc`                          | rewritten to the key `settings/misc.html`                                       |
 
 The redirect rules are evaluated together and emit **one** 301, so
 `https://www.bracemark.com/support/` is a single hop, and every redirect carries the
@@ -355,7 +356,7 @@ really there for is the two rules whose deletion is otherwise silent: the `/inde
 exemption and the absolute `Location`.
 
 **The file must stay under 10 KB, comments included** — a CloudFront quota that
-can't be raised. It sits at roughly 7.5 KB, so a long new comment is a real budget
+can't be raised. It sits at roughly 8.5 KB, so a long new comment is a real budget
 question rather than a theoretical one; the test asserts the ceiling, so it fails in
 node rather than at `create-function`.
 
@@ -429,6 +430,39 @@ the licence claim ([brand-assets.md](./brand-assets.md#the-source--what-we-may-c
 So the windows are still a decision to make deliberately in four places; what
 changed is that forgetting one of them now fails `npm run test` rather than
 shipping.
+
+### Apple Pay domain verification
+
+Paddle offers Apple Pay in its checkout only on a domain Apple has verified, and
+Apple verifies by fetching
+`/.well-known/apple-developer-merchantid-domain-association` from **every domain a
+checkout opens on** ([Paddle's guide](https://developer.paddle.com/concepts/payment-methods/apple-pay)).
+Checkout happens only in bracemark-web, so the file lives in
+`apps/bracemark-web/public/.well-known/` and the marketing site has none. It is
+not ours to write: download it from **Paddle > Checkout > Website approval > Apple
+Pay verification** (the domain must already be approved under _Domain approval_),
+deploy, then click **Verify** there. It is a public verification file, not a
+credential, so it is committed.
+
+Not to be confused with `apple-app-site-association`, which is for universal links
+and shared web credentials — neither of which Bracemark uses.
+
+Three things it depends on, none of which announces itself:
+
+- **The CloudFront function passes it through by exact path.** It is the one real
+  file in either export with no dot in its name, so rule 5 misses it and rule 6
+  would rewrite it to a `.html` key that doesn't exist — a 404 that shows up only
+  as a failed **Verify**. `rewrite-url.test.mjs` pins the pass-through, and that it
+  is exact rather than a `.well-known/` prefix (the reason is in
+  [`security.txt`](#well-knownsecuritytxt) above).
+- **No redirect in front of it.** Paddle requires the domain not sit behind a
+  redirect or proxy. The file is fetched on `app.<domain>`, which has no `www.`
+  alias, and the canonical path triggers none of rules 1–3.
+- **Each tier is a separate verification.** Staging (`app.dryrunbase.com`) uses
+  the sandbox Paddle account ([iap.md](./iap.md#config-per-env)), so Apple Pay on
+  staging means verifying there too. `public/` is shared by both tiers' builds, so
+  if the sandbox and live dashboards hand out different files, one committed copy
+  cannot serve both.
 
 ### previewing a production build locally — `nx start`
 

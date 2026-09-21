@@ -894,6 +894,11 @@ row as never-expiring and `needsRefresh` skips it outright.
   `style-src` all need `https://*.paddle.com` (one wildcard covers sandbox +
   live). Concrete directives + the `connect-src` exfiltration-widening tradeoff
   are in [hosting.md](./hosting.md#security-headers--where-the-csp-has-to-live).
+- **Apple Pay** needs each checkout domain verified with Apple: a file downloaded
+  from the Paddle dashboard, served at
+  `/.well-known/apple-developer-merchantid-domain-association` on bracemark-web.
+  It has no extension, so the CloudFront function needs an exact-path exception
+  to serve it — [hosting.md](./hosting.md#apple-pay-domain-verification).
 
 ### exercising Paddle locally
 
