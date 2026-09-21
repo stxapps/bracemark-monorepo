@@ -12,7 +12,7 @@ import {
   linkRow,
   openSidebarItem,
 } from './fixtures/links';
-import { grantPlus } from './fixtures/plan';
+import { grantPlusAndLoad } from './fixtures/plan';
 import {
   createInSettings,
   lockListInSettings,
@@ -154,8 +154,7 @@ test.describe('lists, tags and filters', () => {
       // Its own account on Plus: the reparent lands a nested list, the
       // `nestedLists` lever, and a free drop routes to the paywall instead.
       const { page, credentials } = app;
-      await grantPlus(credentials.username);
-      await page.reload();
+      await grantPlusAndLoad(page, credentials.username);
 
       const a = unique('E2e dnd A');
       const b = unique('E2e dnd B');
@@ -253,8 +252,7 @@ test.describe('lists, tags and filters', () => {
     { tag: ['@FILTER-HIDDEN-LOCKED-001', '@full', '@online', '@destructive'] },
     async ({ isolatedApp: app }) => {
       const { page, credentials } = app;
-      await grantPlus(credentials.username);
-      await page.reload();
+      await grantPlusAndLoad(page, credentials.username);
 
       const hidden = unique('E2e hidden list');
       const locked = unique('E2e locked list');

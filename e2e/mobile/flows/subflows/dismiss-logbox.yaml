@@ -4,19 +4,32 @@
 # The toast is harness chrome, not product: release builds have no LogBox. But on
 # Android it covers the bottom of the screen AND a transparent strip above
 # itself, and both take touches (docs/e2e.md, _driving the native apps_). Its
-# accessible name is "<count>, <message>"; its dismiss ✕ has no name of its own
+# accessible name is "<badge>, <message>"; its dismiss ✕ has no name of its own
 # and sits at the toast's right edge, so it is pressed as a point INSIDE the
 # toast's bounds rather than as a screen coordinate.
+#
+# ⚠ THE BADGE IS NOT ALWAYS A NUMBER, and matching only digits fails SILENTLY.
+# RN renders it as `count <= 1 ? '!' : count` (LogBoxNotificationCountBadge), so
+# a lone log — the common case — gives "!, <message>", which `[0-9]+, .+` does not
+# match. The `when:` then evaluates false and this subflow reports SKIPPED, which
+# is indistinguishable from the no-op it reports when no toast is up. The caller
+# presses into a toast that is still there, the press CLOSES the toast instead of
+# doing what it meant to, and because that also removes the toast, whatever dumps
+# the hierarchy afterwards sees an innocent screen. The tap reports COMPLETED and
+# the failure surfaces one step later naming whatever the press should have
+# opened. Specimen: FILTER-001 on Android, 2026-09-20, `add-link-url not found`
+# on the add after a row-menu action — four runs blamed the app, the panel and
+# the row before the badge. Keep both spellings in the matcher.
 appId: com.bracemark.app
 ---
 - runFlow:
     when:
       platform: Android
-      visible: '[0-9]+, .+'
+      visible: '(!|[0-9]+), .+'
     commands:
       - tapOn:
-          text: '[0-9]+, .+'
+          text: '(!|[0-9]+), .+'
           point: '96%,50%'
       - extendedWaitUntil:
-          notVisible: '[0-9]+, .+'
+          notVisible: '(!|[0-9]+), .+'
           timeout: 5000

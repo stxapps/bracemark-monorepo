@@ -454,6 +454,28 @@ Seventeen repo-specific gotchas:
   a copy, a tap on the bulk bar's ✕ opened the system clipboard editor ("From
   Bracemark") instead of leaving the mode. `flows/bulk-copy.yaml` leaves the mode
   with the hardware back press there.
+- ⚠ **The LogBox badge is not always a number, and `dismiss-logbox` fails
+  SILENTLY when it isn't.** RN renders it as `count <= 1 ? '!' : count`
+  (`LogBoxNotificationCountBadge`), so a lone log — the common case — names the
+  toast `"!, <message>"`, which a `[0-9]+, .+` matcher does not match. The `when:`
+  evaluates false and the subflow reports SKIPPED, indistinguishable from the
+  no-op it reports when no toast is up. The caller then presses into a toast that
+  is still covering the bottom of the screen, the press CLOSES the toast instead
+  of doing what it meant to — and since that removes the toast, anything dumping
+  the hierarchy afterwards sees an innocent screen. The tap reports COMPLETED and
+  the failure surfaces one step later naming whatever the press should have
+  opened. The matcher therefore spells both forms. Specimen: `FILTER-001` on
+  Android, 2026-09-20 — `add-link-url not found` on the add following a row-menu
+  action, with `sendAccessibilityEvent() dropping event: Cannot find view with
+tag #N` in the toast. That error is RN-internal and not worth chasing: the app
+  makes no accessibility calls at all, so it is the platform dispatching to a
+  view the driver just unmounted, and release builds have no LogBox to show it.
+- ⚠ **A long press on an empty, unfocused iOS field places the caret instead of
+  raising the edit menu**, so `Paste` never exists to tap. `flows/bulk-copy.yaml`
+  reads the pasteboard back through the system paste and so focuses the Note
+  field first. The trap is that the step fails identically whether the platform
+  write landed or not: measured on iOS 26.5, `xcrun simctl pbpaste` held both
+  URLs in display order while the flow reported the app broken.
 - **A press made while a surface is still leaving is swallowed.** A row's ⋯
   pressed as soon as the add panel dropped out of the tree opened no menu on iOS,
   so `flows/subflows/add-link.yaml` waits for the saved row and for animations to
@@ -860,6 +882,67 @@ and `scale` (an archive generated from
 seed accounts or the published-capture account. Offline deterministic links use
 the reserved `.invalid` TLD; a case that deliberately exercises extraction must
 carry the `online` trait and use the separate public fixture table in that file.
+
+#### ⚠ one IP, one bucket — the local rate limit
+
+`bracemark-api`'s baseline limiter buckets by **IP + path** (`middleware/rate-limit.ts`,
+the `standard` tier). In production that sizes a bucket for one user. Locally
+every client is `127.0.0.1` — both Playwright workers, every tab a case opens,
+the browser extension, both simulators — so the whole machine shares one bucket
+per path, and `/v1/iap/status` carries no query string, so they all collide on a
+single key. The deployed 60 req/60s is therefore **deliberately raised to 6000 in
+the `development` env only** ([`wrangler.jsonc`](../apps/bracemark-api/wrangler.jsonc)).
+Do not lower it back to match the deployed tiers for realism: a full web run
+429s, and nothing in the resulting failure says "rate limit". The binding stays
+wired rather than removed so the middleware path and the env's shape still match
+the deployed tiers; the 429 envelope and the client backoff are proved at unit
+level (`app.spec.ts`, `middleware/rate-limit.spec.ts`, shared `api/retry.spec.ts`),
+never here.
+
+Two specimens, both from one run (web, 2026-09-18, the 23 then-existing cases),
+and both disguised:
+
+- **A dialog that opens — the wrong one.** `LOCK-APP-001` took 8× 429 on
+  `/v1/iap/status`, so `useEntitlements` never left `FREE_SUBSCRIPTION_STATUS`.
+  A Plus-gated control renders on the free plan too; it just opens the paywall.
+  The trace shows a click that landed and a dialog that opened, and the page
+  snapshot shows the upsell — nothing anywhere names the plan.
+- **A wipe that looks hung.** `WEB-DATA-001` took 5× 429 on `/v1/ops/list`. The
+  api answers `Retry-After: 60` and the client half honours the hint (shared
+  `api/retry.ts`, four tries), so a single 429 parks that call for 60–75s; and
+  `deleteAllData` awaits the in-flight cycle _before_ its own server call, so the
+  receipt sits behind minutes of backoff while the spinner says "Deleting all
+  your data…". Raising the case's expect timeout chases a backoff window rather
+  than the wipe and cannot win — 60s was tried, and did not.
+
+Both passed alone throughout, because one case never fills a bucket. A red suite
+whose cases are individually green is this until proven otherwise.
+
+#### ⚠ granting Plus is two steps, and the second one is silent
+
+`grantPlus` ([`web/fixtures/plan.ts`](../e2e/web/fixtures/plan.ts)) writes the
+`manual` purchase row to local D1 and verifies it landed. That is the server
+half only. The client still has to fetch `GET /v1/iap/status` and honour it —
+deliberately, because the alternative is priming the cache and proving the UI
+against a state no client ever reached.
+
+So **a web case calls `grantPlusAndLoad(page, username)`**, never bare
+`grantPlus`. It grants, loads `/links`, and blocks until that client holds Plus.
+Three details are what make it a wait rather than a `reload()` and a hope:
+
+- `subscriptionStatusQueryOptions` holds a **5-minute `staleTime`**, so a client
+  that already answered `free` never re-asks on its own. Only a fresh document
+  gets a fresh queryClient. Before this existed, two of the five call sites had
+  a hand-rolled `page.reload()` and three had nothing.
+- It waits on the **persisted last-known copy**, not on the response, because
+  `writeCachedStatus` runs in the hook's effect — which only happens after React
+  has rendered with the fresh value. A `waitForResponse` resolves one render
+  early, and one render early is the entire window.
+- `awaitPlus` is module-private. The failure being closed here is "someone
+  forgot the second call", so there is exactly one entry point.
+
+The native runner keeps calling bare `grantPlus`: it grants **before** the device
+signs in, so that device's first status fetch already carries the plan.
 
 #### artifacts and retries
 
@@ -1508,6 +1591,38 @@ rethrowing `quota_exceeded`, at "Sync failed — Retry" in 20s; and the iOS pill
 its bounds check with each of the two earlier `applyAndScrollTop` orders.
 `SYNC-CONFLICT-001` has not had that check: breaking local-wins means changing
 the reconcile, which its unit specs own.
+
+### the red full suite, and what it was
+
+The web suite was red for a while with every case passing alone, which is the
+signature described under _one IP, one bucket_ above. It is green now. Measured
+2026-09-20 from commit `26eae3e` with the fixes below present in the working
+tree, system Chrome 153.0.8010.48, the iPhone 17 Pro simulator on iOS 26.5,
+`bracemark-pixel8` on Android, app 1.0.0 (1), Maestro 2.8.0:
+
+| surface        | measured result                                                                  |
+| -------------- | -------------------------------------------------------------------------------- |
+| web            | **25/25 passed** in one invocation — the full suite, no retries, 2.2 min         |
+| iOS native     | 15/16 in one leg; `BULK-COPY-001` green on its own after the focus-first fix     |
+| Android native | 9 cases in one leg, then `FILTER-001` red; green on its own after the LogBox fix |
+
+**Nothing was wrong with the app.** All four failures were in the harness, which
+is now the fourth time that has been the split (see _state today_ above), and
+each one presented as a product bug:
+
+- `LOCK-APP-001` and `WEB-DATA-001` were the shared rate-limit bucket — an
+  entitlement read stuck on free opening a paywall, and a wipe apparently hung
+  behind a `Retry-After: 60` backoff. Raising the case's expect timeout to 60s
+  was tried first and could not have worked; the limit was the lever.
+- `BULK-COPY-001` was the iOS edit menu never opening on an unfocused field, with
+  `simctl pbpaste` proving the app's write had been correct all along.
+- `FILTER-001` was the LogBox toast eating the FAB press, because the
+  dismissal subflow matched only a numeric badge and a lone log renders `!`.
+
+Neither native leg has a clean single-invocation pass yet: iOS stopped at
+`BULK-COPY-001` and Android at `FILTER-001`, and the Android cases after it have
+not run since. Both legs need one uninterrupted re-run before this table can
+claim a repeat for every native case.
 
 Nothing here runs automatically. There is still no CI ([testing.md](./testing.md)),
 and the only git hook guards `internal/`.

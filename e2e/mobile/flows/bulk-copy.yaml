@@ -106,6 +106,13 @@ tags: [BULK-COPY-001, full, online, ios, android]
 - tapOn: 'Add link'
 - tapOn:
     id: 'add-link-optional'
+# Focus first, THEN long-press. A long press on an empty, unfocused field places
+# the caret and raises the keyboard instead of the edit menu, so `Paste` never
+# exists to tap — and the flow fails identically whether the platform write
+# landed or not. (Specimen: iOS 26.5, 2026-09-20. `xcrun simctl pbpaste` showed
+# both URLs on the pasteboard, in order, while this step reported the app broken.)
+- tapOn:
+    id: 'add-link-note'
 - longPressOn:
     id: 'add-link-note'
 - tapOn: 'Paste'

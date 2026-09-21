@@ -29,9 +29,24 @@ tags: [FILTER-001, full, online, destructive, ios, android]
     id: 'link-options'
 - tapOn:
     id: 'link-menu-archive'
+# The menu's portal is `accessibilityViewIsModal`, so while it is up the tree holds
+# nothing else and the absence assert below passes against an EMPTY tree — the flow
+# then walks on with the menu still open and the next press goes to its backdrop
+# (docs/e2e.md, _driving the native apps_). Wait for something the screen always
+# shows first, so absence is read against the real screen.
+- extendedWaitUntil:
+    visible:
+      id: 'links-more-options'
+    timeout: 10000
 - extendedWaitUntil:
     notVisible: ".*${ARCHIVED_URL.replace('https://', '')}.*"
     timeout: 10000
+# Put the "links without a preview" prompt away before the next add: every
+# `.invalid` link lacks a preview, so it is up from here on (bulk-actions.yaml
+# does the same, for the same reason).
+- tapOn:
+    text: 'Dismiss'
+    optional: true
 
 - runFlow:
     file: subflows/add-link.yaml
@@ -44,6 +59,10 @@ tags: [FILTER-001, full, online, destructive, ios, android]
     id: 'link-options'
 - tapOn:
     id: 'link-menu-remove'
+- extendedWaitUntil:
+    visible:
+      id: 'links-more-options'
+    timeout: 10000
 - extendedWaitUntil:
     notVisible: ".*${TRASHED_URL.replace('https://', '')}.*"
     timeout: 10000

@@ -3,7 +3,7 @@ import { type Page } from '@playwright/test';
 import { expect, test } from './fixtures/app';
 import { unique, unresolvableUrl } from './fixtures/data';
 import { addLinkButton, displayUrl, linkRow, openSidebarItem } from './fixtures/links';
-import { grantPlus } from './fixtures/plan';
+import { grantPlusAndLoad } from './fixtures/plan';
 import { createInSettings, lockListInSettings, moveListUnder } from './fixtures/taxonomy';
 
 // The device-local app lock and list locks, over a real Dexie and a real load.
@@ -47,11 +47,10 @@ test.describe('locks', () => {
     { tag: ['@LOCK-APP-001', '@full', '@online', '@destructive'] },
     async ({ isolatedApp: app }) => {
       const { page, credentials } = app;
-      await grantPlus(credentials.username);
+      await grantPlusAndLoad(page, credentials.username);
       const anchor = unresolvableUrl(unique('app-lock-anchor'));
       const password = unique('app-lock-password');
 
-      await page.goto('/links');
       await addLinkButton(page).click();
       await page.locator('#link-url').fill(anchor);
       await page.getByRole('button', { name: /^(Save|Confirm)$/ }).click();
@@ -109,7 +108,7 @@ test.describe('locks', () => {
     async ({ isolatedApp: app }) => {
       // Plus twice over: the nesting and the lock.
       const { page, credentials } = app;
-      await grantPlus(credentials.username);
+      await grantPlusAndLoad(page, credentials.username);
       const parent = unique('E2e lock parent');
       const child = unique('E2e lock child');
       const tag = unique('e2e-lock-tag');

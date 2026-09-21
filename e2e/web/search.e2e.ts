@@ -5,7 +5,7 @@ import { expect, test } from './fixtures/app';
 import { unique, unresolvableUrl } from './fixtures/data';
 import { writePagedLibrary } from './fixtures/library';
 import { addLink, addLinkButton, linkRow, openSidebarItem } from './fixtures/links';
-import { grantPlus } from './fixtures/plan';
+import { grantPlusAndLoad } from './fixtures/plan';
 import { expectRowAtTop, scrollerOf, scrollTop, scrollUntilRendered } from './fixtures/scroll';
 import { createInSettings } from './fixtures/taxonomy';
 
@@ -69,7 +69,7 @@ test.describe('search', () => {
       // Its own account on Plus: the structured editor is the `searchEditor`
       // lever, and a free account's Search opens the paywall.
       const { page, credentials } = app;
-      await grantPlus(credentials.username);
+      await grantPlusAndLoad(page, credentials.username);
 
       const list = unique('E2e search list');
       const tag = unique('e2e-search-tag');

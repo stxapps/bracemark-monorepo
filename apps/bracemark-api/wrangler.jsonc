@@ -176,14 +176,30 @@
         "bindings": [{ "name": "USER_DATA", "class_name": "UserDataDO" }],
       },
       "migrations": [{ "tag": "v1", "new_sqlite_classes": ["UserDataDO"] }],
-      // Native rate-limit bindings, one per volume tier (config/rate-limits.ts).
+      // Native rate-limit bindings, one per volume tier (middleware/rate-limit.ts).
       // period is 10 or 60 only; 'tight' (10/10s ≈ 1 req/s) is the strictest the
       // native binding allows. namespace_id is any unique positive integer.
+      //
+      // ⚠ 'standard' is DELIBERATELY ~100× the deployed tiers' 60/60s here, and
+      // must stay far above them. The binding buckets by IP+path, and locally
+      // every client is one IP — both Playwright workers and each of their tabs,
+      // the browser extension, both simulators — so a bucket the deployed tiers
+      // size for one user is shared by the whole machine. `/v1/iap/status` takes
+      // no query string, so they all collide on one key. At 60/60s a full e2e
+      // run 429s, and the client half honours the 60s Retry-After (shared
+      // api/retry.ts): each hit parks that call for 60–75s. Neither symptom
+      // names a rate limit — the entitlement read stays FREE and a Plus-gated
+      // control silently opens its upsell, and delete-all sits on its spinner
+      // past any plausible test timeout (docs/e2e.md, _the local rate limit_).
+      // The binding stays wired rather than dropped so the middleware path and
+      // the env's shape still match the deployed tiers; the 429 envelope and the
+      // backoff are proved at unit level (app.spec.ts, middleware/
+      // rate-limit.spec.ts, shared api/retry.spec.ts), not here.
       "ratelimits": [
         {
           "name": "API_RATE_LIMIT",
           "namespace_id": "1001",
-          "simple": { "limit": 60, "period": 60 },
+          "simple": { "limit": 6000, "period": 60 },
         },
         {
           "name": "API_RATE_LIMIT_TIGHT",
