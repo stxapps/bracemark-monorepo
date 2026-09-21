@@ -1032,11 +1032,18 @@ a crossgrade inside the existing subscription rather than a second purchase.
   all three catalogs and never on a monthly one (`TRIAL_CADENCES`) — the
   marketing site already says "14 days free" (`/pricing`), so a catalog that
   doesn't carry it is a promise the checkout breaks. Then verify the two things
-  no unit test can reach: that Paddle stamps a trialing subscription's
-  `current_billing_period` (a provider row with a null period deliberately does
-  not entitle — see `isEntitled`), and that Play's trial tag is GONE once the
-  trial converts. Both stores compress subscription periods for sandbox/license
-  testers, so that transition runs in minutes rather than 14 days.
+  no unit test can reach, because the specs build their own payloads. First,
+  that a real trialing Paddle subscription folds to `trialing` with `expiresAt`
+  at the trial end. Paddle documents this: `current_billing_period` is `null`
+  only for `paused` and `canceled`, and for a trialing subscription it spans the
+  trial, switching to the `billing_cycle` on activation. It still matters
+  because a provider row with a null period deliberately does not entitle (see
+  `isEntitled`). Run it once through the tunnel (_exercising Paddle locally_),
+  then call `POST /subscriptions/{id}/activate` to end the trial early and
+  check the row turns `active` with the yearly period, without waiting 14 days.
+  Second, that Play's trial tag is GONE once the trial converts. Both stores
+  compress subscription periods for sandbox/license testers, so that transition
+  runs in minutes rather than 14 days.
 
 - **Surfacing `quota_exceeded` client-side** — DONE.
 
