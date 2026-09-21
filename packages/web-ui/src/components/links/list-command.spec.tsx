@@ -191,13 +191,15 @@ describe('ListCommand — the Create row', () => {
     expect(screen.getByText('No lists found.')).not.toBeNull();
   });
 
-  it('offers a create for a name no list has, and passes it back trimmed', () => {
+  it('offers a create for a name no list has, and passes it back trimmed', async () => {
     const onCreate = jest.fn();
     setLists(NESTED());
     render(<ListCommand onSelect={jest.fn()} onCreate={onCreate} />);
 
     act(() => void type('  Groceries  '));
-    fireEvent.click(screen.getByRole('option', { name: /Create/ }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('option', { name: /Create/ }));
+    });
 
     expect(onCreate).toHaveBeenCalledWith('Groceries');
   });
