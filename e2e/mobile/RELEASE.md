@@ -50,3 +50,22 @@ On a real Android device with a fingerprint or face unlock enrolled, repeat step
 1–8 above with the platform's labels. Additionally confirm that the prompt is the
 system BiometricPrompt sheet and that dismissing it with the back gesture behaves
 as a cancel (step 4), not as a navigation out of the gate.
+
+## Native export share surfaces
+
+`DATA-EXPORT-NATIVE-RELEASE-001` `release` `online` `ios` `android`
+
+Run this once on a supported iPhone and once on a supported Android device with a
+disposable account containing the Phase 5 small archive's link and image:
+
+1. Settings → Data → Export all data: keep **Bracemark backup** selected and tap
+   Export all data.
+2. Confirm the operating system share surface opens over Bracemark and offers a
+   Files/download destination. Save the file and verify its name matches
+   `Bracemark backup YYYY-MM-DD.zip`.
+3. Return to Bracemark and verify the receipt says `Exported 1 link and 1 file.`
+   Tap **Save file…** and confirm the share surface can be presented again.
+4. Select **HTML bookmarks**, export it, save it, and verify the filename matches
+   `Bracemark bookmarks YYYY-MM-DD.html` and the receipt says `Exported 1 link.`
+5. Confirm both files exist and are non-empty. Their contents are verified at the
+   unit/native-contract layer; this check owns file creation and OS hand-off.

@@ -338,19 +338,19 @@ Archive structure, parsers, policy, quota decisions, and cross-platform archive
 compatibility remain unit/native-contract responsibilities. E2E covers the file
 surface, orchestration, progress/receipt, visible result, and later sync.
 
-- [ ] `DATA-DELETE-ALL-WEB-001` Existing: wipe in one tab and prove an already-open
+- [x] `DATA-DELETE-ALL-WEB-001` Existing: wipe in one tab and prove an already-open
       links tab repaints without reload while system lists remain.
-- [ ] `DATA-DELETE-ALL-NATIVE-001` Existing: wipe over an already-mounted native
+- [x] `DATA-DELETE-ALL-NATIVE-001` Existing: wipe over an already-mounted native
       links route and prove it repaints without relaunch on iOS and Android.
-- [ ] `DATA-IMPORT-WEB-001` Import a small real Bracemark archive through the web
+- [x] `DATA-IMPORT-WEB-001` Import a small real Bracemark archive through the web
       file surface, assert the receipt, visible list/tag/link/image, and sync to an
       independent client.
-- [ ] `DATA-IMPORT-WEB-002` Import one representative interop file and exercise the
+- [x] `DATA-IMPORT-WEB-002` Import one representative interop file and exercise the
       user-visible quota choice/cancel path. Parser-format matrices stay in unit
       tests.
-- [ ] `DATA-IMPORT-NATIVE-001` Import the small archive through the iOS document
+- [x] `DATA-IMPORT-NATIVE-001` Import the small archive through the iOS document
       picker, assert the receipt and visible result, then cold-start.
-- [ ] `DATA-IMPORT-NATIVE-002` Repeat the system-picker boundary on Android.
+- [x] `DATA-IMPORT-NATIVE-002` Repeat the system-picker boundary on Android.
 - [ ] `DATA-EXPORT-WEB-RELEASE-001` Through a real browser save dialog, create each
       offered export format and verify filename plus receipt. Archive contents are
       verified below E2E.

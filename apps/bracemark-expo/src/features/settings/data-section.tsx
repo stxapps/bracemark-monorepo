@@ -250,7 +250,7 @@ function ImportStatus({ state }: { state: ImportState }) {
     );
   }
   return (
-    <View className="mt-3 flex-row items-start gap-2">
+    <View testID="import-data-complete" className="mt-3 flex-row items-start gap-2">
       <Icon
         as={truncated ? CircleAlert : CircleCheck}
         className="mt-0.5 size-4 shrink-0 text-muted-foreground"
@@ -341,7 +341,12 @@ function ImportView({ onBack }: { onBack: () => void }) {
         back={{ label: 'Data', onPress: onBack }}
       />
       <View className="mt-6 flex-row">
-        <Button variant="outline" onPress={() => void pick()} disabled={running}>
+        <Button
+          variant="outline"
+          testID="import-data-choose"
+          onPress={() => void pick()}
+          disabled={running}
+        >
           <Icon as={Upload} className="size-4" />
           <Text>Choose a file</Text>
         </Button>
@@ -469,7 +474,7 @@ function ExportStatus({ state, excludedCount }: { state: ExportState; excludedCo
           : ''
       }.`;
   return (
-    <View className="mt-3">
+    <View testID="export-data-complete" className="mt-3">
       <View className="flex-row items-start gap-2">
         <Icon
           as={nothingExported ? CircleAlert : CircleCheck}
@@ -483,7 +488,12 @@ function ExportStatus({ state, excludedCount }: { state: ExportState; excludedCo
       {/* Re-present the sheet — the auto-presented one may have been swiped
           away before picking a destination. */}
       <View className="mt-3 flex-row">
-        <Button variant="outline" size="sm" onPress={() => void shareExportedFile(outcome.file)}>
+        <Button
+          variant="outline"
+          size="sm"
+          testID="export-data-share"
+          onPress={() => void shareExportedFile(outcome.file)}
+        >
           <Icon as={Download} className="size-4" />
           <Text>Save file…</Text>
         </Button>
@@ -561,7 +571,12 @@ function ExportView({ onBack }: { onBack: () => void }) {
       )}
 
       <View className="mt-6 flex-row">
-        <Button variant="outline" onPress={() => run(format, lockedListIds)} disabled={running}>
+        <Button
+          variant="outline"
+          testID="export-data-submit"
+          onPress={() => run(format, lockedListIds)}
+          disabled={running}
+        >
           <Icon as={Download} className="size-4" />
           <Text>Export all data</Text>
         </Button>
@@ -722,12 +737,14 @@ export function DataSection() {
               icon={<Icon as={Upload} className="size-5 text-muted-foreground" />}
               title="Import data"
               description="Add links from a text file or another app."
+              testID="import-data-open"
               onPress={() => setView('import')}
             />
             <SettingsRow
               icon={<Icon as={Download} className="size-5 text-muted-foreground" />}
               title="Export all data"
               description="Save everything as a backup or bookmarks file."
+              testID="export-data-open"
               onPress={() => setView('export')}
             />
             <SettingsRow

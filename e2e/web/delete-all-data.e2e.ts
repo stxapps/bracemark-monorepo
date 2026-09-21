@@ -5,7 +5,7 @@ import { addLink, displayUrl } from './fixtures/links';
 test.describe('delete all data', () => {
   test(
     'repaints an already-open links page after the wipe',
-    { tag: ['@WEB-DATA-001', '@full', '@online', '@destructive'] },
+    { tag: ['@DATA-DELETE-ALL-WEB-001', '@full', '@online', '@destructive'] },
     async ({ isolatedApp: app }) => {
       const settingsPage = app.page;
       const linksPage = await app.context.newPage();

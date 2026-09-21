@@ -1,0 +1,96 @@
+# The same flow owns the two platform-specific cases. The archive is copied to
+# Android Downloads or the iOS Files local provider by runner/device-files.ts;
+# selecting it here still crosses the real operating-system document picker.
+appId: com.bracemark.app
+tags: [DATA-IMPORT-NATIVE-001, DATA-IMPORT-NATIVE-002, full, online, ios, android]
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+
+- tapOn:
+    id: 'links-more-options'
+- tapOn:
+    id: 'links-open-settings'
+- tapOn:
+    id: 'settings-open-navigation'
+- tapOn:
+    id: 'settings-nav-data'
+- tapOn:
+    id: 'import-data-open'
+- tapOn:
+    id: 'import-data-choose'
+
+# A directly staged file is intentionally not "recent" yet. Walk the same Files
+# or Downloads location a person would rather than relying on either picker to
+# index a raw simulator/emulator copy into its default Recent view.
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - tapOn: 'Browse'
+      - extendedWaitUntil:
+          visible: 'On My iPhone'
+          timeout: 20000
+      - tapOn: 'On My iPhone'
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - tapOn: 'Show roots'
+      - extendedWaitUntil:
+          visible: 'Downloads'
+          timeout: 20000
+      - tapOn: 'Downloads'
+
+- extendedWaitUntil:
+    visible: '.*${IMPORT_FILE_NAME}.*'
+    timeout: 20000
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      # Like the share-sheet boundary, Maestro can see this system-owned tile
+      # but both text and id taps report COMPLETED without selecting it. The
+      # runner stages exactly one file, and the assertion above proves it is the
+      # intended one before this coordinate hits the first grid tile.
+      - tapOn:
+          point: '18%, 30%'
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      # The filename is a non-clickable TextView inside the one staged file's
+      # clickable DocumentsUI grid card.
+      - tapOn:
+          id: 'com.google.android.documentsui:id/item_root'
+
+- extendedWaitUntil:
+    visible:
+      id: 'import-data-complete'
+    timeout: 60000
+- assertVisible: 'Imported 1 link and 1 file. Added 1 list and 1 tag.'
+
+# Return to the already-mounted links route and observe every user-visible kind
+# the archive carried. The link remains in My List; the extra list proves list
+# creation independently rather than hiding the link behind a navigation.
+- tapOn: 'Data'
+- tapOn:
+    id: 'settings-close'
+- assertVisible: '.*${LINK_TITLE}.*'
+- tapOn:
+    id: 'links-open-navigation'
+- assertVisible: ${LIST_NAME}
+- assertVisible: ${TAG_NAME}
+- tapOn:
+    id: 'links-nav-list-my-list'
+- takeScreenshot: imported-data-visible
+
+# Persistence is a cold-start claim, not a remount. The account and local store
+# survive while the app process stops; a plain launch reopens the remembered
+# dev bundle without clearing state.
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible: '.*${LINK_TITLE}.*'
+    timeout: 30000
+- takeScreenshot: imported-data-after-cold-start

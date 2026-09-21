@@ -220,7 +220,7 @@
     "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
   },
   {
-    "id": "WEB-DATA-001",
+    "id": "DATA-DELETE-ALL-WEB-001",
     "title": "Delete all repaints an already-mounted links page",
     "surface": "web",
     "tier": "full",
@@ -228,6 +228,46 @@
     "fixture": "empty",
     "path": "web/delete-all-data.e2e.ts",
     "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
+    "id": "DATA-IMPORT-WEB-001",
+    "title": "A Bracemark archive imports through the file surface, paints every carried kind, and syncs to another profile",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online"],
+    "fixture": "small",
+    "path": "web/data-lifecycle.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
+    "id": "DATA-IMPORT-WEB-002",
+    "title": "An over-cap interop import can be canceled without a write or truncated by explicit choice",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online"],
+    "fixture": "scale",
+    "path": "web/data-lifecycle.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
+    "id": "DATA-EXPORT-WEB-RELEASE-001",
+    "title": "Chrome's save dialog creates every offered export with the promised filename and receipt",
+    "surface": "web",
+    "tier": "release",
+    "traits": ["online"],
+    "fixture": "small",
+    "path": "web/RELEASE.md",
+    "artifacts": ["manual-checklist"]
+  },
+  {
+    "id": "DATA-EMPTY-001",
+    "title": "An empty export still creates a file and reports the empty-run receipt",
+    "surface": "web",
+    "tier": "release",
+    "traits": ["online"],
+    "fixture": "empty",
+    "path": "web/RELEASE.md",
+    "artifacts": ["manual-checklist"]
   },
   {
     "id": "SYNC-REFRESH-PILL-WEB-001",
@@ -570,7 +610,7 @@
     "artifacts": ["manual-checklist"]
   },
   {
-    "id": "NATIVE-DATA-001",
+    "id": "DATA-DELETE-ALL-NATIVE-001",
     "title": "Delete all repaints the mounted native links screen",
     "surface": "native",
     "tier": "full",
@@ -578,6 +618,36 @@
     "fixture": "empty",
     "path": "mobile/flows/delete-all-data.yaml",
     "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "DATA-IMPORT-NATIVE-001",
+    "title": "An iOS document-picker import reports its result and survives a cold start",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "ios"],
+    "fixture": "small",
+    "path": "mobile/flows/import-data.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "DATA-IMPORT-NATIVE-002",
+    "title": "An Android document-picker import reports its result and survives a cold start",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "android"],
+    "fixture": "small",
+    "path": "mobile/flows/import-data.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "DATA-EXPORT-NATIVE-RELEASE-001",
+    "title": "Native exports open the OS share surface and produce the promised filename and receipt",
+    "surface": "native",
+    "tier": "release",
+    "traits": ["online", "ios", "android"],
+    "fixture": "small",
+    "path": "mobile/RELEASE.md",
+    "artifacts": ["manual-checklist"]
   },
   {
     "id": "SYNC-REFRESH-PILL-IOS-001",

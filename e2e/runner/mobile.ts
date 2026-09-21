@@ -6,12 +6,14 @@ import { profileDir } from '../paths';
 import { importArchive, waitForSync } from '../seed/steps';
 import { type Credentials } from '../web/fixtures/account';
 import { unique, unresolvableUrl } from '../web/fixtures/data';
+import { writeSmallDataArchive } from '../web/fixtures/data-lifecycle';
 import { launchApp, type LaunchedApp } from '../web/fixtures/launch';
 import { writePagedLibrary } from '../web/fixtures/library';
 import { addLink, chooseRowMenuItem, displayUrl, linkRow } from '../web/fixtures/links';
 import { grantPlus } from '../web/fixtures/plan';
 import { syncAndWait } from '../web/fixtures/sync';
 import { parseNativeCli } from './cli';
+import { stageDocumentPickerFile } from './device-files';
 import {
   type Box,
   boxById,
@@ -113,6 +115,12 @@ async function main(): Promise<void> {
       const withRecovery = testCase.id === 'NATIVE-ACCOUNT-002';
       let pagedUrls: string[] = [];
       const conflictUrl = unresolvableUrl(`${run.runId}-conflict`);
+      const importFixture = testCase.id.startsWith('DATA-IMPORT-NATIVE-')
+        ? await writeSmallDataArchive(
+            join(run.runDir, 'cases', testCase.id, 'fixture', 'small-bracemark.zip'),
+            unique('E2E data'),
+          )
+        : undefined;
       const account = await provisionAccount(`${run.runId}-${testCase.id}`, {
         withRecovery,
         prepare: async (app) => {
@@ -276,7 +284,7 @@ async function main(): Promise<void> {
         env.OPEN_URL = unresolvableUrl(`${env.WORD}-open`);
         env.LOCK_PASSWORD = unique('lock-password');
       }
-      if (testCase.id === 'NATIVE-DATA-001') {
+      if (testCase.id === 'DATA-DELETE-ALL-NATIVE-001') {
         env.LINK_URL = unresolvableUrl(`${run.runId}-delete-all`);
         env.LIST_NAME = unique(`${run.runId} delete list`);
         env.TAG_NAME = unique(`${run.runId} delete tag`);
@@ -284,8 +292,25 @@ async function main(): Promise<void> {
 
       const credentials: Credentials = { username: account.username, password: account.password };
       // Undone after the case whether it passed or not: a web profile a case
-      // kept open, a device a case took off the api.
-      let cleanup: (() => Promise<void>) | undefined;
+      // kept open, a device a case took off the api, or a picker fixture copied
+      // into the device's Files/Downloads surface.
+      const cleanupActions: Array<() => Promise<void>> = [];
+
+      if (importFixture) {
+        const fileName = `phase5-${run.runId}.zip`;
+        env.IMPORT_FILE_NAME = fileName;
+        env.LINK_TITLE = importFixture.linkTitle;
+        env.LIST_NAME = importFixture.listName;
+        env.TAG_NAME = importFixture.tagName;
+        cleanupActions.push(
+          await stageDocumentPickerFile({
+            platform: run.platform,
+            deviceId: run.deviceId,
+            sourcePath: importFixture.archivePath,
+            fileName,
+          }),
+        );
+      }
 
       if (
         testCase.id === 'SYNC-REFRESH-PILL-IOS-001' ||
@@ -357,10 +382,10 @@ async function main(): Promise<void> {
         env.WEB_TITLE = unique('E2E web title');
         env.NATIVE_TITLE = unique('E2E device title');
         let web: LaunchedApp | undefined;
-        cleanup = async () => {
+        cleanupActions.push(async () => {
           await web?.close();
           await setApiReachable(run.deviceId, true);
-        };
+        });
         steps = [
           testCase.path,
           // Both clients go offline and the web one retitles the link. The web
@@ -416,7 +441,7 @@ async function main(): Promise<void> {
           steps,
         );
       } finally {
-        await cleanup?.();
+        for (const cleanup of cleanupActions.reverse()) await cleanup();
       }
     }
     await run.finish('passed');

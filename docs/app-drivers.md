@@ -289,6 +289,27 @@ the tree and count the matches — `maestro hierarchy` filtered on the string
 answers it in one command, and a second dump after the tap says whether anything
 moved.
 
+#### ⚠ a document-picker label is not the file's click target
+
+**Both system document pickers expose the staged filename, accept a Maestro text
+tap, report `COMPLETED`, and stay open.** The visible label is not the surface
+that selects the file. On iOS 26.5, even the Files tile's resource-id tap has the
+same silent result; on Android 36.1, the filename is a non-clickable `TextView`
+inside the clickable DocumentsUI card.
+
+`e2e/mobile/flows/import-data.yaml` therefore proves the unique staged filename
+is visible first, then taps the only tile: a percentage coordinate over the
+first Files grid tile on iOS, and DocumentsUI's clickable `item_root` on Android.
+The coordinate is justified only by that one-file fixture contract — using it
+against an arbitrary picker would select an unproved file. Android also navigates
+from **Recent** to **Downloads** explicitly: `adb push` puts the bytes there but
+does not make the current runtime index the archive into Recent.
+
+This is the same failure shape as the share-sheet handoff below: the driver sees
+the system surface, a selector resolves, and the gesture reports success without
+the operating system performing the action. A receipt inside Bracemark is the
+proof that the picker handoff actually occurred.
+
 #### the driver: Maestro, not Appium
 
 > The flows themselves live in `e2e/mobile/`; [e2e.md](./e2e.md) covers the

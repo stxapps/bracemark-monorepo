@@ -11,7 +11,7 @@
 # runner's values would be silently replaced (docs/e2e.md, _driving the native
 # apps_).
 appId: com.bracemark.app
-tags: [NATIVE-DATA-001, full, online, destructive, ios, android]
+tags: [DATA-DELETE-ALL-NATIVE-001, full, online, destructive, ios, android]
 ---
 - runFlow:
     file: subflows/sign-in.yaml
