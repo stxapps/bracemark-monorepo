@@ -11,11 +11,7 @@ import { useCallback, useRef, useState } from 'react';
 import { useApiClient } from '@stxapps/react';
 
 import { useAuth } from '../contexts/auth-provider';
-import {
-  deleteAllData,
-  type DeleteAllOutcome,
-  type DeleteAllStep,
-} from '../data/delete-all-data';
+import { deleteAllData, type DeleteAllOutcome, type DeleteAllStep } from '../data/delete-all-data';
 
 export type DeleteAllState =
   | { phase: 'idle' }

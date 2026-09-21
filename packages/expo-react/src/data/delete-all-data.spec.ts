@@ -187,9 +187,9 @@ describe('deleteAllData', () => {
     );
     const api = apiThat(async () => ({ deletedCount: 1 }));
 
-    await expect(
-      deleteAllData({ username: USER, api, syncWaitTimeoutMs: 1 }),
-    ).rejects.toThrow('Sync is taking longer than expected.');
+    await expect(deleteAllData({ username: USER, api, syncWaitTimeoutMs: 1 })).rejects.toThrow(
+      'Sync is taking longer than expected.',
+    );
 
     expect(api.call).not.toHaveBeenCalled();
     expect(await listPendingOps(USER)).toHaveLength(1);

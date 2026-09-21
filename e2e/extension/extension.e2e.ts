@@ -76,16 +76,13 @@ async function suspendServiceWorker(context: BrowserContext): Promise<SuspendedS
   try {
     type Version = { versionId: string; scriptURL: string; runningStatus: string };
     const version = new Promise<Version>((resolve) => {
-      session.on(
-        'ServiceWorker.workerVersionUpdated',
-        ({ versions }: { versions: Version[] }) => {
-          const current = versions.find(
-            (candidate) =>
-              candidate.scriptURL === worker.url() && candidate.runningStatus === 'running',
-          );
-          if (current) resolve(current);
-        },
-      );
+      session.on('ServiceWorker.workerVersionUpdated', ({ versions }: { versions: Version[] }) => {
+        const current = versions.find(
+          (candidate) =>
+            candidate.scriptURL === worker.url() && candidate.runningStatus === 'running',
+        );
+        if (current) resolve(current);
+      });
     });
     await session.send('ServiceWorker.enable');
     const current = await Promise.race([
@@ -96,19 +93,16 @@ async function suspendServiceWorker(context: BrowserContext): Promise<SuspendedS
     ]);
 
     const stopped = new Promise<void>((resolve) => {
-      session.on(
-        'ServiceWorker.workerVersionUpdated',
-        ({ versions }: { versions: Version[] }) => {
-          if (
-            versions.some(
-              (candidate) =>
-                candidate.versionId === current.versionId && candidate.runningStatus === 'stopped',
-            )
-          ) {
-            resolve();
-          }
-        },
-      );
+      session.on('ServiceWorker.workerVersionUpdated', ({ versions }: { versions: Version[] }) => {
+        if (
+          versions.some(
+            (candidate) =>
+              candidate.versionId === current.versionId && candidate.runningStatus === 'stopped',
+          )
+        ) {
+          resolve();
+        }
+      });
     });
     await session.send('ServiceWorker.stopWorker', { versionId: current.versionId });
     await Promise.race([
@@ -119,19 +113,16 @@ async function suspendServiceWorker(context: BrowserContext): Promise<SuspendedS
     ]);
 
     const restarted = new Promise<void>((resolve) => {
-      session.on(
-        'ServiceWorker.workerVersionUpdated',
-        ({ versions }: { versions: Version[] }) => {
-          if (
-            versions.some(
-              (candidate) =>
-                candidate.versionId === current.versionId && candidate.runningStatus === 'running',
-            )
-          ) {
-            resolve();
-          }
-        },
-      );
+      session.on('ServiceWorker.workerVersionUpdated', ({ versions }: { versions: Version[] }) => {
+        if (
+          versions.some(
+            (candidate) =>
+              candidate.versionId === current.versionId && candidate.runningStatus === 'running',
+          )
+        ) {
+          resolve();
+        }
+      });
     });
     return {
       async waitForRestart() {

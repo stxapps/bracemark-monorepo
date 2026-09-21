@@ -33,7 +33,7 @@ const wrapper = ({ children }: { children: ReactNode }) => <SyncProvider>{childr
 // start counting cycles after it.
 async function readySync() {
   const hook = renderHook(() => useSync(), { wrapper });
-  await act(async () => {});
+  await act(async () => void (await Promise.resolve()));
   expect(hook.result.current.storeStatus).toBe('ready');
   expect(hook.result.current.bgSyncStatus).toBe('idle');
   mockRunIncrementalSync.mockClear();
