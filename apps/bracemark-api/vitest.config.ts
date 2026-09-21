@@ -27,6 +27,34 @@ export default defineConfig(async () => {
     readD1Migrations(path.join(migrationsDir, 'sessions')),
   ]);
 
+  // The `development` env's `secrets.required` (wrangler.jsonc). In deployed envs
+  // these are wrangler SECRETS (never in wrangler.jsonc), so the test pool
+  // provides known values for the signature tests (routes/iap.spec.ts) to sign
+  // with. The private keys must be REAL keys — lib/appstore.ts / lib/playstore.ts
+  // import them via crypto.subtle before signing the store-API JWTs — but the
+  // store endpoints themselves are fetchMock'd in routes/iap.spec.ts, so
+  // throwaway per-run keys are exactly right.
+  //
+  // Set in process.env as well as the bindings below: with `secrets.required`
+  // declared, wrangler reads those names from process.env
+  // (tools/scripts/run-api-dev.sh), so this both silences its per-worker
+  // "Missing required secrets" warning and keeps a real key exported in the
+  // shell from reaching a test.
+  const secrets = {
+    PADDLE_WEBHOOK_SECRET: 'test-webhook-secret',
+    APPSTORE_PRIVATE_KEY: generateKeyPairSync('ec', { namedCurve: 'P-256' })
+      .privateKey.export({ type: 'pkcs8', format: 'pem' })
+      .toString(),
+    PLAY_SA_PRIVATE_KEY: generateKeyPairSync('rsa', { modulusLength: 2048 })
+      .privateKey.export({ type: 'pkcs8', format: 'pem' })
+      .toString(),
+    PLAY_NOTIFY_TOKEN: 'test-notify-token',
+    // Never reaches Paddle: the specs stub globalThis.fetch (lib/paddle.spec.ts
+    // also sets its own key).
+    PADDLE_API_KEY: 'test-api-key',
+  };
+  Object.assign(process.env, secrets);
+
   return {
     test: {
       setupFiles: ['./test/apply-migrations.ts'],
@@ -44,22 +72,7 @@ export default defineConfig(async () => {
             DIRECTORY_MIGRATIONS: directoryMigrations,
             ACCOUNTS_MIGRATIONS: accountsMigrations,
             SESSIONS_MIGRATIONS: sessionsMigrations,
-            // In deployed envs this is a wrangler SECRET (never in wrangler.jsonc),
-            // so the test pool provides a known value for the webhook signature
-            // tests (routes/iap.spec.ts) to sign with.
-            PADDLE_WEBHOOK_SECRET: 'test-webhook-secret',
-            // Store-IAP secrets (also `wrangler secret put` in deployed envs).
-            // The private keys must be REAL keys — lib/appstore.ts /
-            // lib/playstore.ts import them via crypto.subtle before signing the
-            // store-API JWTs — but the store endpoints themselves are fetchMock'd
-            // in routes/iap.spec.ts, so throwaway per-run keys are exactly right.
-            APPSTORE_PRIVATE_KEY: generateKeyPairSync('ec', { namedCurve: 'P-256' })
-              .privateKey.export({ type: 'pkcs8', format: 'pem' })
-              .toString(),
-            PLAY_SA_PRIVATE_KEY: generateKeyPairSync('rsa', { modulusLength: 2048 })
-              .privateKey.export({ type: 'pkcs8', format: 'pem' })
-              .toString(),
-            PLAY_NOTIFY_TOKEN: 'test-notify-token',
+            ...secrets,
           },
         },
       }),

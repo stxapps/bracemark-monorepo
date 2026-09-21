@@ -82,8 +82,9 @@
   //   wrangler secret put <NAME> --env staging|production
   // Non-secret config (e.g. CORS_ORIGINS) lives in `vars` below — including the
   // local-only `development` env that `wrangler dev` uses, so it's committed and
-  // shared. `.dev.vars` (gitignored) is only for local *secrets* you can't put
-  // in this committed file.
+  // shared. Local *secrets* come from the login keychain via
+  // tools/scripts/run-api-dev.sh — never a `.dev.vars`, which that script refuses to
+  // start beside (see the `development` env's `secrets` below).
   "env": {
     // Local-only — used by `wrangler dev --env development`, never deployed.
     // D1/R2 are emulated by miniflare (state under .wrangler/). The
@@ -111,9 +112,7 @@
         // Paddle Billing (routes/iap.ts). Local dev talks to the SANDBOX; the
         // price ids are the sandbox catalog's pri_… ids (Plus exists; Pro is a
         // placeholder until its sandbox product does). The webhook secret + API
-        // key are SECRETS —
-        // put them in .dev.vars locally:
-        //   PADDLE_WEBHOOK_SECRET=pdl_ntfset_…   PADDLE_API_KEY=pdl_sdbx_apikey_…
+        // key are SECRETS — see `secrets` below.
         "PADDLE_API_BASE": "https://sandbox-api.paddle.com",
         // COMMA-SEPARATED lists: every price a plan may be billed at, the one
         // on sale FIRST. The read side accepts them all (an unrecognized price
@@ -123,9 +122,7 @@
         "PADDLE_PRICE_ID_PRO": "TODO: sandbox pri_… id for Pro (yearly)",
         // Store IAP (routes/iap.ts verify + notify; lib/appstore.ts,
         // lib/playstore.ts). Local dev talks to the App Store SANDBOX host. The
-        // private keys + the Play push token are SECRETS — put them in .dev.vars
-        // locally: APPSTORE_PRIVATE_KEY, PLAY_SA_PRIVATE_KEY, PLAY_NOTIFY_TOKEN
-        // (multiline PEMs in .dev.vars: quote the value and use \n escapes).
+        // private keys + the Play push token are SECRETS — see `secrets` below.
         // Store product ids are NOT env config — they're shared constants
         // (@stxapps/shared iap/store-products.ts), identical across envs.
         "APPSTORE_API_BASE": "https://api.storekit-sandbox.itunes.apple.com",
@@ -134,6 +131,23 @@
         "APPSTORE_BUNDLE_ID": "com.bracemark.app",
         "PLAY_PACKAGE_NAME": "com.bracemark.app",
         "PLAY_SA_EMAIL": "TODO: Play service account client_email",
+      },
+      // The local secrets, and the switch that makes `wrangler dev` read them
+      // from the shell: with this list declared and no `.dev.vars*` file, it
+      // binds exactly these names from process.env and nothing else.
+      // tools/scripts/run-api-dev.sh fills them from the login keychain — keep its
+      // SECRETS list identical to this one. `development` ONLY: in a deployed
+      // env the same key makes `wrangler deploy` demand every name, including
+      // the ones whose store setup is still TODO. See docs/env-files.md,
+      // _bracemark-api local secrets_.
+      "secrets": {
+        "required": [
+          "PADDLE_WEBHOOK_SECRET",
+          "PADDLE_API_KEY",
+          "APPSTORE_PRIVATE_KEY",
+          "PLAY_SA_PRIVATE_KEY",
+          "PLAY_NOTIFY_TOKEN",
+        ],
       },
       // DIRECTORY_DB: global username directory (usernames). ACCOUNTS_DB_1: first
       // account shard (users, account_keys). SESSIONS_DB: bearer-token sessions

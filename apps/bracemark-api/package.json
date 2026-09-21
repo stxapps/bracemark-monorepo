@@ -70,7 +70,7 @@
   },
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev --env development",
+    "dev": "bash ../../tools/scripts/run-api-dev.sh",
     "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.spec.json"
   },
   "dependencies": {

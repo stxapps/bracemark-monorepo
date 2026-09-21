@@ -185,11 +185,16 @@ Two consequences of the bake:
 - **Metro needs `--clear`.** `npm run expo:start -- --clear` after editing the
   file; a reload re-runs the old inlined value.
 - **The api's CORS list has to learn the new browser origin**, and the dev
-  `CORS_ORIGINS` lives in the committed, public `wrangler.jsonc`. Put the override
-  in `apps/bracemark-api/.dev.vars.development` instead — gitignored via
-  `.dev.vars.*`, scoped to `--env development`, and it does override the committed
-  `vars` (measured). `bracemark-expo` needs none of this: native clients are not
-  CORS-bound, which the `wrangler.jsonc` comment already says.
+  `CORS_ORIGINS` lives in the committed, public `wrangler.jsonc`. Export the
+  override for the session instead — `CORS_ORIGINS=http://<mac>.local:3000,… npm
+run dev` — which `tools/scripts/run-api-dev.sh` forwards as `--var`, overriding the
+  committed value. **Not** a `.dev.vars.development`: the api's secrets now come
+  from the keychain through the shell, and any `.dev.vars*` file switches that
+  off, so the script refuses to start beside one
+  ([env-files.md](./env-files.md), _bracemark-api local secrets_). The shell also
+  makes switching back out automatic: a new terminal has no override.
+  `bracemark-expo` needs none of this: native clients are not CORS-bound, which
+  the `wrangler.jsonc` comment already says.
 
 ⚠ **Switching back OUT is the half that gets forgotten, and it breaks the two
 targets that never needed this file.** Left uncommented, the override still

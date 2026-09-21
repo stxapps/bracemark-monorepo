@@ -840,7 +840,8 @@ row as never-expiring and `needsRefresh` skips it outright.
   **comma-separated list**, the price on sale first; see _reconciliation_);
   secrets
   `PADDLE_WEBHOOK_SECRET` + `PADDLE_API_KEY` via `wrangler secret put`
-  (`.dev.vars` locally). Register the webhook destination per env at
+  (the login keychain locally — [env-files.md](./env-files.md), _bracemark-api
+  local secrets_). Register the webhook destination per env at
   `…/v1/iap/paddle/webhook`, subscribed to `subscription.*` events.
 - **Paddle dashboard → Checkout settings, per Paddle account**: the **default
   payment link** is `<bracemark-web origin>/settings/subscription`. That's
@@ -858,7 +859,9 @@ row as never-expiring and `needsRefresh` skips it outright.
   `APPSTORE_PRIVATE_KEY` (the
   In-App Purchase key's PKCS#8 PEM), `PLAY_SA_PRIVATE_KEY` (the service
   account's), and `PLAY_NOTIFY_TOKEN` (the push-endpoint guard) via
-  `wrangler secret put` (`.dev.vars` locally). Register per env: App Store
+  `wrangler secret put` (the login keychain locally, never `.dev.vars`: the
+  one In-App Purchase key serves every tier and works on the production host —
+  [env-files.md](./env-files.md), _bracemark-api local secrets_). Register per env: App Store
   Server Notifications V2 → `…/v1/iap/appstore/notify`, where App Store Connect
   has exactly one Sandbox and one Production URL, so sandbox → staging and
   local testing replays instead (_exercising the App Store locally_); Play RTDN
@@ -921,8 +924,8 @@ point, because the expensive one proves the least about our code.
    to stay read-only. No money moves at any tier. It is a `check:` script and
    not a spec because it needs the network and a real API key, which is exactly
    what `npm run test` must not have; the key comes from `PADDLE_API_KEY`, then
-   the login keychain (`bracemark-paddle-key-<tier>`), and from `.dev.vars` for
-   `development` only — never from a file for a deploy tier
+   the login keychain (`bracemark-paddle-key-<tier>`) — never from a file, for
+   any tier; the `development` item is the one `npm run dev` hands the local api
    ([env-files.md](./env-files.md#whats-committed-vs-ignored)).
 3. **The dashboard replays.** Notifications → the simulator sends a synthetic
    event at any destination, and a real delivery can be replayed from its log
@@ -932,8 +935,9 @@ point, because the expensive one proves the least about our code.
 4. **A tunnel, when it has to be Paddle reaching THIS branch.** A public
    hostname in front of `localhost:8787` plus a second notification destination
    pointed at it — `subscription.*` only, and its own secret as
-   `PADDLE_WEBHOOK_SECRET` in `.dev.vars`, since each destination signs with its
-   own. Three things that are not obvious:
+   `PADDLE_WEBHOOK_SECRET` (exported for that session, or swapped into the
+   `bracemark-paddle-webhook-secret-development` keychain item), since each
+   destination signs with its own. Three things that are not obvious:
    - **Expose only `/v1/iap/paddle/webhook`.** `localhost:8787` answers every
      route the Worker has, authenticated ones included, so a whole-origin tunnel
      publishes your dev API and its local R2 for as long as it is up. Restrict
@@ -976,7 +980,7 @@ pull. It lists the sandbox notifications in a window (`--since 6h`/`3d`/a date,
 each one oldest-first to the local `/v1/iap/appstore/notify`, and then compares
 the local `purchases` rows before and after. `--dry-run` only lists them. It
 signs with the same `APPSTORE_*` ids from `wrangler.jsonc` and the same
-`APPSTORE_PRIVATE_KEY` from `.dev.vars` that `wrangler dev` uses, and it
+`APPSTORE_PRIVATE_KEY` keychain item that `npm run dev` hands `wrangler dev`, and it
 refuses any `--api` other than localhost, because the comparison reads local
 D1. The loop, with the sandbox's compressed renewal periods (monthly in
 minutes): buy in a dev build pointed at the local api, cancel or let it renew,

@@ -524,7 +524,9 @@ reads those too, and they are public, which is the problem `account_id` was
 removed from `wrangler.jsonc` to solve. And the untiered `.env.local` in the app
 dir: it loads for every env including `development`, and because neither Worker
 has a `.dev.vars`, `wrangler dev` loads that file as local **secret bindings** —
-so the account id would arrive inside the Worker as well.
+so the account id would arrive inside the Worker as well. (That still holds for
+bracemark-extractor. bracemark-api declares `secrets.required`, so only the names
+it lists get bound — _bracemark-api local secrets_, below.)
 
 - non-secret vars (e.g. `CORS_ORIGINS`) → `vars` under each `env.*`. The
   `development` env sets `CORS_ORIGINS=http://localhost:3000` so local dev needs
@@ -536,13 +538,78 @@ so the account id would arrive inside the Worker as well.
 - D1 / R2 → per-env `d1_databases` / `r2_buckets` bindings. `development`'s are
   emulated locally by miniflare (state under `.wrangler/`), so its ids are
   placeholders.
-- **`.dev.vars`** (gitignored) is **only for local secrets** you can't commit to
-  `wrangler.jsonc` — not for `CORS_ORIGINS`, which lives in the `development`
-  env's `vars`. Loaded by `wrangler dev`, it overrides committed `vars` locally.
+- local secrets → the **login keychain**, never `.dev.vars` — next section.
 
-Local dev is `wrangler dev --env development` (the `dev` target); it uses the
-`development` env above with locally emulated D1/R2. There are no
-`NEXT_PUBLIC_`-style committed files here because nothing is public.
+Local dev is `wrangler dev --env development`, reached through
+`tools/scripts/run-api-dev.sh` (the `dev` target); it uses the `development` env above
+with locally emulated D1/R2. There are no `NEXT_PUBLIC_`-style committed files
+here because nothing is public.
+
+#### ⚠ bracemark-api local secrets
+
+**The api's local secrets live in the login keychain, and `npm run dev` hands them
+to `wrangler dev` through the shell.** There is no `.dev.vars`, and
+`tools/scripts/run-api-dev.sh` refuses to start while one exists.
+
+The reason is the App Store key. There is one In-App Purchase key for all three
+tiers — one `APPSTORE_KEY_ID` in `wrangler.jsonc`, and the key id names the key
+Apple verifies against — and no In-App Purchase key is sandbox-only: the one
+development signs with reads live transaction history on the production host.
+The Play service account is the same shape (one Play Developer API host for test
+and real purchases, [iap.md](./iap.md)). So a `.dev.vars` line for either is a
+production credential sitting in the worktree, which is the CLAUDE.md tripwire.
+The two sandbox Paddle secrets would be harmless in a file, but wrangler can't
+mix sources (below), so they moved too.
+
+| secret                  | keychain item (`-a bracemark`)                |
+| ----------------------- | --------------------------------------------- |
+| `PADDLE_WEBHOOK_SECRET` | `bracemark-paddle-webhook-secret-development` |
+| `PADDLE_API_KEY`        | `bracemark-paddle-key-development`            |
+| `APPSTORE_PRIVATE_KEY`  | `bracemark-appstore-key-development`          |
+| `PLAY_SA_PRIVATE_KEY`   | `bracemark-play-sa-key-development`           |
+| `PLAY_NOTIFY_TOKEN`     | `bracemark-play-notify-token-development`     |
+
+```sh
+# a trailing -w prompts for the value, keeping it out of shell history:
+security add-generic-password -U -a bracemark -s bracemark-paddle-key-development -w
+# PEMs flattened to ONE line — see below:
+security add-generic-password -U -a bracemark -s bracemark-appstore-key-development \
+  -w "$(tr -d '\n' < AuthKey_<KEY_ID>.p8)"
+security add-generic-password -U -a bracemark -s bracemark-play-sa-key-development \
+  -w "$(jq -r .private_key <service-account>.json | tr -d '\n')"
+```
+
+A value already exported in the shell wins over the keychain, and a missing one
+is reported by name and left unbound — the routes that need it stay off, as they
+did with an empty `.dev.vars` line. `bracemark-paddle-key-development` is the
+item `npm run check:paddle` reads for `development`, and
+`bracemark-appstore-key-development` the one `npm run replay:appstore` reads, so
+each secret has one home.
+
+Three rules here fail **silently**:
+
+- **Any `.dev.vars` or `.dev.vars.development` switches the shell off.**
+  Wrangler 4 treats that file as the only source of local secrets and never
+  reads `process.env` while it exists. That is why the script refuses to start
+  beside one rather than warning.
+- **The shell is read because of `secrets.required`,** declared on the
+  `development` env in `wrangler.jsonc`, and **only the names listed there are
+  bound.** Keep that list and the script's `SECRETS` table identical. The
+  other switch, `CLOUDFLARE_INCLUDE_PROCESS_ENV=true`, binds the **whole** shell
+  environment into the Worker — never use it. And don't copy `secrets.required`
+  into `staging`/`production`: there, `wrangler deploy` makes every listed name
+  mandatory, including the ones whose store setup is still TODO.
+- **A PEM stored with its newlines comes back hex-encoded** from
+  `security -w`, and `pemToPkcs8` then fails on the first store call, long
+  after startup looked fine. Store PEMs flattened, as above (`pemToPkcs8`
+  strips the armour and all whitespace, so one line imports fine). The script
+  refuses a `*_PRIVATE_KEY` item that has no `-----BEGIN`.
+
+**Non-secret overrides moved to the shell as well.** Only the listed names are
+bound, so a `CORS_ORIGINS` line in a `.dev.vars.development` or an
+`.env.development.local` does nothing. Export it for the session instead —
+`CORS_ORIGINS=… npm run dev` — and the script forwards it as `--var`, which
+overrides the committed value ([device-testing.md](./device-testing.md)).
 
 ### wiring the frontends to the backend
 
@@ -582,8 +649,9 @@ browser frontends — bracemark-web and bracemark-site — need an allowed origi
   for the frontends (bracemark-expo: the first and last only) — every value in
   them is public.
 - **gitignored:** `.env*.local` (frontend personal overrides — and bracemark-expo's
-  `APPLE_TEAM_ID` and domain switch, above), `.dev.vars` (bracemark-api Workers local), and all real
-  secrets. These never enter git.
+  `APPLE_TEAM_ID` and domain switch, above), `.dev.vars` (still ignored, but
+  bracemark-api's local secrets are in the keychain now — _bracemark-api local
+  secrets_, above), and all real secrets. These never enter git.
 - **in no env file at all:** the per-tier **Cloudflare API token**. Wrangler
   would happily read `CLOUDFLARE_API_TOKEN` out of the same `.env.<tier>.local`
   that carries the account id, which is exactly what makes it tempting — but the
@@ -603,15 +671,17 @@ browser frontends — bracemark-web and bracemark-site — need an allowed origi
   machine without the values ever entering the worktree. The keystore file
   itself lives outside the workspace, at whatever absolute path that file names.
   See [expo-build.md](./expo-build.md) — _android release signing_.
-- **in no env file at all, third case:** the **Paddle API key**, for the deploy
-  tiers. The Worker gets it as a `wrangler secret` and local dev reads the
-  sandbox one from `.dev.vars`, so nothing needed a third home until
+- **in no env file at all, third case:** the **Paddle API key**. The Worker gets
+  it as a `wrangler secret`, so nothing needed a third home until
   `npm run check:paddle` ([iap.md](./iap.md), _exercising Paddle locally_) had to
   ask the live catalog a question from a laptop. It resolves `PADDLE_API_KEY`
   from the shell, then the login keychain (`bracemark-paddle-key-<tier>`), and
-  falls back to `.dev.vars` for `development` ONLY — a live Paddle key can issue
-  refunds and read every customer, so it gets the Cloudflare token's treatment,
-  not the account id's.
+  nowhere else — a live Paddle key can issue refunds and read every customer, so
+  it gets the Cloudflare token's treatment, not the account id's.
+- **in no env file at all, fourth case:** bracemark-api's **local** secrets,
+  the store keys above all — _bracemark-api local secrets_, above. The sandbox
+  Paddle pair sat in `.dev.vars`, and the store keys were headed there too,
+  until it turned out the App Store key is the production one.
 
 **The workspace root has its own pair, and it belongs to no app.** Root `.env` is
 committed and holds non-secret Nx task-running defaults; root `.env.local` is

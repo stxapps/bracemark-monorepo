@@ -126,7 +126,9 @@ area of the code — it is a keystroke anywhere in the tree. Both are irreversib
   because there is nothing there to guard, and that holds only as long as the next
   credential goes outside: `~/.gradle/gradle.properties` for the Play upload key,
   the login keychain plus `tools/scripts/deploy-worker.sh` for the Cloudflare API
-  token and the R2 key pair, `wrangler secret` for anything a Worker needs. A
+  token and the R2 key pair, `wrangler secret` for anything a Worker needs, and
+  the keychain plus `tools/scripts/run-api-dev.sh` for what the local api needs (the
+  App Store key there is the production key — so no `.dev.vars`). A
   gitignored file inside the checkout is **not** a substitute: it is invisible to
   `git` and to a default `rg`, which is exactly what makes it feel safe, and fully
   visible to a backup, an editor index, a recursive grep and an AI agent. The four

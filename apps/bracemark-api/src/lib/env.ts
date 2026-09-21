@@ -74,7 +74,8 @@ export type Bindings = {
   // PADDLE_API_BASE + the price ids are non-secret `vars` (sandbox and live
   // Paddle mint different pri_… ids, so they're per-env); the webhook secret
   // and API key are SECRETS (`wrangler secret put PADDLE_WEBHOOK_SECRET /
-  // PADDLE_API_KEY --env …`; locally in .dev.vars).
+  // PADDLE_API_KEY --env …`; locally the keychain,
+  // tools/scripts/run-api-dev.sh).
   //
   // Each PADDLE_PRICE_ID_* is a COMMA-SEPARATED LIST, not one id — a plan may
   // carry several prices at once (a second billing cadence, a grandfathered
@@ -98,8 +99,8 @@ export type Bindings = {
   // production for production — production also falls back to sandbox on 404
   // for App Review, see lib/appstore.ts). ISSUER_ID/KEY_ID identify the In-App
   // Purchase key (App Store Connect → Integrations); the key's PKCS#8 PEM is a
-  // SECRET (`wrangler secret put APPSTORE_PRIVATE_KEY --env …`; .dev.vars
-  // locally).
+  // SECRET (`wrangler secret put APPSTORE_PRIVATE_KEY --env …`; the keychain
+  // locally, tools/scripts/run-api-dev.sh).
   APPSTORE_API_BASE: string;
   APPSTORE_ISSUER_ID: string;
   APPSTORE_KEY_ID: string;

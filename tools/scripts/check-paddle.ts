@@ -88,14 +88,14 @@ function priceIds(value: string | undefined): string[] {
 }
 
 /**
- * The tier's Paddle API key. The shell first, then the login keychain — and from a
- * file in this worktree for `development` ONLY, because `.dev.vars` is where
- * `wrangler dev` itself reads the same sandbox key from.
+ * The tier's Paddle API key. The shell first, then the login keychain — for every
+ * tier, `development` included: its item is the one `npm run dev` hands the local
+ * api (tools/scripts/run-api-dev.sh), so one sandbox key serves both.
  *
- * The deploy tiers have no such file and must not grow one: a live Paddle key can
- * issue refunds and read every customer, so it belongs in the keychain exactly like
- * the per-tier Cloudflare token (tools/scripts/deploy-worker.sh, docs/env-files.md
- * — _what's committed vs ignored_). There is deliberately no fallback past this.
+ * Never a file in this worktree: a live Paddle key can issue refunds and read
+ * every customer, so it belongs in the keychain exactly like the per-tier
+ * Cloudflare token (tools/scripts/deploy-worker.sh, docs/env-files.md — _what's
+ * committed vs ignored_). There is deliberately no fallback past this.
  */
 function resolveApiKey(tier: Tier): { key: string; from: string } {
   const fromShell = process.env.PADDLE_API_KEY;
@@ -114,16 +114,6 @@ function resolveApiKey(tier: Tier): { key: string; from: string } {
     if (key) return { key, from: `the keychain (${service})` };
   } catch {
     // No keychain, or no such item — fall through to the per-tier answer below.
-  }
-
-  if (tier === 'development') {
-    const match = read('apps/bracemark-api/.dev.vars').match(/^PADDLE_API_KEY=(.*)$/m);
-    const key = match?.[1].trim().replace(/^["']|["']$/g, '');
-    if (key) return { key, from: 'apps/bracemark-api/.dev.vars' };
-    throw new Error(
-      'no PADDLE_API_KEY in the shell, the keychain, or apps/bracemark-api/.dev.vars.\n' +
-        'That file is what `wrangler dev` reads too — see docs/env-files.md.',
-    );
   }
 
   throw new Error(

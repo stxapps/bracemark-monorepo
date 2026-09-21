@@ -25,8 +25,9 @@
 // `iap/verify`. A purchase made from a build pointed at staging has no row here,
 // and "no local row" below is that drop working as designed, not a bug.
 //
-// Development only, on purpose: the sandbox host, `.dev.vars`, and local D1 under
-// apps/bracemark-api/.wrangler/ — the same three things `wrangler dev` uses.
+// Development only, on purpose: the sandbox host, the development keychain item,
+// and local D1 under apps/bracemark-api/.wrangler/ — the same three things
+// `npm run dev` uses (tools/scripts/run-api-dev.sh).
 
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
@@ -76,29 +77,33 @@ function requireVar(name: string): string {
 }
 
 /**
- * The In-App Purchase key's PKCS#8 PEM: the shell first, then `.dev.vars` — the
- * file `wrangler dev` reads the same key from. Multiline PEMs sit there quoted
- * with `\n` escapes (the wrangler.jsonc note), so those are unescaped.
+ * The In-App Purchase key's PKCS#8 PEM: the shell first, then the login keychain
+ * item `wrangler dev` gets the same key from (tools/scripts/run-api-dev.sh). Never a
+ * file in this worktree: the key is the same one production signs with, and it
+ * works against the live Server API too (docs/env-files.md, _bracemark-api
+ * local secrets_). Stored flattened to one line; `serverApiJwt` strips the
+ * armour and all whitespace, so either shape imports.
  */
 function resolvePrivateKey(): { pem: string; from: string } {
   const fromShell = process.env.APPSTORE_PRIVATE_KEY;
   if (fromShell) return { pem: fromShell, from: 'the shell (APPSTORE_PRIVATE_KEY)' };
 
-  let file = '';
+  const service = 'bracemark-appstore-key-development';
   try {
-    file = read('apps/bracemark-api/.dev.vars');
+    const pem = execFileSync(
+      'security',
+      ['find-generic-password', '-a', 'bracemark', '-s', service, '-w'],
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
+    ).trim();
+    if (pem.includes('-----BEGIN')) return { pem, from: `the keychain (${service})` };
   } catch {
-    // No file — the error below says where the key goes.
+    // No keychain, or no such item — the error below says where the key goes.
   }
-  const match = file.match(/^APPSTORE_PRIVATE_KEY=(.*)$/m);
-  const pem = match?.[1]
-    .trim()
-    .replace(/^["']|["']$/g, '')
-    .replace(/\\n/g, '\n');
-  if (pem) return { pem, from: 'apps/bracemark-api/.dev.vars' };
   throw new Error(
-    'no APPSTORE_PRIVATE_KEY in the shell or apps/bracemark-api/.dev.vars.\n' +
-      'That file is what `wrangler dev` reads too — see docs/env-files.md.',
+    `no APPSTORE_PRIVATE_KEY in the shell or the keychain item ${service}.\n` +
+      'Add the In-App Purchase key, flattened to one line:\n' +
+      `  security add-generic-password -U -a bracemark -s ${service} -w "$(tr -d '\\n' < AuthKey_<KEY_ID>.p8)"\n` +
+      'See docs/env-files.md, _bracemark-api local secrets_.',
   );
 }
 
