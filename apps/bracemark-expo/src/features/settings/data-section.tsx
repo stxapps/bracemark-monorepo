@@ -581,10 +581,12 @@ function DeleteStatus({ state }: { state: DeleteAllState }) {
 
   if (state.phase === 'running') {
     return (
-      <View className="mt-3 flex-row items-center gap-2">
+      <View aria-live="polite" className="mt-3 flex-row items-center gap-2">
         <ActivityIndicator size="small" />
         <Text className="min-w-0 flex-1 text-sm text-muted-foreground">
-          Deleting all your data…
+          {state.step === 'waiting-for-sync'
+            ? 'Waiting for an in-progress sync to finish safely. This can take a minute.'
+            : 'Deleting all your data…'}
         </Text>
       </View>
     );

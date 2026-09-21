@@ -18,7 +18,12 @@
 // back afterward (local-wins, the same policy as every fallback) — the UI copy
 // says so.
 
-import { type ApiClient, clearDecodeCache, dataDeleteAllEndpoint } from '@stxapps/shared';
+import {
+  type ApiClient,
+  clearDecodeCache,
+  dataDeleteAllEndpoint,
+  withTimeout,
+} from '@stxapps/shared';
 
 import { awaitInflightSync } from '../sync/engine';
 import { db } from './db';
@@ -30,18 +35,41 @@ export type DeleteAllOutcome = {
   deletedCount: number;
 };
 
+export type DeleteAllStep = 'waiting-for-sync' | 'deleting';
+
+// Allows the retry client's normal one-minute Retry-After window to settle, but
+// stays finite: a fetch or retry wait that never resolves must not leave this
+// user-initiated action spinning forever. Timing out FAILS CLOSED below — no
+// queue clear, server wipe, or local wipe follows.
+//
+// The duration and the wording live HERE, not in the engine: the watchdog is a
+// property of this destructive, user-blocking action, not of waiting itself —
+// `awaitInflightSync` deliberately never rejects, and it also serves the
+// bracemark-extension's background worker, which has no UI to show a message to.
+// shared's `withTimeout` supplies the mechanism and nothing else.
+const SYNC_WAIT_TIMEOUT_MS = 120_000;
+const SYNC_WAIT_TIMEOUT_MESSAGE = 'Sync is taking longer than expected.';
+
 export async function deleteAllData(args: {
   username: string;
   api: ApiClient;
+  onStep?: (step: DeleteAllStep) => void;
+  /** Test seam; production uses the two-minute safety watchdog. */
+  syncWaitTimeoutMs?: number;
 }): Promise<DeleteAllOutcome> {
-  const { username, api } = args;
+  const { username, api, onStep, syncWaitTimeoutMs = SYNC_WAIT_TIMEOUT_MS } = args;
 
   // Quiesce before destroying: a cycle already in flight read the pending queue
   // before we got here and could re-push (resurrect) ops after the server wipe —
   // wait it out, THEN abandon the queue so any later cycle finds nothing to push.
   // (This device's unsynced changes are deliberately discarded: the user is
   // deleting everything, so pushing them first would be work the wipe undoes.)
-  await awaitInflightSync(username);
+  await withTimeout(
+    awaitInflightSync(username, () => onStep?.('waiting-for-sync')),
+    syncWaitTimeoutMs,
+    SYNC_WAIT_TIMEOUT_MESSAGE,
+  );
+  onStep?.('deleting');
   await clearPendingOps(username);
 
   // The server wipe — idempotent, so a failure here leaves everything retryable

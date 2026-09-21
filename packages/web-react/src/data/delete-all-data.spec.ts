@@ -34,10 +34,15 @@ import { getSyncMeta, isFirstSyncDone, markFirstSyncDone } from './sync-store';
 const calls: string[] = [];
 
 const mockAwaitInflightSync = jest.fn(
-  async (_username: string) => void calls.push('awaitInflightSync'),
+  async (_username: string, _onWait?: () => void): Promise<void> => {
+    void _username;
+    void _onWait;
+    calls.push('awaitInflightSync');
+  },
 );
 jest.mock('../sync/engine', () => ({
-  awaitInflightSync: (username: string) => mockAwaitInflightSync(username),
+  awaitInflightSync: (username: string, onWait?: () => void) =>
+    mockAwaitInflightSync(username, onWait),
 }));
 
 const USER = 'alice';
@@ -82,7 +87,14 @@ async function seedSignedInAccountWithData(): Promise<void> {
 
 beforeEach(async () => {
   calls.length = 0;
-  mockAwaitInflightSync.mockClear();
+  mockAwaitInflightSync.mockReset();
+  mockAwaitInflightSync.mockImplementation(
+    async (_username: string, _onWait?: () => void): Promise<void> => {
+      void _username;
+      void _onWait;
+      calls.push('awaitInflightSync');
+    },
+  );
   installStorage();
   await Promise.all([
     db.items.clear(),
@@ -126,7 +138,41 @@ describe('deleteAllData', () => {
 
     expect(calls).toEqual(['awaitInflightSync', 'deleteAll']);
     expect(await listPendingOps(USER)).toEqual([]);
-    expect(mockAwaitInflightSync).toHaveBeenCalledWith(USER);
+    expect(mockAwaitInflightSync).toHaveBeenCalledWith(USER, expect.any(Function));
+  });
+
+  it('reports the safety wait separately from the server and local wipe', async () => {
+    const steps: string[] = [];
+    mockAwaitInflightSync.mockImplementation(async (_username, onWait) => {
+      onWait?.();
+    });
+
+    await deleteAllData({
+      username: USER,
+      api: apiThat(async () => ({ deletedCount: 1 })),
+      onStep: (step) => steps.push(step),
+    });
+
+    expect(steps).toEqual(['waiting-for-sync', 'deleting']);
+  });
+
+  it('fails closed when the in-flight cycle does not settle', async () => {
+    await seedSignedInAccountWithData();
+    mockAwaitInflightSync.mockImplementation(
+      async (_username, onWait) =>
+        new Promise<void>(() => {
+          onWait?.();
+        }),
+    );
+    const api = apiThat(async () => ({ deletedCount: 1 }));
+
+    await expect(
+      deleteAllData({ username: USER, api, syncWaitTimeoutMs: 1 }),
+    ).rejects.toThrow('Sync is taking longer than expected.');
+
+    expect(api.call).not.toHaveBeenCalled();
+    expect(await listPendingOps(USER)).toHaveLength(1);
+    expect(await db.items.count()).toBe(1);
   });
 
   // The server wipe is idempotent, so a failure has to leave a device that can simply try

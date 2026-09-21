@@ -119,10 +119,11 @@ describe('withRetry', () => {
 
     await withRetry(api, { sleep, baseDelayMs: 1_000, maxDelayMs: 2_000 }).call(endpoint, {});
 
-    // 1s, 2s, then 4s clamped back to 2s — jitter still applies on top of the cap.
+    // 1s with jitter, then 2s: once the base reaches the ceiling there is no room
+    // for upward jitter without making maxDelayMs cease to be a maximum.
     expect(slept[0]).toBeLessThanOrEqual(1_250);
-    expect(slept[2]).toBeLessThanOrEqual(2_500);
-    expect(slept[2]).toBeGreaterThanOrEqual(2_000);
+    expect(slept[1]).toBe(2_000);
+    expect(slept[2]).toBe(2_000);
   });
 
   it('caps a long Retry-After hint at maxDelayMs rather than blocking for it', async () => {
@@ -133,8 +134,7 @@ describe('withRetry', () => {
 
     await withRetry(api, { sleep, maxDelayMs: 60_000 }).call(endpoint, {});
 
-    expect(slept[0]).toBeGreaterThanOrEqual(60_000);
-    expect(slept[0]).toBeLessThanOrEqual(75_000); // 60s cap * 1.25 jitter ceiling
+    expect(slept[0]).toBe(60_000);
   });
 
   it('does not retry a non-429 4xx', async () => {

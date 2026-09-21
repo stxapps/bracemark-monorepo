@@ -73,7 +73,10 @@ export function withRetry(api: ApiClient, options: RetryOptions = {}): ApiClient
           const hintMs = retryAfterMsOf(err);
           const backoffMs = Math.min(baseDelayMs * 2 ** attempt, maxDelayMs);
           const baseMs = hintMs !== undefined ? Math.min(hintMs, maxDelayMs) : backoffMs;
-          await sleep(jitteredDelayMs(baseMs));
+          // maxDelayMs is a real ceiling, not merely a ceiling on the pre-jitter
+          // base. At the ceiling there is no room for upward jitter; exceeding it
+          // made the documented 60s maximum last as long as 75s.
+          await sleep(Math.min(jitteredDelayMs(baseMs), maxDelayMs));
         }
       }
     },

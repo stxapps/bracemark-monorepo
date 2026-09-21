@@ -11,11 +11,15 @@ import { useCallback, useRef, useState } from 'react';
 import { useApiClient } from '@stxapps/react';
 
 import { useAuth } from '../contexts/auth-provider';
-import { deleteAllData, type DeleteAllOutcome } from '../data/delete-all-data';
+import {
+  deleteAllData,
+  type DeleteAllOutcome,
+  type DeleteAllStep,
+} from '../data/delete-all-data';
 
 export type DeleteAllState =
   | { phase: 'idle' }
-  | { phase: 'running' }
+  | { phase: 'running'; step: DeleteAllStep }
   | { phase: 'done'; outcome: DeleteAllOutcome }
   | { phase: 'error'; message: string };
 
@@ -42,8 +46,12 @@ export function useDeleteAllData(): UseDeleteAllDataResult {
     }
 
     runningRef.current = true;
-    setState({ phase: 'running' });
-    void deleteAllData({ username, api })
+    setState({ phase: 'running', step: 'deleting' });
+    void deleteAllData({
+      username,
+      api,
+      onStep: (step) => setState({ phase: 'running', step }),
+    })
       .then(
         (outcome) => setState({ phase: 'done', outcome }),
         (err: unknown) =>
