@@ -129,8 +129,8 @@
         // Store product ids are NOT env config — they're shared constants
         // (@stxapps/shared iap/store-products.ts), identical across envs.
         "APPSTORE_API_BASE": "https://api.storekit-sandbox.itunes.apple.com",
-        "APPSTORE_ISSUER_ID": "TODO: App Store Connect issuer id (Integrations)",
-        "APPSTORE_KEY_ID": "TODO: In-App Purchase key id",
+        "APPSTORE_ISSUER_ID": "af0c83b8-7f81-4b5b-80b5-a900632f98db",
+        "APPSTORE_KEY_ID": "32Q498XJQF",
         "APPSTORE_BUNDLE_ID": "com.bracemark.app",
         "PLAY_PACKAGE_NAME": "com.bracemark.app",
         "PLAY_SA_EMAIL": "TODO: Play service account client_email",
@@ -264,8 +264,8 @@
         // Play Console RTDN Pub/Sub push →
         // https://api.dryrunbase.com/v1/iap/playstore/notify?token=<PLAY_NOTIFY_TOKEN>.
         "APPSTORE_API_BASE": "https://api.storekit-sandbox.itunes.apple.com",
-        "APPSTORE_ISSUER_ID": "TODO: App Store Connect issuer id (Integrations)",
-        "APPSTORE_KEY_ID": "TODO: In-App Purchase key id",
+        "APPSTORE_ISSUER_ID": "af0c83b8-7f81-4b5b-80b5-a900632f98db",
+        "APPSTORE_KEY_ID": "32Q498XJQF",
         "APPSTORE_BUNDLE_ID": "com.bracemark.app",
         "PLAY_PACKAGE_NAME": "com.bracemark.app",
         "PLAY_SA_EMAIL": "TODO: Play service account client_email",
@@ -368,8 +368,8 @@
         // Play Console RTDN Pub/Sub push →
         // https://api.bracemark.com/v1/iap/playstore/notify?token=<PLAY_NOTIFY_TOKEN>.
         "APPSTORE_API_BASE": "https://api.storekit.itunes.apple.com",
-        "APPSTORE_ISSUER_ID": "TODO: App Store Connect issuer id (Integrations)",
-        "APPSTORE_KEY_ID": "TODO: In-App Purchase key id",
+        "APPSTORE_ISSUER_ID": "af0c83b8-7f81-4b5b-80b5-a900632f98db",
+        "APPSTORE_KEY_ID": "32Q498XJQF",
         "APPSTORE_BUNDLE_ID": "com.bracemark.app",
         "PLAY_PACKAGE_NAME": "com.bracemark.app",
         "PLAY_SA_EMAIL": "TODO: Play service account client_email",

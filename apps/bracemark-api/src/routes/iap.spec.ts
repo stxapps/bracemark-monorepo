@@ -16,6 +16,7 @@ import {
 
 import { app } from '../app';
 import { purchasesRepo } from '../db/repositories/purchases';
+import { PAST_DUE_GRACE_MS } from '../lib/dunning';
 import { newId } from '../lib/ids';
 import { resetPlayAccessTokenCache } from '../lib/playstore';
 import { issueSession } from '../services/session';
@@ -555,16 +556,19 @@ describe('iap', () => {
       expect(status.willRenew).toBe(false);
     });
 
-    it("honors Apple's billing grace period as the period end", async () => {
+    it("keeps an account inside Apple's billing grace period entitled", async () => {
       const { auth } = await authFor('iap-verify-grace-1');
-      const graceEndsAt = Date.now() + 10 * DAY_MS;
+      const expiresDate = Date.now() - 2 * DAY_MS;
       // Status 4: the renewal lapsed but the account is inside the grace window
       // configured in App Store Connect — Apple says entitled through
-      // gracePeriodExpiresDate, even though expiresDate is already past.
+      // gracePeriodExpiresDate, even though expiresDate is already past. A
+      // 28-day grace outruns the fold's own past_due window, so the expiry moves
+      // just far enough for the fold to end at Apple's date (lib/appstore.ts).
+      const graceEndsAt = expiresDate + 28 * DAY_MS;
       mockAppstoreStatuses({
         originalTransactionId: 'otid-grace-1',
         status: 4,
-        expiresDate: Date.now() - 2 * DAY_MS,
+        expiresDate,
         gracePeriodExpiresDate: graceEndsAt,
       });
 
@@ -573,7 +577,7 @@ describe('iap', () => {
       const status = (await res.json()) as SubscriptionStatus;
       expect(status.plan).toBe('plus');
       expect(status.status).toBe('grace');
-      expect(status.expiresAt).toBe(graceEndsAt);
+      expect(status.expiresAt).toBe(graceEndsAt - PAST_DUE_GRACE_MS);
       expect(status.willRenew).toBe(true); // dunning: collection retries are scheduled
     });
 

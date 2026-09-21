@@ -46,6 +46,7 @@
 // description.
 
 import { BRAND } from '../brand/brand';
+import { PLAN_LABELS } from '../iap/plans';
 
 // --- what the stores allow ---------------------------------------------------
 // Every limit below is a SILENT constraint until submission day, when a 31-character
@@ -65,6 +66,8 @@ import { BRAND } from '../brand/brand';
 // no human ever does).
 export const STORE_LIMITS = {
   appStore: { name: 30, subtitle: 30, keywords: 100, promotionalText: 170, description: 4000 },
+  /** A subscription's localization, and its group's. Neither is indexed. */
+  appStoreSubscription: { groupDisplayName: 30, displayName: 30, description: 45 },
   play: { title: 30, shortDescription: 80, fullDescription: 4000 },
   /** One manifest serves both browsers, so each budget is the smaller of the two. */
   browserExtension: { name: 45, description: 132 },
@@ -115,6 +118,30 @@ export const APP_STORE = {
    */
   promotionalText:
     'Pick a username, save the password we generate for you, and save your first link a minute later. No email address, because the account has nowhere to put one.',
+} as const;
+
+// --- App Store subscriptions -------------------------------------------------
+//
+// Pasted into App Store Connect → Monetization → Subscriptions: the group's
+// localization and each product's. The display name is what the purchase sheet
+// and iOS Settings → Subscriptions call the thing being paid for; the description
+// shows under it in the listing's In-App Purchases row. Only products on sale are
+// here (AVAILABLE_PAID_PLANS) — Pro gets its line the day it gets its product.
+//
+// The description is the upgrade card squeezed into 45 characters, so it follows
+// PLAN_CARD_COPY.plus rather than inventing a pitch: the INCREMENT over Free, only
+// what ships, and no number — the trial and the price are the store's own fields,
+// rendered by the sheet beside this line, and a typed one would drift. The three
+// kept are the ones a stranger can check on the first day: the cap goes, lists
+// nest, the app locks. Previews and the search editor did not fit, and "Server
+// link previews" would also be untrue on the device reading it (web app only).
+// Changing it resubmits the product for review, same as the description above.
+export const APP_STORE_SUBSCRIPTION = {
+  groupDisplayName: BRAND.name,
+  plus: {
+    displayName: `${BRAND.name} ${PLAN_LABELS.plus}`,
+    description: 'Unlimited links, nested lists, and app lock',
+  },
 } as const;
 
 // --- Google Play -------------------------------------------------------------

@@ -4,6 +4,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { bytesToBase64Url, utf8 } from '@stxapps/shared';
 
 import { fetchAppstoreSubscription } from './appstore';
+import { PAST_DUE_GRACE_MS } from './dunning';
 
 // The App Store normalization — Apple's status codes and JWS payloads folded
 // into a StoreSubscriptionSnapshot. The Apple FLOWS (verify, notification,
@@ -176,16 +177,41 @@ describe('fetchAppstoreSubscription', () => {
     expect(snapshot?.expiresAt).toBe(revocationDate);
   });
 
-  it('honors Apple’s billing grace period as the period end', async () => {
-    // Status 4: Apple keeps the user entitled through the window configured in
-    // App Store Connect, past the expiry the transaction carries.
+  // Status 4: Apple keeps the user entitled through the window configured in
+  // App Store Connect, and the fold separately keeps every past_due row entitled
+  // PAST_DUE_GRACE_MS past its expiry. Entitlement ends at the later of the two,
+  // never their sum — so the snapshot's expiry is judged by where the FOLD will
+  // end it: expiresAt + PAST_DUE_GRACE_MS.
+  describe('Apple’s billing grace period', () => {
     const expiresDate = Date.now() - DAY_MS;
-    const gracePeriodExpiresDate = Date.now() + 5 * DAY_MS;
-    apiBody = statusBody(transaction({ status: 4, expiresDate, gracePeriodExpiresDate }));
 
-    const snapshot = await fetchAppstoreSubscription(env, OTID);
-    expect(snapshot?.status).toBe('past_due');
-    expect(snapshot?.expiresAt).toBe(gracePeriodExpiresDate);
+    async function foldEndFor(graceDays: number) {
+      apiBody = statusBody(
+        transaction({
+          status: 4,
+          expiresDate,
+          gracePeriodExpiresDate: expiresDate + graceDays * DAY_MS,
+        }),
+      );
+      const snapshot = await fetchAppstoreSubscription(env, OTID);
+      expect(snapshot?.status).toBe('past_due');
+      return (snapshot?.expiresAt ?? Number.NaN) + PAST_DUE_GRACE_MS;
+    }
+
+    it('does not stack a grace as long as ours on top of our window', async () => {
+      // The configured case: a 16-day grace ends exactly where our window does,
+      // so the expiry stays the paid-through date. Moving it to Apple's end was
+      // the bug — ~32 days of access for a 16-day grace.
+      expect(await foldEndFor(16)).toBe(expiresDate + PAST_DUE_GRACE_MS);
+    });
+
+    it('keeps our window when Apple’s grace is shorter', async () => {
+      expect(await foldEndFor(3)).toBe(expiresDate + PAST_DUE_GRACE_MS);
+    });
+
+    it('honors a longer grace in full, and no further', async () => {
+      expect(await foldEndFor(28)).toBe(expiresDate + 28 * DAY_MS);
+    });
   });
 
   it('prefers the transaction whose originalTransactionId was looked up', async () => {

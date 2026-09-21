@@ -15,6 +15,7 @@ import {
 } from '../db/repositories/paddle-checkouts';
 import { type PurchaseEntity, purchasesRepo } from '../db/repositories/purchases';
 import { fetchAppstoreSubscription } from '../lib/appstore';
+import { PAST_DUE_GRACE_MS } from '../lib/dunning';
 import type { Bindings } from '../lib/env';
 import { HttpError } from '../lib/errors';
 import { newId } from '../lib/ids';
@@ -38,11 +39,6 @@ import type { StoreSource, StoreSubscriptionSnapshot } from '../lib/store';
 // returns. The same rows fold a SECOND way for the `files/sign` quota gate
 // (foldQuotaCeilings → lib/quota.ts), which reads the account's high-water plan
 // instead of its current one. Clients never see purchase rows, only the fold.
-
-// How long a `past_due` subscription stays entitled past its period end while
-// the provider retries payment (Paddle dunning runs up to ~2 weeks). Yanking
-// features mid-dunning punishes an expired card harder than a deliberate cancel.
-const PAST_DUE_GRACE_MS = 16 * 24 * 60 * 60 * 1000;
 
 // Slack past `expires_at` for a subscription in good standing: the renewal
 // webhook lags the period boundary (retries, clock skew), and the row's

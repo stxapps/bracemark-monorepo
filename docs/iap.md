@@ -119,8 +119,15 @@ entitlement end, not the originally paid-through date: an Apple revocation
 cancel (refund/chargeback) ends at `canceled_at` even though that event drops
 the billing period, and Play pulls `expiryTime` back itself. In the other
 direction, Apple's configured billing grace period (`gracePeriodExpiresDate`)
-is honored as the period end while in grace, with the fold's `past_due` slack
-running past whatever the provider last promised.
+is honored while in grace — but as the **later** of Apple's end and the fold's
+own `past_due` window, never their sum. `lib/appstore.ts` moves `expires_at`
+only as far as the fold needs to reach Apple's end (`gracePeriodExpiresDate −
+PAST_DUE_GRACE_MS`, from `lib/dunning.ts`); moving it all the way stacked the two,
+and a 16-day grace became ~32 days of access, which nothing would have noticed
+because Apple sends no notification when grace ends. Configure the grace in App
+Store Connect at **16 days** and it changes nothing about when access ends, only
+Apple's side of it (the renewal date survives a recovery inside grace); 3 days is
+a no-op for us, 28 extends it.
 
 **Manage/cancel** — `POST /v1/iap/portal` mints a Paddle customer-portal
 session URL (needs the secret API key + stored `ctm_…` id, hence server-side).
@@ -852,8 +859,10 @@ row as never-expiring and `needsRefresh` skips it outright.
   In-App Purchase key's PKCS#8 PEM), `PLAY_SA_PRIVATE_KEY` (the service
   account's), and `PLAY_NOTIFY_TOKEN` (the push-endpoint guard) via
   `wrangler secret put` (`.dev.vars` locally). Register per env: App Store
-  Server Notifications V2 → `…/v1/iap/appstore/notify`; Play RTDN Pub/Sub push
-  → `…/v1/iap/playstore/notify?token=<PLAY_NOTIFY_TOKEN>`. No store product-id
+  Server Notifications V2 → `…/v1/iap/appstore/notify`, where App Store Connect
+  has exactly one Sandbox and one Production URL, so sandbox → staging and
+  local testing replays instead (_exercising the App Store locally_); Play RTDN
+  Pub/Sub push → `…/v1/iap/playstore/notify?token=<PLAY_NOTIFY_TOKEN>`. No store product-id
   vars — those are shared constants (`iap/store-products.ts`).
 - **bracemark-web** (`.env.*`): `NEXT_PUBLIC_PADDLE_ENV` +
   `NEXT_PUBLIC_PADDLE_CLIENT_TOKEN` (client tokens are public by design). There
@@ -944,6 +953,65 @@ to the Paddle config, and not something to automate. Driving the checkout itself
 means driving a third-party iframe, a sandbox card and a webhook round trip, and
 it leaves a live subscription behind ([e2e.md](./e2e.md), _what e2e may not
 assert_).
+
+### exercising the App Store locally
+
+App Store Connect takes **one** Server Notifications URL per environment per
+app (App Information → App Store Server Notifications: a Production Server URL
+and a Sandbox Server URL, each V2). The sandbox one points at **staging**
+(`https://api.dryrunbase.com/v1/iap/appstore/notify`, _config per env_). There
+is no second destination to add for a tunnel, as Paddle allows. There is also
+no need for one, for two reasons.
+
+- **A first purchase needs no push at all.** `iap/verify` binds the purchase
+  and returns the fold, so buying in the sandbox against `wrangler dev` already
+  exercises everything up to the notification.
+- **Apple keeps what it sent.** The App Store Server API's notification history
+  returns the signed payloads of the last 180 days, sandbox included, so the
+  push path can be driven by pulling them instead of receiving them.
+
+**`npm run replay:appstore`** (`tools/scripts/replay-appstore.ts`) does that
+pull. It lists the sandbox notifications in a window (`--since 6h`/`3d`/a date,
+24h by default; `--transaction <id>`, `--type DID_RENEW` to narrow it), POSTs
+each one oldest-first to the local `/v1/iap/appstore/notify`, and then compares
+the local `purchases` rows before and after. `--dry-run` only lists them. It
+signs with the same `APPSTORE_*` ids from `wrangler.jsonc` and the same
+`APPSTORE_PRIVATE_KEY` from `.dev.vars` that `wrangler dev` uses, and it
+refuses any `--api` other than localhost, because the comparison reads local
+D1. The loop, with the sandbox's compressed renewal periods (monthly in
+minutes): buy in a dev build pointed at the local api, cancel or let it renew,
+wait for the event, run the script. How to read its output:
+
+- **A replay applies Apple's state as of now, not as of the notification.** The
+  route uses the payload only to find _which_ subscription changed and
+  re-fetches the rest (step 4 of _the purchase flow (store IAP)_). What a replay
+  proves is the push path end to end (route, decode, Apple fetch, binding,
+  upsert). It is not a time machine, and `rewritten, unchanged` is a pass: the
+  row already matched Apple, typically because the app's own status read got
+  there first through the staleness refresh.
+- **`no local row` is the drop working, not a bug.** A notification lands only
+  on a subscription _this_ api bound through `iap/verify`. A sandbox purchase
+  made from a build pointed at staging has no row locally, just as staging has
+  none for a purchase made locally.
+- **A 200 means handled, not applied.** The route is log-and-ACK, so the row
+  comparison is the answer; `not written` sends you to the `wrangler dev` log's
+  `applyStoreNotification` line. A non-200 is the one real failure: Apple's API
+  failed, and Apple would have retried.
+- **History only holds what Apple tried to deliver**, so the Sandbox Server URL
+  has to be set for there to be anything to replay.
+
+Leave the sandbox URL on staging rather than repointing it at a tunnel for an
+afternoon. Nothing restores it afterwards, and until it is restored staging
+stops hearing about sandbox renewals except through its staleness refresh. A
+fan-out forwarder in front of both is possible and harmless, since both
+backends re-fetch and each applies only what it bound. It is machine config
+like the tunnel, though, and the script above makes it unnecessary.
+
+**Play needs none of this.** RTDN is a Pub/Sub topic, and a topic takes several
+push subscriptions, so a second one pointed at a tunnel's
+`/v1/iap/playstore/notify?token=<PLAY_NOTIFY_TOKEN>` gets real fan-out. The
+tunnel rules under _exercising Paddle locally_ apply unchanged: expose that path
+only, and keep the hostname out of this repo.
 
 ### open follow-ups
 

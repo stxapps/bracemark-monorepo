@@ -1,6 +1,7 @@
 import { base64UrlToBytes, bytesToBase64Url, bytesToUtf8, z } from '@stxapps/shared';
 
 import type { PurchaseStatus } from '../db/repositories/purchases';
+import { PAST_DUE_GRACE_MS } from './dunning';
 import type { Bindings } from './env';
 import { b64urlEncodeJson, pemToPkcs8 } from './jwt';
 import type { StoreSubscriptionSnapshot } from './store';
@@ -139,7 +140,8 @@ const statusResponseSchema = z.looseObject({
 // 3 maps to past_due: the fold's PAST_DUE_GRACE_MS (16 days past expiry) is the
 // product decision on how long dunning stays entitled — tighter than Apple's
 // 60-day retry window, same posture as Paddle dunning. 4 also honors Apple's
-// own gracePeriodExpiresDate as the period end (the clamp below). 2 and 5 map
+// own gracePeriodExpiresDate when it runs longer than that (the clamp below —
+// the later of the two, never their sum). 2 and 5 map
 // to canceled: the row records WHY it ended, the fold decides entitlement from
 // time — for 2 the expiry is already past; for 5 (refund / Family Sharing
 // revocation) expiresDate keeps the originally paid-through date, so the
@@ -216,12 +218,18 @@ export async function fetchAppstoreSubscription(
       let expiresAt = info.data.expiresDate ?? null;
       // Billing grace period (status 4): Apple keeps the user entitled through
       // the grace window configured in App Store Connect, and renewalInfo
-      // carries its end — honor it as the period end. The fold's own past_due
-      // slack then runs past what Apple last promised, the same posture as
-      // Paddle dunning.
+      // carries its end. The fold ALREADY gives every past_due row
+      // PAST_DUE_GRACE_MS past its expiry, so the two windows must not stack —
+      // moving expiresAt to Apple's grace end would put the fold's window on top
+      // of Apple's (a 16-day grace became ~32 days of access). Entitlement ends
+      // at the LATER of the two instead: our policy is the floor, and a longer
+      // grace configured in App Store Connect is honored in full. So expiresAt
+      // moves only as far as the fold needs to reach Apple's end, and with a
+      // 16-day grace configured it does not move at all.
       const graceEndsAt = renewal?.success ? (renewal.data.gracePeriodExpiresDate ?? null) : null;
       if (status === 'past_due' && graceEndsAt !== null) {
-        expiresAt = Math.max(expiresAt ?? graceEndsAt, graceEndsAt);
+        const reachesGraceEnd = graceEndsAt - PAST_DUE_GRACE_MS;
+        expiresAt = Math.max(expiresAt ?? reachesGraceEnd, reachesGraceEnd);
       }
       // Revocation (refund / Family Sharing revocation): entitlement ends at
       // revocationDate, but expiresDate keeps the originally paid-through date

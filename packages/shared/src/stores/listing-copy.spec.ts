@@ -2,6 +2,7 @@ import { BRAND } from '../brand/brand';
 import * as LISTING_COPY from './listing-copy';
 import {
   APP_STORE,
+  APP_STORE_SUBSCRIPTION,
   BROWSER_EXTENSION_LISTING,
   FIREFOX_ADDONS_SUMMARY,
   FULL_DESCRIPTION,
@@ -43,6 +44,21 @@ describe('store listing copy — character budgets', () => {
       STORE_LIMITS.appStore.promotionalText,
     ],
     ['App Store description', FULL_DESCRIPTION, STORE_LIMITS.appStore.description],
+    [
+      'App Store subscription group display name',
+      APP_STORE_SUBSCRIPTION.groupDisplayName,
+      STORE_LIMITS.appStoreSubscription.groupDisplayName,
+    ],
+    [
+      'App Store Plus display name',
+      APP_STORE_SUBSCRIPTION.plus.displayName,
+      STORE_LIMITS.appStoreSubscription.displayName,
+    ],
+    [
+      'App Store Plus description',
+      APP_STORE_SUBSCRIPTION.plus.description,
+      STORE_LIMITS.appStoreSubscription.description,
+    ],
     ['Play title', PLAY.title, STORE_LIMITS.play.title],
     ['Play short description', PLAY.shortDescription, STORE_LIMITS.play.shortDescription],
     ['Play full description', FULL_DESCRIPTION, STORE_LIMITS.play.fullDescription],
