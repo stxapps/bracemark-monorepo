@@ -566,9 +566,11 @@ function DeleteStatus({ state }: { state: DeleteAllState }) {
 
   if (state.phase === 'running') {
     return (
-      <p className="flex items-center gap-2 text-sm text-muted-foreground">
+      <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
         <Loader2 className="size-4 animate-spin" />
-        Deleting all your data…
+        {state.step === 'waiting-for-sync'
+          ? 'Waiting for an in-progress sync to finish safely. This can take a minute.'
+          : 'Deleting all your data…'}
       </p>
     );
   }

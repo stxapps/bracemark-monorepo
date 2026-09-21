@@ -674,6 +674,15 @@ may sync back afterward").
    (a cycle that already read the pending queue could re-push ops after the
    wipe), then `clearPendingOps` — this device's unsynced changes are abandoned
    on purpose (pushing them first is work the wipe immediately undoes).
+   The delete view names this as a separate **waiting for sync** step rather than
+   claiming the wipe has started. A two-minute watchdog fails closed: if the
+   cycle does not settle, the attempt reports an error before the queue, server,
+   or local store is touched. It must never time out _into_ the next step. The
+   watchdog is applied HERE, at the flow, with shared's `withTimeout` — the
+   duration and the user-facing line are a property of this destructive,
+   user-blocking action, not of waiting. `awaitInflightSync` itself never
+   rejects, and it also serves the browser extension's background worker, which
+   has no UI to report a timeout to.
 2. Call the endpoint. Nothing local is touched until the server confirms.
 3. Wipe the local **synced** stores: `items`, the decode cache, and `locks`
    (they guard lists that no longer exist — the same reset sign-out applies).

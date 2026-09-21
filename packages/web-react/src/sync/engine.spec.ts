@@ -33,7 +33,13 @@ import {
 } from '../data/mutations';
 import { enqueuePut } from '../data/pending-store';
 import { toItemRecord } from '../data/projection';
-import { loadEntityContent, runIncrementalSync, runInitialSync, type SyncDeps } from './engine';
+import {
+  awaitInflightSync,
+  loadEntityContent,
+  runIncrementalSync,
+  runInitialSync,
+  type SyncDeps,
+} from './engine';
 import { BlobRequestError, getBlob, putBlob } from './r2';
 
 // The crypto boundary is not what these specs are about: a reversible stand-in keeps
@@ -221,6 +227,31 @@ beforeEach(async () => {
     syncCursorUpdatedAt: 1000,
     syncCursorPath: 'links/l_seed.enc',
     firstSyncDoneAt: 1,
+  });
+});
+
+describe('waiting for an in-flight cycle', () => {
+  it('reports a wait only when a cycle is actually running', async () => {
+    const onIdleWait = jest.fn();
+    await awaitInflightSync(USER, onIdleWait);
+    expect(onIdleWait).not.toHaveBeenCalled();
+
+    let release!: (reply: OpsListReply) => void;
+    const blockedList = new Promise<OpsListReply>((resolve) => {
+      release = resolve;
+    });
+    const cycle = runIncrementalSync(deps({ opsList: () => blockedList }));
+    const onWait = jest.fn();
+    const waiting = awaitInflightSync(USER, onWait);
+
+    expect(onWait).toHaveBeenCalledTimes(1);
+    release({
+      ops: [],
+      oldestUpdatedAt: 500,
+      newestUpdatedAt: 1000,
+      hasMore: false,
+    });
+    await Promise.all([cycle, waiting]);
   });
 });
 

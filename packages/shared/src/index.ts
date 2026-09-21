@@ -4,6 +4,7 @@ export * from './api/retry';
 export * from './array/chunk';
 export * from './async/pool';
 export * from './async/progress';
+export * from './async/with-timeout';
 export * from './auth/credentials';
 export * from './auth/endpoints';
 export * from './brand/brand';

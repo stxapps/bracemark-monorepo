@@ -65,7 +65,13 @@ import {
   resetFileSystem,
   writeFileText,
 } from '../testing/memory-file-system';
-import { loadEntityContent, loadEntityContents, runIncrementalSync, type SyncDeps } from './engine';
+import {
+  awaitInflightSync,
+  loadEntityContent,
+  loadEntityContents,
+  runIncrementalSync,
+  type SyncDeps,
+} from './engine';
 import { BlobRequestError, getBlob, getBlobToFile, putBlob, putBlobFromFile } from './r2';
 
 // The one seam that would reach native sqlite; everything above it in db.ts —
@@ -348,6 +354,31 @@ beforeEach(async () => {
   // so a test picks its cycle by what it makes ops/list answer, not by leftover
   // state.
   await markFirstSyncDone(USER, 1000, 'links/l_seed.enc');
+});
+
+describe('waiting for an in-flight cycle', () => {
+  it('reports a wait only when a cycle is actually running', async () => {
+    const onIdleWait = jest.fn();
+    await awaitInflightSync(USER, onIdleWait);
+    expect(onIdleWait).not.toHaveBeenCalled();
+
+    let release!: (reply: OpsListReply) => void;
+    const blockedList = new Promise<OpsListReply>((resolve) => {
+      release = resolve;
+    });
+    const cycle = runIncrementalSync(deps({ opsList: () => blockedList }));
+    const onWait = jest.fn();
+    const waiting = awaitInflightSync(USER, onWait);
+
+    expect(onWait).toHaveBeenCalledTimes(1);
+    release({
+      ops: [],
+      oldestUpdatedAt: 500,
+      newestUpdatedAt: 1000,
+      hasMore: false,
+    });
+    await Promise.all([cycle, waiting]);
+  });
 });
 
 // --- the content push: row, disk, and the two crypto paths -------------------

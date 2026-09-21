@@ -168,8 +168,15 @@ const rerunRequests = new Set<string>();
 // re-push ops after the server wipe). Swallows the cycle's rejection — the
 // waiter only cares that it's over, not how it went (the cycle's own callers
 // handle the error).
-export async function awaitInflightSync(username: string): Promise<void> {
-  await inflightSyncs.get(username)?.catch(() => undefined);
+export async function awaitInflightSync(username: string, onWait?: () => void): Promise<void> {
+  const inflight = inflightSyncs.get(username);
+  if (!inflight) return;
+
+  // Let a blocking caller distinguish "waiting for the engine to become safe"
+  // from the work it performs afterward. Called only when there is actually a
+  // cycle to wait for, so a delete-all view does not flash a false waiting step.
+  onWait?.();
+  await inflight.catch(() => undefined);
 }
 
 // A returning-visit sync (docs flow #2 + "a sync cycle"): reconcile, then push,
