@@ -20,10 +20,22 @@
     },
     "onlineExtraction": [
       {
-        "id": "iana-example-domain",
+        "id": "example-known-page",
         "url": "https://example.com/",
+        "namespace": "query",
         "expectedTitle": "Example Domain",
-        "trait": "online"
+        "expectedVerdict": "done",
+        "trait": "internet",
+        "description": "IANA's reserved documentation page. Not ours: no og:image, no redirect. A run-scoped ?e2e= query keeps each saved URL unique."
+      },
+      {
+        "id": "example-missing-page",
+        "url": "https://example.com/e2e-missing",
+        "namespace": "path",
+        "expectedStatus": 404,
+        "expectedVerdict": "permanent",
+        "trait": "internet",
+        "description": "Any unknown path on the same origin answers a real 404, which settles as a permanent failure. A run-scoped suffix keeps each URL unique."
       }
     ]
   }

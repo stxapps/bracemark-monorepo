@@ -1,0 +1,81 @@
+# Switch Link previews to `all` and run Generate all over a pending library that
+# arrived by sync — links this device never saved, so `saves` never touches them.
+#
+# The runner imports the library through the web app before the device signs
+# in (web/fixtures/extraction.ts, `writePendingExtractionLibrary`): FILLER rows
+# first, newest, at `.invalid` hosts, then the three targets as the OLDEST rows —
+# example.com (LINK_TITLE), an example.com 404, and one more `.invalid`. The
+# fillers push the targets below the fold, and the automatic drain at `all` is
+# displayed-scoped, so only the full-library job can settle them. TOTAL is the
+# library's size.
+appId: com.bracemark.app
+tags: [EXTRACT-NATIVE-ALL-001, full, online, internet, ios, android]
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+
+# The synced library is on the device: the newest filler row has painted.
+- extendedWaitUntil:
+    visible: '.*${FILLER_TEXT}.*'
+    timeout: 60000
+
+- runFlow:
+    file: subflows/open-settings.yaml
+    env:
+      SECTION: extraction
+- tapOn:
+    id: 'extraction-mode-all'
+- runFlow:
+    file: subflows/assert-radio-checked.yaml
+    env:
+      RADIO_ID: extraction-mode-all
+
+# The counts and the button sit below the three radio rows — off screen on a
+# phone, where a wait would time out against a control that is merely unscrolled.
+- scrollUntilVisible:
+    element:
+      id: 'extraction-generate-all'
+    direction: DOWN
+    timeout: 20000
+# Enabled only once the pending count has answered and is above zero.
+- extendedWaitUntil:
+    visible:
+      id: 'extraction-generate-all'
+      enabled: true
+    timeout: 30000
+- tapOn:
+    id: 'extraction-generate-all'
+
+# Settled: every link has a verdict. The progress line counts successes only, so
+# the permanent bucket is read on its own — the example.com 404 — and Pending must
+# be empty. The `.invalid` rows are the transient remainder.
+- extendedWaitUntil:
+    visible:
+      id: 'extraction-progress'
+      text: '1 of ${TOTAL} links previewed\.'
+    timeout: 180000
+- assertVisible:
+    id: 'extraction-count-done'
+    text: '1'
+- assertVisible:
+    id: 'extraction-count-pending'
+    text: '0'
+- assertVisible:
+    id: 'extraction-count-wont-retry'
+    text: '1'
+- extendedWaitUntil:
+    visible:
+      id: 'extraction-generate-all'
+    timeout: 30000
+- takeScreenshot: generate-all-settled
+
+# The representative success row, reached the way a person would: scroll down to
+# it. Its fallback would have been the example.com address; the title can only
+# be the device's extraction.
+- tapOn:
+    id: 'settings-close'
+- scrollUntilVisible:
+    element: '.*${LINK_TITLE}.*'
+    direction: DOWN
+    timeout: 60000
+- takeScreenshot: generate-all-success-row

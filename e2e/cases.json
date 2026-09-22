@@ -290,6 +290,36 @@
     "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
   },
   {
+    "id": "EXTRACT-WEB-001",
+    "title": "A save fills in its title from the server extractor without a reload",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online", "internet"],
+    "fixture": "empty",
+    "path": "web/extraction.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
+    "id": "EXTRACT-WEB-ALL-001",
+    "title": "Generate all drains an imported pending library and settles each verdict",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online", "internet"],
+    "fixture": "small",
+    "path": "web/extraction.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
+    "id": "EXTRACT-OFFLINE-001",
+    "title": "A save stays successful and pending while extraction is down, then enriches",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online", "internet"],
+    "fixture": "empty",
+    "path": "web/extraction.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
     "id": "EXT-AUTH-001",
     "title": "Extension sign-in survives popup and browser-profile reopen",
     "surface": "extension",
@@ -757,6 +787,26 @@
     "traits": ["online", "android"],
     "fixture": "small",
     "path": "mobile/flows/sync-conflict.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "EXTRACT-NATIVE-001",
+    "title": "A save at the default mode fills in its title through the device extractor",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "internet", "ios", "android"],
+    "fixture": "empty",
+    "path": "mobile/flows/extract-save.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "EXTRACT-NATIVE-ALL-001",
+    "title": "Generate all at `all` settles a synced pending library below the fold",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "internet", "ios", "android"],
+    "fixture": "small",
+    "path": "mobile/flows/extract-all.yaml",
     "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
   },
   {

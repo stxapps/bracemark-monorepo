@@ -8,6 +8,11 @@ import { type Credentials } from '../web/fixtures/account';
 import { unique, unresolvableUrl } from '../web/fixtures/data';
 import { writeSmallDataArchive } from '../web/fixtures/data-lifecycle';
 import { API_URL } from '../web/fixtures/env';
+import {
+  knownPage,
+  type PendingExtractionLibrary,
+  writePendingExtractionLibrary,
+} from '../web/fixtures/extraction';
 import { launchApp, type LaunchedApp } from '../web/fixtures/launch';
 import { writePagedLibrary } from '../web/fixtures/library';
 import { addLink, chooseRowMenuItem, displayUrl, linkRow } from '../web/fixtures/links';
@@ -55,6 +60,11 @@ const PLUS_CASES = new Set([
 // expo-react lock-provider.tsx); the case waits past it by a margin that absorbs
 // the Home press and Maestro's own start-up on either side.
 const AUTO_RELOCK_WAIT_MS = 75_000;
+
+// Enough `.invalid` rows above EXTRACT-NATIVE-ALL-001's targets to keep them
+// below the fold on a phone, where the displayed-scoped drain at `all` cannot see
+// them — so only Generate all can settle them (mobile/flows/extract-all.yaml).
+const EXTRACTION_FILLERS = 24;
 
 // A settings row's grip, found beside the rename field that carries the name.
 async function listGrip(context: CaseStepContext, name: string) {
@@ -118,11 +128,19 @@ function assertLeadsList(list: Box, row: Box | null, below: Box | null, what: st
 // Take an Android device off the local api, or put it back, without touching the
 // app: the emulator reaches :8787 only through this reverse mapping, and Metro
 // (:8081) keeps its own (docs/e2e.md, _driving the native apps_).
-async function setApiReachable(deviceId: string, reachable: boolean): Promise<void> {
+// Take one local origin off an Android device, or put it back, by its adb
+// reverse mapping — 8787 is the api, 8788 bracemark-extractor. The emulator
+// reaches this Mac's servers only through these, so removing one is a real
+// network cut for the app and nothing else.
+async function setPortReachable(deviceId: string, port: number, reachable: boolean) {
   const args = reachable
-    ? ['reverse', 'tcp:8787', 'tcp:8787']
-    : ['reverse', '--remove', 'tcp:8787'];
+    ? ['reverse', `tcp:${port}`, `tcp:${port}`]
+    : ['reverse', '--remove', `tcp:${port}`];
   await capture('adb', ['-s', deviceId, ...args], { allowFailure: !reachable });
+}
+
+async function setApiReachable(deviceId: string, reachable: boolean): Promise<void> {
+  await setPortReachable(deviceId, 8787, reachable);
 }
 
 // Standalone native journeys. Platform and device are deliberately mandatory:
@@ -151,6 +169,7 @@ async function main(): Promise<void> {
             unique('E2E data'),
           )
         : undefined;
+      let extractionLibrary: PendingExtractionLibrary | undefined;
       const account = await provisionAccount(`${run.runId}-${testCase.id}`, {
         withRecovery,
         prepare: async (app) => {
@@ -177,6 +196,16 @@ async function main(): Promise<void> {
             await createInSettings(app.page, 'tag', shareTagName);
             await app.page.goto('/links');
             await syncAndWait(app.page);
+          }
+          if (testCase.id === 'EXTRACT-NATIVE-ALL-001') {
+            // Imported on the web and synced down, so the device meets these as
+            // links it never saved — the residual only `all` covers.
+            extractionLibrary = await writePendingExtractionLibrary(
+              join(run.runDir, 'cases', testCase.id, 'fixture', 'pending-extraction.zip'),
+              { label: 'e2e-device-all', fillers: EXTRACTION_FILLERS },
+            );
+            await importArchive(app.page, extractionLibrary.archivePath);
+            await waitForSync(app.page);
           }
           if (testCase.id === 'SYNC-CONFLICT-001') {
             // The one link both clients edit, on the server before either does.
@@ -326,6 +355,16 @@ async function main(): Promise<void> {
         env.OPEN_URL = unresolvableUrl(`${env.WORD}-open`);
         env.LOCK_PASSWORD = unique('lock-password');
       }
+      if (testCase.id === 'EXTRACT-NATIVE-001') {
+        const known = knownPage('e2e-device-save');
+        env.LINK_URL = known.url;
+        env.LINK_TITLE = known.title;
+      }
+      if (extractionLibrary) {
+        env.LINK_TITLE = extractionLibrary.known.title;
+        env.FILLER_TEXT = displayUrl(extractionLibrary.fillerUrls[0]);
+        env.TOTAL = String(extractionLibrary.total);
+      }
       if (testCase.id === 'DATA-DELETE-ALL-NATIVE-001') {
         env.LINK_URL = unresolvableUrl(`${run.runId}-delete-all`);
         env.LIST_NAME = unique(`${run.runId} delete list`);
@@ -341,8 +380,7 @@ async function main(): Promise<void> {
         env.LINK_TEXT = displayUrl(url);
         // Safari supplies the real document title on iOS. Android receives the
         // run-scoped multi-word EXTRA_SUBJECT below.
-        env.SHARE_TITLE =
-          run.platform === 'ios' ? 'localhost' : unique('E2E shared page title');
+        env.SHARE_TITLE = run.platform === 'ios' ? 'localhost' : unique('E2E shared page title');
         // Maestro text selectors are regular expressions. iOS keeps the URL's
         // regex-safe token; Android renders EXTRA_SUBJECT as the primary title,
         // so its equally unique title is the honest visible oracle.
@@ -364,6 +402,16 @@ async function main(): Promise<void> {
       // kept open, a device a case took off the api, or a picker fixture copied
       // into the device's Files/Downloads surface.
       const cleanupActions: Array<() => Promise<void>> = [];
+
+      // Expo extracts on the device and never calls bracemark-extractor. On
+      // Android that is made observable: the extractor's reverse mapping is gone
+      // for the whole case, so a title can only have come from the device's own
+      // fetch. (The iOS simulator shares this Mac's loopback; there is no
+      // per-device cut to make, and the case proves the device path alone.)
+      if (testCase.id.startsWith('EXTRACT-NATIVE-') && run.platform === 'android') {
+        await setPortReachable(run.deviceId, 8788, false);
+        cleanupActions.push(() => setPortReachable(run.deviceId, 8788, true));
+      }
 
       if (importFixture) {
         const fileName = `phase5-${run.runId}.zip`;

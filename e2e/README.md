@@ -141,6 +141,13 @@ prepares the main-app state; `runner/share.ts` then performs the real Safari or
 Android `ACTION_SEND` handoff between committed part flows. Run Phase 6 alone by
 passing its comma-separated case ids to `--case`, once per platform.
 
+The extraction cases (Phase 7: `EXTRACT-*`) are the only ones that reach the
+public internet — example.com, from `fixtures.json` — and carry the `internet`
+trait for it. They need `npm run dev` for the extractor on 8788 (web's
+`webServer` starts only api and web). `--exclude-trait internet` gives a run with
+no third-party network dependency; `online` does not, because every stack-backed
+case carries it.
+
 ## the published screenshots
 
 Also not a test, and its own folder rather than a corner of `seed/`: `e2e/shot/`
@@ -197,9 +204,11 @@ It is the same plaintext row the seed writes, not a test endpoint.
 2. **Tests in a worker share one account.** Namespace with `unique()`
    (`web/fixtures/data.ts`), never assert on a global count, never sign out (see
    `account.e2e.ts`).
-3. **Assert on what the user typed, not what was extracted.** The extractor's SSRF
-   guard makes a local fixture server unreachable by design, so specs use
-   unresolvable `.invalid` URLs — `unresolvableUrl()`, same module.
+3. **Assert on what the user typed, not what was extracted** — unless the case is
+   an `internet` extraction case. The extractor's SSRF guard makes a local fixture
+   server unreachable by design, so specs use unresolvable `.invalid` URLs —
+   `unresolvableUrl()`, same module. The exceptions use `web/fixtures/extraction.ts`
+   and nothing else.
 4. **The `testID`s the flows bind to are an interface.** They live in
    bracemark-expo, and renaming one fails a flow as a bare timeout on a missing
    element — never as anything that names the rename. The list is in

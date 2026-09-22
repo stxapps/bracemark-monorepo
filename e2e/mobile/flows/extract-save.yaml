@@ -1,0 +1,56 @@
+# Save a real public page at the default `saves` mode and watch Expo's DEVICE
+# extractor fill in its title — the gestured path (`extractNow`), which needs no
+# opt-in because the save is the consent (docs/link-extraction.md, _expo drains
+# in the foreground_).
+#
+# LINK_URL is example.com with a run-scoped query, LINK_TITLE its known title
+# (e2e/fixtures.json, web/fixtures/extraction.ts). This is one of the few flows
+# allowed to assert an EXTRACTED value, hence the `internet` trait.
+#
+# "Without calling the server extractor" is proved by the runner, not here: on
+# Android it removes the device's reverse mapping to bracemark-extractor for the
+# length of this case, so a server call could not have answered. Expo has no
+# extractor origin configured at all; the iOS run proves the device path works.
+appId: com.bracemark.app
+tags: [EXTRACT-NATIVE-001, full, online, internet, ios, android]
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+
+# A fresh account sits at the default. Assert it rather than assume it: at `all`
+# the displayed-row drain would also fetch this link, and the case would stop
+# proving the gestured path.
+- runFlow:
+    file: subflows/open-settings.yaml
+    env:
+      SECTION: extraction
+- runFlow:
+    file: subflows/assert-radio-checked.yaml
+    env:
+      RADIO_ID: extraction-mode-saves
+- tapOn:
+    id: 'settings-close'
+
+- tapOn: 'Add link'
+- tapOn:
+    id: 'add-link-url'
+- inputText: ${LINK_URL}
+# No hideKeyboard: see add-link.yaml — the panel sits above the keyboard.
+- tapOn:
+    id: 'add-link-save'
+
+# The row repaints in place from the untitled fallback to the extracted title.
+# A row's accessible name is a composite ("E, <title>, <host>, now, …"), so the
+# match is a substring one.
+- extendedWaitUntil:
+    visible: '.*${LINK_TITLE}.*'
+    timeout: 45000
+- takeScreenshot: extracted-on-device
+
+# Written to the local store, not only painted: a cold start reads it back.
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible: '.*${LINK_TITLE}.*'
+    timeout: 30000
+- takeScreenshot: extracted-after-cold-start

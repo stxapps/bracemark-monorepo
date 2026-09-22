@@ -57,8 +57,8 @@ export function validateCaseRegistry(cases = readCaseRegistry()): void {
     }
   }
   for (const fixture of fixtures.urls.onlineExtraction) {
-    if (new URL(fixture.url).protocol !== 'https:' || fixture.trait !== 'online') {
-      throw new Error(`online extraction fixture ${fixture.id} must be https and tagged online`);
+    if (new URL(fixture.url).protocol !== 'https:' || fixture.trait !== 'internet') {
+      throw new Error(`online extraction fixture ${fixture.id} must be https and tagged internet`);
     }
   }
 
