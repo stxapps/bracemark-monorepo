@@ -33,6 +33,20 @@
     "anthropic-skills:morning": "off",
     "anthropic-skills:pdf": "off",
     "anthropic-skills:pptx": "off",
-    "anthropic-skills:xlsx": "off"
+    "anthropic-skills:xlsx": "off",
+    "gplay-cli-usage": "off",
+    "gplay-iap-setup": "off",
+    "gplay-metadata-sync": "off",
+    "gplay-ppp-pricing": "off",
+    "gplay-preflight": "off",
+    "gplay-release-flow": "off",
+    "gplay-reports-download": "off",
+    "gplay-review-management": "off",
+    "gplay-rollout-management": "off",
+    "gplay-screenshot-automation": "off",
+    "gplay-submission-checks": "off",
+    "gplay-testers-orchestration": "off",
+    "gplay-user-management": "off",
+    "gplay-vitals-monitoring": "off"
   }
 }
