@@ -1,0 +1,44 @@
+# The account is imported to exactly the free link cap before device sign-in.
+# The runner first shares non-URL text/data and observes the no-link state, then
+# shares an HTTP page and observes the quota state. Both arrive through the real
+# platform boundary; detailed state permutations remain component tests.
+appId: com.bracemark.app
+tags: [SHARE-BOUNDARY-001, full, online, scale, ios, android]
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+- tapOn:
+    id: 'links-more-options'
+- tapOn:
+    id: 'links-sync'
+- extendedWaitUntil:
+    visible: ".*${CAP_HOST}.*"
+    timeout: 60000
+- runFlow:
+    file: subflows/open-settings.yaml
+    env:
+      SECTION: subscription
+- extendedWaitUntil:
+    visible: 'Your plan applies to your whole account.*'
+    timeout: 30000
+- tapOn: 'Refresh'
+- extendedWaitUntil:
+    notVisible: 'Refreshing…'
+    timeout: 30000
+- tapOn:
+    id: 'settings-close'
+- tapOn:
+    id: 'links-more-options'
+- tapOn:
+    id: 'links-sync'
+- runFlow:
+    file: subflows/open-settings.yaml
+    env:
+      SECTION: data
+- extendedWaitUntil:
+    visible: 'Last synced.*'
+    timeout: 30000
+- assertNotVisible: '.*waiting to sync.*'
+- tapOn:
+    id: 'settings-close'
+- pressKey: Home

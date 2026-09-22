@@ -537,6 +537,24 @@ checked by the host step that read them, since a flow can only say "visible".
   keeps serving the bundle; the runner restores the mapping after the case
   whether it passed or not. The iOS simulator shares the host's loopback, so
   there is no equivalent short of stopping the api under every other client.
+- **Across a real share boundary** (`SHARE-*`). A host step opens Safari with
+  `simctl openurl` or launches Android's exported `ShareActivity` with a real
+  `ACTION_SEND`; committed Maestro parts make every assertion on the system
+  sheet, the share tree, or the foregrounded app. On iOS the system row still
+  needs the measured coordinate tap described in [share-sheet.md](./share-sheet.md),
+  immediately followed by a `share-*` testID that only the extension renders.
+  On Android the helper quotes each `adb shell` word before passing a multi-word
+  subject, and the already-running case records the app PID on both sides of the
+  share. The killed-app case removes only the API reverse while saving so the
+  next launch has a real pending op to drain; cleanup restores it even after a
+  failure. Cross-client proof signs a separate persistent web profile into the
+  account and requires exactly one row after an explicit native sync.
+  `SHARE-CREATE-001` is Android-only: after the first text edit in an iOS share
+  extension, XCTest exposes Safari's tree and routes later taps there even while
+  the extension remains painted. iOS still proves the real system handoff,
+  existing taxonomy pickers, save, outbox drain and cross-client upload; the
+  shared create state machine stays at component level. Do not replace the
+  missing iOS gesture with screen coordinates and call it a pass.
 
 #### accounts for a mobile run
 
@@ -677,6 +695,20 @@ All of them are in the app:
 | `delete-account-password`   | ” — the fresh-proof password re-entry                                               |
 | `delete-account-confirm`    | ” — the confirmation checkbox row                                                   |
 | `delete-account-submit`     | ” — the destructive action                                                          |
+| `share-title`               | `src/features/share/share-specimen.tsx` — the payload title                         |
+| `share-url`                 | ” — the normalized address                                                          |
+| `share-add`                 | `src/features/share/share-screen.tsx` — the Save action                             |
+| `share-list-row`            | ” — the current destination disclosure                                              |
+| `share-tags-row`            | ” — the current tag-set disclosure                                                  |
+| `share-saved`               | ” — the durable-save confirmation                                                   |
+| `share-signed-out`          | ” — the no-session terminal state                                                    |
+| `share-no-url`              | ” — the no-HTTP-URL terminal state                                                   |
+| `share-quota`               | ” — the at-cap terminal state                                                        |
+| `share-list-input`          | `src/features/share/share-list-picker.tsx`                                           |
+| `share-list-create`         | ” — the new-list action                                                             |
+| `share-tag-input`           | `src/features/share/share-tags-picker.tsx`                                           |
+| `share-tag-create`          | ” — the new-tag action                                                              |
+| `share-close`               | `src/features/share/share-kit.tsx` — the process/surface exit                        |
 | `contract-vectors-pass`     | `src/app/contract-vectors.tsx` (dev-only)                                           |
 | `contract-vectors-fail`     | ” — carries the failing check names in its text                                     |
 | `vector-<check>`            | ” — one per vector, `PASS`/`FAIL`/`RUNNING`                                         |
@@ -685,6 +717,11 @@ The three `contract-vectors` ids are the one group NOT in the shipped app: the
 screen returns a `<Redirect>` in production. Exactly one of `-pass`/`-fail` ever
 renders, and neither renders while checks are still running, so a flow that
 asserts the pass marker cannot pass by catching the screen mid-run.
+
+The `share-*` group is the opposite special case: none of those ids is in the
+main app route tree. Seeing one after Safari's system sheet or Android's
+`ACTION_SEND` is the far-side proof that the dedicated share host mounted; a
+successful system tap or `am start` status alone is not a pass.
 
 The recovery-door ids are deliberately **distinct** from the password ones rather
 than shared. The two modes never mount together, so reuse would work — but the

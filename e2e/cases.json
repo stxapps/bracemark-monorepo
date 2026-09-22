@@ -650,6 +650,76 @@
     "artifacts": ["manual-checklist"]
   },
   {
+    "id": "SHARE-ANDROID-001",
+    "title": "A real Android ACTION_SEND saves through list and tag pickers into the already-running app",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "android"],
+    "fixture": "small",
+    "path": "mobile/flows/share-android.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "SHARE-ANDROID-002",
+    "title": "A killed Android main app retains a shared link as a pending write and syncs it on launch",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "android"],
+    "fixture": "empty",
+    "path": "mobile/flows/share-android-killed.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "SHARE-IOS-001",
+    "title": "Safari enters the iOS share extension and the foregrounded main app drains its outbox",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "ios"],
+    "fixture": "small",
+    "path": "mobile/flows/share-ios.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "SHARE-IOS-002",
+    "title": "The signed-out iOS share extension explains the boundary without launching the main app",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "ios"],
+    "fixture": "empty",
+    "path": "mobile/flows/share-ios-signed-out.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "SHARE-BOUNDARY-001",
+    "title": "Native share surfaces show no-URL and at-cap states at the operating-system boundary",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "scale", "ios", "android"],
+    "fixture": "scale",
+    "path": "mobile/flows/share-boundary.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "SHARE-CREATE-001",
+    "title": "A list and tag created in the share surface reach the main app exactly once",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "android"],
+    "fixture": "small",
+    "path": "mobile/flows/share-create.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "SHARE-CROSS-CLIENT-001",
+    "title": "A link saved through a native share surface syncs to an independent web profile",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "ios", "android"],
+    "fixture": "empty",
+    "path": "mobile/flows/share-cross-client.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
     "id": "SYNC-REFRESH-PILL-IOS-001",
     "title": "A pull under a scrolled iOS list moves no row and waits behind the refresh pill",
     "surface": "native",

@@ -1,0 +1,10 @@
+# A successful system share is foregrounded and explicitly synced, with no
+# intervening native edit. The runner then signs a separate web profile into the
+# account and requires that client to read the shared link.
+appId: com.bracemark.app
+tags: [SHARE-CROSS-CLIENT-001, full, online, ios, android]
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+- pressKey: Home
+

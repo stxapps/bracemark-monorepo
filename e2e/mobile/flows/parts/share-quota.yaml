@@ -1,0 +1,15 @@
+appId: com.bracemark.app
+---
+- runFlow:
+    file: ../subflows/open-system-share.yaml
+    env:
+      SHARE_STATE_ID: share-quota
+- assertNotVisible:
+    id: 'share-add'
+- takeScreenshot: share-at-link-cap
+- tapOn: 'Close'
+- extendedWaitUntil:
+    notVisible:
+      id: 'share-quota'
+    timeout: 10000
+

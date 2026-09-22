@@ -7,11 +7,13 @@ import { importArchive, waitForSync } from '../seed/steps';
 import { type Credentials } from '../web/fixtures/account';
 import { unique, unresolvableUrl } from '../web/fixtures/data';
 import { writeSmallDataArchive } from '../web/fixtures/data-lifecycle';
+import { API_URL } from '../web/fixtures/env';
 import { launchApp, type LaunchedApp } from '../web/fixtures/launch';
 import { writePagedLibrary } from '../web/fixtures/library';
 import { addLink, chooseRowMenuItem, displayUrl, linkRow } from '../web/fixtures/links';
 import { grantPlus } from '../web/fixtures/plan';
 import { syncAndWait } from '../web/fixtures/sync';
+import { createInSettings } from '../web/fixtures/taxonomy';
 import { parseNativeCli } from './cli';
 import { stageDocumentPickerFile } from './device-files';
 import {
@@ -31,6 +33,12 @@ import { provisionAccount } from './lib';
 import { type CaseStep, type CaseStepContext, prepareNativeRun } from './native-run';
 import { capture } from './process';
 import { selectCasesForPlatform, validateCaseRegistry } from './registry';
+import {
+  assertMainAppStopped,
+  mainAppPid,
+  openSystemShare,
+  startPlainTextShareSource,
+} from './share';
 
 // Cases whose subject is a Plus lever get the existing `manual` grant before the
 // device signs in, so the sign-in's entitlement read already carries it
@@ -63,6 +71,24 @@ async function writeFromWeb(label: string, credentials: Credentials, url: string
     await app.page.goto('/links');
     await addLink(app.page, url);
     await syncAndWait(app.page);
+  } finally {
+    await app.close();
+  }
+}
+
+// The reader is a distinct persistent profile. It performs an explicit pull and
+// must see exactly one row, so a local native write or a duplicated upload cannot
+// satisfy the cross-client claim.
+async function readSharedLinkFromWeb(
+  label: string,
+  credentials: Credentials,
+  url: string,
+): Promise<void> {
+  const app = await launchApp(profileDir(label), { existing: credentials });
+  try {
+    await app.page.goto('/links');
+    await syncAndWait(app.page);
+    await expect(linkRow(app.page, url)).toHaveCount(1);
   } finally {
     await app.close();
   }
@@ -115,6 +141,10 @@ async function main(): Promise<void> {
       const withRecovery = testCase.id === 'NATIVE-ACCOUNT-002';
       let pagedUrls: string[] = [];
       const conflictUrl = unresolvableUrl(`${run.runId}-conflict`);
+      const shareListName = unique('E2E share list');
+      const shareTagName = unique('e2e-share-tag');
+      const shareCreatedListName = unique('E2E shared list');
+      const shareCreatedTagName = unique('e2e-shared-tag');
       const importFixture = testCase.id.startsWith('DATA-IMPORT-NATIVE-')
         ? await writeSmallDataArchive(
             join(run.runDir, 'cases', testCase.id, 'fixture', 'small-bracemark.zip'),
@@ -130,11 +160,23 @@ async function main(): Promise<void> {
             // server before the device signs in and pulls it.
             const library = await writePagedLibrary(
               join(run.runDir, 'cases', testCase.id, 'fixture', 'paged.zip'),
-              { count: 60, label: 'e2e-paged' },
+              {
+                // SHARE-BOUNDARY-001 needs the public create gate exactly at
+                // the free tier's 200-link cap. Other scale cases need only the
+                // first paging boundary and retain their smaller fixture.
+                count: testCase.id === 'SHARE-BOUNDARY-001' ? 200 : 60,
+                label: testCase.id === 'SHARE-BOUNDARY-001' ? 'e2e-share-cap' : 'e2e-paged',
+              },
             );
             await importArchive(app.page, library.archivePath);
             await waitForSync(app.page);
             pagedUrls = library.urls;
+          }
+          if (['SHARE-ANDROID-001', 'SHARE-IOS-001'].includes(testCase.id)) {
+            await createInSettings(app.page, 'list', shareListName);
+            await createInSettings(app.page, 'tag', shareTagName);
+            await app.page.goto('/links');
+            await syncAndWait(app.page);
           }
           if (testCase.id === 'SYNC-CONFLICT-001') {
             // The one link both clients edit, on the server before either does.
@@ -289,6 +331,33 @@ async function main(): Promise<void> {
         env.LIST_NAME = unique(`${run.runId} delete list`);
         env.TAG_NAME = unique(`${run.runId} delete tag`);
       }
+      if (testCase.id.startsWith('SHARE-')) {
+        const shareToken = `${run.runId}-${testCase.id.toLowerCase()}`;
+        const url =
+          run.platform === 'ios'
+            ? `${API_URL}/health?share=${encodeURIComponent(shareToken)}`
+            : unresolvableUrl(shareToken);
+        env.LINK_URL = url;
+        env.LINK_TEXT = displayUrl(url);
+        // Safari supplies the real document title on iOS. Android receives the
+        // run-scoped multi-word EXTRA_SUBJECT below.
+        env.SHARE_TITLE =
+          run.platform === 'ios' ? 'localhost' : unique('E2E shared page title');
+        // Maestro text selectors are regular expressions. iOS keeps the URL's
+        // regex-safe token; Android renders EXTRA_SUBJECT as the primary title,
+        // so its equally unique title is the honest visible oracle.
+        env.LINK_MATCH = run.platform === 'ios' ? shareToken : env.SHARE_TITLE;
+        env.SHARE_SOURCE_TEXT = '.*status.*ok.*';
+        env.LIST_NAME = ['SHARE-ANDROID-001', 'SHARE-IOS-001'].includes(testCase.id)
+          ? shareListName
+          : shareCreatedListName;
+        env.TAG_NAME = ['SHARE-ANDROID-001', 'SHARE-IOS-001'].includes(testCase.id)
+          ? shareTagName
+          : shareCreatedTagName;
+        if (testCase.id === 'SHARE-BOUNDARY-001') {
+          env.CAP_HOST = new URL(pagedUrls[0]).host;
+        }
+      }
 
       const credentials: Credentials = { username: account.username, password: account.password };
       // Undone after the case whether it passed or not: a web profile a case
@@ -310,6 +379,164 @@ async function main(): Promise<void> {
             fileName,
           }),
         );
+      }
+
+      const openShare = async (options: { noUrl?: boolean } = {}) => {
+        if (options.noUrl) {
+          let sourceUrl = env.LINK_URL;
+          if (run.platform === 'ios') {
+            const source = await startPlainTextShareSource();
+            cleanupActions.push(source.close);
+            sourceUrl = source.url;
+          }
+          await openSystemShare({
+            platform: run.platform,
+            deviceId: run.deviceId,
+            sourceUrl,
+            sharedText: 'Plain text without a link',
+            title: 'Plain text fixture',
+          });
+          return;
+        }
+        env.SHARE_SOURCE_TEXT = '.*status.*ok.*';
+        await openSystemShare({
+          platform: run.platform,
+          deviceId: run.deviceId,
+          sourceUrl: env.LINK_URL,
+          title: env.SHARE_TITLE,
+        });
+      };
+
+      if (testCase.id === 'SHARE-ANDROID-001') {
+        let pidBefore: string | null = null;
+        steps = [
+          testCase.path,
+          async () => {
+            pidBefore = await mainAppPid(run.platform, run.deviceId);
+            if (!pidBefore) throw new Error('main app was not running before ACTION_SEND');
+            await openShare();
+            return null;
+          },
+          'mobile/flows/parts/share-save.yaml',
+          async () => {
+            const pidAfter = await mainAppPid(run.platform, run.deviceId);
+            if (pidAfter !== pidBefore) {
+              throw new Error(`ACTION_SEND replaced the main process: ${pidBefore} -> ${pidAfter}`);
+            }
+            return null;
+          },
+          'mobile/flows/parts/share-foreground-result.yaml',
+        ];
+      }
+      if (testCase.id === 'SHARE-IOS-001') {
+        steps = [
+          testCase.path,
+          async () => {
+            await openShare();
+            return null;
+          },
+          'mobile/flows/parts/share-save.yaml',
+          'mobile/flows/parts/share-foreground-result.yaml',
+        ];
+      }
+      if (testCase.id === 'SHARE-ANDROID-002') {
+        cleanupActions.push(async () => setApiReachable(run.deviceId, true));
+        steps = [
+          testCase.path,
+          async () => {
+            await assertMainAppStopped(run.platform, run.deviceId, 'before killed-app share');
+            await setApiReachable(run.deviceId, false);
+            await openShare();
+            return null;
+          },
+          'mobile/flows/parts/share-save-default.yaml',
+          async () => {
+            await setApiReachable(run.deviceId, true);
+            return null;
+          },
+          'mobile/flows/parts/share-foreground-sync.yaml',
+          async () => {
+            await readSharedLinkFromWeb(
+              `${run.runId}-${testCase.id}-reader`,
+              credentials,
+              env.LINK_URL,
+            );
+            return null;
+          },
+        ];
+      }
+      if (testCase.id === 'SHARE-IOS-002') {
+        steps = [
+          testCase.path,
+          async () => {
+            await assertMainAppStopped(run.platform, run.deviceId, 'before signed-out share');
+            await openShare();
+            return null;
+          },
+          'mobile/flows/parts/share-signed-out.yaml',
+          async () => {
+            await assertMainAppStopped(run.platform, run.deviceId, 'after signed-out share');
+            return null;
+          },
+        ];
+      }
+      if (testCase.id === 'SHARE-BOUNDARY-001') {
+        steps = [
+          testCase.path,
+          async () => {
+            await openShare({ noUrl: true });
+            return null;
+          },
+          'mobile/flows/parts/share-no-url.yaml',
+          async () => {
+            await openShare();
+            return null;
+          },
+          'mobile/flows/parts/share-quota.yaml',
+        ];
+      }
+      if (testCase.id === 'SHARE-CREATE-001') {
+        steps = [
+          testCase.path,
+          async () => {
+            await openShare();
+            return null;
+          },
+          'mobile/flows/parts/share-create-list.yaml',
+          'mobile/flows/parts/share-create-tag.yaml',
+          'mobile/flows/parts/share-create-save.yaml',
+          'mobile/flows/parts/share-create-list-result.yaml',
+          async (context) => {
+            const root = parseHierarchy(await context.hierarchy());
+            onlyNode(root, 'List name', env.LIST_NAME, `shared list named ${env.LIST_NAME}`);
+            return null;
+          },
+          'mobile/flows/parts/share-create-tag-result.yaml',
+          async (context) => {
+            const root = parseHierarchy(await context.hierarchy());
+            onlyNode(root, 'Tag name', env.TAG_NAME, `shared tag named ${env.TAG_NAME}`);
+            return null;
+          },
+        ];
+      }
+      if (testCase.id === 'SHARE-CROSS-CLIENT-001') {
+        steps = [
+          testCase.path,
+          async () => {
+            await openShare();
+            return null;
+          },
+          'mobile/flows/parts/share-save-default.yaml',
+          'mobile/flows/parts/share-foreground-sync.yaml',
+          async () => {
+            await readSharedLinkFromWeb(
+              `${run.runId}-${testCase.id}-reader`,
+              credentials,
+              env.LINK_URL,
+            );
+            return null;
+          },
+        ];
       }
 
       if (

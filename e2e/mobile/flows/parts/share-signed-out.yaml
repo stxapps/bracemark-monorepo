@@ -1,0 +1,15 @@
+appId: com.bracemark.app
+---
+- runFlow:
+    file: ../subflows/open-system-share.yaml
+    env:
+      SHARE_STATE_ID: share-signed-out
+- assertVisible: 'Sign in to save links'
+- assertNotVisible:
+    id: 'share-add'
+- takeScreenshot: signed-out-share-extension
+- tapOn: 'Close'
+- extendedWaitUntil:
+    notVisible:
+      id: 'share-signed-out'
+    timeout: 10000

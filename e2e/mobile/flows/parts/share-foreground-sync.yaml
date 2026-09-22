@@ -1,0 +1,28 @@
+# Launch/foreground after Save, observe the local durable write, then wait on the
+# Data card's settled state so the following web profile cannot race the push.
+appId: com.bracemark.app
+---
+- launchApp:
+    stopApp: false
+- extendedWaitUntil:
+    visible:
+      id: 'links-screen'
+    timeout: 30000
+- extendedWaitUntil:
+    visible: ".*${LINK_MATCH}.*"
+    timeout: 30000
+- tapOn:
+    id: 'links-more-options'
+- tapOn:
+    id: 'links-sync'
+- runFlow:
+    file: ../subflows/open-settings.yaml
+    env:
+      SECTION: data
+- extendedWaitUntil:
+    visible: 'Last synced.*'
+    timeout: 30000
+- assertNotVisible: '.*waiting to sync.*'
+- tapOn:
+    id: 'settings-close'
+- takeScreenshot: shared-link-synced

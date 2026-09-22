@@ -1,0 +1,44 @@
+# Enter the system share surface, choose existing taxonomy, and save. The
+# extension/activity-only marker is the proof that the system handoff crossed
+# into Bracemark; the title assertion catches Android shell word-splitting and
+# iOS preprocessing drift.
+appId: com.bracemark.app
+---
+- runFlow:
+    file: ../subflows/open-system-share.yaml
+    env:
+      SHARE_STATE_ID: share-add
+
+- assertVisible:
+    id: 'share-title'
+    text: ${SHARE_TITLE}
+- assertVisible:
+    id: 'share-url'
+    text: ${LINK_TEXT}
+
+- tapOn:
+    id: 'share-list-row'
+- tapOn: ${LIST_NAME}
+- assertVisible:
+    id: 'share-list-row'
+    text: 'List: ${LIST_NAME}'
+
+- tapOn:
+    id: 'share-tags-row'
+- tapOn: ${TAG_NAME}
+- tapOn: 'Done'
+- assertVisible:
+    id: 'share-tags-row'
+    text: 'Tags: ${TAG_NAME}'
+
+- tapOn:
+    id: 'share-add'
+- extendedWaitUntil:
+    visible:
+      id: 'share-saved'
+    timeout: 30000
+- takeScreenshot: shared-with-list-and-tag
+- extendedWaitUntil:
+    notVisible:
+      id: 'share-saved'
+    timeout: 10000

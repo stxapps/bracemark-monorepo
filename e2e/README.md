@@ -136,6 +136,11 @@ terminal.
 | `.artifacts/`         | gitignored — traces, reports, run manifests, browser profiles         |
 | `credentials/`        | gitignored — the accounts `npm run seed:accounts` created             |
 
+Native share cases are ordinary `e2e-mobile` cases. Their first registered flow
+prepares the main-app state; `runner/share.ts` then performs the real Safari or
+Android `ACTION_SEND` handoff between committed part flows. Run Phase 6 alone by
+passing its comma-separated case ids to `--case`, once per platform.
+
 ## the published screenshots
 
 Also not a test, and its own folder rather than a corner of `seed/`: `e2e/shot/`

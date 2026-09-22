@@ -1,0 +1,33 @@
+# Establish signed-out state through the real teardown so the App Group snapshot
+# and shared-Keychain mirror are cleared, then stop the main app. The runner opens
+# Safari and later verifies that only the extension process appeared.
+appId: com.bracemark.app
+tags: [SHARE-IOS-002, full, online, ios]
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+- tapOn:
+    id: 'links-more-options'
+- tapOn: 'Sign out'
+- repeat:
+    times: 5
+    while:
+      notVisible: 'Sign in'
+    commands:
+      - runFlow:
+          when:
+            platform: iOS
+          commands:
+            - tapOn:
+                text: 'Not Now'
+                optional: true
+      - assertVisible:
+          text: 'Sign in'
+          optional: true
+- extendedWaitUntil:
+    visible: 'Sign in'
+    timeout: 60000
+- assertNotVisible:
+    id: 'links-screen'
+- stopApp
+

@@ -1,0 +1,20 @@
+appId: com.bracemark.app
+---
+- tapOn: 'Done'
+- assertVisible:
+    id: 'share-list-row'
+    text: 'List: ${LIST_NAME}'
+- assertVisible:
+    id: 'share-tags-row'
+    text: 'Tags: ${TAG_NAME}'
+- tapOn:
+    id: 'share-add'
+- extendedWaitUntil:
+    visible:
+      id: 'share-saved'
+    timeout: 30000
+- takeScreenshot: share-created-taxonomy
+- extendedWaitUntil:
+    notVisible:
+      id: 'share-saved'
+    timeout: 10000

@@ -1,0 +1,17 @@
+# Editing an iOS share extension can temporarily leave XCTest with Safari's
+# tree only even though the extension remains painted. End after keyboard
+# submission so the next Maestro invocation reconnects before asserting.
+appId: com.bracemark.app
+---
+- runFlow:
+    file: ../subflows/open-system-share.yaml
+    env:
+      SHARE_STATE_ID: share-add
+
+- tapOn:
+    id: 'share-list-row'
+- tapOn:
+    id: 'share-list-input'
+- inputText: ${LIST_NAME}
+- pressKey: Enter
+

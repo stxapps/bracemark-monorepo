@@ -1,0 +1,23 @@
+# Save to the default list after a real system handoff. Used where the boundary
+# under test is process death or cross-client delivery rather than pickers.
+appId: com.bracemark.app
+---
+- runFlow:
+    file: ../subflows/open-system-share.yaml
+    env:
+      SHARE_STATE_ID: share-add
+- assertVisible:
+    id: 'share-title'
+    text: ${SHARE_TITLE}
+- tapOn:
+    id: 'share-add'
+- extendedWaitUntil:
+    visible:
+      id: 'share-saved'
+    timeout: 30000
+- takeScreenshot: shared-to-default-list
+- extendedWaitUntil:
+    notVisible:
+      id: 'share-saved'
+    timeout: 10000
+

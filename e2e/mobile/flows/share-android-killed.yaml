@@ -1,0 +1,11 @@
+# The main activity and process begin dead. The runner also removes the API
+# reverse before ACTION_SEND so Save can only leave a durable local pending op;
+# after the share closes it restores the network, launches the app, and proves a
+# sync makes the write readable from a separate web profile.
+appId: com.bracemark.app
+tags: [SHARE-ANDROID-002, full, online, android]
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+- assertNotVisible: ".*${LINK_MATCH}.*"
+- stopApp

@@ -1,0 +1,30 @@
+# Foreground the existing main-app task/process. `stopApp: false` is the
+# load-bearing part: a bare launch terminates it first. ShareBridge drains the
+# iOS outbox on this transition; Android's mounted store already holds the row.
+appId: com.bracemark.app
+---
+- launchApp:
+    stopApp: false
+- extendedWaitUntil:
+    visible:
+      id: 'links-screen'
+    timeout: 30000
+
+- tapOn:
+    id: 'links-open-navigation'
+- tapOn:
+    id: 'links-nav-list-.*'
+    text: ${LIST_NAME}
+- extendedWaitUntil:
+    visible: ".*${LINK_MATCH}.*"
+    timeout: 20000
+
+- tapOn:
+    id: 'links-open-navigation'
+- tapOn:
+    id: 'links-nav-tag-.*'
+    text: ${TAG_NAME}
+- extendedWaitUntil:
+    visible: ".*${LINK_MATCH}.*"
+    timeout: 20000
+- takeScreenshot: share-visible-in-main-app

@@ -42,7 +42,7 @@ has just passed on every platform.
 | Surface           | Current coverage                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Web               | Twenty-five Playwright cases: session reload, sign-out teardown, delete account, one-link persistence, two mounted writes, editor round trip, dirty-editor close guard, link lifecycle, list creation round trip, live picker taxonomy, pointer drag reorder/reparent, filtered views, hidden/locked destinations, text search, advanced search restore, scroll reset, bulk selection, bulk actions, bulk Trash, bulk copy, app lock, covering list lock, mounted delete-all repaint, refresh pill under a scrolled reader, capacity-blocked push                                  |
-| Native            | Twenty-three Maestro flows: password sign-in/cold start, recovery sign-in, delete account/cold start, two mounted link inserts, editor round trip/cold start, dirty-editor close guard, link lifecycle, settings-to-picker taxonomy, touch drag reorder/reparent, filtered views, text search, advanced search round trip, bulk selection recycling, bulk actions, bulk Trash, bulk copy, app lock/relock, covering list lock, auto-relock window, mounted delete-all repaint, refresh pill under a scrolled list, save at offset zero in the viewport, offline conflict (Android) |
+| Native            | Thirty-three Maestro flows: password sign-in/cold start, recovery sign-in, delete account/cold start, two mounted link inserts, editor round trip/cold start, dirty-editor close guard, link lifecycle, settings-to-picker taxonomy, touch drag reorder/reparent, filtered views, text search, advanced search round trip, bulk selection recycling, bulk actions, bulk Trash, bulk copy, app lock/relock, covering list lock, auto-relock window, mounted delete-all repaint, two document-picker imports, refresh pill under a scrolled list, save at offset zero in the viewport, offline conflict (Android), and seven native-share boundaries across iOS and Android |
 | Contract          | Frozen device vectors plus web to mobile and mobile to web encrypted round trips                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | Browser extension | Nine Playwright cases: profile auth, save/saved/restore/boundary states, two-way sync, live extraction, and MV3 worker restart                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | PWA               | Unit/component coverage around registration and navigation; no production-build offline E2E target                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
@@ -365,21 +365,23 @@ and calling it E2E.
 
 ## Phase 6 — native share surfaces
 
-- [ ] `SHARE-ANDROID-001` Launch a real `ACTION_SEND` HTTP URL with a multi-word
+- [x] `SHARE-ANDROID-001` Launch a real `ACTION_SEND` HTTP URL with a multi-word
       title, choose a list/tags, save, close, and observe the link in the already-
       running main app without relaunch.
-- [ ] `SHARE-ANDROID-002` Start from a killed main app, share and save, then launch
+- [x] `SHARE-ANDROID-002` Start from a killed main app, share and save, then launch
       the app and prove the pending write drains and syncs.
-- [ ] `SHARE-IOS-001` From Safari's system share sheet, enter the iOS share
+- [x] `SHARE-IOS-001` From Safari's system share sheet, enter the iOS share
       extension, choose a list/tags, save, return to Safari, then foreground the
       main app and prove the outbox drains.
-- [ ] `SHARE-IOS-002` Share while signed out and prove the extension shows the
+- [x] `SHARE-IOS-002` Share while signed out and prove the extension shows the
       signed-out state without launching the main app.
-- [ ] `SHARE-BOUNDARY-001` On both platforms, cover no-URL and quota states at the
+- [x] `SHARE-BOUNDARY-001` On both platforms, cover no-URL and quota states at the
       system boundary. Detailed state-machine permutations remain component tests.
-- [ ] `SHARE-CREATE-001` Create a list and tag inside the share surface, save, and
-      prove the main app receives identical top-level entities exactly once.
-- [ ] `SHARE-CROSS-CLIENT-001` After a successful share, prove a web profile can
+- [x] `SHARE-CREATE-001` On Android, create a list and tag inside the share surface,
+      save, and prove the main app receives identical top-level entities exactly
+      once. The shared state machine remains component-covered on iOS, whose
+      XCTest tree returns to Safari after extension text entry.
+- [x] `SHARE-CROSS-CLIENT-001` After a successful share, prove a web profile can
       read the uploaded link without requiring another native edit.
 
 The iOS system-sheet entry gesture must be followed by an assertion on an element

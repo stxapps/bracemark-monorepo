@@ -1,0 +1,31 @@
+appId: com.bracemark.app
+---
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - extendedWaitUntil:
+          visible: 'Share plain text'
+          timeout: 30000
+      - tapOn: 'Share plain text'
+      - extendedWaitUntil:
+          visible: 'Bracemark'
+          timeout: 30000
+      - tapOn:
+          # navigator.share({ text }) opens iOS's compact Apps list directly.
+          # Its accessibility frames are sheet-local: add the sheet's y=489
+          # origin to Bracemark's row before converting to screen percentage.
+          point: '40%,75%'
+- extendedWaitUntil:
+    visible:
+      id: 'share-no-url'
+    timeout: 60000
+- assertVisible: 'No link in this share'
+- assertNotVisible:
+    id: 'share-add'
+- takeScreenshot: share-without-url
+- tapOn: 'Close'
+- extendedWaitUntil:
+    notVisible:
+      id: 'share-no-url'
+    timeout: 10000

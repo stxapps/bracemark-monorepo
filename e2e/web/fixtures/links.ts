@@ -30,13 +30,14 @@ export async function addLink(page: Page, url: string): Promise<void> {
   await expect(page.getByText(displayUrl(url))).toBeVisible();
 }
 
-// What an untitled link renders as: the URL with the scheme stripped (host +
-// path). This mirrors the app's own `displayUrl`, deliberately re-spelled rather
-// than imported — e2e may use `@stxapps/shared` for addressing but never for
-// expectations, or it stops being able to catch a change in this exact rule.
+// What an untitled link renders as: HTTPS loses its scheme; HTTP keeps the
+// insecure marker. This mirrors the app's own `displayUrl`, deliberately
+// re-spelled rather than imported — e2e may use `@stxapps/shared` for addressing
+// but never for expectations, or it stops being able to catch a change in this
+// exact rule.
 // See docs/e2e.md, "what e2e may not assert".
 export function displayUrl(url: string): string {
-  return url.replace(/^https?:\/\//, '');
+  return url.replace(/^https:\/\//, '');
 }
 
 // The rendered row for one link, by the anchor it wraps. `[data-index]` is the

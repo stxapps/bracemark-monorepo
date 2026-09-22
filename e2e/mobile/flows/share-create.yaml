@@ -1,0 +1,10 @@
+# The runner opens a real share, creates one list and tag inside the sheet, then
+# foregrounds the main app twice. Later committed parts read the entities and
+# the runner counts their settings rows, proving the idempotent drain delivered
+# each exact top-level entity once.
+appId: com.bracemark.app
+tags: [SHARE-CREATE-001, full, online, android]
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+- pressKey: Home

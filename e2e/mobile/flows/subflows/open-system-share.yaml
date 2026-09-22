@@ -1,0 +1,44 @@
+# Cross Safari's system share sheet on iOS, then prove which process opened by
+# waiting on an element rendered only by Bracemark's share tree. Android arrives
+# with ShareActivity already started by runner/share.ts, so it needs only the
+# far-side assertion.
+#
+# Parameters: SHARE_SOURCE_TEXT (iOS caller's settled text), SHARE_STATE_ID.
+appId: com.bracemark.app
+---
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - extendedWaitUntil:
+          visible: ${SHARE_SOURCE_TEXT}
+          timeout: 30000
+
+      # Safari 26 shows this coachmark once over the bottom menu.
+      - assertVisible:
+          text: 'Close'
+          optional: true
+      - tapOn:
+          text: 'Close'
+          optional: true
+
+      - tapOn: 'More'
+      - extendedWaitUntil:
+          visible: 'Share'
+          timeout: 30000
+      - tapOn: 'Share'
+      - extendedWaitUntil:
+          visible: 'Bracemark'
+          timeout: 30000
+
+      # Maestro's semantic tap reports COMPLETED but silently dismisses back to
+      # Safari. The measured activity-row coordinate launches the extension;
+      # percentages retain the target on the larger supported phone profile.
+      - tapOn:
+          point: '61%,74%'
+
+- extendedWaitUntil:
+    visible:
+      id: ${SHARE_STATE_ID}
+    timeout: 60000
+

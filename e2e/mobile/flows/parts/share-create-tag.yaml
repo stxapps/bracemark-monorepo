@@ -1,0 +1,13 @@
+# The preceding invocation created and selected the list. Reconnect to the
+# still-open share host, then create the tag through the field's submit path.
+appId: com.bracemark.app
+---
+- assertVisible:
+    id: 'share-list-row'
+    text: 'List: ${LIST_NAME}'
+- tapOn:
+    id: 'share-tags-row'
+- tapOn:
+    id: 'share-tag-input'
+- inputText: ${TAG_NAME}
+- pressKey: Enter

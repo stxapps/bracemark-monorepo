@@ -1,0 +1,10 @@
+# SHARE-IOS-001 setup. The runner opens the source in Safari; the next committed
+# part enters the real system share sheet, saves through the separate extension
+# process, and foregrounds this main app so ShareBridge drains the outbox.
+appId: com.bracemark.app
+tags: [SHARE-IOS-001, full, online, ios]
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+- assertNotVisible: ".*${LINK_MATCH}.*"
+- pressKey: Home

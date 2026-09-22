@@ -1,0 +1,13 @@
+appId: com.bracemark.app
+---
+- tapOn:
+    id: 'settings-open-navigation'
+- tapOn:
+    id: 'settings-nav-tags'
+- extendedWaitUntil:
+    visible:
+      text: ${TAG_NAME}
+      below: 'New tag name'
+    timeout: 10000
+- takeScreenshot: share-taxonomy-exactly-once
+

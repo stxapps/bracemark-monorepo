@@ -1,0 +1,34 @@
+# Foreground twice so an iOS outbox is offered to both the mount and foreground
+# passes. The same idempotent draft must still produce one link/list/tag.
+appId: com.bracemark.app
+---
+- launchApp:
+    stopApp: false
+- extendedWaitUntil:
+    visible:
+      id: 'links-screen'
+    timeout: 30000
+
+- tapOn:
+    id: 'links-open-navigation'
+- tapOn:
+    id: 'links-nav-list-.*'
+    text: ${LIST_NAME}
+- extendedWaitUntil:
+    visible: ".*${LINK_MATCH}.*"
+    timeout: 20000
+- pressKey: Home
+- launchApp:
+    stopApp: false
+- extendedWaitUntil:
+    visible: ".*${LINK_MATCH}.*"
+    timeout: 30000
+- runFlow:
+    file: ../subflows/open-settings.yaml
+    env:
+      SECTION: lists
+- extendedWaitUntil:
+    visible:
+      text: ${LIST_NAME}
+      below: 'New list name'
+    timeout: 10000

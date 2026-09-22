@@ -1,0 +1,10 @@
+# SHARE-ANDROID-001 setup. The runner opens a real ACTION_SEND over a browser,
+# drives the compose/save part, verifies this process survived, then foregrounds
+# this already-running main app to observe the write without a relaunch.
+appId: com.bracemark.app
+tags: [SHARE-ANDROID-001, full, online, android]
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+- assertNotVisible: ".*${LINK_MATCH}.*"
+- pressKey: Home
