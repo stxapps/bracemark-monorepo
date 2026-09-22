@@ -1,4 +1,5 @@
 import { BRAND } from '../brand/brand';
+import { PLAN_CARD_COPY } from '../iap/plans';
 import * as LISTING_COPY from './listing-copy';
 import {
   APP_STORE,
@@ -7,6 +8,7 @@ import {
   FIREFOX_ADDONS_SUMMARY,
   FULL_DESCRIPTION,
   PLAY,
+  PLAY_SUBSCRIPTION,
   SCREENSHOT_CAPTIONS,
   STORE_LIMITS,
 } from './listing-copy';
@@ -62,6 +64,17 @@ describe('store listing copy — character budgets', () => {
     ['Play title', PLAY.title, STORE_LIMITS.play.title],
     ['Play short description', PLAY.shortDescription, STORE_LIMITS.play.shortDescription],
     ['Play full description', FULL_DESCRIPTION, STORE_LIMITS.play.fullDescription],
+    ['Play Plus name', PLAY_SUBSCRIPTION.plus.name, STORE_LIMITS.playSubscription.name],
+    [
+      'Play Plus description',
+      PLAY_SUBSCRIPTION.plus.description,
+      STORE_LIMITS.playSubscription.description,
+    ],
+    ...PLAY_SUBSCRIPTION.plus.benefits.map((benefit, i): [string, string, number] => [
+      `Play Plus benefit ${i + 1}`,
+      benefit,
+      STORE_LIMITS.playSubscription.benefit,
+    ]),
     [
       'browser extension manifest name',
       BROWSER_EXTENSION_LISTING.name,
@@ -98,6 +111,22 @@ describe('store listing copy — character budgets', () => {
     // copy would reach for the tagline here, and it is 51 characters.
     expect(BRAND.tagline.length).toBeGreaterThan(STORE_LIMITS.appStore.subtitle);
     expect(APP_STORE.subtitle).toBe(BRAND.subtitle);
+  });
+});
+
+describe('Play subscription benefits', () => {
+  it('fits in Play’s benefit slots', () => {
+    expect(PLAY_SUBSCRIPTION.plus.benefits.length).toBeLessThanOrEqual(
+      STORE_LIMITS.playSubscription.benefits,
+    );
+  });
+
+  it('sells only what the upgrade card sells, in its words', () => {
+    // A benefit reworded here forks the vocabulary for one entitlement (see
+    // PLAN_CARD_COPY on "Unlimited"); one added here sells what the card doesn't.
+    for (const benefit of PLAY_SUBSCRIPTION.plus.benefits) {
+      expect(PLAN_CARD_COPY.plus.features).toContain(benefit);
+    }
   });
 });
 

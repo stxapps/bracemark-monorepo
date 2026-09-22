@@ -449,7 +449,7 @@ export const PLAN_CARD_COPY: Record<PaidPlan, { blurb: string; features: string[
       'Server link previews in the web app',
       'Nested lists',
       'App lock & hidden lists',
-      'Search editor — fields, lists and tags',
+      'Search editor — fields, lists, and tags',
     ],
   },
   pro: {

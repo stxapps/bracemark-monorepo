@@ -68,6 +68,8 @@ export const STORE_LIMITS = {
   appStore: { name: 30, subtitle: 30, keywords: 100, promotionalText: 170, description: 4000 },
   /** A subscription's localization, and its group's. Neither is indexed. */
   appStoreSubscription: { groupDisplayName: 30, displayName: 30, description: 45 },
+  /** A subscription's listing. Play has no group; `benefits` is a count, the rest characters. */
+  playSubscription: { name: 55, description: 80, benefit: 40, benefits: 4 },
   play: { title: 30, shortDescription: 80, fullDescription: 4000 },
   /** One manifest serves both browsers, so each budget is the smaller of the two. */
   browserExtension: { name: 45, description: 132 },
@@ -141,6 +143,36 @@ export const APP_STORE_SUBSCRIPTION = {
   plus: {
     displayName: `${BRAND.name} ${PLAN_LABELS.plus}`,
     description: 'Unlimited links, nested lists, and app lock',
+  },
+} as const;
+
+// --- Play subscriptions ------------------------------------------------------
+//
+// Pasted into Play Console → Monetize with Play → Subscriptions, on the
+// subscription itself (not its base plan or offer). Play has no subscription
+// group, so there is no group line. Same rules as the App Store entry above:
+// only what ships, no number (Play renders the price and the trial beside it),
+// and the display name is the same string.
+//
+// The benefits are PLAN_CARD_COPY.plus's features, verbatim — the spec holds
+// them to that — minus "Server link previews in the web app", dropped for the
+// App Store's reason: it is untrue on the device reading it. Four is Play's cap
+// and what is left fits it exactly.
+//
+// The description does the one job the benefits can't: it names the plan below.
+// The card's list is an INCREMENT (see PLAN_CARD_COPY), and the settings sections
+// prepend 'Everything in Free' for exactly that reason; four bullets alone would
+// read to an Android buyer as the whole of what they are paying for.
+export const PLAY_SUBSCRIPTION = {
+  plus: {
+    name: APP_STORE_SUBSCRIPTION.plus.displayName,
+    description: `Everything in ${PLAN_LABELS.free}, plus unlimited links, nested lists, and app lock`,
+    benefits: [
+      'Unlimited saved links',
+      'Nested lists',
+      'App lock & hidden lists',
+      'Search editor — fields, lists, and tags',
+    ],
   },
 } as const;
 
