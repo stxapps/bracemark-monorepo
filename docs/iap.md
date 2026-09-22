@@ -1094,7 +1094,11 @@ a crossgrade inside the existing subscription rather than a second purchase.
   `paymentState: 2` did not survive into subscriptionsv2), so `lib/playstore.ts`
   keys on the line item's `offerDetails.offerTags` containing
   `PLAY_FREE_TRIAL_OFFER_TAG` — a tag rather than an offer id, so regional or
-  campaign trial offers all share one marker and adding one needs no deploy. All
+  campaign trial offers all share one marker and adding one needs no deploy. The
+  same tag (in `@stxapps/shared`, beside `STORE_PRODUCT_IDS`) is how
+  bracemark-expo's checkout picks the trial offer's token: Play lists the base
+  plan and every eligible offer in no promised order, so buying the first entry
+  would grant or skip the trial by list order. All
   three are gated on the normalized status being `active`, so a lapsed trial in
   dunning keeps the `past_due` sentence rather than being told it's still free.
 

@@ -19,6 +19,7 @@ import {
   iapVerifyEndpoint,
   type PaidPlan,
   planOfStoreProduct,
+  PLAY_FREE_TRIAL_OFFER_TAG,
   STORE_PRODUCT_IDS,
   type SubscriptionStatus,
 } from '@stxapps/shared';
@@ -179,14 +180,19 @@ export async function openStoreCheckout(options: {
   onClosed = options.onClosed;
 
   const sku = STORE_PRODUCT_IDS[options.plan];
-  // Play requires the base-plan/offer token from the fetched product; the
-  // first offer is the base yearly plan (we configure no promotional offers).
-  // `subscriptionOffers` is the cross-platform standard shape — its Android-only
-  // predecessor `subscriptionOfferDetailsAndroid` is deprecated upstream.
-  const offerToken =
-    options.product.platform === 'android'
-      ? options.product.subscriptionOffers?.[0]?.offerTokenAndroid
-      : undefined;
+  // Play requires the base-plan/offer token from the fetched product. Play
+  // lists the base plan AND every offer the buyer is eligible for, in no
+  // promised order, so buy the free-trial offer by its tag when it's listed —
+  // otherwise the trial the pricing copy promises depends on list order — and
+  // fall back to the first entry (the base plan; the trial is the only offer
+  // we configure). `subscriptionOffers` is the cross-platform standard shape —
+  // its Android-only predecessor `subscriptionOfferDetailsAndroid` is
+  // deprecated upstream.
+  const offers =
+    options.product.platform === 'android' ? (options.product.subscriptionOffers ?? []) : [];
+  const offer =
+    offers.find((o) => o.offerTagsAndroid?.includes(PLAY_FREE_TRIAL_OFFER_TAG)) ?? offers[0];
+  const offerToken = offer?.offerTokenAndroid;
 
   await requestPurchase({
     request: {

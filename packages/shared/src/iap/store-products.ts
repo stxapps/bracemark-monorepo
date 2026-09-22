@@ -32,3 +32,30 @@ export function planOfStoreProduct(productId: string): Exclude<Plan, 'free'> | n
   }
   return null;
 }
+
+// The Play Console OFFER TAG that marks our free-trial offer.
+//
+// Play has no trial STATUS: a subscription inside its trial phase reads
+// SUBSCRIPTION_STATE_ACTIVE like any other, and v1's `paymentState: 2` ("free
+// trial") did not survive into subscriptionsv2. The offer applied to the line
+// item is the only signal — and `offerId` alone won't do, since a paid
+// introductory offer carries one too (Apple's PAY_AS_YOU_GO/PAY_UP_FRONT
+// problem, same shape). A TAG rather than an id also means regional or
+// campaign-specific trial offers all share one marker, so adding an offer in
+// Play Console never needs a deploy.
+//
+// TAG THE OFFER, NEVER THE BASE PLAN. `offerTags` includes tags INHERITED from
+// the base plan, so a base-plan tag would mark every Android subscriber
+// `trialing` forever — and nothing would ever clear it. Play is the only
+// provider where that's possible: Paddle's own status flips trialing→active,
+// and Apple mints a FRESH transaction for the first paid period (dropping
+// offerDiscountType with it), but Play carries ONE line item across the
+// trial→paid boundary. So the launch checklist item is to watch a license
+// tester — whose trial and renewal periods are compressed to minutes — cross
+// that boundary and confirm the tag is gone (docs/iap.md, the trial).
+//
+// Read by BOTH edges, like STORE_PRODUCT_IDS: bracemark-api's `lib/playstore.ts`
+// folds a tagged line item to `trialing`, and bracemark-expo's `lib/iap.ts`
+// buys the tagged offer when Play lists it (Play lists only the offers the
+// buyer is eligible for, so a returning subscriber falls back to the base plan).
+export const PLAY_FREE_TRIAL_OFFER_TAG = 'free-trial';

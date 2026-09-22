@@ -1,4 +1,9 @@
-import { AVAILABLE_PAID_PLANS, STORE_PRODUCT_IDS, type SubscriptionStatus } from '@stxapps/shared';
+import {
+  AVAILABLE_PAID_PLANS,
+  PLAY_FREE_TRIAL_OFFER_TAG,
+  STORE_PRODUCT_IDS,
+  type SubscriptionStatus,
+} from '@stxapps/shared';
 
 const mockInitConnection = jest.fn<Promise<void>, []>();
 const mockFetchProducts = jest.fn();
@@ -132,6 +137,36 @@ test('opens checkout with the selected SKU and the Play offer token', async () =
       google: {
         skus: [STORE_PRODUCT_IDS.plus],
         subscriptionOffers: [{ sku: STORE_PRODUCT_IDS.plus, offerToken: 'base-plan-token' }],
+      },
+    },
+    type: 'subs',
+  });
+});
+
+test('opens checkout with the Play free-trial offer when it is listed after the base plan', async () => {
+  const iap = load();
+
+  await iap.openStoreCheckout({
+    plan: 'plus',
+    product: {
+      id: STORE_PRODUCT_IDS.plus,
+      platform: 'android',
+      subscriptionOffers: [
+        { offerTokenAndroid: 'base-plan-token', offerTagsAndroid: [] },
+        { offerTokenAndroid: 'trial-token', offerTagsAndroid: [PLAY_FREE_TRIAL_OFFER_TAG] },
+      ],
+    } as never,
+    onCompleted: jest.fn(),
+    onFailed: jest.fn(),
+    onClosed: jest.fn(),
+  });
+
+  expect(mockRequestPurchase).toHaveBeenCalledWith({
+    request: {
+      apple: { sku: STORE_PRODUCT_IDS.plus },
+      google: {
+        skus: [STORE_PRODUCT_IDS.plus],
+        subscriptionOffers: [{ sku: STORE_PRODUCT_IDS.plus, offerToken: 'trial-token' }],
       },
     },
     type: 'subs',

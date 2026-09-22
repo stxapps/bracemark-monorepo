@@ -1,10 +1,11 @@
 import { env } from 'cloudflare:workers';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
+import { PLAY_FREE_TRIAL_OFFER_TAG } from '@stxapps/shared';
+
 import {
   acknowledgePlaystorePurchase,
   fetchPlaystoreSubscription,
-  PLAY_FREE_TRIAL_OFFER_TAG,
   playAccessToken,
   resetPlayAccessTokenCache,
 } from './playstore';
