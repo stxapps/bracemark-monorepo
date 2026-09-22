@@ -192,6 +192,12 @@ const config: ExpoConfig = {
     // outside the repo, and Gradle falls back to debug signing when they are
     // absent. See docs/expo-build.md — android release signing.
     './plugins/with-android-signing',
+    // expo-dev-launcher's ML Kit barcode scanner (the dev launcher's QR button)
+    // is debug-only code, but on Android its libraries were linked into release
+    // too: ~5 MB of native lib per ABI, a ContentProvider that runs at every
+    // launch, and a Play Services module download. This strips them from
+    // release only. See the plugin, and docs/expo-build.md.
+    './plugins/with-android-release-no-mlkit',
     // DEVELOPMENT_TEAM and IPHONEOS_DEPLOYMENT_TARGET for the iOS SHARE
     // EXTENSION target, neither of which reaches it: withDevelopmentTeam runs
     // before expo-share-extension creates the target, and expo-build-properties

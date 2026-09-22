@@ -1,8 +1,8 @@
 ## expo build & release (bracemark-expo)
 
 How bracemark-expo gets **built** — the local prebuild/Xcode/gradle workflow, the
-app config that feeds it, and the two release-only Android concerns (R8
-minification, Play upload signing), plus the Claude Code plugin for the iOS
+app config that feeds it, and the three release-only Android concerns (R8
+minification, the dev launcher's ML Kit, Play upload signing), plus the Claude Code plugin for the iOS
 App Store Connect side and the vendored `gplay` skills for the Play Console
 side. For what each dependency _is_ and how it's wired, see
 [expo-dependencies.md](./expo-dependencies.md); for the one-time scaffold
@@ -460,6 +460,44 @@ a blanket keep.
 run:android` (debug). Until bracemark-expo has a release/EAS pipeline,
 this is configured but unproven; verify with a release build before the first store
 submission.
+
+#### android release — the dev launcher's ML Kit
+
+**`expo-dev-client` is linked into release builds on Android.** On iOS,
+expo-dev-launcher and expo-dev-menu mark themselves `debugOnly` in their
+`expo-module.config.json`, so a Release configuration never links them. Android
+has no such flag: autolinking adds every module to every variant, and the dev
+launcher ships a no-op `src/release/` stub instead. That stub is harmless.
+The dependencies next to it are not. `expo-dev-launcher/android/build.gradle`
+declares `play-services-code-scanner` and `mlkit:barcode-scanning` as plain
+`implementation`, although only debug code uses them (the launcher's "scan QR
+code" button). A release AAB therefore carried:
+
+- `libbarhopper_v3.so`, about 5 MB per ABI. R8 shrinks Java/Kotlin only and
+  never touches a `.so`.
+- `MlKitInitProvider`, a ContentProvider that runs at every app start, plus
+  ML Kit's component-discovery service.
+- `com.google.mlkit.vision.DEPENDENCIES = barcode_ui`, a meta-data entry from
+  the dev launcher's _main_ manifest. It asks Play Services to download the
+  barcode module onto every device that installs the app.
+
+`plugins/with-android-release-no-mlkit.js` removes all three from release only.
+It excludes the ML Kit artifacts from the app's `release*` Gradle configurations,
+and writes `android/app/src/release/AndroidManifest.xml` with a
+`tools:node="remove"` for the meta-data. Debug builds keep all of it, so the QR
+scanner still works in a dev build.
+
+**Removing the dev launcher itself from release isn't possible this way.** The
+generated `ExpoModulesPackageList` is shared by all variants and names its
+classes. The only full removal is a separate prebuild with `expo-dev-client`
+excluded from autolinking, and a 5 MB gain doesn't justify a second native
+project.
+
+If an upstream release makes release code reference ML Kit, the release
+build fails in R8 with _Missing class com.google.mlkit…_. That means revisiting
+the exclusion, not adding a `-dontwarn`. Check with
+`unzip -l app-release.aab | grep -i 'barhopper\|mlkit'`, which should print
+nothing.
 
 #### android release signing — the Play upload key
 
