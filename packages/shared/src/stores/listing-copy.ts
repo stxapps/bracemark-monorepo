@@ -150,6 +150,19 @@ export const PLAY = {
 
   /** Indexed, and the only copy most visitors read. */
   shortDescription: 'Your links are encrypted on your device before they ever sync.',
+
+  /**
+   * Store settings → Manage tags. Picked from Google's fixed list, not typed — so
+   * these must match the picker's wording exactly — and capped at five. Not
+   * indexed as text, but they decide where the app is browsed AND the peer group
+   * the Console benchmarks our ratings and vitals against, so a wrong tag is worse
+   * than an empty slot. That is why only three of the five are used.
+   *
+   * The list has no bookmark, read-later or save tag (checked at submission). The
+   * near miss is "Password manager": it matches "encrypted" and "vault", and it is
+   * a product claim we do not make and a peer group we would be ranked against.
+   */
+  tags: ['Productivity', 'Privacy & security', 'Tools'],
 } as const;
 
 // --- the long description, for both stores -----------------------------------
