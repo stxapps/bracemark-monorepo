@@ -31,4 +31,4 @@ the supported production Chrome build against a disposable account. Do not stub
 - [ ] Export **Bracemark backup** through Chrome's native save dialog.
 - [ ] Verify a non-empty `Bracemark backup YYYY-MM-DD.zip` file exists.
 - [ ] Verify the receipt says: `The file was saved, but there were no links to
-    put in it.`
+  put in it.`
