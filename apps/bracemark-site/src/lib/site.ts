@@ -196,6 +196,12 @@ export const FOOTER_LINKS: { heading: string; links: FooterLink[] }[] = [
       // readers arrive from a User-Agent string in an access log, never from our
       // footer.
       { href: '/security', label: 'Security' },
+      // The page Play's Data safety form links as the "Delete account URL", and
+      // listed for the same reason the refund policy is: a reviewer opening the
+      // site looks for it in this column, beside the privacy policy whose
+      // retention list it restates. Last, because it is the one a visitor looks
+      // for rather than browses to.
+      { href: '/delete-account', label: 'Delete account' },
     ],
   },
 ];
