@@ -1,0 +1,98 @@
+# A free account's Subscription section against the real store: the Plus product
+# fetched from the App Store sandbox, StoreKit's own sheet raised by the upgrade
+# card, and a cancel that returns to the card with nothing bought and nothing
+# reported as an error.
+#
+# iOS only, and the reason is the store rather than the flow. The iPhone
+# simulator reaches the App Store sandbox catalog with no account signed in;
+# the Android emulator has no Google account, so Play Billing has no store to
+# answer and the card correctly stays on the planning price with its button off.
+# Play's half is IAP-PLAY-RELEASE-001 (mobile/RELEASE.md), on a build installed
+# from a test track.
+#
+# ⚠ The simulator's App Store sandbox account must stay SIGNED OUT, which is how
+# a new simulator comes. The purchase request then stops at StoreKit's "Sign in
+# to Apple Account" prompt — a sheet the store draws, with nothing behind it that
+# can charge — and that prompt is what this flow waits for. Signed in, StoreKit
+# shows a real subscribe sheet instead: this flow then fails at the wait below,
+# by name, rather than pressing anything on a sheet that can buy.
+#
+#   maestro test mobile/flows/subscription-store.yaml -e USERNAME=… -e PASSWORD=…
+appId: com.bracemark.app
+tags: [IAP-NATIVE-001, full, online, internet, ios]
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+- runFlow:
+    file: subflows/open-settings.yaml
+    env:
+      SECTION: subscription
+- extendedWaitUntil:
+    visible:
+      id: 'subscription-plan'
+      text: 'Free'
+    timeout: 20000
+
+# --- the product, from the store -----------------------------------------------------
+# The button enables only once the store returned the product (lib/iap.ts,
+# fetchStorePlanProducts), and the price is the product's `displayPrice` from
+# then on — never the `$48/year` planning price the card shows while it has
+# none. The figure itself belongs to the storefront, so only its shape is read.
+- scrollUntilVisible:
+    element:
+      id: 'subscription-upgrade-plus'
+    direction: DOWN
+- extendedWaitUntil:
+    visible:
+      id: 'subscription-upgrade-plus'
+      enabled: true
+    timeout: 30000
+- assertNotVisible:
+    id: 'subscription-price-plus'
+    text: '\$48/year'
+- assertVisible:
+    id: 'subscription-price-plus'
+    text: '.+/year'
+- takeScreenshot: store-product
+
+# --- the store's sheet, and backing out of it ----------------------------------------
+- tapOn:
+    id: 'subscription-upgrade-plus'
+# StoreKit's prompt, which only the store draws. ⚠ Its title spells
+# "Apple Account" with a NO-BREAK SPACE (U+00A0) — measured on iOS 26.5 — so a
+# selector typed with an ordinary space matches nothing while the hierarchy
+# plainly shows the words. The `.` is that one character; the rest is literal.
+- extendedWaitUntil:
+    visible: 'Sign in to Apple.Account'
+    timeout: 30000
+- takeScreenshot: store-sheet
+- tapOn: 'Cancel'
+# A backed-out sheet is a close, not a failure (lib/iap.ts: Paddle's `closed`
+# semantics). The error notice renders between the plan box and the card, so
+# the screen is scrolled back up to where it would be before its absence is
+# read — off screen, "not visible" would pass for the wrong reason. This is the
+# line that caught expo-iap rejecting `requestPurchase` on a cancel
+# (docs/e2e.md, _subscriptions_).
+- extendedWaitUntil:
+    visible:
+      id: 'subscription-upgrade-plus'
+      enabled: true
+    timeout: 20000
+- scrollUntilVisible:
+    element:
+      id: 'subscription-plan'
+    direction: UP
+- assertNotVisible:
+    id: 'subscription-error'
+- assertNotVisible:
+    id: 'subscription-notice'
+
+# And the server agrees nothing was bought.
+- tapOn:
+    id: 'subscription-refresh'
+- extendedWaitUntil:
+    visible:
+      id: 'subscription-plan'
+      text: 'Free'
+    timeout: 20000
+- takeScreenshot: store-sheet-cancelled

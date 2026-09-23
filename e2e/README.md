@@ -166,6 +166,17 @@ second native leg, or anything else against the stack, beside them. If a run was
 killed with SIGKILL and the api stops answering, `kill -CONT` the process on 8787. The `SCALE-*` and `SKELETON-NATIVE-001` accounts import and upload a
 thousand links first (about a minute), and the device's first pull follows.
 
+Phase 9's subscription cases (`IAP-*`) buy nothing. `IAP-WEB-001` needs the
+api started by `npm run dev`, which hands it the Paddle sandbox key from the
+keychain, and reaches Paddle's sandbox (`internet`); each run leaves one unpaid
+`ready` transaction there. `IAP-NATIVE-001` is iOS-only and needs the
+simulator's App Store sandbox account **signed out**; a run that stops with
+StoreKit's sign-in prompt up leaves it over the next case, so press its Cancel
+first. `IAP-ENTITLEMENT-001` runs on web, the browser extension, iOS and
+Android — the same id on each surface, so run it once per target. The provider
+purchases and restores are `web/RELEASE.md` and `mobile/RELEASE.md`
+(docs/e2e.md, _subscriptions_).
+
 ## the published screenshots
 
 Also not a test, and its own folder rather than a corner of `seed/`: `e2e/shot/`

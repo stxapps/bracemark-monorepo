@@ -1,0 +1,37 @@
+# Part of IAP-ENTITLEMENT-001 (mobile/flows/plan-gates.yaml carries the case).
+# Runs after the runner has granted the account Plus in local D1, with the
+# device still on the Subscription section reading Free. The status query holds
+# a 5-minute staleTime, so nothing re-asks by itself: Refresh is the user's way
+# to, and everything after it stays on the same mounted app — so the gate
+# opening proves the refreshed answer reached every reader, not a cold start.
+appId: com.bracemark.app
+---
+- tapOn:
+    id: 'subscription-refresh'
+- extendedWaitUntil:
+    visible:
+      id: 'subscription-plan'
+      text: 'Plus'
+    timeout: 20000
+# Upgrade cards render only on free.
+- assertNotVisible:
+    id: 'subscription-upgrade-plus'
+- takeScreenshot: plan-granted
+
+- tapOn:
+    id: 'settings-open-navigation'
+- tapOn:
+    id: 'settings-nav-misc'
+- scrollUntilVisible:
+    element:
+      id: 'app-lock-set'
+    direction: DOWN
+- tapOn:
+    id: 'app-lock-set'
+- extendedWaitUntil:
+    visible:
+      id: 'lock-dialog-password'
+    timeout: 10000
+- assertNotVisible:
+    id: 'paywall'
+- takeScreenshot: plan-gate-open

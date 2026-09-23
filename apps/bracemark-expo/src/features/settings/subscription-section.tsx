@@ -241,7 +241,9 @@ export function SubscriptionSection() {
         <View className="flex-row items-start justify-between gap-4">
           <View className="min-w-0 flex-1 gap-0.5">
             <View className="flex-row items-baseline gap-2">
-              <Text className="font-medium">{PLAN_LABELS[plan]}</Text>
+              <Text testID="subscription-plan" className="font-medium">
+                {PLAN_LABELS[plan]}
+              </Text>
               {plan !== 'free' && status === 'trialing' && (
                 <Text className="text-sm text-muted-foreground">free trial</Text>
               )}
@@ -284,6 +286,7 @@ export function SubscriptionSection() {
           <Button
             variant="outline"
             size="sm"
+            testID="subscription-refresh"
             disabled={busy !== null}
             onPress={() => void refreshStatus()}
           >
@@ -355,8 +358,16 @@ export function SubscriptionSection() {
         )}
       </View>
 
-      {notice && <SettingsNotice tone="pending">{notice}</SettingsNotice>}
-      {error && <SettingsNotice tone="error">{error}</SettingsNotice>}
+      {notice && (
+        <SettingsNotice tone="pending" testID="subscription-notice">
+          {notice}
+        </SettingsNotice>
+      )}
+      {error && (
+        <SettingsNotice tone="error" testID="subscription-error">
+          {error}
+        </SettingsNotice>
+      )}
 
       {/* Upgrades. The extra column around the cards holds the consent line
           closer than the pane's `gap-8`, so it reads as the cards' own fine
@@ -377,7 +388,10 @@ export function SubscriptionSection() {
                 <View key={cardPlan} className="rounded-lg border border-border p-4">
                   <View className="flex-row items-baseline justify-between">
                     <Text className="font-medium">{PLAN_LABELS[cardPlan]}</Text>
-                    <Text className="text-sm text-muted-foreground">
+                    <Text
+                      testID={`subscription-price-${cardPlan}`}
+                      className="text-sm text-muted-foreground"
+                    >
                       {/* The store's localized price once loaded; the USD
                           planning price as a placeholder meanwhile. */}
                       {product
@@ -399,6 +413,7 @@ export function SubscriptionSection() {
                   </View>
                   <Button
                     className="mt-4"
+                    testID={`subscription-upgrade-${cardPlan}`}
                     disabled={busy !== null || !product}
                     onPress={() => void startCheckout(cardPlan)}
                   >
@@ -455,6 +470,7 @@ export function SubscriptionSection() {
               pane's own inset). */}
           <Button
             variant="outline"
+            testID="subscription-restore"
             disabled={busy !== null}
             hitSlop={{ top: 8, bottom: 12, left: 12, right: 12 }}
             onPress={() => void restore()}

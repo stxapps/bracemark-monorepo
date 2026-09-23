@@ -138,6 +138,31 @@ export async function grantPlan(userId: string, plan: Exclude<SeedPlan, 'free'>)
   );
 }
 
+// End the grant: the same row, canceled, its expiry a moment in the past. That
+// is how a comp or an operator-granted plan ends in production — the row stays
+// (purchases are Tier-0 history), and the fold stops entitling it because a
+// `canceled` row is entitled only until `expires_at`, with no slack
+// (`isEntitled`, services/iap.ts). `needsRefresh` never looks at it either:
+// `manual` has no provider and `canceled` is terminal. Deleting the row instead
+// would be a state no production account reaches. Used by IAP-DOWNGRADE-001.
+//
+// The high-water ceilings (`foldQuotaCeilings`) deliberately keep the plan this
+// row once held, so the lapsed account's byte/object ceiling does not drop —
+// docs/iap.md, _enforcement_. Nothing here needs to undo that.
+export async function lapsePlan(userId: string): Promise<void> {
+  const now = Date.now();
+  await d1(
+    'DIRECTORY_DB',
+    `UPDATE purchases SET
+       status = 'canceled',
+       expires_at = ${now - 1000},
+       canceled_at = ${now},
+       event_occurred_at = ${now},
+       updated_at = ${now}
+     WHERE source = 'manual' AND external_id = ${quote(`seed-${userId}`)}`,
+  );
+}
+
 // What the account is entitled to right now, straight off the row — used to
 // confirm the grant landed before the seed imports a library that a free plan
 // would refuse whole.

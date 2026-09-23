@@ -69,3 +69,84 @@ disposable account containing the Phase 5 small archive's link and image:
    `Bracemark bookmarks YYYY-MM-DD.html` and the receipt says `Exported 1 link.`
 5. Confirm both files exist and are non-empty. Their contents are verified at the
    unit/native-contract layer; this check owns file creation and OS hand-off.
+
+## Store purchases
+
+`IAP-NATIVE-001` fetches the App Store product on the iOS simulator and opens and
+cancels StoreKit's sheet; `IAP-ENTITLEMENT-001` proves each client opens its
+plan gates from a `manual` grant. Neither buys anything. Buying, restoring and
+replaying need a store sandbox account and, on Android, a build Play installed —
+neither of which a simulator, an emulator without a Google account, or Maestro
+can stand in for (docs/e2e.md, _subscriptions_). Use a disposable account, the
+build pointed at an api whose store secrets and notification URLs are set
+(docs/iap.md, _config per env_), and record the store account's role (sandbox
+tester, license tester), never its address or password.
+
+### App Store sandbox purchase
+
+`IAP-APPLE-RELEASE-001` `release` `online` `ios`
+
+On a real iPhone running an App Store-compatible build (TestFlight or a
+distribution-signed build), signed into a Sandbox Apple Account under Settings →
+Developer:
+
+1. Settings → Subscription: the Plus card shows the storefront's price, not
+   `$48/year`, and **Upgrade to Plus** is enabled.
+2. Upgrade, and confirm the sheet offers the free trial. Subscribe. The section
+   says **You're on Plus now — thank you.** with no polling pause, and the plan
+   box reads Plus with **free trial**.
+3. The api bound it: the `purchases` row is `appstore`, on this account's
+   `user_id`, with the trial end as `expires_at`
+   (`npm run replay:appstore -- --dry-run` lists the sandbox notifications for
+   it).
+4. **Replay after a failed verify.** With a second disposable account, stop the
+   api (or cut the device's network) after confirming the sheet and before the
+   app hears back. The section shows an error and stays Free. Restore the api,
+   force-quit and relaunch, open Subscription and press **Refresh**: Plus, with
+   no second purchase — the unfinished transaction replayed through verify.
+5. **Manage subscription** opens the App Store's subscription settings for
+   Bracemark. Cancel there; **Refresh** reads "Free trial ends on <date> — you
+   won't be charged."
+
+### Play license-tester purchase
+
+`IAP-PLAY-RELEASE-001` `release` `online` `android`
+
+On a real Android device signed into a license-tester Google account, with the
+build installed from the internal test track (a sideloaded build is not the
+build Play bills):
+
+1. Settings → Subscription: the Plus card shows Play's price, not `$48/year`,
+   and **Upgrade to Plus** is enabled. Open the sheet and back out of it: the
+   card returns enabled with **no error** under it (`IAP-NATIVE-001`'s claim,
+   which the emulator cannot reach).
+2. Upgrade again and confirm Play selected the free-trial offer. Buy with the
+   "always approves" test instrument. The plan box reads Plus with **free
+   trial**.
+3. The `purchases` row is `playstore`, on this account. Play Console → Order
+   management shows the order **acknowledged** within minutes — the api's
+   server-side acknowledge, not only the app's `finishTransaction`.
+4. Let the compressed test trial convert (minutes for a license tester): after
+   **Refresh**, the box reads "Renews on <date>", with no **free trial** tag —
+   Play's trial tag must not outlive the trial (docs/iap.md, _the trial_).
+5. **Manage subscription** opens Play's subscription screen for Bracemark.
+   Cancel there and confirm the section's "it won't renew" wording after
+   **Refresh**.
+
+### Restore purchases
+
+`IAP-RESTORE-001` `release` `online` `ios` `android`
+
+Run on each platform after its purchase check above, while that store account
+still holds the subscription:
+
+1. Delete the app, reinstall, sign in to the SAME Bracemark account. It reads
+   Plus already (the server holds the purchase); **Restore purchases** reports
+   `Restored — you're on Plus.` and nothing changes.
+2. Sign out and sign in to a DIFFERENT, free disposable Bracemark account on the
+   same device and store account. **Restore purchases** must not move the
+   subscription: the section shows the server's refusal (`purchase_bound`) and
+   the plan stays Free. On the server the row's `user_id` is still the first
+   account's.
+3. Sign in to a store account that never bought: **Restore purchases** says
+   `No purchases to restore on this store account.`

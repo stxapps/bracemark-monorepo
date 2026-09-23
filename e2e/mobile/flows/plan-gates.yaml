@@ -1,0 +1,53 @@
+# A free account meets the plan gates, then — once the runner has written a
+# `manual` Plus grant to local D1 — the same device learns of it through the
+# Subscription section's Refresh and the same press opens the feature, with no
+# relaunch in between. Part one of IAP-ENTITLEMENT-001's native leg; the runner
+# grants, then runs parts/plan-gates-plus.yaml.
+#
+# The gate is `locks` (Settings → Misc → Set app lock…): a free press opens the
+# paywall, a Plus press the lock dialog (misc-section.tsx). The grant is a real
+# product state rather than a test endpoint (web/fixtures/plan.ts).
+#
+#   maestro test mobile/flows/plan-gates.yaml -e USERNAME=… -e PASSWORD=…
+appId: com.bracemark.app
+tags: [IAP-ENTITLEMENT-001, full, online, destructive, ios, android]
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+- runFlow:
+    file: subflows/open-settings.yaml
+    env:
+      SECTION: misc
+# Not `centerElement`: the button ends the page (lock-app.yaml).
+- scrollUntilVisible:
+    element:
+      id: 'app-lock-set'
+    direction: DOWN
+- tapOn:
+    id: 'app-lock-set'
+- extendedWaitUntil:
+    visible:
+      id: 'paywall'
+    timeout: 10000
+- assertVisible:
+    id: 'paywall-upgrade'
+- assertNotVisible:
+    id: 'lock-dialog-password'
+- takeScreenshot: plan-gate-closed
+- tapOn:
+    id: 'paywall-dismiss'
+- extendedWaitUntil:
+    notVisible:
+      id: 'paywall'
+    timeout: 10000
+
+# Leave the device on the Subscription section, free, for the part to refresh.
+- tapOn:
+    id: 'settings-open-navigation'
+- tapOn:
+    id: 'settings-nav-subscription'
+- extendedWaitUntil:
+    visible:
+      id: 'subscription-plan'
+      text: 'Free'
+    timeout: 20000

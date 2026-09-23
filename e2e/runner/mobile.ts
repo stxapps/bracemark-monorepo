@@ -578,6 +578,21 @@ async function main(): Promise<void> {
           'mobile/flows/parts/lock-autorelock-resume.yaml',
         ];
       }
+      if (testCase.id === 'IAP-ENTITLEMENT-001') {
+        // The grant lands while the device is signed in and reading Free, so
+        // the only way it can learn of it is to ask again — which the part
+        // does through the Subscription section's Refresh. (PLUS_CASES grant
+        // BEFORE sign-in instead; this case is the one whose subject is the
+        // client catching up.)
+        steps = [
+          testCase.path,
+          async () => {
+            await grantPlus(account.username);
+            return null;
+          },
+          'mobile/flows/parts/plan-gates-plus.yaml',
+        ];
+      }
       if (testCase.id === 'LOCK-LIST-001') {
         env.PARENT_LIST = unique('E2E lock parent');
         env.CHILD_LIST = unique('E2E lock child');

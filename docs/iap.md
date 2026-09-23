@@ -377,7 +377,13 @@ the server only learns about from the receipt the app submits.
 1. **Purchase** — the section's upgrade card opens the store's own sheet
    (`requestPurchase`); prices shown come from the fetched product's
    `displayPrice` (the store's localized, tax-correct number — the USD table is
-   only placeholder copy).
+   only placeholder copy). **A sheet that ends without a purchase is reported
+   twice**: expo-iap 4.x rejects `requestPurchase` with the outcome AND emits it
+   to the error listener. `openStoreCheckout` settles the checkout on whichever
+   lands first, and a cancel is a close (Paddle's `closed`), never an error — a
+   rejection that reached the section's catch used to print "User cancelled the
+   purchase flow" under the card. `IAP-NATIVE-001` pins it on the iOS simulator
+   ([e2e.md](./e2e.md), _subscriptions_).
 2. **Verify** — on the purchase event the app POSTs `/v1/iap/verify`
    `{ source, productId, token }` (App Store transaction id / Play purchase
    token). The token is only a **lookup key**: bracemark-api fetches the
@@ -993,7 +999,10 @@ point, because the expensive one proves the least about our code.
      hostname fronts a laptop.
 
 That last one is a **manual release check** — worth doing once after any change
-to the Paddle config, and not something to automate. Driving the checkout itself
+to the Paddle config, and not something to automate (`IAP-PADDLE-RELEASE-001` in
+`e2e/web/RELEASE.md` is its checklist). What IS automated stops one step short
+of a payment: `IAP-WEB-001` creates the real sandbox transaction, opens the real
+overlay and closes it ([e2e.md](./e2e.md), _subscriptions_). Driving the checkout itself
 means driving a third-party iframe, a sandbox card and a webhook round trip, and
 it leaves a live subscription behind ([e2e.md](./e2e.md), _what e2e may not
 assert_).

@@ -297,11 +297,13 @@ export function SettingsNotice({
   tone = 'info',
   icon,
   className,
+  testID,
   children,
 }: {
   tone?: 'info' | 'error' | 'pending';
   icon?: ReactNode;
   className?: string;
+  testID?: string;
   children: ReactNode;
 }) {
   const ref = useRef<View>(null);
@@ -327,6 +329,7 @@ export function SettingsNotice({
   return (
     <View
       ref={ref}
+      testID={testID}
       className={cn(
         'flex-row items-start gap-2 rounded-lg px-3 py-2.5',
         tone === 'info' && 'border border-border',

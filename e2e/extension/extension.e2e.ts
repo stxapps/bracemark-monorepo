@@ -1,10 +1,13 @@
 import { type BrowserContext, type Locator, type Page } from '@playwright/test';
 
 import { profileDir } from '../paths';
+import { importArchive, waitForSync } from '../seed/steps';
 import { unique } from '../web/fixtures/data';
 import { WEB_URL } from '../web/fixtures/env';
 import { launchApp } from '../web/fixtures/launch';
+import { writePagedLibrary } from '../web/fixtures/library';
 import { addLink, displayUrl } from '../web/fixtures/links';
+import { grantPlus } from '../web/fixtures/plan';
 import { syncAndWait } from '../web/fixtures/sync';
 import { expect, test } from './fixtures/app';
 import { openExtensionPopup, waitForExtensionSync } from './fixtures/extension';
@@ -367,6 +370,59 @@ test.describe('browser extension', () => {
       } finally {
         await suspended.dispose();
       }
+    },
+  );
+
+  // The browser extension's one plan gate is the free tier's link cap: at 200 the
+  // popup replaces its editor with the full-library wall, and upgrading is a
+  // hand-off to the web app (popup/Editor.tsx). The popup is a fresh document
+  // on every open, so reopening it is its whole "refresh" — it re-asks
+  // `GET /v1/iap/status` and folds the answer over its cached copy.
+  test(
+    'a manual Plus grant lifts the full-library wall when the popup next opens',
+    { tag: ['@IAP-ENTITLEMENT-001', '@full', '@online', '@extension', '@scale'] },
+    async ({ extensionApp, webApp }, testInfo) => {
+      const library = await writePagedLibrary(testInfo.outputPath('at-cap.zip'), {
+        count: 200,
+        label: 'e2e-ext-cap',
+      });
+      await importArchive(webApp.page, library.archivePath);
+      await waitForSync(webApp.page);
+
+      // --- free, at the cap: the wall, and its way out -------------------------
+      const url = controlledPageUrl('plan-gate');
+      const atCap = await extensionApp.signIn(url);
+      await waitForExtensionSync(atCap);
+      await expect(atCap.getByRole('heading', { name: 'Your library is full' })).toBeVisible();
+      await expect(atCap.getByRole('button', { name: 'Save', exact: true })).toHaveCount(0);
+      const [plans] = await Promise.all([
+        extensionApp.context.waitForEvent('page'),
+        atCap.getByRole('button', { name: 'Upgrade to Plus' }).click(),
+      ]);
+      await expect(plans).toHaveURL(`${WEB_URL}/settings/subscription`);
+      await plans.close();
+      await atCap.close();
+
+      // --- the grant; the next open knows it -----------------------------------
+      await grantPlus(webApp.credentials.username);
+      const opened = await extensionApp.open(url);
+      // Read only once BOTH inputs to the gate have settled, or the editor can be
+      // caught in the frame before the link count loads — which a popup still
+      // walled off would also show. The count is settled with the synced pill;
+      // the plan once the popup has persisted the fresh answer as its last-known
+      // copy, which web-react's useEntitlements does only after rendering it
+      // (web/fixtures/plan.ts, awaitPlus, reads the same key for the same
+      // reason).
+      await waitForExtensionSync(opened);
+      await opened.waitForFunction(() => {
+        const raw = localStorage.getItem('bracemark.subscriptionStatus');
+        return raw !== null && (JSON.parse(raw) as { plan?: string }).plan === 'plus';
+      });
+      await expect(opened.getByRole('heading', { name: 'Your library is full' })).toHaveCount(0);
+      await expect(opened.getByRole('heading', { name: 'Save this page' })).toBeVisible();
+      // The 201st link: the wall was the cap, and nothing behind it counts.
+      await opened.getByRole('button', { name: 'Save', exact: true }).click();
+      await expect(opened.getByText('Saved', { exact: true })).toBeVisible();
     },
   );
 });

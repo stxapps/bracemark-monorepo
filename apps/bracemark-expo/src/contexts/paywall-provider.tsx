@@ -93,7 +93,7 @@ export function PaywallProvider({ children }: { children: ReactNode }) {
       {children}
       {copy && (
         <Dialog open onOpenChange={(open) => !open && close()}>
-          <DialogContent className="w-full max-w-sm">
+          <DialogContent testID="paywall" className="w-full max-w-sm">
             <DialogHeader>
               <DialogTitle>
                 <Icon as={Lock} className="size-4" /> {copy.title}
@@ -101,10 +101,10 @@ export function PaywallProvider({ children }: { children: ReactNode }) {
               <DialogDescription>{copy.description}</DialogDescription>
             </DialogHeader>
             <DialogFooter>
-              <Button variant="outline" onPress={close}>
+              <Button variant="outline" testID="paywall-dismiss" onPress={close}>
                 <Text>Not now</Text>
               </Button>
-              <Button onPress={upgrade}>
+              <Button testID="paywall-upgrade" onPress={upgrade}>
                 <Text>Upgrade to {PLAN_LABELS[copy.plan]}</Text>
               </Button>
             </DialogFooter>

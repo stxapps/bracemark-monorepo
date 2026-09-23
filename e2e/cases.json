@@ -350,6 +350,46 @@
     "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report", "checkpoint"]
   },
   {
+    "id": "IAP-WEB-001",
+    "title": "A free account sees the Plus price and checkout, opens the real Paddle overlay, closes it and returns without buying",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online", "internet"],
+    "fixture": "empty",
+    "path": "web/subscription.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
+    "id": "IAP-ENTITLEMENT-001",
+    "title": "A manual Plus grant opens the web app's plan gates after the Subscription Refresh, without a reload",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online", "destructive"],
+    "fixture": "empty",
+    "path": "web/subscription.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
+    "id": "IAP-DOWNGRADE-001",
+    "title": "A lapsed plan keeps nested data readable on this and a new client while the gated create paths close",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online", "destructive"],
+    "fixture": "small",
+    "path": "web/subscription.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
+    "id": "IAP-PADDLE-RELEASE-001",
+    "title": "A Paddle sandbox checkout completes, reaches the account by webhook, shows trial wording, and cancels",
+    "surface": "web",
+    "tier": "release",
+    "traits": ["online", "internet"],
+    "fixture": "empty",
+    "path": "web/RELEASE.md",
+    "artifacts": ["manual-checklist"]
+  },
+  {
     "id": "EXT-AUTH-001",
     "title": "Extension sign-in survives popup and browser-profile reopen",
     "surface": "extension",
@@ -458,6 +498,16 @@
     "fixture": "small",
     "path": "extension/RELEASE.md",
     "artifacts": ["manual-checklist"]
+  },
+  {
+    "id": "IAP-ENTITLEMENT-001",
+    "title": "A manual Plus grant lifts the browser extension's full-library wall on the popup's next open",
+    "surface": "extension",
+    "tier": "full",
+    "traits": ["online", "extension", "scale"],
+    "fixture": "scale",
+    "path": "extension/extension.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
   },
   {
     "id": "PWA-001",
@@ -938,6 +988,56 @@
     "fixture": "scale",
     "path": "mobile/flows/keyboard.yaml",
     "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "IAP-NATIVE-001",
+    "title": "A free account on the iOS simulator fetches the store's Plus product, opens StoreKit's sheet and backs out without buying or an error",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "internet", "ios"],
+    "fixture": "empty",
+    "path": "mobile/flows/subscription-store.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "IAP-ENTITLEMENT-001",
+    "title": "A manual Plus grant opens the native plan gates after the Subscription Refresh, without a relaunch",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "destructive", "ios", "android"],
+    "fixture": "empty",
+    "path": "mobile/flows/plan-gates.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "IAP-RESTORE-001",
+    "title": "Restore purchases in the store sandbox re-verifies an unfinished purchase onto the signed-in account only",
+    "surface": "native",
+    "tier": "release",
+    "traits": ["online", "ios", "android"],
+    "fixture": "empty",
+    "path": "mobile/RELEASE.md",
+    "artifacts": ["manual-checklist"]
+  },
+  {
+    "id": "IAP-APPLE-RELEASE-001",
+    "title": "A StoreKit sandbox purchase verifies, entitles, restores, and replays after a controlled verify failure",
+    "surface": "native",
+    "tier": "release",
+    "traits": ["online", "ios"],
+    "fixture": "empty",
+    "path": "mobile/RELEASE.md",
+    "artifacts": ["manual-checklist"]
+  },
+  {
+    "id": "IAP-PLAY-RELEASE-001",
+    "title": "A Play license-tester purchase from a track-installed build shows the store price, entitles, acknowledges, and restores",
+    "surface": "native",
+    "tier": "release",
+    "traits": ["online", "android"],
+    "fixture": "empty",
+    "path": "mobile/RELEASE.md",
+    "artifacts": ["manual-checklist"]
   },
   {
     "id": "CONTRACT-VECTORS-001",

@@ -1,6 +1,6 @@
 import { type Page } from '@playwright/test';
 
-import { findUserId, grantPlan, readGrantedPlan } from '../../seed/plan';
+import { findUserId, grantPlan, lapsePlan, readGrantedPlan } from '../../seed/plan';
 
 // Put a disposable account on Plus, for the cases whose subject is a Plus lever —
 // nested lists, the advanced search editor, locks.
@@ -23,6 +23,20 @@ export async function grantPlus(username: string): Promise<void> {
   await grantPlan(userId, 'plus');
   if ((await readGrantedPlan(userId)) !== 'plus') {
     throw new Error(`the Plus grant for ${username} did not land`);
+  }
+}
+
+// End that grant, the way a comp ends (seed/plan.ts, lapsePlan), and confirm no
+// active row is left. The server half only, exactly like `grantPlus`: every
+// client still has to re-read `GET /v1/iap/status` before it knows, and the case
+// that calls this (IAP-DOWNGRADE-001) makes each client do that the way a person
+// would.
+export async function lapsePlus(username: string): Promise<void> {
+  const userId = await findUserId(username);
+  if (!userId) throw new Error(`no user id for ${username}; was the account created?`);
+  await lapsePlan(userId);
+  if ((await readGrantedPlan(userId)) !== null) {
+    throw new Error(`the Plus grant for ${username} is still active after the lapse`);
   }
 }
 
