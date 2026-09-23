@@ -376,8 +376,14 @@ export function SubscriptionSection() {
 
       {/* Current plan. Not a SettingsRow: the row is a title/description pair with
           one trailing control, and this grows a payment-issue notice and a
-          Manage-billing block UNDER that pair, inside the same border. */}
-      <div className="rounded-lg border border-border p-4">
+          Manage-billing block UNDER that pair, inside the same border.
+
+          A NAMED group, like each upgrade card below: the two kinds of box print
+          the same plan names ("Plus" is both an owner's plan and a card's
+          title), and the name is what tells a screen reader — and IAP-WEB-001 /
+          IAP-ENTITLEMENT-001 (docs/e2e.md, _subscriptions_) — which one a line
+          belongs to. */}
+      <div role="group" aria-label="Current plan" className="rounded-lg border border-border p-4">
         <div className="flex items-start justify-between gap-4">
           <div className="flex min-w-0 flex-col gap-0.5">
             <span className="font-medium">
@@ -522,7 +528,12 @@ export function SubscriptionSection() {
         <div className="flex flex-col gap-3">
           <div className="grid gap-4 sm:grid-cols-2">
             {upgradeCards.map(({ plan: cardPlan, blurb, features }) => (
-              <div key={cardPlan} className="flex flex-col rounded-lg border border-border p-4">
+              <div
+                key={cardPlan}
+                role="group"
+                aria-label={`${PLAN_LABELS[cardPlan]} plan`}
+                className="flex flex-col rounded-lg border border-border p-4"
+              >
                 <div className="flex items-baseline justify-between">
                   <span className="font-medium">{PLAN_LABELS[cardPlan]}</span>
                   <span className="text-sm text-muted-foreground">

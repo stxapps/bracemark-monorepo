@@ -194,16 +194,32 @@ export async function openStoreCheckout(options: {
     offers.find((o) => o.offerTagsAndroid?.includes(PLAY_FREE_TRIAL_OFFER_TAG)) ?? offers[0];
   const offerToken = offer?.offerTokenAndroid;
 
-  await requestPurchase({
-    request: {
-      apple: { sku },
-      google: {
-        skus: [sku],
-        ...(offerToken ? { subscriptionOffers: [{ sku, offerToken }] } : {}),
+  // The sheet's outcome arrives TWICE when it is not a purchase: expo-iap 4.x
+  // rejects this call with the store's error as well as emitting it to the
+  // error listener. So a backed-out sheet has to be recognized here too, or it
+  // reaches the section's catch and prints "User cancelled the purchase flow" as
+  // an error under the card. Taking the handlers settles the checkout once,
+  // whichever of the two lands first. Found by IAP-NATIVE-001 on the iOS
+  // simulator (docs/e2e.md, _subscriptions_); the jest mock resolved.
+  try {
+    await requestPurchase({
+      request: {
+        apple: { sku },
+        google: {
+          skus: [sku],
+          ...(offerToken ? { subscriptionOffers: [{ sku, offerToken }] } : {}),
+        },
       },
-    },
-    type: 'subs',
-  });
+      type: 'subs',
+    });
+  } catch (e) {
+    const handlers = takeHandlers();
+    if ((e as { code?: unknown } | null)?.code === ErrorCode.UserCancelled) {
+      handlers.onClosed?.();
+      return;
+    }
+    throw e;
+  }
 }
 
 // Re-drive verify for purchases the store already holds — the "Restore

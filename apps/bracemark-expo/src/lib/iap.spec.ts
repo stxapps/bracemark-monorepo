@@ -289,6 +289,51 @@ test('treats cancellation as a close and other store errors as failures', async 
   expect(onClosed).toHaveBeenCalledTimes(1);
 });
 
+// expo-iap 4.x rejects requestPurchase with the sheet's error AND emits it to
+// the listener. Treating only the listener as the signal let the rejection reach
+// the section's catch, which printed a backed-out sheet as an error — seen on
+// the iOS simulator by IAP-NATIVE-001, invisible here while the mock resolved.
+test('settles a rejected sheet once: a cancel is a close, anything else is thrown', async () => {
+  const iap = load();
+  const onClosed = jest.fn();
+  const onFailed = jest.fn();
+  const cancelled = Object.assign(new Error('User cancelled the purchase flow'), {
+    code: 'user-cancelled',
+  });
+  mockRequestPurchase.mockRejectedValueOnce(cancelled);
+
+  await expect(
+    iap.openStoreCheckout({
+      plan: 'plus',
+      product: { id: STORE_PRODUCT_IDS.plus, platform: 'ios' } as never,
+      onCompleted: jest.fn(),
+      onFailed,
+      onClosed,
+    }),
+  ).resolves.toBeUndefined();
+  purchaseFailed?.({ code: 'user-cancelled', message: 'cancelled' });
+
+  expect(onClosed).toHaveBeenCalledTimes(1);
+  expect(onFailed).not.toHaveBeenCalled();
+
+  const unavailable = Object.assign(new Error('Store unavailable'), { code: 'service-error' });
+  mockRequestPurchase.mockRejectedValueOnce(unavailable);
+
+  await expect(
+    iap.openStoreCheckout({
+      plan: 'plus',
+      product: { id: STORE_PRODUCT_IDS.plus, platform: 'ios' } as never,
+      onCompleted: jest.fn(),
+      onFailed,
+      onClosed,
+    }),
+  ).rejects.toBe(unavailable);
+  purchaseFailed?.({ code: 'service-error', message: 'Store unavailable' });
+
+  expect(onFailed).not.toHaveBeenCalled();
+  expect(onClosed).toHaveBeenCalledTimes(1);
+});
+
 test('silently verifies a replayed transaction when no checkout is open', async () => {
   const iap = load();
   let settle!: () => void;
