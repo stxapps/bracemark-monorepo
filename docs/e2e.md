@@ -262,9 +262,29 @@ and assertable. **Assert on what the user typed, never on what was extracted.**
 Extraction has five vitest specs against the real `HTMLRewriter`; that is the
 right layer for it.
 
-If an end-to-end extraction proof is ever wanted, it needs one real public URL in
-exactly one spec, tagged so it can be skipped offline — a deliberate network
-dependency, not the default.
+**The exception is the `internet` cases, and it is narrow on purpose.** The
+`EXTRACT-*` cases (Phase 7) do assert an extracted title, and they get it from
+one real public origin: `example.com`, IANA's reserved documentation domain —
+the `onlineExtraction` table in [`e2e/fixtures.json`](../e2e/fixtures.json), read
+by `e2e/web/fixtures/extraction.ts`, which both runners use. A run-scoped `?e2e=`
+query keeps each saved URL unique (the origin ignores it), and any other path on
+the origin answers a real **404**, which `verdictForStatus` settles as
+`permanent` — so the one host gives a known title AND a controlled permanent
+failure, and a `.invalid` URL still supplies the transient one.
+
+It is a host we do not own, which bounds the claim. It has no `og:image` and never
+redirects, so **the preview image, redirect handling and a no-metadata page are
+not proved end to end** — they stay in the extractor's and expo-react's unit
+specs. A fixture origin of our own (a small Worker with pages for each) was
+proposed and deliberately not built: it would add a public deployment to own,
+monitor and keep honest; `EXTRACT-FIXTURE-001` in `e2e/NEXT.md` stays open as the
+record of that choice. Nothing weakens the SSRF guard either way.
+
+Those cases carry the **`internet`** trait, and it is not `online`: every
+stack-backed case already carries `online`, so only `--exclude-trait internet`
+yields a run with no third-party dependency. A red `internet` case whose
+`fetch` to example.com itself failed is an availability fact, not a product one —
+`curl -sI https://example.com/` settles which before anything else is read.
 
 **The backup round trip.** Export ⇄ import looks like a whole-flow question and
 is not one, for a reason specific to this app: `exportAllData` claims its
@@ -687,6 +707,10 @@ All of them are in the app:
 | `settings-open-navigation`  | `src/features/settings/topbar.tsx`                                                  |
 | `settings-close`            | ” — returns to the links route                                                      |
 | `settings-nav-<section>`    | `src/features/settings/sidebar.tsx`                                                 |
+| `extraction-mode-<mode>`    | `src/features/settings/extraction-section.tsx` — `off` `saves` `all` radio rows     |
+| `extraction-count-<bucket>` | ” — the number in `done` `pending` `will-retry` `wont-retry`                        |
+| `extraction-progress`       | ” — "N of M links previewed."                                                       |
+| `extraction-generate-all`   | ” — also `extraction-pause`, which replaces it while the job runs                   |
 | `delete-all-open`           | `src/features/settings/data-section.tsx`                                            |
 | `delete-all-confirm`        | ” — the confirmation checkbox row                                                   |
 | `delete-all-submit`         | ” — the destructive action                                                          |
@@ -701,14 +725,14 @@ All of them are in the app:
 | `share-list-row`            | ” — the current destination disclosure                                              |
 | `share-tags-row`            | ” — the current tag-set disclosure                                                  |
 | `share-saved`               | ” — the durable-save confirmation                                                   |
-| `share-signed-out`          | ” — the no-session terminal state                                                    |
-| `share-no-url`              | ” — the no-HTTP-URL terminal state                                                   |
-| `share-quota`               | ” — the at-cap terminal state                                                        |
-| `share-list-input`          | `src/features/share/share-list-picker.tsx`                                           |
+| `share-signed-out`          | ” — the no-session terminal state                                                   |
+| `share-no-url`              | ” — the no-HTTP-URL terminal state                                                  |
+| `share-quota`               | ” — the at-cap terminal state                                                       |
+| `share-list-input`          | `src/features/share/share-list-picker.tsx`                                          |
 | `share-list-create`         | ” — the new-list action                                                             |
-| `share-tag-input`           | `src/features/share/share-tags-picker.tsx`                                           |
+| `share-tag-input`           | `src/features/share/share-tags-picker.tsx`                                          |
 | `share-tag-create`          | ” — the new-tag action                                                              |
-| `share-close`               | `src/features/share/share-kit.tsx` — the process/surface exit                        |
+| `share-close`               | `src/features/share/share-kit.tsx` — the process/surface exit                       |
 | `contract-vectors-pass`     | `src/app/contract-vectors.tsx` (dev-only)                                           |
 | `contract-vectors-fail`     | ” — carries the failing check names in its text                                     |
 | `vector-<check>`            | ” — one per vector, `PASS`/`FAIL`/`RUNNING`                                         |
@@ -918,7 +942,9 @@ and `scale` (an archive generated from
 `e2e/seed/library.ts` and imported into a fresh account). No test uses the human
 seed accounts or the published-capture account. Offline deterministic links use
 the reserved `.invalid` TLD; a case that deliberately exercises extraction must
-carry the `online` trait and use the separate public fixture table in that file.
+carry the `internet` trait and use the separate public fixture table in that file
+(_what e2e may not assert_, above). The registry check enforces that every entry
+in that table is `https` and tagged `internet`.
 
 #### ⚠ one IP, one bucket — the local rate limit
 
@@ -1628,6 +1654,37 @@ rethrowing `quota_exceeded`, at "Sync failed — Retry" in 20s; and the iOS pill
 its bounds check with each of the two earlier `applyAndScrollTop` orders.
 `SYNC-CONFLICT-001` has not had that check: breaking local-wins means changing
 the reconcile, which its unit specs own.
+
+The Phase 7 extraction cases were measured 2026-09-22 from commit `59a9dad` with
+their changes present in the working tree — system Chrome, the iPhone 17 Pro
+simulator on iOS 26.5, `bracemark-pixel8` on Android, Maestro 2.8.0, against
+live example.com:
+
+| surface        | measured result                                                                                           |
+| -------------- | --------------------------------------------------------------------------------------------------------- |
+| web            | **9/9 passed** — `EXTRACT-WEB-001`, `EXTRACT-WEB-ALL-001`, `EXTRACT-OFFLINE-001`, three repeats, no retry |
+| iOS native     | **2/2 passed** twice — `EXTRACT-NATIVE-001`, `EXTRACT-NATIVE-ALL-001`                                     |
+| Android native | **2/2 passed** twice — the same two, with the device's route to the extractor removed                     |
+
+They found one app bug, fixed in the same change: **Expo's Generate all never
+finished when eight pending links in a row sat on dead hosts.** A drain step in
+which no host answered was read as "the device is offline" and rethrown for a
+backoff with the cursor unmoved, so the same step was retried forever — Pause
+over "0 of 27", nothing logged, and the auto drain wedged the same way. The step
+now asks NetInfo, and records the links as transient failures when the device is
+connected ([link-extraction.md](./link-extraction.md), _expo drains in the
+foreground_).
+
+Each case was also run against the behaviour it guards and failed: the web
+auto drain disabled (`EXTRACT-WEB-001` at the extract request,
+`EXTRACT-OFFLINE-001` at the first refused attempt), the extract-all batch
+skipped (`EXTRACT-WEB-ALL-001` at the settled progress line), the drain's
+transport retry removed (`EXTRACT-OFFLINE-001` at the post-reload retries),
+the add panel's `extractNow` removed (`EXTRACT-NATIVE-001` at the title, iOS),
+and the dead-host stall above (`EXTRACT-NATIVE-ALL-001`, iOS, before the fix).
+iOS cannot remove the extractor from one simulator — it shares this Mac's
+loopback — so "without calling the server extractor" is proved on Android only;
+expo has no extractor origin configured at all.
 
 ### the red full suite, and what it was
 

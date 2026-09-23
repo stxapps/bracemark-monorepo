@@ -1,0 +1,23 @@
+# Assert one RN radio row (`role="radio"` + `aria-checked`) is the selected one.
+#
+# Two spellings because the platforms expose the state differently. XCUITest
+# folds it into the element's VALUE — "radio button, checked" — which Maestro
+# reads as the node's text, and its `checked:` filter does not see it at all
+# (measured on the iOS 26.5 simulator: the checked row failed `checked: true`).
+# Android's accessibility node carries a real checked flag.
+appId: com.bracemark.app
+---
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - assertVisible:
+          id: ${RADIO_ID}
+          text: 'radio button, checked'
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - assertVisible:
+          id: ${RADIO_ID}
+          checked: true

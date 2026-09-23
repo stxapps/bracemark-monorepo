@@ -27,9 +27,9 @@ export function unique(prefix: string): string {
 // guard to serve a test would be trading the app's real security boundary for
 // convenience. `.invalid` is the reserved TLD for exactly this.
 //
-// So: e2e asserts on what the user TYPED, never on what was extracted. Extraction
-// has five vitest specs against the real HTMLRewriter; see docs/e2e.md, "what e2e
-// may not assert".
+// So: e2e asserts on what the user TYPED, never on what was extracted. The one
+// exception is the `internet` extraction cases, which take their public URLs from
+// ./extraction instead; see docs/e2e.md, "what e2e may not assert".
 export function unresolvableUrl(path: string): string {
   return `https://${unique('e2e')}.invalid/${path}`;
 }

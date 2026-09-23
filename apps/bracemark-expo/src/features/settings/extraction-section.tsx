@@ -99,6 +99,7 @@ function OptionRow({
   return (
     <Pressable
       role="radio"
+      testID={`extraction-mode-${value}`}
       onPress={onSelect}
       aria-checked={selected}
       className={cn(
@@ -118,11 +119,14 @@ function OptionRow({
   );
 }
 
-// One labelled count in a bordered tile — web's Stat, in RN boxes.
-function Stat({ label, value }: { label: string; value: number }) {
+// One labelled count in a bordered tile — web's Stat, in RN boxes. The id sits on
+// the NUMBER, so a flow can read one bucket without matching the label copy.
+function Stat({ label, value, testID }: { label: string; value: number; testID: string }) {
   return (
     <View className="flex-1 gap-0.5 rounded-lg border border-border p-3">
-      <Text className="text-2xl font-semibold tabular-nums">{value}</Text>
+      <Text testID={testID} className="text-2xl font-semibold tabular-nums">
+        {value}
+      </Text>
       <Text className="text-sm text-muted-foreground">{label}</Text>
     </View>
   );
@@ -226,16 +230,24 @@ export function ExtractionSection() {
               even before the labels wrap. */}
           <View className="gap-3">
             <View className="flex-row gap-3">
-              <Stat label="With preview" value={doneCount} />
-              <Stat label="Pending" value={pendingCount} />
+              <Stat label="With preview" value={doneCount} testID="extraction-count-done" />
+              <Stat label="Pending" value={pendingCount} testID="extraction-count-pending" />
             </View>
             <View className="flex-row gap-3">
-              <Stat label="Will retry" value={failedTransientCount} />
-              <Stat label="Won’t retry" value={failedPermanentCount} />
+              <Stat
+                label="Will retry"
+                value={failedTransientCount}
+                testID="extraction-count-will-retry"
+              />
+              <Stat
+                label="Won’t retry"
+                value={failedPermanentCount}
+                testID="extraction-count-wont-retry"
+              />
             </View>
           </View>
 
-          <Text className="mt-4 text-sm text-muted-foreground">
+          <Text testID="extraction-progress" className="mt-4 text-sm text-muted-foreground">
             {total === 0
               ? 'No links to preview yet.'
               : `${doneCount} of ${total} link${total === 1 ? '' : 's'} previewed.`}
@@ -275,12 +287,17 @@ export function ExtractionSection() {
 
           <View className="mt-6 flex-row">
             {isExtractingAll ? (
-              <Button variant="outline" onPress={pause}>
+              <Button testID="extraction-pause" variant="outline" onPress={pause}>
                 <Icon as={Pause} className="size-4" />
                 <Text>{isRunning ? 'Generating… Pause' : 'Pause'}</Text>
               </Button>
             ) : (
-              <Button variant="outline" disabled={pendingCount === 0} onPress={extractAll}>
+              <Button
+                testID="extraction-generate-all"
+                variant="outline"
+                disabled={pendingCount === 0}
+                onPress={extractAll}
+              >
                 <Icon as={ImageDown} className="size-4" />
                 <Text>Generate all</Text>
               </Button>

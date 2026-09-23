@@ -8,11 +8,12 @@
 //    a single observable event. Here every link is its own fetch, and a rejected fetch is
 //    indistinguishable per-link from "this host is down" — so the BATCH decides: if some
 //    other link in it got a response, the failures were about those hosts and are recorded;
-//    if NOTHING got a response, the device is offline and the error is rethrown with
-//    nothing written. Get that backwards in either direction and it is silent — a
-//    subway ride would settle `failed` on every link it touched, burning a backoff step
-//    each, or a genuinely dead host would never settle and be re-picked by every scan
-//    forever.
+//    if NOTHING got a response, NetInfo decides: offline → the error is rethrown with
+//    nothing written; connected → every host in the batch is dead, and each is recorded.
+//    Get that backwards in either direction and it is silent — a subway ride would settle
+//    `failed` on every link it touched, burning a backoff step each, or a batch of dead
+//    hosts would never settle and the drain would re-pick that same step forever (which
+//    it did, until EXTRACT-NATIVE-ALL-001 caught it).
 //
 // 2. THE FAVICON CARVE-OUT AND ITS GATE. Capturing the page's declared `<link rel=icon>`
 //    is licensed by "this costs no disclosure the page fetch didn't already pay" — true of
@@ -43,6 +44,11 @@ import { USER_AGENT } from './user-agent';
 type ResponseBody = ConstructorParameters<typeof Response>[0];
 
 jest.mock('expo-sqlite', () => require('../testing/node-sqlite'));
+// The OS connectivity verdict, consulted only when a whole batch went unanswered.
+jest.mock('@react-native-community/netinfo', () => ({
+  __esModule: true,
+  default: { fetch: () => Promise.resolve({ isConnected: mockConnected }) },
+}));
 jest.mock('expo-file-system', () => require('../testing/memory-file-system'));
 jest.mock('@stxapps/expo-crypto', () => ({ newId: () => `id-${(mockIds += 1)}` }));
 jest.mock('@stxapps/expo-crypto/lib/ids', () => ({ newId: () => `id-${(mockIds += 1)}` }));
@@ -55,6 +61,7 @@ jest.mock('./image', () => ({
 }));
 
 let mockIds = 0;
+let mockConnected: boolean | null = false;
 let mockProbeSize: { width: number; height: number } | undefined = { width: 800, height: 600 };
 
 const { resetFileSystem } = require('../testing/memory-file-system') as {
@@ -266,7 +273,8 @@ describe('runDeviceTitleImageBatch', () => {
     // NOTHING answered: the device is offline, so nothing is recorded — no link's backoff
     // is burned by a subway ride — and the rethrown TypeError is what
     // `isRetryableTransportError` reads to back the drain off.
-    it('throws and records nothing when no link reached a server', async () => {
+    it('throws and records nothing when no link reached a server while offline', async () => {
+      mockConnected = false;
       routes({});
 
       await expect(
@@ -280,6 +288,27 @@ describe('runDeviceTitleImageBatch', () => {
 
       expect(await readExtraction('l_1')).toBeUndefined();
       expect(await readExtraction('l_2')).toBeUndefined();
+    });
+
+    // NOTHING answered but the OS says the device is connected: every host in the batch is
+    // dead. Recording them is what moves the drain's cursor on — thrown, the same step
+    // would be re-picked forever.
+    it('records every link as failed when none answered but the device is connected', async () => {
+      mockConnected = true;
+      routes({});
+
+      await expect(
+        runDeviceTitleImageBatch(
+          USER,
+          [linkItem('l_1', 'https://a.example/x'), linkItem('l_2', 'https://b.example/y')],
+          TIER,
+          { optedIn: true },
+        ),
+      ).resolves.toBe(2);
+
+      expect((await facetOf('l_1'))?.status).toBe('failed');
+      expect((await facetOf('l_2'))?.status).toBe('failed');
+      mockConnected = false;
     });
 
     // SOMETHING answered, so the connection is fine and the failures really were about

@@ -1172,6 +1172,23 @@ whereas `off` is a decision, and re-asking someone who picked "never contact the
 sites" is nagging. The dismissal is device-local while the setting it offers is
 synced, so a second phone still gets its one offer.
 
+**Offline is the OS's call, never the batch's alone.** Every expo link is its own
+fetch, so a rejected fetch cannot say whether the host is dead or the phone is.
+`runDeviceTitleImageBatch` (`lib/device-extraction.ts`) lets the batch decide
+first — if any link in it got an HTTP response, the unanswered ones are dead
+hosts and are recorded `failed` — and asks NetInfo only when NOTHING answered:
+`isConnected === false` rethrows a `TypeError` so the drain backs off with no
+backoff burned; connected records every link as a transient failure. Both
+halves are load-bearing, and the second was once missing: the drain retries a
+thrown step with its cursor unmoved, so a step of eight dead hosts in a row —
+which an old bookmarks import easily holds — was retried forever, and Generate
+all sat on Pause over "0 of N" with nothing logged. A captive network lands on
+the recorded side, which costs each link one transient backoff step and never a
+`permanent`. Web has no such branch: the extractor answers per URL
+(`fetch_failed`), and only a failure of the extractor request itself is
+wholesale. `EXTRACT-NATIVE-ALL-001` guards it end to end
+([e2e.md](./e2e.md), _state today_).
+
 ⚠ **"The device that saved the link" describes the Expo DEFAULT, not the product.**
 `all` is the position where a
 device fetches pages for links it never saved — synced, imported, saved in the web

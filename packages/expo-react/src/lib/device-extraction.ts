@@ -1,3 +1,4 @@
+import NetInfo from '@react-native-community/netinfo';
 import { File, Paths } from 'expo-file-system';
 
 import { newId } from '@stxapps/expo-crypto';
@@ -62,9 +63,22 @@ import { USER_AGENT } from './user-agent';
 // nothing to do with the hosts. So a link whose fetch threw at the TRANSPORT level (no
 // HTTP response at all) is held back rather than recorded; at the end of the batch, if
 // some other link in it did get a response, the held-back ones are genuinely per-host
-// failures and are recorded as such — but if NOTHING got a response, the original
-// `TypeError` is rethrown, which `isRetryableTransportError` classifies as retryable, so
-// the drain stops and backs off with no backoff burned. Every other per-link outcome
+// failures and are recorded as such. If NOTHING got a response, the batch alone cannot
+// tell a dropped connection from a batch of dead hosts, so it asks the OS (NetInfo, the
+// same `isConnected !== false` reading query-managers gives TanStack Query): offline →
+// the original `TypeError` is rethrown, which `isRetryableTransportError` classifies as
+// retryable, so the drain stops and backs off with no backoff burned; connected → the
+// hosts are dead and are recorded like any other per-host failure.
+//
+// ⚠ That second branch is not an edge case. The drain retries a thrown step with its
+// cursor UNMOVED, so a step whose every link sat on a dead host — eight expired domains
+// in a row, which an old bookmarks import easily holds — was retried forever: Generate
+// all showed Pause over "0 of N" with nothing logged, and the auto drain was wedged the
+// same way. EXTRACT-NATIVE-ALL-001 (e2e/mobile/flows/extract-all.yaml) found it and
+// guards it. A connected-but-captive network lands on the recorded side: each link burns
+// one transient backoff step and is retried later, never settled `permanent`.
+//
+// Every other per-link outcome
 // (HTTP status, unparseable page, image failure) is RECORDED and never thrown, so the
 // drain always makes progress and never re-picks the same link forever.
 
@@ -153,16 +167,27 @@ export async function runDeviceTitleImageBatch(
 
   if (unreached.length > 0) {
     // Some host answered, so the failures were about those hosts, not the connection.
-    if (reachedSomething) {
-      for (const targets of unreached) await settle(username, targets, tier, 'failed');
-    } else {
-      // Nothing answered — the device is offline. Record nothing (no backoff burned) and
-      // let the drain back off: a TypeError is what `isRetryableTransportError` wants.
+    // Nothing answered and the OS says the device is offline: record nothing (no backoff
+    // burned) and let the drain back off — a TypeError is what `isRetryableTransportError`
+    // wants. Nothing answered while CONNECTED: every host in the batch is dead, which is a
+    // per-host fact and is recorded, or the drain re-picks this same step forever.
+    if (!reachedSomething && (await deviceIsOffline())) {
       throw unreachedErr ?? new TypeError('device extraction: network request failed');
     }
+    for (const targets of unreached) await settle(username, targets, tier, 'failed');
   }
 
   return links.length;
+}
+
+// The OS's connectivity verdict, read only when a whole batch went unanswered. A failed
+// read is treated as offline — the old behaviour, and the one that burns no backoff.
+async function deviceIsOffline(): Promise<boolean> {
+  try {
+    return (await NetInfo.fetch()).isConnected === false;
+  } catch {
+    return true;
+  }
 }
 
 // One URL's whole life: fetch → parse → select → title write → image write → favicon.

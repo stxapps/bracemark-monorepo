@@ -18,10 +18,11 @@ export const API_URL = process.env.E2E_API_URL ?? 'http://localhost:8787';
 
 // bracemark-extractor — the server-extraction origin, on 8788 (docs/env-files.md,
 // _the local port map_), and brought up by `npm run dev` alongside the api and the
-// web app. Only the marketing-screenshot capture needs it (shot/): it is the
-// one thing in e2e/ that deliberately fetches real, public URLs, and its preflight
-// asks THIS origin rather than curl because the two genuinely disagree — a zone
-// behind Cloudflare answers a Worker where it 403s a shell.
+// web app. Two things need it: the marketing-screenshot capture (shot/), whose
+// preflight asks THIS origin rather than curl because the two genuinely disagree —
+// a zone behind Cloudflare answers a Worker where it 403s a shell — and the
+// `internet` extraction cases (web/extraction.e2e.ts), which fetch example.com
+// through it. Playwright's webServer does not start it; `npm run dev` does.
 export const EXTRACTOR_URL = process.env.E2E_EXTRACTOR_URL ?? 'http://localhost:8788';
 
 // bracemark-site — the marketing apex. Sign-out leaves the app for this origin via
