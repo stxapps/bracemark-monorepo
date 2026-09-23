@@ -1,0 +1,15 @@
+# Part two of VIEWPORT-BULK-001: enter bulk edit where bulk-viewport.yaml left
+# the list. The runner compares the rows with the ones it measured before.
+appId: com.bracemark.app
+---
+- tapOn:
+    id: 'links-more-options'
+- tapOn:
+    id: 'links-select-links'
+- extendedWaitUntil:
+    visible:
+      id: 'bulk-count'
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: bulk-viewport-selecting

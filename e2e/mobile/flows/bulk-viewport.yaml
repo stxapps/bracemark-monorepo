@@ -1,0 +1,39 @@
+# Enter and leave bulk edit with the list scrolled well past its top, and leave
+# each state for the runner to measure (runner/mobile.ts, VIEWPORT-BULK-001).
+#
+# What only a device shows: bulk mode swaps the topbar for the bulk bar and
+# re-renders every mounted cell with a selection control, so FlashList re-lays
+# out cells it has already measured. A cell that re-renders blank, or a list
+# that jumps back to its top, still has every row in the accessibility tree —
+# the runner reads the rows' bounds against the list's, and the pixels inside
+# them, in each state.
+#
+# The account arrives holding 60 links in My List, newest first, at
+# `https://HOST/row-000` … `row-059` (web/fixtures/library.ts).
+#
+#   maestro test mobile/flows/bulk-viewport.yaml -e USERNAME=… -e PASSWORD=… \
+#     -e HOST=e2e-paged-….invalid
+appId: com.bracemark.app
+tags: [VIEWPORT-BULK-001, full, online, scale, visual, ios, android]
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+- extendedWaitUntil:
+    visible: '.*${HOST}/row-000.*'
+    timeout: 60000
+# The "links without a preview" prompt sits above the list and moves it when it
+# goes; put it away first so only bulk mode can move a row.
+- tapOn:
+    text: 'Dismiss'
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 5000
+- scrollUntilVisible:
+    element: '.*${HOST}/row-020.*'
+    direction: DOWN
+    centerElement: true
+    timeout: 60000
+- waitForAnimationToEnd:
+    timeout: 5000
+- assertNotVisible: '.*${HOST}/row-000.*'
+- takeScreenshot: bulk-viewport-scrolled

@@ -1,0 +1,68 @@
+# Part two of OFFLINE-*-001: the api is out of reach. Read — from a cold start,
+# which restores the session from secure-store and the library from SQLite with
+# no server to ask — and through in-app navigation; then write: retitle the one
+# link and save a second. Both land locally and wait in the queue.
+appId: com.bracemark.app
+---
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible:
+      id: 'links-screen'
+    timeout: 60000
+- extendedWaitUntil:
+    visible: ".*${EDITED_URL.replace('https://', '')}.*"
+    timeout: 30000
+- tapOn:
+    text: 'Dismiss'
+    optional: true
+
+- tapOn:
+    id: 'links-open-navigation'
+- tapOn:
+    id: 'links-nav-all'
+- extendedWaitUntil:
+    visible: ".*${EDITED_URL.replace('https://', '')}.*"
+    timeout: 20000
+- tapOn:
+    id: 'links-open-navigation'
+- tapOn:
+    id: 'links-nav-list-my-list'
+- extendedWaitUntil:
+    visible: ".*${EDITED_URL.replace('https://', '')}.*"
+    timeout: 20000
+
+# One link on the account, so the row menu's trigger is unambiguous. The title
+# starts blank (no override), so typing sets it outright.
+- tapOn:
+    id: 'link-options'
+- tapOn:
+    id: 'link-menu-edit'
+- tapOn:
+    id: 'edit-link-title'
+- inputText: ${TITLE}
+- tapOn:
+    id: 'edit-link-save'
+- extendedWaitUntil:
+    visible: '.*${TITLE}.*'
+    timeout: 10000
+- runFlow:
+    file: ../subflows/add-link.yaml
+    env:
+      URL: ${ADDED_URL}
+
+# Queued, not pushed: the Data card counts what is waiting.
+- runFlow:
+    file: ../subflows/open-settings.yaml
+    env:
+      SECTION: data
+- extendedWaitUntil:
+    visible: '.*waiting to sync.*'
+    timeout: 20000
+- takeScreenshot: offline-queued
+- tapOn:
+    id: 'settings-close'
+- extendedWaitUntil:
+    visible:
+      id: 'links-screen'
+    timeout: 10000

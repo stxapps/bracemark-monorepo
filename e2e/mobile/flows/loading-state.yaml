@@ -1,0 +1,43 @@
+# Sign in to an account whose library is still on its way: the generated
+# 1,000-link library (web/fixtures/scale-library.ts), uploaded from the web
+# before the device ever saw it. Stops with the credentials filled in; the
+# runner slows the api (runner/api-pause.ts, `throttle`) and
+# parts/loading-signed-in.yaml submits and waits for the first-pull screen,
+# which the runner then HOLDS by freezing the api — SKELETON-NATIVE-001;
+# parts/loading-held.yaml and loading-released.yaml read it held and released.
+#
+# Slowed first because unslowed it is not there to see: measured on the iPhone
+# 17 Pro simulator, the whole thousand-link pull finished inside the seconds
+# the driver spent getting iOS's "Save Password?" sheet off the screen above it.
+#
+# Why this loading state and not the list's bones: the native links screen
+# reads expo-sqlite, on the device, in the time a frame takes, and nothing
+# outside the app can hold that read without replacing the data hook — which
+# is exactly what the case may not do. What a person with a real library does
+# wait through on a new phone is this screen, for as long as the network takes,
+# and the network IS something a runner can hold. The bones stay covered at
+# component level (docs/e2e.md, _the native loading state_).
+#
+# The first-pull progressbar is found by its accessible name, "Decrypting your
+# links" (initial-sync-gate.tsx) — the headline above it carries an ellipsis, so
+# the whole-string match cannot land on the copy instead. Android folds the
+# bar's value into the name ("Decrypting your links, 440 of 2,073 items"); iOS
+# does not; the parts match both.
+#
+#   maestro test mobile/flows/loading-state.yaml -e USERNAME=… -e PASSWORD=…
+appId: com.bracemark.app
+tags: [SKELETON-NATIVE-001, full, online, scale, visual, ios, android]
+---
+- runFlow:
+    file: subflows/cold-launch.yaml
+- extendedWaitUntil:
+    visible: 'Sign in'
+    timeout: 60000
+- tapOn: 'Sign in'
+- tapOn:
+    id: 'sign-in-username'
+- inputText: ${USERNAME}
+- tapOn:
+    id: 'sign-in-password'
+- inputText: ${PASSWORD}
+- hideKeyboard

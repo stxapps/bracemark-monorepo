@@ -660,11 +660,16 @@ type error or a failing test.
 
 ## verifying any of this
 
-**The tests do not cover it.** The Maestro flows use `hideKeyboard`
-(`e2e/mobile/flows/add-link.yaml`), a native command that bypasses the app's own
-affordances entirely — so a surface can lose all three mechanisms with every e2e
-run still green. Same for jest: none of this renders. A device or simulator is
-the only instrument.
+**The tests barely cover it.** The Maestro flows that need the keyboard gone use
+`hideKeyboard`, a native command that bypasses the app's own affordances
+entirely, and jest renders none of this. One e2e case is the exception:
+`VIEWPORT-KEYBOARD-001` (`e2e/mobile/flows/keyboard.yaml`) requires the add
+panel's URL and Note fields, the search box and its controls, and — on Android —
+the share tag picker's field, Create row and Done to sit above the keyboard's
+measured frame, then dismisses each by the app's own path (the panel's chrome,
+a drag on the results, the share sheet's gap) and requires the surface and its
+draft to survive. Every other surface and path in this doc is still checked by
+hand, on a device or simulator.
 
 **And the instrument has holes.** Driving the keyboard with Maestro ran into six
 separate blind spots, each of which reads exactly like a failing fix. They were

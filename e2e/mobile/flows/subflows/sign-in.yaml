@@ -80,8 +80,14 @@ appId: com.bracemark.app
           id: 'links-screen'
           optional: true
 
-- assertVisible:
-    id: 'links-screen'
+# A long wait rather than a bare assert: a scale account's first pull holds the
+# links screen behind "Decrypting your links…" for as long as a thousand links
+# take to arrive, which outlasts the loop above. The loop still paces the
+# AutoFill sheet; a sheet that lands later is taken by the block below.
+- extendedWaitUntil:
+    visible:
+      id: 'links-screen'
+    timeout: 300000
 
 # The second half of the race: the sheet can still be on its way in when the
 # links screen is already up. This waits it out once — WARNED, not failed, when

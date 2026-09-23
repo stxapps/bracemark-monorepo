@@ -42,6 +42,25 @@ export async function scrollUntilRendered(page: Page, scroller: Locator, url: st
     .toBe(1);
 }
 
+// Walk DOWN a screen at a time until `url`'s row is rendered, then centre it.
+// For a row somewhere in the middle of a long library, where
+// `scrollUntilRendered` would overshoot: at the very bottom the virtualizer has
+// already unmounted a row several pages up, and the loop would page on forever.
+// Infinite scroll still does the paging — each step brings the last row nearer.
+export async function scrollUntilRow(page: Page, scroller: Locator, url: string) {
+  await expect
+    .poll(
+      async () => {
+        if ((await linkRow(page, url).count()) === 1) return true;
+        await scroller.evaluate((el) => el.scrollBy({ top: el.clientHeight * 0.8 }));
+        return false;
+      },
+      { timeout: 120_000, intervals: [100] },
+    )
+    .toBe(true);
+  await linkRow(page, url).evaluate((el) => el.scrollIntoView({ block: 'center' }));
+}
+
 export async function scrollToTop(scroller: Locator) {
   await scroller.evaluate((el) => el.scrollTo({ top: 0 }));
 }

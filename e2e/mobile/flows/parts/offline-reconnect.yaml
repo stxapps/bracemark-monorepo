@@ -1,0 +1,22 @@
+# Part three of OFFLINE-*-001: the api is back. A user's Sync drains the queue;
+# the Data card is the settled signal — nothing waiting, and "Last synced" —
+# since the ⋯ trigger reads the same during a cycle as after one.
+appId: com.bracemark.app
+---
+- tapOn:
+    id: 'links-more-options'
+- tapOn:
+    id: 'links-sync'
+- runFlow:
+    file: ../subflows/open-settings.yaml
+    env:
+      SECTION: data
+- extendedWaitUntil:
+    notVisible: '.*waiting to sync.*'
+    timeout: 90000
+- extendedWaitUntil:
+    visible: 'Last synced.*'
+    timeout: 30000
+- takeScreenshot: offline-drained
+- tapOn:
+    id: 'settings-close'

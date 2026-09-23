@@ -16,9 +16,11 @@ import {
 import { launchApp, type LaunchedApp } from '../web/fixtures/launch';
 import { writePagedLibrary } from '../web/fixtures/library';
 import { addLink, chooseRowMenuItem, displayUrl, linkRow } from '../web/fixtures/links';
-import { grantPlus } from '../web/fixtures/plan';
+import { grantPlus, grantPlusAndLoad } from '../web/fixtures/plan';
+import { type ScaleLibrary, writeScaleLibrary } from '../web/fixtures/scale-library';
 import { syncAndWait } from '../web/fixtures/sync';
 import { createInSettings } from '../web/fixtures/taxonomy';
+import { type ApiControl, controlApi } from './api-pause';
 import { parseNativeCli } from './cli';
 import { stageDocumentPickerFile } from './device-files';
 import {
@@ -26,16 +28,22 @@ import {
   boxById,
   boxOf,
   centerOf,
+  findNodes,
   formatBox,
+  type HierarchyNode,
   isInside,
   onlyNode,
   parseHierarchy,
   rowBoxByText,
   sameRow,
+  screenBox,
   writeDragFlow,
+  writeTapFlow,
 } from './hierarchy';
+import { keyboardFrame } from './keyboard';
 import { provisionAccount } from './lib';
 import { type CaseStep, type CaseStepContext, prepareNativeRun } from './native-run';
+import { inkShare, screenshot } from './pixels';
 import { capture } from './process';
 import { selectCasesForPlatform, validateCaseRegistry } from './registry';
 import {
@@ -55,6 +63,16 @@ const PLUS_CASES = new Set([
   'LOCK-LIST-001',
   'LOCK-AUTORELOCK-001',
 ]);
+
+// Cases that need the generated 1,000-link library (web/fixtures/scale-library.ts)
+// rather than the 60-link paged one. A thousand links is past the free cap, so
+// they take the same `manual` Plus grant.
+const SCALE_LIBRARY_CASES = new Set(['SCALE-IOS-001', 'SCALE-ANDROID-001', 'SKELETON-NATIVE-001']);
+
+// The least share of a row's box a painted row covers in ink (text, thumbnail,
+// chips) — a blank recycled cell is one flat colour, ~0. Measured on the paged
+// library's rows: ~0.08–0.15 on both devices.
+const PAINTED_ROW_INK = 0.02;
 
 // expo's lock provider relocks after 60s in the background (AUTO_RELOCK_AFTER_MS,
 // expo-react lock-provider.tsx); the case waits past it by a margin that absorbs
@@ -143,6 +161,201 @@ async function setApiReachable(deviceId: string, reachable: boolean): Promise<vo
   await setPortReachable(deviceId, 8787, reachable);
 }
 
+// A web profile's view of the account after an explicit pull: exactly one row
+// for `url`, carrying `text` when given. Pulled again until it is — a device
+// that has only just been given the api back may still be pushing.
+async function readFromWeb(
+  label: string,
+  credentials: Credentials,
+  expectations: Array<{ url: string; text?: string }>,
+): Promise<void> {
+  const app = await launchApp(profileDir(label), { existing: credentials });
+  try {
+    await app.page.goto('/links');
+    await expect
+      .poll(
+        async () => {
+          await syncAndWait(app.page);
+          for (const { url, text } of expectations) {
+            const row = linkRow(app.page, url);
+            if ((await row.count()) !== 1) return false;
+            if (text && !(await row.innerText()).includes(text)) return false;
+          }
+          return true;
+        },
+        { timeout: 90_000, intervals: [2_000] },
+      )
+      .toBe(true);
+  } finally {
+    await app.close();
+  }
+}
+
+// The list as the device shows it now: every paged-library row painted wholly
+// inside it — by bounds AND by pixels — and the row the scroll position is
+// anchored on, the one crossing the list's top edge (else the first below it).
+// Anything less than a screenful of painted rows, or a row inside the list that
+// drew nothing, fails here.
+async function paintedRows(context: CaseStepContext, urls: string[], label: string) {
+  const root = parseHierarchy(await context.hierarchy());
+  const list = boxById(root, 'links-list');
+  const raster = await screenshot(
+    context.platform,
+    context.deviceId,
+    join(context.caseDir, `${context.index}-${label}.png`),
+  );
+  const screenWidth = screenBox(root).right;
+  const mounted: Array<{ url: string; box: Box }> = [];
+  for (const url of urls) {
+    const box = rowBoxByText(root, displayUrl(url));
+    if (!box || box.bottom <= list.top || box.top >= list.bottom) continue;
+    mounted.push({ url, box });
+  }
+  // Wholly inside, at full height. Android reports bounds clipped to the
+  // scroller, so a sliver of a row at an edge still reads as "inside" — and
+  // may hold nothing but its border.
+  const heights = mounted.map(({ box }) => box.bottom - box.top).sort((a, b) => a - b);
+  const fullHeight = heights[Math.floor(heights.length / 2)] ?? 0;
+  let painted = 0;
+  for (const { url, box } of mounted) {
+    if (!isInside(box, list) || box.bottom - box.top < fullHeight * 0.8) continue;
+    const ink = inkShare(raster, box, screenWidth);
+    if (ink < PAINTED_ROW_INK) {
+      throw new Error(`${label}: row ${url} at ${formatBox(box)} is in the list but painted blank`);
+    }
+    painted += 1;
+  }
+  if (painted < 3) throw new Error(`${label}: only ${painted} rows are painted in the list`);
+  mounted.sort((a, b) => a.box.top - b.box.top);
+  return { list, anchor: mounted[0] };
+}
+
+// The tree and the keyboard's frame once the keyboard is in the state the step
+// expects, read up to four times a second apart. One read is not enough: with
+// the machine loaded, an iOS hierarchy read came back without the keyboard's
+// node while the checkpoint taken just before it showed the keys up.
+async function settledKeyboard(context: CaseStepContext, expectUp: boolean) {
+  for (let attempt = 1; ; attempt++) {
+    const root = parseHierarchy(await context.hierarchy());
+    const keyboard = await keyboardFrame(context, root);
+    if (Boolean(keyboard) === expectUp || attempt === 4) return { root, keyboard };
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+}
+
+// Each named element is on screen and wholly above the soft keyboard — which
+// must be up — and so reachable by a finger. Returns what it read, so a step can
+// go on to aim a gesture from the same frame.
+async function clearOfKeyboard(
+  context: CaseStepContext,
+  label: string,
+  elements:
+    | Array<{ what: string; box: Box }>
+    | ((root: HierarchyNode) => Array<{ what: string; box: Box }>),
+) {
+  const { root, keyboard } = await settledKeyboard(context, true);
+  if (!keyboard) throw new Error(`${label}: no soft keyboard is up`);
+  const screen = screenBox(root);
+  for (const { what, box } of typeof elements === 'function' ? elements(root) : elements) {
+    if (!isInside(box, screen) || box.bottom > keyboard.top) {
+      throw new Error(
+        `${label}: ${what} at ${formatBox(box)} is not clear of the keyboard at ${formatBox(keyboard)}`,
+      );
+    }
+  }
+  return { root, keyboard, screen };
+}
+
+function requireBox(box: Box | null, what: string): Box {
+  if (!box) throw new Error(`${what} is not on screen`);
+  return box;
+}
+
+const byIds =
+  (...ids: string[]) =>
+  (root: HierarchyNode) =>
+    ids.map((id) => ({ what: `#${id}`, box: boxById(root, id) }));
+
+// The keyboard is down AND the surface that had it is still the one on
+// screen — a keyboard also "goes" when a stray tap sends the app to the
+// background, which is how a drag misread as a row press once passed here.
+async function keyboardGone(
+  context: CaseStepContext,
+  label: string,
+  stillShowing: string,
+): Promise<null> {
+  const { root, keyboard } = await settledKeyboard(context, false);
+  if (keyboard) throw new Error(`${label}: the keyboard is still up at ${formatBox(keyboard)}`);
+  if (findNodes(root, (attributes) => attributes['resource-id'] === stillShowing).length !== 1) {
+    throw new Error(
+      `${label}: #${stillShowing} is gone — the gesture did more than put the keyboard away ` +
+        '(on Android, see docs/e2e.md: a drag on the results delivered as a row press)',
+    );
+  }
+  return null;
+}
+
+// Maestro matches text as a (case-insensitive) regex against the whole
+// accessible name, so a fixture value is escaped before it becomes a selector.
+function escapeRegex(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// How a flow and a host step find one row of the scale library. A row prints
+// its title, or its address when it has none (the generated titles repeat
+// every 24 links, so only an address is unique alone); a title is paired with
+// the host the row prints under it, which no mounted neighbour shares.
+function scaleRow(library: ScaleLibrary, url: string) {
+  const display = library.display.get(url);
+  if (!display) throw new Error(`${url} is not a shown row of the scale library`);
+  const host = new URL(url).host;
+  const unique = [...library.display.values()].filter((value) => value === display).length === 1;
+  const texts = unique ? [display] : [display, host];
+  return {
+    texts,
+    match: `.*${texts.map(escapeRegex).join('.*')}.*`,
+    unique,
+  };
+}
+
+// The two pins the native flows page past: deep ones whose row above is a
+// unique address, which `scrollUntilVisible` can stop on without meeting a
+// namesake first.
+function nativeDeepPins(library: ScaleLibrary) {
+  const pins = library.deepPins.filter((pin) => scaleRow(library, pin.before).unique);
+  if (pins.length < 2) throw new Error('the scale library has too few addressable deep pins');
+  return [pins[0], pins[pins.length - 1]];
+}
+
+// The overlay held for `pin`: the rows dated either side of it are painted
+// back to back inside the list, and the pin itself is mounted nowhere near.
+function assertClosedOver(
+  library: ScaleLibrary,
+  pin: { url: string; before: string; after: string },
+) {
+  return async (context: CaseStepContext): Promise<null> => {
+    const root = parseHierarchy(await context.hierarchy());
+    const list = boxById(root, 'links-list');
+    const before = rowBoxByText(root, scaleRow(library, pin.before).texts);
+    const after = rowBoxByText(root, scaleRow(library, pin.after).texts);
+    if (!before || !after) throw new Error(`the rows around ${pin.url} are not both mounted`);
+    for (const box of [before, after]) {
+      if (!isInside(box, list)) {
+        throw new Error(`row ${formatBox(box)} is outside the list ${formatBox(list)}`);
+      }
+    }
+    if (Math.abs(after.top - before.bottom) > 2) {
+      throw new Error(
+        `something sits between the rows around ${pin.url}: ${formatBox(before)} then ${formatBox(after)}`,
+      );
+    }
+    if (rowBoxByText(root, scaleRow(library, pin.url).texts)) {
+      throw new Error(`pinned ${pin.url} is mounted in the rest of the list`);
+    }
+    return null;
+  };
+}
+
 // Standalone native journeys. Platform and device are deliberately mandatory:
 // a result that does not say which runtime it exercised is not a baseline.
 async function main(): Promise<void> {
@@ -159,6 +372,7 @@ async function main(): Promise<void> {
       const withRecovery = testCase.id === 'NATIVE-ACCOUNT-002';
       let pagedUrls: string[] = [];
       const conflictUrl = unresolvableUrl(`${run.runId}-conflict`);
+      const offlineUrl = unresolvableUrl(`${run.runId}-offline-edited`);
       const shareListName = unique('E2E share list');
       const shareTagName = unique('e2e-share-tag');
       const shareCreatedListName = unique('E2E shared list');
@@ -170,11 +384,23 @@ async function main(): Promise<void> {
           )
         : undefined;
       let extractionLibrary: PendingExtractionLibrary | undefined;
+      let scaleLibrary: ScaleLibrary | undefined;
       const account = await provisionAccount(`${run.runId}-${testCase.id}`, {
         withRecovery,
         prepare: async (app) => {
           if (PLUS_CASES.has(testCase.id)) await grantPlus(app.credentials.username);
-          if (testCase.fixture === 'scale') {
+          if (SCALE_LIBRARY_CASES.has(testCase.id)) {
+            // This browser imports past the free cap, so IT must hold Plus, not
+            // only the server (docs/e2e.md, _granting Plus is two steps_). The
+            // whole library reaches the server before the device signs in, so
+            // the device's first pull is a thousand links.
+            await grantPlusAndLoad(app.page, app.credentials.username);
+            scaleLibrary = await writeScaleLibrary(
+              join(run.runDir, 'cases', testCase.id, 'fixture', 'scale.zip'),
+            );
+            await importArchive(app.page, scaleLibrary.archivePath);
+            await waitForSync(app.page);
+          } else if (testCase.fixture === 'scale') {
             // The paged library goes in through the web app and reaches the
             // server before the device signs in and pulls it.
             const library = await writePagedLibrary(
@@ -211,6 +437,12 @@ async function main(): Promise<void> {
             // The one link both clients edit, on the server before either does.
             await app.page.goto('/links');
             await addLink(app.page, conflictUrl);
+            await syncAndWait(app.page);
+          }
+          if (testCase.id.startsWith('OFFLINE-')) {
+            // What the device must still read once the api is gone.
+            await app.page.goto('/links');
+            await addLink(app.page, offlineUrl);
             await syncAndWait(app.page);
           }
         },
@@ -639,6 +871,24 @@ async function main(): Promise<void> {
           },
         ];
       }
+      if (testCase.id === 'SCALE-IOS-001' || testCase.id === 'SCALE-ANDROID-001') {
+        const library = scaleLibrary;
+        if (!library) throw new Error(`${testCase.id}: the scale library was never imported`);
+        const [first, later] = nativeDeepPins(library);
+        env.PIN_0 = scaleRow(library, library.pinned[0]).match;
+        env.BEFORE_1 = scaleRow(library, first.before).match;
+        env.AFTER_1 = scaleRow(library, first.after).match;
+        env.PIN_1 = scaleRow(library, first.url).match;
+        env.BEFORE_2 = scaleRow(library, later.before).match;
+        env.AFTER_2 = scaleRow(library, later.after).match;
+        env.PIN_2 = scaleRow(library, later.url).match;
+        steps = [
+          testCase.path,
+          assertClosedOver(library, first),
+          'mobile/flows/parts/scale-deeper.yaml',
+          assertClosedOver(library, later),
+        ];
+      }
       if (testCase.id === 'SYNC-LOCAL-TOP-001') {
         env.HOST = new URL(pagedUrls[0]).host;
         env.LINK_URL = unresolvableUrl(`${run.runId}-local-top`);
@@ -648,6 +898,242 @@ async function main(): Promise<void> {
             const { root, list, row } = await rowInList(context, env.LINK_URL);
             const previous = rowBoxByText(root, displayUrl(pagedUrls[0]));
             assertLeadsList(list, row, previous, 'a save at offset zero');
+            return null;
+          },
+        ];
+      }
+      if (testCase.id === 'VIEWPORT-BULK-001') {
+        env.HOST = new URL(pagedUrls[0]).host;
+        let before: { url: string; offset: number } | undefined;
+        // The row the scroll position is anchored on, and where its top edge
+        // sits against the list's — the position as the reader sees it. Both
+        // must hold as bulk mode comes and goes. (Rows BELOW the anchor may
+        // legitimately move: bulk mode hides each row's ⋯, so a title that
+        // wrapped around it can re-measure a line shorter.) Android reports a
+        // node's bounds CLIPPED to its scroller, so a row crossing the top edge
+        // reads as starting exactly on it and only its identity is comparable;
+        // iOS reports the real frame, and its offset is compared too.
+        const holdsPosition = (label: string) => async (context: CaseStepContext) => {
+          const { list, anchor } = await paintedRows(context, pagedUrls, label);
+          const offset = anchor.box.top - list.top;
+          if (!before) {
+            before = { url: anchor.url, offset };
+            return null;
+          }
+          const moved = before.offset < 0 && Math.abs(offset - before.offset) > 2;
+          if (anchor.url !== before.url || moved) {
+            throw new Error(
+              `${label}: the list moved — ${before.url} at ${before.offset} became ` +
+                `${anchor.url} at ${offset}`,
+            );
+          }
+          return null;
+        };
+        steps = [
+          testCase.path,
+          holdsPosition('scrolled'),
+          'mobile/flows/parts/bulk-viewport-enter.yaml',
+          holdsPosition('selecting'),
+          'mobile/flows/parts/bulk-viewport-exit.yaml',
+          holdsPosition('left'),
+        ];
+      }
+      if (testCase.id === 'VIEWPORT-KEYBOARD-001') {
+        env.HOST = new URL(pagedUrls[0]).host;
+        env.LINK_URL = unresolvableUrl(`${run.runId}-keyboard`);
+        // Every paged row's address says `row-…`, so the search box's list
+        // stays a full, scrollable screen under the keyboard.
+        env.WORD = 'row';
+        env.TAG_NAME = unique('e2e-keyboard-tag');
+        const shareUrl = unresolvableUrl(`${run.runId}-keyboard-share`);
+        steps = [
+          testCase.path,
+          async (context) => {
+            await clearOfKeyboard(
+              context,
+              'add panel, URL',
+              byIds('add-link-url', 'add-link-save'),
+            );
+            return null;
+          },
+          'mobile/flows/parts/keyboard-add-note.yaml',
+          // Note clear of the keyboard; then the panel's chrome — the header's
+          // empty middle, level with its ✕ (link-add-panel.tsx) — which the
+          // panel claims and answers with Keyboard.dismiss.
+          async (context) => {
+            const { root, screen } = await clearOfKeyboard(
+              context,
+              'add panel, Note',
+              byIds('add-link-note', 'add-link-save'),
+            );
+            const close = boxOf(onlyNode(root, 'Close add link', undefined, 'add panel ✕'));
+            return writeTapFlow(context, 'add-panel-chrome', {
+              x: Math.round(screen.right / 2),
+              y: centerOf(close).y,
+            });
+          },
+          (context) =>
+            keyboardGone(context, 'add panel, after its chrome was tapped', 'add-link-note'),
+          'mobile/flows/parts/keyboard-add-dismissed.yaml',
+          // The box, its two controls and the first result are all above the
+          // keyboard, and so is the middle of the screen, where the next part's
+          // drag starts — on the list, not on the keys.
+          async (context) => {
+            const { root, keyboard } = await clearOfKeyboard(context, 'search', (tree) => [
+              ...byIds('links-search-input', 'links-search-clear', 'links-search-advanced')(tree),
+            ]);
+            const list = boxById(root, 'links-list');
+            const row = rowBoxByText(root, displayUrl(pagedUrls[0]));
+            if (!row || row.bottom > keyboard.top || !isInside(row, list)) {
+              throw new Error('search: the first result is not reachable above the keyboard');
+            }
+            // The drag the next step makes: from the middle of the list's
+            // visible stretch toward its top — on the rows, never on the keys.
+            // (Maestro's directional swipe began on the keyboard, measured on
+            // iOS 26.5, and moved nothing.) On Android it is `input swipe`, a
+            // native gesture, so a press it produces is the app's to answer
+            // for: on the AVD such a drag is intermittently delivered as a PRESS
+            // on the row under it and opens the link — an open finding
+            // (docs/e2e.md, _scale, loading and offline_) that `keyboardGone`
+            // below reports by name.
+            const visibleBottom = Math.min(list.bottom, keyboard.top);
+            const x = centerOf(list).x;
+            const span = visibleBottom - list.top;
+            const from = { x, y: list.top + Math.round(span * 0.5) };
+            const to = { x, y: list.top + Math.round(span * 0.05) };
+            if (context.platform === 'android') {
+              await capture('adb', [
+                '-s',
+                context.deviceId,
+                'shell',
+                'input',
+                'swipe',
+                ...[from.x, from.y, to.x, to.y, 300].map(String),
+              ]);
+              return null;
+            }
+            return writeDragFlow(context, 'search-results-drag', from, to, 250);
+          },
+          (context) =>
+            keyboardGone(context, 'search, after dragging the results', 'links-search-input'),
+          'mobile/flows/parts/keyboard-search-kept.yaml',
+        ];
+        // The share sheet's text entry is only observable on Android: over the
+        // iOS extension the panel leaves the accessibility tree the moment the
+        // keyboard is presented (docs/soft-keyboard.md, _verifying any of this_).
+        if (run.platform === 'android') {
+          steps.push(
+            async () => {
+              await openSystemShare({
+                platform: run.platform,
+                deviceId: run.deviceId,
+                sourceUrl: shareUrl,
+                title: unique('E2E keyboard share'),
+              });
+              return null;
+            },
+            'mobile/flows/parts/keyboard-share-tags.yaml',
+            // Field, Create row and Done above the keyboard; then the gap under
+            // the field, which is the sheet's dismiss layer (share-kit.tsx).
+            async (context) => {
+              const { root } = await clearOfKeyboard(context, 'share tags', (tree) => [
+                ...byIds('share-tag-input', 'share-tag-create')(tree),
+                { what: 'Done', box: requireBox(rowBoxByText(tree, 'Done'), 'the Done button') },
+              ]);
+              const input = boxById(root, 'share-tag-input');
+              return writeTapFlow(context, 'share-gap', {
+                x: centerOf(input).x,
+                y: Math.round(input.bottom + (input.bottom - input.top) / 4),
+              });
+            },
+            (context) =>
+              keyboardGone(context, 'share tags, after the gap was tapped', 'share-tag-input'),
+            'mobile/flows/parts/keyboard-share-dismissed.yaml',
+          );
+        }
+      }
+      if (testCase.id === 'SKELETON-NATIVE-001') {
+        let api: ApiControl | undefined;
+        cleanupActions.push(async () => api?.resume());
+        steps = [
+          testCase.path,
+          // A slow server from the moment of sign-in, so the first pull is
+          // still running when the flow looks for it…
+          async () => {
+            api = await controlApi();
+            api.throttle();
+            return null;
+          },
+          'mobile/flows/parts/loading-signed-in.yaml',
+          // …and then no server at all, so it stays where the flow found it.
+          async () => {
+            api?.pause();
+            return null;
+          },
+          'mobile/flows/parts/loading-held.yaml',
+          // Painted, not merely present: the bar sits on screen and the band
+          // around it — the headline over it, the count under it — carries ink.
+          async (context) => {
+            const root = parseHierarchy(await context.hierarchy());
+            // Android folds the bar's value into its name; iOS does not.
+            const bars = findNodes(root, (attributes) =>
+              /^Decrypting your links(, .*)?$/.test(attributes.accessibilityText ?? ''),
+            );
+            if (bars.length !== 1)
+              throw new Error(`expected one first-pull progressbar, found ${bars.length}`);
+            const box = boxOf(bars[0]);
+            const screen = screenBox(root);
+            if (!isInside(box, screen) || box.right - box.left <= 0) {
+              throw new Error(`the progressbar ${formatBox(box)} is not on screen`);
+            }
+            const reach = Math.round((box.right - box.left) / 4);
+            const band = { ...box, top: box.top - reach, bottom: box.bottom + reach };
+            const raster = await screenshot(
+              context.platform,
+              context.deviceId,
+              join(context.caseDir, `${context.index}-loading-held.png`),
+            );
+            if (inkShare(raster, band, screen.right) < PAINTED_ROW_INK) {
+              throw new Error(`the loading state around ${formatBox(box)} is painted blank`);
+            }
+            api?.resume();
+            return null;
+          },
+          'mobile/flows/parts/loading-released.yaml',
+        ];
+      }
+      if (testCase.id === 'OFFLINE-IOS-001' || testCase.id === 'OFFLINE-ANDROID-001') {
+        env.EDITED_URL = offlineUrl;
+        env.ADDED_URL = unresolvableUrl(`${run.runId}-offline-added`);
+        env.TITLE = unique('E2E offline title');
+        let api: ApiControl | undefined;
+        const reconnect = async () => {
+          if (run.platform === 'android') await setApiReachable(run.deviceId, true);
+          else api?.resume();
+        };
+        cleanupActions.push(reconnect);
+        steps = [
+          testCase.path,
+          async () => {
+            if (run.platform === 'android') {
+              await setApiReachable(run.deviceId, false);
+            } else {
+              api = await controlApi();
+              api.pause();
+            }
+            return null;
+          },
+          'mobile/flows/parts/offline-local.yaml',
+          async () => {
+            await reconnect();
+            return null;
+          },
+          'mobile/flows/parts/offline-reconnect.yaml',
+          async () => {
+            await readFromWeb(`${run.runId}-${testCase.id}-reader`, credentials, [
+              { url: env.ADDED_URL },
+              { url: env.EDITED_URL, text: env.TITLE },
+            ]);
             return null;
           },
         ];

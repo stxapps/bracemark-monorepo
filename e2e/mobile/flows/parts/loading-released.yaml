@@ -1,0 +1,28 @@
+# Part three of SKELETON-NATIVE-001: the api is back, the held requests are
+# served, and the same pull finishes into the links screen — no retry, no
+# relaunch.
+appId: com.bracemark.app
+---
+- extendedWaitUntil:
+    visible:
+      id: 'links-screen'
+    timeout: 300000
+- assertNotVisible: 'Decrypting your links(, .*)?'
+# Then the links screen's own first read of a thousand links, with the list's
+# bones up meanwhile. On the Pixel 8 AVD's dev build the frames right after the
+# pull are busy enough that a single wait for the rows failed in under a second
+# — the hierarchy read, not the timeout — while the rows were on screen moments
+# later; so the wait is paced by optional lookups, and the hard assert after it
+# is what fails a read that never lands.
+- repeat:
+    times: 20
+    while:
+      notVisible:
+        id: 'link-options'
+    commands:
+      - assertVisible:
+          id: 'link-options'
+          optional: true
+- assertVisible:
+    id: 'link-options'
+- takeScreenshot: loading-released

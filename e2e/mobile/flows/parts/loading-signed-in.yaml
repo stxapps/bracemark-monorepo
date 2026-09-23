@@ -1,0 +1,26 @@
+# Part two of SKELETON-NATIVE-001: submit, with the api slowed to a tenth of
+# its speed, and wait for the first pull's progressbar to be on screen.
+appId: com.bracemark.app
+---
+- tapOn:
+    id: 'sign-in-submit'
+
+# Argon2id first, then the pull lists the library and the bar appears. iOS may
+# float its "Save Password?" sheet over the app meanwhile (subflows/sign-in.yaml
+# carries the whole story); the optional tap is a no-op without it.
+- repeat:
+    times: 12
+    while:
+      notVisible: 'Decrypting your links(, .*)?'
+    commands:
+      - runFlow:
+          when:
+            platform: iOS
+          commands:
+            - tapOn:
+                text: 'Not Now'
+                optional: true
+      - assertVisible:
+          text: 'Decrypting your links(, .*)?'
+          optional: true
+- assertVisible: 'Decrypting your links(, .*)?'

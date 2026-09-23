@@ -1,0 +1,19 @@
+# Part two of SKELETON-NATIVE-001: with the api frozen, the first pull cannot
+# finish, so the loading state stays up for as long as this takes. The runner
+# reads its bounds and pixels afterwards.
+appId: com.bracemark.app
+---
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - assertVisible:
+          text: 'Save Password?'
+          optional: true
+      - tapOn:
+          text: 'Not Now'
+          optional: true
+- assertVisible: 'Decrypting your links(, .*)?'
+- assertNotVisible:
+    id: 'links-screen'
+- takeScreenshot: loading-held

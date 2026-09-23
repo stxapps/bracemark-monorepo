@@ -1,0 +1,22 @@
+# VIEWPORT-KEYBOARD-001 on Android: the share sheet's tag picker, over a real
+# ACTION_SEND the runner has just delivered. Its field submits to add a tag
+# rather than blurring (`submitBehavior="submit"`), so return is no way out; the
+# runner measures, then taps the sheet's own dismiss layer.
+appId: com.bracemark.app
+---
+- runFlow:
+    file: ../subflows/open-system-share.yaml
+    env:
+      SHARE_STATE_ID: share-add
+- tapOn:
+    id: 'share-tags-row'
+- tapOn:
+    id: 'share-tag-input'
+- inputText: ${TAG_NAME}
+- extendedWaitUntil:
+    visible:
+      id: 'share-tag-create'
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: keyboard-share-tags

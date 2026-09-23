@@ -320,6 +320,36 @@
     "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
   },
   {
+    "id": "SCALE-WEB-001",
+    "title": "A generated 1,000-link library pages past its first result set to a known far row without repeating a pinned row",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online", "scale"],
+    "fixture": "scale",
+    "path": "web/scale.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report", "checkpoint"]
+  },
+  {
+    "id": "SKELETON-WEB-001",
+    "title": "A held first read paints the list and card skeletons and announces loading",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online", "destructive", "visual"],
+    "fixture": "small",
+    "path": "web/scale.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report", "checkpoint"]
+  },
+  {
+    "id": "OFFLINE-WEB-001",
+    "title": "An open page reads, writes and edits offline, reports the failed cycle, and syncs its queue to another profile on reconnect",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online", "destructive"],
+    "fixture": "small",
+    "path": "web/offline.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report", "checkpoint"]
+  },
+  {
     "id": "EXT-AUTH-001",
     "title": "Extension sign-in survives popup and browser-profile reopen",
     "surface": "extension",
@@ -427,6 +457,36 @@
     "traits": ["online", "extension"],
     "fixture": "small",
     "path": "extension/RELEASE.md",
+    "artifacts": ["manual-checklist"]
+  },
+  {
+    "id": "PWA-001",
+    "title": "A cold launch of the installed production build with the origin gone and the browser offline brings back the app shell and the cached library",
+    "surface": "pwa",
+    "tier": "full",
+    "traits": ["online", "pwa"],
+    "fixture": "small",
+    "path": "pwa/pwa.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report", "checkpoint"]
+  },
+  {
+    "id": "PWA-002",
+    "title": "An edit made in the offline installed production build syncs to an independent client once the network returns",
+    "surface": "pwa",
+    "tier": "full",
+    "traits": ["online", "pwa"],
+    "fixture": "small",
+    "path": "pwa/pwa.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report", "checkpoint"]
+  },
+  {
+    "id": "PWA-RELEASE-001",
+    "title": "Install and smoke the PWA through real browser chrome on the release device/browser matrix",
+    "surface": "pwa",
+    "tier": "release",
+    "traits": ["online", "pwa"],
+    "fixture": "small",
+    "path": "web/RELEASE.md",
     "artifacts": ["manual-checklist"]
   },
   {
@@ -807,6 +867,76 @@
     "traits": ["online", "internet", "ios", "android"],
     "fixture": "small",
     "path": "mobile/flows/extract-all.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "SCALE-IOS-001",
+    "title": "A generated 1,000-link library pages past its first result set on iOS, with each deep pin's neighbours painted back to back",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "scale", "ios"],
+    "fixture": "scale",
+    "path": "mobile/flows/scale.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "SCALE-ANDROID-001",
+    "title": "A generated 1,000-link library pages past its first result set on Android, with each deep pin's neighbours painted back to back",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "scale", "android"],
+    "fixture": "scale",
+    "path": "mobile/flows/scale.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "SKELETON-NATIVE-001",
+    "title": "A new device's first pull of a 1,000-link library holds a painted, announced loading state while the api stalls and finishes into the links screen",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "scale", "visual", "ios", "android"],
+    "fixture": "scale",
+    "path": "mobile/flows/loading-state.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "VIEWPORT-BULK-001",
+    "title": "Entering and leaving bulk edit at a non-zero offset keeps every FlashList cell painted and the scroll position stable",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "scale", "visual", "ios", "android"],
+    "fixture": "scale",
+    "path": "mobile/flows/bulk-viewport.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "OFFLINE-IOS-001",
+    "title": "iOS reads from a cold start, retitles and saves with the api frozen, then drains its queue to a web profile",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "destructive", "ios"],
+    "fixture": "small",
+    "path": "mobile/flows/offline.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "OFFLINE-ANDROID-001",
+    "title": "Android reads from a cold start, retitles and saves with its api route removed, then drains its queue to a web profile",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "destructive", "android"],
+    "fixture": "small",
+    "path": "mobile/flows/offline.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "VIEWPORT-KEYBOARD-001",
+    "title": "With the soft keyboard up, the add panel, the search box and the Android share tag picker keep their fields and controls above it, and each app dismissal path puts it away without closing the surface",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "scale", "visual", "ios", "android"],
+    "fixture": "scale",
+    "path": "mobile/flows/keyboard.yaml",
     "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
   },
   {

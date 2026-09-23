@@ -141,22 +141,53 @@ async function probeMetro(origin: string): Promise<void> {
 // Simulator.app-wide key, not a per-device one, and absent means on. The key is
 // only read at Simulator launch, so a `defaults write` without a restart passes
 // this check and still runs with the hardware keyboard.
-async function assertIosSoftwareKeyboard(): Promise<void> {
+//
+// …and the Simulator key is only half of it. The simulated iPhone keeps its own
+// memory of a hardware keyboard — `HardwareKeyboardLastSeen` in its
+// `com.apple.keyboard.preferences` — and while that reads true iOS minimizes
+// the software keyboard to nothing, with the Simulator key correctly off.
+// Measured on iOS 26.5: a caret and an edit menu, no keys, until the device
+// flag was cleared and the device rebooted. Maestro's own typing does not
+// set it; something outside the run did, and it outlived Simulator restarts.
+async function assertIosSoftwareKeyboard(deviceId: string): Promise<void> {
   const result = await capture(
     'defaults',
     ['read', 'com.apple.iphonesimulator', 'ConnectHardwareKeyboard'],
     { allowFailure: true },
   );
-  if (result.stdout.trim() === '0') return;
-  throw new Error(
-    'Connect Hardware Keyboard is on in Simulator, so no software keyboard would appear. Run ' +
-      '`defaults write com.apple.iphonesimulator ConnectHardwareKeyboard -bool false`, restart ' +
-      'Simulator, and re-boot the device (docs/app-drivers.md, _the software keyboard_).',
+  if (result.stdout.trim() !== '0') {
+    throw new Error(
+      'Connect Hardware Keyboard is on in Simulator, so no software keyboard would appear. Run ' +
+        '`defaults write com.apple.iphonesimulator ConnectHardwareKeyboard -bool false`, restart ' +
+        'Simulator, and re-boot the device (docs/app-drivers.md, _the software keyboard_).',
+    );
+  }
+  const seen = await capture(
+    'xcrun',
+    [
+      'simctl',
+      'spawn',
+      deviceId,
+      'defaults',
+      'read',
+      'com.apple.keyboard.preferences',
+      'HardwareKeyboardLastSeen',
+    ],
+    { allowFailure: true },
   );
+  if (seen.stdout.trim() === '1') {
+    throw new Error(
+      `iOS device ${deviceId} remembers a hardware keyboard and will minimize the software one. ` +
+        `Run \`xcrun simctl spawn ${deviceId} defaults write com.apple.keyboard.preferences ` +
+        'HardwareKeyboardLastSeen -bool false`, then reboot the device ' +
+        `(\`xcrun simctl shutdown ${deviceId} && xcrun simctl boot ${deviceId}\`) — not a ` +
+        'SpringBoard restart, which left it crashing mid-run (docs/app-drivers.md, _the software keyboard_).',
+    );
+  }
 }
 
 async function iosDevice(deviceId: string): Promise<{ device: DeviceIdentity; app: AppIdentity }> {
-  await assertIosSoftwareKeyboard();
+  await assertIosSoftwareKeyboard(deviceId);
   const result = await capture('xcrun', ['simctl', 'list', 'devices', 'booted', '--json']);
   const parsed = JSON.parse(result.stdout) as {
     devices: Record<

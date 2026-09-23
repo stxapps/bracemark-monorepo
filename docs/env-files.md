@@ -56,6 +56,14 @@ Files in `apps/bracemark-web/` (committed except `*.local`):
 | `.env.production`  | `nx build bracemark-web`            | Next (auto)  |
 | `.env.staging`     | `nx build bracemark-web -c staging` | Nx `envFile` |
 
+`.env.development` has a second reader: `nx build bracemark-web -c development`
+takes it through the same `envFile` mechanism, which is a PRODUCTION-mode build
+(the static export and its service worker) aimed at the local stack. Nothing
+deploys it — `deploy-static.sh` rebuilds and then refuses a bundle that does
+not name its tier's origins — and the one caller is the PWA e2e target
+([e2e.md](./e2e.md), _the PWA target_), which copies `out/` away as soon as it
+is built.
+
 Current vars:
 
 - `NEXT_PUBLIC_API_URL` → the matching bracemark-api URL.

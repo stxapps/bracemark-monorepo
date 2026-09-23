@@ -64,3 +64,17 @@ export async function assertStackOwnedByRepo(
     await assertOriginOwnedByRepo(entry.origin, entry.label, { required: entry.required });
   }
 }
+
+// For an origin a case serves ITSELF and takes away mid-case (the PWA target):
+// any listener there, ours or not, would answer in its place.
+export async function assertPortFree(origin: string, label: string): Promise<void> {
+  const port = localPort(origin);
+  if (!port) return;
+  const pids = await listenerPids(port);
+  if (pids.length > 0) {
+    throw new Error(
+      `${label} needs ${origin} free, but pid ${pids.join(', ')} is listening there. ` +
+        'Stop it and retry (the marketing site’s dev server uses this port).',
+    );
+  }
+}

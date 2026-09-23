@@ -148,7 +148,23 @@ a single symmetric `setQuery`:
   common case, suffixed forms for the rest, repeated keys). The **search editor's**
   writer.
 
-Both write the URL; both let `query`/`selection` re-derive from it. The asymmetry is
+Both write the URL; both let `query`/`selection` re-derive from it.
+
+⚠ **On web both write it with `window.history.pushState`, not `router.push`**
+(and the stale-selection bounce with `replaceState`). Every write stays on
+`/links` and changes only the search params, which Next's app router
+integrates without a server round trip — `useSearchParams` re-reads, and Back
+steps through the entries as before. `router.push` fetches the route's RSC
+payload first and, when that fetch fails, falls back to a full document load:
+with the network gone, one sidebar click took an open, fully-loaded links page
+to the browser's offline error page, in the dev server and in the static
+export alike. Nothing below e2e can see it — the unit spec mocks the router,
+and online the two are indistinguishable. `OFFLINE-WEB-001` and `PWA-001`
+(docs/e2e.md) are the specimen. A navigation that LEAVES `/links` still goes
+through the router; offline, only the installed app's service worker can
+answer that one.
+
+The asymmetry is
 why there's no single wide `setQuery(LinkQuery)` for navigation: a full inverse
 serializer is only justified once a writer needs the whole grammar, and the **advanced
 search form is exactly that writer** — it builds text/url/title word clauses +

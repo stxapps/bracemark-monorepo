@@ -1,0 +1,13 @@
+# Part three of VIEWPORT-BULK-001: leave bulk edit by its own ✕, and let the
+# runner measure the list once more.
+appId: com.bracemark.app
+---
+- tapOn:
+    id: 'bulk-exit'
+- extendedWaitUntil:
+    notVisible:
+      id: 'bulk-count'
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: bulk-viewport-left

@@ -1,0 +1,15 @@
+# Part two of SCALE-*-001: further down the same Show All, past a later pin's
+# slot — pages beyond the first result set — where the runner reads the bounds
+# again. Never run alone; scale.yaml signs in and pages the first stretch.
+appId: com.bracemark.app
+---
+- scrollUntilVisible:
+    element: '.*${BEFORE_2}.*'
+    direction: DOWN
+    centerElement: true
+    timeout: 300000
+- waitForAnimationToEnd:
+    timeout: 5000
+- assertVisible: '${AFTER_2}'
+- assertNotVisible: '${PIN_2}'
+- takeScreenshot: scale-later-deep-pin

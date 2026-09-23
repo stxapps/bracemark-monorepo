@@ -1,0 +1,11 @@
+# VIEWPORT-KEYBOARD-001: the runner has just dragged the results — a generated
+# drag from the list's visible middle, since the links list dismisses on drag
+# (`keyboardDismissMode="on-drag"`, main.tsx), the gesture a reader makes
+# anyway. It took the keyboard and nothing else: the search box is still up
+# with what was typed in it.
+appId: com.bracemark.app
+---
+- assertVisible:
+    id: 'links-search-input'
+    text: '${WORD}'
+- takeScreenshot: keyboard-search-dismissed

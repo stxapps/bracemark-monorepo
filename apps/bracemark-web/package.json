@@ -15,6 +15,9 @@
         "configurations": {
           "staging": {
             "envFile": "apps/bracemark-web/.env.staging"
+          },
+          "development": {
+            "envFile": "apps/bracemark-web/.env.development"
           }
         },
         "outputs": [

@@ -1,0 +1,13 @@
+# VIEWPORT-KEYBOARD-001 on Android: the keyboard is gone and the picker, its
+# draft and its Create row are still there. Leave without saving.
+appId: com.bracemark.app
+---
+- assertVisible:
+    id: 'share-tag-input'
+    text: '${TAG_NAME}'
+- assertVisible:
+    id: 'share-tag-create'
+- takeScreenshot: keyboard-share-dismissed
+- tapOn: 'Done'
+- tapOn:
+    id: 'share-close'

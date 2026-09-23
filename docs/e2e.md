@@ -15,6 +15,7 @@ survives it.
 | ------------- | ------------------ | ------------------------------------------------------------------------------- |
 | **web**       | `@playwright/test` | Dexie survives a reload, cross-origin sign-out, real Argon2id in a real browser |
 | **extension** | `@playwright/test` | unpacked MV3 profile/session, popup writes, worker restart, web cross-read      |
+| **pwa**       | `@playwright/test` | the production export's service worker: a cold launch offline, a queued write   |
 | **native**    | Maestro            | real expo-sqlite, secure-store, cold-start session, per-platform navigation     |
 | **contract**  | both, stitched     | one password → the same keys → the same blobs, **web ⇄ mobile**                 |
 | **vectors**   | Maestro, no stack  | the FROZEN table against real quick-crypto, on device                           |
@@ -66,12 +67,14 @@ reasons in descending weight:
 
 ```
 e2e/
-  playwright.config.ts    extension.playwright.config.ts    global-setup.ts
+  playwright.config.ts    extension.playwright.config.ts    pwa.playwright.config.ts
+  global-setup.ts
   cases.json              case ids, tiers, traits, fixtures and artifact contract
   fixtures.json           fixture sizes and deterministic/online URL contract
   paths.ts                the one answer to where a run writes
   web/                    playwright specs + fixtures
   extension/              unpacked-extension specs, shared driver, release checks
+  pwa/                    installed-production-build specs + the origin they own
   mobile/flows/           maestro flows, run standalone
   mobile/shots/           maestro flows for the native store captures
   mobile/contract/        maestro legs of a contract run (parameterised)
@@ -92,8 +95,8 @@ that true, and the first is the one that will bite:
   from its mere presence, and the project would silently join `nx run-many -t test`.
 - Specs are named `*.e2e.ts`, never `*.spec.ts` — a second line of defence behind
   the first, and the reason `testMatch` is set explicitly.
-- Targets are `e2e-web`, `e2e-extension`, `e2e-mobile`, `e2e-contract`. No target
-  is called `test`.
+- Targets are `e2e-web`, `e2e-extension`, `e2e-pwa`, `e2e-mobile`,
+  `e2e-contract`. No target is called `test`.
 
 Inferred from the project's own files, `@stxapps/e2e` gets `typecheck` and `lint`
 for free and no `build`. Both are worth having: a stale selector type is a free
@@ -203,6 +206,51 @@ stops the installed MV3 service-worker version through CDP, observes its stopped
 state, then uses the popup's public Sync request to wake it back to running and
 observes the pulled link through the live popup. There is no app source import,
 storage-state shortcut, or test-only message.
+
+#### the PWA target
+
+`e2e-pwa` is the only e2e run against bracemark-web's **production** build, and
+that is its reason to exist: the serwist service worker (`src/sw.ts` — the
+precache plus `@serwist/next`'s `defaultCache`) is built by `serwist build`
+after `next build` and is disabled outright in development
+(`SerwistProvider disable`), so no `e2e-web` case ever meets it.
+
+`runner/pwa.ts` builds `nx build @stxapps/bracemark-web -c development` — a
+production-mode build of `.env.development`'s origins, through the same
+`envFile` mechanism `staging` uses ([env-files.md](./env-files.md)) — copies
+`out/` into the run directory at once, and refuses the copy unless it has a
+`sw.js` and a bundle that names the local api and neither deployed one. The
+spec then serves that copy ITSELF (`pwa/fixtures/origin.ts`, the same file
+mapping `nx start` does), because "the origin is unavailable" has to be a
+refused connection the case can cause and undo between two steps. The origin is
+`localhost:3001`: `:3000` is the dev server's during every other run, and
+`:3001` is the other origin the development api's `CORS_ORIGINS` allows. The
+preflight requires the port free — the marketing site's dev server also wants it.
+
+⚠ **Chrome installs the app under automation but never opens its standalone
+window, and nothing fails when it doesn't.** CDP `PWA.install` is real — it
+applies Chrome's installability checks and refuses a wrong manifest id — but a
+`PWA.launch`-ed app still reports `display-mode: browser` (measured, Chrome 153),
+and Chrome ignores `display-mode` in media emulation. bracemark-web registers its
+worker only when standalone or when a registration already exists
+(`inner-layout.tsx`), so the case makes that first registration itself, with the
+same script URL, and every later load takes the app's existing-registration
+branch. The run manifest records `standaloneWindowProven: false`;
+`PWA-RELEASE-001` (`web/RELEASE.md`) owns the real install surfaces and the
+standalone trigger. Emulating the display mode would not be installation proof
+even if it worked.
+
+What the two cases prove, on a profile that is closed and reopened (a cold
+launch — `pwa/fixtures/pwa.ts` keeps the profile where `launch.ts` deletes it):
+`PWA-001`, that with the origin stopped and the browser offline the document
+comes from the worker (`response.fromServiceWorker()`), the library comes back
+from IndexedDB, and an in-app view change still works; `PWA-002`, that a link
+and an edit made there are queued, reported as a failed cycle, and reach an
+independent profile once origin and network return. Cut the worker's caching
+(`precacheEntries` AND `runtimeCaching` emptied) and `PWA-001` fails at the
+worker assertion. Emptying the precache alone does NOT fail it — the online
+launch the case makes first leaves `defaultCache` holding the document and its
+chunks — so the claim is "the worker brings it back", not "the precache does".
 
 #### the fixture constraint — read this before touching `web/fixtures/`
 
@@ -334,11 +382,13 @@ and the run stayed green around a capture of the unfiltered library. Prefer
 leaving it out where the form is already above the keyboard, and reach for it
 only where an input is still focused — if the flow has just submitted, the step
 is at best a no-op and at worst a navigation.
-So every one of the app's dismissal paths (return/done, tap-outside,
-scroll-to-dismiss) can regress with the whole suite still green, and a field can
-end up with no way to close the keyboard at all. That is not a gap to close by
-asserting harder here: the mechanisms are RN defaults that jest doesn't render
-and the a11y tree doesn't expose. It is a **manual** check, and
+So the flows that use it prove nothing about the app's own dismissal paths
+(return/done, tap-outside, scroll-to-dismiss). One case does:
+`VIEWPORT-KEYBOARD-001` measures three representative surfaces against the
+keyboard's real frame and dismisses each by the app's own gesture (_scale,
+loading and offline_, below). Everything else stays a **manual** check — the
+mechanisms are RN defaults that jest doesn't render, one case cannot visit every
+field, and iOS's share sheet cannot be driven with its keyboard up — and
 [soft-keyboard.md](./soft-keyboard.md) carries the contract, the surfaces to
 check, and the four ways Maestro itself misleads you on this (portals and
 keyboard-covered panels dropping out of the tree, the autocorrect strip
@@ -357,7 +407,7 @@ accessible identity is untestable as well as inaccessible. Flows bind to `testID
 and accessible labels, **never to body copy** — copy in this repo changes often,
 and a flow keyed to a sentence turns every wording edit into a red run.
 
-Seventeen repo-specific gotchas:
+Twenty-one repo-specific gotchas:
 
 - **`launchApp` resumes, it does not cold-start.** Every flow that assumes a root
   screen needs its state wiped first, or it passes alone and fails in a directory
@@ -507,6 +557,26 @@ tag #N` in the toast. That error is RN-internal and not worth chasing: the app
 - **Maestro's `PATH` entry is in `.zshenv`, not `.zshrc`.** `runner/lib.ts` falls
   back to `~/.maestro/bin/maestro` anyway, so a shell that lost it gets a working
   run instead of `ENOENT`.
+- ⚠ **Android reports a node's bounds CLIPPED to its scroller; iOS reports the
+  real frame.** A row half under the list's top edge reads, on the Pixel 8 AVD,
+  as a short box starting exactly on the edge — `[0,279][1080,306]`, 27px of a
+  ~200px row, holding nothing but its border — so "inside the list" is true of a
+  sliver and a paint check on it reads blank. `runner/mobile.ts`'s
+  `paintedRows` counts only rows at (near) full height, and `VIEWPORT-BULK-001`
+  compares the anchor row's offset on iOS only, its identity on both.
+- **The iOS hierarchy's root reports `[0,0][0,0]`**; the window is among its
+  direct children. Scale a box onto a screenshot by `screenBox` in
+  `runner/hierarchy.ts`, never by the root — and never by the union of every
+  node, since a scroller's content runs far past the screen.
+- **A row at the very bottom of a scrolled drawer is never "100% visible" on the
+  AVD.** Show All under a 24-list, 40-tag library sat painted whole at
+  `[21,2111][912,2206]` of 2400 while `scrollUntilVisible` kept scrolling and
+  timed out; `flows/scale.yaml` passes `visibilityPercentage: 50`.
+- **Maestro's directional `swipe` does not start where you think.** With the
+  keyboard up on iOS, `swipe: direction: UP` moved the links list not at all —
+  the gesture began on the keys. A drag whose start point matters is generated
+  from measured bounds (`writeDragFlow` with a short `duration`,
+  `VIEWPORT-KEYBOARD-001`).
 
 #### gestures and waits the runner performs
 
@@ -556,7 +626,35 @@ checked by the host step that read them, since a flow can only say "visible".
   `adb reverse --remove tcp:8787` is a device that cannot sync while Metro's 8081
   keeps serving the bundle; the runner restores the mapping after the case
   whether it passed or not. The iOS simulator shares the host's loopback, so
-  there is no equivalent short of stopping the api under every other client.
+  there is no per-device equivalent — see the next item for what iOS gets instead.
+- **A frozen or a slow server** (`OFFLINE-IOS-001`, `SKELETON-NATIVE-001`).
+  `runner/api-pause.ts` signals the api's own `workerd` process: `SIGSTOP`
+  freezes it, `SIGCONT` thaws it, and `throttle` alternates the two (stopped
+  900ms of every 1000). The fault is a HANG, not Android's refusal — the kernel
+  still accepts the connection and the request waits — and nothing is lost: on
+  thaw every held request is served. It stalls every client of the local api at
+  once, so it is a serial-runner tool only, and the thaw is registered on exit,
+  SIGINT and SIGTERM as well as in the case's cleanup: a frozen api outliving a
+  run wedges every later one with nothing to say why. If a run was killed hard
+  (SIGKILL) and the stack stopped answering, `kill -CONT` the 8787 listener.
+- **Pixels** (`VIEWPORT-BULK-001`, `SKELETON-NATIVE-001`). A cell that drew
+  nothing is still in the tree with bounds, so the painted half of a viewport
+  claim reads a device screenshot (`simctl io … screenshot`, `screencap -p`)
+  through `runner/pixels.ts` — a minimal PNG decoder, the twin of
+  `seed/png.ts` — and requires ink (luma off the box's dominant colour) inside
+  each row's box. Painted rows measured ~0.08–0.15 on both devices; a blank cell
+  is ~0; the floor is 0.02.
+- **The keyboard's frame** (`VIEWPORT-KEYBOARD-001`). `runner/keyboard.ts`: on
+  iOS the keyboard is in Maestro's tree as its `inputView` host, whose frame
+  includes the suggestion strip; on Android the IME is its own window and not in
+  the app's tree at all, so the frame is the touchable region `dumpsys window
+InputMethod` reports while the window is visible. Every "reachable" claim is a
+  control's bounds wholly above that frame's top.
+- **A tap on a region, not a control** (`VIEWPORT-KEYBOARD-001`).
+  `writeTapFlow` taps a coordinate read off the controls around it — the add
+  panel's header level with its ✕, the share sheet's gap under its field —
+  because what is being tapped is the surface's own dismiss layer
+  ([soft-keyboard.md](./soft-keyboard.md), _dismissal_), which has no name.
 - **Across a real share boundary** (`SHARE-*`). A host step opens Safari with
   `simctl openurl` or launches Android's exported `ShareActivity` with a real
   `ACTION_SEND`; committed Maestro parts make every assertion on the system
@@ -868,6 +966,120 @@ that FAILS before that line leaves them in `apps/bracemark-api/.wrangler/`.
 Writing the size map directly, or a test-only ceiling, would prove the UI
 against a state the server never reached.
 
+### scale, loading and offline
+
+The Phase 8 cases, and the one decision in each that a reader would otherwise
+have to rediscover.
+
+**Paging a real library** (`SCALE-WEB-001`, `SCALE-IOS-001`/`-ANDROID-001`). The
+generated library pins every 37th link, so most pins sit pages deep in the date
+order — exactly where the pinned overlay's "excluded from the rest"
+([client-queries.md](./client-queries.md), _the pinned overlay_) either holds or
+shows the link twice. The fixture computes Show All's expected order from the
+entities it hands the importer. On web every rendered row carries the
+virtualizer's `data-index`, so the case requires each deep pin's two date
+neighbours to be CONSECUTIVE indices and the known last row to sit at exactly
+`pins + rest − 1` — one extra row anywhere above it and that index is off by
+one. Native has no index, and its rows print a title the generator repeats
+every 24 links, so a flow can only scroll to a row that prints its (unique)
+address: the runner picks deep pins whose upper neighbour is such a row, and
+reads the two neighbours' bounds back to back (`assertClosedOver`). Breaking the
+exclusion (`readRest` handed no pinned paths) fails the web case on its first
+pin, counted twice.
+
+**The web first read, held** (`SKELETON-WEB-001`). The skeleton exists only
+until the links page's first `readLinks` answers — tens of milliseconds — so a
+second tab of the same origin (`web/fixtures/store-hold.ts`) holds a read-write
+transaction on the `items` store, and IndexedDB queues the app's own read-only
+one behind it. It is contention, not a stub: nothing in the app is replaced,
+nothing is written, and it is the wait a long import in another tab really
+causes. The session, `syncMeta` and `localSettings` stay readable, so the shell
+comes up; the card variant is reached through the DEVICE layout setting for
+that reason — the synced one lives in `items` too and would read as the default
+while held. The case checks the bones are painted inside the viewport (a grid,
+for cards), the status region's polite announcement, and the rows arriving on
+release without a reload. Observed while held and not chased: the sidebar says
+"No tags yet" and lists no system lists — a read that has not answered is drawn
+as an empty one.
+
+**The native loading state** (`SKELETON-NATIVE-001`). The native bones are not
+reachable honestly: expo-sqlite answers on the device in a frame, and nothing
+outside the app can hold that read without replacing the data hook — which is
+the one thing the case may not do. What a person with a real library does wait
+through on a new phone is the first pull, "Decrypting your links…", and the
+network is something a runner can hold. So the case signs in to a 1,000-link
+account with the api throttled (unthrottled, the whole pull finished inside the
+seconds it took to get iOS's "Save Password?" sheet off it), freezes the api
+once the first-pull progressbar is on screen, reads it held — its bounds, and
+ink in the band around it — and thaws: the SAME pull finishes into the links
+screen with no retry or relaunch. The list bones stay covered at component
+level. They DO show on the Pixel 8 AVD straight after that pull — photographed
+once, with the topbar's title still blank — because the first read of a
+thousand links lands in frames busy enough that a single Maestro wait for the
+rows failed in under a second on a hierarchy read; `parts/loading-released.yaml`
+paces that wait. A slow frame is not a lever, so nothing asserts on it. Android
+also folds the progressbar's value into its name ("Decrypting your links, 440 of
+2,073 items"), where iOS names it by the label alone; the parts match both.
+
+**Bulk mode at an offset** (`VIEWPORT-BULK-001`). The claim is the scroll
+position, and the position is the row crossing the list's top edge: FlashList
+anchors that one. Rows BELOW it may legitimately move — bulk mode hides each
+row's ⋯, so a title that wrapped around it re-measures a line shorter (measured
+on iOS: the first fully visible row rose 20pt while the anchor held). Every
+full-height row in the list must also carry ink in every state.
+
+**The keyboard** (`VIEWPORT-KEYBOARD-001`). Three surfaces: the add panel (URL
+on arrival, then the multiline Note, which return cannot dismiss), the links
+search box, and — Android only — the share sheet's tag picker, whose field
+submits instead of blurring. Each is measured against the keyboard's real
+frame, then dismissed by the app's own path: a tap on the panel's chrome, a drag
+on the results, a tap on the sheet's gap — never `hideKeyboard`. Each dismissal
+must leave the surface and its draft in place. iOS's share sheet is left out
+because its panel leaves the accessibility tree while the keyboard is up
+([soft-keyboard.md](./soft-keyboard.md), _verifying any of this_); a pass there
+would be a coordinate tap with nothing to confirm against.
+
+⚠ **Open, not chased: on Android a drag on the search results can open the
+link under the finger.** With text typed into the search box and the keyboard
+up, a native `adb shell input swipe` starting ~200px above the IME was
+delivered as a press on the row under it — the link opened in Chrome — in 3 of
+~15 tries on the Pixel 8 AVD's dev build, including after a 5-second settle;
+without typed text, 0 of 7; starting 500px above the IME, 0 of 6. Maestro's own
+swipe did the same twice inside the case. The row is a core RN `Pressable`
+inside the `on-drag` FlashList (`link-row.tsx`, `main.tsx`); the cause was not
+pinned down. The case drags from mid-list with a native gesture and requires
+the search box to still be on screen afterwards, so it catches this by name —
+and is therefore intermittently RED on Android (4 of 8 runs), which is why
+`VIEWPORT-KEYBOARD-001` stays open in `e2e/NEXT.md`. Reproduce it on a release
+build on a real phone before deciding it is the app's; if it is, the fix closes
+the case.
+
+⚠ **An iOS simulator can hide its software keyboard with Simulator's setting
+correctly off.** The simulated device remembers a hardware keyboard
+(`HardwareKeyboardLastSeen` in its `com.apple.keyboard.preferences`) and then
+minimizes the software one to nothing — measured on iOS 26.5: a caret and an
+edit menu, no keys. Every earlier keyboard-shaped flow would have passed on it.
+The iOS preflight now refuses such a device and prints the `simctl` commands
+that clear it — a device REBOOT, not a SpringBoard restart, which left
+SpringBoard segfaulting mid-run for hours afterwards
+([app-drivers.md](./app-drivers.md), _the software keyboard_).
+
+**Offline** (`OFFLINE-WEB-001`, `OFFLINE-IOS-001`/`-ANDROID-001`, `PWA-*`). Web
+cuts the browser with `context.setOffline` on a page that stays open; the dev
+server has no worker, so a reload is the PWA target's. Android removes its api
+route (a refusal); iOS freezes the api (a hang) — the two platforms meet the two
+fault shapes a phone does. The native part starts with a cold start while cut
+off, which is secure-store and SQLite with no server to ask. Every case ends
+with an independent web profile reading the drained queue, pulled until it
+does, since a device given the api back may still be pushing.
+
+`OFFLINE-WEB-001` found an app bug on its first run: offline, one sidebar click
+took the open links page to Chrome's error page — `router.push` fetches the
+route's RSC payload and falls back to a full document load when it cannot. The
+links page's view changes now go through the History API
+([search.md](./search.md), _two writers, not a mirror_); the same click
+before the fix fails the case at its first view change.
+
 ### running it
 
 Everything needs Metro and an installed Expo development build except web. The
@@ -896,6 +1108,7 @@ npx nx e2e-web @stxapps/e2e
 npx nx e2e-web:headed @stxapps/e2e
 npx nx e2e-web:report @stxapps/e2e
 npx nx e2e-extension @stxapps/e2e
+npx nx e2e-pwa @stxapps/e2e   # builds the production export itself; needs :3001 free
 
 # Exact ids come from `xcrun simctl list devices booted` or `adb devices`.
 npx nx e2e-mobile @stxapps/e2e -- --platform ios --device <udid> --suite full
@@ -910,8 +1123,8 @@ still be run serially because they share the local stack and are intentionally
 expensive. The vectors case remains first in a full contract run. Run it alone
 with `--case CONTRACT-VECTORS-001`.
 
-The four targets also have root scripts — `npm run e2e:web`, `e2e:extension`,
-`e2e:mobile`, and `e2e:contract`. There is deliberately no bare `npm run e2e`: no honest fan-out
+The five targets also have root scripts — `npm run e2e:web`, `e2e:extension`,
+`e2e:pwa`, `e2e:mobile`, and `e2e:contract`. There is deliberately no bare `npm run e2e`: no honest fan-out
 can boot, build, select, and prepare both native platforms. `expo:ios` and
 `expo:android` are prerequisites, not tests; see [expo-build.md](./expo-build.md).
 On Android, run `npm run expo:android:reverse` after each emulator boot.
@@ -939,7 +1152,11 @@ npm run e2e:mobile -- --platform ios --device <udid> --exclude-trait destructive
 [`e2e/fixtures.json`](../e2e/fixtures.json) defines the fixture sizes: `empty`
 (the normal fresh account), `small` (the minimum multi-entity journey state),
 and `scale` (an archive generated from
-`e2e/seed/library.ts` and imported into a fresh account). No test uses the human
+`e2e/seed/library.ts` and imported into a fresh account). The `SCALE-*` cases
+take the generated 1,000-link library itself (`web/fixtures/scale-library.ts`,
+the `plus-full` shape, with the Plus grant a thousand links needs); the other
+`scale` cases take the 60-link paged library (`web/fixtures/library.ts`), whose
+row order is known outright. No test uses the human
 seed accounts or the published-capture account. Offline deterministic links use
 the reserved `.invalid` TLD; a case that deliberately exercises extraction must
 carry the `internet` trait and use the separate public fixture table in that file
@@ -1685,6 +1902,39 @@ and the dead-host stall above (`EXTRACT-NATIVE-ALL-001`, iOS, before the fix).
 iOS cannot remove the extractor from one simulator — it shares this Mac's
 loopback — so "without calling the server extractor" is proved on Android only;
 expo has no extractor origin configured at all.
+
+The Phase 8 scale, loading, viewport and offline cases were measured 2026-09-23
+from commit `783141b` with their changes present in the working tree — system
+Chrome 153.0.8010.53, Playwright 1.62.1, the iPhone 17 Pro simulator on iOS 26.5,
+`bracemark-pixel8` (`sdk_gphone64_arm64`, Android 16), app 1.0.0 (1), Maestro
+2.8.0:
+
+| surface        | measured result                                                                                                                                                                                       |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| web            | **33/33 passed** in one invocation — the full suite with `SCALE-WEB-001`, `SKELETON-WEB-001`, `OFFLINE-WEB-001`, no retries, 3.9 min                                                                  |
+| pwa            | **2/2 passed** — `PWA-001`, `PWA-002`, against a freshly built and staged production export                                                                                                           |
+| iOS native     | **5/5 passed** in one invocation — `SCALE-IOS-001`, `SKELETON-NATIVE-001`, `VIEWPORT-BULK-001`, `VIEWPORT-KEYBOARD-001`, `OFFLINE-IOS-001`; the keyboard case twice more on its final drag            |
+| Android native | **4/5** in one invocation — `SCALE-ANDROID-001`, `SKELETON-NATIVE-001`, `VIEWPORT-BULK-001`, `OFFLINE-ANDROID-001`; `VIEWPORT-KEYBOARD-001` **4 of 8 runs**, every red one the open tap-through below |
+
+One app bug, fixed in the same change: **offline, a view change in the open web
+app navigated to the browser's error page** (`router.push` → the History API;
+_scale, loading and offline_ above, and [search.md](./search.md)). One harness
+tripwire, now a preflight: the iOS device's own hardware-keyboard memory
+(`HardwareKeyboardLastSeen`) hid the software keyboard with Simulator's setting
+correctly off. Three iOS runs were lost to SpringBoard segfaults inside the
+simulator (a null dereference in Apple's process, with SafariViewService in the
+same second), each sending the app to the Home screen between a flow and the
+runner's next hierarchy read. All three followed a `launchctl stop` of
+SpringBoard made to clear the keyboard flag; none recurred after a device
+reboot, which is now the documented fix.
+
+Each web case was also run against the behaviour it guards and failed:
+`SCALE-WEB-001` with `readRest` handed no pinned paths (at the first pin,
+counted twice), `SKELETON-WEB-001` with the skeleton rendering nothing (at the
+status region), `OFFLINE-WEB-001` against the pre-fix `router.push` (at the
+first view change), and `PWA-001` with the worker's precache and runtime caching
+both emptied (at the worker assertion). The native cases have **not** had that
+check yet — the same open half as the Phase 3 native flows.
 
 ### the red full suite, and what it was
 

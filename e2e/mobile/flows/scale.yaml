@@ -1,0 +1,58 @@
+# Page a generated 1,000-link library (web/fixtures/scale-library.ts — the
+# `plus-full` generator, imported on the web and synced before the device signs
+# in) past its first page in Show All, and stop where a pinned link's own date
+# would put it. The first step of a runner-driven case: runner/mobile.ts reads
+# the rows' bounds here, and parts/scale-deeper.yaml goes further down.
+#
+# What only a device shows: FlashList pages by `onEndReached` growing the read's
+# limit, and the pinned overlay must keep a pin out of the pages it would
+# otherwise fall in (docs/client-queries.md, _the pinned overlay_). With it
+# working, the two links dated either side of the pin are adjacent rows. A row
+# is found by its primary line — the generated titles repeat every 24 links, so
+# BEFORE_* is always a row that prints its (unique) address instead, and the
+# titled rows are matched with their host.
+#
+#   maestro test mobile/flows/scale.yaml -e USERNAME=… -e PASSWORD=… \
+#     -e PIN_0=… -e BEFORE_1=… -e AFTER_1=… -e PIN_1=…
+#
+# One flow for two registry ids: the claim is registered per platform.
+appId: com.bracemark.app
+tags: [SCALE-IOS-001, SCALE-ANDROID-001, full, online, scale, ios, android]
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+- tapOn:
+    id: 'links-open-navigation'
+# Twenty-four lists and forty tags put Show All below the drawer's fold. At the
+# end of that scroll the row sits on the rail's bottom band, where the Pixel 8
+# AVD never reports it 100% visible — measured painted whole at
+# [21,2111][912,2206] of 2400 while the default threshold kept scrolling.
+- scrollUntilVisible:
+    element:
+      id: 'links-nav-all'
+    direction: DOWN
+    visibilityPercentage: 50
+    timeout: 30000
+- tapOn:
+    id: 'links-nav-all'
+# The overlay leads the view: the first pin, marked as one.
+- extendedWaitUntil:
+    visible: '${PIN_0}.*, Pinned.*'
+    timeout: 60000
+- tapOn:
+    text: 'Dismiss'
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: scale-top
+
+- scrollUntilVisible:
+    element: '.*${BEFORE_1}.*'
+    direction: DOWN
+    centerElement: true
+    timeout: 300000
+- waitForAnimationToEnd:
+    timeout: 5000
+- assertVisible: '${AFTER_1}'
+- assertNotVisible: '${PIN_1}'
+- takeScreenshot: scale-first-deep-pin

@@ -39,14 +39,14 @@ not itself completeness.
 Present in the tree today; this table is an inventory, not a claim that every row
 has just passed on every platform.
 
-| Surface           | Current coverage                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Web               | Twenty-eight Playwright cases: session reload, sign-out teardown, delete account, one-link persistence, two mounted writes, editor round trip, dirty-editor close guard, link lifecycle, list creation round trip, live picker taxonomy, pointer drag reorder/reparent, filtered views, hidden/locked destinations, text search, advanced search restore, scroll reset, bulk selection, bulk actions, bulk Trash, bulk copy, app lock, covering list lock, mounted delete-all repaint, refresh pill under a scrolled reader, capacity-blocked push, server extraction on save, Generate all, extractor-down retry                                                                                                          |
-| Native            | Thirty-five Maestro flows: password sign-in/cold start, recovery sign-in, delete account/cold start, two mounted link inserts, editor round trip/cold start, dirty-editor close guard, link lifecycle, settings-to-picker taxonomy, touch drag reorder/reparent, filtered views, text search, advanced search round trip, bulk selection recycling, bulk actions, bulk Trash, bulk copy, app lock/relock, covering list lock, auto-relock window, mounted delete-all repaint, two document-picker imports, refresh pill under a scrolled list, save at offset zero in the viewport, offline conflict (Android), seven native-share boundaries across iOS and Android, device extraction on save, and Generate all at `all` |
-| Contract          | Frozen device vectors plus web to mobile and mobile to web encrypted round trips                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| Browser extension | Nine Playwright cases: profile auth, save/saved/restore/boundary states, two-way sync, live extraction, and MV3 worker restart                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| PWA               | Unit/component coverage around registration and navigation; no production-build offline E2E target                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| Automation        | No CI workflow currently runs these targets                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Surface           | Current coverage                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Web               | Thirty-one Playwright cases: session reload, sign-out teardown, delete account, one-link persistence, two mounted writes, editor round trip, dirty-editor close guard, link lifecycle, list creation round trip, live picker taxonomy, pointer drag reorder/reparent, filtered views, hidden/locked destinations, text search, advanced search restore, scroll reset, bulk selection, bulk actions, bulk Trash, bulk copy, app lock, covering list lock, mounted delete-all repaint, refresh pill under a scrolled reader, capacity-blocked push, server extraction on save, Generate all, extractor-down retry, 1,000-link paging, the held first-read skeleton, open-page offline read/write/reconnect                                                                                                                                                        |
+| Native            | Forty Maestro flows: password sign-in/cold start, recovery sign-in, delete account/cold start, two mounted link inserts, editor round trip/cold start, dirty-editor close guard, link lifecycle, settings-to-picker taxonomy, touch drag reorder/reparent, filtered views, text search, advanced search round trip, bulk selection recycling, bulk actions, bulk Trash, bulk copy, app lock/relock, covering list lock, auto-relock window, mounted delete-all repaint, two document-picker imports, refresh pill under a scrolled list, save at offset zero in the viewport, offline conflict (Android), seven native-share boundaries across iOS and Android, device extraction on save, Generate all at `all`, 1,000-link paging, the held first pull, bulk mode at an offset, keyboard clearance and dismissal, and offline cold-start read/write/reconnect |
+| Contract          | Frozen device vectors plus web to mobile and mobile to web encrypted round trips                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Browser extension | Nine Playwright cases: profile auth, save/saved/restore/boundary states, two-way sync, live extraction, and MV3 worker restart                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| PWA               | Two `e2e-pwa` cases against the production export: an offline cold launch, and an offline write that syncs; real installation is release qualification                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| Automation        | No CI workflow currently runs these targets                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 
 Before adding broad new coverage, capture a fresh result for every existing case:
 
@@ -425,32 +425,43 @@ case already carries `online`) and are `full`, so they never block a smoke run;
 
 ### Scale and viewport states
 
-- [ ] `SCALE-WEB-001` Import the generated 1,000-link archive into a disposable
+- [x] `SCALE-WEB-001` Import the generated 1,000-link archive into a disposable
       account, page beyond the first result set, and prove a known later row becomes
       reachable without duplicate pinned rows.
-- [ ] `SCALE-IOS-001` Repeat the infinite-scroll boundary on iOS.
-- [ ] `SCALE-ANDROID-001` Repeat the infinite-scroll boundary on Android.
-- [ ] `SKELETON-WEB-001` Delay the real initial read/sync boundary and capture the
+- [x] `SCALE-IOS-001` Repeat the infinite-scroll boundary on iOS.
+- [x] `SCALE-ANDROID-001` Repeat the infinite-scroll boundary on Android.
+- [x] `SKELETON-WEB-001` Delay the real initial read/sync boundary and capture the
       painted list/card skeleton plus accessible loading announcement.
-- [ ] `SKELETON-NATIVE-001` Capture the corresponding real native loading state on
-      iOS and Android without replacing the data hook.
-- [ ] `VIEWPORT-BULK-001` Enter/exit native bulk mode at a non-zero offset and
+- [x] `SKELETON-NATIVE-001` Capture the corresponding real native loading state on
+      iOS and Android without replacing the data hook. The first pull of a
+      1,000-link library, held by freezing the api; the list bones are not
+      holdable natively and stay at component level (`docs/e2e.md`, _scale,
+      loading and offline_).
+- [x] `VIEWPORT-BULK-001` Enter/exit native bulk mode at a non-zero offset and
       prove the FlashList cells remain painted and the offset remains stable.
 - [ ] `VIEWPORT-KEYBOARD-001` At representative native editor/search/share
       surfaces, capture the keyboard-present checkpoint and prove focused fields,
-      controls, and dismissal gestures remain reachable.
+      controls, and dismissal gestures remain reachable. The share surface is
+      Android-only: the iOS extension's panel leaves the accessibility tree
+      while the keyboard is up. **Open:** built and green on iOS; on Android the
+      drag that dismisses the search keyboard is intermittently delivered as a
+      press on a row (4 of 8 runs red) — an open finding in `docs/e2e.md`,
+      _scale, loading and offline_. Closes when that is resolved.
 
 ### Offline and reconnect
 
-- [ ] `OFFLINE-WEB-001` While the page remains open, go offline, read cached data,
+- [x] `OFFLINE-WEB-001` While the page remains open, go offline, read cached data,
       create/edit a link, reconnect, sync, and prove another profile receives the
       queued write.
-- [ ] `OFFLINE-IOS-001` Repeat local read/write/reconnect on iOS.
-- [ ] `OFFLINE-ANDROID-001` Repeat local read/write/reconnect on Android.
-- [ ] `PWA-001` Add a separate production-build PWA target; install/register the
+- [x] `OFFLINE-IOS-001` Repeat local read/write/reconnect on iOS.
+- [x] `OFFLINE-ANDROID-001` Repeat local read/write/reconnect on Android.
+- [x] `PWA-001` Add a separate production-build PWA target; install/register the
       real service worker, complete one online launch, then cold-launch the app
-      shell and cached library with the origin unavailable.
-- [ ] `PWA-002` Create an offline edit in the installed PWA, reconnect, and prove
+      shell and cached library with the origin unavailable. Chrome installs
+      under automation but never opens the standalone window, so the case
+      registers the real worker itself; the app's standalone trigger is
+      `PWA-RELEASE-001`'s.
+- [x] `PWA-002` Create an offline edit in the installed PWA, reconnect, and prove
       it syncs to an independent client.
 - [ ] `PWA-RELEASE-001` Install and smoke the PWA through real supported browser
       chrome on the release device/browser matrix. Do not treat display-mode
@@ -459,6 +470,10 @@ case already carries `online`) and are `full`, so they never block a smoke run;
 A network-fault proxy owned by `e2e` may be introduced if it can delay/drop real
 API and extractor traffic without changing product source or weakening security
 boundaries. Prefer that over app-only failure switches.
+
+No proxy was needed: every client reaches this Mac's api directly, so the
+runner signals the api process instead (`runner/api-pause.ts` — freeze, thaw,
+throttle), and Android keeps its `adb reverse` cut.
 
 ## Phase 9 — subscriptions and IAP
 

@@ -412,7 +412,12 @@ this watch 1 time, most recently because: MustScanSubDirs`. With the watch
   before reading a single pixel. Maestro's `inputText` works either way, so a
   flow never notices on its own. The key is read only at launch, so a
   `defaults read` of `0` still lies until Simulator restarts
-  (`docs/app-drivers.md`, _the software keyboard_).
+  (`docs/app-drivers.md`, _the software keyboard_). With the key correctly `0`
+  and still no keys, the DEVICE remembers a hardware keyboard:
+  `xcrun simctl spawn <udid> defaults read com.apple.keyboard.preferences
+HardwareKeyboardLastSeen` prints `1`. Write it `false` the same way and
+  reboot the device (`xcrun simctl shutdown <udid> && xcrun simctl boot
+<udid>`) — not a SpringBoard restart, after which SpringBoard kept crashing.
 
 - **An empty `maestro hierarchy` is not always a bug.** Editing a file while an
   overlay or a modal is on screen can leave the accessibility tree holding the

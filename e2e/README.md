@@ -25,6 +25,7 @@ npx nx e2e-web @stxapps/e2e
 npx nx e2e-web:headed @stxapps/e2e
 npx nx e2e-web:report @stxapps/e2e
 npx nx e2e-extension @stxapps/e2e
+npx nx e2e-pwa @stxapps/e2e
 
 # Use exact ids from `xcrun simctl list devices booted` or `adb devices`.
 npx nx e2e-mobile @stxapps/e2e -- --platform ios --device <udid> --suite full
@@ -59,8 +60,8 @@ manifest, per-case JUnit, Maestro command/log/screenshot output, named stable
 checkpoints, and a hierarchy dump on failure. A pass that needed Playwright's
 retry exits non-zero.
 
-The four run-it targets also have root scripts: `npm run e2e:web`,
-`e2e:extension`, `e2e:mobile`, `e2e:contract`. There is no bare `npm run e2e` —
+The five run-it targets also have root scripts: `npm run e2e:web`,
+`e2e:extension`, `e2e:pwa`, `e2e:mobile`, `e2e:contract`. There is no bare `npm run e2e` —
 see `docs/e2e.md`, _running_.
 
 ## seeding a dev account
@@ -125,6 +126,7 @@ terminal.
 | `paths.ts`            | where a run writes — the only source of `.artifacts` paths            |
 | `web/`                | Playwright specs (`*.e2e.ts`) and their fixtures                      |
 | `extension/`          | unpacked MV3 specs, shared driver, and release qualification          |
+| `pwa/`                | installed-production-build specs and the static origin they own       |
 | `mobile/flows/`       | Maestro flows that run standalone                                     |
 | `mobile/flows/parts/` | the later steps of a runner-driven case — never run alone             |
 | `mobile/RELEASE.md`   | real-device biometric lock checks (release qualification)             |
@@ -147,6 +149,22 @@ trait for it. They need `npm run dev` for the extractor on 8788 (web's
 `webServer` starts only api and web). `--exclude-trait internet` gives a run with
 no third-party network dependency; `online` does not, because every stack-backed
 case carries it.
+
+The PWA target (`PWA-001`/`002`) builds bracemark-web's production export
+against the local stack itself (`nx build @stxapps/bracemark-web -c
+development`), stages a copy in the run directory, and serves it on
+`localhost:3001` from inside the spec, stopping it to make the origin
+unavailable. It needs only the api up — `npm run dev` is fine — and `:3001`
+free, so stop the marketing site's dev server first. The real install surfaces
+are `PWA-RELEASE-001` in [`web/RELEASE.md`](./web/RELEASE.md).
+
+Phase 8's native cases (`SCALE-*`, `SKELETON-NATIVE-001`, `VIEWPORT-*`,
+`OFFLINE-*`) run in the ordinary `e2e-mobile` target. Two of them —
+`SKELETON-NATIVE-001` and `OFFLINE-IOS-001` — freeze the local api process for
+a stretch (`runner/api-pause.ts`), which stalls every client of it: never run a
+second native leg, or anything else against the stack, beside them. If a run was
+killed with SIGKILL and the api stops answering, `kill -CONT` the process on 8787. The `SCALE-*` and `SKELETON-NATIVE-001` accounts import and upload a
+thousand links first (about a minute), and the device's first pull follows.
 
 ## the published screenshots
 

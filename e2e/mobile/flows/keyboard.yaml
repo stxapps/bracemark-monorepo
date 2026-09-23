@@ -1,0 +1,44 @@
+# The soft keyboard over three representative native surfaces — an editor (the
+# add panel), the links search box, and (Android) the share sheet's tag picker —
+# each left keyboard-up for the runner to measure (runner/mobile.ts,
+# VIEWPORT-KEYBOARD-001), then put away by the APP's own dismissal path, never
+# Maestro's `hideKeyboard` (docs/soft-keyboard.md, _verifying any of this_).
+#
+# What only a device shows: the keyboard overlays the window on both platforms,
+# so every surface has to move itself clear of it (avoidance) and offer a way
+# to put it away that neither submits nor navigates (dismissal). A field under
+# the keyboard is still "visible" to every selector — the runner reads the
+# keyboard's own frame (iOS: its `inputView` node; Android: the IME window) and
+# requires each control's bounds above it.
+#
+# The account arrives holding 60 links in My List at `https://HOST/row-…`
+# (web/fixtures/library.ts), so the search below matches a list long enough to
+# scroll — the scroll IS the dismissal it exercises.
+#
+#   maestro test mobile/flows/keyboard.yaml -e USERNAME=… -e PASSWORD=… \
+#     -e HOST=e2e-paged-….invalid
+appId: com.bracemark.app
+tags: [VIEWPORT-KEYBOARD-001, full, online, scale, visual, ios, android]
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+- extendedWaitUntil:
+    visible: '.*${HOST}/row-000.*'
+    timeout: 60000
+- tapOn:
+    text: 'Dismiss'
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 5000
+
+# --- the add panel: the URL field takes focus on arrival ---------------------------
+- runFlow:
+    file: subflows/dismiss-logbox.yaml
+- tapOn: 'Add link'
+- extendedWaitUntil:
+    visible:
+      id: 'add-link-url'
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: keyboard-add-url

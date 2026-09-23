@@ -1,0 +1,22 @@
+# Sign in to an account holding one link written on the web, then hand the
+# device to the runner, which cuts it off the api (runner/mobile.ts,
+# OFFLINE-*-001): Android by removing its `adb reverse` route (a refusal), iOS by
+# freezing the api process (a hang — the simulator shares this Mac's loopback,
+# so there is no per-device route to take away; runner/api-pause.ts).
+# parts/offline-local.yaml reads and writes with the api out of reach, and
+# parts/offline-reconnect.yaml drains the queue once it is back.
+#
+#   maestro test mobile/flows/offline.yaml -e USERNAME=… -e PASSWORD=… \
+#     -e EDITED_URL=https://….invalid/offline-edited
+appId: com.bracemark.app
+tags: [OFFLINE-IOS-001, OFFLINE-ANDROID-001, full, online, destructive, ios, android]
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+- extendedWaitUntil:
+    visible: ".*${EDITED_URL.replace('https://', '')}.*"
+    timeout: 60000
+- tapOn:
+    text: 'Dismiss'
+    optional: true
+- takeScreenshot: offline-base

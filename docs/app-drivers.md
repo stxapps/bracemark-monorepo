@@ -168,6 +168,26 @@ reads the key only at launch, so after changing it, restart Simulator and
 re-boot the device. The steps are in `.claude/skills/verify/SKILL.md`,
 _Gotchas_.
 
+**…and the device has its own memory of a hardware keyboard, which the Simulator
+key does not reach.** The simulated iPhone keeps `HardwareKeyboardLastSeen` in
+its `com.apple.keyboard.preferences`, and while that reads true iOS minimizes the
+software keyboard to nothing — a caret and an edit menu, no keys — with
+`ConnectHardwareKeyboard` correctly `0`. Measured on iOS 26.5, on a device whose
+flag something outside any run had set (Maestro's own typing does not set it).
+The runner refuses such a device too, and the fix is on the device:
+
+```sh
+xcrun simctl spawn <udid> defaults write com.apple.keyboard.preferences HardwareKeyboardLastSeen -bool false
+xcrun simctl shutdown <udid> && xcrun simctl boot <udid>
+```
+
+Reboot rather than restart SpringBoard (`launchctl stop com.apple.SpringBoard`
+also brings the keys back): after that restart the simulator's SpringBoard
+crashed three times in the next few hours of runs — a null dereference, with
+SafariViewService going down in the same second — each time sending the app to
+the Home screen between a flow and the runner's next hierarchy read, where it
+failed as a missing `links-list` or a missing keyboard. None after a reboot.
+
 **A real iPhone is possible and is the highest-friction path.** It needs a dev
 build signed with a profile carrying the device UDID, and WebDriverAgent
 installed on the phone for tap and query — which needs its own signing.
