@@ -627,6 +627,41 @@ period follows. The policy:
   grandfathering problem retiring a `pri_…` has. That stickiness, not the setup
   cost, is the reason to keep the list short.
 
+**The anchors, and they are the same number on all three providers** — Plus,
+yearly:
+
+| currency | anchor    | where                                           |
+| -------- | --------- | ----------------------------------------------- |
+| USD      | **$48**   | the base price; US on both stores               |
+| EUR      | **€49**   | the euro area (the 21 member states) and Monaco |
+| GBP      | **£45**   | GB                                              |
+| CAD      | **CA$69** | CA                                              |
+| AUD      | **A$79**  | AU                                              |
+
+One number per currency everywhere is the point: the marketing site, the web
+plan cards and the store sheets can then never disagree about what a market
+pays. Each is a charm price at roughly the base price plus that market's
+consumer tax where the tag is expected to include it (EUR, GBP, AUD); CAD, like
+USD, is tax-exclusive and sits near the plain conversion.
+
+Where each one is set, because each provider stores it differently:
+
+- **Paddle** — `unitPriceOverrides` on the yearly `pri_…`, one entry per
+  currency, in **both** sandbox and live (they are separate catalogs; a sandbox
+  without them tests a checkout nobody in those markets will see).
+- **App Store Connect** — a per-territory price on the subscription. Apple's
+  auto-equalization already lands on $48, €49, CA$69 and A$79; only the UK was
+  overridden (Apple generated £49).
+- **Play Console** — a regional price per **country**, not per currency: Play
+  prices each euro country separately and folds each one's VAT into its
+  generated number (Finland came out at €54.99, Luxembourg at €48.99), so €49 is
+  set on every one of them. Gibraltar, San Marino and Vatican City stay on auto
+  deliberately — they carry no VAT, and the anchor would be a 20%+ increase
+  there. Set these while the base plan is still a draft: before the first
+  subscriber any change is free.
+
+Every other country stays on the store's auto price, or on $48 at Paddle.
+
 ### reconciliation — when a webhook never arrives
 
 Every writer above is a provider **push**, and push has holes the providers' own
