@@ -1025,29 +1025,12 @@ unreachable account carrying wrapped DEKs.
    paper over R2's lack of versioning).
 3. **Revoke = delete the door's row**, deliberately (plus its `sessions` row).
    The DEK is unchanged, so the other doors keep working — no re-encryption.
-4. **Bulk R2 hygiene.** Keep the bookmark bucket free of any lifecycle rule that
-   could silently expire a user's server copy; route deletes through a separate
-   admin path, not the hot request path.
 
-#### backups & replication (set up before launch)
+#### backups & replication
 
-- **D1 Tier-0 set — `DIRECTORY_DB` (`usernames`) + every account shard (`users` +
-  `account_keys` / wrapped DEKs):** Time Travel is always on and free — any point
-  in the **last 30 days** is restorable (`wrangler d1 time-travel restore`). Note
-  these are now **separate databases with separate timelines**, so a
-  point-in-time restore that must stay consistent across the directory and a shard
-  is a per-db operation — pick a quiet point and restore each. For retention
-  beyond 30 days, run a **scheduled D1 export** (REST API + Workflows / a
-  Cron-triggered Worker) daily for **each** of these dbs, and copy at least the
-  weekly dump **off Cloudflare** (e.g. to S3) so a platform-level account problem
-  can't take the Tier-0 state with it. (`SESSIONS_DB` is not Tier-0 — skip it.)
-- **R2 (bulk ciphertext):** R2 is durable but **not versioned**. This data is
-  lower-stakes (the client's local-first copy is a second replica), but still
-  guard against accidental delete/overwrite with **R2 event notifications →
-  Queue → Worker** replicating writes to a second bucket.
-- **Test restores.** A backup you have never restored is not a backup —
-  periodically restore D1 to a scratch DB and confirm a sample of wrapped DEKs
-  still unwrap.
+The export schedule, the off-Cloudflare copy, R2 replication and hygiene, and
+the restore drill for this Tier-0 set live in
+[server-backups.md](./server-backups.md).
 
 #### why not the per-user Durable Object?
 
@@ -1072,9 +1055,12 @@ SQLite-backed DOs now have **30-day point-in-time recovery, on by default**
    together with one command; DO PITR is per-object, so a _consistent_ restore
    across the registry plus every affected DO is far harder.
 
-The DO's real job is the user's **bookmark data / sync / op-log** (strong
-per-user consistency, now PITR-backed). Keep that there; keep the tiny, pre-auth,
-Tier-0 wrapped DEK beside its credential in D1.
+The DO's real job is **sync bookkeeping** — the user's op log and `file_sizes`
+quota map, where strong per-user ordering matters. The bookmark data itself is
+encrypted files in R2, the source of truth
+([local-first-sync.md](./local-first-sync.md#source-of-truth-r2-is-truth-the-op-log-is-an-accelerator)).
+Keep that bookkeeping there; keep the tiny, pre-auth, Tier-0 wrapped DEK beside
+its credential in D1.
 
 #### future: sharding D1 — the seam is pre-cut
 
@@ -1137,17 +1123,14 @@ Two things to **avoid**, as they would make sharding hard:
 - An active client caches the **unwrapped DEK** locally (IndexedDB, as a
   non-extractable `CryptoKey`), so a transient server hiccup never locks a live
   session. A _fresh_ device still depends entirely on server durability — which
-  is why the D1 backup discipline above is non-negotiable.
+  is why the D1 backup discipline ([server-backups.md](./server-backups.md)) is
+  non-negotiable.
 - Optionally let the user **download their wrapped-DEK blob** as an explicit
   user-held backup file — a last-ditch copy that survives even total server loss
   (still useless without a door's secret).
 
-> Cloudflare references: [D1 Time Travel](https://developers.cloudflare.com/d1/reference/time-travel/),
-> [D1 export](https://developers.cloudflare.com/d1/wrangler-commands/),
-> [D1 limits (10 GB/db, 50k dbs)](https://developers.cloudflare.com/d1/platform/limits/),
-> [SQLite-backed DO storage + PITR](https://developers.cloudflare.com/durable-objects/api/sqlite-storage-api/).
-> R2 has **no** native object versioning as of 2026-06; keys live in D1 for that
-> reason, and bulk R2 data is replicated rather than versioned.
+> Cloudflare references: [D1 limits (10 GB/db, 50k dbs)](https://developers.cloudflare.com/d1/platform/limits/);
+> the backup-side references are in [server-backups.md](./server-backups.md).
 
 ### rollout — adopt the architecture now, ship doors later
 
@@ -1215,6 +1198,5 @@ the data is gone."**
 - **Storage durability** — schema/topology is **✅ built**: three databases
   (`DIRECTORY_DB`, `ACCOUNTS_DB_1`, `SESSIONS_DB`), `account_keys` with the
   **wrapped DEK inline** in the shard, and the `account_db_id` routing seam. Still
-  open (don't wait for the first real user): the daily export + off-platform copy
-  for `DIRECTORY_DB` **and** each account shard (the two together are the Tier-0
-  set), and a restore drill.
+  open: the backups — tracked in
+  [server-backups.md](./server-backups.md#still-open).
