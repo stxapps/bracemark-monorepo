@@ -620,8 +620,10 @@ alongside `’`. There is no `Literal` selector, because `"` is real data in thi
 workspace and such a rule would be per-file disables forever — so a **prose
 string in a single-quoted literal** (`'the "Service"'`) is the gap, and this page
 is what covers it. `listing-copy.spec.ts` is where that gap matters most:
-`FULL_DESCRIPTION` is the one export long enough to quote anything, and it is
-pasted into a store console by hand.
+the two long descriptions, `FULL_DESCRIPTION` and
+`BROWSER_EXTENSION_FULL_DESCRIPTION`, are the exports long enough to quote
+anything — the second quotes Chrome's permission warning — and both are pasted
+into a store console by hand.
 
 #### terminology
 

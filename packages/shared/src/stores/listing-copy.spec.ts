@@ -4,6 +4,7 @@ import * as LISTING_COPY from './listing-copy';
 import {
   APP_STORE,
   APP_STORE_SUBSCRIPTION,
+  BROWSER_EXTENSION_FULL_DESCRIPTION,
   BROWSER_EXTENSION_LISTING,
   FIREFOX_ADDONS_SUMMARY,
   FULL_DESCRIPTION,
@@ -84,6 +85,11 @@ describe('store listing copy — character budgets', () => {
       'browser extension manifest description',
       BROWSER_EXTENSION_LISTING.description,
       STORE_LIMITS.browserExtension.description,
+    ],
+    [
+      'Chrome Web Store description',
+      BROWSER_EXTENSION_FULL_DESCRIPTION,
+      STORE_LIMITS.chromeWebStore.description,
     ],
     ['Firefox Add-ons summary', FIREFOX_ADDONS_SUMMARY, STORE_LIMITS.firefoxAddons.summary],
     // Every caption, found by walking the object rather than listed — a fifth
@@ -231,8 +237,8 @@ describe('rules that bind every exported string', () => {
     expect(unscoped).toEqual([]);
 
     // And the enumeration is load-bearing enough that it has to still be there:
-    // the two strings that carry it are the product's whole argument.
-    expect(EVERY_EXPORTED_STRING.filter(([, v]) => sentenceWithTheClaim(v)).length).toBe(2);
+    // the strings that carry it are the product's whole argument.
+    expect(EVERY_EXPORTED_STRING.filter(([, v]) => sentenceWithTheClaim(v)).length).toBe(3);
   });
 });
 
@@ -253,12 +259,15 @@ describe('the strings Apple reads', () => {
   });
 });
 
-describe('the long description', () => {
-  it('quotes no price, cap or trial length (they change without a review)', () => {
+describe('the long descriptions', () => {
+  it.each([
+    ['FULL_DESCRIPTION', FULL_DESCRIPTION],
+    ['BROWSER_EXTENSION_FULL_DESCRIPTION', BROWSER_EXTENSION_FULL_DESCRIPTION],
+  ])('%s quotes no price, cap or trial length (they change without a review)', (_name, value) => {
     // Numbers belong in APP_STORE.promotionalText, which Apple lets us edit
     // outside the review cycle. Anything here goes stale on the storefront for as
     // long as a review takes. Bullets are "•", so no digit is legitimate.
-    expect(FULL_DESCRIPTION).not.toMatch(/\d/);
+    expect(value).not.toMatch(/\d/);
   });
 });
 

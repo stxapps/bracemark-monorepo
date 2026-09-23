@@ -73,6 +73,8 @@ export const STORE_LIMITS = {
   play: { title: 30, shortDescription: 80, fullDescription: 4000 },
   /** One manifest serves both browsers, so each budget is the smaller of the two. */
   browserExtension: { name: 45, description: 132 },
+  /** The dashboard's Store listing tab. Title and summary come from the manifest. */
+  chromeWebStore: { description: 16000 },
   firefoxAddons: { summary: 250 },
   /**
    * ⚠ THE ONE LIMIT NO CONSOLE ENFORCES. A screenshot caption is drawn INTO the
@@ -269,6 +271,48 @@ export const BROWSER_EXTENSION_LISTING = {
   description:
     'Save the tab you’re reading in two clicks. Bracemark encrypts every link in your browser before it syncs — only you can read it.',
 } as const;
+
+// The browser extension's long description — PASTED, into the Chrome Web Store
+// dashboard's Store listing tab. Not FULL_DESCRIPTION, and that is not the "two
+// long descriptions" the note above it refuses: that note is about tuning one
+// product's text per store, and this is a different product. FULL_DESCRIPTION
+// sells the mobile app, and most of it is untrue on this listing — sharing in
+// from any app is the share sheet, and search, pins, layouts and import live in
+// the web app and the mobile app, not in a popup that saves the current tab.
+// "Only promise what ships" means what ships IN THIS ITEM.
+//
+// So it describes the popup (`entrypoints/popup/`) and points at the web app for
+// the rest. Walk it again when the popup gains or loses a feature — the same
+// instruction as the "two clicks" note above, for the same reason: the reader
+// checks it on their own toolbar a minute after installing.
+//
+// The permission line is a claim about `wxt.config.ts`: `activeTab`, and no host
+// permission but the api's. Adding a `<all_urls>`-style host permission makes it
+// false AND puts Chrome's warning, quoted here, on the install dialog.
+export const BROWSER_EXTENSION_FULL_DESCRIPTION = `Bracemark is a bookmark manager that cannot read your bookmarks. This browser extension saves the tab you’re reading into it.
+
+Click the Bracemark button, choose a list, add tags or a note if you like, and press Save. The link is encrypted in your browser before it syncs: the address, the title, the tags, the note, the list you filed it in. Your key is unlocked by your password, on your device, and never leaves it. Of your library, our servers hold a path, a size, and bytes we have no key for; the account around it — your username, your plan — is what we can read.
+
+WHAT THE BROWSER EXTENSION DOES
+• Saves the tab you’re on in two clicks
+• Files it into your lists and tags, the same ones you use everywhere else in Bracemark
+• Picks up the page’s title and image from the tab itself
+• Shows when it last synced, and what is still waiting to
+
+WHAT IT ASKS FOR
+• Access to a tab only when you click the button on it — never “Read and change all your data on all websites”
+• No ads, no trackers, no analytics
+
+WHERE YOUR LINKS GO
+Everything you save turns up in the Bracemark web app, on any device you sign in on — where you search, pin, import and export it. Export is in open formats, on every plan.
+
+YOU’LL NEED AN ACCOUNT
+Sign in with your Bracemark username and password. No account yet? The browser extension opens the web app to create one, and no email address is needed.
+
+WHAT IT COSTS TO BUILD IT THIS WAY
+We hold no key, so there is no password reset. A recovery code is your second way in, and saving it is on you.
+
+Bracemark is paid for by subscriptions. There is no advertising, no data to sell, and no investor waiting for us to change that.`;
 
 // --- the store screenshots ---------------------------------------------------
 //
