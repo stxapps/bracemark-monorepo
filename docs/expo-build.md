@@ -1,8 +1,9 @@
 ## expo build & release (bracemark-expo)
 
 How bracemark-expo gets **built** — the local prebuild/Xcode/gradle workflow, the
-app config that feeds it, and the three release-only Android concerns (R8
-minification, the dev launcher's ML Kit, Play upload signing), plus the Claude Code plugin for the iOS
+app config that feeds it, the devices and OS versions it ships to, and the three
+release-only Android concerns (R8 minification, the dev launcher's ML Kit, Play
+upload signing), plus the Claude Code plugin for the iOS
 App Store Connect side and the vendored `gplay` skills for the Play Console
 side. For what each dependency _is_ and how it's wired, see
 [expo-dependencies.md](./expo-dependencies.md); for the one-time scaffold
@@ -277,6 +278,88 @@ and About prints whichever the running platform has. Belt and braces:
 version onto the extension regardless, so re-adding `ios.version` can't
 resurrect the mismatch — see below.
 
+#### devices — phones only, and the two OS floors ⚠
+
+**bracemark-expo ships for phones only, and half of that is not in this repo.**
+iOS is `ios.supportsTablet: false`, which prebuilds to `TARGETED_DEVICE_FAMILY =
+1`. Android has no manifest switch that does the job, so tablets are excluded in
+the **Play Console**, and this section is the only record of it.
+
+| device                                       | gets                                                      | set by                          |
+| -------------------------------------------- | --------------------------------------------------------- | ------------------------------- |
+| iPhone                                       | the app                                                   | —                               |
+| iPad                                         | the iPhone build in compatibility mode, a phone-sized box | `supportsTablet: false`         |
+| Android phone, foldables included            | the app                                                   | —                               |
+| Android tablet, Chromebook, TV, Wear OS, car | nothing — the Play Store does not offer it                | Play Console → _Device catalog_ |
+
+**The Play Console half, as done on 2026-09-23.** Test and release → Reach and
+devices → _Device catalog_ → filter **Form factor** to every value except Phone
+→ select all → Exclude: 3,418 devices, out of those the manifest already
+allowed. The two cleaner routes don't exist: the catalog's exclusion **rules**
+have no form-factor field, and Advanced settings → _Form factors_ has no ChromeOS
+opt-out. Nor can `gplay` do any of it — the Android Publisher API has no
+device-catalog resource at all, and `gplay device-tiers` is asset-pack
+targeting, not availability. `<supports-screens>` doesn't filter Play either,
+and `<compatible-screens>`, which does, is deprecated and fragile.
+
+**⚠ It is a list of devices, not a rule, so it goes stale silently.** A tablet
+Google adds to the catalog after that date is offered the app until someone
+re-runs the filter, and nothing says so — the tablet user just gets the phone
+layout stretched to the screen. Re-run it before each production release:
+_Device catalog_ → form factor every value except Phone → status Supported →
+exclude whatever comes back.
+
+**Foldables are phones in the catalog, and the portrait lock doesn't hold on
+them.** At `targetSdk` 36, Android 16 ignores `screenOrientation`,
+`resizeableActivity` and aspect-ratio limits on any display 600dp wide or more,
+so an unfolded Fold runs the phone layout full-width, and rotates.
+`MainActivity`'s `configChanges` already lists
+`orientation|screenSize|screenLayout`, so that re-lays out rather than restarting
+the activity. `PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY` would restore the
+lock and is **deliberately not set**: it is honoured only while targeting 36 and
+ignored from 37, so it defers the layout work by one `targetSdk` rather than
+removing it. Add it only if a foldable run shows a screen that is actually
+broken.
+
+**Compatibility mode still gets reviewed.** App Review runs iPhone apps on iPad
+(guideline 2.4.1) — the iOS share extension from Safari included — so check both
+on the iPad before a submission. App Store Connect → _Pricing and Availability_
+also offers the iPhone build to Apple silicon Macs and Apple Vision Pro by
+default, and neither has been run.
+
+**The OS floors: iOS 26 and Android 13 (API 33).** Both are in the
+`expo-build-properties` entry. The iOS share extension copies the app target's
+deployment target (_ios share extension build settings_, below), and the
+marketing site's FAQ quotes both by hand (`content/faq.tsx`, `platforms`), so a
+change to either is three places. Both were chosen by the same asymmetry: a floor
+lowers for free, but raising it after launch strands installed users on their
+last compatible build, still talking to an api that moves on.
+
+- **iOS went up from the scaffolded 18** because nothing below 26 has ever been
+  run and iOS 26 restyled the system chrome, while 26 was already on ~79% of
+  iPhones by June 2026 (Apple's figure).
+- **Android stays at 33** because API 36 was on only ~25% of devices in September
+  2026, so the same move would turn away three in four. The untested-versions
+  risk is carried instead by the Play **pre-launch report**, which runs every
+  testing-track upload on real devices across Android versions — read it before
+  promoting to production. API 35 (Android 15, where edge-to-edge is enforced) is
+  the fallback floor if that report shows breakage there is no time to fix.
+
+**When the app supports tablets, undo all of it in one change:**
+
+1. `supportsTablet: true` — and it is **one-way**: once a build with iPad support
+   ships, App Store Connect rejects any later build that drops it.
+2. iPad screenshots become required at submission ([brand-assets.md](./brand-assets.md),
+   _the store screenshots_, already names the size).
+3. Play Console → _Device catalog_ → filter Excluded, form factor Tablet (and
+   Chromebook, if it is in scope) → include them again. TV, Wear OS and car stay
+   excluded unless they are supported too.
+4. Decide `orientation: 'portrait'` again — on large screens Android already
+   ignores it (above).
+5. The marketing site says phone-only on purpose in three places: the FAQ's
+   `platforms` and `need-extension` answers, and the home page capture card
+   (`app/page.tsx`, "Phone").
+
 #### ios share extension build settings ⚠
 
 **The `BracemarkShareExtension` target is born with four values wrong that are
@@ -290,7 +373,7 @@ come from those two files:
 | value                                          | app target      | share extension, unfixed          | symptom                                                       |
 | ---------------------------------------------- | --------------- | --------------------------------- | ------------------------------------------------------------- |
 | `DEVELOPMENT_TEAM`                             | `APPLE_TEAM_ID` | absent                            | empty **Team** in Signing & Capabilities                      |
-| `IPHONEOS_DEPLOYMENT_TARGET`                   | `18.0`          | literal `15.1`                    | Pods built for a newer iOS than the target links for          |
+| `IPHONEOS_DEPLOYMENT_TARGET`                   | `26.0`          | literal `15.1`                    | Pods built for a newer iOS than the target links for          |
 | `MARKETING_VERSION`, `CURRENT_PROJECT_VERSION` | `ios.version`   | top-level `version`               | App Store rejects the upload on a version the app won't share |
 | `CFBundleDisplayName` (plist)                  | `Bracemark`     | `$(PRODUCT_NAME) Share Extension` | "BracemarkShareExtension Share Extension" in the share sheet  |
 
@@ -312,7 +395,7 @@ the file carries the full reasoning, so this is the short version.
   `updateDeploymentTargetXcodeProject`), so a `com.apple.product-type.app-extension`
   target is skipped **by design** and would still be skipped if it ran last.
   Meanwhile `ios.deploymentTarget` also lands in `Podfile.properties.json`, so
-  every Pod _is_ built at 18.0.
+  every Pod _is_ built at 26.0.
 - **The versions — a second config key.** The extension's plist takes
   `CFBundleShortVersionString` from `$(MARKETING_VERSION)`, which
   `expo-share-extension` seeds from the **top-level** `config.version`, while the

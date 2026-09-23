@@ -585,7 +585,7 @@ const CAPTURE = [
     body: 'Click the icon on the tab you are already reading, then Save. The extension tries to take the title and preview image from your own browser, so no server of ours has to fetch the page.',
   },
   {
-    name: 'Phone and tablet',
+    name: 'Phone',
     where: 'iOS · Android',
     // NOT "same capture" as the extension card above it. The share sheet gets what
     // the SHARING APP hands over — a URL and whatever title it chose to attach —

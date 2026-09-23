@@ -42,6 +42,9 @@ const config: ExpoConfig = {
       dark: './assets/images/ios-dark.png',
       tinted: './assets/images/ios-tinted.png',
     },
+    // Phones only — and the Android half of that is a Play Console setting, not
+    // anything in this file. Turning tablets on is one-way on iOS and a list of
+    // other places to undo: docs/expo-build.md, _devices_.
     supportsTablet: false,
     bundleIdentifier: 'com.bracemark.app',
     appleTeamId: process.env.APPLE_TEAM_ID,
@@ -164,11 +167,18 @@ const config: ExpoConfig = {
         preprocessingFile: './share-extension/preprocessing.js',
       },
     ],
+    // The two OS floors below are quoted by hand in bracemark-site's FAQ
+    // (content/faq.tsx, `platforms`), which cannot import them. Raise one, bump
+    // it there in the same change.
     [
       'expo-build-properties',
       {
         ios: {
-          deploymentTarget: '18.0',
+          // 26, not the 18 it was scaffolded with: nothing below 26 has ever
+          // been run, and iOS 26 restyled the system chrome. The floor only
+          // lowers for free — raising it after launch strands installed users
+          // on their last compatible build, talking to a moving api.
+          deploymentTarget: '26.0',
         },
         android: {
           minSdkVersion: 33,
@@ -203,7 +213,7 @@ const config: ExpoConfig = {
     // before expo-share-extension creates the target, and expo-build-properties
     // skips it by product type. Without this, Xcode's Signing & Capabilities
     // Team is empty on BracemarkShareExtension after every prebuild, and that
-    // target builds for iOS 15.1 against Pods built for the 18.0 set above.
+    // target builds for iOS 15.1 against Pods built for the 26.0 set above.
     // Position in this array does not matter: it is a `finalized` mod, which
     // runs after the whole chain. See the plugin.
     './plugins/with-share-extension-build-settings',

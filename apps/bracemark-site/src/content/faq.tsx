@@ -207,13 +207,28 @@ export const FAQ_GROUPS: FaqGroup[] = [
         ),
       },
       {
+        // ⚠ THE TWO OS FLOORS ARE TYPED, NOT READ. They are `deploymentTarget`
+        // and `minSdkVersion` in apps/bracemark-expo/app.config.ts, which this
+        // site cannot import (an app never imports an app), so an Expo SDK bump
+        // that raises either one leaves this answer quoting the old floor with
+        // nothing failing. Bump them here in the same change.
+        //
+        // The native apps are phone-only: `ios.supportsTablet: false`, so an iPad
+        // runs the iPhone build in compatibility mode, and Android tablets and
+        // Chromebooks are excluded in the Play Console device catalog
+        // (docs/expo-build.md, _devices_). The web app is what serves both. No
+        // "yet" and no tablet layout promised: that is a planned feature, and a
+        // promise about one ends up standing in several places at once (see
+        // `offline` below).
         id: 'platforms',
         q: 'Where does it run?',
         a: (
           <>
             A web app in any modern browser — Chrome, Firefox, Safari, Edge — on desktops, tablets
-            and phones; native apps for iOS and Android; and a browser extension for Chrome and
-            Firefox. One account, the same library everywhere.
+            and phones; native apps for iPhone (iOS 26 or later) and Android phones (Android 13 or
+            later); and a browser extension for Chrome and Firefox. On an iPad, the iPhone app opens
+            in a phone-sized window. On an Android tablet or a Chromebook, use the web app. One
+            account, the same library everywhere.
           </>
         ),
       },
@@ -250,8 +265,8 @@ export const FAQ_GROUPS: FaqGroup[] = [
           <>
             No. On a laptop it is the best way to save: the extension reads the page you are already
             looking at, so the title and preview image come from your own browser and nothing has to
-            fetch that page on your behalf. On a phone or tablet, share into the iOS or Android app
-            from whatever app you are in — the link is saved on the spot and, with the default Link
+            fetch that page on your behalf. On a phone, share into the iOS or Android app from
+            whatever app you are in — the link is saved on the spot and, with the default Link
             previews setting, the app fetches the page itself the next time you open it. Saving from
             the web app works without either — see the previews question below for what changes.
           </>

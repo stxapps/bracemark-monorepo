@@ -41,7 +41,7 @@ const plist = fromConfigPlugins('@expo/plist');
  *   so an `app-extension` target is skipped by design and would still be
  *   skipped if it ran last. The extension keeps the plugin's literal `"15.1"`
  *   while `ios.deploymentTarget` puts the app — and, through
- *   `Podfile.properties.json`, every Pod — on 18.0. Symptom: pods built for a
+ *   `Podfile.properties.json`, every Pod — on 26.0. Symptom: pods built for a
  *   newer iOS than the target linking them.
  * - **`MARKETING_VERSION` / `CURRENT_PROJECT_VERSION`.** The extension's
  *   Info.plist takes `CFBundleShortVersionString` from `$(MARKETING_VERSION)`,
