@@ -7,8 +7,7 @@
 //   - bracemark-web (the app) shows a single browser-extension button in the links
 //     page's previews prompt, via `extensionStoreUrl()`.
 //
-// A second copy would be a drift hazard with a deadline: all four are placeholders
-// until submission (below), and the day they're filled in, one copy would be
+// A second copy would be a drift hazard: the day a listing moves, one copy would be
 // updated and the other forgotten.
 //
 // "Browser extension" throughout, never bare "extension" (docs/architecture.md —
@@ -17,12 +16,19 @@
 // Hard-coded, not env-configured, because a store listing is a fixed public address
 // — unlike the app's own origins, these are the same in every environment.
 //
-// TODO: all four are PLACEHOLDERS. The values they replaced addressed the legacy
-// Brace.to listings (`com.bracedotto`, App Store id 1531456778, and the Chrome one
-// by its v1 extension id — which is what the Web Store actually resolves, the slug
-// is decorative), and Bracemark gets brand-new listings on every store because the
-// identifiers change. Fill these in at submission time; until then
-// they link nowhere rather than to the wrong product.
+// Bracemark gets brand-new listings on every store, never the legacy Brace.to ones
+// (`com.bracedotto`, App Store id 1531456778, the v1 Chrome extension id), because
+// the identifiers change. Each URL is keyed by the identifier its store actually
+// resolves, and every one of them is fixed before review, not by it — so a listing
+// still in review is a dead link here, never a wrong one:
+//
+//   - Chrome: the extension id the Web Store assigned at first upload (dashboard →
+//     the item). The `/bracemark/` slug is decorative. NOT the id an unpacked build
+//     gets — the manifest carries no `key`, so each unpacked load has its own.
+//   - App Store: the numeric Apple ID (App Store Connect → App Information). No
+//     country segment, so each visitor lands on their own storefront.
+//   - Firefox: the slug set on the AMO listing, `bracemark` — AMO resolves by slug.
+//   - Play: the package name, `package` in apps/bracemark-expo/app.config.ts.
 
 // Data only, no picker. Choosing WHICH browser-extension listing to offer a visitor
 // is a UA sniff, and this package is `platform:agnostic` — it compiles without the
@@ -30,7 +36,7 @@
 // that has one: apps/bracemark-web/src/lib/extension-stores.ts.
 
 export const CHROME_WEB_STORE_URL =
-  'https://chromewebstore.google.com/detail/bracemark/TODO_EXTENSION_ID';
+  'https://chromewebstore.google.com/detail/bracemark/geddbkhciieeichmhpflpkaamjglgbjo';
 export const FIREFOX_ADDONS_URL = 'https://addons.mozilla.org/en-US/firefox/addon/bracemark/';
 export const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.bracemark.app';
-export const APP_STORE_URL = 'https://apps.apple.com/us/app/idTODO_APP_STORE_ID';
+export const APP_STORE_URL = 'https://apps.apple.com/app/id6814343506';
