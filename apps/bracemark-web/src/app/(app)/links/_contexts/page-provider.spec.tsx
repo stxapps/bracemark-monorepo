@@ -45,11 +45,16 @@ let mockLists: TreeNode<TreeItem>[] = [];
 let mockTags: TreeNode<TreeItem>[] = [];
 let mockSetting = { sortOn: 'updatedAt', sortOrder: 'desc' };
 
+// The provider navigates through the History API (see its note on why not
+// `router.push`), so these stand in for the two calls, keyed on the href.
 const push = jest.fn();
 const replace = jest.fn();
+jest.spyOn(window.history, 'pushState').mockImplementation((_state, _unused, url) => push(url));
+jest
+  .spyOn(window.history, 'replaceState')
+  .mockImplementation((_state, _unused, url) => replace(url));
 
 jest.mock('next/navigation', () => ({
-  useRouter: () => ({ push, replace }),
   useSearchParams: () => new URLSearchParams(mockSearch),
 }));
 

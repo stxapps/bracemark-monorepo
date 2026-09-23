@@ -20,7 +20,7 @@
 // travels with it (the self-wrapping AuthGuard/GuestGuard pattern).
 
 import { createContext, Suspense, useCallback, useContext, useEffect, useMemo } from 'react';
-import { type ReadonlyURLSearchParams, useRouter, useSearchParams } from 'next/navigation';
+import { type ReadonlyURLSearchParams, useSearchParams } from 'next/navigation';
 
 import {
   ALL_ID,
@@ -313,8 +313,25 @@ interface LinksPageContextValue {
 
 const LinksPageContext = createContext<LinksPageContextValue | null>(null);
 
+// Every navigation this provider makes stays on /links and changes only the
+// search params, so it goes through the History API rather than `router.push`.
+// Next's app router integrates `pushState`/`replaceState` — `useSearchParams`
+// re-reads the new URL and the history entry is its own — without asking the
+// server for anything. `router.push` fetches the route's RSC payload first, and
+// when that fetch fails it falls back to a full document load: with the network
+// gone, one sidebar click took an open, fully-loaded links page to the browser's
+// offline error page, in the dev server and in the static export alike
+// (OFFLINE-WEB-001, docs/e2e.md). For a static client page that payload is the
+// same for every view, so even online the round trip bought nothing.
+function pushView(href: string) {
+  window.history.pushState(null, '', href);
+}
+
+function replaceView(href: string) {
+  window.history.replaceState(null, '', href);
+}
+
 function InnerLinksPageProvider({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
   const searchParams = useSearchParams();
 
   // Sort is a GLOBAL synced setting with an optional READ-ONLY URL override: the
@@ -365,16 +382,13 @@ function InnerLinksPageProvider({ children }: { children: React.ReactNode }) {
   const tags = useTags();
   const stale = isStaleSelection(selection, lists, tags);
   useEffect(() => {
-    if (stale) router.replace('/links');
-  }, [stale, router]);
+    if (stale) replaceView('/links');
+  }, [stale]);
 
   // push (not replace) so the back button steps through the views you visited —
   // the deep-link/history behavior the URL approach is for.
-  const setSimpleQuery = useCallback(
-    (next: Selection) => router.push(hrefForSelection(next)),
-    [router],
-  );
-  const setQuery = useCallback((next: LinkQuery) => router.push(hrefForQuery(next)), [router]);
+  const setSimpleQuery = useCallback((next: Selection) => pushView(hrefForSelection(next)), []);
+  const setQuery = useCallback((next: LinkQuery) => pushView(hrefForQuery(next)), []);
 
   const value = useMemo(
     () => ({ selection, setSimpleQuery, setQuery, query }),
