@@ -197,11 +197,11 @@ const FACTS: [string, string][] = [
 const NEVER: [string, string][] = [
   [
     'Keep what it read',
-    'Nothing is buffered to disk, cached, indexed or stored. What it finds goes straight back to the device that asked and the bytes are gone — there is no copy of your page at our end to leak, subpoena or change our mind about.',
+    'Nothing is buffered to disk, cached, indexed, or stored. What it finds goes straight back to the device that asked and the bytes are gone — there is no copy of your page at our end to leak, subpoena, or change our mind about.',
   ],
   [
     'Write down the address you saved',
-    'The whole reason this service is separate from the rest of Bracemark is that the URL it sees stays transient. Observability is counts, latency and error rates — that address never reaches a log line. The one you connect FROM is a different thing and we do hold it, briefly: the rate limiter counts requests against it for a few seconds so that a single source cannot flood the service. It is never written down beside the URL, and the privacy policy inventories it.',
+    'The whole reason this service is separate from the rest of Bracemark is that the URL it sees stays transient. Observability is counts, latency, and error rates — that address never reaches a log line. The one you connect FROM is a different thing and we do hold it, briefly: the rate limiter counts requests against it for a few seconds so that a single source cannot flood the service. It is never written down beside the URL, and the privacy policy inventories it.',
   ],
   [
     'Know who asked',
@@ -209,7 +209,7 @@ const NEVER: [string, string][] = [
   ],
   [
     'Come back for the rest of your site',
-    'One request names one saved document. The fetcher has no queue of its own, never follows links it finds and never schedules a revisit. It returns only when a person’s Bracemark client asks for a saved address again — for another pending link or a retry of an earlier attempt.',
+    'One request names one saved document. The fetcher has no queue of its own, never follows links it finds, and never schedules a revisit. It returns only when a person’s Bracemark client asks for a saved address again — for another pending link or a retry of an earlier attempt.',
   ],
   [
     'Feed a dataset or a model',
@@ -346,7 +346,7 @@ export default function Page() {
           </dl>
           <p className={cn('mt-6 text-base leading-7 text-muted-foreground')}>
             Because nothing on the page is executed, what it sees is the markup you served and
-            nothing more: no stylesheet, script or font is pulled in behind it, and a page that
+            nothing more: no stylesheet, script, or font is pulled in behind it, and a page that
             assembles its title in the browser yields nothing to find. The ceilings are ours as much
             as yours — this runs anonymously, so the caps are what keep it from being an open proxy
             pointed at your bandwidth. You can read every one of them, and the guard that re-checks
@@ -484,7 +484,7 @@ export default function Page() {
             Write to <MailLink address={ABUSE_EMAIL} variant="specimen" />. If it arrived more often
             than this page says it can, exceeded one of the caps above, or reached something it had
             no business reaching, that is a bug and we want it. The user-agent line, a few
-            timestamps and the paths are enough to find it at our end. A person reads that address,
+            timestamps, and the paths are enough to find it at our end. A person reads that address,
             not an auto-responder.
           </p>
         </section>

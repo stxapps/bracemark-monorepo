@@ -262,7 +262,7 @@ export function SubscriptionSection() {
                   // `all` covers synced and imported links on this device and is free on
                   // every plan. Naming the device rather than the save keeps the line
                   // true at whichever position the setting sits.
-                  `Encrypted saving, sync, lists and tags — up to ${entitlementsOf('free').maxLinks} links, with previews fetched on this device.`
+                  `Encrypted saving, sync, lists, and tags — up to ${entitlementsOf('free').maxLinks} links, with previews fetched on this device.`
                 : expiresAt === null
                   ? 'Never expires.'
                   : // A trial's period end is the FIRST CHARGE, not a renewal —

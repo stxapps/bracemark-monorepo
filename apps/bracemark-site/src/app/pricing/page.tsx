@@ -27,7 +27,7 @@ export const metadata: Metadata = {
   // Derived like everything else on the page: a search snippet that promises a
   // cap or a trial length the product doesn't have is the same drift, just
   // harder to notice because nobody reads it in review.
-  description: `Bracemark is free for your first ${entitlementsOf('free').maxLinks} links. ${PLAN_LABELS.plus} adds unlimited links, nested and hidden lists, the app lock and the search editor — with a ${TRIAL_DAYS}-day free trial.`,
+  description: `Bracemark is free for your first ${entitlementsOf('free').maxLinks} links. ${PLAN_LABELS.plus} adds unlimited links, nested and hidden lists, the app lock, and the search editor — with a ${TRIAL_DAYS}-day free trial.`,
 };
 
 // The public pricing page. Every NUMBER on it — the prices, the link caps, the
@@ -92,7 +92,7 @@ const FREE_FEATURES = [
   'End-to-end encryption — only you hold the key',
   'Sync across all your devices',
   'Browser extension and mobile share sheet',
-  'Lists, tags, pins and search',
+  'Lists, tags, pins, and search',
   // Its own bullet, never folded into the search line above it: the FREE search
   // haystack is url ⊕ title, and "search your notes" is exactly the promise a
   // merged bullet would make. Searching a note is the Plus editor's "Note contains"
@@ -238,7 +238,7 @@ const COMPARISON: { label: string; cell: (plan: Plan) => Cell }[] = [
   // The scope half STAYS. There is no cap on what is searched, on either plan, and
   // that is what a buyer comparing plans is weighing — naming the fields is not a
   // reason to give it up. "Address", not "URL": this page is read in the same
-  // sitting as the landing bullet ("Across titles, addresses and hosts") and the
+  // sitting as the landing bullet ("Across titles, addresses, and hosts") and the
   // FAQ ("matches titles and addresses"), and URL is the IN-APP register, where the
   // search editor has a field by that name.
   //
@@ -305,7 +305,7 @@ export default function Page() {
           <p className={cn('mt-5 text-lg leading-8 text-muted-foreground')}>
             Start free and keep {formatLinks('free')} links for as long as you like. Upgrade when
             your library outgrows it — with a {TRIAL_DAYS}-day free trial, and the same encryption,
-            sync and export on every plan.
+            sync, and export on every plan.
           </p>
         </section>
 

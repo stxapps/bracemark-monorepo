@@ -113,7 +113,7 @@ const PARAMS: [string, string][] = [
 const BREACH_HAS: [string, string][] = [
   [
     'Every encrypted file, and its shape',
-    'One encrypted file per item you keep, each with a path, a size and the time it last changed. That is a count of how many things you keep and a record of when you touch them — it is real, it is what a file-per-item design costs, and no amount of encryption removes it.',
+    'One encrypted file per item you keep, each with a path, a size, and the time it last changed. That is a count of how many things you keep and a record of when you touch them — it is real, it is what a file-per-item design costs, and no amount of encryption removes it.',
   ],
   [
     'Your username and public key',
@@ -131,7 +131,7 @@ const BREACH_HAS: [string, string][] = [
 
 const BREACH_LACKS: [string, string][] = [
   [
-    'A single address, title, tag or note',
+    'A single address, title, tag, or note',
     'All of it is inside the ciphertext, including the references between a link and its preview image. The server never held a key to any of it, so there is no key to take.',
   ],
   [
@@ -188,7 +188,7 @@ export default function Page() {
             The parameters
           </h2>
           <p className={cn('mt-4 text-base leading-7 text-muted-foreground')}>
-            These are a frozen cross-platform contract: the web app, the browser extension and the
+            These are a frozen cross-platform contract: the web app, the browser extension, and the
             mobile apps must derive identically or a door would not open, so they are pinned by test
             vectors in the repository rather than set per client. Every value below is rendered from
             the constant the apps use, not typed into this page.

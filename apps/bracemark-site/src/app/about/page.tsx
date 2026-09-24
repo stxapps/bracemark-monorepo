@@ -202,7 +202,7 @@ const TRADEOFFS: [string, string][] = [
   // open at the right end and says when it exists without inventing one trigger.
   [
     'A saved link can rot',
-    'A saved link keeps the address, anything you write about it and any preview data Bracemark extracts — at save time or later. The page itself is on someone else’s server: if it changes or goes away, what the library keeps is your record of the web, not the web.',
+    'A saved link keeps the address, anything you write about it, and any preview data Bracemark extracts — at save time or later. The page itself is on someone else’s server: if it changes or goes away, what the library keeps is your record of the web, not the web.',
   ],
 ];
 
@@ -235,12 +235,12 @@ export default function Page() {
             <div className={cn('mt-4 space-y-4 text-base leading-7 text-muted-foreground')}>
               <p>
                 What you save is a fairly complete picture of what you are reading, buying, worrying
-                about and working on. Most bookmark managers hold that picture in readable form on
+                about, and working on. Most bookmark managers hold that picture in readable form on
                 their servers, and most of them mean well. But meaning well is a policy, and
-                policies change with funding rounds, acquisitions, subpoenas and breaches.
+                policies change with funding rounds, acquisitions, subpoenas, and breaches.
               </p>
               {/* "What the server keeps OF IT" — the scoping clause is the whole
-                  repair. The sentence used to end "the server keeps a path, a size
+                  repair. The sentence used to end "the server keeps a path, a size,
                   and some bytes", which reads as the total and is not: the same
                   Worker holds the account in the clear — username, public key,
                   sessions, and a subscription row if you pay. /privacy has always
@@ -249,8 +249,8 @@ export default function Page() {
                   and makes the claim checkable rather than merely confident. */}
               <p>
                 So Bracemark is built the other way round. Your password unlocks a key on your own
-                device; every link, list and tag becomes its own encrypted file before it is
-                uploaded; what the server keeps of it is a path, a size and some bytes. Around that
+                device; every link, list, and tag becomes its own encrypted file before it is
+                uploaded; what the server keeps of it is a path, a size, and some bytes. Around that
                 sits the account — your username, your sessions, your plan if you buy one — and
                 nothing readable from a single link. There is no “we promise not to look” in that
                 sentence, because there is no looking available to promise against.
@@ -404,7 +404,7 @@ export default function Page() {
               <p>
                 This one keeps the promise and rebuilds what it rests on. The encryption is now ours
                 end to end: a key your password unlocks, with a recovery code as the second door.
-                You sign up with a username. Nothing else.
+                You create an account with a username. Nothing else.
               </p>
             </div>
           </section>
@@ -557,7 +557,7 @@ export default function Page() {
                   it gets named, and only once it exists. */}
               <p>
                 One more absence, since you would find it anyway: no third party has audited this
-                code. There is no report to link, no security firm on retainer and no transparency
+                code. There is no report to link, no security firm on retainer, and no transparency
                 report, because none of those exist yet rather than because they say something we
                 would rather you missed. What is here instead is the repository, this page, and a
                 policy that inventories every field we hold.

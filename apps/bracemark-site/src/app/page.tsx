@@ -167,7 +167,7 @@ const SCREENSHOT = {
   // the tree goes flat again.
   alt:
     'The list layout in Bracemark: saved links one per row, each with a small preview image, ' +
-    'its title, its site and its tags, beside a sidebar of lists — one nested under another — ' +
+    'its title, its site, and its tags, beside a sidebar of lists — one nested under another — ' +
     'and tags.',
   // The caption has to cover the picture ABOVE it, and an earlier one did not: it
   // said previews come from the device that saved the link, full stop, over
@@ -314,7 +314,7 @@ function HeroPanel() {
                 WHAT THE SLOT WANTS: a link that implies an ACT, not a TASTE.
                 Taste says what kind of person you are; an act says what you are
                 about to do, and the hero's "a fairly complete picture of what
-                you are reading, buying, worrying about and working on" is a
+                you are reading, buying, worrying about, and working on" is a
                 claim about circumstances. Interview prep is something you are
                 doing on Thursday and have not told your manager about —
                 ordinary, non-medical, and still nobody's business. Sensitive
@@ -614,7 +614,7 @@ const CAPTURE = [
     // sites, and a server fetching another site is exactly what the rest of the
     // sentence sells (docs/link-extraction.md, _server extraction_) — so
     // "a web site can't fetch another web site" would refute its own next clause.
-    body: `Paste a URL and it is saved. Browsers won’t let a web page fetch another site. Turn on server previews on ${PLAN_LABELS.plus} and pending links fill in as you browse, or let a phone set to All links fill them in after sync.`,
+    body: `Paste a URL and it is saved. Browsers won’t let a web page fetch another site, so the title and image need help: turn on server previews on ${PLAN_LABELS.plus} and pending links fill in as you browse, or let a phone set to All links fill them in after sync.`,
   },
   {
     name: 'Import',
@@ -657,7 +657,7 @@ const CAPTURE = [
 // are the daily-loop basics, and every one is free.
 // The Plus levers get one honest footnote instead of four asterisks.
 //
-// Lists, tags and pins are ONE entry because they are one idea — where a link
+// Lists, tags, and pins are ONE entry because they are one idea — where a link
 // sits: which list it is filed in, what it is labelled, and what is held at the
 // top. That is the grouping /pricing's comparison row already ships ("Lists,
 // tags, pins, notes & layouts"), so the two surfaces now cut the concept the same
@@ -681,7 +681,7 @@ const CAPTURE = [
 // there, and it has to stay exactly that literal.
 const LIBRARY: [string, string][] = [
   [
-    'Lists, tags and pins',
+    'Lists, tags, and pins',
     'Save a link to a list, tag it, and find it later. Pin a few of them to the top.',
   ],
   [
@@ -694,7 +694,7 @@ const LIBRARY: [string, string][] = [
   ],
   [
     'Search',
-    `Across titles, addresses and hosts, every link. The ${PLAN_LABELS.plus} editor adds more fields.`,
+    `Across titles, addresses, and hosts, every link. The ${PLAN_LABELS.plus} editor adds more fields.`,
   ],
   // The old line was true and quietly left out the half a switcher cares about:
   // a link no device fetched gets nothing. Until now that fact existed on one
@@ -705,7 +705,7 @@ const LIBRARY: [string, string][] = [
   // it names the two cases and stops.
   [
     'Previews',
-    `Titles and images from the browser extension, the mobile app, or the opt-in preview server on ${PLAN_LABELS.plus}.`,
+    `Titles and images from the browser extension, the mobile app, or opt-in server previews on ${PLAN_LABELS.plus}.`,
   ],
   // "In formats other apps read" appeared three times across the site and never
   // named one, which reads exactly like a company that doesn't export well. The
@@ -760,12 +760,12 @@ const TRADE: { aspect: string; hosted: string; ours: string }[] = [
     aspect: 'Search',
     hosted:
       'Runs on their servers, over your titles and addresses in readable form. That is what makes it possible.',
-    ours: `Runs on your device, across titles, addresses and hosts — every link, on every plan, and no search you type leaves it. Searching by field, or across several lists and tags at once, is the ${PLAN_LABELS.plus} editor.`,
+    ours: `Runs on your device, across titles, addresses, and hosts — every link, on every plan, and no search you type leaves it. Searching by field, or across several lists and tags at once, is the ${PLAN_LABELS.plus} editor.`,
   },
   {
     aspect: 'Previews',
     hosted: 'Their servers fetch every page you save, and keep what they find.',
-    ours: `The browser extension tries to extract from the live tab when you save. The mobile app fetches on-device — saved links by default, or every pending link that comes into view when you choose All links. In the web app, the opt-in preview server on ${PLAN_LABELS.plus} fills new saves and pending links as you browse; Generate all covers the rest.`,
+    ours: `The browser extension tries to extract from the live tab when you save. The mobile app fetches on-device — saved links by default, or every pending link that comes into view when you choose All links. In the web app, opt-in server previews on ${PLAN_LABELS.plus} fill new saves and pending links as you browse; Generate all covers the rest.`,
   },
   {
     // The loss a hosted-manager user is actually buying against, and the one this
@@ -805,6 +805,20 @@ const TRADE: { aspect: string; hosted: string; ours: string }[] = [
     hosted:
       'Their server holds the readable copy, so it can merge two edits, keep a version history, and give you back the one you wanted.',
     ours: 'Each link is its own encrypted file, so edits to different links never collide. Edit the same link on two devices before they sync and the later edit is the one that survives — we hold nothing readable from your links to merge, and no earlier version to restore.',
+  },
+  {
+    // THE COST THIS BAND SHIPPED WITHOUT, twice over. docs/brand-assets.md names
+    // three costs every long surface must carry — no password reset, search on
+    // the device, no shared or public lists — and the lede closed over a trade
+    // that held only the first two ("Here is the whole trade"). /about and
+    // `FULL_DESCRIPTION` both list it; this row uses their wording.
+    //
+    // Fourth by the frequency-then-weight rule: wanting to share a list is
+    // occasional, and a forgotten password stays last for its own reasons.
+    aspect: 'Sharing a list',
+    hosted:
+      'Their server can read the list, so it can hand it to anyone you invite, or publish it at a link.',
+    ours: 'There are no shared or public lists. Sharing means handing someone a way to decrypt part of your library. That is real work rather than a button, and we would rather not fake it.',
   },
   {
     // The row that does a second job. The no-reset fact and its answer used to
@@ -891,7 +905,7 @@ const GUARANTEES: [string, string][] = [
   // where the whole list lives.
   [
     'Our blindness',
-    'For each thing you save we hold a path, a size, a timestamp and an encrypted blob — we cannot index your library, search it, or hand it to anyone in a readable form. What we can read is the account around it: your username, the public key your sign-ins are checked against, the sessions that keep your devices signed in, and your subscription if you buy one. The privacy policy inventories every field of it.',
+    'For each thing you save we hold a path, a size, a timestamp, and an encrypted blob — we cannot index your library, search it, or hand it to anyone in a readable form. What we can read is the account around it: your username, the public key your sign-ins are checked against, the sessions that keep your devices signed in, and your subscription if you buy one. The privacy policy inventories every field of it.',
   ],
 ];
 
@@ -945,7 +959,7 @@ const GUARANTEES: [string, string][] = [
 const DURABILITY: [string, React.ReactNode][] = [
   [
     'It is already on your device',
-    'Bracemark is local-first: the copy you open, search and edit is held on the machine in front of you, and syncing is how your other devices catch up. The library does not need us to be reachable in order to open.',
+    'Bracemark is local-first: the copy you open, search, and edit is held on the machine in front of you, and syncing is how your other devices catch up. The library does not need us to be reachable in order to open.',
   ],
   // THE CANONICAL STATEMENT OF WHAT COMES OUT, and the only one on the page: the
   // LIBRARY band's Export bullet stays a bullet ("Several formats, one a complete
@@ -1016,7 +1030,7 @@ const DURABILITY: [string, React.ReactNode][] = [
     // so the position stays here and the obstacles live in one place, /faq
     // `self-hosting`, where the reader who actually wants them will look.
     <>
-      Both apps, the browser extension, the server they sync to and the one that fetches link
+      Both apps, the browser extension, the server they sync to, and the one that fetches link
       previews are in{' '}
       <a
         className={cn(
@@ -1065,7 +1079,7 @@ export default function Page() {
 
                   - It opens with the STAKES rather than the feature. "A fairly
                     complete picture of what you are reading, buying, worrying
-                    about and working on" is the one line on the property that
+                    about, and working on" is the one line on the property that
                     describes the reader's situation instead of the product's
                     architecture, and it was stranded on /about, which is not in
                     the nav. The hero explained beautifully HOW we can't read
@@ -1136,7 +1150,7 @@ export default function Page() {
                   putting the reader on keys one clause earlier. */}
               <p className={cn('mt-6 max-w-xl text-lg leading-8 text-muted-foreground')}>
                 What you save is a fairly complete picture of what you are reading, buying, worrying
-                about and working on. Bracemark encrypts every part of it on your device before it
+                about, and working on. Bracemark encrypts every part of it on your device before it
                 syncs — the address, the title, the tags, whatever you write about it — with a key
                 your password unlocks. That key never reaches us. Not a promise we make — a thing we
                 can’t undo.
@@ -1205,8 +1219,8 @@ export default function Page() {
               <p className={cn('mt-5 max-w-md text-sm leading-6 text-muted-foreground')}>
                 Free for your first {FREE_LINKS} links — start empty, or bring the library you
                 already have. No card, and no email address. The two doors into your account are
-                your password and a recovery code, and the app asks you to save both at sign-up —
-                the password in your password manager, the code somewhere else.
+                your password and a recovery code, and the app asks you to save both when you create
+                the account — the password in your password manager, the code somewhere else.
               </p>
 
               <div className={cn('mt-10 flex items-center gap-5')}>
@@ -1555,8 +1569,8 @@ export default function Page() {
           ))}
         </ul>
         <p className={cn('mt-10 max-w-2xl text-sm leading-6 text-muted-foreground')}>
-          Nested lists, hidden lists, the app lock, the structured search editor and previews from
-          our server are {PLAN_LABELS.plus}. Everything else above is free.
+          Nested lists, hidden lists, the app lock, the structured search editor, and server
+          previews are {PLAN_LABELS.plus}. Everything else above is free.
         </p>
       </Band>
 
@@ -1573,7 +1587,7 @@ export default function Page() {
       <Band
         label="Compared with"
         title="What we gave up to get here."
-        lede="Hosted bookmark managers keep titles and addresses readable to run server-side features. Each link is encrypted on your device before it syncs, so search stays on your device and server previews are a separate opt-in. Here is the whole trade."
+        lede="Hosted bookmark managers keep titles and addresses readable to run server-side features. Bracemark encrypts each link on your device before it syncs, so search stays on your device and server previews are a separate opt-in. Here is the trade, row by row."
       >
         {/* One `dt` and two `dd`s per row: one term, two descriptions, which is
             what a definition list is for and what makes this survive being
@@ -1617,7 +1631,7 @@ export default function Page() {
           THERE WERE THREE, AND "Your exit" IS NOT COMING BACK — not for symmetry,
           and not because two columns look sparse. It was the only entry that
           broke the rule in the sentence above: a key unlocked by Argon2id and a
-          row of "a path, a size, a timestamp and an encrypted blob" are things we
+          row of "a path, a size, a timestamp, and an encrypted blob" are things we
           CANNOT do, which is what the headline promises; an export policy is a
           thing we WOULD not do, which is the register this band exists to refuse
           ("We built it so we can't"). It also said "Charging you to leave would
@@ -1805,7 +1819,7 @@ export default function Page() {
         // this: repeating it one line under itself reads worse, and /pricing uses
         // "outgrows" too. The one-idiom rule in the Free card's note below is
         // about the NUMBER, not the metaphor.
-        lede={`Start with ${FREE_LINKS} links and no card. Upgrade when you meet the cap — on day one if you are arriving with a library, later if you are starting fresh — with a ${TRIAL_DAYS}-day trial that takes a card, and the same encryption, sync and export on every plan.`}
+        lede={`Start with ${FREE_LINKS} links and no card. Upgrade when you meet the cap — on day one if you are arriving with a library, later if you are starting fresh — with a ${TRIAL_DAYS}-day trial that takes a card, and the same encryption, sync, and export on every plan.`}
       >
         <div className={cn('flex flex-wrap items-end gap-x-16 gap-y-8')}>
           <div>
@@ -1833,7 +1847,7 @@ export default function Page() {
             {/* "Advanced search" was the one overclaim on an otherwise literal
                 page. Every reader arriving from a competitor decoded it as
                 full-text search inside saved pages — which the library band has
-                already told them it isn't ("Across titles, addresses and
+                already told them it isn't ("Across titles, addresses, and
                 hosts") — so the teaser was quietly contradicting the product. These are the comparison table's own row labels,
                 which were accurate all along, and they restore nested lists:
                 the one Plus feature a switcher with folders actually needs, and

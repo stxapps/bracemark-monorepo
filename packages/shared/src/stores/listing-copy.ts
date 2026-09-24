@@ -233,15 +233,15 @@ SAVING A LINK
 FINDING IT AGAIN
 • Lists and tags, so a link is where you would look for it
 • Pins for the handful you are working from right now
-• Search across titles, addresses and hosts, instantly, on your device
+• Search across titles, addresses, and hosts, instantly, on your device
 • Card or list layouts, set per device
-• Previews with titles and images, fetched by the browser extension, the mobile app or our opt-in preview server
+• Previews with titles and images, from the browser extension, the mobile app, or opt-in server previews
 • The whole library lives on the device, so it opens and searches offline
 
 YOURS TO LEAVE WITH
 • Full export in open formats, on every plan, forever
 • No ads, no trackers, no analytics — the only outside code we load runs the checkout
-• No email address required — sign up with a username
+• No email address required — just a username
 
 WHAT IT COSTS TO BUILD IT THIS WAY
 We hold no key, so there is no password reset. A recovery code is your second door, and saving it is genuinely on you. Search runs on your device rather than ours. There are no shared or public lists.
@@ -304,7 +304,7 @@ WHAT IT ASKS FOR
 • No ads, no trackers, no analytics
 
 WHERE YOUR LINKS GO
-Everything you save turns up in the Bracemark web app, on any device you sign in on — where you search, pin, import and export it. Export is in open formats, on every plan.
+Everything you save turns up in the Bracemark web app, on any device you sign in on — where you search, pin, import, and export it. Export is in open formats, on every plan.
 
 YOU’LL NEED AN ACCOUNT
 Sign in with your Bracemark username and password. No account yet? The browser extension opens the web app to create one, and no email address is needed.

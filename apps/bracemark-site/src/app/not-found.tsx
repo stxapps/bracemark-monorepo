@@ -37,7 +37,7 @@ const ELSEWHERE: ElsewhereCard[] = [
   {
     href: '/faq',
     title: 'Questions people actually ask',
-    body: 'Encryption, the account model, imports and exports — most answers are already there.',
+    body: 'Encryption, the account model, imports, and exports — most answers are already there.',
   },
 ];
 

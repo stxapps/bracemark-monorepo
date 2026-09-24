@@ -390,7 +390,7 @@ is checkable, to a critique of an industry, which is not.
 
 **The harm underneath it is real, and is already stated three times — each time
 as a fact rather than as a cause.** /about opens on it ("what you are reading,
-buying, worrying about and working on"); the hero specimen assembles that picture
+buying, worrying about, and working on"); the hero specimen assembles that picture
 in front of the reader out of two topic tags and a weekday; the landing band's
 "No ads, ever" carries the investor clause that says why the policy can hold.
 There is no fourth surface missing. If one is ever wanted it is descriptive and
@@ -482,6 +482,19 @@ here — the point is that the next string matches the last two hundred.
 | contractions              | the default — "won't be shown again", "doesn't look like a valid URL"              | uncontracted-by-habit, which reads legal         |
 | the platform verb         | **click** on web, **tap** on expo — the ported string differs in exactly this word | "select", "press", or one string serving both    |
 | plan names and numbers    | read `PLAN_LABELS` and `iap/plans`; store copy carries **no** numbers at all       | typing "Plus", a price, a cap, or a trial length |
+
+**The serial comma was the one row not already kept when this table was
+written.** The rule stood and the copy did not: the marketing site dropped it
+more often than it kept it — "Lists, tags and pins", "titles, addresses and
+hosts", four clauses of /terms — while /delete-account kept it throughout. The
+sweep put it into every user-facing string, the store copy in `listing-copy.ts`
+included. Nothing enforces it: a list is grammar, not a character, so no
+selector can find the missing comma the way one finds a straight `'`. Section
+headings in /terms and /privacy are quoted by name elsewhere on the same page
+(_Plans, fees, and subscriptions_), so a heading and its cross-reference move
+together. The one exception is an **ampersand label** — "List, tags & note",
+"Lists, tags, pins, notes & layouts" — where the `&` already marks the last item
+and a comma before it reads as a typo.
 
 **The one place contractions are dropped is a decision, not an oversight.** The
 tagline says _can't_ and `FULL_DESCRIPTION` opens with _cannot_ — "Bracemark is a

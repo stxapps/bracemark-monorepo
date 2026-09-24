@@ -36,9 +36,13 @@ export const metadata: Metadata = {
 //     copy" is `endSession` on the session-invalid path, which runs the full
 //     `clearData` (web-react and expo-react auth-provider.tsx) — the next time
 //     that device reaches the server, not at the moment of deletion.
+//   - WHAT IS DELETED is scoped to "the storage your devices sync with", never
+//     "our storage": the backups are our storage too, and they are listed two
+//     sections down as kept. An unscoped "immediately" is disproved on this page.
 //   - WHAT IS KEPT matches /privacy, _How long we keep it_, and must keep
 //     matching it: the tombstoned username, subscription records under tax law,
-//     support mail, providers' logs, and backups for their 30-day window
+//     support mail and the paraphrased questions kept from it, providers' logs,
+//     and backups for their 30-day window
 //     (/privacy's header comment, _BACKUPS ARE A 30-DAY WINDOW_). The same
 //     window is why WHAT IS DELETED's "nothing could open the data" waits for
 //     the backup copies of the key to expire.
@@ -46,7 +50,11 @@ export const metadata: Metadata = {
 //     fresh password-signed proof and there is no email on file, so nothing we
 //     hold can tell the owner from anyone who knows the username. The two-year
 //     line is /privacy's "we reserve the right", quoted as a right, not promised
-//     as a schedule.
+//     as a schedule. "We don't", not "we can't", for deleting on request and for
+//     bringing an account back: we could delete a named account, and a backup
+//     holds a deleted one for 30 days, so both are things we decline to do. The
+//     reason the first is declined is the sentence before it — nothing we hold
+//     tells the owner from anyone else who knows the username.
 
 const ACCOUNT_SETTINGS_URL = `${APP_URL}/settings/account`;
 
@@ -146,8 +154,8 @@ export default function Page() {
           </Steps>
 
           <p className={cn(body, 'mt-6')}>
-            Uninstalling the app doesn’t delete your account. Deletion can’t be undone: there is no
-            grace period and no recovery.
+            Uninstalling the app doesn’t delete your account. Deletion is final: there is no grace
+            period, and we don’t bring a deleted account back from a backup.
           </p>
         </section>
 
@@ -155,13 +163,14 @@ export default function Page() {
           <h2 className={h2}>What is deleted</h2>
           <ul className={bullets}>
             <li className={bullet}>
-              Everything in your library — links, lists, tags, pins, files, and settings — from our
-              storage, immediately.
+              Everything in your library — links, lists, tags, pins, files, and settings — from the
+              storage your devices sync with, immediately. Its backup copies follow within{' '}
+              {BACKUP_RETENTION_DAYS} days.
             </li>
             <li className={bullet}>
-              The encrypted copies of the key your library is encrypted with. Once their backup
-              copies expire too, within {BACKUP_RETENTION_DAYS} days, nothing could open the data
-              even if a copy survived.
+              The encrypted copies of your key, the one your password and recovery code unlock. Once
+              their backup copies expire too, within {BACKUP_RETENTION_DAYS} days, nothing could
+              open your data even if a copy of it survived.
             </li>
             <li className={bullet}>
               Your account record and every signed-in session. The device you delete from erases its
@@ -184,7 +193,8 @@ export default function Page() {
             </li>
             <li className={bullet}>
               Email you’ve sent to support, until it is no longer useful for supporting you. Ask and
-              we’ll delete it sooner.
+              we’ll delete it sooner. The questions we paraphrase from it for help pages and fixes
+              carry no name, email address, or username, and we keep those.
             </li>
             <li className={bullet}>
               Backup copies of your library and account record, including the encrypted copies of
@@ -212,7 +222,7 @@ export default function Page() {
           <p className={cn(body, 'mt-3')}>
             Deleting needs your password because nothing else proves the account is yours: there is
             no email on file, so we can’t tell you apart from anyone else who knows your username,
-            and we can’t delete an account on request. If both your password and your recovery code
+            and we don’t delete an account on request. If both your password and your recovery code
             are gone, the library can’t be opened by anyone, including us. We also reserve the
             right, in our privacy policy, to delete an account that has gone unused for two years or
             more.

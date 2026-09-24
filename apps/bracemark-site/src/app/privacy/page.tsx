@@ -124,7 +124,7 @@ export default function Page() {
       // makes ("The privacy policy inventories every field of it"). This is the
       // surface that pointer points AT, so it is the one place on the property
       // that must never claim to be shorter than it is.
-      lede="The short version: we hold encrypted files we cannot open, and the smallest account record that makes signing in possible. Everything else — a subscription record if you buy one, the request data any web service processes, an email you send us — is inventoried below."
+      lede="We hold encrypted files we cannot open, and an account record: your username, the keys that let you sign in, and a session for each signed-in device. Everything else — a subscription record if you buy one, the request data any web service processes, an email you send us — is inventoried below."
       meta={`Effective ${PRIVACY_UPDATED}`}
       width="document"
     >
@@ -132,7 +132,7 @@ export default function Page() {
         <p>
           This policy explains what {COMPANY.legalName} (“{COMPANY.shortName}”, “we”, “us”) collects
           when you use Bracemark, why, and what happens to it. It covers bracemark.com,
-          app.bracemark.com, the Bracemark applications for iOS, Android, Chrome and Firefox, and
+          app.bracemark.com, the Bracemark applications for iOS, Android, Chrome, and Firefox, and
           the services behind them.
         </p>
         <p>
@@ -151,12 +151,9 @@ export default function Page() {
           </li>
           <li>
             We do not ask for your email address, and there is no advertising, no analytics product,
-            no tracker and no data sold or shared for marketing.
+            no tracker, and no data sold or shared for marketing.
           </li>
-          <li>
-            The only way we make money is the optional subscription — which is why our incentives
-            and yours point the same way.
-          </li>
+          <li>We make money one way: the optional subscription.</li>
           {/* NOT "delete everything", which this page disproves twice below it —
               a deleted username is retired rather than released (the last line
               of _How long we keep it_) and the subscription record outlives the
@@ -199,9 +196,9 @@ export default function Page() {
             your account") is the one that carries the meaning a reader wanted from
             the absolute, and unlike the absolute it is true. */}
         <p>
-          We do not collect an email address, a phone number, a name, or any other identifier at
-          sign-up. If you never write to us and never subscribe, the account itself holds nothing
-          that names you — what remains is the ordinary request data described under{' '}
+          We do not collect an email address, a phone number, a name, or any other identifier when
+          you create an account. If you never write to us and never subscribe, the account itself
+          holds nothing that names you — what remains is the ordinary request data described under{' '}
           <em>Technical and security data</em> below, which we do not join to your account.
         </p>
         <p>
@@ -212,7 +209,7 @@ export default function Page() {
 
         <h3>Your library</h3>
         <p>
-          Each saved link, list, tag and setting is stored as its own{' '}
+          Each saved link, list, tag, and setting is stored as its own{' '}
           <strong>encrypted file</strong>. For each one we hold the file’s path, its size in bytes,
           and when it last changed — the minimum needed to sync your devices. We hold no titles, no
           web addresses, no tags, no notes, and no index over any of it, because none of that exists
@@ -234,7 +231,7 @@ export default function Page() {
         <p>
           Subscribing is the one thing in Bracemark that attaches a real identity to you, and we
           would rather state it than let you find it at checkout. Charging a card requires a name,
-          an email address and payment details, which the provider collects and holds; the record
+          an email address, and payment details, which the provider collects and holds; the record
           above is the link between that customer and your account. It costs you anonymity, not
           confidentiality — your library is encrypted exactly as before, so we can tell that an
           account pays and still cannot read anything in it. The free plan requires no payment, so
@@ -346,26 +343,33 @@ export default function Page() {
             lifted from a support thread; it does not rule out a help page, which
             is the reason the paraphrase is kept. */}
         <p>
-          When you email support we receive your message, your email address and whatever you choose
-          to put in it. We keep the correspondence so we can follow up. We use it to answer you, and
-          to learn what is unclear or broken: a question more than one person asks becomes a help
-          page or a fix.
+          When you email support we receive your message, your email address, and whatever you
+          choose to put in it. We keep the correspondence so we can follow up. We use it to answer
+          you, and to learn what is unclear or broken: a question more than one person asks becomes
+          a help page or a fix.
         </p>
         <p>
           What we keep for that second use is the question in our own words — not your name, your
           email address, your username, or what you wrote word for word. We never publish your
           message or quote you without asking first.
         </p>
+        {/* NO VENDOR IS NAMED, here or in the provider list. Which company runs the
+            model can change without anything a reader relies on changing, so the
+            published fact is the ROLE — a provider processing on our behalf — and
+            the one promise that holds whichever it is: a person writes or approves
+            every reply. Naming a vendor would make a routine switch a policy
+            change. */}
         <p>
-          An AI model may help us read support email and draft replies. It processes your message on
-          our behalf. A person at Bracemark reads every message and writes or approves every reply
-          we send.
+          An AI model may help us read support email and draft replies. The company that runs the
+          model processes your message on our behalf, as our other providers do. A person at
+          Bracemark reads every message, and writes or approves every reply we send.
         </p>
         <p>
           Your library can hold whatever you want it to, and we cannot see it — that is the point. A
-          support email is different: it reaches us in the clear. Please leave out anything you
-          would rather we did not hold. And never send us your password or your recovery code:
-          nobody at Bracemark will ever ask you for either, and either one would open your library.
+          support email is different: it reaches our mailbox, and any model that helps us answer it,
+          in readable form. Please leave out anything you would rather we did not hold. And never
+          send us your password or your recovery code: nobody at Bracemark will ever ask you for
+          either, and either one would open your library.
         </p>
 
         <h2>Cookies and on-device storage</h2>
@@ -400,7 +404,7 @@ export default function Page() {
             To answer you when you write to us, and to turn the questions people ask into help pages
             and fixes — keeping the question, not who asked it.
           </li>
-          <li>To meet legal, tax and accounting obligations.</li>
+          <li>To meet legal, tax, and accounting obligations.</li>
         </ul>
         <p>
           We do not use your information for advertising, we do not sell or rent it, and we do not
@@ -410,7 +414,7 @@ export default function Page() {
 
         <h2>Our legal bases</h2>
         <p>
-          Where the GDPR, the UK GDPR or Thailand’s PDPA applies, we have to name the legal basis
+          Where the GDPR, the UK GDPR, or Thailand’s PDPA applies, we have to name the legal basis
           for each use rather than just describe it. Ours are:
         </p>
         <ul>
@@ -464,8 +468,8 @@ export default function Page() {
             support email.
           </li>
           <li>
-            <strong>Anthropic</strong> — provides the AI model that helps us read and reply to
-            support email.
+            <strong>An AI model provider</strong> — runs the model that helps us read support email
+            and draft replies to it.
           </li>
         </ul>
         <p>
@@ -494,11 +498,10 @@ export default function Page() {
             could open the data even if a copy survived.
           </li>
           <li>
-            <strong>Backups</strong> — {BACKUP_RETENTION_DAYS} days. Cloudflare keeps a
-            point-in-time history of our databases, and we keep encrypted copies of the files and
-            account records outside Cloudflare. Both are deleted automatically after{' '}
-            {BACKUP_RETENTION_DAYS} days, so anything you delete is gone from them within{' '}
-            {BACKUP_RETENTION_DAYS} days too.
+            <strong>Backups</strong> — up to {BACKUP_RETENTION_DAYS} days. Cloudflare keeps a
+            rolling history of our databases, and we keep our own encrypted copies of your files and
+            account records outside Cloudflare. Neither reaches back further than that, so anything
+            you delete is gone from both within the same window.
           </li>
           <li>
             <strong>Sessions</strong> — until they expire or you sign that device out.
@@ -509,7 +512,8 @@ export default function Page() {
           </li>
           <li>
             <strong>Support email</strong> — until it is no longer useful for supporting you. The
-            notes we take from it hold no name, address or username, and we keep them.
+            questions we paraphrase from it for help pages and fixes carry no name, email address,
+            or username, and we keep those.
           </li>
           <li>
             <strong>Infrastructure logs</strong> — for the short window our providers keep them,
@@ -527,7 +531,7 @@ export default function Page() {
 
         <h2>Your rights</h2>
         <p>
-          Depending on where you live, you may have rights to access, correct, delete, restrict or
+          Depending on where you live, you may have rights to access, correct, delete, restrict, or
           port your personal data, and to object to processing. Most of them you can exercise
           yourself, immediately, without asking us:
         </p>
@@ -540,9 +544,9 @@ export default function Page() {
               exclusion is stated in full once, in /faq `import-export`; this is
               the deliberate second copy and the only one. */}
           <li>
-            <strong>Access and portability</strong> — Settings → Data → Export, which gives you your
-            whole library in open formats. A list you have locked is left out of the file until you
-            unlock it.
+            <strong>Access and portability</strong> — Settings → Data → Export all data, which gives
+            you your whole library in open formats. A list you have locked is left out of the file
+            until you unlock it.
           </li>
           <li>
             <strong>Correction</strong> — edit anything in the app; it is your data on your device.
@@ -552,8 +556,8 @@ export default function Page() {
             deletes the account itself.
           </li>
           <li>
-            <strong>Withdrawing consent</strong> — the only thing you consented to is server-side
-            link previews, and Settings → Link Previews switches it back off.
+            <strong>Withdrawing consent</strong> — the only thing you consented to is server
+            previews, and Settings → Link previews switches them back off.
           </li>
         </ul>
         <p>
@@ -590,7 +594,7 @@ export default function Page() {
         <h2>If you are in Thailand</h2>
         <p>
           We are a Thai company, so the Personal Data Protection Act applies to us directly. It
-          gives you rights of access, correction, erasure, restriction, portability, objection and
+          gives you rights of access, correction, erasure, restriction, portability, objection, and
           withdrawal of consent — the same set described above, exercised the same way. If we have
           not put something right, you can complain to the Office of the Personal Data Protection
           Committee.
@@ -612,7 +616,7 @@ export default function Page() {
           Where your state grants them, you have the right to know what we hold, to receive a copy,
           to correct it, to delete it, and to appeal if we refuse. Ask at{' '}
           <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>, or use the in-app tools above,
-          which are faster. Exercising a right never costs you service, features or a worse price.
+          which are faster. Exercising a right never costs you service, features, or a worse price.
         </p>
         <p>
           Some browsers send a Do Not Track or Global Privacy Control signal. There is nothing here
@@ -627,8 +631,9 @@ export default function Page() {
           Your library is encrypted on your device with AES-256-GCM, under a random key that your
           password unlocks via Argon2id; connections use TLS; and the keys that open your account
           are stored only in a form that your password or recovery code can unlock. No system is
-          perfectly secure, and we do not claim otherwise — but the design deliberately limits how
-          much a breach of ours could reveal, because what we hold is not readable.
+          perfectly secure, and we do not claim otherwise — but the design limits what a breach of
+          ours could reveal: your library would be ciphertext, and the account around it holds no
+          name, email address, or payment details.
         </p>
         <p>
           The code behind all of this is public, at{' '}

@@ -12,7 +12,7 @@ import { CREATE_ACCOUNT_URL } from '../../lib/site';
 export const metadata: Metadata = {
   title: 'FAQ',
   description:
-    'How Bracemark’s encryption, account, plans and features work — including the questions with uncomfortable answers.',
+    'How Bracemark’s encryption, account, plans, and features work — including the questions with uncomfortable answers.',
 };
 
 // The questions themselves live in `content/faq.tsx`, shared with /pricing. This

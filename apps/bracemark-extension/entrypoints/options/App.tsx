@@ -21,7 +21,7 @@ function App() {
     <OptionsShell>
       <h1 className={cn('text-xl font-semibold')}>Settings</h1>
       <p className={cn('mt-1 text-sm text-muted-foreground')}>
-        Your account and how the extension looks. Lists, tags and everything else live in the
+        Your account and how the extension looks. Lists, tags, and everything else live in the
         Bracemark app.
       </p>
 

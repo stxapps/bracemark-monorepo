@@ -51,7 +51,7 @@ export default function Page() {
       <div className={cn('legal-prose')}>
         <p>
           These Terms of Service (“Terms”) govern your access to and use of the Bracemark website at
-          bracemark.com and app.bracemark.com, the Bracemark applications for iOS, Android, Chrome
+          bracemark.com and app.bracemark.com, the Bracemark applications for iOS, Android, Chrome,
           and Firefox, and any related services (together, the “Service”), all provided by {company}{' '}
           (“{COMPANY.shortName}”, “we”, “us”).
         </p>
@@ -78,7 +78,7 @@ export default function Page() {
         <h2>Your licence to use the Service</h2>
         <p>
           Subject to your compliance with these Terms, {COMPANY.shortName} grants you a limited,
-          non-exclusive, non-transferable, non-sublicensable and revocable licence to use the
+          non-exclusive, non-transferable, non-sublicensable, and revocable licence to use the
           Service, and to install and use the applications on devices you own or control, for your
           own personal or internal business use.
         </p>
@@ -92,17 +92,17 @@ export default function Page() {
           We may suspend or terminate your licence, or any part of the Service, if you breach these
           Terms or the acceptable-use rules below. On termination, the rights granted to you end and
           you must stop using the Service; the sections that by their nature should survive —
-          including those covering our content, disclaimers, liability, indemnity and disputes —
+          including those covering our content, disclaimers, liability, indemnity, and disputes —
           continue to apply.
         </p>
         <p>
           You can end this agreement whenever you like: stop using the Service and uninstall the
           applications, or delete your account from Settings → Account, which removes what we hold
           for it. Deleting an account does not cancel a subscription — see{' '}
-          <em>Plans, fees and subscriptions</em> below.
+          <em>Plans, fees, and subscriptions</em> below.
         </p>
 
-        <h2>Your account, your password and your key</h2>
+        <h2>Your account, your password, and your key</h2>
         <p>
           A Bracemark account is a username and a password. We do not ask for an email address or
           any other personal identifier, and there is no account-verification step.
@@ -161,10 +161,10 @@ export default function Page() {
 
         <h2>Feedback</h2>
         <p>
-          If you send us an idea, a bug report or a suggestion, you give us permission to use it —
-          in any way, anywhere, without payment, attribution or any obligation of confidence. Please
-          do not send us anything you consider secret or that belongs to someone else. This says
-          nothing about the links and notes in your library, which are covered by{' '}
+          If you send us an idea, a bug report, or a suggestion, you give us permission to use it —
+          in any way, anywhere, without payment, attribution, or any obligation of confidence.
+          Please do not send us anything you consider secret or that belongs to someone else. This
+          says nothing about the links and notes in your library, which are covered by{' '}
           <em>Your content</em> above.
         </p>
 
@@ -176,8 +176,8 @@ export default function Page() {
             infringes someone else’s rights;
           </li>
           <li>
-            attempt to gain unauthorised access to any account, system or data, or to circumvent any
-            limit, quota or entitlement in the Service;
+            attempt to gain unauthorised access to any account, system, or data, or to circumvent
+            any limit, quota, or entitlement in the Service;
           </li>
           <li>
             interfere with the operation of the Service, including by automated request volumes that
@@ -188,11 +188,11 @@ export default function Page() {
             resell or commercially redistribute access to the Service we operate, or to the accounts
             on it. This is a restriction on the hosted service, not on the source code — what you
             may do with the code is set by its licence, described under{' '}
-            <em>Our content, the source code and trademarks</em> below.
+            <em>Our content, the source code, and trademarks</em> below.
           </li>
         </ul>
         <p>
-          We may rate-limit, suspend or terminate access that we reasonably believe breaches these
+          We may rate-limit, suspend, or terminate access that we reasonably believe breaches these
           rules or threatens the stability of the Service.
         </p>
 
@@ -207,7 +207,7 @@ export default function Page() {
           valid legal order.
         </p>
 
-        <h2>Plans, fees and subscriptions</h2>
+        <h2>Plans, fees, and subscriptions</h2>
         <p>
           The Service has a free plan and one or more paid plans. The features and limits of each
           are described on our <Link href="/pricing">pricing page</Link>. We may change what the
@@ -263,7 +263,7 @@ export default function Page() {
 
         <h2>Changes to the Service</h2>
         <p>
-          We may modify, suspend or discontinue any part of the Service. Where a change is
+          We may modify, suspend, or discontinue any part of the Service. Where a change is
           significant and affects a paid plan, we will give reasonable notice on this website.
         </p>
 
@@ -275,10 +275,10 @@ export default function Page() {
           on this website.
         </p>
 
-        <h2>Our content, the source code and trademarks</h2>
+        <h2>Our content, the source code, and trademarks</h2>
         <p>
           {COMPANY.shortName} and its licensors own the Service, the applications, and the software,
-          designs and other materials that make them up, together with all associated intellectual
+          designs, and other materials that make them up, together with all associated intellectual
           property rights. Except for the rights granted by the source-code licence described below,
           the Service is licensed to you rather than sold, and we reserve all rights not expressly
           granted in these Terms.
@@ -306,7 +306,7 @@ export default function Page() {
         <h2>Third-party materials</h2>
         <p>
           The Service stores and displays links to websites and services that we do not control. We
-          do not endorse them and we are not responsible for their content, their terms or their
+          do not endorse them and we are not responsible for their content, their terms, or their
           privacy practices, and we are not liable for any loss arising from your use of or reliance
           on them.
         </p>
@@ -360,10 +360,10 @@ export default function Page() {
         <h2>Indemnification</h2>
         <p>
           You agree to indemnify and hold the {COMPANY.shortName} Parties harmless from any claims,
-          losses, liabilities and expenses (including reasonable legal fees) arising out of your use
-          of the Service, your content, your breach of these Terms, or your violation of any law or
-          of anyone else’s rights. We may assume the exclusive defence of any matter subject to this
-          indemnity, and you agree to cooperate with it.
+          losses, liabilities, and expenses (including reasonable legal fees) arising out of your
+          use of the Service, your content, your breach of these Terms, or your violation of any law
+          or of anyone else’s rights. We may assume the exclusive defence of any matter subject to
+          this indemnity, and you agree to cooperate with it.
         </p>
 
         <h2>Disputes</h2>
@@ -437,7 +437,7 @@ export default function Page() {
           or removed to the minimum extent necessary and the rest will remain in force. Our failure
           to enforce a provision is not a waiver of it. You may not assign your rights under these
           Terms without our written consent; we may assign ours in connection with a merger,
-          acquisition or sale of assets.
+          acquisition, or sale of assets.
         </p>
         <p>
           These Terms are an agreement between you and {COMPANY.shortName} alone, and not with any

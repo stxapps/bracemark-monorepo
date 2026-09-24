@@ -109,15 +109,15 @@ export const FAQ_GROUPS: FaqGroup[] = [
       },
       {
         id: 'vs-others',
-        q: 'How is this different from Raindrop, Pocket or my browser’s bookmarks?',
+        q: 'How is this different from Raindrop, Pocket, or my browser’s bookmarks?',
         a: (
           <>
             Browser bookmarks don’t follow you off that browser. The hosted managers do follow you,
             but their servers hold your titles and addresses in readable form — that is what makes
             their server-side search and recommendations possible in the first place. Each link is
             encrypted on your device before it syncs, so search and organisation happen on your own
-            devices. Link previews are fetched there too unless you choose the web app’s opt-in
-            preview server.
+            devices. Link previews are fetched there too unless you turn on server previews, an
+            opt-in in the web app.
           </>
         ),
       },
@@ -224,7 +224,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
         q: 'Where does it run?',
         a: (
           <>
-            A web app in any modern browser — Chrome, Firefox, Safari, Edge — on desktops, tablets
+            A web app in any modern browser — Chrome, Firefox, Safari, Edge — on desktops, tablets,
             and phones; native apps for iPhone (iOS 26 or later) and Android phones (Android 13 or
             later); and a browser extension for Chrome and Firefox. On an iPad, the iPhone app opens
             in a phone-sized window. On an Android tablet or a Chromebook, use the web app. One
@@ -234,7 +234,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
       },
       {
         // The last sentence is the one that matters, and it is here because
-        // "opens, browses and searches" was read as offline READING by everyone
+        // "opens, browses, and searches" was read as offline READING by everyone
         // arriving from a read-it-later app — the answer was accurate and the
         // inference it invited was wrong, which is the worst kind of copy.
         //
@@ -251,10 +251,10 @@ export const FAQ_GROUPS: FaqGroup[] = [
         a: (
           <>
             Yes. Bracemark is local-first: the app reads from a copy of your library held on the
-            device, so it opens, browses and searches with no connection at all. Anything you change
-            while offline is queued and syncs the next time you have a network. What is on the
-            device is your library — addresses, titles, tags, notes and preview images. Following a
-            link out to the live page is the one thing that still needs a connection.
+            device, so it opens, browses, and searches with no connection at all. Anything you
+            change while offline is queued and syncs the next time you have a network. What is on
+            the device is your library — addresses, titles, tags, notes, and preview images.
+            Following a link out to the live page is the one thing that still needs a connection.
           </>
         ),
       },
@@ -285,10 +285,10 @@ export const FAQ_GROUPS: FaqGroup[] = [
         a: (
           <>
             Your password is put through Argon2id on your device to derive a key, and that key
-            unlocks the one your library is encrypted with. Every link, list, tag and setting is its
-            own encrypted file; encryption happens before anything is uploaded, and decryption only
-            ever happens on a device of yours. The password itself never reaches us — not when you
-            sign up, and not when you sign in.
+            unlocks the one your library is encrypted with. Every link, list, tag, and setting is
+            its own encrypted file; encryption happens before anything is uploaded, and decryption
+            only ever happens on a device of yours. The password itself never reaches us — not when
+            you create the account, and not when you sign in.
           </>
         ),
       },
@@ -313,7 +313,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
             The username you chose, a public key that lets us check a sign-in signature, a session
             record for each device you are signed in on, and a set of encrypted files — each with a
             path, a size, and the time it last changed. If you subscribe, a subscription record too.
-            Not one title, address, tag or note, and no search index over any of it. The full
+            Not one title, address, tag, or note, and no search index over any of it. The full
             inventory is in the <PageLink href="/privacy">privacy policy</PageLink>.
           </>
         ),
@@ -333,8 +333,8 @@ export const FAQ_GROUPS: FaqGroup[] = [
         q: 'Doesn’t paying you identify me?',
         a: (
           <>
-            It identifies you to the payment provider, yes — it needs a name, an email address and a
-            way to charge you, and it holds those under its own privacy policy. What reaches us is
+            It identifies you to the payment provider, yes — it needs a name, an email address, and
+            a way to charge you, and it holds those under its own privacy policy. What reaches us is
             its identifier for your subscription, stored against your account so the app knows which
             features to unlock. That is the whole of it, and none of it touches the encryption: we
             can tell that an account pays, and still cannot read one link inside it. The free plan
@@ -375,7 +375,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
         q: 'Do you use cookies, trackers, or analytics?',
         a: (
           <>
-            We run no analytics, ship no advertising SDK, fingerprint nothing and set no cookies of
+            We run no analytics, ship no advertising SDK, fingerprint nothing, and set no cookies of
             our own, anywhere in Bracemark. One screen loads code that isn’t ours: opening Settings
             → Subscription must load Paddle’s script, to show your price in your own currency and to
             run the checkout if you subscribe. That script is the only third-party code in
@@ -421,7 +421,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
             and the metadata that rides with them — a path, a size, the time each last changed —
             together with the account record: the username you chose, the public key your sign-ins
             are checked against, the sessions that keep your devices signed in, and a subscription
-            record if you pay. It does not reach a link, a title, a tag or a note, and there is no
+            record if you pay. It does not reach a link, a title, a tag, or a note, and there is no
             key on our side to compel, because one was never there. An order also does not have to
             come to us at all: Cloudflare stores the encrypted files and the account databases,
             Amazon Web Services serves this website and the app, and Paddle holds the payment
@@ -452,9 +452,9 @@ export const FAQ_GROUPS: FaqGroup[] = [
             links saved on that device, and the All links setting also covers synced and imported
             links as they come into view. With All links selected, Generate all works through every
             pending link. Those paths are free and involve no server of ours. In the web app, the
-            browser blocks one page from fetching another site. Turn on the opt-in{' '}
-            {PLAN_LABELS.plus} preview server and new saves, older links, synced links and imports
-            fill in as you browse; Generate all covers the rest. The service holds no key and
+            browser blocks one page from fetching another site. Turn on opt-in server previews on{' '}
+            {PLAN_LABELS.plus} and new saves, older links, synced links, and imports fill in as you
+            browse; Generate all covers the rest. The server that fetches them holds no key and
             receives no account identity. It stores no URL or page content; its rate limiter briefly
             holds the requesting IP address to stop one source abusing it.
           </>
@@ -476,7 +476,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
           <>
             Yes — the whole thing is public at{' '}
             <ExternalLink href={SOURCE.url}>{SOURCE.label}</ExternalLink>, under the{' '}
-            {SOURCE.license}: the apps, the browser extension, the two servers behind them and the
+            {SOURCE.license}: the apps, the browser extension, the two servers behind them, and the
             key derivation, in one repository. You can read where the key comes from, where
             encryption happens, and what each of those servers is given. One caveat we would rather
             state than have you assume: reading the source proves what the code does, not that the
@@ -539,7 +539,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
     items: [
       {
         id: 'signup',
-        q: 'What do I need to sign up?',
+        q: 'What do I need to create an account?',
         a: (
           <>
             A username and a password. That is all we ask for — no email address, no phone number,
@@ -673,8 +673,8 @@ export const FAQ_GROUPS: FaqGroup[] = [
         a: (
           <>
             Free for your first {FREE_LINKS} links, with no card. {PLAN_LABELS.plus} is $
-            {PLAN_USD_PER_YEAR.plus} a year — unlimited links, nested and hidden lists, the app lock
-            and the structured search editor — and starts with a {TRIAL_DAYS}-day free trial.
+            {PLAN_USD_PER_YEAR.plus} a year — unlimited links, nested and hidden lists, the app
+            lock, and the structured search editor — and starts with a {TRIAL_DAYS}-day free trial.
             Everything is on the <PageLink href="/pricing">pricing page</PageLink>.
           </>
         ),
@@ -703,7 +703,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
         a: (
           <>
             Nothing is deleted and nothing is put out of reach. You keep reading, searching,
-            editing, deleting and exporting the whole library; new links stop saving until you
+            editing, deleting, and exporting the whole library; new links stop saving until you
             upgrade or make room. Upgrading lifts the cap straight away. That is also what happens
             if a trial ends with more than {FREE_LINKS} links in your library — they all stay, and
             stay exportable; you just cannot add new ones until you are back under the cap or on{' '}
@@ -969,8 +969,8 @@ export const FAQ_GROUPS: FaqGroup[] = [
             there, and setting Link previews to All links also fills in synced and imported links as
             they come into view. With All links selected, Generate all works through everything
             still pending. In the web app, the browser won’t let a web page fetch another site, so
-            the opt-in {PLAN_LABELS.plus} preview server fills in new saves and pending links as you
-            browse; its Generate all button covers the full library. Some pages give nothing up
+            opt-in server previews on {PLAN_LABELS.plus} fill in new saves and pending links as you
+            browse, and Generate all there covers the full library. Some pages give nothing up
             whichever path asks, and no plan changes that: anything behind a login or a paywall, a
             PDF or another file that isn’t a web page, a site that turns away automated requests,
             and pages whose text is assembled by JavaScript after they load. We stop retrying those,
@@ -985,7 +985,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
         q: 'Can I put lists inside lists?',
         a: (
           <>
-            Yes, on {PLAN_LABELS.plus}. The free plan gives you flat lists, tags and pins, which is
+            Yes, on {PLAN_LABELS.plus}. The free plan gives you flat lists, tags, and pins, which is
             enough structure for a library of {FREE_LINKS} links; nesting starts to matter at the
             size the paid plan is for.
           </>
@@ -1079,7 +1079,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
         q: 'What happens if I change the same link on two devices?',
         a: (
           <>
-            Each link, list and tag is stored as its own encrypted file, so two devices working on
+            Each link, list, and tag is stored as its own encrypted file, so two devices working on
             different things never collide. If the same link is edited in both places before they
             sync, the later edit is the one that survives and the earlier one is replaced — we hold
             nothing readable from your links, so there is no merge we could do for you and no older
@@ -1180,7 +1180,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
           <>
             A deleted link, yes: removing a link puts it in Trash, and it stays there until you
             delete it permanently. Restore brings it back — to My List, since nothing records which
-            list it came from. An edit is the half we cannot help with. Saving a title, a note or a
+            list it came from. An edit is the half we cannot help with. Saving a title, a note, or a
             set of tags replaces what was there, and we hold nothing readable from your links to
             have kept the earlier version in, so there is no history to roll back through and
             nothing we could hand you. An export is the backstop worth having, with one thing to
@@ -1306,9 +1306,10 @@ export const FAQ_GROUPS: FaqGroup[] = [
         // `usersRepo(shard).deleteStmt`). "Also" makes them a third step a reader
         // then wonders whether they must run, which is the counting error this
         // answer exists to stop; "including" opens a set the sentence never
-        // closes. It does NOT widen into what teardown keeps
-        // beyond the username — the purchases row and /privacy's tax-law
-        // retention stay where they are, per the note above.
+        // closes. It does NOT list what teardown keeps beyond the username — it
+        // POINTS at /delete-account, which does. It used to call the username
+        // "the one thing that stays", an enumeration that closed over a list the
+        // purchases row, support mail and the 30-day backups all sit outside.
         id: 'delete-account',
         q: 'How do I delete my library, or my whole account?',
         a: (
@@ -1316,8 +1317,10 @@ export const FAQ_GROUPS: FaqGroup[] = [
             Settings → Data wipes your library and keeps the account. Settings → Account does that
             same wipe and then deletes the account itself, along with the keys that could ever have
             opened it — so there is no need to run both. Neither can be undone, so both ask you to
-            confirm first. Your username is the one thing that stays: it is retired rather than
-            released, so nobody can register it later and be mistaken for you.
+            confirm first. Your username stays for good: it is retired rather than released, so
+            nobody can register it later and be mistaken for you. The{' '}
+            <PageLink href="/delete-account">delete-account page</PageLink> lists everything else
+            that outlives a deletion, and for how long.
           </>
         ),
       },

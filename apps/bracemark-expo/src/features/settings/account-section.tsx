@@ -104,7 +104,8 @@ function DeleteAccountView({ onBack }: { onBack: () => void }) {
               Consider exporting your data first (Settings → Data).
             </Text>
             <Text className="text-sm font-medium text-destructive">
-              This action cannot be undone. There is no grace period and no recovery.
+              This can’t be undone. There is no grace period, and we don’t bring a deleted account
+              back from a backup.
             </Text>
           </>
         }

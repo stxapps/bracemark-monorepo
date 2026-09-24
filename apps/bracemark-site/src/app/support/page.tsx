@@ -34,6 +34,11 @@ export const metadata: Metadata = {
 // security block below DOES name two intervals, which is not an exception to this
 // so much as the paragraph after next applied: see the comment on that section.
 //
+// An AI model may help draft a reply, and this page says so in the same sentence
+// as the promise it could otherwise seem to break: the lede's "no chatbot" and
+// "someone who works on Bracemark reads it" stay true because a person writes or
+// approves every reply we send. /privacy, _If you contact us_, is the long form.
+//
 // "Every message gets one" was the same SLA in a different coat, and it went the
 // same way. A reply to EVERY message is not a thing a team can hold: spam, abuse,
 // a thank-you that needs nothing back, a report we cannot act on. The promise is
@@ -61,7 +66,7 @@ const ELSEWHERE: ElsewhereCard[] = [
   {
     href: '/faq',
     title: 'Read the FAQ first',
-    body: 'Encryption, the account model, plans and the day-to-day questions — most answers are already there.',
+    body: 'Encryption, the account model, plans, and the day-to-day questions — most answers are already there.',
   },
   PRICING_CARD,
   {
@@ -92,7 +97,8 @@ export default function Page() {
           <p className={cn('mt-5 text-body text-muted-foreground')}>
             Bugs, billing, imports, exports, anything at all. We are a small team in one timezone,
             so a reply can take a day or two. A person reads every message, and anything that needs
-            an answer gets one.
+            an answer gets one — an AI model may help draft it, but a person writes or approves
+            every reply we send.
           </p>
 
           <h2 className={cn('mt-8 text-sm font-semibold')}>Worth including</h2>

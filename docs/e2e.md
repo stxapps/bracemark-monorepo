@@ -1895,7 +1895,7 @@ once already (the hero's hand-typed ciphertext).
 
 **What is IN the library is decided by the hero paragraph, not by taste.** That
 paragraph names the four things a saved library is a picture of — "what you are
-reading, buying, worrying about and working on" — and the figure four screens
+reading, buying, worrying about, and working on" — and the figure four screens
 below it is the only place the site can show that being true. So the lists answer
 it one for one: `Reading`, `Interview prep`, `Health`, `Shopping`, with everything
 else as texture. It is a deliberately narrow test, because the loose version of it
