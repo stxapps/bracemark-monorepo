@@ -337,10 +337,29 @@ export default function Page() {
         </p>
 
         <h3>If you contact us</h3>
+        {/* SUPPORT MAIL HAS TWO USES, AND THE SECOND IS BOUNDED BY WHAT WE KEEP.
+            This paragraph used to end "we use it only to help you", which a help
+            page written from a recurring question falsifies. The second use is
+            stated by what survives it — the question in our words, never who asked
+            or what they wrote verbatim — because that is the part a reader can hold
+            us to. "Never publish or quote without asking" rules out a testimonial
+            lifted from a support thread; it does not rule out a help page, which
+            is the reason the paraphrase is kept. */}
         <p>
           When you email support we receive your message, your email address and whatever you choose
-          to put in it. We keep the correspondence so we can follow up, and we use it only to help
-          you.
+          to put in it. We keep the correspondence so we can follow up. We use it to answer you, and
+          to learn what is unclear or broken: a question more than one person asks becomes a help
+          page or a fix.
+        </p>
+        <p>
+          What we keep for that second use is the question in our own words — not your name, your
+          email address, your username, or what you wrote word for word. We never publish your
+          message or quote you without asking first.
+        </p>
+        <p>
+          An AI model may help us read support email and draft replies. It processes your message on
+          our behalf. A person at Bracemark reads every message and writes or approves every reply
+          we send.
         </p>
         <p>
           Your library can hold whatever you want it to, and we cannot see it — that is the point. A
@@ -377,7 +396,10 @@ export default function Page() {
             paid for.
           </li>
           <li>To keep it running and safe: diagnose faults, prevent abuse, enforce rate limits.</li>
-          <li>To answer you when you write to us.</li>
+          <li>
+            To answer you when you write to us, and to turn the questions people ask into help pages
+            and fixes — keeping the question, not who asked it.
+          </li>
           <li>To meet legal, tax and accounting obligations.</li>
         </ul>
         <p>
@@ -401,6 +423,8 @@ export default function Page() {
             <strong>Our legitimate interests</strong> — keeping the service up and abuse off it:
             answering requests, applying rate limits, diagnosing faults. The interest is running a
             service that works; the data involved is what any web server handles to reply at all.
+            The same interest covers working out, from the questions people send us, which parts of
+            Bracemark need fixing or explaining better.
           </li>
           <li>
             <strong>Your consent</strong> — the one optional thing, the {PLAN_LABELS.plus} setting
@@ -437,6 +461,10 @@ export default function Page() {
           </li>
           <li>
             <strong>Namecheap (Private Email)</strong> — hosts the mailbox that receives your
+            support email.
+          </li>
+          <li>
+            <strong>Anthropic</strong> — provides the AI model that helps us read and reply to
             support email.
           </li>
         </ul>
@@ -480,7 +508,8 @@ export default function Page() {
             afterwards for as long as tax and accounting law requires.
           </li>
           <li>
-            <strong>Support email</strong> — until it is no longer useful for supporting you.
+            <strong>Support email</strong> — until it is no longer useful for supporting you. The
+            notes we take from it hold no name, address or username, and we keep them.
           </li>
           <li>
             <strong>Infrastructure logs</strong> — for the short window our providers keep them,
