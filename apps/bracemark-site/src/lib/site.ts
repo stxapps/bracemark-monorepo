@@ -120,7 +120,17 @@ export const PADDLE_REFUND_POLICY_URL = 'https://www.paddle.com/legal/refund-pol
 // so the two documents can never claim different vintages of the same rewrite —
 // and so bumping one after an edit is a deliberate act, not a forgotten one.
 export const TERMS_UPDATED = '18 September 2026';
-export const PRIVACY_UPDATED = '21 August 2026';
+export const PRIVACY_UPDATED = '23 September 2026';
+
+// How long a backup outlives what it copies — the window /privacy (_Backups_,
+// and the key-blob line above it) and /delete-account (_What is deleted_, _What
+// is kept_) promise. It is not free to change in either direction. This line is
+// the only copy of the number: what prunes our own off-Cloudflare copies reads
+// it from here, so keep it a bare integer literal. Cloudflare's own history (D1
+// Time Travel, Durable Object point-in-time recovery) is fixed at 30 days, so a
+// smaller number here would be false the day it shipped (docs/server-backups.md,
+// _Retention is a public promise_).
+export const BACKUP_RETENTION_DAYS = 30;
 
 // `/about` earns a slot despite the header being the scarcest space on the site:
 // it was footer-only, and it is where the writing that actually moves a sceptic

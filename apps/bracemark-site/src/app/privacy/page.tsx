@@ -5,7 +5,13 @@ import { PLAN_LABELS } from '@stxapps/shared';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { PageShell } from '../../components/page-shell';
-import { COMPANY, PRIVACY_UPDATED, SOURCE, SUPPORT_EMAIL } from '../../lib/site';
+import {
+  BACKUP_RETENTION_DAYS,
+  COMPANY,
+  PRIVACY_UPDATED,
+  SOURCE,
+  SUPPORT_EMAIL,
+} from '../../lib/site';
 
 export const metadata: Metadata = {
   title: 'Privacy Policy',
@@ -69,6 +75,25 @@ export const metadata: Metadata = {
 //     hangs on the SCREEN rather than on the property — loading Paddle.js on
 //     /pricing would make a second place the exception, which is still falsified,
 //     but the sentence no longer says "this site loads none" for them to quote.
+//
+//   - BACKUPS ARE A 30-DAY WINDOW, and the window is a number in code on our side
+//     and a platform fact on Cloudflare's. D1 Time Travel and SQLite-backed DO
+//     point-in-time recovery are 30 days, and our own off-Cloudflare copies are
+//     pruned from the same number. Every "30 days" below is
+//     `BACKUP_RETENTION_DAYS` (lib/site.ts), and "held by us" under _Where your
+//     data is_ is that copy. /delete-account says the same thing twice and moves
+//     with it (docs/server-backups.md, _Retention is a public promise_).
+//     "HELD BY US, NOT BY A PROVIDER" IS TRUE ONLY WHILE IT IS. It answers the
+//     reader who notices the copy is missing from the provider list above. The
+//     day a provider holds a backup (docs/server-backups.md, _later_), it goes on
+//     that list, its lifecycle rules have to fit inside the window, and this
+//     sentence is rewritten rather than left to read as if nothing changed.
+//     "NOTHING COULD OPEN THE DATA" WAITS FOR THE WINDOW. Until the backup
+//     copies of the key blobs expire, a user's password still opens the backup
+//     copies of their files. The sentence was true the moment deletion ran,
+//     until backups existed, and now only holds once they have expired.
+//     "Daily" is deliberately absent: a run is skipped while the backup machine
+//     is off, and the reader is promised the window, not the cadence.
 //
 //   - THE NOTICE CHANNEL IS THIS WEBSITE, and only this website. The paragraph
 //     under _Changes to this policy_ used to promise we would highlight a material
@@ -428,15 +453,24 @@ export default function Page() {
           We are established in Thailand and the providers above operate globally, so your encrypted
           files and account records are stored and processed in countries other than the one you
           live in, including the United States. Which countries depends on which provider, and what
-          each of them holds is the line beside its name above.
+          each of them holds is the line beside its name above. The backup copies we keep outside
+          Cloudflare are held by us, not by a provider.
         </p>
 
         <h2>How long we keep it</h2>
         <ul>
           <li>
             <strong>Your account and library</strong> — until you delete them. Deleting all data
-            wipes the stored files; deleting your account also destroys the encrypted key blobs,
-            after which nothing could open the data even if a copy survived.
+            wipes the stored files; deleting your account also destroys the encrypted key blobs, and
+            their backup copies follow within {BACKUP_RETENTION_DAYS} days. After that, nothing
+            could open the data even if a copy survived.
+          </li>
+          <li>
+            <strong>Backups</strong> — {BACKUP_RETENTION_DAYS} days. Cloudflare keeps a
+            point-in-time history of our databases, and we keep encrypted copies of the files and
+            account records outside Cloudflare. Both are deleted automatically after{' '}
+            {BACKUP_RETENTION_DAYS} days, so anything you delete is gone from them within{' '}
+            {BACKUP_RETENTION_DAYS} days too.
           </li>
           <li>
             <strong>Sessions</strong> — until they expire or you sign that device out.

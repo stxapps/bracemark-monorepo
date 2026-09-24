@@ -5,7 +5,7 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { MailLink } from '../../components/mail-link';
 import { PageShell } from '../../components/page-shell';
-import { APP_URL, SIGN_IN_URL, SUPPORT_EMAIL } from '../../lib/site';
+import { APP_URL, BACKUP_RETENTION_DAYS, SIGN_IN_URL, SUPPORT_EMAIL } from '../../lib/site';
 
 export const metadata: Metadata = {
   title: 'Delete your account',
@@ -38,7 +38,10 @@ export const metadata: Metadata = {
 //     that device reaches the server, not at the moment of deletion.
 //   - WHAT IS KEPT matches /privacy, _How long we keep it_, and must keep
 //     matching it: the tombstoned username, subscription records under tax law,
-//     support mail, providers' logs. No claim about backups, in either direction.
+//     support mail, providers' logs, and backups for their 30-day window
+//     (/privacy's header comment, _BACKUPS ARE A 30-DAY WINDOW_). The same
+//     window is why WHAT IS DELETED's "nothing could open the data" waits for
+//     the backup copies of the key to expire.
 //   - IF YOU CAN'T SIGN IN is the cost the design carries: the route requires a
 //     fresh password-signed proof and there is no email on file, so nothing we
 //     hold can tell the owner from anyone who knows the username. The two-year
@@ -156,8 +159,9 @@ export default function Page() {
               storage, immediately.
             </li>
             <li className={bullet}>
-              The encrypted copies of the key your library is encrypted with, so nothing could open
-              the data even if a copy survived.
+              The encrypted copies of the key your library is encrypted with. Once their backup
+              copies expire too, within {BACKUP_RETENTION_DAYS} days, nothing could open the data
+              even if a copy survived.
             </li>
             <li className={bullet}>
               Your account record and every signed-in session. The device you delete from erases its
@@ -181,6 +185,11 @@ export default function Page() {
             <li className={bullet}>
               Email you’ve sent to support, until it is no longer useful for supporting you. Ask and
               we’ll delete it sooner.
+            </li>
+            <li className={bullet}>
+              Backup copies of your library and account record, including the encrypted copies of
+              your key, for up to {BACKUP_RETENTION_DAYS} days, after which they’re deleted
+              automatically.
             </li>
             <li className={bullet}>
               Infrastructure logs, for the short window our providers keep them, after which they
