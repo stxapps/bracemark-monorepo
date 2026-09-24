@@ -33,6 +33,7 @@ import { getLocalSettings, setLocalSettings } from './local-settings-store';
 import { putLock } from './lock-store';
 import { enqueuePutTx, listPendingOps } from './pending-store';
 import { toItemRecord } from './projection';
+import { readReviewPromptState, writeReviewPromptState } from './review-prompt-store';
 import { readSidebarCollapsedIds, writeSidebarCollapsedIds } from './sidebar-view-store';
 import { readCachedStatus, writeCachedStatus } from './subscription-store';
 import { getSyncMeta, isFirstSyncDone, markFirstSyncDone } from './sync-store';
@@ -102,6 +103,12 @@ async function seedSignedInAccountWithData(): Promise<void> {
   await putFavicon('example.com', new Uint8Array([1, 2, 3]));
   await setLocalSettings({ linksLayoutSource: 'local', linksLayout: 'card' });
   writeSidebarCollapsedIds(['lists']);
+  writeReviewPromptState({
+    savesSinceAsk: 3,
+    lastAskedAt: null,
+    askCount: 0,
+    openedStorePage: false,
+  });
   writeCachedStatus({
     plan: 'plus',
     status: 'active',
@@ -266,6 +273,7 @@ describe('deleteAllData', () => {
     expect(await getLocalSettings()).toMatchObject({ linksLayout: 'card' });
     expect(readCachedStatus()?.plan).toBe('plus');
     expect(readSidebarCollapsedIds()).toEqual(['lists']);
+    expect(readReviewPromptState().savesSinceAsk).toBe(3);
   });
 
   // An empty local store IS the complete snapshot of the wiped namespace, so the

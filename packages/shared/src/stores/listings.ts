@@ -6,6 +6,10 @@
 //     page — all four listings at once.
 //   - bracemark-web (the app) shows a single browser-extension button in the links
 //     page's previews prompt, via `extensionStoreUrl()`.
+//   - bracemark-expo opens its own platform's listing from Settings → About's
+//     "Rate Bracemark" row (lib/review-prompt.ts) — read from here rather than
+//     from `ios.appStoreUrl` / `android.playStoreUrl` in app.config.ts, which
+//     would be a copy.
 //
 // A second copy would be a drift hazard: the day a listing moves, one copy would be
 // updated and the other forgotten.

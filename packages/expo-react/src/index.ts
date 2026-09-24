@@ -19,6 +19,7 @@ export * from './data/mutations';
 export * from './data/pending-store';
 export * from './data/projection';
 export * from './data/queries';
+export * from './data/review-prompt-store';
 export * from './data/session-store';
 export * from './data/share-store';
 export * from './data/share-theme-store';

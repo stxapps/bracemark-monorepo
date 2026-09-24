@@ -177,6 +177,7 @@ jest.mock('./item-store', () => ({
   namespaceRows: jest.fn(() => []),
 }));
 jest.mock('./subscription-store', () => ({ readCachedStatus: jest.fn(() => null) }));
+jest.mock('./review-prompt-store', () => ({ countReviewPromptSave: jest.fn() }));
 jest.mock('./mutations', () => ({
   writeLink: jest.fn(async () => undefined),
   writeList: jest.fn(async () => undefined),
@@ -351,6 +352,20 @@ describe('drainShareOutbox', () => {
     await expect(drainShareOutbox()).resolves.toEqual(['links/link-1.enc']);
     // Applied means gone — and NOT quarantined.
     expect([...mockFiles.keys()]).toEqual([]);
+  });
+
+  // A share is a save: it counts toward the app-store review prompt, and only a
+  // draft that landed does — a quarantined one never became a link.
+  it('counts each landed draft toward the review prompt, and nothing it quarantined', async () => {
+    const { countReviewPromptSave } =
+      jest.requireMock<typeof import('./review-prompt-store')>('./review-prompt-store');
+    jest.mocked(countReviewPromptSave).mockClear();
+    mockFiles.set(`${OUTBOX}/bad.json`, 'not json');
+    mockFiles.set(`${OUTBOX}/good.json`, JSON.stringify(draft));
+
+    await drainShareOutbox();
+
+    expect(countReviewPromptSave).toHaveBeenCalledTimes(1);
   });
 
   it('quarantines an unparseable file instead of deleting it', async () => {

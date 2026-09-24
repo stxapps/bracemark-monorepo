@@ -104,6 +104,64 @@ Run → Options → StoreKit Configuration), and schemes live under `ios/`, whic
 re-select it after each prebuild — or test on a device with a sandbox account
 and skip it.
 
+#### expo-store-review
+
+The in-app rating prompt — `SKStoreReviewController` / `AppStore.requestReview`
+on iOS, the Play In-App Review API on Android. Added per the normal convention
+(`*` in the app, `~9.0.9` at root). **No config plugin** — the module ships
+none, so nothing goes in `app.config.ts`'s `plugins` — but it is native, so
+`npx expo prebuild` before it exists on a device.
+
+The rules for WHEN to ask are `apps/bracemark-expo/src/lib/review-prompt.ts`,
+and its header is the argument; in short, a successful save from the add panel,
+every tenth since the last ask, never more than once per 120 days, never more
+than three times per device, never after an error. Saves from the share sheet
+count toward the ten (share-store's `applyShareDraft`, the one place both
+platforms' shares land in the app's process) but never ask themselves. An import
+never asks: it is usually the first session, before the user has used the
+product. The bookkeeping is a device-local single-row table, `review_prompt`
+(`@stxapps/expo-react` `data/review-prompt-store.ts`), wiped on sign-out with the
+rest.
+
+Settings → About carries a **Rate Bracemark** row that opens the store listing
+(on iOS with `?action=write-review`, which opens the review composer). Pressing
+it stops the automatic prompt on that device for good — it is the only sign we
+can get that the user rated. The URLs come from `@stxapps/shared`'s
+`stores/listings.ts`, **not** `StoreReview.storeUrl()`: that reads
+`ios.appStoreUrl` / `android.playStoreUrl` from `app.config.ts`, which would be a
+second copy of the listings. Nor does `app.config.ts` import them to fill those
+fields: it is evaluated in Node at config time, and the shared barrel is raw
+TypeScript with zod behind it — nothing there needs the URLs anyway.
+
+Four things that aren't in its README:
+
+- **The OS decides whether anything shows, and never says.** iOS caps the sheet
+  at three a year per install and shows nothing from TestFlight; Play keeps an
+  unpublished quota and shows nothing for an install that didn't come from Play.
+  `requestReview` resolves either way, so "I called it and nothing appeared" is
+  normal and not a bug. What we store is when we **asked**. Neither store says
+  whether the user has rated either, which is why the lifetime cap and the
+  Settings row stand in for that answer.
+- **We don't gate on `isAvailableAsync()`.** On Android it looks up the Play
+  Store package by name, and Android 11+ hides a package from an app whose
+  manifest declares no matching `<queries>` — this module ships none — so it can
+  answer false where the review flow works. `requestReview` alone is safe on
+  both platforms; its rejection (no foreground scene on iOS, a failed Play task)
+  is swallowed.
+- **`__DEV__` builds never ask.** In a development build the iOS simulator shows
+  the sheet on _every_ call, which would land in the middle of the Maestro flows
+  that save more than a handful of links. To see the real sheet, run a
+  **release** build on the simulator (`npx expo run:ios --configuration Release`)
+  and save ten links. On Android nothing shows outside a Play
+  install; Play's internal-app-sharing or an internal-testing track is the way to
+  see it there.
+- **It is in the iOS share extension's `excludedPackages`.** Its Swift reaches
+  the host app's window scene through `UIApplication.shared`, which an app
+  extension can't use, and the extension never asks anyway. After a prebuild,
+  `ios/Podfile` should list it in the `BracemarkShareExtension` target's
+  `exclude` array, and `ExpoStoreReview` should appear only in
+  `Pods-Bracemark`'s xcconfigs.
+
 #### @react-native-community/datetimepicker
 
 The two **theme crossover-time** fields in Settings → Misc (`custom` mode —

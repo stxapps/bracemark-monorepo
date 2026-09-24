@@ -605,6 +605,15 @@ not by the in-sheet kick landing.
   possible enhancement, less pressing now that the upload gives cross-device
   freshness at share time.
 
+**A landed share counts toward the app-store review prompt.** A share is a
+save, so it is counted toward the ten saves that earn the ask — in
+`applyShareDraft`, because that is where both platforms' shares land in the
+app's own process: Android's Save calls it directly, and the iOS drain calls it
+for each outbox draft. The iOS share extension can't count its own saves (the
+count is a row in the sqlite it must not open), and neither shell ever asks:
+the ask comes on the next save in the app
+([expo-dependencies.md](./expo-dependencies.md), _expo-store-review_).
+
 ### the main app's half — ShareBridge
 
 `ShareBridge` (bracemark-expo `components/share-bridge.tsx`) is a renderless

@@ -122,6 +122,7 @@ import { Input } from '../../components/ui/input';
 import { NativeOnlyAnimatedView } from '../../components/ui/native-only-animated-view';
 import { Text } from '../../components/ui/text';
 import { Textarea } from '../../components/ui/textarea';
+import { noteReviewMoment } from '../../lib/review-prompt';
 import { cn } from '../../lib/utils';
 import { useLinksPage } from './page-provider';
 
@@ -388,6 +389,9 @@ export function LinkAddPanel({ onClose }: { onClose: () => void }) {
       // repaints itself, so nothing here waits on the network.
       if (created) extractNow([created.path]);
       close();
+      // A save that landed is the moment the app-store review prompt uses; it
+      // decides for itself whether this one asks (lib/review-prompt.ts).
+      if (created) noteReviewMoment();
     } finally {
       setSaving(false);
     }

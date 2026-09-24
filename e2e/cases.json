@@ -1020,6 +1020,16 @@
     "artifacts": ["manual-checklist"]
   },
   {
+    "id": "REVIEW-PROMPT-RELEASE-001",
+    "title": "A release build raises the store review sheet on the tenth save, never after an import or a failure, and never again once the store page was opened",
+    "surface": "native",
+    "tier": "release",
+    "traits": ["online", "ios", "android"],
+    "fixture": "empty",
+    "path": "mobile/RELEASE.md",
+    "artifacts": ["manual-checklist"]
+  },
+  {
     "id": "IAP-APPLE-RELEASE-001",
     "title": "A StoreKit sandbox purchase verifies, entitles, restores, and replays after a controlled verify failure",
     "surface": "native",

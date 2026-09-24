@@ -82,6 +82,8 @@ const engine = (): typeof import('../sync/engine') => require('../sync/engine');
 const itemStore = (): typeof import('./item-store') => require('./item-store');
 const mutations = (): typeof import('./mutations') => require('./mutations');
 const queries = (): typeof import('./queries') => require('./queries');
+const reviewPrompts = (): typeof import('./review-prompt-store') =>
+  require('./review-prompt-store');
 const shareUpload = (): typeof import('./share-upload') => require('./share-upload');
 const subscriptions = (): typeof import('./subscription-store') => require('./subscription-store');
 
@@ -483,6 +485,13 @@ async function applyShareDraft(username: string, draft: ShareDraft): Promise<voi
   if (title !== undefined) {
     await mutations().writeExtraction(username, draft.id, { fields: { title } });
   }
+
+  // A share is a save, so it counts toward the app-store review prompt — here,
+  // because both platforms' shares land through this function in the app's own
+  // process (Android's Save, the iOS drain); the iOS share extension can't open
+  // the sqlite the count lives in. It only counts: the sheet never asks, and the
+  // ask comes on a later save in the app (bracemark-expo lib/review-prompt.ts).
+  reviewPrompts().countReviewPromptSave();
 }
 
 // Read + parse one outbox file. Null when the bytes are unreadable OR the JSON

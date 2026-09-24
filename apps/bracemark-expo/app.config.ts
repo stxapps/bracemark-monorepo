@@ -163,6 +163,11 @@ const config: ExpoConfig = {
           'expo-updates',
           'expo-image',
           'expo-iap',
+          // The review sheet needs the host app's window scene, which an app
+          // extension can't reach (`UIApplication.shared` is unavailable to
+          // one), and the sheet never asks from here anyway
+          // (src/lib/review-prompt.ts).
+          'expo-store-review',
         ],
         preprocessingFile: './share-extension/preprocessing.js',
       },

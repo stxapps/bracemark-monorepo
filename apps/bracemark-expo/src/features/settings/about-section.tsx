@@ -16,12 +16,18 @@
 //     out-arrow instead of the chevron (settings-kit's `external`) — the glyph is
 //     the only warning a user gets that pressing it leaves.
 //
+// And one row web has no counterpart for: RATE BRACEMARK, under the brand card,
+// which opens this platform's store listing (the App Store's review composer on
+// iOS). It is the only way a rating starts on the user's side rather than ours,
+// and pressing it also retires the automatic review prompt on this device
+// (lib/review-prompt.ts).
+//
 // The mark renders at 40px, the one departure from the 20px lockup shared by
 // every other surface (docs/brand-assets.md — _the mark_): everywhere else the brand is
 // a carrier that has to agree with the six other surfaces, and here it is the
 // subject of the screen.
 
-import { Linking, View } from 'react-native';
+import { Linking, Platform, View } from 'react-native';
 import Constants from 'expo-constants';
 import {
   AtSign,
@@ -33,6 +39,7 @@ import {
   type LucideIcon,
   Scale,
   ShieldCheck,
+  Star,
 } from 'lucide-react-native';
 
 import { BRAND, COMPANY, SOCIAL, SOURCE } from '@stxapps/shared';
@@ -40,6 +47,7 @@ import { BRAND, COMPANY, SOCIAL, SOURCE } from '@stxapps/shared';
 import { BracemarkIcon } from '../../components/icons/bracemark-icon';
 import { Icon } from '../../components/ui/icon';
 import { Text } from '../../components/ui/text';
+import { openStoreReviewPage } from '../../lib/review-prompt';
 import { ABOUT_URL, FAQ_URL, PRIVACY_URL, SITE_URL, SUPPORT_URL, TERMS_URL } from '../../lib/site';
 import { SettingsGroup, SettingsHeader, SettingsPane, SettingsRow } from './settings-kit';
 
@@ -160,6 +168,14 @@ export function AboutSection() {
         </View>
         <Text className="text-center text-xs text-muted-foreground">Version {versionLabel()}</Text>
       </View>
+
+      <SettingsRow
+        icon={<Icon as={Star} className="size-5 text-muted-foreground" />}
+        title="Rate Bracemark"
+        description={`Leave a rating or a review on ${Platform.OS === 'ios' ? 'the App Store' : 'Google Play'}.`}
+        onPress={openStoreReviewPage}
+        external
+      />
 
       <SettingsGroup title="Pages">
         <PageRows pages={PAGES} />

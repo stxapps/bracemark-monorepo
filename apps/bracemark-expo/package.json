@@ -79,6 +79,7 @@
     "expo-splash-screen": "*",
     "expo-sqlite": "*",
     "expo-status-bar": "*",
+    "expo-store-review": "*",
     "expo-system-ui": "*",
     "jest-expo": "*",
     "lucide-react-native": "*",

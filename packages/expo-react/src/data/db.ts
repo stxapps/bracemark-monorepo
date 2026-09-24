@@ -287,6 +287,32 @@ export const sidebarView = sqliteTable('sidebar_view', {
   value: text('value', { mode: 'json' }).$type<SidebarViewValue>().notNull(),
 });
 
+// Device-local bookkeeping for the app-store review prompt (bracemark-expo
+// `lib/review-prompt.ts` owns the rules): how many links this device has saved
+// since the last ask, when that ask was, how many asks there have been, and
+// whether the user went to the store page themselves. Its own single-row bag for the
+// same reason `sidebar_view` is — it is not a setting, nothing surfaces it in
+// the Settings "Device" tab, and web has no counterpart (a browser has no store
+// sheet to raise). Never synced: the OS caps the prompt per install, so a count
+// from another device would only spend this one's budget early. Wiped on
+// sign-out with the rest (clear-data), not by delete-all-data.
+export interface ReviewPromptValue {
+  savesSinceAsk: number;
+  // Epoch ms of the last `requestReview` call, or null if this device never made
+  // one. When we ASKED, not when a sheet showed — the OS never says whether it did.
+  lastAskedAt: number | null;
+  // `requestReview` calls this device has made, ever — the lifetime cap's count.
+  askCount: number;
+  // Did the user open the store's review page from Settings → About? The one
+  // signal we can get that they rated, since neither store reports it.
+  openedStorePage: boolean;
+}
+export const reviewPrompt = sqliteTable('review_prompt', {
+  // Single-row table — one bag per device, keyed by a constant.
+  id: text('id', { enum: ['singleton'] }).primaryKey(),
+  value: text('value', { mode: 'json' }).$type<ReviewPromptValue>().notNull(),
+});
+
 const schema = {
   syncMeta,
   items,
@@ -298,6 +324,7 @@ const schema = {
   locks,
   favicons,
   sidebarView,
+  reviewPrompt,
 };
 
 // The exclusive upper bound of a namespace prefix scan — the sqlite spelling
@@ -438,6 +465,10 @@ export const DDL = `
     fetched_at INTEGER NOT NULL
   );
   CREATE TABLE IF NOT EXISTS sidebar_view (
+    id TEXT PRIMARY KEY NOT NULL,
+    value TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS review_prompt (
     id TEXT PRIMARY KEY NOT NULL,
     value TEXT NOT NULL
   );

@@ -32,6 +32,7 @@ import { setLocalSettings } from './local-settings-store';
 import { putLock } from './lock-store';
 import { enqueuePutTx } from './pending-store';
 import { toItemRecord } from './projection';
+import { writeReviewPromptState } from './review-prompt-store';
 import { writeSidebarCollapsedIds } from './sidebar-view-store';
 import { readCachedStatus, writeCachedStatus } from './subscription-store';
 import { seedNewAccount } from './sync-store';
@@ -96,6 +97,12 @@ async function seedEverything(): Promise<void> {
   await putLock({ id: 'app', kind: 'app', salt: 'aa', hash: 'bb' });
   await putFavicon('example.com', new Uint8Array([1, 2, 3]));
   writeSidebarCollapsedIds(['lists']);
+  writeReviewPromptState({
+    savesSinceAsk: 3,
+    lastAskedAt: null,
+    askCount: 0,
+    openedStorePage: false,
+  });
   writeCachedStatus({
     plan: 'plus',
     status: 'active',
@@ -123,6 +130,7 @@ function remaining(): Record<string, number> {
     locks: count('locks'),
     favicons: count('favicons'),
     sidebarView: count('sidebar_view'),
+    reviewPrompt: count('review_prompt'),
     subscriptionStatus: count('subscription_status'),
     filesOnDisk: listFileUris().length,
   };
@@ -156,6 +164,7 @@ describe('clearData', () => {
       locks: 0,
       favicons: 0,
       sidebarView: 0,
+      reviewPrompt: 0,
       subscriptionStatus: 0,
       filesOnDisk: 0,
     });

@@ -150,3 +150,37 @@ still holds the subscription:
    account's.
 3. Sign in to a store account that never bought: **Restore purchases** says
    `No purchases to restore on this store account.`
+
+## Store review prompt
+
+`REVIEW-PROMPT-RELEASE-001` `release` `online` `ios` `android`
+
+Development builds never ask (`__DEV__`), so no Maestro run can reach this, and the
+OS decides whether a sheet appears at all — which is what this checks. The rules
+are `apps/bracemark-expo/src/lib/review-prompt.ts`; the platform behaviour is
+docs/expo-dependencies.md, _expo-store-review_. Start each platform from a fresh
+install so the device has never been asked.
+
+1. **iOS.** From `apps/bracemark-expo`, build Release on the simulator —
+   `npx expo run:ios --configuration Release` — and sign in to a disposable
+   account. Save nine links from the add panel: no sheet. Save a tenth: the
+   rating sheet rises about a second and a half after the panel closes, over the
+   list rather than over the panel. Dismiss it.
+2. **The window holds.** Save ten more: no sheet.
+3. **An import never asks.** Delete the app, reinstall, sign in, and import a
+   small HTML bookmarks file with no saves first: the receipt shows and no sheet
+   follows. Then save nine links: still no sheet, because imported links are not
+   saves. The tenth raises it.
+4. **Share-sheet saves count, but don't ask.** Reinstall and sign in. Share nine
+   links from Safari through the share sheet: no sheet, in Safari or on
+   returning to the app. Save one from the add panel: the sheet rises.
+5. **Never after a failure.** A save refused as a duplicate doesn't count toward
+   the ten.
+6. **The store page retires it.** Reinstall and sign in. In Settings → About,
+   press **Rate Bracemark**: the App Store opens on Bracemark's review composer.
+   Come back. Save ten links: no sheet.
+7. **Android.** Upload the release build to Play's internal app sharing (or an
+   internal testing track), install it from that link on a device signed in to
+   a Google account that has not reviewed Bracemark, and repeat steps 1, 4 and 6.
+   Play shows its in-app review card; a sideloaded build calls the same code and
+   shows nothing, which is expected.
