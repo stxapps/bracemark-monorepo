@@ -7,4 +7,3 @@ tags: [SHARE-CROSS-CLIENT-001, full, online, ios, android]
 - runFlow:
     file: subflows/sign-in.yaml
 - pressKey: Home
-

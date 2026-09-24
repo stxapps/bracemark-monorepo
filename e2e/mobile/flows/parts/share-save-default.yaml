@@ -20,4 +20,3 @@ appId: com.bracemark.app
     notVisible:
       id: 'share-saved'
     timeout: 10000
-

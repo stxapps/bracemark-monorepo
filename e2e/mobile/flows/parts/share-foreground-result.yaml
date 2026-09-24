@@ -16,7 +16,7 @@ appId: com.bracemark.app
     id: 'links-nav-list-.*'
     text: ${LIST_NAME}
 - extendedWaitUntil:
-    visible: ".*${LINK_MATCH}.*"
+    visible: '.*${LINK_MATCH}.*'
     timeout: 20000
 
 - tapOn:
@@ -25,6 +25,6 @@ appId: com.bracemark.app
     id: 'links-nav-tag-.*'
     text: ${TAG_NAME}
 - extendedWaitUntil:
-    visible: ".*${LINK_MATCH}.*"
+    visible: '.*${LINK_MATCH}.*'
     timeout: 20000
 - takeScreenshot: share-visible-in-main-app

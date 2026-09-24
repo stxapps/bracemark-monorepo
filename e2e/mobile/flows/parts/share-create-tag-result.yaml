@@ -10,4 +10,3 @@ appId: com.bracemark.app
       below: 'New tag name'
     timeout: 10000
 - takeScreenshot: share-taxonomy-exactly-once
-

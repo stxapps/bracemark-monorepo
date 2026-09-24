@@ -6,5 +6,5 @@ tags: [SHARE-IOS-001, full, online, ios]
 ---
 - runFlow:
     file: subflows/sign-in.yaml
-- assertNotVisible: ".*${LINK_MATCH}.*"
+- assertNotVisible: '.*${LINK_MATCH}.*'
 - pressKey: Home

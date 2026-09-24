@@ -30,4 +30,3 @@ tags: [SHARE-IOS-002, full, online, ios]
 - assertNotVisible:
     id: 'links-screen'
 - stopApp
-

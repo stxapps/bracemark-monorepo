@@ -41,4 +41,3 @@ appId: com.bracemark.app
     visible:
       id: ${SHARE_STATE_ID}
     timeout: 60000
-

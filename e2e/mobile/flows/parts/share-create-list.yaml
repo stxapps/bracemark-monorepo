@@ -14,4 +14,3 @@ appId: com.bracemark.app
     id: 'share-list-input'
 - inputText: ${LIST_NAME}
 - pressKey: Enter
-

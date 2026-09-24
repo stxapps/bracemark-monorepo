@@ -12,7 +12,7 @@ tags: [SHARE-BOUNDARY-001, full, online, scale, ios, android]
 - tapOn:
     id: 'links-sync'
 - extendedWaitUntil:
-    visible: ".*${CAP_HOST}.*"
+    visible: '.*${CAP_HOST}.*'
     timeout: 60000
 - runFlow:
     file: subflows/open-settings.yaml
