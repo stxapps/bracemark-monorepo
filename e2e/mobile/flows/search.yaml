@@ -33,9 +33,11 @@ tags: [SEARCH-001, full, online, ios, android]
 # --- commit ---------------------------------------------------------------------------
 - tapOn:
     id: 'links-search-toggle'
-- tapOn:
-    id: 'links-search-input'
-- inputText: ${WORD}
+- runFlow:
+    file: subflows/type-autofocused.yaml
+    env:
+      FIELD: links-search-input
+      TEXT: ${WORD}
 - pressKey: Enter
 - extendedWaitUntil:
     visible:

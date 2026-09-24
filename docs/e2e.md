@@ -413,7 +413,7 @@ accessible identity is untestable as well as inaccessible. Flows bind to `testID
 and accessible labels, **never to body copy** — copy in this repo changes often,
 and a flow keyed to a sentence turns every wording edit into a red run.
 
-Twenty-six repo-specific gotchas:
+Twenty-seven repo-specific gotchas:
 
 - **`launchApp` resumes, it does not cold-start.** Every flow that assumes a root
   screen needs its state wiped first, or it passes alone and fails in a directory
@@ -556,6 +556,40 @@ tag #N` in the toast. That error is RN-internal and not worth chasing: the app
   pressed as soon as the add panel dropped out of the tree opened no menu on iOS,
   so `flows/subflows/add-link.yaml` waits for the saved row and for animations to
   end before handing the screen back.
+- ⚠ **A tap into a surface the keyboard moves lands where the target WAS.**
+  `tapOn` aims from a hierarchy snapshot and presses up to a second later, and
+  the keyboard moves most of the surfaces a flow types into: the lock dialog's
+  KeyboardAvoidingView slides it up, the add panel rides the keyboard, and the
+  auth screens and the lock pane are KeyboardAwareScrollViews that scroll the
+  field clear as it rises, falls or resizes. A snapshot from before the move
+  sends the tap to chrome that drops the keyboard
+  ([soft-keyboard.md](./soft-keyboard.md), _dismissal_), to the keyboard itself,
+  or to the neighbouring field, and `inputText` then types into nothing or into
+  the wrong field and still reports COMPLETED. Measured on iOS 26.5: a lock-dialog
+  tap aimed at y 360 with the field settled at 259–277, from a snapshot 0.1s
+  before the keyboard's `didShow` (the submit read "Please enter a password");
+  a sign-in whose keyboard collapsed 26ms after the password tap's snapshot, the
+  device briefly reporting a hardware keyboard, so the password went into
+  Username; and 4 of 71 add-panel taps aimed at the URL field's pre-rise y 681,
+  settled at 407, which passed only by beating the keyboard by ~0.2s. Three rules:
+  - A field that **focused itself on arrival** is typed into with no tap:
+    `flows/subflows/type-autofocused.yaml` (the add panel's URL, the search box,
+    the recovery username, the lock dialog through `subflows/lock-dialog.yaml`).
+    On Android such a field already reads `focused=true`, and relying on the
+    autofocus also asserts it.
+  - Any **other** tap into such a surface waits for `waitForAnimationToEnd`
+    first — the sign-in fields (`subflows/sign-in-fields.yaml`), the recovery
+    code, and the lock pane, whose autofocus a rejected attempt's submit undoes
+    (`subflows/unlock-pane.yaml`).
+  - What can be **read back** is: the sign-in flows assert the username after
+    the password, so a misplaced keystroke fails there rather than five minutes
+    on as a links screen that never came. A wait cannot stop a move that starts
+    after the snapshot (the sign-in's), and a pass after a retry counts as red
+    here (_artifacts and retries_), so the read-back is what makes it legible.
+
+  (`parts/visual-app-lock-gate.yaml` still taps the lock dialog's field, into a
+  dialog `parts/visual-app-lock-dialog.yaml` has already waited out.)
+
 - **A Maestro tap on the Pixel 8 AVD returns about six seconds after it presses.**
   Feedback shorter than that — bulk Copy's 1.5s "Copied" — has reverted before any
   assertion can run, so `flows/bulk-copy.yaml` asserts it on iOS only and proves
@@ -2245,9 +2279,14 @@ fling runs out. The flow now scrolls on to the page's end
 (`parts/visual-app-lock-dialog.yaml`); with it the lock case read **6/6 same**
 twice on Android and once on iOS, against the baselines already accepted. One
 iOS lock run before that failed in `visual-list-lock.yaml` with the lock
-password never typed ("Please enter a password"), on a device booted without
-Simulator.app open; the same part failed twice on 2026-09-23 before passing.
-Not diagnosed. One Android run was lost before all this, with the two
+password never typed ("Please enter a password"): the tap on the auto-focused
+field, aimed mid-slide, landed on the dialog's chrome and dropped the keyboard.
+It is a gotcha now (_driving the native apps_), fixed in every flow with that
+shape. The device
+had been booted without Simulator.app open, which the logs show played no part.
+The part's two failures on 2026-09-23 were not this: the password went in both
+times, and each failed later, on the wrong-row lock of the `rightOf:` gotcha
+(same list). One Android run was lost before all this, with the two
 device legs started together: its sign-in typed `ee2e_…` for `e2e_…` and the
 account refused it. Every leg since has run alone.
 

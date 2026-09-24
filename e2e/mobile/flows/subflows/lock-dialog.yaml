@@ -1,0 +1,17 @@
+# Type a password into the lock dialog that is opening and submit it. Pulled in
+# with `runFlow`; never run directly. Parameter: PASSWORD.
+#
+# The field is `autoFocus` (lock-password-dialog.tsx) and is typed into with no
+# tap — type-autofocused.yaml. This dialog is that file's specimen: measured on
+# iOS, a tap aimed from a snapshot 0.1s before the keyboard's didShow landed on
+# the dialog's chrome, which drops the keyboard (ui/dialog.tsx), and the submit
+# read "Please enter a password".
+appId: com.bracemark.app
+---
+- runFlow:
+    file: type-autofocused.yaml
+    env:
+      FIELD: lock-dialog-password
+      TEXT: ${PASSWORD}
+- tapOn:
+    id: 'lock-dialog-submit'

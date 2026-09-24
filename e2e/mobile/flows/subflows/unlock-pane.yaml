@@ -11,8 +11,20 @@
 # rejected attempt leaves its text in place and `eraseText` deletes backwards from
 # the caret (recovery-sign-in.yaml). Then the iOS "Save Password?" sheet, which a
 # submitted secure field can raise over the app, is waved off if it comes.
+#
+# The field is tapped, unlike type-autofocused.yaml's, because its autofocus is
+# not a guarantee here: a rejected attempt's submit blurs it. But the pane is a
+# KeyboardAwareScrollView (lock-pane.tsx) that scrolls the field clear of a rising
+# keyboard and back as it falls, and a tap aimed from a snapshot mid-scroll lands
+# where the field was — so the pane is let settle first.
 appId: com.bracemark.app
 ---
+- extendedWaitUntil:
+    visible:
+      id: 'lock-pane-password'
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 5000
 - tapOn:
     id: 'lock-pane-password'
 - eraseText: 100

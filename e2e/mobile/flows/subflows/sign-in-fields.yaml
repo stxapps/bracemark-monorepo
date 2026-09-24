@@ -1,0 +1,39 @@
+# Fill the sign-in form that is opening and put the keyboard away; the caller
+# presses Sign in. Pulled in with `runFlow`; never run directly. Parameters (the
+# caller's scope): USERNAME, PASSWORD.
+#
+# Each field is tapped only once the screen has stopped moving (docs/e2e.md,
+# _driving the native apps_, "A tap into a surface the keyboard moves"). `tapOn`
+# aims from a hierarchy snapshot, and this screen moves under it: the push slides
+# it in, and AuthScreen's KeyboardAwareScrollView scrolls the form as the keyboard
+# rises, falls or resizes. Measured on iOS 26.5: the keyboard collapsed 26ms after
+# the password tap's snapshot (the device briefly reported a hardware keyboard),
+# the form dropped back, and the tap aimed at the password field landed in
+# Username — which took the password after the username.
+appId: com.bracemark.app
+---
+- extendedWaitUntil:
+    visible:
+      id: 'sign-in-username'
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn:
+    id: 'sign-in-username'
+- inputText: ${USERNAME}
+
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn:
+    id: 'sign-in-password'
+- inputText: ${PASSWORD}
+
+# The username read back, so a keystroke that went to the wrong field fails HERE,
+# as that, and not five minutes on as a links screen that never came. The
+# password is a secure field and cannot be read; a password typed into Username
+# is what this catches.
+- assertVisible:
+    id: 'sign-in-username'
+    text: ${USERNAME}
+
+- hideKeyboard

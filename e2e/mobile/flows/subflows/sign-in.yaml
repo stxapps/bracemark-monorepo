@@ -24,15 +24,8 @@ appId: com.bracemark.app
     timeout: 60000
 - tapOn: 'Sign in'
 
-- tapOn:
-    id: 'sign-in-username'
-- inputText: ${USERNAME}
-
-- tapOn:
-    id: 'sign-in-password'
-- inputText: ${PASSWORD}
-
-- hideKeyboard
+- runFlow:
+    file: sign-in-fields.yaml
 - tapOn:
     id: 'sign-in-submit'
 

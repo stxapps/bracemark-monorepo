@@ -10,9 +10,11 @@ appId: com.bracemark.app
 - runFlow:
     file: dismiss-logbox.yaml
 - tapOn: 'Add link'
-- tapOn:
-    id: 'add-link-url'
-- inputText: ${URL}
+- runFlow:
+    file: type-autofocused.yaml
+    env:
+      FIELD: add-link-url
+      TEXT: ${URL}
 - tapOn:
     id: 'add-link-save'
 - extendedWaitUntil:

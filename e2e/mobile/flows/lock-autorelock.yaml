@@ -40,11 +40,10 @@ tags: [LOCK-AUTORELOCK-001, full, online, destructive, ios, android]
     direction: DOWN
 - tapOn:
     id: 'app-lock-set'
-- tapOn:
-    id: 'lock-dialog-password'
-- inputText: ${LOCK_PASSWORD}
-- tapOn:
-    id: 'lock-dialog-submit'
+- runFlow:
+    file: subflows/lock-dialog.yaml
+    env:
+      PASSWORD: ${LOCK_PASSWORD}
 - extendedWaitUntil:
     visible:
       id: 'app-lock-remove'

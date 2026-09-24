@@ -1,0 +1,31 @@
+# Type into a field that focuses itself on arrival. Pulled in with `runFlow`;
+# never run directly. Parameters: FIELD — the field's testID; TEXT.
+#
+# NO `tapOn` on the field, and it is not an omission (docs/e2e.md, _driving the
+# native apps_, "A tap into a surface the keyboard moves"). The field is `autoFocus`,
+# so the keyboard rises as its surface arrives, and the surface moves with it: the
+# lock dialog's KeyboardAvoidingView slides it up, the add panel rides the keyboard.
+# `tapOn` aims from a hierarchy snapshot, and one taken before or during that move
+# sends the tap where the field WAS — onto chrome that drops the keyboard, or onto
+# the keyboard itself. `inputText` then types into nothing and still reports
+# COMPLETED. Measured on iOS 26.5: a lock-dialog tap aimed at y 360 with the field
+# settled at 259–277, which failed; and 4 of 71 add-panel taps aimed at the URL
+# field's pre-rise y 681 with it settled at 407 — which passed only by beating the
+# keyboard's willShow, by 0.18s in the one timed. On Android the field reads
+# `focused=true` before any tap.
+#
+# Relying on the autofocus also asserts it: a surface that arrives unfocused (the
+# race docs/soft-keyboard.md describes for the lock dialog) fails at the caller's
+# next wait rather than being tapped past.
+#
+# Only for a field that has just arrived. One that can have LOST focus since — the
+# lock pane after a rejected attempt — keeps its tap (unlock-pane.yaml).
+appId: com.bracemark.app
+---
+- extendedWaitUntil:
+    visible:
+      id: ${FIELD}
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 5000
+- inputText: ${TEXT}
