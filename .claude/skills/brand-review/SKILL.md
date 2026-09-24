@@ -36,6 +36,12 @@ If the content under review is an in-app string, also read the doc that owns its
 area (`docs/editors.md`, `docs/account.md`, `docs/iap.md`, `docs/locks.md`) —
 several of them rule on specific words.
 
+**Then the overlay, if there is one.** If `local.md` exists beside this file, read
+it and follow it. It is gitignored and per clone — context that cannot be public —
+so it is often absent, and the review stands without it. Nothing it contains goes
+into a file this repo tracks: findings still cite `docs/brand-assets.md` sections,
+never the overlay or anything it points to.
+
 ## Inputs
 
 Accept the content as: pasted text, a file path, a URL, or **nothing** — with no
