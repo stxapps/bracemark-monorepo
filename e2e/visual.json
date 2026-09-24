@@ -261,6 +261,86 @@
       "gate": false
     },
     {
+      "id": "large-font-advanced-search",
+      "title": "The Advanced search sheet at a large font size",
+      "case": "VISUAL-FONT-001",
+      "platforms": ["ios", "android"],
+      "appearances": ["light"],
+      "fontScale": "large",
+      "masks": [],
+      "gate": false
+    },
+    {
+      "id": "large-font-settings-account",
+      "title": "Settings: Account at a large font size",
+      "case": "VISUAL-FONT-001",
+      "platforms": ["ios", "android"],
+      "appearances": ["light"],
+      "fontScale": "large",
+      "masks": ["username"],
+      "gate": false
+    },
+    {
+      "id": "large-font-settings-data",
+      "title": "Settings: Data at a large font size",
+      "case": "VISUAL-FONT-001",
+      "platforms": ["ios", "android"],
+      "appearances": ["light"],
+      "fontScale": "large",
+      "masks": ["sync-time"],
+      "gate": false
+    },
+    {
+      "id": "large-font-settings-extraction",
+      "title": "Settings: Link previews at a large font size",
+      "case": "VISUAL-FONT-001",
+      "platforms": ["ios", "android"],
+      "appearances": ["light"],
+      "fontScale": "large",
+      "masks": [],
+      "gate": false
+    },
+    {
+      "id": "large-font-settings-lists",
+      "title": "Settings: Lists at a large font size",
+      "case": "VISUAL-FONT-001",
+      "platforms": ["ios", "android"],
+      "appearances": ["light"],
+      "fontScale": "large",
+      "masks": [],
+      "gate": false
+    },
+    {
+      "id": "large-font-settings-tags",
+      "title": "Settings: Tags at a large font size",
+      "case": "VISUAL-FONT-001",
+      "platforms": ["ios", "android"],
+      "appearances": ["light"],
+      "fontScale": "large",
+      "masks": [],
+      "gate": false
+    },
+    {
+      "id": "large-font-settings-misc",
+      "title": "Settings: Misc. at a large font size",
+      "case": "VISUAL-FONT-001",
+      "platforms": ["ios", "android"],
+      "appearances": ["light"],
+      "fontScale": "large",
+      "masks": [],
+      "gate": false
+    },
+    {
+      "id": "large-font-settings-about",
+      "title": "Settings: About at a large font size",
+      "case": "VISUAL-FONT-001",
+      "platforms": ["ios", "android"],
+      "appearances": ["light"],
+      "fontScale": "large",
+      "masks": [],
+      "gate": false
+    },
+    {
       "id": "large-font-share",
       "title": "The native share surface's editor at a large font size",
       "case": "VISUAL-FONT-001",

@@ -954,7 +954,7 @@ same role the kit's menu items have).
   the y of `My List` and the g of `Add tags`, the two combobox triggers the link
   editors put beside an Input.
 
-  **The whole app had exactly one box that could do it, and it was the kit's**:
+  **The first box found doing it was the kit's**:
   `Button size="default"` carried the registry's `h-10 px-4 py-2`, and `py-2`
   left 22pt inside a height the class had already pinned — so the padding could
   not size anything and could only shrink what the label was measured against.
@@ -986,6 +986,20 @@ same role the kit's menu items have).
   pinned** (it cannot add room and can only take it), and a control that means
   to match an `Input` takes `ui/input.tsx`'s type verbatim — `text-base
 leading-5`, measured-centred as a `Text` — rather than the size variant's.
+
+  **The budget to check is at the 1.3 cap, not at 1×**: inner height ≥ 1.3 ×
+  the line box — 26 for `text-sm`, 31.2 for `text-base`, 20.8 for `text-xs`.
+  Two more boxes failed it after the button, both exact at 1× and both only
+  visible with the OS text size raised: `ui/tabs.tsx`'s list (`h-9` minus its
+  `p-[3px]` and the trigger's border and `py-1` left 20 — the labels were cut
+  in half; now `min-h-9`, since nothing else pins it), and the advanced-search
+  filter box (`h-8` minus Input's `py-1` left 22 — Android sheared the cap
+  tops; now `py-0`, the button's fix). Growing a single-line Input with `h-auto
+min-h-*` is not the general answer: an empty Android field measures its
+  placeholder taller than typed text, so the box shrinks on the first keystroke.
+  The budget is now a spec, `components/ui/line-budget.spec.tsx`, which fails on
+  all three specimens as they shipped ([accessibility.md](./accessibility.md),
+  _font scaling_).
 
 - **A new type-scale token** — the bar is high, and it is not "this size repeats".
   Tailwind's `--text-*` names a size, but what usually has to hold is a size

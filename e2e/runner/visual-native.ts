@@ -363,6 +363,29 @@ export async function runVisualNativeCase(
       'mobile/flows/parts/visual-paywall.yaml',
       shot('large-font-dialog'),
       'mobile/flows/parts/visual-paywall-dismiss.yaml',
+      // The surfaces with the most fixed-height controls — tab strips, table
+      // rows, checklists — photographed with the library in them. It lands
+      // HERE, after the four above, so their baselines never saw it; the share
+      // sheet below opens over the last of these sections (About), which is
+      // its backdrop now, not the links page it once had. The
+      // budget arithmetic itself is a spec (bracemark-expo's
+      // components/ui/line-budget.spec.tsx); these catch what arithmetic can't.
+      async () => {
+        await importFromWeb(
+          `${run.runId}-${testCase.id}-importer`,
+          credentials,
+          library.archivePath,
+        );
+        return null;
+      },
+      'mobile/flows/parts/visual-pulled.yaml',
+      'mobile/flows/parts/visual-advanced-search.yaml',
+      shot('large-font-advanced-search'),
+      'mobile/flows/parts/visual-advanced-search-close.yaml',
+      ...SETTINGS_SECTIONS.flatMap((section): CaseStep[] => [
+        { flow: 'mobile/flows/parts/visual-settings.yaml', env: { SECTION: section } },
+        shot(`large-font-settings-${section}`),
+      ]),
       openShare,
       shareEditor,
       shot('large-font-share'),

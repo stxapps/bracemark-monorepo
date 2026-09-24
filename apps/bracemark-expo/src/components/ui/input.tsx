@@ -57,7 +57,7 @@ import { cn } from '../../lib/utils';
 // targets on a device that is entirely touch. They are invisible today only
 // because iOS is `supportsTablet: false` and Android is portrait-locked. Settle
 // those with the tablet layout; this file's answer is the type only. The one native control below it is the advanced-search WordField's
-// filter box (`h-8 text-sm`, features/links/search-bar.tsx) — dense on purpose,
+// filter box (`h-8 py-0 text-sm`, features/links/search-bar.tsx) — dense on purpose,
 // and the one place the two clients now differ: its web twin takes the step
 // (`h-8 text-base md:h-7 md:text-sm`), because there it is a field a phone can
 // zoom. Same 32px box on a phone either way; only the type differs, and only

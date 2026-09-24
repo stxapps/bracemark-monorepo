@@ -1,0 +1,17 @@
+# Close the Advanced search sheet without searching, then the search bar under
+# it, back to the links page the sheet opened from.
+appId: com.bracemark.app
+---
+- tapOn:
+    id: 'advanced-search-close'
+- extendedWaitUntil:
+    notVisible:
+      id: 'advanced-search-close'
+    timeout: 10000
+- tapOn:
+    id: 'links-search-toggle'
+- extendedWaitUntil:
+    visible:
+      id: 'links-title'
+      text: 'My List'
+    timeout: 10000

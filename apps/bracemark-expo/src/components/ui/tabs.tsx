@@ -17,6 +17,11 @@ import { TextClassContext } from './text';
 // full-strength `text-foreground` made the unselected tabs read as selected
 // (docs/theme.md, _contrast — dark mode, where the ratio lies_, on why the
 // alpha form is the safe one).
+// And the list is `min-h-9`, not the registry's `h-9`: 36 minus the list's
+// `p-[3px]` and the trigger's border and `py-1` leaves exactly the 20 of a
+// `text-sm` line at 1×, so the first step of font scaling clipped the labels'
+// descenders and at the 1.3 cap cut the words in half (docs/accessibility.md,
+// _font scaling_). At 1× the box is the same 36.
 function Tabs({ className, ...props }: React.ComponentProps<typeof TabsPrimitive.Root>) {
   return <TabsPrimitive.Root className={cn('flex flex-col gap-2', className)} {...props} />;
 }
@@ -25,7 +30,7 @@ function TabsList({ className, ...props }: React.ComponentProps<typeof TabsPrimi
   return (
     <TabsPrimitive.List
       className={cn(
-        'flex h-9 flex-row items-center justify-center rounded-4xl bg-muted p-[3px]',
+        'flex min-h-9 flex-row items-center justify-center rounded-4xl bg-muted p-[3px]',
         Platform.select({ web: 'inline-flex w-fit', native: 'mr-auto' }),
         className,
       )}

@@ -1221,7 +1221,7 @@ the accepted baseline.
 | `VISUAL-APP-001`   | web, iOS, Android        | signed out, empty, list and card layouts, search, add, edit, bulk mode, seven settings sections, the delete receipt |
 | `VISUAL-LOCK-001`  | web, iOS, Android (Plus) | a locked list's pane, the Set app lock dialog, the app gate                                                         |
 | `VISUAL-SHARE-001` | iOS, Android             | the share surface's editor and its no-link state                                                                    |
-| `VISUAL-FONT-001`  | iOS, Android             | sign-in, the add panel, the edit screen, the upgrade dialog and the share editor at a large text size               |
+| `VISUAL-FONT-001`  | iOS, Android             | at a large text size: sign-in, add, edit, the upgrade dialog, advanced search, all seven settings sections, share   |
 
 **The matrix.** Every checkpoint is taken in light and dark. The web takes each
 at two layouts — `wide` (1280×900) and `narrow` (390×844) — and they are two
@@ -1234,7 +1234,17 @@ profile to add. The large-text case sets iOS's content size to
 `extra-extra-extra-large` and Android's `font_scale` to 1.3 — both at or past the
 app's 1.3 cap ([accessibility.md](./accessibility.md), _font scaling_), so the
 capture is the largest text the app will ever lay out. The iOS share sheet is in
-it too, and shows the exemption that section records: it does not scale.
+it too, and shows the exemption that section records: it does not scale. After
+the upgrade dialog it imports the fixed library and photographs advanced search and
+every settings section — the surfaces with the most fixed-height controls, tab
+strips and table rows. Sign-in, add, edit and the upgrade dialog
+never see the library; the share sheet, taken last, now opens over the About
+section rather than the links page. **This case is the second line, not the first.** Whether a pinned box
+holds its text at the cap is arithmetic, and bracemark-expo's
+`components/ui/line-budget.spec.tsx` does it on every run; a baseline diff only
+reports a CHANGE, so a box that already clipped when its baseline was accepted
+passes here forever. Review a new large-text baseline for clipping before
+accepting it — that review is the only thing this case adds for a clip.
 
 **The appearance is the SYSTEM's, and the account's theme is left alone.** A
 fresh account's theme is `system` (`DEFAULT_THEME`, [theme.md](./theme.md)), so

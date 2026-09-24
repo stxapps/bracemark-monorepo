@@ -446,6 +446,29 @@ the setting. That is an accessibility regression aimed at the people the setting
 exists for. So: cap, don't disable. 1.3 keeps the common small bumps working and
 bounds the overflow to what the surrounding chrome absorbs.
 
+**"What the chrome absorbs" is checked, because it is the half that silently
+fails.** A box that pins a height (`h-*`, `size-*`) has that height minus its
+vertical padding and borders for its text, and at the cap a `text-sm` line needs
+26, `text-base` 31.2, `text-xs` 20.8. Three boxes left exactly one 1× line and
+clipped for anyone with the setting raised — Button's `py-2`, the tab strip, the
+advanced-search filter box ([theme.md](./theme.md), _extending_) — and each hid
+the sum across two components. `components/ui/line-budget.spec.tsx` does the sum
+on the classes that reach the host nodes: the kit at every size, every call site
+of a kit control rendered through the real component with its own literal props,
+and every `View`/`Pressable` that pins a height against the Text written inside
+it. It fails with the file, line, and both numbers. It is a necessary condition,
+not layout — wrapping, a runtime class, a component between the box and its text
+are the large-text visual checkpoints' ([e2e.md](./e2e.md), _visual
+checkpoints_). The fix for a hit is `min-h-*` where nothing needs the box fixed,
+or dropping the padding where something does (the height already sizes it).
+
+**A text size changed while the app runs is a different failure, and not ours to
+fix yet.** On Android every Text measured before the change keeps its old height
+at the new size until a cold start — React Native 0.81's measure cache, fixed by
+a flag RN 0.82 turns on. [dependency-upgrades.md](./dependency-upgrades.md),
+_the target window_, carries the cause, why it was not forced on 0.81, and the
+check to run after the bump.
+
 **The one exemption is a repair, not a policy: the iOS share-extension process.**
 RN computes its scale factor from `UIApplication.sharedApplication`, which does
 not exist in an app extension, so the multiplier there is **0** — and

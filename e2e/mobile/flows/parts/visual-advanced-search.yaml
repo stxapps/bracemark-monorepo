@@ -1,0 +1,15 @@
+# Open the Advanced search sheet from the links page. Opening it takes the focus
+# off the search field the toggle autofocused, so the keyboard is down for the
+# capture — the sheet's own fields, labels and checklists are the subject.
+appId: com.bracemark.app
+---
+- tapOn:
+    id: 'links-search-toggle'
+- tapOn:
+    id: 'links-search-advanced'
+- extendedWaitUntil:
+    visible:
+      id: 'advanced-search-close'
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 5000

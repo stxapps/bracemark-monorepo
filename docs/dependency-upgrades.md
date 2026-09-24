@@ -54,6 +54,26 @@ next pressure is ~API 37 around Aug 2027.
 - `react-native-quick-crypto` + `nitro-modules`;
 - `expo-iap`, pinned `^4.7.0` here — 5.0.0 landed 2026-07-30.
 
+**The bump also fixes a bug, so prove it rather than assume it** (researched
+2026-09-24). On Android, changing the OS text size while the app is running
+leaves every Text measured before the change at its OLD height, painted at the
+new size — the links list clipped to unreadable, titles through hosts, until a
+cold start. Text first measured after the change is correct. The cause is RN
+0.81's `enableFontScaleChangesUpdatingLayout` feature flag, `false` in 0.81.5 and
+in none of its release levels: with it off, `ReactSurfaceImpl` hands Fabric a
+font scale of `1` whatever the device says, and `TextMeasureCache` keys on that
+multiplier, so a stale measurement is still a cache hit. **RN 0.82.0 defaults it
+to `true`**, so any SDK on RN ≥ 0.82 fixes it with no code of ours. Forcing it
+on 0.81 was weighed and declined: it means overriding an experimental flag
+through `com.facebook.react.internal.featureflags` from a config plugin
+(`loadReactNative` installs its own provider, so only
+`dangerouslyForceOverride` reaches it) — internal API, to repair a state a cold
+start already clears, that the upgrade retires anyway. After the bump: cold
+start at 1.0, raise the text size, return, and see the list re-measure — then
+add that as a large-text visual checkpoint (`VISUAL-FONT-001`), which it could
+not have been before, since it would only have photographed the bug. iOS was not
+checked.
+
 **Drop the `@expo/metro` override as part of that bump.** Root `package.json`
 carries `"overrides": { "@nx/expo": { "@expo/metro": "~54.2.0" } }` only because
 `@nx/expo@23.1.1` declares an optional peer `@expo/metro: ">= 55.0.0"` that

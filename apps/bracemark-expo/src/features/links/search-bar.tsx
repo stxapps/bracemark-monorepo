@@ -229,7 +229,16 @@ function TriCheckList({
           aria-label={`Filter ${label.toLowerCase()}`}
           autoCapitalize="none"
           autoCorrect={false}
-          className="h-8 text-sm"
+          // `py-0`, for ui/button.tsx's reason: the height is pinned, so the
+          // padding sizes nothing and only takes room from the line. 32 minus
+          // Input's `py-1` and the border left 22 for a `text-sm` line that is
+          // 26 at the 1.3 cap, and Android drew it with the cap tops sheared
+          // off (docs/accessibility.md, _font scaling_); without it there is
+          // 30. Invisible at 1× — Android centres the line box and iOS sets
+          // none. Not `h-auto min-h-8`: that grows, but an empty Android field
+          // measures its placeholder ~8dp taller than typed text, so the box
+          // shrank on the first keystroke.
+          className="h-8 py-0 text-sm"
         />
       )}
       <View className="max-h-40 rounded-md border border-border p-1">
