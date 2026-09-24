@@ -169,7 +169,7 @@ async function prepareAccount(
 // URL list.
 async function enableServerExtraction(page: Page): Promise<void> {
   await page.goto('/settings/extraction');
-  const toggle = page.getByRole('switch', { name: 'Server-side previews' });
+  const toggle = page.getByRole('switch', { name: 'Server previews' });
   await expect(toggle).toBeVisible();
   if ((await toggle.getAttribute('data-state')) !== 'checked') await toggle.click();
   await expect(toggle).toHaveAttribute('data-state', 'checked');

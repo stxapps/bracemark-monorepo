@@ -29,6 +29,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ImageDown, Pause } from 'lucide-react';
 import Link from 'next/link';
 
+import { PLAN_LABELS } from '@stxapps/shared';
 import {
   useEntitlements,
   useExtraction,
@@ -156,14 +157,14 @@ export function ExtractionSection() {
       <SettingsPane>
         <SettingsHeader
           title="Link previews"
-          description="The browser extension tries to fill in a title and preview image whenever you save. The mobile app can also fill pending synced and imported links on-device when its Link previews setting covers All links. Server previews inside this web app are part of the Plus plan."
+          description={`The browser extension tries to fill in a title and preview image whenever you save. The mobile app can also fill pending synced and imported links on-device when its Link previews setting covers All links. Server previews inside this web app are part of the ${PLAN_LABELS.plus} plan.`}
         />
         <SettingsRow
-          title="Server-side previews"
+          title="Server previews"
           description="Upgrade to fill pending previews through the web app as links come into view, or generate them for the full library."
           action={
             <Button asChild variant="outline" size="sm">
-              <Link href="/settings/subscription">Upgrade to Plus</Link>
+              <Link href="/settings/subscription">Upgrade to {PLAN_LABELS.plus}</Link>
             </Button>
           }
         />
@@ -175,7 +176,7 @@ export function ExtractionSection() {
     <SettingsPane>
       <SettingsHeader
         title="Link previews"
-        description="The browser extension tries to fill in a title and preview image whenever you save. The mobile app fetches previews on-device: saved links by default, or every pending link that comes into view when its setting covers All links. This web app cannot fetch other sites directly. Turn on server-side previews below and pending links fill in as you browse; Generate all covers the full library."
+        description="The browser extension tries to fill in a title and preview image whenever you save. The mobile app fetches previews on-device: saved links by default, or every pending link that comes into view when its setting covers All links. This web app cannot fetch other sites directly. Turn on server previews below and pending links fill in as you browse; Generate all covers the full library."
       />
 
       <SettingsRow
@@ -195,7 +196,7 @@ export function ExtractionSection() {
           // passes these same words as a plain string, and the two would render
           // at different sizes depending on the reader's plan.
           <Label htmlFor="server-extraction" className="text-base font-medium">
-            Server-side previews
+            Server previews
           </Label>
         }
         // "Never your account" is the claim that holds; "or anything else" was the
@@ -216,8 +217,8 @@ export function ExtractionSection() {
 
       {serverExtraction && !enabled ? (
         <SettingsNotice tone="pending">
-          Server-side previews are on but currently unavailable — they resume once you’re signed in
-          and the server is reachable.
+          Server previews are on but currently unavailable — they resume once you’re signed in and
+          the server is reachable.
         </SettingsNotice>
       ) : enabled ? (
         <div className="flex flex-col gap-4">

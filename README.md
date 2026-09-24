@@ -2,9 +2,9 @@
 
 **The bookmark manager that can't read your bookmarks.**
 
-Your password derives a key on your own device. Every link, list, tag and setting
+Your password unlocks a key on your own device. Every link, list, tag, and setting
 becomes its own encrypted file before it is uploaded, so what the server holds of
-your library is a path, a size and some bytes it has no key for. The account around
+your library is a path, a size, and some bytes it has no key to open. The account around
 it is in the clear — a username, a public key, sessions, a subscription row if you
 pay — and none of it reads a link. There is no "we promise not to look" in that
 sentence, because there is no looking available to promise against.

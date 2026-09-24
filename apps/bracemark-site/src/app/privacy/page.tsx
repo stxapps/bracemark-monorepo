@@ -124,7 +124,7 @@ export default function Page() {
       // makes ("The privacy policy inventories every field of it"). This is the
       // surface that pointer points AT, so it is the one place on the property
       // that must never claim to be shorter than it is.
-      lede="We hold encrypted files we cannot open, and an account record: your username, the keys that let you sign in, and a session for each signed-in device. Everything else — a subscription record if you buy one, the request data any web service processes, an email you send us — is inventoried below."
+      lede="We hold encrypted files we cannot open, and an account record: your username, the public key your sign-ins are checked against, the encrypted copies of your key, and a session for each signed-in device. Everything else — a subscription record if you buy one, the request data any web service processes, an email you send us — is inventoried below."
       meta={`Effective ${PRIVACY_UPDATED}`}
       width="document"
     >
@@ -362,7 +362,7 @@ export default function Page() {
         <p>
           An AI model may help us read support email and draft replies. The company that runs the
           model processes your message on our behalf, as our other providers do. A person at
-          Bracemark reads every message, and writes or approves every reply we send.
+          Bracemark reads every message and writes or approves every reply we send.
         </p>
         <p>
           Your library can hold whatever you want it to, and we cannot see it — that is the point. A
@@ -633,7 +633,8 @@ export default function Page() {
           are stored only in a form that your password or recovery code can unlock. No system is
           perfectly secure, and we do not claim otherwise — but the design limits what a breach of
           ours could reveal: your library would be ciphertext, and the account around it holds no
-          name, email address, or payment details.
+          name, email address, or payment details. Email you send to support is the exception, and{' '}
+          <em>If you contact us</em> above says what it holds.
         </p>
         <p>
           The code behind all of this is public, at{' '}

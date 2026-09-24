@@ -496,6 +496,18 @@ together. The one exception is an **ampersand label** — "List, tags & note",
 "Lists, tags, pins, notes & layouts" — where the `&` already marks the last item
 and a comma before it reads as a typo.
 
+**A serial comma needs three items; two take none.** The sweep's own failure
+mode is to reach for the comma at every "and", and two things joined by one
+"and" are a pair, not a list: "reads every message and writes or approves every
+reply", "a path and a size", never "reads every message, and writes". The test
+is to count what the "and" closes — three or more and the comma goes in; two and
+it stays out. Not to be confused with a comma between two **clauses**, each with
+its own subject, which is ordinary punctuation and stays: "There is no grace
+period, and we don’t bring a deleted account back from a backup." One sweep
+already added the stray kind to /privacy, and this rule is harder to hold than
+the one above it, because a two-item comma looks like diligence rather than an
+error.
+
 **The one place contractions are dropped is a decision, not an oversight.** The
 tagline says _can't_ and `FULL_DESCRIPTION` opens with _cannot_ — "Bracemark is a
 bookmark manager that **cannot** read your bookmarks", and later "We **cannot**

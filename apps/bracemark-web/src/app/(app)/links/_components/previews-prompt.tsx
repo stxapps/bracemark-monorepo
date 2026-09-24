@@ -46,6 +46,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { ImageDown, X } from 'lucide-react';
 import Link from 'next/link';
 
+import { PLAN_LABELS } from '@stxapps/shared';
 import {
   readRawPendingTitleImageCount,
   useEntitlements,
@@ -120,7 +121,7 @@ export function PreviewsPrompt() {
               The Bracemark browser extension tries to preview links in your browser as you save
               them — free, without our server fetching the page. The mobile app can also fill in the
               links already here for free when its Link previews setting covers All links. Doing
-              that through the web app’s preview server is part of Plus.
+              that with server previews in the web app is part of {PLAN_LABELS.plus}.
             </p>
             <div className="mt-1 flex flex-wrap items-center gap-2">
               <Button asChild size="sm" variant="outline">

@@ -221,14 +221,14 @@ describe('rules that bind every exported string', () => {
   });
 
   it('keeps the holdings enumeration scoped to the library', () => {
-    // "our servers hold a path, a size, and bytes we have no key for" is true of
+    // "our servers hold a path, a size, and bytes we have no key to open" is true of
     // the LIBRARY and false as a sentence about the servers. Dropping the two
     // scoping words is a plausible edit — it reads tighter — and it turns the
     // sentence into a claim a reader can falsify from /privacy. Asserted on the
     // sentence rather than the whole string so the scope cannot drift into a
     // different paragraph.
     const sentenceWithTheClaim = (value: string) =>
-      value.split('.').find((sentence) => /bytes we have no key for/i.test(sentence));
+      value.split('.').find((sentence) => /bytes we have no key to open/i.test(sentence));
 
     const unscoped = offending((value) => {
       const sentence = sentenceWithTheClaim(value);

@@ -179,7 +179,7 @@ test.describe('server extraction', () => {
 // the missing switch fails here rather than as a title that never arrives.
 async function enableServerExtraction(page: Page): Promise<void> {
   await page.goto('/settings/extraction');
-  const toggle = page.getByRole('switch', { name: 'Server-side previews' });
+  const toggle = page.getByRole('switch', { name: 'Server previews' });
   await expect(toggle).toHaveAttribute('data-state', 'unchecked');
   await toggle.click();
   await expect(toggle).toHaveAttribute('data-state', 'checked');

@@ -220,7 +220,7 @@ export const FULL_DESCRIPTION = `Bracemark is a bookmark manager that cannot rea
 
 Save anything worth coming back to — articles, docs, threads, products, videos — and read it later on any device.
 
-Every link you save is encrypted on your device before it syncs: the address, the title, the tags, the list you filed it in. Your key is unlocked by your password, on your device, and never leaves it. Of your library, our servers hold a path, a size, and bytes we have no key for; the account around it — your username, your plan — is what we can read.
+Every link you save is encrypted on your device before it syncs: the address, the title, the tags, the list you filed it in. Your key is unlocked by your password, on your device, and never leaves it. Of your library, our servers hold a path, a size, and bytes we have no key to open; the account around it — your username, your public key, your sessions, and your plan — is what we can read.
 
 That is not a privacy policy. It is the architecture. We cannot look, so we cannot be asked to.
 
@@ -235,7 +235,7 @@ FINDING IT AGAIN
 • Pins for the handful you are working from right now
 • Search across titles, addresses, and hosts, instantly, on your device
 • Card or list layouts, set per device
-• Previews with titles and images, from the browser extension, the mobile app, or opt-in server previews
+• Previews with titles and images, from the browser extension, the mobile app, or server previews, an opt-in
 • The whole library lives on the device, so it opens and searches offline
 
 YOURS TO LEAVE WITH
@@ -291,7 +291,7 @@ export const BROWSER_EXTENSION_LISTING = {
 // false AND puts Chrome's warning, quoted here, on the install dialog.
 export const BROWSER_EXTENSION_FULL_DESCRIPTION = `Bracemark is a bookmark manager that cannot read your bookmarks. This browser extension saves the tab you’re reading into it.
 
-Click the Bracemark button, choose a list, add tags or a note if you like, and press Save. The link is encrypted in your browser before it syncs: the address, the title, the tags, the note, the list you filed it in. Your key is unlocked by your password, on your device, and never leaves it. Of your library, our servers hold a path, a size, and bytes we have no key for; the account around it — your username, your plan — is what we can read.
+Click the Bracemark button, choose a list, add tags or a note if you like, and click Save. The link is encrypted in your browser before it syncs: the address, the title, the tags, the note, the list you filed it in. Your key is unlocked by your password, on your device, and never leaves it. Of your library, our servers hold a path, a size, and bytes we have no key to open; the account around it — your username, your public key, your sessions, and your plan — is what we can read.
 
 WHAT THE BROWSER EXTENSION DOES
 • Saves the tab you’re on in two clicks
@@ -400,4 +400,4 @@ export const PWA_INSTALL_DESCRIPTION = PLAY.shortDescription;
  * it be set on the listing rather than in the manifest — so this is a paste field,
  * and the manifest keeps the shorter string above for both browsers.
  */
-export const FIREFOX_ADDONS_SUMMARY = `${BRAND.tagline}. Save the tab you’re reading in two clicks, encrypted in your browser with a key your password unlocks before it syncs. Of your library we hold a path, a size, and bytes we have no key for.`;
+export const FIREFOX_ADDONS_SUMMARY = `${BRAND.tagline}. Save the tab you’re reading in two clicks, encrypted in your browser with a key your password unlocks before it syncs. Of your library we hold a path, a size, and bytes we have no key to open.`;

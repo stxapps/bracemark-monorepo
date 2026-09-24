@@ -818,7 +818,7 @@ const TRADE: { aspect: string; hosted: string; ours: string }[] = [
     aspect: 'Sharing a list',
     hosted:
       'Their server can read the list, so it can hand it to anyone you invite, or publish it at a link.',
-    ours: 'There are no shared or public lists. Sharing means handing someone a way to decrypt part of your library. That is real work rather than a button, and we would rather not fake it.',
+    ours: 'There are no shared or public lists. Sharing means handing someone the means to decrypt part of your library. It is real work rather than a button, and we would rather not fake it.',
   },
   {
     // The row that does a second job. The no-reset fact and its answer used to

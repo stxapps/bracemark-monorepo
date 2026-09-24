@@ -452,7 +452,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
             links saved on that device, and the All links setting also covers synced and imported
             links as they come into view. With All links selected, Generate all works through every
             pending link. Those paths are free and involve no server of ours. In the web app, the
-            browser blocks one page from fetching another site. Turn on opt-in server previews on{' '}
+            browser blocks one page from fetching another site. Turn on server previews on{' '}
             {PLAN_LABELS.plus} and new saves, older links, synced links, and imports fill in as you
             browse; Generate all covers the rest. The server that fetches them holds no key and
             receives no account identity. It stores no URL or page content; its rate limiter briefly
