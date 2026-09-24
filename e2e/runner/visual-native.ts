@@ -26,6 +26,7 @@ import { keyboardFrame } from './keyboard';
 import { provisionAccount } from './lib';
 import { type CaseStep, type CaseStepContext, type NativeRun } from './native-run';
 import { diffRasters, encodePng, fillBox, type Raster, screenshot } from './pixels';
+import { capture } from './process';
 import { type E2ECase } from './registry';
 import { openSystemShare, startPlainTextShareSource } from './share';
 import { freezeStatusBar } from './status-bar';
@@ -369,6 +370,17 @@ export async function runVisualNativeCase(
     ];
   } else {
     throw new Error(`no visual runner owns ${testCase.id}`);
+  }
+
+  // iOS stamps "◀ Safari" into the status bar of an app opened while Safari is
+  // in front, and the frozen status bar does not cover it. The share cases end
+  // in Safari, so the next cold launch — the following case's, or the next
+  // run's first — would photograph the breadcrumb. Launched from SpringBoard it
+  // is never drawn. Exits non-zero when Safari is not running.
+  if (run.platform === 'ios') {
+    await capture('xcrun', ['simctl', 'terminate', run.deviceId, 'com.apple.mobilesafari'], {
+      allowFailure: true,
+    });
   }
 
   try {

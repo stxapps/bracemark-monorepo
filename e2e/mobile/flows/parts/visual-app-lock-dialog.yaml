@@ -10,6 +10,13 @@ appId: com.bracemark.app
     element:
       id: 'app-lock-set'
     direction: DOWN
+# …and on to the end. Where scrollUntilVisible stops is wherever the swipe's
+# fling ran out, and the page behind the dialog is in the photograph: on
+# Android two runs stopped some 50px apart. The button ends the page, so the end
+# is less than a screen away and always the same offset.
+- scroll
+- waitForAnimationToEnd:
+    timeout: 5000
 - tapOn:
     id: 'app-lock-set'
 - extendedWaitUntil:

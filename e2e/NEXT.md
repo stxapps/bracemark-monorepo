@@ -524,21 +524,28 @@ provider sandbox.
 Functional assertions remain authoritative. Screenshots make paint-only defects
 reviewable and prove the viewport claims semantic selectors cannot.
 
-- [ ] `VISUAL-001` Define named checkpoints for signed-out, empty, populated list,
+- [x] `VISUAL-001` Define named checkpoints for signed-out, empty, populated list,
       populated cards, search, add, edit, bulk mode, settings sections, app lock,
-      list lock, delete receipt, and native share states.
-- [ ] `VISUAL-002` Capture light and dark appearances for every checkpoint whose
-      color/contrast differs materially.
-- [ ] `VISUAL-003` Capture wide and narrow web layouts, plus the canonical iOS and
+      list lock, delete receipt, and native share states. 26 in
+      `e2e/visual.json`, over `VISUAL-APP-001`, `-LOCK-001`, `-SHARE-001`,
+      `-FONT-001`.
+- [x] `VISUAL-002` Capture light and dark appearances for every checkpoint whose
+      color/contrast differs materially. Every non-large-text checkpoint takes
+      both, and a dark capture no darker than its light twin fails the run.
+- [x] `VISUAL-003` Capture wide and narrow web layouts, plus the canonical iOS and
       Android phone profiles. Add tablet/large-screen coverage only when the
-      product supports it.
-- [ ] `VISUAL-004` Add large-font checkpoints for the highest-risk native forms,
-      dialogs, and share surfaces.
-- [ ] `VISUAL-005` Freeze or mask timestamps, progress counters, status chrome,
+      product supports it. The app is phone-only, so there is no tablet
+      profile.
+- [x] `VISUAL-004` Add large-font checkpoints for the highest-risk native forms,
+      dialogs, and share surfaces. Five, in `VISUAL-FONT-001`.
+- [x] `VISUAL-005` Freeze or mask timestamps, progress counters, status chrome,
       random ids, and other unstable regions before considering pixel gating.
-- [ ] `VISUAL-006` Begin new screenshot comparisons as review-only. Promote a
+- [x] `VISUAL-006` Begin new screenshot comparisons as review-only. Promote a
       checkpoint to a blocking visual assertion only after repeated runs show it
-      is deterministic and its failure has a clear owner.
+      is deterministic and its failure has a clear owner. Review-only on all
+      three profiles, each with an accepted machine-local baseline; none is
+      gated yet, and a gate needs an `owner` in the catalog. Promotion — and
+      where a shared baseline lives — stays open for CI (`CI-*`).
 
 Do not reuse the published-store screenshot fixture as a visual-test baseline.
 It deliberately depends on live public pages and serves a different purpose.

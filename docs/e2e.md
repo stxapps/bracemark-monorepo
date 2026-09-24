@@ -1277,6 +1277,17 @@ frozen in the PIXELS only: iOS's hierarchy still reports the real time — `7:06
 PM` in a dump taken beside a `9:41` capture — so do not read the clock off a
 dump to check the freeze.)
 
+⚠ **The freeze does not cover iOS's back-link breadcrumb.** An app opened
+while Safari is in front gets "◀ Safari" beside the clock — so the share
+cases, which end in Safari, left it on the cold launch after them: every run on
+`large-font-sign-in` (baked into the first accepted iOS baseline; gone again by
+the add panel), and the next run's `signed-out`, which came back `changed` at
+0.12% against a baseline taken from a fresh boot.
+Which captures carried it depended on case order and on what the device was
+doing before the run, not on the app. The runner now terminates Safari before
+every iOS case, so each cold launch comes from SpringBoard and the breadcrumb is
+never drawn.
+
 **Review-only, until a checkpoint is promoted.** `runner/visual-compare.ts`
 diffs each capture against the baseline for its **device profile** —
 `web-chrome`, or `<platform>-<model>-<os>` — with a per-channel tolerance and a
@@ -2200,6 +2211,42 @@ extension, at the wall), `IAP-DOWNGRADE-001` with nesting grandfathered for an
 account that already had nested lists (at the nesting paywall — a mutation
 `IAP-ENTITLEMENT-001` stays green under), and `IAP-NATIVE-001` against the
 pre-fix `openStoreCheckout` (at the error notice, iOS).
+
+The visual checkpoints were measured on the web 2026-09-23 from commit
+`055b09f` with their changes present in the working tree — system Chrome
+153.0.8010.53, Playwright 1.62.1 — and on the devices 2026-09-24 from commit
+`84e16cb` with the two harness fixes below in the working tree — the iPhone 17 Pro
+simulator on iOS 26.5, `bracemark-pixel8` (`sdk_gphone64_arm64`, Android 16),
+app 1.0.0 (1), Maestro 2.8.0. Every native leg ran alone, not beside the other
+platform's:
+
+| surface | measured result                                                                                                              |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| web     | **76 captured and accepted**, then **76/76 same** on the next full run                                                       |
+| iOS     | **4/4 cases, 47 captured and accepted** in one invocation (23.7 min), then **47/47 same** on the next (23.8 min)             |
+| Android | **4/4 cases, 47 captured and accepted** in one invocation (37.7 min), then **45/47 same** on the next (21.1 min) — see below |
+
+Two harness faults, both caught by a repeat and fixed in the same change. iOS's
+"◀ Safari" breadcrumb (_visual checkpoints_, above): the first iOS repeat read
+`signed-out` as `changed` at 0.12%. And the Android repeat's two misses were
+`app-lock-dialog`, at ~1%: the dialog identical, the Settings page behind its
+scrim some 50px higher, because `scrollUntilVisible` stops wherever the swipe's
+fling runs out. The flow now scrolls on to the page's end
+(`parts/visual-app-lock-dialog.yaml`); with it the lock case read **6/6 same**
+twice on Android and once on iOS, against the baselines already accepted. One
+iOS lock run before that failed in `visual-list-lock.yaml` with the lock
+password never typed ("Please enter a password"), on a device booted without
+Simulator.app open; the same part failed twice on 2026-09-23 before passing.
+Not diagnosed. One Android run was lost before all this, with the two
+device legs started together: its sign-in typed `ee2e_…` for `e2e_…` and the
+account refused it. Every leg since has run alone.
+
+The comparison was run against the two things it exists to catch, on the web
+lock case, and flagged both: the locked list's one-line description reworded
+(its four captures `changed`, at 0.14–0.49% against the 0.05% threshold), and
+the appearance flip made a no-op (all six dark captures, luma ratio 1.00, the
+run red). No checkpoint is gated, and none has reached the catalog's
+`promotionStreak` of five: the longest same-as-baseline streak is three runs.
 
 ### the red full suite, and what it was
 
