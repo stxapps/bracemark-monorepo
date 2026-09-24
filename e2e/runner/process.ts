@@ -31,6 +31,20 @@ export async function capture(
   }
 }
 
+// `adb shell` receives one command string and re-splits it on the device. Quote
+// every word here so a multi-word value remains one value there
+// (docs/app-drivers.md, _adb shell has no argv_). With no `deviceId` it talks to
+// the one attached device, as a bare `adb shell` does.
+export async function adbShell(
+  deviceId: string | undefined,
+  words: string[],
+  allowFailure = false,
+): Promise<string> {
+  const command = words.map((word) => `'${word.replaceAll("'", `'\\''`)}'`).join(' ');
+  const target = deviceId ? ['-s', deviceId] : [];
+  return (await capture('adb', [...target, 'shell', command], { allowFailure })).stdout.trim();
+}
+
 export async function inherit(
   command: string,
   args: string[],

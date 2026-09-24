@@ -1,0 +1,11 @@
+# Leave the edit screen without saving.
+appId: com.bracemark.app
+---
+- tapOn:
+    id: 'edit-link-cancel'
+- extendedWaitUntil:
+    notVisible:
+      id: 'edit-link-save'
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 5000

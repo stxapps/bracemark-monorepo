@@ -1,0 +1,31 @@
+# Set the app lock from its open dialog, then relock from the ⋯ menu.
+appId: com.bracemark.app
+---
+- tapOn:
+    id: 'lock-dialog-password'
+- inputText: ${LOCK_PASSWORD}
+- tapOn:
+    id: 'lock-dialog-submit'
+- extendedWaitUntil:
+    visible:
+      id: 'app-lock-remove'
+    timeout: 20000
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - tapOn:
+          text: 'Not Now'
+          optional: true
+- tapOn:
+    id: 'settings-close'
+- tapOn:
+    id: 'links-more-options'
+- tapOn:
+    id: 'links-lock-app'
+- extendedWaitUntil:
+    visible:
+      id: 'app-lock-pane'
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 5000

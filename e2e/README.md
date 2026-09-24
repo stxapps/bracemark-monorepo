@@ -32,6 +32,11 @@ npx nx e2e-mobile @stxapps/e2e -- --platform ios --device <udid> --suite full
 npx nx e2e-contract @stxapps/e2e -- --platform ios --device <udid>
 npx nx e2e-mobile @stxapps/e2e -- --platform android --device <serial> --suite full
 npx nx e2e-contract @stxapps/e2e -- --platform android --device <serial>
+
+# Visual checkpoints: capture, compare with this machine's baseline, report.
+npx nx e2e-visual @stxapps/e2e -- --platform web
+npx nx e2e-visual @stxapps/e2e -- --platform ios --device <udid>
+npx nx e2e-visual @stxapps/e2e -- --platform android --device <serial> --accept
 ```
 
 The vectors leg runs FIRST in that chain on purpose: it is the cheapest and the
@@ -60,8 +65,8 @@ manifest, per-case JUnit, Maestro command/log/screenshot output, named stable
 checkpoints, and a hierarchy dump on failure. A pass that needed Playwright's
 retry exits non-zero.
 
-The five run-it targets also have root scripts: `npm run e2e:web`,
-`e2e:extension`, `e2e:pwa`, `e2e:mobile`, `e2e:contract`. There is no bare `npm run e2e` —
+The six run-it targets also have root scripts: `npm run e2e:web`,
+`e2e:extension`, `e2e:pwa`, `e2e:mobile`, `e2e:contract`, `e2e:visual`. There is no bare `npm run e2e` —
 see `docs/e2e.md`, _running_.
 
 ## seeding a dev account
@@ -123,10 +128,12 @@ terminal.
 | --------------------- | --------------------------------------------------------------------- |
 | `cases.json`          | case ids, tiers, traits, fixtures, paths, artifact expectations       |
 | `fixtures.json`       | empty/small/scale and deterministic/online URL fixture contracts      |
+| `visual.json`         | the named visual checkpoints, their masks and gates                   |
 | `paths.ts`            | where a run writes — the only source of `.artifacts` paths            |
 | `web/`                | Playwright specs (`*.e2e.ts`) and their fixtures                      |
 | `extension/`          | unpacked MV3 specs, shared driver, and release qualification          |
 | `pwa/`                | installed-production-build specs and the static origin they own       |
+| `visual/`             | web visual checkpoint specs and their capture helper                  |
 | `mobile/flows/`       | Maestro flows that run standalone                                     |
 | `mobile/flows/parts/` | the later steps of a runner-driven case — never run alone             |
 | `mobile/RELEASE.md`   | real-device biometric lock checks (release qualification)             |
@@ -176,6 +183,19 @@ first. `IAP-ENTITLEMENT-001` runs on web, the browser extension, iOS and
 Android — the same id on each surface, so run it once per target. The provider
 purchases and restores are `web/RELEASE.md` and `mobile/RELEASE.md`
 (docs/e2e.md, _subscriptions_).
+
+## visual checkpoints
+
+`e2e-visual` photographs every named checkpoint in `visual.json` — light and
+dark; wide and narrow on the web; a large text size on a device — masks what
+moves, and compares each capture with this machine's accepted baseline. It is
+**review-only**: a changed capture is listed in `visual/report.html` beside its
+baseline and a diff, and fails nothing unless its checkpoint is gated. The run
+does fail on a missing capture, or a dark capture that is not darker than its
+light twin. `--accept` makes a complete run the baseline, under
+`.artifacts/visual/baselines/<profile>/` (local and gitignored — clearing
+`.artifacts` clears them). The device legs restore the appearance, text size and
+status bar they found. Design: `docs/e2e.md`, _visual checkpoints_.
 
 ## the published screenshots
 

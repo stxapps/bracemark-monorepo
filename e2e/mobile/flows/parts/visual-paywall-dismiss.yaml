@@ -1,0 +1,11 @@
+# Dismiss the upgrade dialog and leave Settings.
+appId: com.bracemark.app
+---
+- tapOn:
+    id: 'paywall-dismiss'
+- extendedWaitUntil:
+    notVisible:
+      id: 'paywall'
+    timeout: 10000
+- tapOn:
+    id: 'settings-close'

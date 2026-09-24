@@ -1,0 +1,9 @@
+# VISUAL-SHARE-001 on a device: the native share surface's visual checkpoints —
+# its editor, and its no-link state (e2e/visual.json). This signs in, so the
+# surface opens onto an account; runner/visual-native.ts hands the device the
+# real share and photographs what arrives.
+appId: com.bracemark.app
+tags: [VISUAL-SHARE-001, full, online, visual, baseline, ios, android]
+---
+- runFlow:
+    file: subflows/sign-in.yaml

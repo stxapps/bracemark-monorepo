@@ -1,0 +1,14 @@
+# Save the add panel's link and wait for its row.
+appId: com.bracemark.app
+---
+- tapOn:
+    id: 'add-link-save'
+- extendedWaitUntil:
+    notVisible:
+      id: 'add-link-url'
+    timeout: 20000
+- extendedWaitUntil:
+    visible: ".*${DRAFT_URL.replace('https://', '')}.*"
+    timeout: 20000
+- waitForAnimationToEnd:
+    timeout: 5000

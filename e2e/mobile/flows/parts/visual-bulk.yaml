@@ -1,0 +1,22 @@
+# Enter bulk edit and select two fixture rows.
+appId: com.bracemark.app
+---
+- tapOn:
+    id: 'links-more-options'
+- tapOn:
+    id: 'links-select-links'
+- runFlow:
+    file: ../subflows/select-row.yaml
+    env:
+      ROW: '.*${SELECT_A}'
+- runFlow:
+    file: ../subflows/select-row.yaml
+    env:
+      ROW: '.*${SELECT_B}'
+- extendedWaitUntil:
+    visible:
+      id: 'bulk-count'
+      text: '.*2.*'
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 5000

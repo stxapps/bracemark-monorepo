@@ -1,0 +1,13 @@
+# Close the search, which also restores the view it ran from.
+appId: com.bracemark.app
+---
+- tapOn:
+    id: 'links-search-toggle'
+- extendedWaitUntil:
+    visible:
+      id: 'links-title'
+      text: 'My List'
+    timeout: 10000
+- extendedWaitUntil:
+    visible: '.*${LANDED_TITLE}.*'
+    timeout: 10000

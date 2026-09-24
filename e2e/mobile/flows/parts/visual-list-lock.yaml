@@ -1,0 +1,37 @@
+# Lock the visual library's private list from its open row menu, and open the
+# list onto its lock pane. The menu is opened by the runner: every row's ⋯ is
+# "List actions", and `rightOf: <name>` resolves to the FIRST one right of the
+# name — measured on iOS, My List's, which this part then locked instead.
+appId: com.bracemark.app
+---
+- tapOn:
+    id: 'list-menu-lock'
+- tapOn:
+    id: 'lock-dialog-password'
+- inputText: ${LOCK_PASSWORD}
+- tapOn:
+    id: 'lock-dialog-submit'
+- extendedWaitUntil:
+    visible: 'Locked'
+    timeout: 20000
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - tapOn:
+          text: 'Not Now'
+          optional: true
+- tapOn:
+    id: 'settings-close'
+- tapOn:
+    id: 'links-open-navigation'
+# A locked row's name folds its lock in: "Private, Locked".
+- tapOn:
+    id: 'links-nav-list-.*'
+    text: '${PRIVATE_LIST}(, Locked)?'
+- extendedWaitUntil:
+    visible:
+      id: 'list-lock-pane'
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 5000

@@ -25,6 +25,19 @@ export function runArtifactDir(runId: string): string {
   return join(ARTIFACTS, 'runs', runId);
 }
 
+// What a visual run photographed, and the report comparing it (docs/e2e.md,
+// _visual checkpoints_). Inside the run directory like every other result.
+export function visualRunDir(runDir: string): string {
+  return join(runDir, 'visual');
+}
+
+// The accepted screenshots a visual run is compared against, one directory per
+// device profile. Under `.artifacts` — gitignored and machine-local — because a
+// raster is a fact about this machine's browser, simulator and fonts as much as
+// about the app; `--accept` is the only thing that writes here. Clearing
+// `.artifacts` clears them, and the next run reports every checkpoint `new`.
+export const VISUAL_BASELINES = join(ARTIFACTS, 'visual', 'baselines');
+
 // A persistent Chrome profile for `launchApp` (web/fixtures/launch.ts). Every
 // caller that needs one comes through here, so there is exactly one answer to where
 // profiles live. The name namespaces the caller: `w0`/`w1` per Playwright worker,

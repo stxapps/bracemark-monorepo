@@ -1,0 +1,21 @@
+# VISUAL-FONT-001 on a device: the highest-risk forms, dialogs and share surface
+# with the system text size raised (e2e/visual.json, VISUAL-004). The runner sets
+# the size BEFORE this cold launch — on Android a font-scale change recreates the
+# activity — and puts it back afterwards (runner/visual-native.ts).
+#
+# The first checkpoint is the sign-in form itself, before anything is typed.
+appId: com.bracemark.app
+tags: [VISUAL-FONT-001, full, online, visual, baseline, ios, android]
+---
+- runFlow:
+    file: subflows/cold-launch.yaml
+- extendedWaitUntil:
+    visible: 'Sign in'
+    timeout: 60000
+- tapOn: 'Sign in'
+- extendedWaitUntil:
+    visible:
+      id: 'sign-in-username'
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 5000

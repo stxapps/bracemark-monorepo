@@ -1,7 +1,7 @@
 import { createServer, type Server } from 'node:http';
 
 import { type NativePlatform } from './cli';
-import { capture } from './process';
+import { adbShell, capture } from './process';
 
 const APP_ID = 'com.bracemark.app';
 const SHARE_ACTIVITY = 'com.bracemark.app/com.bracemark.share.ShareActivity';
@@ -36,18 +36,6 @@ export async function startPlainTextShareSource(): Promise<{
         server.close((error) => (error ? reject(error) : resolve()));
       }),
   };
-}
-
-// `adb shell` receives one command string and re-splits it on the device. Quote
-// every word here so a multi-word EXTRA_SUBJECT remains one value there
-// (docs/app-drivers.md, _adb shell has no argv_).
-async function adbShell(deviceId: string, words: string[], allowFailure = false): Promise<string> {
-  const command = words.map((word) => `'${word.replaceAll("'", `'\\''`)}'`).join(' ');
-  return (
-    await capture('adb', ['-s', deviceId, 'shell', command], {
-      allowFailure,
-    })
-  ).stdout.trim();
 }
 
 export async function openSystemShare(options: {
@@ -102,9 +90,8 @@ export async function mainAppPid(
   // A stopped UIKit service remains registered with launchd but carries `-` in
   // the PID column. Match the app bundle exactly enough to exclude the
   // com.bracemark.app.ShareExtension process that this suite intentionally opens.
-  const listed = (
-    await capture('xcrun', ['simctl', 'spawn', deviceId, 'launchctl', 'list'])
-  ).stdout;
+  const listed = (await capture('xcrun', ['simctl', 'spawn', deviceId, 'launchctl', 'list']))
+    .stdout;
   const pids = listed
     .split('\n')
     .filter(

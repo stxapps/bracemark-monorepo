@@ -1,0 +1,15 @@
+# VISUAL-LOCK-001 on a device: the lock surfaces' visual checkpoints — a locked
+# list's pane, the Set app lock dialog and the app gate (e2e/visual.json). The
+# account is on Plus and its visual library was imported before this sign-in, so
+# the first pull brings it. The parts and the photographs are
+# runner/visual-native.ts's.
+appId: com.bracemark.app
+tags: [VISUAL-LOCK-001, full, online, visual, baseline, destructive, ios, android]
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+- extendedWaitUntil:
+    visible: '.*${LANDED_TITLE}.*'
+    timeout: 120000
+- runFlow:
+    file: subflows/dismiss-logbox.yaml

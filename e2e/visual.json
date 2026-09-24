@@ -1,0 +1,274 @@
+{
+  "profiles": {
+    "web": {
+      "layouts": {
+        "wide": {
+          "width": 1280,
+          "height": 900
+        },
+        "narrow": {
+          "width": 390,
+          "height": 844
+        }
+      }
+    },
+    "ios": {
+      "largeContentSize": "extra-extra-extra-large"
+    },
+    "android": {
+      "largeFontScale": "1.3"
+    }
+  },
+  "masks": {
+    "relative-time": "the wide pane's relative date column, which moves with the wall clock",
+    "username": "the run's throwaway username",
+    "sync-time": "the Data section's Last synced timestamp",
+    "keyboard": "the soft keyboard's frame, whose suggestion strip is not the app's"
+  },
+  "comparison": {
+    "channelTolerance": 24,
+    "changedRatio": 0.0005,
+    "promotionStreak": 5
+  },
+  "checkpoints": [
+    {
+      "id": "signed-out",
+      "title": "The first screen a signed-out person meets",
+      "case": "VISUAL-APP-001",
+      "platforms": ["web", "ios", "android"],
+      "appearances": ["light", "dark"],
+      "masks": [],
+      "gate": false
+    },
+    {
+      "id": "empty",
+      "title": "A fresh account's links page",
+      "case": "VISUAL-APP-001",
+      "platforms": ["web", "ios", "android"],
+      "appearances": ["light", "dark"],
+      "masks": [],
+      "gate": false
+    },
+    {
+      "id": "populated-list",
+      "title": "The visual library in the list layout",
+      "case": "VISUAL-APP-001",
+      "platforms": ["web", "ios", "android"],
+      "appearances": ["light", "dark"],
+      "masks": ["relative-time"],
+      "gate": false
+    },
+    {
+      "id": "populated-cards",
+      "title": "The visual library in the card layout",
+      "case": "VISUAL-APP-001",
+      "platforms": ["web", "ios", "android"],
+      "appearances": ["light", "dark"],
+      "masks": [],
+      "gate": false
+    },
+    {
+      "id": "search",
+      "title": "A committed text search and its results",
+      "case": "VISUAL-APP-001",
+      "platforms": ["web", "ios", "android"],
+      "appearances": ["light", "dark"],
+      "masks": ["relative-time", "keyboard"],
+      "gate": false
+    },
+    {
+      "id": "add",
+      "title": "The add surface with a URL typed and the optional fields open",
+      "case": "VISUAL-APP-001",
+      "platforms": ["web", "ios", "android"],
+      "appearances": ["light", "dark"],
+      "masks": ["relative-time", "keyboard"],
+      "gate": false
+    },
+    {
+      "id": "edit",
+      "title": "The edit surface for a titled, filed, tagged link with a note",
+      "case": "VISUAL-APP-001",
+      "platforms": ["web", "ios", "android"],
+      "appearances": ["light", "dark"],
+      "masks": ["relative-time"],
+      "gate": false
+    },
+    {
+      "id": "bulk-mode",
+      "title": "Bulk edit with two links selected",
+      "case": "VISUAL-APP-001",
+      "platforms": ["web", "ios", "android"],
+      "appearances": ["light", "dark"],
+      "masks": ["relative-time"],
+      "gate": false
+    },
+    {
+      "id": "settings-account",
+      "title": "Settings: Account",
+      "case": "VISUAL-APP-001",
+      "platforms": ["web", "ios", "android"],
+      "appearances": ["light", "dark"],
+      "masks": ["username"],
+      "gate": false
+    },
+    {
+      "id": "settings-data",
+      "title": "Settings: Data",
+      "case": "VISUAL-APP-001",
+      "platforms": ["web", "ios", "android"],
+      "appearances": ["light", "dark"],
+      "masks": ["sync-time"],
+      "gate": false
+    },
+    {
+      "id": "settings-extraction",
+      "title": "Settings: Link previews",
+      "case": "VISUAL-APP-001",
+      "platforms": ["web", "ios", "android"],
+      "appearances": ["light", "dark"],
+      "masks": [],
+      "gate": false
+    },
+    {
+      "id": "settings-lists",
+      "title": "Settings: Lists",
+      "case": "VISUAL-APP-001",
+      "platforms": ["web", "ios", "android"],
+      "appearances": ["light", "dark"],
+      "masks": [],
+      "gate": false
+    },
+    {
+      "id": "settings-tags",
+      "title": "Settings: Tags",
+      "case": "VISUAL-APP-001",
+      "platforms": ["web", "ios", "android"],
+      "appearances": ["light", "dark"],
+      "masks": [],
+      "gate": false
+    },
+    {
+      "id": "settings-misc",
+      "title": "Settings: Misc.",
+      "case": "VISUAL-APP-001",
+      "platforms": ["web", "ios", "android"],
+      "appearances": ["light", "dark"],
+      "masks": [],
+      "gate": false
+    },
+    {
+      "id": "settings-about",
+      "title": "Settings: About",
+      "case": "VISUAL-APP-001",
+      "platforms": ["web", "ios", "android"],
+      "appearances": ["light", "dark"],
+      "masks": [],
+      "gate": false
+    },
+    {
+      "id": "delete-receipt",
+      "title": "The delete-all-data receipt",
+      "case": "VISUAL-APP-001",
+      "platforms": ["web", "ios", "android"],
+      "appearances": ["light", "dark"],
+      "masks": [],
+      "gate": false
+    },
+    {
+      "id": "app-lock-dialog",
+      "title": "The Set app lock dialog",
+      "case": "VISUAL-LOCK-001",
+      "platforms": ["web", "ios", "android"],
+      "appearances": ["light", "dark"],
+      "masks": ["keyboard"],
+      "gate": false
+    },
+    {
+      "id": "app-lock",
+      "title": "The app lock gate",
+      "case": "VISUAL-LOCK-001",
+      "platforms": ["web", "ios", "android"],
+      "appearances": ["light", "dark"],
+      "masks": ["keyboard"],
+      "gate": false
+    },
+    {
+      "id": "list-lock",
+      "title": "A locked list's pane",
+      "case": "VISUAL-LOCK-001",
+      "platforms": ["web", "ios", "android"],
+      "appearances": ["light", "dark"],
+      "masks": ["relative-time", "keyboard"],
+      "gate": false
+    },
+    {
+      "id": "share-editor",
+      "title": "The native share surface's editor",
+      "case": "VISUAL-SHARE-001",
+      "platforms": ["ios", "android"],
+      "appearances": ["light", "dark"],
+      "masks": [],
+      "gate": false
+    },
+    {
+      "id": "share-no-url",
+      "title": "The native share surface given no link",
+      "case": "VISUAL-SHARE-001",
+      "platforms": ["ios", "android"],
+      "appearances": ["light", "dark"],
+      "masks": [],
+      "gate": false
+    },
+    {
+      "id": "large-font-sign-in",
+      "title": "The sign-in form at a large font size",
+      "case": "VISUAL-FONT-001",
+      "platforms": ["ios", "android"],
+      "appearances": ["light"],
+      "fontScale": "large",
+      "masks": [],
+      "gate": false
+    },
+    {
+      "id": "large-font-add",
+      "title": "The add panel at a large font size",
+      "case": "VISUAL-FONT-001",
+      "platforms": ["ios", "android"],
+      "appearances": ["light"],
+      "fontScale": "large",
+      "masks": ["keyboard"],
+      "gate": false
+    },
+    {
+      "id": "large-font-edit",
+      "title": "The edit screen at a large font size",
+      "case": "VISUAL-FONT-001",
+      "platforms": ["ios", "android"],
+      "appearances": ["light"],
+      "fontScale": "large",
+      "masks": [],
+      "gate": false
+    },
+    {
+      "id": "large-font-dialog",
+      "title": "The upgrade dialog at a large font size",
+      "case": "VISUAL-FONT-001",
+      "platforms": ["ios", "android"],
+      "appearances": ["light"],
+      "fontScale": "large",
+      "masks": [],
+      "gate": false
+    },
+    {
+      "id": "large-font-share",
+      "title": "The native share surface's editor at a large font size",
+      "case": "VISUAL-FONT-001",
+      "platforms": ["ios", "android"],
+      "appearances": ["light"],
+      "fontScale": "large",
+      "masks": [],
+      "gate": false
+    }
+  ]
+}

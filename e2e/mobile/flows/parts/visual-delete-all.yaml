@@ -1,0 +1,19 @@
+# Delete all data from Settings → Data and wait for the receipt.
+appId: com.bracemark.app
+---
+- tapOn:
+    id: 'settings-open-navigation'
+- tapOn:
+    id: 'settings-nav-data'
+- tapOn:
+    id: 'delete-all-open'
+- tapOn:
+    id: 'delete-all-confirm'
+- tapOn:
+    id: 'delete-all-submit'
+- extendedWaitUntil:
+    visible:
+      id: 'delete-all-complete'
+    timeout: 60000
+- waitForAnimationToEnd:
+    timeout: 5000

@@ -1,0 +1,17 @@
+# Open the first row's edit screen — the pinned fixture link, when the visual
+# library is loaded.
+appId: com.bracemark.app
+---
+- runFlow:
+    file: ../subflows/dismiss-logbox.yaml
+- tapOn:
+    id: 'link-options'
+    index: 0
+- tapOn:
+    id: 'link-menu-edit'
+- extendedWaitUntil:
+    visible:
+      id: 'edit-link-save'
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 5000

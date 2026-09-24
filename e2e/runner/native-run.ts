@@ -24,7 +24,7 @@ const REPO_ROOT = join(E2E_ROOT, '..');
 const DEFAULT_DEV_CLIENT_LINK =
   'bracemark://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081%2F%3FdisableOnboarding%3D1';
 
-interface DeviceIdentity {
+export interface DeviceIdentity {
   id: string;
   name: string;
   model: string;
@@ -51,7 +51,7 @@ interface CaseResult {
 interface RunManifest {
   schemaVersion: 1;
   runId: string;
-  kind: 'mobile' | 'contract';
+  kind: 'mobile' | 'contract' | 'visual';
   status: 'running' | 'passed' | 'failed';
   startedAt: string;
   finishedAt?: string;
@@ -81,6 +81,10 @@ interface RunManifest {
 // and a wall-clock interval that IS the behaviour under test (the auto-relock
 // grace window). Every assertion still lives in a committed flow; a host step only
 // measures, waits, or synthesizes the gesture.
+//
+// A committed part can also be handed its own `env`, merged over the case's, for
+// a part a case runs more than once with a different value each time (the
+// visual run's settings sections).
 export interface CaseStepContext {
   platform: NativePlatform;
   deviceId: string;
@@ -92,13 +96,19 @@ export interface CaseStepContext {
   hierarchy(): Promise<string>;
 }
 
-export type CaseStep = string | ((context: CaseStepContext) => Promise<string | null>);
+export interface FlowStep {
+  flow: string;
+  env?: Record<string, string>;
+}
+
+export type CaseStep = string | FlowStep | ((context: CaseStepContext) => Promise<string | null>);
 
 export interface NativeRun {
   runId: string;
   runDir: string;
   platform: NativePlatform;
   deviceId: string;
+  device: DeviceIdentity;
   devClientLink: string;
   runCase(
     testCase: E2ECase,
@@ -327,7 +337,7 @@ function safeError(error: unknown): string {
 }
 
 export async function prepareNativeRun(
-  kind: 'mobile' | 'contract',
+  kind: 'mobile' | 'contract' | 'visual',
   options: NativeCliOptions,
   selectedCases: E2ECase[],
 ): Promise<NativeRun> {
@@ -399,6 +409,7 @@ export async function prepareNativeRun(
     runDir,
     platform: options.platform,
     deviceId: options.deviceId,
+    device: identity.device,
     devClientLink,
     async runCase(testCase, env = {}, secretValues = [], steps = [testCase.path]) {
       const result = manifest.cases.find((candidate) => candidate.id === testCase.id);
@@ -419,12 +430,12 @@ export async function prepareNativeRun(
       // original artifact names; a multi-step case numbers them. Only the
       // registered flow carries the suite's tags, so only it is filtered by them —
       // a part flow would otherwise be skipped as untagged.
-      const runFlow = async (flow: string, index: number) => {
+      const runFlow = async (flow: string, index: number, stepEnv: Record<string, string> = {}) => {
         const suffix = steps.length === 1 ? '' : `-${index}`;
         const maestroOptions: MaestroOptions = {
           platform: options.platform,
           deviceId: options.deviceId,
-          env: { EXPO_DEV_CLIENT_LINK: devClientLink, ...env },
+          env: { EXPO_DEV_CLIENT_LINK: devClientLink, ...env, ...stepEnv },
           reportPath: join(caseDir, `junit${suffix}.xml`),
           testOutputDir: join(caseDir, `maestro${suffix}`),
           debugOutputDir: join(caseDir, `debug${suffix}`),
@@ -452,6 +463,10 @@ export async function prepareNativeRun(
       try {
         for (const [position, step] of steps.entries()) {
           const index = position + 1;
+          if (typeof step === 'object') {
+            await runFlow(step.flow, index, step.env);
+            continue;
+          }
           const flow =
             typeof step === 'string'
               ? step

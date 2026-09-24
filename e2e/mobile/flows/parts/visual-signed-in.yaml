@@ -1,0 +1,13 @@
+# Sign in to the fresh account and land on its empty links page.
+appId: com.bracemark.app
+---
+- runFlow:
+    file: ../subflows/sign-in.yaml
+- extendedWaitUntil:
+    visible:
+      id: 'links-empty'
+    timeout: 30000
+- runFlow:
+    file: ../subflows/dismiss-logbox.yaml
+- waitForAnimationToEnd:
+    timeout: 5000

@@ -1,0 +1,18 @@
+# Open the add panel, type a URL and open the optional fields — left with the
+# keyboard up, which the checkpoint masks.
+appId: com.bracemark.app
+---
+- runFlow:
+    file: ../subflows/dismiss-logbox.yaml
+- tapOn: 'Add link'
+- tapOn:
+    id: 'add-link-url'
+- inputText: ${DRAFT_URL}
+- tapOn:
+    id: 'add-link-optional'
+- extendedWaitUntil:
+    visible:
+      id: 'add-link-note'
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 5000

@@ -1,0 +1,19 @@
+# Pick a link layout in Settings → Misc and return to the links page.
+# Parameter (the step's env): LAYOUT — the radio's label, `List` or `Card`. On
+# iOS the row's name folds its hint in after a comma, hence the optional tail.
+appId: com.bracemark.app
+---
+- runFlow:
+    file: ../subflows/open-settings.yaml
+    env:
+      SECTION: misc
+- tapOn: '${LAYOUT}(, .*)?'
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn:
+    id: 'settings-close'
+- extendedWaitUntil:
+    visible: '.*${LANDED_TITLE}.*'
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 5000

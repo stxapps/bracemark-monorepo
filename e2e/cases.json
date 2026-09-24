@@ -1068,5 +1068,101 @@
     "fixture": "small",
     "path": "mobile/contract/add-link.yaml",
     "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "VISUAL-APP-001",
+    "title": "The app's named visual checkpoints, wide and narrow, light and dark",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online", "visual", "baseline", "destructive"],
+    "fixture": "small",
+    "path": "visual/app.e2e.ts",
+    "artifacts": [
+      "visual-captures",
+      "visual-report",
+      "trace-on-failure",
+      "screenshot-on-failure",
+      "html-report"
+    ]
+  },
+  {
+    "id": "VISUAL-LOCK-001",
+    "title": "The lock surfaces' visual checkpoints, wide and narrow, light and dark",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online", "visual", "baseline", "destructive"],
+    "fixture": "small",
+    "path": "visual/locks.e2e.ts",
+    "artifacts": [
+      "visual-captures",
+      "visual-report",
+      "trace-on-failure",
+      "screenshot-on-failure",
+      "html-report"
+    ]
+  },
+  {
+    "id": "VISUAL-APP-001",
+    "title": "The app's named visual checkpoints on a phone, light and dark",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "visual", "baseline", "destructive", "ios", "android"],
+    "fixture": "small",
+    "path": "mobile/flows/visual-app.yaml",
+    "artifacts": [
+      "visual-captures",
+      "visual-report",
+      "junit",
+      "maestro-output",
+      "hierarchy-on-failure"
+    ]
+  },
+  {
+    "id": "VISUAL-LOCK-001",
+    "title": "The lock surfaces' visual checkpoints on a phone, light and dark",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "visual", "baseline", "destructive", "ios", "android"],
+    "fixture": "small",
+    "path": "mobile/flows/visual-locks.yaml",
+    "artifacts": [
+      "visual-captures",
+      "visual-report",
+      "junit",
+      "maestro-output",
+      "hierarchy-on-failure"
+    ]
+  },
+  {
+    "id": "VISUAL-SHARE-001",
+    "title": "The native share surface's visual checkpoints, light and dark",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "visual", "baseline", "ios", "android"],
+    "fixture": "empty",
+    "path": "mobile/flows/visual-share.yaml",
+    "artifacts": [
+      "visual-captures",
+      "visual-report",
+      "junit",
+      "maestro-output",
+      "hierarchy-on-failure"
+    ]
+  },
+  {
+    "id": "VISUAL-FONT-001",
+    "title": "The highest-risk native forms, dialog and share surface at a large text size",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "visual", "baseline", "ios", "android"],
+    "fixture": "empty",
+    "path": "mobile/flows/visual-font.yaml",
+    "artifacts": [
+      "visual-captures",
+      "visual-report",
+      "junit",
+      "maestro-output",
+      "hierarchy-on-failure"
+    ]
   }
 ]

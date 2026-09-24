@@ -24,6 +24,9 @@
       "e2e-contract": {
         "cache": false
       },
+      "e2e-visual": {
+        "cache": false
+      },
       "seed:fixtures": {
         "cache": false
       },
@@ -57,6 +60,7 @@
     "e2e-web:report": "tsx runner/web-report.ts",
     "e2e-mobile": "tsx runner/mobile.ts",
     "e2e-contract": "tsx runner/contract.ts",
+    "e2e-visual": "tsx runner/visual.ts",
     "seed:fixtures": "tsx seed/fixtures.ts",
     "seed:accounts": "tsx seed/accounts.ts",
     "shot:preflight": "tsx shot/preflight.ts",

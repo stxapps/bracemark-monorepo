@@ -1,0 +1,9 @@
+# Close the share surface's editor without saving.
+appId: com.bracemark.app
+---
+- tapOn:
+    id: 'share-close'
+- extendedWaitUntil:
+    notVisible:
+      id: 'share-add'
+    timeout: 10000

@@ -1,0 +1,20 @@
+# Commit a text search two fixture titles share.
+appId: com.bracemark.app
+---
+- tapOn:
+    id: 'links-search-toggle'
+- tapOn:
+    id: 'links-search-input'
+- inputText: ${SEARCH_WORD}
+- pressKey: Enter
+- extendedWaitUntil:
+    visible:
+      id: 'links-title'
+      text: 'Search'
+    timeout: 10000
+- extendedWaitUntil:
+    notVisible: '.*${LANDED_TITLE}.*'
+    timeout: 10000
+- assertVisible: '.*${SEARCH_HIT}.*'
+- waitForAnimationToEnd:
+    timeout: 5000

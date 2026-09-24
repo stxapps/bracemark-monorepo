@@ -1,0 +1,20 @@
+# Open the upgrade dialog from a Plus-gated control on a free account — Settings
+# → Misc → Set app lock… (plan-gates.yaml has the gate).
+appId: com.bracemark.app
+---
+- runFlow:
+    file: ../subflows/open-settings.yaml
+    env:
+      SECTION: misc
+- scrollUntilVisible:
+    element:
+      id: 'app-lock-set'
+    direction: DOWN
+- tapOn:
+    id: 'app-lock-set'
+- extendedWaitUntil:
+    visible:
+      id: 'paywall'
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 5000

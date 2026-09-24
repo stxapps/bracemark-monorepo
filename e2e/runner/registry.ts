@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { E2E_ROOT } from '../paths';
+import { validateVisualCatalog } from './visual-catalog';
 
 export type E2ESurface = 'web' | 'extension' | 'pwa' | 'native' | 'contract';
 export type E2ETier = 'smoke' | 'full' | 'release';
@@ -24,6 +25,12 @@ export interface CaseFilters {
   cases?: string[];
   includeTraits?: string[];
   excludeTraits?: string[];
+  // Select the `baseline` cases, and only them. They photograph checkpoints for
+  // runner/visual.ts to compare with an accepted baseline, so no other runner
+  // may pick one up: run by e2e-web or e2e-mobile they would capture into a run
+  // nothing reviews. (`visual` alone is a trait of functional cases that make a
+  // pixel claim — SKELETON-*, VIEWPORT-* — and selects nothing special.)
+  baseline?: boolean;
 }
 
 const REGISTRY_PATH = join(E2E_ROOT, 'cases.json');
@@ -93,6 +100,8 @@ export function validateCaseRegistry(cases = readCaseRegistry()): void {
       }
     }
   }
+
+  validateVisualCatalog(cases);
 }
 
 export function selectCases(surface: E2ESurface, filters: CaseFilters = {}): E2ECase[] {
@@ -109,11 +118,19 @@ export function selectCases(surface: E2ESurface, filters: CaseFilters = {}): E2E
     if (requested.tier === 'release') {
       throw new Error(`${id} is release qualification and cannot run automatically`);
     }
+    if (requested.traits.includes('baseline') !== Boolean(filters.baseline)) {
+      throw new Error(
+        filters.baseline
+          ? `${id} is not a visual checkpoint case`
+          : `${id} is a visual checkpoint case; run it with e2e-visual`,
+      );
+    }
   }
 
   const selected = all.filter((testCase) => {
     if (testCase.surface !== surface) return false;
     if (testCase.tier === 'release') return false;
+    if (testCase.traits.includes('baseline') !== Boolean(filters.baseline)) return false;
     if (requestedCases.size > 0 && !requestedCases.has(testCase.id)) return false;
     if (filters.suite === 'smoke' && testCase.tier !== 'smoke') return false;
     if ([...include].some((trait) => !testCase.traits.includes(trait))) return false;

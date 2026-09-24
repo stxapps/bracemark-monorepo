@@ -1,0 +1,7 @@
+# Sign in from a cold start and land on the (empty) links page.
+appId: com.bracemark.app
+---
+- runFlow:
+    file: ../subflows/sign-in.yaml
+- runFlow:
+    file: ../subflows/dismiss-logbox.yaml

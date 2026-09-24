@@ -1,0 +1,34 @@
+# Open one Settings section — through the settings drawer when Settings is
+# already up, from the links page's ⋯ when it is not.
+# Parameter (the step's env): SECTION — as in `settings-nav-<section>`.
+appId: com.bracemark.app
+---
+- runFlow:
+    when:
+      visible:
+        id: 'settings-open-navigation'
+    commands:
+      - tapOn:
+          id: 'settings-open-navigation'
+      - tapOn:
+          id: 'settings-nav-${SECTION}'
+- runFlow:
+    when:
+      notVisible:
+        id: 'settings-open-navigation'
+    commands:
+      - runFlow:
+          file: ../subflows/open-settings.yaml
+          env:
+            SECTION: ${SECTION}
+# The Data section's sync line reads "N changes waiting" until a cycle settles;
+# the checkpoint masks the settled "Last synced …", so wait for it.
+- runFlow:
+    when:
+      true: ${SECTION === 'data'}
+    commands:
+      - extendedWaitUntil:
+          visible: 'Last synced.*'
+          timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000

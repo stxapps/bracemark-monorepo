@@ -4,7 +4,8 @@
       "description": "A newly provisioned disposable account with no user-created data."
     },
     "small": {
-      "description": "Only the deterministic entities created by one journey; no shared seed account."
+      "description": "Only the deterministic entities created by one journey; no shared seed account. The visual checkpoint cases import one fixed library instead, whose values are constants rather than namespaced, because a screenshot compared with yesterday's must show the same words.",
+      "visualGenerator": "web/fixtures/visual-library.ts"
     },
     "scale": {
       "description": "A generated library imported through Settings → Data into a fresh disposable account: seed/library.ts for a realistic library, web/fixtures/library.ts for a paged journey whose row order is known.",

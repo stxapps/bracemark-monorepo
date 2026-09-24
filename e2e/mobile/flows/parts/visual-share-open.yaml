@@ -1,0 +1,8 @@
+# Cross into the share surface the runner just handed the device, and wait for
+# the state named by SHARE_STATE_ID — an id only the share tree renders.
+appId: com.bracemark.app
+---
+- runFlow:
+    file: ../subflows/open-system-share.yaml
+- waitForAnimationToEnd:
+    timeout: 5000

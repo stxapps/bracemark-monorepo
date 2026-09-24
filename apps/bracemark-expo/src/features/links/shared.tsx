@@ -218,7 +218,7 @@ export function EmptyState({
   const { icon, title, body, cta } = emptyCopy(selection);
 
   return (
-    <View className="flex-1 items-center justify-center gap-3 px-6 py-12">
+    <View testID="links-empty" className="flex-1 items-center justify-center gap-3 px-6 py-12">
       <View className="size-11 items-center justify-center rounded-full bg-muted">
         <Icon as={icon} className="size-5 text-muted-foreground" />
       </View>

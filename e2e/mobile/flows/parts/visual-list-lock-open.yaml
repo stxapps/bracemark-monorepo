@@ -1,0 +1,9 @@
+# Open Settings → Lists, where the runner presses the private list's own ⋯.
+appId: com.bracemark.app
+---
+- runFlow:
+    file: ../subflows/open-settings.yaml
+    env:
+      SECTION: lists
+- waitForAnimationToEnd:
+    timeout: 5000

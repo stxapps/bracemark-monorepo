@@ -1,0 +1,9 @@
+# Leave bulk edit.
+appId: com.bracemark.app
+---
+- tapOn:
+    id: 'bulk-exit'
+- extendedWaitUntil:
+    notVisible:
+      id: 'bulk-count'
+    timeout: 10000

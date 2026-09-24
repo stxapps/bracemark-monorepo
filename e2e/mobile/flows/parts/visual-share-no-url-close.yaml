@@ -1,0 +1,8 @@
+# Close the share surface's no-link state.
+appId: com.bracemark.app
+---
+- tapOn: 'Close'
+- extendedWaitUntil:
+    notVisible:
+      id: 'share-no-url'
+    timeout: 10000

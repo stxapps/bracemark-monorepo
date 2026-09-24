@@ -1,0 +1,19 @@
+# VISUAL-APP-001 on a device: the app's named visual checkpoints
+# (e2e/visual.json, docs/e2e.md _visual checkpoints_). This flow only reaches the
+# first of them — the landing screen after a wiped cold start. The rest of the
+# case is committed parts under parts/visual-*.yaml, with a host step between
+# each that photographs the screen in every appearance (runner/visual-native.ts).
+# Nothing here asserts what a screen looks like; the accepted baseline does.
+#
+# Run it through `npm run e2e:visual -- --platform <ios|android> --device <id>`;
+# alone it only navigates.
+appId: com.bracemark.app
+tags: [VISUAL-APP-001, full, online, visual, baseline, destructive, ios, android]
+---
+- runFlow:
+    file: subflows/cold-launch.yaml
+- extendedWaitUntil:
+    visible: 'Sign in'
+    timeout: 60000
+- waitForAnimationToEnd:
+    timeout: 5000

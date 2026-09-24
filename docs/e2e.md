@@ -71,10 +71,13 @@ e2e/
   global-setup.ts
   cases.json              case ids, tiers, traits, fixtures and artifact contract
   fixtures.json           fixture sizes and deterministic/online URL contract
+  visual.json             the named visual checkpoints (_visual checkpoints_)
+  visual.playwright.config.ts
   paths.ts                the one answer to where a run writes
   web/                    playwright specs + fixtures
   extension/              unpacked-extension specs, shared driver, release checks
   pwa/                    installed-production-build specs + the origin they own
+  visual/                 web visual checkpoint specs + their capture helper
   mobile/flows/           maestro flows, run standalone
   mobile/shots/           maestro flows for the native store captures
   mobile/contract/        maestro legs of a contract run (parameterised)
@@ -96,7 +99,7 @@ that true, and the first is the one that will bite:
 - Specs are named `*.e2e.ts`, never `*.spec.ts` — a second line of defence behind
   the first, and the reason `testMatch` is set explicitly.
 - Targets are `e2e-web`, `e2e-extension`, `e2e-pwa`, `e2e-mobile`,
-  `e2e-contract`. No target is called `test`.
+  `e2e-contract`, `e2e-visual`. No target is called `test`.
 
 Inferred from the project's own files, `@stxapps/e2e` gets `typecheck` and `lint`
 for free and no `build`. Both are worth having: a stale selector type is a free
@@ -410,7 +413,7 @@ accessible identity is untestable as well as inaccessible. Flows bind to `testID
 and accessible labels, **never to body copy** — copy in this repo changes often,
 and a flow keyed to a sentence turns every wording edit into a red run.
 
-Twenty-five repo-specific gotchas:
+Twenty-six repo-specific gotchas:
 
 - **`launchApp` resumes, it does not cold-start.** Every flow that assumes a root
   screen needs its state wiped first, or it passes alone and fails in a directory
@@ -580,6 +583,15 @@ tag #N` in the toast. That error is RN-internal and not worth chasing: the app
   the gesture began on the keys. A drag whose start point matters is generated
   from measured bounds (`writeDragFlow` with a short `duration`,
   `VIEWPORT-KEYBOARD-001`).
+- ⚠ **`rightOf:` is not "on the same row".** Every settings row's ⋯ is named
+  "List actions", and `tapOn: 'List actions'` with `rightOf: Private` pressed
+  **My List's** — the first ⋯ right of the name, rows above included. The
+  COMPLETED tap opened a real menu, the flow then locked the wrong list, and it
+  failed two steps later on a lock pane that never appeared (`VISUAL-LOCK-001`,
+  iOS 26.5). A control on a named row is pressed as a point from `sameRow` in
+  `runner/hierarchy.ts`, the way the drag-and-drop grips are. Other flows still
+  use `rightOf` on lists they have just created; the row order is what spares
+  them, so check it before copying one.
 - ⚠ **A system string can carry a NO-BREAK SPACE, and then no selector typed
   with a space matches it.** StoreKit's prompt reads "Sign in to Apple Account"
   in the hierarchy and is `Apple\u00A0Account` in the bytes (iOS 26.5), so
@@ -777,6 +789,7 @@ All of them are in the app:
 | `links-open-settings`         | ” — the Settings menu item                                                          |
 | `links-list`                  | `src/features/links/main.tsx` — the FlashList, the viewport bounds are read against |
 | `links-refresh-pill`          | `src/features/links/shared.tsx` — the "New updates" pill                            |
+| `links-empty`                 | ” — the settled empty state, never the loading bones                                |
 | `add-link-url`                | `src/features/links/link-add-panel.tsx`                                             |
 | `add-link-save`               | ” — the submit, whose label flips Save→Confirm                                      |
 | `add-link-optional`           | ” — the "List, tags & note" disclosure                                              |
@@ -1178,6 +1191,125 @@ running client learns of a grant only by asking; the web case moves between
 Settings sections by the rail's links and the native one by the settings drawer,
 so the gate's answer is the Refresh's rather than a fresh document's.
 
+### visual checkpoints
+
+Functional cases stay authoritative. A visual checkpoint is a **named
+screenshot**, taken the same way every run, so a paint-only defect — a token
+that went wrong in dark mode, a sheet that clips at a large text size, a row
+that renders blank — shows up in a review instead of in a user's report. It is
+its own target, `e2e-visual`, because what it produces is a comparison, not a
+pass:
+
+```sh
+npm run e2e:visual -- --platform web
+npm run e2e:visual -- --platform ios --device <udid>
+npm run e2e:visual -- --platform android --device <serial>
+npm run e2e:visual -- --platform web --accept    # this run becomes the baseline
+```
+
+**The catalog is [`e2e/visual.json`](../e2e/visual.json)**, the visual twin of
+`cases.json`: every checkpoint by name, the case that captures it, its platforms
+and appearances, its masks, and whether it is gated. `npm run check:registry`
+holds the two together — every checkpoint names a case that runs on each of its
+platforms, every checkpoint case owns at least one checkpoint, a gate needs an
+owner — and the capture helpers look each name up and throw on one the catalog
+does not define. What a checkpoint must LOOK like is never written anywhere but
+the accepted baseline.
+
+| case               | surfaces                 | what it photographs                                                                                                 |
+| ------------------ | ------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| `VISUAL-APP-001`   | web, iOS, Android        | signed out, empty, list and card layouts, search, add, edit, bulk mode, seven settings sections, the delete receipt |
+| `VISUAL-LOCK-001`  | web, iOS, Android (Plus) | a locked list's pane, the Set app lock dialog, the app gate                                                         |
+| `VISUAL-SHARE-001` | iOS, Android             | the share surface's editor and its no-link state                                                                    |
+| `VISUAL-FONT-001`  | iOS, Android             | sign-in, the add panel, the edit screen, the upgrade dialog and the share editor at a large text size               |
+
+**The matrix.** Every checkpoint is taken in light and dark. The web takes each
+at two layouts — `wide` (1280×900) and `narrow` (390×844) — and they are two
+Playwright **projects**, not a resize: the add surface is a popover wide and a
+sheet narrow, so resizing with it open would photograph something nobody sees.
+Each project drives its own account from scratch. The devices are the canonical
+phones, the iPhone 17 Pro simulator and the Pixel 8 AVD; the app is phone-only
+and portrait-locked ([expo-build.md](./expo-build.md)), so there is no tablet
+profile to add. The large-text case sets iOS's content size to
+`extra-extra-extra-large` and Android's `font_scale` to 1.3 — both at or past the
+app's 1.3 cap ([accessibility.md](./accessibility.md), _font scaling_), so the
+capture is the largest text the app will ever lay out. The iOS share sheet is in
+it too, and shows the exemption that section records: it does not scale.
+
+**The appearance is the SYSTEM's, and the account's theme is left alone.** A
+fresh account's theme is `system` (`DEFAULT_THEME`, [theme.md](./theme.md)), so
+the web leg emulates `prefers-color-scheme` and waits for the `.dark` class, and
+a device leg flips `simctl ui … appearance` or `cmd uimode night` and the app
+follows through Uniwind's `Appearance` listener — exactly as it follows a
+person's Control Centre toggle. The flip is live on both platforms: Android's
+MainActivity declares `uiMode` in its `configChanges`, so the screen under test
+is re-themed rather than recreated. ⚠ **`fontScale` is not declared**, so a text
+size change recreates the activity: the large-text case sets it before its cold
+launch and puts it back after (`runner/device-look.ts`). ⚠ **And every Android
+`font_scale` write is a configuration change, which leaks a second wifi icon
+into a frozen status bar** (_the published screenshots_, below) — the freeze is
+re-entered after each one. That freeze now lives in `runner/status-bar.ts`,
+shared by this target and the store captures.
+
+**A dark capture that is not darker than its light twin fails the run.** It is
+the one thing a flip can get wrong silently: the screen holds perfectly still
+in the OLD appearance for a frame or two after the switch, and a stability
+check alone would photograph it as the new one. The device leg therefore also
+skips frames that still match the previous appearance before it waits for two
+agreeing frames. Measured against a helper whose flip was a no-op: all six dark
+captures of the lock case flagged at a luma ratio of 1.00, and the run red.
+
+**Determinism is built, not hoped for.** The cases import one fixed library
+(`web/fixtures/visual-library.ts`) — the one fixture in `e2e/` whose values are
+constants rather than `unique()`, because a screenshot compared with yesterday's
+must show the same words. Its links are `.invalid`, carry settled `done`
+extractions with generated previews, hang off a fixed timestamp, and pin
+`deviceExtractionMode: 'off'`, so nothing on screen waits on the network. What
+still moves is **masked**, never frozen by stubbing the app: the web's relative
+date column, the run's username, the Data section's "Last synced …", and the
+soft keyboard's frame, whose suggestion strip is not the app's. Masks paint
+Playwright's magenta on the web and the same colour over hierarchy bounds on a
+device (`runner/visual-native.ts`). The device status bar is frozen for the
+whole run. A capture is taken once two consecutive frames agree —
+`animations: 'disabled'` and a hidden caret on the web, a tolerance on a device,
+where a blinking caret is a few hundred pixels. (The frozen status bar is
+frozen in the PIXELS only: iOS's hierarchy still reports the real time — `7:06
+PM` in a dump taken beside a `9:41` capture — so do not read the clock off a
+dump to check the freeze.)
+
+**Review-only, until a checkpoint is promoted.** `runner/visual-compare.ts`
+diffs each capture against the baseline for its **device profile** —
+`web-chrome`, or `<platform>-<model>-<os>` — with a per-channel tolerance and a
+changed-pixel ratio from the catalog, and writes `visual/report.html` with the
+baseline, the capture and a diff side by side. A `changed` capture fails
+nothing. It fails the run only when its checkpoint is `gate: true`, which the
+catalog allows only with an `owner`; none is gated yet. Every compare also
+extends a per-capture **streak** of consecutive same-as-baseline runs (in the
+profile's `history.json`), and the report stars the captures past the catalog's
+`promotionStreak` — that is the evidence a promotion is argued from. What fails
+every run regardless is the harness breaking its own contract: a capture the
+catalog owes that was never taken, or the dark check above.
+
+⚠ **Baselines are machine-local, and that is deliberate for now.** They live in
+`e2e/.artifacts/visual/baselines/<profile>/`, gitignored, written only by
+`--accept`, and only after a run that captured everything. A raster is a fact
+about a machine's browser build, simulator runtime and fonts as much as about
+the app, so a baseline committed from one machine would read as `changed` on
+the next; and a public repo of app screenshots is a publishing decision
+([brand-assets.md](./brand-assets.md)). Clearing `.artifacts` clears them, and
+the next run reports every capture `new`. Where a shared baseline lives is the
+first question CI has to answer before any checkpoint is gated.
+
+Not photographed, on purpose: the **Subscription** section, whose price is the
+store's or Paddle's live answer (the `IAP-*` cases own it); the share sheet's
+**saved** state, which dismisses itself after 1.2s and cannot be held for two
+appearances; and the store captures' fixture — `shot/` depends on live public
+pages and serves a different purpose.
+
+The device legs make one app change to be drivable: `links-empty`, the settled
+empty state's testID (_the testID contract_, above), so the flow waits for the
+empty screen rather than for body copy or the loading bones.
+
 ### running it
 
 Everything needs Metro and an installed Expo development build except web. The
@@ -1221,8 +1353,8 @@ still be run serially because they share the local stack and are intentionally
 expensive. The vectors case remains first in a full contract run. Run it alone
 with `--case CONTRACT-VECTORS-001`.
 
-The five targets also have root scripts — `npm run e2e:web`, `e2e:extension`,
-`e2e:pwa`, `e2e:mobile`, and `e2e:contract`. There is deliberately no bare `npm run e2e`: no honest fan-out
+The six targets also have root scripts — `npm run e2e:web`, `e2e:extension`,
+`e2e:pwa`, `e2e:mobile`, `e2e:contract`, and `e2e:visual`. There is deliberately no bare `npm run e2e`: no honest fan-out
 can boot, build, select, and prepare both native platforms. `expo:ios` and
 `expo:android` are prerequisites, not tests; see [expo-build.md](./expo-build.md).
 On Android, run `npm run expo:android:reverse` after each emulator boot.
@@ -1246,6 +1378,14 @@ npm run e2e:web -- --case WEB-LINK-001
 npm run e2e:extension -- --case EXT-AUTH-001
 npm run e2e:mobile -- --platform ios --device <udid> --exclude-trait destructive
 ```
+
+Two traits are easy to confuse. `visual` marks any case whose claim is in
+pixels or bounds — `SKELETON-*` and `VIEWPORT-*` carry it and run in their
+ordinary targets. `baseline` marks the visual checkpoint cases, whose output is
+a comparison with an accepted baseline: `e2e-visual` selects only those, and
+every other runner refuses them by name (`--case VISUAL-APP-001` on `e2e-web`
+says to use `e2e-visual`), since run anywhere else they would photograph into a
+run nothing reviews.
 
 [`e2e/fixtures.json`](../e2e/fixtures.json) defines the fixture sizes: `empty`
 (the normal fresh account), `small` (the minimum multi-entity journey state),

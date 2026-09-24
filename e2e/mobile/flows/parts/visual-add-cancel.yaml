@@ -1,0 +1,9 @@
+# Discard the add panel explicitly.
+appId: com.bracemark.app
+---
+- tapOn:
+    id: 'add-link-cancel'
+- extendedWaitUntil:
+    notVisible:
+      id: 'add-link-url'
+    timeout: 10000

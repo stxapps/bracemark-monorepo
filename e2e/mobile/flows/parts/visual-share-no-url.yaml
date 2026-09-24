@@ -1,0 +1,27 @@
+# Share plain text with no link in it, and wait for the share surface's no-link
+# state. On iOS the source is the runner's plain-text page, crossed exactly as
+# parts/share-no-url.yaml crosses it; Android arrives with the ACTION_SEND
+# already delivered.
+appId: com.bracemark.app
+---
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - extendedWaitUntil:
+          visible: 'Share plain text'
+          timeout: 30000
+      - tapOn: 'Share plain text'
+      - extendedWaitUntil:
+          visible: 'Bracemark'
+          timeout: 30000
+      - tapOn:
+          # navigator.share({ text }) opens iOS's compact Apps list directly;
+          # the measured row, as parts/share-no-url.yaml has it.
+          point: '40%,75%'
+- extendedWaitUntil:
+    visible:
+      id: 'share-no-url'
+    timeout: 60000
+- waitForAnimationToEnd:
+    timeout: 5000

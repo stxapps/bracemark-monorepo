@@ -101,3 +101,29 @@ export function parseWebCli(argv = process.argv.slice(2)): WebCliOptions {
   const parsed = parseArguments(argv, FILTER_FLAGS);
   return { ...filters(parsed.values), playwrightArgs: parsed.passthrough };
 }
+
+export interface VisualCliOptions extends CommonFilters {
+  platform: 'web' | NativePlatform;
+  // Required on a device; the web leg drives the local browser.
+  deviceId?: string;
+  // Make this run's captures the baseline, once it has passed.
+  accept: boolean;
+}
+
+export function parseVisualCli(argv = process.argv.slice(2)): VisualCliOptions {
+  const accept = argv.includes('--accept');
+  const parsed = parseArguments(
+    argv.filter((argument) => argument !== '--accept'),
+    new Set([...FILTER_FLAGS, 'platform', 'device']),
+  );
+  if (parsed.passthrough.length > 0) {
+    throw new Error(`unknown visual E2E arguments: ${parsed.passthrough.join(' ')}`);
+  }
+  const platform = one(parsed.values, 'platform', true);
+  if (platform !== 'web' && platform !== 'ios' && platform !== 'android') {
+    throw new Error(`--platform must be "web", "ios" or "android", got ${platform}`);
+  }
+  const deviceId = one(parsed.values, 'device', platform !== 'web');
+  if (platform === 'web' && deviceId) throw new Error('--device is for ios and android only');
+  return { ...filters(parsed.values), platform, deviceId, accept };
+}

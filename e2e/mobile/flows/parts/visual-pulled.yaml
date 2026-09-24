@@ -1,0 +1,15 @@
+# Pull what another client imported, through the ⋯ menu's Sync, and wait for the
+# library's newest row.
+appId: com.bracemark.app
+---
+- tapOn:
+    id: 'links-more-options'
+- tapOn:
+    id: 'links-sync'
+- extendedWaitUntil:
+    visible: '.*${LANDED_TITLE}.*'
+    timeout: 60000
+- runFlow:
+    file: ../subflows/dismiss-logbox.yaml
+- waitForAnimationToEnd:
+    timeout: 5000
