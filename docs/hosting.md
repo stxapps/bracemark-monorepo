@@ -431,6 +431,59 @@ So the windows are still a decision to make deliberately in four places; what
 changed is that forgetting one of them now fails `npm run test` rather than
 shipping.
 
+### `/sitemap.xml` and JSON-LD
+
+The marketing site only — `app.bracemark.com` is an app behind an auth gate and
+publishes neither.
+
+**The sitemap** is `apps/bracemark-site/src/app/sitemap.ts`, the same
+`force-static` metadata route as `robots.ts`, and production's robots.txt names
+it ([env-files.md](./env-files.md#robotstxt-is-per-tier) has why staging's does
+not). Three things to know:
+
+- **The page list is typed by hand, and `sitemap.spec.ts` is what keeps it
+  whole.** The module runs inside Next's build output, where walking `src/app/`
+  would look in the wrong place, so the spec walks the tree instead and fails on
+  any `page.tsx` the list is missing. A page that should stay out goes in the
+  spec's `UNLISTED` set, with its reason. A dynamic route (`[slug]`) fails the
+  spec outright: its URLs have to be enumerated in `sitemap.ts` from whatever its
+  `generateStaticParams` reads.
+- **Clean URLs only**, the form the CloudFront function answers 200 for
+  ([above](#clean-urls--the-cloudfront-function)). `/about/` or `/about.html` is a
+  301, which a search console reports as a sitemap error. The function passes
+  `/sitemap.xml` through on its dot, pinned in `rewrite-url.test.mjs` beside
+  `robots.txt`; `deploy-static.sh` uploads it in the must-revalidate pass.
+- **No `lastmod`, `changefreq` or `priority`.** Google ignores the last two and
+  trusts `lastmod` only where it has proven accurate; a build timestamp on every
+  page is the textbook inaccurate one.
+
+**The JSON-LD** is `apps/bracemark-site/src/lib/structured-data.ts`, rendered by
+`components/json-ld.tsx`: an `Organization` + `WebSite` + `SoftwareApplication`
+graph on the landing page, and an `FAQPage` on `/faq`.
+
+- **It holds no copy of its own.** Every string is a constant a visible page
+  already prints — `BRAND.descriptor` as the app's description, `COMPANY` for the
+  publisher, the four listings plus `SOCIAL` and `SOURCE` as the app's `sameAs`,
+  the base prices from `@stxapps/shared` as its offers (lifetime only while
+  `LIFETIME_ON_SALE`), and the FAQ's own answers. Nobody reads structured data
+  rendered, so a sentence that existed only there would be a public claim no
+  review ever saw ([brand-assets.md](./brand-assets.md)). No `aggregateRating`
+  for the same reason — which also means no app rich result, since Google
+  requires one; the graph is for entity identity, not a snippet.
+- **The Organization is the legal entity, not the brand**: the one /terms and
+  /privacy name, with the company's own site as its `url`. Bracemark is the
+  `SoftwareApplication` it publishes.
+- **The FAQ answers are extracted from JSX without rendering it** —
+  `react-dom/server` is refused in a server component. `plainText()` walks
+  `children`, and calls a plain function component that has none (`MailLink`
+  prints its `address` prop). A component whose text is not its children would
+  lose words there silently, so `structured-data.spec.tsx` compares every
+  answer against the DOM's `textContent`.
+- **The CSP does not apply.** `application/ld+json` is a data block the browser
+  never executes, so it needs no hash and no `'unsafe-inline'`
+  ([above](#security-headers--where-the-csp-has-to-live)). `<` is escaped as
+  `\u003c` so a string containing `</script>` cannot close the tag.
+
 ### Apple Pay domain verification
 
 Paddle offers Apple Pay in its checkout only on a domain Apple has verified, and

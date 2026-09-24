@@ -20,7 +20,9 @@ import { Button } from '@stxapps/web-ui/components/ui/button';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { ArrowGlyph } from '../components/glyphs';
+import { JsonLd } from '../components/json-ld';
 import { CREATE_ACCOUNT_URL, PREDECESSOR, SOURCE } from '../lib/site';
+import { SITE_GRAPH } from '../lib/structured-data';
 
 // Moved here from bracemark-web when the apex became this app. Two things changed
 // with the move, both consequences of the site being a different origin from the app:
@@ -1057,6 +1059,9 @@ const STORES = [
 export default function Page() {
   return (
     <>
+      {/* Who publishes this and where else it lives, for machines — the landing
+          page is where a crawler looks for a site's own identity. */}
+      <JsonLd data={SITE_GRAPH} />
       {/* --- hero --------------------------------------------------------
           The hero has no background of its own, so unlike the bands below it
           gains nothing from bleeding — the wrapper exists purely because

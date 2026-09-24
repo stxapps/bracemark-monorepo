@@ -125,10 +125,12 @@ Two vars:
 
 The site's own apex is **not** a var: `SITE_URL` is hard-coded to
 `https://bracemark.com` in `src/lib/site.ts`, and the block comment there is the
-argument for why. Short version: it feeds only `metadataBase` and `og:url`, and
-env-driving it would put `https://bracemark.com` into the deploy script's
-forbidden-origin list for staging, where it collides with the
-`https://bracemark.com/extractor` User-Agent that /extractor publishes verbatim.
+argument for why. Short version: every URL it feeds — `metadataBase`, `og:url`,
+the sitemap, the JSON-LD — names a page's canonical address, which is
+production's in every tier; and env-driving it would put `https://bracemark.com`
+into the deploy script's forbidden-origin list for staging, where it collides
+with the `https://bracemark.com/extractor` User-Agent that /extractor publishes
+verbatim.
 
 `npm run dev:site` (= `nx dev @stxapps/bracemark-site`) serves on **port 3001**,
 so it can run beside bracemark-web's 3000.
@@ -241,7 +243,16 @@ Three things worth keeping straight:
   to a route handler, and `output: 'export'` refuses one that hasn't declared
   itself static. It fails the build loudly, so it can't regress quietly.
 
-Production behaviour is unchanged by this: both apps still allow everything.
+Production's file is the only one that names a sitemap. bracemark-site emits
+`Sitemap: https://bracemark.com/sitemap.xml` under its `Allow: /`; staging still
+builds `sitemap.xml` — a static export cannot drop a route per tier — but its
+robots.txt does not advertise it, since a file that disallows everything and
+points at URLs to crawl is two contradictory instructions. `robots.spec.ts`
+holds both branches. [hosting.md](./hosting.md#sitemapxml-and-json-ld) has the
+sitemap itself.
+
+Production behaviour is otherwise unchanged by this: both apps still allow
+everything.
 Whether `app.bracemark.com` — an application behind an auth gate, whose only
 public pages are `/sign-in` and `/create-account` — should be indexed at all is a
 separate product question this doc doesn't answer.

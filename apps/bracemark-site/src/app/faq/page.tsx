@@ -6,8 +6,10 @@ import { Button } from '@stxapps/web-ui/components/ui/button';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { ArrowGlyph, ChevronGlyph } from '../../components/glyphs';
+import { JsonLd } from '../../components/json-ld';
 import { FAQ_GROUPS } from '../../content/faq';
 import { CREATE_ACCOUNT_URL } from '../../lib/site';
+import { faqPage } from '../../lib/structured-data';
 
 export const metadata: Metadata = {
   title: 'FAQ',
@@ -28,6 +30,7 @@ export default function Page() {
 
   return (
     <div className={cn('pt-14 px-safe pb-4 md:pt-20')}>
+      <JsonLd data={faqPage(FAQ_GROUPS)} />
       <div className={cn('mx-auto max-w-6xl px-4 md:px-6 lg:px-8')}>
         <header className={cn('max-w-3xl')}>
           <p className={cn('eyebrow')}>Answers</p>

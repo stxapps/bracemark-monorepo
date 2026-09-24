@@ -1,5 +1,7 @@
 import type { MetadataRoute } from 'next';
 
+import { SITE_URL } from '../lib/site';
+
 // robots.txt, generated at BUILD time rather than served as a static file, because
 // it is the one document that must differ between the two tiers.
 //
@@ -38,7 +40,11 @@ if (allowIndexing !== 'true' && allowIndexing !== 'false') {
 // hard error rather than a silently dynamic route, so it can't regress quietly.
 export const dynamic = 'force-static';
 
+// The `Sitemap:` line is production's alone. Staging still builds a sitemap
+// (app/sitemap.ts — a static export cannot leave one route out per tier), but a
+// Disallow-everything file advertising URLs to crawl is two contradictory
+// instructions, the same trap as the noindex note above.
 export default function robots(): MetadataRoute.Robots {
   if (allowIndexing === 'false') return { rules: { userAgent: '*', disallow: '/' } };
-  return { rules: { userAgent: '*', allow: '/' } };
+  return { rules: { userAgent: '*', allow: '/' }, sitemap: `${SITE_URL}/sitemap.xml` };
 }

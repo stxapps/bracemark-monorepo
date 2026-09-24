@@ -22,8 +22,10 @@ if (!appUrl) throw new Error('NEXT_PUBLIC_APP_URL is not set');
 export const APP_URL = appUrl;
 
 /**
- * The apex this site is served from, for the absolute OG URLs in `app/layout.tsx`
- * (`metadataBase` and `og:url` — the only two readers).
+ * The apex this site is served from, for every absolute URL the site publishes
+ * about itself: `metadataBase` and `og:url` in `app/layout.tsx`, the sitemap and
+ * its `robots.txt` line, the JSON-LD in `lib/structured-data.ts`, and
+ * security.txt's `Canonical`.
  *
  * Hard-coded to production on purpose, unlike APP_URL above. Env-driving it would
  * put `https://bracemark.com` in the deploy script's forbidden-origin list for
@@ -33,8 +35,13 @@ export const APP_URL = appUrl;
  * (tools/scripts/deploy-static.sh, _the tier check_). The cost is that a staging
  * page unfurls with production's og:url and card image; the card image is the
  * same file in both tiers, and staging is `Disallow: /` to crawlers anyway
- * (`app/robots.ts`). Revisit if this ever feeds a canonical tag or a sitemap,
- * which would make it SEO-load-bearing rather than cosmetic.
+ * (`app/robots.ts`).
+ *
+ * The sitemap and the JSON-LD make it SEO-load-bearing rather than cosmetic, and
+ * production is still the right value for them in every tier: they name the
+ * canonical address of a page, which is production's whichever build prints it.
+ * Only production's robots.txt advertises the sitemap, and staging is never
+ * crawled to find the rest.
  */
 export const SITE_URL = 'https://bracemark.com';
 

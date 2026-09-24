@@ -51,6 +51,12 @@ export const COMPANY = {
   shortName: 'STX Apps',
   attn: 'Bracemark Team',
   addressLines: ['247 Chan 31 Sathon', 'Bangkok 10120', 'Thailand'],
+  /**
+   * The company's own website — not Bracemark's, which is the marketing site on
+   * the apex. Read by the marketing site's structured data, which names the
+   * publisher behind the product.
+   */
+  url: 'https://stxapps.com',
 } as const;
 
 // The public repository, and the licence it is published under. Here for the same

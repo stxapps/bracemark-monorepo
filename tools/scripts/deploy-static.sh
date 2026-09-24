@@ -42,8 +42,8 @@ readonly REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 #   week       icons, social images, favicon — real files with stable names, so
 #              a changed one needs the CloudFront invalidation to appear.
 #   revalidate HTML, the `.txt` RSC payloads Next 16 emits beside it, sw.js,
-#              manifest.json, robots.txt. These point at the hashed assets above,
-#              so they must never be served stale.
+#              manifest.json, robots.txt, sitemap.xml. These point at the hashed
+#              assets above or at pages, so they must never be served stale.
 readonly CACHE_IMMUTABLE="public, max-age=31536000, immutable"
 readonly CACHE_WEEK="public, max-age=604800"
 readonly CACHE_REVALIDATE="public, max-age=0, must-revalidate"
@@ -320,8 +320,8 @@ IMAGES=(
 )
 
 # The inverse of the two passes above: HTML, the `.txt` RSC payloads, sw.js,
-# manifest.json, robots.txt — everything whose content changes under a stable
-# name.
+# manifest.json, robots.txt, sitemap.xml — everything whose content changes
+# under a stable name.
 DOCUMENTS=(
   --exclude "_next/*"
   --exclude "*.png" --exclude "*.jpg" --exclude "*.jpeg" --exclude "*.gif"

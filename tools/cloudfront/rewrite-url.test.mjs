@@ -119,6 +119,7 @@ const CASES = [
     'pass:/settings/__next.!KGFwcCk.settings.txt',
   ],
   [SITE, '/robots.txt', '', 'pass:/robots.txt'],
+  [SITE, '/sitemap.xml', '', 'pass:/sitemap.xml'],
   // The dot that matters here is the one in the LAST segment; the leading dot on
   // `.well-known` is incidental and must stay that way. RFC 9116 fixes this path
   // exactly, so a rule that grew a dotfolder case would take security.txt off the
