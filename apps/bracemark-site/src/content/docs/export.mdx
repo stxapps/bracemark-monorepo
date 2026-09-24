@@ -1,0 +1,35 @@
+## Where to find it
+
+**In a browser:** open <AppLink path="/settings/data">Settings → Data</AppLink> and click Export all data. Pick a format and click Export all data. The file goes to your downloads, or wherever you choose if your browser asks.
+
+**In the Android or iOS app:** tap the ⋯ menu above your links, then Settings. Tap Data, then Export all data. Pick a format and tap Export all data, then choose where the file goes from the share sheet. If you close the sheet by mistake, tap Save file… to bring it back.
+
+Export is free on every plan, including when your library is over the free plan’s limit.
+
+## Which format
+
+| Format           | What it’s for                                                                                               | Includes Trash |
+| ---------------- | ----------------------------------------------------------------------------------------------------------- | -------------- |
+| Bracemark backup | Everything — links, lists, tags, pins, files, and settings — as a `.zip` you can import back into Bracemark | Yes            |
+| HTML bookmarks   | Web browsers (Chrome, Firefox, Safari), LinkWarden, and Karakeep                                            | No             |
+| CSV              | Raindrop.io and spreadsheets                                                                                | No             |
+| Plain text       | Just the URLs, one per line, for any text editor                                                            | No             |
+
+Only the Bracemark backup brings everything back when you import it. The other three are for taking your links to another app, and each carries what that kind of file has room for. A link’s note, for example, goes in the CSV but not the HTML.
+
+## What an export leaves out
+
+- **Locked lists**, and every link inside them, in every format. A locked list’s name is left out too. The export screen tells you how many lists it is skipping; unlock them first if you want everything.
+- **Trash**, in every format except the Bracemark backup.
+
+## The file isn’t encrypted
+
+Your library is encrypted before it leaves your device, but an export is a readable copy of it: anyone who opens the file can read every link in it. Keep it somewhere you’d trust with your password, and delete copies you no longer need.
+
+## Which copy it’s made from
+
+An export is made from the copy of your library on the device you export from. It checks with the server first, so changes your other devices have synced are included, and so are changes on this device that haven’t synced yet. If it can’t reach the server, it says so and exports what this device has.
+
+## Very large libraries on a phone
+
+The Android and iOS apps can’t write a Bracemark backup with more than 65,535 items in it, or one larger than 4 GB, because of the zip format they write. Past either limit the app tells you so rather than writing a backup with pieces missing. Export the backup from a browser instead, at <AppLink path="/settings/data">Settings → Data</AppLink>, which has neither limit.

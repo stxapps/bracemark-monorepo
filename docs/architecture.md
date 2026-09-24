@@ -52,7 +52,8 @@ convention: the site has no auth stack, no data layer, and its own origin (see
   `/terms`, `/privacy`, `/support`, `/contact`, `/delete-account` (the URL
   Play's Data safety form asks for). Static export like bracemark-web, and
   deliberately **thin** — it depends on `@stxapps/shared` and `@stxapps/web-ui`
-  and nothing else, so no auth stack, no Dexie, no crypto ships to the apex. It
+  and nothing else, so no auth stack, no Dexie, no crypto ships to the apex
+  (its MDX compiler is build-time only — _the marketing site's `/docs`_, below). It
   links to bracemark-web across origins (`NEXT_PUBLIC_APP_URL`) rather than
   rendering any signed-in UI. What it shares with the app it shares through
   `shared` — the store-listing URLs (`stores/listings.ts`) are the first
@@ -114,7 +115,62 @@ convention: the site has no auth stack, no data layer, and its own origin (see
 
 A separate **bracemark-docs** app was planned here once. It's gone:
 `bracemark-site` owns `/docs` as a path on the apex, so the docs accrue SEO
-authority to the one domain instead of a second host.
+authority to the one domain instead of a second host — how it is built is the
+next section.
+
+### the marketing site's `/docs`
+
+Help pages, one task each, with the labels the apps actually print. `/faq`,
+`/security`, `/extractor` and `/delete-account` say **what** and **why**; `/docs`
+says **how**, and a FAQ answer that grows steps should link to a docs page instead.
+
+| piece                                    | what it is                                                                                                                    |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `src/content/docs/index.ts`              | the manifest — groups, reading order, and each page's slug, title and description (the meta description, printed as the lede) |
+| `src/content/docs/<slug>.mdx`            | the prose, starting at `##` — the page prints its own `<h1>` from the manifest                                                |
+| `src/app/docs/[slug]/page.tsx`           | the one route; `generateStaticParams` from the manifest, `dynamicParams = false`                                              |
+| `src/lib/docs/load.ts`                   | reads the file and compiles it with `@mdx-js/mdx` at build time                                                               |
+| `src/lib/docs/headings.ts`               | the heading-id rule and the rehype plugin that stamps it — the "On this page" column                                          |
+| `src/components/docs/mdx-components.tsx` | everything a page may use beyond Markdown: `<AppLink path=…>`, `<FreeLinks />`, and on-site links via next/link               |
+| `.docs-prose` (`globals.css`)            | the styling, as `.legal-prose` does for /terms and /privacy — so a page stays plain Markdown                                  |
+
+**We compile the MDX; `@next/mdx` doesn't.** Next 16 builds with Turbopack, which
+accepts remark/rehype plugins only as serializable strings, and the heading plugin
+is a function that hands its results back through a closure. Compiling in
+`load.ts` keeps plugins as plain functions and `next.config.js` untouched. It all
+runs during `next build` under `output: 'export'`: `@mdx-js/mdx` and `remark-gfm`
+are build-time dependencies of the site, the pages ship as HTML with no MDX
+runtime, and the `new Function` that `evaluate` uses never reaches a browser or
+the apex CSP. That is why adding them doesn't break the site's "thin" rule above,
+which is about what ships to the apex.
+
+**The manifest is an import, not a folder walk**, for `sitemap.ts`'s reason: that
+module runs from Next's build output, where the source tree isn't. So the sitemap,
+the static params, the sidebar and prev/next all read one list, and
+`src/content/docs/docs.spec.ts` holds the manifest and the folder to each other.
+
+**A page imports nothing.** Numbers come from `@stxapps/shared` through the
+component map (`<FreeLinks />` reads the plan table, never a typed 200), and a link
+into the app goes through `<AppLink>`, because the app's origin differs per tier
+and a cross-origin link must not be a next/link ([hosting.md](./hosting.md),
+_crossing an origin_). A tag not in the map fails the build.
+
+⚠ **MDX is outside every checker the rest of the site has** — ESLint, prettier and
+`tsc` never read it, so the workspace's `’` and `“ ”` rule
+([brand-assets.md](./brand-assets.md), _the mechanics_) and every link are
+unguarded unless `docs.spec.ts` checks them. It does, reading the MDX as text:
+no imports or exports, only mapped components, no `# ` heading, typographic quotes
+in prose, and every `/docs/…#anchor`, `/faq#id` and site path resolving. Reading
+as text rather than compiling is forced — `@mdx-js/mdx` and the unified stack are
+ESM-only and dozens of packages deep for jest — and it is only sound while
+**headings are plain text** (no code, emphasis, links or JSX), so a heading's id is
+computable from its source line. The spec holds that too. What it can't check is
+the copy itself: run each page through the `brand-review` skill, and write the
+steps from the UI strings, click for web and tap for the apps.
+
+`/blog`, when it has posts, is the same loader over `src/content/blog/` with its
+own manifest carrying dates, plus a static feed route. Search is deliberately
+absent while the docs fit a sidebar.
 
 ### libs
 

@@ -173,6 +173,9 @@ export const FOOTER_LINKS: { heading: string; links: FooterLink[] }[] = [
     links: [
       { href: '/pricing', label: 'Pricing' },
       { href: '/faq', label: 'FAQ' },
+      // Footer only, for now: HEADER_LINKS above is at its four-link ceiling, and
+      // Docs earns a header slot only by replacing one of them.
+      { href: '/docs', label: 'Docs' },
     ],
   },
   {

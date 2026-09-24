@@ -1,5 +1,6 @@
 import type { MetadataRoute } from 'next';
 
+import { DOC_PAGES } from '../content/docs';
 import { SITE_URL } from '../lib/site';
 
 // /sitemap.xml — every page on the marketing site, for the crawlers that read
@@ -27,11 +28,17 @@ import { SITE_URL } from '../lib/site';
 // the right content rather than a tolerated one: those are the canonical
 // addresses of these pages. Staging's robots.txt is `Disallow: /` and names no
 // sitemap, so nothing is pointed at this copy anyway.
+//
+// The one dynamic route, `/docs/[slug]`, is enumerated from the same manifest its
+// `generateStaticParams` reads (content/docs/index.ts), so a page added there is
+// listed here without a second edit.
 const PATHS = [
   '/',
   '/about',
   '/pricing',
   '/faq',
+  '/docs',
+  ...DOC_PAGES.map((page) => `/docs/${page.slug}`),
   '/support',
   '/security',
   '/extractor',
