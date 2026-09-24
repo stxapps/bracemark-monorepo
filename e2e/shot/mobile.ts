@@ -136,6 +136,25 @@ async function bootedUdid(): Promise<string> {
   return booted[0].udid;
 }
 
+async function attachedSerial(): Promise<string> {
+  const serials = (await capture('adb', ['devices']))
+    .split('\n')
+    .slice(1)
+    .map((line) => line.trim().split(/\s+/))
+    .filter(([, state]) => state === 'device')
+    .map(([serial]) => serial);
+  if (serials.length !== 1) {
+    throw new Error(`expected exactly one attached Android device, found ${serials.length}`);
+  }
+  return serials[0];
+}
+
+// Maestro is told which device rather than left to pick, the same as every
+// other native run (runner/native-run.ts).
+async function deviceId(platform: Platform): Promise<string> {
+  return platform === 'ios' ? bootedUdid() : attachedSerial();
+}
+
 /**
  * Pin the simulator's region so the frozen clock reads 9:41. See SHOT_LOCALE.
  *
@@ -277,9 +296,12 @@ async function main(): Promise<void> {
     PASSWORD: seedPassword(SHOT_USER.key),
   };
 
+  const device = { platform, deviceId: await deviceId(platform) };
+
   await freezeStatusBar(platform);
   try {
     await maestro('mobile/shots/store.yaml', {
+      ...device,
       env: {
         ...credentials,
         // Passed on every run, never defaulted in the flow: a Maestro `env:`
@@ -299,6 +321,7 @@ async function main(): Promise<void> {
 
     await openShareSource(platform);
     await maestro('mobile/shots/share.yaml', {
+      ...device,
       env: { SAVE_FROM_ANY_APP_SHOT: 'save-from-any-app' },
       testOutputDir: shareRun,
     });
