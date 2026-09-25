@@ -104,7 +104,8 @@
         // placeholders — `wrangler dev` and the Workers test pool emulate R2 with
         // miniflare, so these never authenticate against real R2; the presigned
         // URLs they produce are only ever shape-checked locally, never fetched.
-        // In staging/prod the key pair are SECRETS, not vars (see those envs).
+        // In staging/prod the account id and the key pair are SECRETS, not vars
+        // (see those envs).
         "R2_ACCOUNT_ID": "local-account-id",
         "R2_ACCESS_KEY_ID": "local-access-key-id",
         "R2_SECRET_ACCESS_KEY": "local-secret-access-key",
@@ -119,7 +120,12 @@
         // is a permanent drop — the subscriber pays and is never entitled), the
         // checkout sells the first. Add, never replace.
         "PADDLE_PRICE_ID_PLUS": "pri_01m2sbmvgv19d85spx9wbqgab8",
-        "PADDLE_PRICE_ID_PRO": "TODO: sandbox pri_… id for Pro (yearly)",
+        // Pro is not on sale (AVAILABLE_PAID_PLANS, @stxapps/shared iap/plans.ts),
+        // so it has no price: EMPTY, not a `TODO:` — deploy-worker.sh refuses a
+        // production deploy while any TODO remains, and an off-sale plan is not
+        // unfinished config. Fill it in the same change that puts Pro on sale;
+        // `npm run check:paddle` fails an on-sale plan whose list is empty.
+        "PADDLE_PRICE_ID_PRO": "",
         // Store IAP (routes/iap.ts verify + notify; lib/appstore.ts,
         // lib/playstore.ts). Local dev talks to the App Store SANDBOX host. The
         // private keys + the Play push token are SECRETS — see `secrets` below.
@@ -267,7 +273,8 @@
         // is a permanent drop — the subscriber pays and is never entitled), the
         // checkout sells the first. Add, never replace.
         "PADDLE_PRICE_ID_PLUS": "pri_01m2sbmvgv19d85spx9wbqgab8",
-        "PADDLE_PRICE_ID_PRO": "TODO: sandbox pri_… id for Pro (yearly)",
+        // Empty while Pro is off sale — see the development env.
+        "PADDLE_PRICE_ID_PRO": "",
         // Store IAP — staging verifies against the App Store SANDBOX. Secrets,
         // set separately:
         //   wrangler secret put APPSTORE_PRIVATE_KEY --env staging
@@ -370,7 +377,8 @@
         "PADDLE_API_BASE": "https://api.paddle.com",
         // COMMA-SEPARATED lists, on sale FIRST — see the development env.
         "PADDLE_PRICE_ID_PLUS": "pri_01m2snpfpfe3e254kcehqjcf42",
-        "PADDLE_PRICE_ID_PRO": "TODO: live pri_… id for Pro (yearly)",
+        // Empty while Pro is off sale — see the development env.
+        "PADDLE_PRICE_ID_PRO": "",
         // Store IAP — production verifies against the PRODUCTION App Store host
         // (with the code-level sandbox fallback on 404 for App Review — see
         // lib/appstore.ts). Secrets, set separately:

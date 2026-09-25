@@ -649,8 +649,17 @@ the chunks it was just handed. The `.txt` files are Next 16's RSC payloads and
 travel with the HTML, not with the assets — they must not outlive it. `_next/`
 is the one pass without `--delete`: a client on the previous build is still
 fetching chunks by hash, and deleting them mid-session breaks navigation. That
-means old builds accumulate, so **expire them with an S3 lifecycle rule on the
-`_next/` prefix** rather than by deleting at deploy time.
+means old builds accumulate — a build is ~10 MB, so they are left to.
+
+**Never expire `_next/` with an S3 lifecycle rule by age.** The pass is
+`--size-only`, so a chunk whose hash survives a build is never re-uploaded and
+keeps the `LastModified` of the deploy that **first** uploaded it — a vendor
+chunk can be months old and still loaded by the live build. An "expire after
+_N_ days" rule on the prefix therefore deletes files the current build needs,
+N days after they first shipped, with no deploy anywhere near it: the app
+starts failing chunk loads and CloudFront answers each with `/404.html`. If old
+builds ever need pruning, prune by **reference** — delete the `_next/` keys that
+none of the last few builds' `out/` contains — never by age.
 
 **No `--acl public-read` anywhere.** Buckets created since April 2023 have ACLs
 disabled by default (`BucketOwnerEnforced`), which makes that flag an
@@ -764,6 +773,41 @@ its own frontend origins back (`CORS_ORIGINS`, never `*`) — both the `app.` ho
 and the apex, per _the hosts_ above. The full table lives in
 [env-files.md](./env-files.md#wiring-the-frontends-to-the-backend); keep the two
 in sync.
+
+**R2 needs a CORS policy of its own, and `CORS_ORIGINS` is not it.** The blob
+PUT/GET in `packages/web-react/src/sync/r2.ts` goes from the browser straight to
+`<account-id>.r2.cloudflarestorage.com` over a presigned URL, so the api's CORS
+middleware never sees it — the **bucket** answers the preflight, and a new bucket
+has no policy at all. Forget it and every PUT dies at preflight with _"No
+'Access-Control-Allow-Origin' header is present"_, while sign-in, lists and link
+edits all keep working. Local dev cannot surface it: under `wrangler dev`, blobs go
+through the api's own proxy route (`r2/local.ts`), which `CORS_ORIGINS` already
+covers. Like secrets, the policy is set out of band, once per tier's bucket, with
+that tier's token:
+
+```json
+{
+  "rules": [
+    {
+      "allowed": { "origins": ["https://app.dryrunbase.com"], "methods": ["GET", "PUT"] },
+      "maxAgeSeconds": 3600
+    }
+  ]
+}
+```
+
+```bash
+npx wrangler r2 bucket cors set bracemark-user-files-<tier> --file <that json> --env <tier>
+npx wrangler r2 bucket cors list bracemark-user-files-<tier> --env <tier>
+```
+
+- **`app.*` only.** The marketing site never touches R2. The Expo app's native
+  `fetch` is not subject to CORS, and the browser extension's `host_permissions`
+  name only the api.
+- **No `headers`.** `putBlob` sends a raw byte body and no custom header, so the
+  preflight asks for none. If the client starts sending one, add it here in the
+  same change.
+- **No `exposeHeaders`.** The client reads only the status and the body.
 
 Deploy artifacts are **built once per tier**, never promoted: `NEXT_PUBLIC_API_URL`
 and `NEXT_PUBLIC_APP_URL` are baked at build time, so staging and production are

@@ -331,9 +331,11 @@ DOCUMENTS=(
 step "Syncing _next/ (immutable, 1 year)"
 # No --delete: a client that loaded the previous build is still fetching its
 # chunks by hash, and deleting them breaks navigation for anyone mid-session.
-# Old builds accumulate, so expire them with an S3 lifecycle rule on `_next/`
-# rather than here (docs/hosting.md, _deploying the static sites_).
-# --size-only is safe precisely because these names are content-addressed.
+# Old builds accumulate, and are left to. --size-only is safe precisely because
+# these names are content-addressed — and it is also why `_next/` must never get
+# an S3 lifecycle rule by age: an unchanged chunk is never re-uploaded, so its
+# LastModified is its FIRST deploy, and the rule would expire chunks the live
+# build still loads (docs/hosting.md, _deploying the static sites_).
 aws s3 sync "$OUT_DIR/_next" "$S3_URI/_next" "${SYNC_FLAGS[@]}" \
   --size-only \
   "${JUNK[@]}" \

@@ -55,9 +55,11 @@ export type Bindings = {
   // All R2 access goes through the r2/user-files gateway.
   USER_FILES: R2Bucket;
 
-  // R2 S3-API credentials for presigning. Account id + bucket name are non-secret
-  // `vars`; the access key pair are SECRETS (`wrangler secret put R2_ACCESS_KEY_ID
-  // / R2_SECRET_ACCESS_KEY --env …`). All are per-env (see wrangler.jsonc). The
+  // R2 S3-API credentials for presigning. The bucket name is a non-secret `var`;
+  // the account id and the access key pair are SECRETS (`wrangler secret put
+  // R2_ACCOUNT_ID / R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY --env …`) — the account
+  // id not because it is one, but to keep it out of the public wrangler.jsonc
+  // (docs/env-files.md). All are per-env (see wrangler.jsonc). The
   // account id + access keys are account-scoped, so they're shared across every
   // bucket; only the bucket *name* is per-bucket (hence the `_USER_FILES_` infix —
   // a second bucket gets its own `R2_<NAME>_BUCKET` var, same creds). The name is
