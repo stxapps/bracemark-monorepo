@@ -1,0 +1,11 @@
+Karakeep offers a browser bookmarks HTML export. Choose that format for Bracemark, rather than Karakeep’s own full export file, which Bracemark does not read.
+
+## Export from Karakeep
+
+In Karakeep, open Settings → Import / Export → Export and choose Netscape / Browser (HTML). Save the `.html` file. This path is recorded in a [Karakeep export issue](https://github.com/karakeep-app/karakeep/issues/1981); the project’s [release notes](https://github.com/karakeep-app/karakeep/releases/tag/v0.33.1) also mention fixes to its Netscape HTML exporter.
+
+## Import and check
+
+Open [Settings → Data](/docs/import#where-to-find-it) in Bracemark, choose Import data, and select the HTML file. Addresses and titles come across, along with details the file carries. Bracemark skips links it already has.
+
+The browser bookmarks format does not carry Karakeep’s saved page copies, PDFs, or images. A reported Karakeep HTML export wrote bookmarks flat rather than preserving its list tree, so check the resulting lists before relying on them. The [general import guide](/docs/import) explains formats, duplicates, and plan limits.

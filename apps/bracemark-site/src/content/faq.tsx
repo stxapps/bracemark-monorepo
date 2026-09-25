@@ -109,15 +109,16 @@ export const FAQ_GROUPS: FaqGroup[] = [
       },
       {
         id: 'vs-others',
-        q: 'How is this different from Raindrop, Pocket, or my browser’s bookmarks?',
+        q: 'How is this different from a hosted manager or my browser’s bookmarks?',
         a: (
           <>
-            Browser bookmarks don’t follow you off that browser. The hosted managers do follow you,
-            but their servers hold your titles and addresses in readable form — that is what makes
-            their server-side search and recommendations possible in the first place. Each link is
-            encrypted on your device before it syncs, so search and organisation happen on your own
-            devices. Link previews are fetched there too unless you turn on server previews, an
-            opt-in in the web app.
+            Chrome and Firefox can each sync bookmarks across devices signed in to their own
+            browser. Bracemark keeps a separate collection you can use across its web app, phone
+            apps, and browser extension. Each link is encrypted on your device before it syncs, so
+            search and organisation happen on your devices. The web app’s server previews are
+            optional and receive the address of any link they fetch.{' '}
+            <PageLink href="/docs/ways-to-keep-links">Compare the ways to keep links</PageLink> by
+            where they work, what can be read, and how you can export them.
           </>
         ),
       },
@@ -254,7 +255,8 @@ export const FAQ_GROUPS: FaqGroup[] = [
             device, so it opens, browses, and searches with no connection at all. Anything you
             change while offline is queued and syncs the next time you have a network. What is on
             the device is your library — addresses, titles, tags, notes, and preview images.
-            Following a link out to the live page is the one thing that still needs a connection.
+            Following a link out to the live page is the one thing that still needs a connection.{' '}
+            <PageLink href="/docs/sync-and-devices">Sync and devices</PageLink> explains what happens to offline changes.
           </>
         ),
       },
@@ -544,7 +546,8 @@ export const FAQ_GROUPS: FaqGroup[] = [
           <>
             A username and a password. That is all we ask for — no email address, no phone number,
             no card. We suggest the password for you: seven random words, long enough to survive an
-            offline attack in a way most typed passwords are not. You can choose your own instead.
+            offline attack in a way most typed passwords are not. You can choose your own instead. See{' '}
+            <PageLink href="/docs/create-an-account">Create an account</PageLink> for the recovery step.
           </>
         ),
       },
@@ -598,10 +601,10 @@ export const FAQ_GROUPS: FaqGroup[] = [
         q: 'What if I lose my password?',
         a: (
           <>
-            Sign in with your recovery code, then set a new password. If both are gone, so is the
-            library — no one at Bracemark can recover it, because no one here can decrypt it. That
-            is the honest cost of the guarantee on the front page, and it is the reason the app asks
-            you to save both.
+            Sign in with your recovery code, then set a new password. If both are gone, we cannot
+            sign you in or decrypt your account for you. A device that is still signed in may let
+            you export your links into a new account; otherwise there is no way to recover them.{' '}
+            <PageLink href="/docs/lost-password">Lost your password</PageLink> has the steps.
           </>
         ),
       },
@@ -704,7 +707,8 @@ export const FAQ_GROUPS: FaqGroup[] = [
           <>
             Nothing is deleted and nothing is put out of reach. You keep reading, searching,
             editing, deleting, and exporting the whole library; new links stop saving until you
-            upgrade or make room. Upgrading lifts the cap straight away. That is also what happens
+            upgrade or delete links permanently to make room. Moving a link to Trash still counts
+            toward the limit. Upgrading lifts the cap straight away. That is also what happens
             if a trial ends with more than {FREE_LINKS} links in your library — they all stay, and
             stay exportable; you just cannot add new ones until you are back under the cap or on{' '}
             {PLAN_LABELS.plus}.
@@ -728,7 +732,11 @@ export const FAQ_GROUPS: FaqGroup[] = [
             pick, and the file on your device is never changed. If you take the ones that fit,
             importing the same file again later brings in the rest — the links already saved are
             skipped as duplicates. One exception: a Bracemark backup (.zip) is all-or-nothing,
-            because a half-restored backup is worse than none.
+            because a half-restored backup is worse than none.{' '}
+            <PageLink href="/docs/import#if-the-file-holds-more-than-your-plan-allows">
+              Import your links
+            </PageLink>{' '}
+            explains the choices.
           </>
         ),
       },
@@ -925,7 +933,8 @@ export const FAQ_GROUPS: FaqGroup[] = [
             Give it a minute — activation arrives from the payment provider a few seconds after
             checkout. If it hasn’t landed, open Settings → Subscription and restore your purchase;
             if it still hasn’t, write to <MailLink address={SUPPORT_EMAIL} /> with the date and the
-            store you bought it from.
+            store you bought it from. See{' '}
+            <PageLink href="/docs/manage-your-subscription">Manage your subscription</PageLink> for the store-specific steps.
           </>
         ),
       },
@@ -976,7 +985,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
             and pages whose text is assembled by JavaScript after they load. We stop retrying those,
             so they land in the failed count under Link previews in Settings rather than a queue
             that is still working on them. The link is saved either way, and you can give it a title
-            of your own.
+            of your own. See <PageLink href="/docs/link-previews">Link previews</PageLink> for the settings.
           </>
         ),
       },
@@ -987,7 +996,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
           <>
             Yes, on {PLAN_LABELS.plus}. The free plan gives you flat lists, tags, and pins, which is
             enough structure for a library of {FREE_LINKS} links; nesting starts to matter at the
-            size the paid plan is for.
+            size the paid plan is for. See <PageLink href="/docs/lists">Lists</PageLink> for the controls.
           </>
         ),
       },
@@ -1000,7 +1009,8 @@ export const FAQ_GROUPS: FaqGroup[] = [
             when you save it or from “Edit note” in the link’s menu. It is encrypted on your device
             with the link itself, so it is as unreadable to us as the address is. The search box
             matches titles and addresses; to search your notes, use the “Note contains” field in the{' '}
-            {PLAN_LABELS.plus} search editor.
+            {PLAN_LABELS.plus} search editor. See{' '}
+            <PageLink href="/docs/search">Search your links</PageLink> for the controls.
           </>
         ),
       },
@@ -1086,7 +1096,11 @@ export const FAQ_GROUPS: FaqGroup[] = [
             version to restore (see <HashLink id="undo-edit">can I undo a change</HashLink>).
             Anything you change offline queues up and goes out in order the next time you have a
             network. Titles and preview images fetched in the background live in a separate
-            encrypted file from what you write, so one never overwrites the other.
+            encrypted file from what you write, so one never overwrites the other. See{' '}
+            <PageLink href="/docs/sync-and-devices#when-two-devices-change-the-same-link">
+              Sync and devices
+            </PageLink>{' '}
+            for the steps to check sync.
           </>
         ),
       },
@@ -1108,7 +1122,8 @@ export const FAQ_GROUPS: FaqGroup[] = [
             A {PLAN_LABELS.plus} feature that puts a lock over the app, and lets you hide individual
             lists from view. It sits on top of the encryption rather than replacing it — encryption
             protects your library from us and from anyone who gets the files; the lock protects it
-            from whoever is standing behind you.
+            from whoever is standing behind you. See{' '}
+            <PageLink href="/docs/app-lock-and-list-locks">App and list locks</PageLink> for setup and recovery.
           </>
         ),
       },
@@ -1186,7 +1201,8 @@ export const FAQ_GROUPS: FaqGroup[] = [
             nothing we could hand you. An export is the backstop worth having, with one thing to
             know about it: restoring a backup fills gaps rather than overwriting, so a link you
             deleted comes back and a link you still have keeps the version on your device. It covers
-            the clean-up you regret rather than the edit, and exporting first costs nothing.
+            the clean-up you regret rather than the edit, and exporting first costs nothing.{' '}
+            <PageLink href="/docs/restore-a-link">Restore a link</PageLink> has the steps.
           </>
         ),
       },
@@ -1267,7 +1283,9 @@ export const FAQ_GROUPS: FaqGroup[] = [
             ). Export gives you the whole library on every plan: a full backup that restores
             everything, or one of three formats other apps read — a browser bookmarks file, a CSV
             carrying the address, list, title, note, tags, and date of every link, and a plain list
-            of URLs. A list you have locked is left out of the file until you unlock it.
+            of URLs. A list you have locked is left out of the file until you unlock it. See{' '}
+            <PageLink href="/docs/import">Import your links</PageLink> and{' '}
+            <PageLink href="/docs/export">Export your data</PageLink> for the steps and formats.
           </>
         ),
       },

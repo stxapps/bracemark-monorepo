@@ -1,0 +1,11 @@
+Use Linkwarden’s JSON export, often named `backup.json`. Bracemark reads its collections and link details; converting that file to a plain list of URLs first would lose them.
+
+## Export from Linkwarden
+
+Open Linkwarden’s account settings and choose Export Data. Keep the JSON file it downloads. Linkwarden’s [project discussion of its export format](https://github.com/linkwarden/linkwarden/issues/587) describes the JSON backup; Bracemark’s importer is built for that file, not for an HTML file from Linkwarden.
+
+## Import into Bracemark
+
+Open [Settings → Data](/docs/import#where-to-find-it), choose Import data, and select `backup.json`. Collections become lists, including nested ones. Link titles, notes, tags, saved dates, and pins come across when they are in the file. An ordinary collection named Unorganized remains an ordinary list; the file does not mark it as a special default list.
+
+Archived page copies, PDFs, and images do not come across. The JSON may name files stored on Linkwarden’s server, but it does not contain their bytes. Check a nested collection, a tagged link, and a pinned link after import. [Import your links](/docs/import) explains duplicates and plan limits.

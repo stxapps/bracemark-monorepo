@@ -446,8 +446,10 @@ not). Three things to know:
   would look in the wrong place, so the spec walks the tree instead and fails on
   any `page.tsx` the list is missing. A page that should stay out goes in the
   spec's `UNLISTED` set, with its reason. A dynamic route (`[slug]`) fails the
-  spec outright: its URLs have to be enumerated in `sitemap.ts` from whatever its
-  `generateStaticParams` reads.
+  spec outright unless it is in the spec's `DYNAMIC_ROUTES`: its URLs have to be
+  enumerated in `sitemap.ts` from whatever its `generateStaticParams` reads. The
+  one today is `/docs/[slug]`, which both read from the docs manifest
+  ([architecture.md](./architecture.md), _the marketing site's `/docs`_).
 - **Clean URLs only**, the form the CloudFront function answers 200 for
   ([above](#clean-urls--the-cloudfront-function)). `/about/` or `/about.html` is a
   301, which a search console reports as a sitemap error. The function passes

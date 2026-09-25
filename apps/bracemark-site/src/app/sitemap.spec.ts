@@ -6,6 +6,7 @@
 import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { DOC_PAGES } from '../content/docs';
 import { SITE_URL } from '../lib/site';
 import sitemap from './sitemap';
 
@@ -15,24 +16,37 @@ import sitemap from './sitemap';
 // list in sitemap.ts.
 const UNLISTED = new Set<string>();
 
+// A dynamic route has no one URL to list, so each one is expanded here from the
+// same source its `generateStaticParams` reads — the manifest, not the files, so
+// the expansion can't be satisfied by the list it is checking.
+const DYNAMIC_ROUTES: Record<string, string[]> = {
+  '/docs/[slug]': DOC_PAGES.map((page) => page.slug),
+};
+
 /** Every route `src/app/` defines, read from its `page.tsx` files. */
 function routesOnDisk(): string[] {
   const appDir = __dirname;
   return (readdirSync(appDir, { recursive: true }) as string[])
     .filter((file) => /(^|\/)page\.tsx$/.test(file))
-    .map((file) => {
+    .flatMap((file) => {
       const segments = file
         .split('/')
         .slice(0, -1)
         // A route group `(name)` shapes the tree but not the URL.
         .filter((segment) => !/^\(.*\)$/.test(segment));
-      // A dynamic segment has no one URL to list — its params would have to be
-      // enumerated in sitemap.ts, from the same source generateStaticParams uses.
-      // Fail on it rather than let a whole family of pages go unlisted.
+      const route = `/${segments.join('/')}`;
+      // A dynamic route not in DYNAMIC_ROUTES fails outright rather than let a
+      // whole family of pages go unlisted.
       if (segments.some((segment) => segment.startsWith('['))) {
-        throw new Error(`${join('src/app', file)}: a dynamic route needs its own sitemap entries`);
+        const params = DYNAMIC_ROUTES[route];
+        if (!params) {
+          throw new Error(
+            `${join('src/app', file)}: a dynamic route needs its own sitemap entries`,
+          );
+        }
+        return params.map((param) => route.replace(/\[[^\]]+\]/, param));
       }
-      return `/${segments.join('/')}`;
+      return [route];
     });
 }
 

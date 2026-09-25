@@ -9,7 +9,8 @@
  * tokens bracemark-web renders against, so the two properties can't drift into
  * different greys. What is added here is only what a marketing page needs and an
  * app doesn't: two extra typefaces, one accent colour, and the prose styling the
- * two long legal documents would otherwise carry as class soup on every element.
+ * two long legal documents and the /docs pages would otherwise carry as class
+ * soup on every element.
  *
  * Nothing here is pushed back into web-ui: a token the app never uses does not
  * belong in the app's sheet.
@@ -171,6 +172,62 @@
   }
   .legal-prose a {
     @apply text-signal underline decoration-signal-line underline-offset-2 hover:decoration-signal;
+  }
+
+  /*
+   * /docs pages — the same move as .legal-prose, for the same reason: they are
+   * MDX, edited as documents, so the markup stays plain h2/p/ol/table and the
+   * styling lives here. Differences from the legal pages: `text-body` like the
+   * support pages rather than their smaller type, numbered steps (not (a)/(b)
+   * clauses), tables for "which file" choices, inline code for file names, and a
+   * scroll margin on every heading so an "On this page" jump clears the sticky
+   * header (65px, site-header.tsx).
+   */
+  .docs-prose {
+    @apply text-body text-muted-foreground;
+  }
+  .docs-prose h2 {
+    @apply mt-12 scroll-mt-24 font-display text-2xl font-semibold tracking-tight text-foreground;
+  }
+  .docs-prose h3 {
+    @apply mt-8 scroll-mt-24 text-base font-semibold text-foreground;
+  }
+  .docs-prose p {
+    @apply mt-4;
+  }
+  .docs-prose ul,
+  .docs-prose ol {
+    @apply mt-4 space-y-2 pl-6;
+  }
+  .docs-prose ul {
+    @apply list-disc;
+  }
+  .docs-prose ol {
+    @apply list-decimal;
+  }
+  .docs-prose li::marker {
+    @apply text-muted-foreground;
+  }
+  .docs-prose li > p {
+    @apply mt-2;
+  }
+  .docs-prose strong {
+    @apply font-semibold text-foreground;
+  }
+  .docs-prose code {
+    @apply rounded-sm bg-muted px-1 py-0.5 font-mono text-[0.8125rem] text-foreground;
+  }
+  .docs-prose table {
+    @apply mt-6 w-full border-collapse text-left text-sm leading-6;
+  }
+  .docs-prose th {
+    @apply border-b border-border py-2 pr-4 align-bottom font-semibold text-foreground;
+  }
+  .docs-prose td {
+    @apply border-b border-border py-2 pr-4 align-top;
+  }
+  .docs-prose a {
+    @apply rounded-sm text-signal underline decoration-signal-line underline-offset-2 hover:decoration-signal focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none;
   }
 }
 
