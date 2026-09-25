@@ -81,13 +81,18 @@ implementation of it has to do, this one or the one under _later_.
 - **R2:** a mirror in which any object a run would overwrite or delete is first
   moved aside under that run's date. That is the versioning R2 does not have.
   Never a plain copy, and never a mirror without the history.
-- **Read-only credentials, separate from the deploy token.** A job that runs
-  unattended holds only a **D1 Read** token and an R2 **Object Read** key pair,
-  per tier — never a write credential. "Read-only" is checked, not assumed: every
-  run sends a write that matches no rows, and stops if it is allowed. Restores
-  use a write credential the job never holds (_restore drill_). Same rule as
-  every other credential: never a file in the worktree (`CLAUDE.md`,
-  _Tripwires_; [env-files.md](./env-files.md)).
+- **The narrowest credentials there are, separate from the deploy token.** A job
+  that runs unattended holds only **D1 Read** and R2 **Object Read**, per tier.
+  Object Read is read-only: R2 refuses a write. **D1 Read is not.** It decides
+  which endpoints a token reaches, and the query API is one of them, which runs
+  whatever SQL it is sent — a `DELETE` included. Cloudflare has nothing
+  narrower, so the job's D1 token can change rows. What it can't do is create or
+  delete a database — that needs D1 Edit — and a write it makes is undone with
+  D1 Time Travel. That boundary is checked, not assumed: every run asks to
+  create a database with a request that could create nothing, and stops unless
+  it is refused as unauthorised. Restores use a credential the job never holds
+  (_restore drill_). Same rule as every other credential: never a file in the
+  worktree (`CLAUDE.md`, _Tripwires_; [env-files.md](./env-files.md)).
 - **A half-finished run never looks finished.** A day's dumps appear together or
   not at all.
 
