@@ -356,6 +356,15 @@ aws s3 sync "$OUT_DIR" "$S3_URI" "${SYNC_FLAGS[@]}" \
   "${JUNK[@]}" \
   --cache-control "$CACHE_REVALIDATE"
 
+# `aws s3 sync` guesses `.xml` as generic XML and does not preserve the build
+# route's Content-Type. Re-upload the site's small feed with its RSS MIME type.
+if [ "$APP" = "site" ]; then
+  step "Setting the RSS feed content type"
+  aws s3 cp "$OUT_DIR/feed.xml" "$S3_URI/feed.xml" "${SYNC_FLAGS[@]}" \
+    --content-type "application/rss+xml; charset=utf-8" \
+    --cache-control "$CACHE_REVALIDATE"
+fi
+
 # --- invalidate ------------------------------------------------------------
 
 if [ "$DRY_RUN" = true ]; then

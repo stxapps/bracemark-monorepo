@@ -1,5 +1,6 @@
 import type { MetadataRoute } from 'next';
 
+import { BLOG_POSTS } from '../content/blog';
 import { DOC_PAGES } from '../content/docs';
 import { SITE_URL } from '../lib/site';
 
@@ -18,10 +19,9 @@ import { SITE_URL } from '../lib/site';
 // URL that 301s, which a search console reports as a sitemap error rather than
 // following.
 //
-// No `lastModified`, `changeFrequency` or `priority`. Google ignores the last two
-// outright, and trusts `lastmod` only from a site whose values have proven
-// accurate — a build timestamp on every page, which is all a static export could
-// cheaply give, is the canonical inaccurate one.
+// No `changeFrequency` or `priority`. Only /blog posts have an accurate
+// `lastModified`: their publication/update timestamps are set by the author.
+// A build timestamp on every page would misstate unchanged content.
 //
 // Absolute against SITE_URL, which is production in every tier (lib/site.ts). A
 // staging build therefore publishes a sitemap of production's URLs, and that is
@@ -29,9 +29,8 @@ import { SITE_URL } from '../lib/site';
 // addresses of these pages. Staging's robots.txt is `Disallow: /` and names no
 // sitemap, so nothing is pointed at this copy anyway.
 //
-// The one dynamic route, `/docs/[slug]`, is enumerated from the same manifest its
-// `generateStaticParams` reads (content/docs/index.ts), so a page added there is
-// listed here without a second edit.
+// Both dynamic routes are enumerated from the manifests their
+// `generateStaticParams` read, so a page added there is listed here too.
 const PATHS = [
   '/',
   '/about',
@@ -39,6 +38,7 @@ const PATHS = [
   '/faq',
   '/docs',
   ...DOC_PAGES.map((page) => `/docs/${page.slug}`),
+  '/blog',
   '/support',
   '/security',
   '/extractor',
@@ -51,5 +51,11 @@ const PATHS = [
 export const dynamic = 'force-static';
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  return PATHS.map((path) => ({ url: `${SITE_URL}${path}` }));
+  return [
+    ...PATHS.map((path) => ({ url: `${SITE_URL}${path}` })),
+    ...BLOG_POSTS.map((post) => ({
+      url: `${SITE_URL}/blog/${post.slug}`,
+      lastModified: post.updatedAt ?? post.publishedAt,
+    })),
+  ];
 }

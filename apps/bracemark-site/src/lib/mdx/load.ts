@@ -6,9 +6,9 @@ import { evaluate } from '@mdx-js/mdx';
 import type { MDXContent } from 'mdx/types';
 import remarkGfm from 'remark-gfm';
 
-import { type DocHeading, rehypeHeadingIds } from './headings';
+import { type Heading, rehypeHeadingIds } from './headings';
 
-// Reads one /docs page and compiles it, at build time. Only server components
+// Reads a /docs or /blog page and compiles it, at build time. Only server components
 // call this, and under `output: 'export'` they run once, during `next build` — so
 // the compiler, the file read and the `new Function` that `evaluate` runs the
 // compiled module with all stay on the build machine. The page ships as HTML with
@@ -24,13 +24,17 @@ import { type DocHeading, rehypeHeadingIds } from './headings';
 // module lives under `.next/`, where a relative path finds nothing. Every target
 // that renders the site — `nx build`, `nx dev` — runs with the project root as
 // its cwd.
-const DOCS_DIR = join(process.cwd(), 'src/content/docs');
+type Collection = 'docs' | 'blog';
 
-export async function loadDoc(
+export async function loadMdx(
+  collection: Collection,
   slug: string,
-): Promise<{ Content: MDXContent; headings: DocHeading[] }> {
-  const source = await readFile(join(DOCS_DIR, `${slug}.mdx`), 'utf8');
-  const headings: DocHeading[] = [];
+): Promise<{ Content: MDXContent; headings: Heading[] }> {
+  const source = await readFile(
+    join(process.cwd(), 'src/content', collection, `${slug}.mdx`),
+    'utf8',
+  );
+  const headings: Heading[] = [];
   const { default: Content } = await evaluate(source, {
     ...runtime,
     remarkPlugins: [remarkGfm],

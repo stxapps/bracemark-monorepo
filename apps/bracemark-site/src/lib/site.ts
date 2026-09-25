@@ -182,6 +182,7 @@ export const FOOTER_LINKS: { heading: string; links: FooterLink[] }[] = [
     heading: 'Company',
     links: [
       { href: '/about', label: 'About' },
+      { href: '/blog', label: 'Blog' },
       { href: '/support', label: 'Support' },
       // Under Company rather than Product: it is a fact about who builds this and
       // how, not a thing you can buy. Developers look in the footer for it, which

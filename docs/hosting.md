@@ -448,16 +448,24 @@ not). Three things to know:
   spec's `UNLISTED` set, with its reason. A dynamic route (`[slug]`) fails the
   spec outright unless it is in the spec's `DYNAMIC_ROUTES`: its URLs have to be
   enumerated in `sitemap.ts` from whatever its `generateStaticParams` reads. The
-  one today is `/docs/[slug]`, which both read from the docs manifest
-  ([architecture.md](./architecture.md), _the marketing site's `/docs`_).
+  routes today are `/docs/[slug]` and `/blog/[slug]`, each backed by its own
+  manifest ([architecture.md](./architecture.md), _the marketing site's `/docs`_
+  and _the marketing site's `/blog`_).
 - **Clean URLs only**, the form the CloudFront function answers 200 for
   ([above](#clean-urls--the-cloudfront-function)). `/about/` or `/about.html` is a
   301, which a search console reports as a sitemap error. The function passes
   `/sitemap.xml` through on its dot, pinned in `rewrite-url.test.mjs` beside
   `robots.txt`; `deploy-static.sh` uploads it in the must-revalidate pass.
-- **No `lastmod`, `changefreq` or `priority`.** Google ignores the last two and
-  trusts `lastmod` only where it has proven accurate; a build timestamp on every
-  page is the textbook inaccurate one.
+- **No `changefreq` or `priority`, and no generated `lastmod`.** Google ignores
+  the first two and trusts `lastmod` only where it has proven accurate. Blog
+  articles alone carry it, from their author-set publication or substantive
+  update time; ordinary pages never get a build timestamp.
+
+`/feed.xml` is a static GET route compiled from the blog manifest at build time.
+The CloudFront clean-URL function passes the dotted path through. The deploy
+script uploads `.xml` with the must-revalidate documents, then overwrites the
+feed object with `application/rss+xml; charset=utf-8`, because `aws s3 sync`
+infers generic XML from the extension rather than preserving the route's header.
 
 **The JSON-LD** is `apps/bracemark-site/src/lib/structured-data.ts`, rendered by
 `components/json-ld.tsx`: an `Organization` + `WebSite` + `SoftwareApplication`
@@ -638,11 +646,11 @@ production's origin in its card metadata. That is now
 
 **Three cache classes, keyed off the path rather than a list of filenames.**
 
-| what                                         | `Cache-Control`               | `--delete` |
-| -------------------------------------------- | ----------------------------- | ---------- |
-| `_next/**` — content-hashed, build-ID-scoped | `max-age=31536000, immutable` | no         |
-| images and icons — stable names              | `max-age=604800`              | yes        |
-| `.html`, `.txt`, `sw.js`, `manifest.json`    | `max-age=0, must-revalidate`  | yes        |
+| what                                              | `Cache-Control`               | `--delete` |
+| ------------------------------------------------- | ----------------------------- | ---------- |
+| `_next/**` — content-hashed, build-ID-scoped      | `max-age=31536000, immutable` | no         |
+| images and icons — stable names                   | `max-age=604800`              | yes        |
+| `.html`, `.txt`, `.xml`, `sw.js`, `manifest.json` | `max-age=0, must-revalidate`  | yes        |
 
 Uploaded in that order, so a client loading a page mid-deploy can always resolve
 the chunks it was just handed. The `.txt` files are Next 16's RSC payloads and

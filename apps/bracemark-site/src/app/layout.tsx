@@ -196,6 +196,16 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={cn(inter.variable, bricolage.variable, plexMono.variable)}>
+      {/* Page-level canonical metadata replaces `metadata.alternates`, so keep
+          the RSS discovery link in the shared document head. */}
+      <head>
+        <link
+          rel="alternate"
+          type="application/rss+xml"
+          title="Bracemark blog"
+          href={`${SITE_URL}/feed.xml`}
+        />
+      </head>
       <body>
         <div className={cn('flex min-h-dvh flex-col bg-background text-foreground antialiased')}>
           <SiteHeader />

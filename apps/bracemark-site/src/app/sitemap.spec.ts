@@ -6,6 +6,7 @@
 import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { BLOG_POSTS } from '../content/blog';
 import { DOC_PAGES } from '../content/docs';
 import { SITE_URL } from '../lib/site';
 import sitemap from './sitemap';
@@ -21,6 +22,7 @@ const UNLISTED = new Set<string>();
 // the expansion can't be satisfied by the list it is checking.
 const DYNAMIC_ROUTES: Record<string, string[]> = {
   '/docs/[slug]': DOC_PAGES.map((page) => page.slug),
+  '/blog/[slug]': BLOG_POSTS.map((post) => post.slug),
 };
 
 /** Every route `src/app/` defines, read from its `page.tsx` files. */

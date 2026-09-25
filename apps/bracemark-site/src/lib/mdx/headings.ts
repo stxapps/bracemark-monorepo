@@ -1,15 +1,16 @@
-// Heading ids for /docs, and the rehype plugin that stamps them.
+// Heading ids for /docs and /blog, and the rehype plugin that stamps them.
 //
-// Deliberately free of imports. The id rule has two callers that must agree: the
-// plugin, which runs inside the MDX compile at build time, and `docs.spec.ts`,
-// which recomputes the ids from the SOURCE lines to check every `/docs/…#anchor`
-// link. The spec cannot run the compile — `@mdx-js/mdx` and the unified stack
-// under it are ESM-only, dozens of packages deep, and jest would need every one
-// of them on its transform allowlist — so it reads `## ` lines instead. That is
-// only sound while a heading's source text IS its rendered text, which is why the
-// spec also holds headings to plain text: no code spans, emphasis, links or JSX.
+// Deliberately free of imports. The id rule has two kinds of caller that must
+// agree: the plugin, which runs inside the MDX compile at build time, and
+// `docs.spec.ts` / `blog.spec.ts`, which recompute the ids from the SOURCE lines
+// to check every `#anchor` link. The specs cannot run the compile — `@mdx-js/mdx`
+// and the unified stack under it are ESM-only, dozens of packages deep, and jest
+// would need every one of them on its transform allowlist — so they read `## `
+// lines instead. That is only sound while a heading's source text IS its rendered
+// text, which is why the specs also hold headings to plain text: no code spans,
+// emphasis, links or JSX.
 
-export type DocHeading = { id: string; text: string; depth: 2 | 3 };
+export type Heading = { id: string; text: string; depth: 2 | 3 };
 
 /**
  * The id for a heading's text, unique within one page. `seen` carries the counts
@@ -50,7 +51,7 @@ function textOf(node: HastNode): string {
  * The h2s are the page's "On this page" list; the h3s get ids so they can be
  * linked to, and share the counter so an h3 can't collide with an h2.
  */
-export function rehypeHeadingIds(collected: DocHeading[]) {
+export function rehypeHeadingIds(collected: Heading[]) {
   return (tree: HastNode) => {
     const seen = new Map<string, number>();
     const walk = (node: HastNode) => {

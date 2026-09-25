@@ -7,8 +7,8 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import sitemap from '../../app/sitemap';
-import { MDX_COMPONENTS } from '../../components/docs/mdx-components';
-import { headingId } from '../../lib/docs/headings';
+import { MDX_COMPONENTS } from '../../components/mdx-components';
+import { headingId } from '../../lib/mdx/headings';
 import { SITE_URL } from '../../lib/site';
 import { FAQ_GROUPS } from '../faq';
 import { DOC_PAGES } from './index';
@@ -16,7 +16,7 @@ import { DOC_PAGES } from './index';
 // The /docs pages are MDX, which no linter, type-checker or prettier pass reads.
 // Everything a .tsx page gets for free from those tools, and that a docs page can
 // get wrong silently, is asserted here instead. The MDX is read as TEXT, never
-// compiled: the compiler is ESM-only and deep (lib/docs/headings.ts has why).
+// compiled: the compiler is ESM-only and deep (lib/mdx/headings.ts has why).
 
 const DIR = __dirname;
 const FILES = readdirSync(DIR).filter((file) => file.endsWith('.mdx'));
@@ -76,7 +76,7 @@ describe.each(DOC_PAGES.map((page) => page.slug))('/docs/%s', (slug) => {
   const source = SOURCES.get(slug) ?? '';
   const lines = proseLines(source);
 
-  // The component map is the whole vocabulary (components/docs/mdx-components.tsx).
+  // The component map is the whole vocabulary (components/mdx-components.tsx).
   // An import would let a page reach past it, and an export would add a
   // named binding nothing renders.
   it('imports and exports nothing', () => {

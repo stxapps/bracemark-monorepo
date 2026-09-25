@@ -37,6 +37,7 @@ import {
   SOURCE,
 } from '@stxapps/shared';
 
+import type { BlogPost } from '../content/blog';
 import type { FaqGroup } from '../content/faq';
 import { SITE_URL } from './site';
 
@@ -152,6 +153,24 @@ export function faqPage(groups: FaqGroup[]) {
         name: item.q,
         acceptedAnswer: { '@type': 'Answer', text: plainText(item.a) },
       })),
+  };
+}
+
+/** The article's visible title, description and dates, with no new claims. */
+export function blogPosting(post: BlogPost) {
+  const url = `${SITE_URL}/blog/${post.slug}`;
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'BlogPosting',
+    '@id': `${url}#article`,
+    headline: post.title,
+    description: post.description,
+    url,
+    mainEntityOfPage: url,
+    datePublished: post.publishedAt,
+    ...(post.updatedAt && { dateModified: post.updatedAt }),
+    author: { '@type': 'Organization', name: BRAND.name, url: `${SITE_URL}/about` },
+    publisher: { '@id': ORGANIZATION_ID },
   };
 }
 

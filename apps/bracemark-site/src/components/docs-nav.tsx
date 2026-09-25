@@ -2,8 +2,8 @@ import Link from 'next/link';
 
 import { cn } from '@stxapps/web-ui/lib/utils';
 
-import { DOC_GROUPS } from '../../content/docs';
-import { ChevronGlyph } from '../glyphs';
+import { DOC_GROUPS } from '../content/docs';
+import { ChevronGlyph } from './glyphs';
 
 // The /docs sidebar: every page, grouped, in the manifest's order. The current
 // page is marked with `aria-current` rather than by a client hook, because every

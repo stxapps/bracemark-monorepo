@@ -3,13 +3,14 @@ import Link from 'next/link';
 
 import { entitlementsOf, PLAN_LABELS } from '@stxapps/shared';
 
-import { APP_URL } from '../../lib/site';
+import { APP_URL } from '../lib/site';
 
-// Everything a /docs page may use beyond plain Markdown. The pages import nothing
-// (docs.spec.ts holds that), so this map is the whole vocabulary, and a tag not
-// in it fails the build rather than rendering blank.
+// Everything a /docs page or /blog post may use beyond plain Markdown. The pages
+// import nothing (docs.spec.ts and blog.spec.ts hold that), so this map is the
+// whole vocabulary, and a tag not in it fails the build rather than rendering
+// blank.
 //
-// Plain elements are NOT restyled here: `.docs-prose` in globals.css styles
+// Plain elements are NOT restyled here: `.mdx-prose` in globals.css styles
 // h2/p/ul/table/code as a document, the way `.legal-prose` does for /terms and
 // /privacy, so a page reads as Markdown to whoever edits it. The overrides are
 // only for behaviour.

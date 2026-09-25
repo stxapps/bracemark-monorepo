@@ -128,15 +128,19 @@ pages link to the relevant product page without repeating its pitch. Comparison
 pages need explicit criteria, sources and a review date so their facts stay
 current.
 
-| piece                                    | what it is                                                                                                                    |
-| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `src/content/docs/index.ts`              | the manifest — groups, reading order, and each page's slug, title and description (the meta description, printed as the lede) |
-| `src/content/docs/<slug>.mdx`            | the prose, starting at `##` — the page prints its own `<h1>` from the manifest                                                |
-| `src/app/docs/[slug]/page.tsx`           | the one route; `generateStaticParams` from the manifest, `dynamicParams = false`                                              |
-| `src/lib/docs/load.ts`                   | reads the file and compiles it with `@mdx-js/mdx` at build time                                                               |
-| `src/lib/docs/headings.ts`               | the heading-id rule and the rehype plugin that stamps it — the "On this page" column                                          |
-| `src/components/docs/mdx-components.tsx` | everything a page may use beyond Markdown: `<AppLink path=…>`, `<FreeLinks />`, and on-site links via next/link               |
-| `.docs-prose` (`globals.css`)            | the styling, as `.legal-prose` does for /terms and /privacy — so a page stays plain Markdown                                  |
+| piece                               | what it is                                                                                                                    |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `src/content/docs/index.ts`         | the manifest — groups, reading order, and each page's slug, title and description (the meta description, printed as the lede) |
+| `src/content/docs/<slug>.mdx`       | the prose, starting at `##` — the page prints its own `<h1>` from the manifest                                                |
+| `src/app/docs/[slug]/page.tsx`      | the one route; `generateStaticParams` from the manifest, `dynamicParams = false`                                              |
+| `src/lib/mdx/load.ts`               | reads the file and compiles it with `@mdx-js/mdx` at build time                                                               |
+| `src/lib/mdx/headings.ts`           | the heading-id rule and the rehype plugin that stamps it — the "On this page" column                                          |
+| `src/components/mdx-components.tsx` | everything a page may use beyond Markdown: `<AppLink path=…>`, `<FreeLinks />`, and on-site links via next/link               |
+| `.mdx-prose` (`globals.css`)        | the styling, as `.legal-prose` does for /terms and /privacy — so a page stays plain Markdown                                  |
+
+The last four rows are shared with `/blog` (next section), which is why they are
+named for MDX rather than for docs; what only docs uses — `lib/docs/metadata.ts`,
+`components/docs-nav.tsx` — stays named for it.
 
 **We compile the MDX; `@next/mdx` doesn't.** Next 16 builds with Turbopack, which
 accepts remark/rehype plugins only as serializable strings, and the heading plugin
@@ -174,11 +178,25 @@ computable from its source line. The spec holds that too. What it can't check is
 the copy itself: run each page through the `brand-review` skill, and write the
 steps from the UI strings, click for web and tap for the apps.
 
-`/blog`, when it has posts, is the same loader over `src/content/blog/` with its
-own manifest carrying dates, plus a static feed route. It holds news, releases,
-announcements and dated thoughts or experiences; posts link to `/docs` for
-answers that must stay current. Search is deliberately absent while the docs fit
-a sidebar.
+### the marketing site's `/blog`
+
+Dated product news and first-hand notes live at `/blog`; task instructions and
+current reference facts stay in `/docs`. Each post is an MDX file under
+`src/content/blog/`, compiled by the same build-only loader as docs. The typed
+blog manifest supplies slugs, titles, summaries, and publication/update times to
+the index, static article paths, metadata, sitemap, and RSS feed. An article's
+visible date, `BlogPosting` JSON-LD, and feed date therefore come from one value.
+The article page reuses the docs component map and prose rules, without the docs
+sidebar. The post source imports nothing. `content/blog/blog.spec.ts` checks its
+file/manifest parity, mapped components, date format, and internal links, since
+MDX is outside the TypeScript and ESLint passes described above.
+
+`app/feed.xml/route.ts` emits an RSS 2.0 summary feed as a static GET response
+during `next build`; no request-time server runs at the apex. Its item GUID is
+the article's permanent URL, and `pubDate` stays at the original publication
+time when an article is updated. `lib/blog/feed.spec.ts` guards XML escaping and
+the date rule. Search remains absent while the docs and blog fit ordinary
+navigation.
 
 ### libs
 
