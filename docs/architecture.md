@@ -120,9 +120,13 @@ next section.
 
 ### the marketing site's `/docs`
 
-Help pages, one task each, with the labels the apps actually print. `/faq`,
-`/security`, `/extractor` and `/delete-account` say **what** and **why**; `/docs`
-says **how**, and a FAQ answer that grows steps should link to a docs page instead.
+The maintained knowledge base: task guides using the labels the apps actually
+print, concept explanations, and factual comparisons. `/faq` gives short answers;
+`/security`, `/extractor` and `/delete-account` present the main product
+explanations. A FAQ answer that needs more detail links to a docs page, and docs
+pages link to the relevant product page without repeating its pitch. Comparison
+pages need explicit criteria, sources and a review date so their facts stay
+current.
 
 | piece                                    | what it is                                                                                                                    |
 | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
@@ -148,6 +152,8 @@ which is about what ships to the apex.
 module runs from Next's build output, where the source tree isn't. So the sitemap,
 the static params, the sidebar and prev/next all read one list, and
 `src/content/docs/docs.spec.ts` holds the manifest and the folder to each other.
+The docs index and each page also set their own canonical URL and social preview
+metadata; each article's title and description come from that same manifest.
 
 **A page imports nothing.** Numbers come from `@stxapps/shared` through the
 component map (`<FreeLinks />` reads the plan table, never a typed 200), and a link
@@ -169,8 +175,10 @@ the copy itself: run each page through the `brand-review` skill, and write the
 steps from the UI strings, click for web and tap for the apps.
 
 `/blog`, when it has posts, is the same loader over `src/content/blog/` with its
-own manifest carrying dates, plus a static feed route. Search is deliberately
-absent while the docs fit a sidebar.
+own manifest carrying dates, plus a static feed route. It holds news, releases,
+announcements and dated thoughts or experiences; posts link to `/docs` for
+answers that must stay current. Search is deliberately absent while the docs fit
+a sidebar.
 
 ### libs
 

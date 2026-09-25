@@ -1,4 +1,3 @@
-import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
@@ -8,6 +7,7 @@ import { DocsNav } from '../../../components/docs/docs-nav';
 import { MDX_COMPONENTS } from '../../../components/docs/mdx-components';
 import { DOC_PAGES, docNeighbours, findDoc } from '../../../content/docs';
 import { loadDoc } from '../../../lib/docs/load';
+import { docsMetadata } from '../../../lib/docs/metadata';
 
 // One /docs page. The page list, titles and descriptions are the manifest
 // (content/docs/index.ts); the prose is `content/docs/<slug>.mdx`, compiled at
@@ -25,10 +25,11 @@ export function generateStaticParams() {
 
 type Props = { params: Promise<{ slug: string }> };
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
+export async function generateMetadata({ params }: Props) {
   const found = findDoc((await params).slug);
   if (!found) return {};
-  return { title: found.page.title, description: found.page.description };
+  const { title, description, slug } = found.page;
+  return docsMetadata(title, description, `/docs/${slug}`);
 }
 
 export default async function Page({ params }: Props) {

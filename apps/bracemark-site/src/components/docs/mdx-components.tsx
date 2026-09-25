@@ -1,7 +1,7 @@
 import type { MDXComponents } from 'mdx/types';
 import Link from 'next/link';
 
-import { entitlementsOf } from '@stxapps/shared';
+import { entitlementsOf, PLAN_LABELS } from '@stxapps/shared';
 
 import { APP_URL } from '../../lib/site';
 
@@ -43,8 +43,14 @@ function FreeLinks() {
   return entitlementsOf('free').maxLinks;
 }
 
+/** A plan name, kept in step with the app and pricing page. */
+function PlanName({ plan }: { plan: keyof typeof PLAN_LABELS }) {
+  return PLAN_LABELS[plan];
+}
+
 export const MDX_COMPONENTS: MDXComponents = {
   a: Anchor,
   AppLink,
   FreeLinks,
+  PlanName,
 };

@@ -5,16 +5,16 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { PageShell } from '../../components/page-shell';
 import { DOC_GROUPS } from '../../content/docs';
+import { docsMetadata } from '../../lib/docs/metadata';
 
-export const metadata: Metadata = {
-  title: 'Docs',
-  description:
-    'Step-by-step help for Bracemark, with the labels you’ll see on screen: importing and exporting your library, and getting back in with your recovery code.',
-};
+export const metadata: Metadata = docsMetadata(
+  'Docs',
+  'Guides to using Bracemark, with the labels you’ll see on screen and the details that affect your links and account.',
+  '/docs',
+);
 
-// The /docs landing: the manifest's groups, each page with its description. The
-// division of labour with /faq is the point of the lede — /faq says what and why,
-// /docs says how (docs/architecture.md, _the marketing site's `/docs`_).
+// The /docs landing: the manifest's groups, each page with its description.
+// The FAQ gives short answers; a docs page has room for the full explanation.
 
 const link = cn(
   'rounded-sm text-signal underline decoration-signal-line underline-offset-2 hover:decoration-signal focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none',
@@ -24,11 +24,11 @@ export default function Page() {
   return (
     <PageShell
       eyebrow="Docs"
-      title="How to do it, step by step."
+      title="Guides and answers."
       lede={
         <>
-          Each page walks through one task with the labels you’ll see on screen. For what Bracemark
-          is and why it works the way it does, start with the{' '}
+          Find the steps to use Bracemark and the details that affect your links and account. For a
+          short answer to a common question, start with the{' '}
           <Link className={link} href="/faq">
             FAQ
           </Link>
