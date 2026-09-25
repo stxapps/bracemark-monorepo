@@ -69,6 +69,14 @@ describe('toNetscapeHtml', () => {
     expect(untagged).not.toContain('TAGS=');
   });
 
+  it('writes descriptions only when requested for a standalone file conversion', () => {
+    const snapshot = bundle([folder('L', [link({ note: 'First <draft> & second' })])]);
+    expect(toNetscapeHtml(snapshot)).not.toContain('<DD>');
+    const html = toNetscapeHtml(snapshot, { includeNotes: true });
+    expect(html).toContain('<DD>First &lt;draft&gt; &amp; second');
+    expect(parseImportText(html).links[0].note).toBe('First <draft> & second');
+  });
+
   it('escapes HTML in titles, folder names, urls, and tags', () => {
     const html = toNetscapeHtml(
       bundle([

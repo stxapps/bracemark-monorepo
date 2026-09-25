@@ -44,6 +44,13 @@ the three interop serializers are pure functions in `@stxapps/shared`
   importing deleted-pending links into a browser as live bookmarks is never
   wanted.
 
+The marketing site's separate `/tools/bookmark-converter` reads a selected
+Raindrop.io CSV file in the browser and writes bookmarks HTML. It uses the pure
+CSV importer and Netscape serializer from `shared`, with a strict source check,
+an inspection receipt, and a parse-back check on the generated file. It does not
+read or write a Bracemark account. The app can import the original CSV directly;
+the converter's download is for someone who needs an HTML bookmarks file.
+
 Export reads the **local** store (unsynced edits on this device are included)
 after a pre-export sync refresh; a failed refresh downgrades to a warning —
 "this is this device's copy" — rather than aborting. The policy that spans all

@@ -49,6 +49,7 @@ convention: the site has no auth stack, no data layer, and its own origin (see
   on `/sign-in` (`AuthGuard`'s `isInstalled`).
 - **bracemark-site** — Next.js marketing site, served at the apex
   `bracemark.com`: the landing page, `/pricing`, `/about`, `/docs`, `/blog`,
+  `/tools/bookmark-converter`,
   `/terms`, `/privacy`, `/support`, `/contact`, `/delete-account` (the URL
   Play's Data safety form asks for). Static export like bracemark-web, and
   deliberately **thin** — it depends on `@stxapps/shared` and `@stxapps/web-ui`
@@ -61,6 +62,15 @@ convention: the site has no auth stack, no data layer, and its own origin (see
   most: a marketing pricing page that hand-copies quotas is the classic drift.
   It also calls `bracemark-api` for public data (stats, health), which is why the
   apex is a real CORS origin and not a redirect-only host.
+
+The marketing site's bookmark converter is a client component inside a static
+page. It reads a selected Raindrop.io CSV file locally and uses pure code in
+`@stxapps/shared` to inspect and serialize browser bookmarks HTML. It does not
+import the signed-in web app's data layer or send file content to an API. The
+shared conversion checks its output by parsing it again before a download is
+offered; the page lists skipped rows, metadata the output cannot hold, and
+fields a destination browser may ignore.
+
 - **bracemark-extension** — browser extension (wxt)
 - **bracemark-api** — backend API (hand-written, not nx-generated)
 - **bracemark-extractor** — Cloudflare Workers + hono server that fetches

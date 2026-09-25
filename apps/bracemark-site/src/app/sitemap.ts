@@ -39,6 +39,7 @@ const PATHS = [
   '/docs',
   ...DOC_PAGES.map((page) => `/docs/${page.slug}`),
   '/blog',
+  '/tools/bookmark-converter',
   '/support',
   '/security',
   '/extractor',

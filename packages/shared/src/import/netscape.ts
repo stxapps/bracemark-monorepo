@@ -25,9 +25,9 @@ import { FAVORITES_TAG, isRaindropHtml, withHighlights, withoutUnsorted } from '
 //
 // <DD> is the format's own description element, and the one construct here with
 // NO closing tag: the description runs from the tag to the next block one. Our
-// exporter never writes it (export/netscape.ts sends notes to CSV instead — see
-// export/csv.ts), so it exists purely to read what other apps write, which is
-// the whole job of this file. Dropping it silently lost a note per link, and a
+// app exporter does not write it (export/netscape.ts sends app notes to CSV
+// instead — see export/csv.ts); the standalone converter opts in when making
+// an HTML file from a CSV. Dropping it silently lost a note per link, and a
 // note is the one field a bookmarks file carries that the user TYPED. Raindrop
 // writes a link's highlights as MORE <DD>s after the note, each holding one
 // <blockquote> — see raindrop.ts for where those go.

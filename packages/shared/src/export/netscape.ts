@@ -1,4 +1,21 @@
-import type { ExportBundle, ExportFolder, ExportLinkRow } from './bundle';
+import type { ExportLinkRow } from './bundle';
+
+// A file conversion can lack dates even when the app's own export snapshot never
+// does. Omit absent attributes rather than inventing the day of conversion.
+export type NetscapeLinkRow = Omit<ExportLinkRow, 'createdAt' | 'updatedAt'> &
+  Partial<Pick<ExportLinkRow, 'createdAt' | 'updatedAt'>>;
+
+export interface NetscapeFolder {
+  name: string;
+  links: NetscapeLinkRow[];
+  children: NetscapeFolder[];
+}
+
+export interface NetscapeBundle {
+  folders: NetscapeFolder[];
+  rootLinks?: NetscapeLinkRow[];
+  exportedAt?: number;
+}
 
 // Netscape Bookmark File serializer — the one interop format everything reads:
 // web browsers (Chrome/Firefox/Safari "Import bookmarks"), LinkWarden, and
@@ -22,26 +39,35 @@ function esc(value: string): string {
     .replace(/"/g, '&quot;');
 }
 
-function linkLine(link: ExportLinkRow, indent: string): string {
-  const attrs = [
-    `HREF="${esc(link.url)}"`,
-    `ADD_DATE="${Math.floor(link.createdAt / 1000)}"`,
-    `LAST_MODIFIED="${Math.floor(link.updatedAt / 1000)}"`,
-  ];
+function linkLines(link: NetscapeLinkRow, indent: string, includeNotes: boolean): string[] {
+  const attrs = [`HREF="${esc(link.url)}"`];
+  if (link.createdAt !== undefined) attrs.push(`ADD_DATE="${Math.floor(link.createdAt / 1000)}"`);
+  if (link.updatedAt !== undefined)
+    attrs.push(`LAST_MODIFIED="${Math.floor(link.updatedAt / 1000)}"`);
   if (link.tagNames.length > 0) attrs.push(`TAGS="${esc(link.tagNames.join(','))}"`);
-  return `${indent}<DT><A ${attrs.join(' ')}>${esc(link.title)}</A>`;
+  const lines = [`${indent}<DT><A ${attrs.join(' ')}>${esc(link.title)}</A>`];
+  if (includeNotes && link.note) lines.push(`${indent}<DD>${esc(link.note)}`);
+  return lines;
 }
 
-function pushFolder(folder: ExportFolder, indent: string, out: string[]): void {
+function pushFolder(
+  folder: NetscapeFolder,
+  indent: string,
+  out: string[],
+  includeNotes: boolean,
+): void {
   out.push(`${indent}<DT><H3>${esc(folder.name)}</H3>`);
   out.push(`${indent}<DL><p>`);
   const inner = indent + '    ';
-  for (const link of folder.links) out.push(linkLine(link, inner));
-  for (const child of folder.children) pushFolder(child, inner, out);
+  for (const link of folder.links) out.push(...linkLines(link, inner, includeNotes));
+  for (const child of folder.children) pushFolder(child, inner, out, includeNotes);
   out.push(`${indent}</DL><p>`);
 }
 
-export function toNetscapeHtml(bundle: ExportBundle): string {
+export function toNetscapeHtml(
+  bundle: NetscapeBundle,
+  options: { includeNotes?: boolean } = {},
+): string {
   const out: string[] = [
     '<!DOCTYPE NETSCAPE-Bookmark-file-1>',
     '<!-- This is an automatically generated file.',
@@ -52,7 +78,10 @@ export function toNetscapeHtml(bundle: ExportBundle): string {
     '<H1>Bookmarks</H1>',
     '<DL><p>',
   ];
-  for (const folder of bundle.folders) pushFolder(folder, '    ', out);
+  for (const link of bundle.rootLinks ?? [])
+    out.push(...linkLines(link, '    ', options.includeNotes === true));
+  for (const folder of bundle.folders)
+    pushFolder(folder, '    ', out, options.includeNotes === true);
   out.push('</DL><p>');
   return out.join('\n') + '\n';
 }

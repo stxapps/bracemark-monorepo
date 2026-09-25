@@ -30,11 +30,13 @@ import {
 
 // One pass, character-wise — small and total: every input yields SOME row
 // split, garbage never throws, and the header gate above decides relevance.
-function parseCsv(text: string): string[][] {
+export function scanCsv(text: string): { rows: string[][]; malformed: boolean } {
   const rows: string[][] = [];
   let row: string[] = [];
   let field = '';
   let inQuotes = false;
+  let closedQuote = false;
+  let malformed = false;
 
   const src = text.startsWith('﻿') ? text.slice(1) : text;
   for (let i = 0; i < src.length; i++) {
@@ -46,6 +48,7 @@ function parseCsv(text: string): string[][] {
           i++;
         } else {
           inQuotes = false;
+          closedQuote = true;
         }
       } else {
         field += ch;
@@ -53,27 +56,32 @@ function parseCsv(text: string): string[][] {
       continue;
     }
     if (ch === '"') {
+      if (field !== '' || closedQuote) malformed = true;
       inQuotes = true;
     } else if (ch === ',') {
       row.push(field);
       field = '';
+      closedQuote = false;
     } else if (ch === '\n' || ch === '\r') {
       if (ch === '\r' && src[i + 1] === '\n') i++;
       row.push(field);
       field = '';
       rows.push(row);
       row = [];
+      closedQuote = false;
     } else {
+      if (closedQuote) malformed = true;
       field += ch;
     }
   }
+  if (inQuotes) malformed = true;
   // Flush a final row that has no trailing newline.
   if (field !== '' || row.length > 0) {
     row.push(field);
     rows.push(row);
   }
   // A row that's one empty field is a blank line, not data.
-  return rows.filter((r) => r.length > 1 || r[0].trim() !== '');
+  return { rows: rows.filter((r) => r.length > 1 || r[0].trim() !== ''), malformed };
 }
 
 // A folder cell → the path it names. Our own export and the `a/b/c` shape
@@ -91,7 +99,7 @@ function folderPath(value: string, raindrop: boolean): string[] {
 }
 
 export function parseRaindropCsv(text: string): ImportedLink[] {
-  const rows = parseCsv(text);
+  const rows = scanCsv(text).rows;
   if (rows.length < 2) return [];
 
   const header = rows[0].map((name) => name.trim().toLowerCase());

@@ -60,6 +60,7 @@ export * from './sync/system-lists';
 export * from './sync/tree';
 export * from './sync/tree-dnd';
 export * from './theme/theme';
+export * from './tools/bookmark-converter';
 export * from './url/host-identity';
 export * from './url/url';
 export * from './zod';
