@@ -601,10 +601,10 @@ export const FAQ_GROUPS: FaqGroup[] = [
         q: 'What if I lose my password?',
         a: (
           <>
-            Sign in with your recovery code, then set a new password. If both are gone, so is the
-            library — no one at Bracemark can recover it, because no one here can decrypt it. That
-            is the honest cost of the guarantee on the front page, and it is the reason the app asks
-            you to save both.
+            Sign in with your recovery code, then set a new password. If both are gone, we cannot
+            sign you in or decrypt your account for you. A device that is still signed in may let
+            you export your links into a new account; otherwise there is no way to recover them.{' '}
+            <PageLink href="/docs/lost-password">Lost your password</PageLink> has the steps.
           </>
         ),
       },
@@ -732,7 +732,11 @@ export const FAQ_GROUPS: FaqGroup[] = [
             pick, and the file on your device is never changed. If you take the ones that fit,
             importing the same file again later brings in the rest — the links already saved are
             skipped as duplicates. One exception: a Bracemark backup (.zip) is all-or-nothing,
-            because a half-restored backup is worse than none.
+            because a half-restored backup is worse than none.{' '}
+            <PageLink href="/docs/import#if-the-file-holds-more-than-your-plan-allows">
+              Import your links
+            </PageLink>{' '}
+            explains the choices.
           </>
         ),
       },
@@ -1092,7 +1096,11 @@ export const FAQ_GROUPS: FaqGroup[] = [
             version to restore (see <HashLink id="undo-edit">can I undo a change</HashLink>).
             Anything you change offline queues up and goes out in order the next time you have a
             network. Titles and preview images fetched in the background live in a separate
-            encrypted file from what you write, so one never overwrites the other.
+            encrypted file from what you write, so one never overwrites the other. See{' '}
+            <PageLink href="/docs/sync-and-devices#when-two-devices-change-the-same-link">
+              Sync and devices
+            </PageLink>{' '}
+            for the steps to check sync.
           </>
         ),
       },
