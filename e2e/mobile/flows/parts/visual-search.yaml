@@ -3,9 +3,11 @@ appId: com.bracemark.app
 ---
 - tapOn:
     id: 'links-search-toggle'
-- tapOn:
-    id: 'links-search-input'
-- inputText: ${SEARCH_WORD}
+- runFlow:
+    file: ../subflows/type-autofocused.yaml
+    env:
+      FIELD: links-search-input
+      TEXT: ${SEARCH_WORD}
 - pressKey: Enter
 - extendedWaitUntil:
     visible:

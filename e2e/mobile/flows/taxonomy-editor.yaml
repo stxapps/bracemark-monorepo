@@ -81,9 +81,11 @@ tags: [TAXONOMY-EDITOR-002, full, online, ios, android]
 - runFlow:
     file: subflows/dismiss-logbox.yaml
 - tapOn: 'Add link'
-- tapOn:
-    id: 'add-link-url'
-- inputText: ${LINK_URL}
+- runFlow:
+    file: subflows/type-autofocused.yaml
+    env:
+      FIELD: add-link-url
+      TEXT: ${LINK_URL}
 - tapOn:
     id: 'add-link-optional'
 

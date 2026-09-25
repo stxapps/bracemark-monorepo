@@ -6,11 +6,10 @@ appId: com.bracemark.app
 ---
 - tapOn:
     id: 'list-menu-lock'
-- tapOn:
-    id: 'lock-dialog-password'
-- inputText: ${LOCK_PASSWORD}
-- tapOn:
-    id: 'lock-dialog-submit'
+- runFlow:
+    file: ../subflows/lock-dialog.yaml
+    env:
+      PASSWORD: ${LOCK_PASSWORD}
 - extendedWaitUntil:
     visible: 'Locked'
     timeout: 20000

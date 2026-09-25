@@ -24,9 +24,11 @@ tags: [LINK-CLOSE-001, full, online, ios, android]
 # A saved link: what the edit screen opens on, and what makes the absence
 # assertions after the restart mean something.
 - tapOn: 'Add link'
-- tapOn:
-    id: 'add-link-url'
-- inputText: ${ANCHOR_URL}
+- runFlow:
+    file: subflows/type-autofocused.yaml
+    env:
+      FIELD: add-link-url
+      TEXT: ${ANCHOR_URL}
 - tapOn:
     id: 'add-link-save'
 - extendedWaitUntil:
@@ -36,9 +38,11 @@ tags: [LINK-CLOSE-001, full, online, ios, android]
 # --- the add panel ----------------------------------------------------------------
 # A bare typed URL is deliberately NOT dirty; the note makes it so.
 - tapOn: 'Add link'
-- tapOn:
-    id: 'add-link-url'
-- inputText: ${DISCARDED_URL}
+- runFlow:
+    file: subflows/type-autofocused.yaml
+    env:
+      FIELD: add-link-url
+      TEXT: ${DISCARDED_URL}
 - tapOn:
     id: 'add-link-optional'
 - tapOn:

@@ -83,11 +83,10 @@ tags: [LOCK-LIST-001, full, online, destructive, ios, android]
     rightOf: ${PARENT_LIST}
 - tapOn:
     id: 'list-menu-lock'
-- tapOn:
-    id: 'lock-dialog-password'
-- inputText: ${LOCK_PASSWORD}
-- tapOn:
-    id: 'lock-dialog-submit'
+- runFlow:
+    file: subflows/lock-dialog.yaml
+    env:
+      PASSWORD: ${LOCK_PASSWORD}
 - extendedWaitUntil:
     visible: 'Locked'
     timeout: 20000
@@ -136,9 +135,11 @@ tags: [LOCK-LIST-001, full, online, destructive, ios, android]
 
 - tapOn:
     id: 'links-search-toggle'
-- tapOn:
-    id: 'links-search-input'
-- inputText: ${WORD}
+- runFlow:
+    file: subflows/type-autofocused.yaml
+    env:
+      FIELD: links-search-input
+      TEXT: ${WORD}
 - pressKey: Enter
 - extendedWaitUntil:
     visible:

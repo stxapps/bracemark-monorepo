@@ -79,9 +79,11 @@ tags: [FILTER-001, full, online, destructive, ios, android]
 - runFlow:
     file: subflows/dismiss-logbox.yaml
 - tapOn: 'Add link'
-- tapOn:
-    id: 'add-link-url'
-- inputText: ${FILED_URL}
+- runFlow:
+    file: subflows/type-autofocused.yaml
+    env:
+      FIELD: add-link-url
+      TEXT: ${FILED_URL}
 - tapOn:
     id: 'add-link-optional'
 - tapOn:

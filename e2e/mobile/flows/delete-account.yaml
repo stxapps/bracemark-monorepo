@@ -95,13 +95,8 @@ tags: [ACCOUNT-DELETE-002, full, online, destructive, ios, android]
 # The refusal. A tombstoned username 404s on the pre-auth door fetch, so no
 # Argon2id runs and the answer is quick.
 - tapOn: 'Sign in'
-- tapOn:
-    id: 'sign-in-username'
-- inputText: ${USERNAME}
-- tapOn:
-    id: 'sign-in-password'
-- inputText: ${PASSWORD}
-- hideKeyboard
+- runFlow:
+    file: subflows/sign-in-fields.yaml
 - tapOn:
     id: 'sign-in-submit'
 

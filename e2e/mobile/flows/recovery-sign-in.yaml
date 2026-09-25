@@ -32,17 +32,28 @@ tags: [NATIVE-ACCOUNT-002, full, online, ios, android]
 - tapOn:
     id: 'sign-in-use-recovery'
 
-- tapOn:
-    id: 'sign-in-recovery-username'
-- inputText: ${USERNAME}
+- runFlow:
+    file: subflows/type-autofocused.yaml
+    env:
+      FIELD: sign-in-recovery-username
+      TEXT: ${USERNAME}
 
 # --- the wrong code -----------------------------------------------------------
 # Well-formed but not this account's: 52 Crockford base32 chars in the display
 # grouping, so it clears the field's own validation and fails where it should —
 # on the GCM tag, when the recovery-KEK it derives doesn't unwrap the DEK.
+#
+# The code field is tapped once the form has settled, and the username read back
+# after it, as in subflows/sign-in.yaml: AuthScreen's KeyboardAwareScrollView moves
+# the form under a tap aimed from a stale snapshot.
+- waitForAnimationToEnd:
+    timeout: 5000
 - tapOn:
     id: 'sign-in-recovery-code'
 - inputText: '00000-00000-00000-00000-00000-00000-00000-00000-00000-00000-00'
+- assertVisible:
+    id: 'sign-in-recovery-username'
+    text: ${USERNAME}
 - hideKeyboard
 - tapOn:
     id: 'sign-in-recovery-submit'
@@ -72,13 +83,20 @@ tags: [NATIVE-ACCOUNT-002, full, online, ios, android]
 - tapOn:
     id: 'sign-in-use-recovery'
 
-- tapOn:
-    id: 'sign-in-recovery-username'
-- inputText: ${USERNAME}
+- runFlow:
+    file: subflows/type-autofocused.yaml
+    env:
+      FIELD: sign-in-recovery-username
+      TEXT: ${USERNAME}
 
+- waitForAnimationToEnd:
+    timeout: 5000
 - tapOn:
     id: 'sign-in-recovery-code'
 - inputText: ${RECOVERY_CODE}
+- assertVisible:
+    id: 'sign-in-recovery-username'
+    text: ${USERNAME}
 - hideKeyboard
 - tapOn:
     id: 'sign-in-recovery-submit'

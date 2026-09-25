@@ -32,9 +32,11 @@ tags: [EXTRACT-NATIVE-001, full, online, internet, ios, android]
     id: 'settings-close'
 
 - tapOn: 'Add link'
-- tapOn:
-    id: 'add-link-url'
-- inputText: ${LINK_URL}
+- runFlow:
+    file: subflows/type-autofocused.yaml
+    env:
+      FIELD: add-link-url
+      TEXT: ${LINK_URL}
 # No hideKeyboard: see add-link.yaml — the panel sits above the keyboard.
 - tapOn:
     id: 'add-link-save'
