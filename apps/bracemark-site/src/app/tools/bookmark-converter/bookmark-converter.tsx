@@ -153,9 +153,8 @@ export function BookmarkConverter({ appImportUrl }: BookmarkConverterProps) {
             )}
           />
           <p id="file-help" className={cn('mt-2 text-sm text-muted-foreground')}>
-            Up to {BOOKMARK_CONVERTER_MAX_MB} MB and{' '}
-            {BOOKMARK_CONVERTER_MAX_ROWS.toLocaleString()} bookmark rows. The CSV must be exported by
-            Raindrop.io.
+            Up to {BOOKMARK_CONVERTER_MAX_MB} MB and {BOOKMARK_CONVERTER_MAX_ROWS.toLocaleString()}{' '}
+            bookmark rows. The CSV must be exported by Raindrop.io.
           </p>
         </div>
         {busy && (

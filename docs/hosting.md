@@ -182,7 +182,16 @@ bake in:
 - A static export cannot mint per-request nonces, so Next's inline bootstrap
   scripts need either a build-time hash union (regenerated every deploy) or
   `'unsafe-inline'`, with `connect-src` as the load-bearing exfiltration block.
-- `worker-src 'self'` covers the Argon2 worker and the serwist service worker.
+- `worker-src 'self' blob:` — **both halves are needed, and `'self'` alone
+  silently breaks sign-in.** The serwist service worker registers from a
+  same-origin script, so it needs `'self'`. The Argon2 worker does not: Turbopack
+  never hands `new Worker(new URL('./argon2.worker.ts', import.meta.url))` the
+  chunk's URL. Its runtime builds a small bootstrap `Blob` that `importScripts`
+  the real chunks, and starts the worker from that `blob:` URL (search the
+  emitted `_next/static/chunks/turbopack-*.js` for `createObjectURL`). `'self'`
+  does not match `blob:`, so a policy with only `'self'` blocks the KDF, and every
+  sign-in and account creation hangs, while the service worker registers fine.
+  The chunks the bootstrap imports are same-origin and fall under `script-src`.
 - `connect-src` is `'self'`, that tier's api and extractor origins, **and that
   tier's R2 endpoint** — `https://<cloudflare-account-id>.r2.cloudflarestorage.com`.
   R2 is the one that gets forgotten, because it is the one data path that never
@@ -245,10 +254,18 @@ need.
 
 **The marketing site gets its own, much smaller policy — do not reuse the app's.**
 The apex holds no credentials, runs no crypto and has no service worker, so it
-needs none of `wasm-unsafe-eval`, `worker-src`, or the Paddle allowances;
-checkout happens in the app. A tight `default-src 'self'` plus its tier's api
-origin in `connect-src` is the whole policy. Copying bracemark-web's would
-silently widen the apex to every host the app needs, for nothing.
+needs none of `wasm-unsafe-eval` or the Paddle allowances; checkout happens in
+the app. A tight `default-src 'self'` plus its tier's api origin in `connect-src`
+is almost the whole policy. Copying bracemark-web's would silently widen the apex
+to every host the app needs, for nothing.
+
+**The one addition is `worker-src blob:`.** The site does run a dedicated worker,
+the bookmark converter's (`src/app/tools/bookmark-converter/`), and Turbopack
+starts it from a `blob:` bootstrap exactly as it does the app's Argon2 worker
+(above). Without a `worker-src`, the browser falls back through `script-src` to
+`default-src 'self'`, which does not match `blob:`. The tool then fails on every
+file with "Could not check this file", and the rest of the site looks fine.
+`'self'` is not needed here: the site has no service worker.
 
 ### clean URLs — the CloudFront function
 
