@@ -196,6 +196,11 @@ export const DOC_GROUPS: DocGroup[] = [
         description: 'Export Karakeep bookmarks as HTML, import the file, and check the lists and details that came across.',
       },
       {
+        slug: 'import-from-brace-to',
+        title: 'Move from Brace.to',
+        description: 'Export your Brace.to data, import the file into Bracemark, and check what came across.',
+      },
+      {
         slug: 'import-from-pocket-export',
         title: 'Import an existing Pocket export',
         description: 'Bring in a Pocket ZIP or CSV you downloaded before its export window closed.',
