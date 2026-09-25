@@ -9,9 +9,9 @@ import { parseRaindropCsv, scanCsv } from '../import/csv';
 import { parseNetscapeHtml } from '../import/netscape';
 import { canonicalUrlKey, normalizeUrl } from '../url/url';
 
-export const BOOKMARK_CONVERTER_MAX_MB = 4;
-export const BOOKMARK_CONVERTER_MAX_BYTES = BOOKMARK_CONVERTER_MAX_MB * 1024 * 1024;
-const MAX_ROWS = 25_000;
+export const BOOKMARK_CONVERTER_MAX_MB = 16;
+export const BOOKMARK_CONVERTER_MAX_BYTES = BOOKMARK_CONVERTER_MAX_MB * 1_000_000;
+export const BOOKMARK_CONVERTER_MAX_ROWS = 25_000;
 
 export interface BookmarkConversionReceipt {
   sourceRows: number;
@@ -81,7 +81,7 @@ function signature(link: ImportedLink): string {
 export function convertRaindropCsvToBookmarksHtml(text: string): BookmarkConversion {
   if (new TextEncoder().encode(text).length > BOOKMARK_CONVERTER_MAX_BYTES) {
     throw new Error(
-      `This file is too large. Choose a CSV export under ${BOOKMARK_CONVERTER_MAX_MB} MB.`,
+      `This file is too large. Choose a CSV export up to ${BOOKMARK_CONVERTER_MAX_MB} MB.`,
     );
   }
 
@@ -108,7 +108,7 @@ export function convertRaindropCsvToBookmarksHtml(text: string): BookmarkConvers
     throw new Error('This CSV repeats a column name. Export it again.');
   }
   if (rows.length < 2) throw new Error('This CSV has no bookmark rows to convert.');
-  if (rows.length - 1 > MAX_ROWS) {
+  if (rows.length - 1 > BOOKMARK_CONVERTER_MAX_ROWS) {
     throw new Error('This CSV has too many rows for this tool. Split the export and try again.');
   }
   if (rows.slice(1).some((row) => row.length !== header.length)) {

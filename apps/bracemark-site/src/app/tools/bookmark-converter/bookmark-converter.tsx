@@ -5,13 +5,50 @@ import { useState } from 'react';
 import {
   BOOKMARK_CONVERTER_MAX_BYTES,
   BOOKMARK_CONVERTER_MAX_MB,
+  BOOKMARK_CONVERTER_MAX_ROWS,
   type BookmarkConversion,
-  convertRaindropCsvToBookmarksHtml,
 } from '@stxapps/shared';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
+import type { ConversionMessage } from './bookmark-converter.worker';
+
 interface BookmarkConverterProps {
   appImportUrl: string;
+}
+
+function convertInWorker(file: File): Promise<BookmarkConversion> {
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(new URL('./bookmark-converter.worker.ts', import.meta.url), {
+      type: 'module',
+    });
+    const timeout = window.setTimeout(() => {
+      worker.terminate();
+      reject(new Error('This file took too long to check. Split the export and try again.'));
+    }, 60_000);
+    const finish = () => {
+      window.clearTimeout(timeout);
+      worker.terminate();
+    };
+    worker.onmessage = (event: MessageEvent<ConversionMessage>) => {
+      finish();
+      if (event.data.ok) resolve(event.data.conversion);
+      else reject(new Error(event.data.message));
+    };
+    worker.onerror = () => {
+      finish();
+      reject(new Error('Could not check this file. Please try again.'));
+    };
+    worker.onmessageerror = () => {
+      finish();
+      reject(new Error('Could not read the conversion result. Please try again.'));
+    };
+    try {
+      worker.postMessage(file);
+    } catch {
+      finish();
+      reject(new Error('Could not read this file. Please try again.'));
+    }
+  });
 }
 
 function download(name: string, body: string, type: string) {
@@ -67,15 +104,13 @@ export function BookmarkConverter({ appImportUrl }: BookmarkConverterProps) {
     if (!file) return;
     if (file.size > BOOKMARK_CONVERTER_MAX_BYTES) {
       setError(
-        `This file is too large. Choose a CSV export under ${BOOKMARK_CONVERTER_MAX_MB} MB.`,
+        `This file is too large. Choose a CSV export up to ${BOOKMARK_CONVERTER_MAX_MB} MB.`,
       );
       return;
     }
     setBusy(true);
     try {
-      // Yield a frame so the progress text paints before a large local parse.
-      await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
-      setConversion(convertRaindropCsvToBookmarksHtml(await file.text()));
+      setConversion(await convertInWorker(file));
     } catch (cause) {
       setError(
         cause instanceof Error ? cause.message : 'Could not read this file. Please try again.',
@@ -118,12 +153,14 @@ export function BookmarkConverter({ appImportUrl }: BookmarkConverterProps) {
             )}
           />
           <p id="file-help" className={cn('mt-2 text-sm text-muted-foreground')}>
-            Up to {BOOKMARK_CONVERTER_MAX_MB} MB. The CSV must be exported by Raindrop.io.
+            Up to {BOOKMARK_CONVERTER_MAX_MB} MB and{' '}
+            {BOOKMARK_CONVERTER_MAX_ROWS.toLocaleString()} bookmark rows. The CSV must be exported by
+            Raindrop.io.
           </p>
         </div>
         {busy && (
           <p role="status" className={cn('mt-4 text-sm')}>
-            Reading {fileName}…
+            Checking {fileName}…
           </p>
         )}
         {error && (
