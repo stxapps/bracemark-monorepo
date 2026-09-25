@@ -78,6 +78,7 @@ import {
   TRASH_ID,
 } from '@stxapps/shared';
 
+import { yieldToMain } from '../lib/yield-to-main';
 import { loadEntityContents, runIncrementalSync, type SyncDeps } from '../sync/engine';
 import { db } from './db';
 import { parseBlob } from './projection';
@@ -124,6 +125,11 @@ interface GatheredLink {
   extraction: Extraction | undefined;
 }
 
+// Records decoded between two yields. `parseBlob` is a utf-8 decode plus a
+// schema check per record, ~18 ms per 500 at a 4x CPU slowdown; the gather used
+// to run every link and then every extraction in one task each, which held the
+// page for 1.5–1.8 s at 50,000 links (docs/data-lifecycle.md, _main-thread
+// cost_).
 const GATHER_CHUNK = 500;
 
 // Decode every record under an id-keyed namespace prefix into (path, entity)
@@ -146,7 +152,8 @@ async function readRawNamespace<T extends z.ZodTypeAny>(
 
 // Decode the whole `links/` namespace (newest first), join each survivor's
 // extraction, and drop locked-list links. O(library) by nature — the export IS
-// a full read — chunked only so progress ticks.
+// a full read — so both passes go a GATHER_CHUNK at a time, yielding between
+// chunks so the page can paint the progress they report.
 async function gatherLinks(
   excludedListIds: ReadonlySet<string>,
   onProgress: ProgressFn,
@@ -157,6 +164,7 @@ async function gatherLinks(
 
   const included: { path: string; link: Link }[] = [];
   for (let i = 0; i < records.length; i += GATHER_CHUNK) {
+    if (i > 0) await yieldToMain();
     for (const record of records.slice(i, i + GATHER_CHUNK)) {
       const link = parseBlob(record.data, linkSchema);
       if (link === undefined || excludedListIds.has(link.listId)) continue;
@@ -166,15 +174,20 @@ async function gatherLinks(
   }
   included.sort((a, b) => b.link.createdAt - a.link.createdAt);
 
-  // Join the co-keyed extractions (the writer-split shadow of each link).
-  const exRecords = await db.items.bulkGet(
-    included.map(({ path }) => rekey(path, LINKS_PREFIX, EXTRACTIONS_PREFIX)),
-  );
-  return included.map(({ path, link }, i) => ({
-    path,
-    link,
-    extraction: parseBlob(exRecords[i]?.data, extractionSchema),
-  }));
+  // Join the co-keyed extractions (the writer-split shadow of each link), read
+  // and decoded a chunk at a time for the same reason.
+  const gathered: GatheredLink[] = [];
+  for (let i = 0; i < included.length; i += GATHER_CHUNK) {
+    if (i > 0) await yieldToMain();
+    const chunk = included.slice(i, i + GATHER_CHUNK);
+    const exRecords = await db.items.bulkGet(
+      chunk.map(({ path }) => rekey(path, LINKS_PREFIX, EXTRACTIONS_PREFIX)),
+    );
+    chunk.forEach(({ path, link }, j) => {
+      gathered.push({ path, link, extraction: parseBlob(exRecords[j]?.data, extractionSchema) });
+    });
+  }
+  return gathered;
 }
 
 // --- the interop bundle ---------------------------------------------------------

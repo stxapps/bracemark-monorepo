@@ -91,12 +91,13 @@ import {
   parseImportText,
   pathFromId,
   PINS_PREFIX,
-  projectImportedLinks,
+  projectImportedLinksInChunks,
   referencedFileIds,
   resolveImportQuota,
 } from '@stxapps/shared';
 import { newId } from '@stxapps/web-crypto';
 
+import { yieldToMain } from '../lib/yield-to-main';
 import { runIncrementalSync, type SyncDeps } from '../sync/engine';
 import { db } from './db';
 import { bulkWriteEntities, type RawEntityEntry } from './mutations';
@@ -105,6 +106,14 @@ import { readLists, readPins, readTags } from './queries';
 // Writes land in bounded transactions so IndexedDB isn't asked for one
 // transaction per link and progress can tick between chunks.
 const WRITE_CHUNK = 200;
+
+// Rows or lines handled between two yields in the loops that run BEFORE the
+// writes (dedupe, the backup's classify pass and its skip-existing lookup).
+// Each was one uninterrupted task, and at 50,000 links the restore's held the
+// page for 2.2 s; per thousand they cost ~10–25 ms at a 4x CPU slowdown
+// (docs/data-lifecycle.md, _main-thread cost_). The projection pauses on its own
+// chunk, PROJECT_CHUNK in @stxapps/shared import/project.ts.
+const YIELD_CHUNK = 1000;
 
 // --- the existing library (what dedupe/quota/skip-existing check against) -------
 
@@ -143,7 +152,9 @@ async function importInterop(
   // Dedupe against the library and within the file, by canonical identity.
   const seen = new Set(existing.urlKeys);
   const rows: ImportedLink[] = [];
-  for (const row of bundle.links) {
+  for (let i = 0; i < bundle.links.length; i++) {
+    if (i > 0 && i % YIELD_CHUNK === 0) await yieldToMain();
+    const row = bundle.links[i];
     const key = canonicalUrlKey(row.url) ?? row.url;
     if (seen.has(key)) continue;
     seen.add(key);
@@ -165,15 +176,18 @@ async function importInterop(
   // titles, custom-image blobs, pin ranks. All of it is shared with expo
   // (@stxapps/shared import/project.ts) — only the store reads around it and the
   // chunked writes below are this platform's.
-  const projected = projectImportedLinks({
-    rows: kept,
-    lists: await readLists(),
-    tags: await readTags(),
-    existingPinRanks: (await readPins()).map((pin) => pin.rank),
-    images: bundle.images,
-    newId,
-    now: Date.now(),
-  });
+  const projected = await projectImportedLinksInChunks(
+    {
+      rows: kept,
+      lists: await readLists(),
+      tags: await readTags(),
+      existingPinRanks: (await readPins()).map((pin) => pin.rank),
+      images: bundle.images,
+      newId,
+      now: Date.now(),
+    },
+    yieldToMain,
+  );
 
   // Blobs first (content before metadata), one at a time — they can be MB-sized,
   // unlike the small entity rows that follow.
@@ -231,15 +245,25 @@ async function importBracemarkBackup(
 
   let invalidCount = 0;
   const classified: BundleEntry[] = [];
-  for (const line of itemsText.split('\n')) {
+  const lines = itemsText.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    if (i > 0 && i % YIELD_CHUNK === 0) await yieldToMain();
+    const line = lines[i];
     if (line.trim() === '') continue;
     const entry = classifyBundleLine(line);
     if (entry === undefined) invalidCount += 1;
     else classified.push(entry);
   }
 
-  // SKIP-EXISTING: a path already in the local store is never touched.
-  const existingRecords = await db.items.bulkGet(classified.map((entry) => entry.path));
+  // SKIP-EXISTING: a path already in the local store is never touched. Looked
+  // up a slice at a time: one bulkGet over every path issued and collected
+  // tens of thousands of IndexedDB gets inside a single task.
+  const existingRecords: unknown[] = [];
+  for (let i = 0; i < classified.length; i += YIELD_CHUNK) {
+    if (i > 0) await yieldToMain();
+    const slice = classified.slice(i, i + YIELD_CHUNK).map((entry) => entry.path);
+    existingRecords.push(...(await db.items.bulkGet(slice)));
+  }
   let skippedCount = 0;
   const fresh = classified.filter((_, i) => {
     if (existingRecords[i] === undefined) return true;

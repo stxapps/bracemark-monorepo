@@ -15,6 +15,7 @@
     "runner/**/*.ts",
     "seed/**/*.ts",
     "shot/**/*.ts",
+    "measure/**/*.ts",
     "pwa/**/*.ts",
     "visual/**/*.ts",
     "global-setup.ts",

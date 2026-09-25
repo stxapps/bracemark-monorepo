@@ -111,7 +111,41 @@ function namesOnlyTheAddress(title: string, url: string): boolean {
   return candidate === bare(url) || candidate === bare(hostFromText(url));
 }
 
+// Rows projected between two pauses in `projectImportedLinksInChunks`. The
+// per-row cost is URL parsing (`hostFromText`), an id mint and two schema
+// checks: about 13 ms per thousand rows on web at a 4x CPU slowdown, so a chunk
+// stays well under the 50 ms a long task starts at (docs/data-lifecycle.md,
+// _main-thread cost_).
+export const PROJECT_CHUNK = 1000;
+
+// The whole import in one synchronous call. What expo and the specs use.
 export function projectImportedLinks(options: ProjectImportOptions): ProjectedImport {
+  const steps = projectSteps(options);
+  for (;;) {
+    const step = steps.next();
+    if (step.done) return step.value;
+  }
+}
+
+// The same projection, handing the thread back between chunks. At 50,000 rows
+// the synchronous call held web's main thread for ~0.6 s in one task; `pause`
+// is the platform's yield (web-react lib/yield-to-main.ts), awaited every
+// PROJECT_CHUNK rows. One body for both entry points, so the two can't drift.
+export async function projectImportedLinksInChunks(
+  options: ProjectImportOptions,
+  pause: () => Promise<void>,
+): Promise<ProjectedImport> {
+  const steps = projectSteps(options);
+  for (;;) {
+    const step = steps.next();
+    if (step.done) return step.value;
+    await pause();
+  }
+}
+
+// Yields (nothing) after every PROJECT_CHUNK rows; the drivers above decide
+// whether a yield is a pause.
+function* projectSteps(options: ProjectImportOptions): Generator<void, ProjectedImport> {
   const { rows, images, newId, now } = options;
 
   const lists = new ListResolver(options.lists, now, newId);
@@ -136,6 +170,7 @@ export function projectImportedLinks(options: ProjectImportOptions): ProjectedIm
   const pinned: { id: string; sourceRank: string; createdAt: number; updatedAt: number }[] = [];
 
   for (let i = 0; i < rows.length; i++) {
+    if (i > 0 && i % PROJECT_CHUNK === 0) yield;
     const row = rows[i];
     // Undated rows get descending stamps from `now`, so the file's order IS the
     // library's newest-first display order after import.

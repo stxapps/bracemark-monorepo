@@ -68,6 +68,13 @@ export const SEED_ARCHIVES = join(ARTIFACTS, 'seed');
 // <img> at.
 export const SHOT_OUTPUT = join(ARTIFACTS, 'shot');
 
+// Where the data-path measurement writes (measure/data.ts): one directory per
+// run, holding its fixtures, the staged export, the results and any traces. Run
+// output like the rest — a finished run's numbers belong in
+// docs/data-lifecycle.md, not in a file here that the next `rm -rf .artifacts`
+// takes with it.
+export const MEASURE_OUTPUT = join(ARTIFACTS, 'measure');
+
 // The shot account's backup archive — one FILE, not a directory, because there is
 // one fixture and `shot/account.ts` rebuilds it on every run.
 //

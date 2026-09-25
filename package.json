@@ -41,6 +41,7 @@
     "shot:web": "nx shot:web @stxapps/e2e",
     "shot:ext": "nx shot:ext @stxapps/e2e",
     "shot:mobile": "nx shot:mobile @stxapps/e2e",
+    "measure:data": "nx measure:data @stxapps/e2e",
     "build": "nx run-many -t build --output-style=stream",
     "deploy:web:staging": "bash tools/scripts/deploy-static.sh web staging",
     "deploy:web:production": "bash tools/scripts/deploy-static.sh web production",

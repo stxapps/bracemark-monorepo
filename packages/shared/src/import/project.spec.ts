@@ -3,7 +3,13 @@ import { EXTRACTIONS_PREFIX, LINKS_PREFIX, PINS_PREFIX } from '../sync/paths';
 import { ranksBetween } from '../sync/rank';
 import { ARCHIVE_ID, MY_LIST_ID, TRASH_ID } from '../sync/system-lists';
 import type { ImportedLink } from './bundle';
-import { type ProjectedImport, projectImportedLinks, type ProjectImportOptions } from './project';
+import {
+  PROJECT_CHUNK,
+  type ProjectedImport,
+  projectImportedLinks,
+  projectImportedLinksInChunks,
+  type ProjectImportOptions,
+} from './project';
 
 // The pure half of an import: rows in, every blob the run will write out. It is
 // where an import's USER-VISIBLE behaviour is decided — which list a row lands in,
@@ -319,5 +325,47 @@ describe('projectImportedLinks', () => {
   it('pins nothing when no row was pinned', () => {
     const result = project({ rows: [row({ url: 'https://example.com/a' })] });
     expect(under(result, PINS_PREFIX)).toEqual([]);
+  });
+});
+
+// The chunked driver web awaits so a big import doesn't freeze the page
+// (docs/data-lifecycle.md, _main-thread cost_). Both drivers run one generator,
+// and these pin the two ways that could still go wrong: the chunked run
+// producing a different import, and the pause never being taken — which would
+// look like success everywhere except a frozen tab.
+describe('projectImportedLinksInChunks', () => {
+  // A mix that exercises every branch whose state spans rows — the list and tag
+  // resolvers, the shared image, the pins — across more than one chunk boundary.
+  const rows = Array.from({ length: PROJECT_CHUNK * 2 + 7 }, (_, i) =>
+    row({
+      url: `https://example.com/${i}`,
+      title: `Title ${i}`,
+      folderPath: [`Folder ${i % 5}`],
+      tagNames: [`tag-${i % 3}`],
+      ...(i % 400 === 0 ? { pinRank: String(i).padStart(6, '0') } : {}),
+      ...(i % 250 === 0 ? { imageRef: 'shared' } : {}),
+    }),
+  );
+  const options = (): ProjectImportOptions => ({
+    rows,
+    lists: [],
+    tags: [],
+    existingPinRanks: [],
+    images: new Map([['shared', new Uint8Array([1, 2, 3])]]),
+    newId: idMinter(),
+    now: NOW,
+  });
+
+  it('produces exactly what the synchronous projection produces', async () => {
+    const chunked = await projectImportedLinksInChunks(options(), async () => undefined);
+    expect(chunked).toEqual(projectImportedLinks(options()));
+  });
+
+  it('pauses between chunks, and only between them', async () => {
+    let pauses = 0;
+    await projectImportedLinksInChunks(options(), async () => {
+      pauses += 1;
+    });
+    expect(pauses).toBe(Math.ceil(rows.length / PROJECT_CHUNK) - 1);
   });
 });

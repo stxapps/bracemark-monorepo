@@ -224,6 +224,20 @@ Every file here is named for its target — `shot/preflight.ts`, `shot/account.t
 one scene table (`shot/scenes.ts`, what `web.ts` photographs). The Maestro YAML
 `shot/mobile.ts` drives stays in `mobile/shots/`, with the rest of the flows.
 
+## measuring the data path
+
+Also not a test: `e2e/measure/` reports how long import and export hold the web
+app's main thread, at library sizes you pick, against a production export it
+builds and serves on :3001. It needs the api up (`npm run dev`). Design:
+`docs/e2e.md`, _measuring the data path_. What the numbers decide:
+`docs/data-lifecycle.md`, _main-thread cost_.
+
+```sh
+npm run measure:data                                # 10,000 links, CPU 4x slower
+npm run measure:data -- --links 10000,50000 --cpu 6
+npm run measure:data -- --trace                     # + a DevTools trace per leg
+```
+
 ## what a spec may depend on
 
 **No spec depends on a seeded account, and none should.** Every web spec creates

@@ -2049,6 +2049,82 @@ through the ten named lists, so the drawer and global search still show a real
 filed collection. Keeping the title and the visible rows in the same list also
 means no compositor has to rewrite product chrome.
 
+### measuring the data path
+
+`e2e/measure/data.ts` (`npm run measure:data`) reports how long import and
+export hold bracemark-web's main thread, at library sizes you pick. It is the
+measurement behind [data-lifecycle.md](./data-lifecycle.md), _main-thread
+cost_, and it lives here because it needs everything a whole-flow case needs: a
+real account, the plan grant, the Settings → Data controls, and Chrome.
+
+**It is not a test, and it is in no suite**, for the same reason `shot/` isn't.
+Timing on a dev machine running the whole local stack is noisy, so a pass/fail
+threshold either flaps or is set so loose it never fires. It prints a table and
+writes `results.json` into `.artifacts/measure/<run>/`. A person reads the
+longest task against the bands in the doc and records the reading there.
+
+```sh
+npm run dev                                         # the api; the web origin is its own
+npm run measure:data                                # 10,000 links, CPU 4x slower
+npm run measure:data -- --links 10000,50000 --cpu 6
+npm run measure:data -- --trace                     # + a DevTools trace per leg
+npm run measure:data -- --dev                       # the dev server on :3000 instead
+npm run measure:data -- --skip-build                # stage the existing out/
+```
+
+Per size it runs six legs on two fresh Plus accounts: an **HTML bookmarks
+import** into an empty library (the interop path), a **backup restore** of a
+realistic library (`seed/library.ts` at the `plus-full` shape, scaled, without
+its preview images), and **four exports** from that library once it has
+synced. The sync wait is unmeasured: straight after a restore the engine is
+still pushing everything, and an export's opening refresh would measure the
+push.
+
+What each design choice protects against:
+
+- **The production export, by default.** React's development build does several
+  times the main-thread work of the production one. The run builds the export
+  against the local api with the PWA runner's build (`runner/web-export.ts`,
+  split out of `runner/pwa.ts` so importing it doesn't start a PWA run) and serves
+  it on :3001 itself, like the PWA target. `--dev` is for readable function
+  names only; label a `--dev` reading as such.
+- **The CPU slowdown applies inside each leg's window only.** It goes through
+  CDP (`Emulation.setCPUThrottlingRate`), so it is Chromium-only. Argon2id at
+  account creation runs at full speed, as does everything between legs.
+- **The instrument is the browser's own.** `longtask` entries give the headline
+  number. Both observers are installed by an init script before the app's code
+  runs. A leg that navigates mid-window throws, because the observers and
+  `performance.now()` belong to one document.
+- **⚠ The init script is a string, not a function.** tsx compiles with
+  esbuild's `keepNames`, which wraps named inner functions in a `__name(…)`
+  helper that exists in node and not in the page. A function-form init script
+  throws in the browser before installing anything. The first run did exactly
+  that, and the only symptom was the "no instrument" guard on its first leg.
+- **Every run starts with a positive control.** `calibrate` runs a fixed amount
+  of work as an ordinary page task at 1× and at the chosen factor. The run stops
+  unless both read as long tasks and the slowdown shows. That rule came from a
+  specimen: a leg that reports no long task is only good news if the instrument
+  would have seen one, and code run synchronously inside a DevTools-protocol
+  command (a `page.evaluate` body, the `change` event `setInputFiles` fires) is
+  not reported as a long task at all. The 1× reading also records the machine's
+  speed for comparing readings.
+- **Frame attribution names the entry point, not the owner.**
+  `long-animation-frame` entries list the scripts that _started_ a stall.
+  Promise continuations run inside the task that resolved them, so an export's
+  decode loop shows up as Dexie's `IDBRequest.onsuccess` and a restore's
+  classify loop as zip.js's `TextWriter`. What consumed the time is `--trace`
+  plus the DevTools Bottom-Up tab. On a production trace the names are
+  minified, so run `--dev --trace` for them: the dev build inflates the times,
+  but the same code owns the tasks.
+- **Export takes the download path.** The init script deletes
+  `showSaveFilePicker`, so the backup goes down the Safari/Firefox fallback
+  (`downloadBlob`), which Playwright catches as a download. That is a real product
+  path doing the same main-thread work. It is not the save-dialog stub rejected
+  above under _what e2e may not assert_: that rule is about proving the save, and
+  this measures the build-up to it. Each export leg checks the deletion took, so
+  a Chrome that moved the method would fail loudly, not hang on an invisible
+  dialog.
+
 ### state today
 
 Web, native, and contract were measured 2026-09-16 from commit

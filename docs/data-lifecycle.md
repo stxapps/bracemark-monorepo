@@ -788,6 +788,141 @@ landing on; from an installed PWA it stays on `/sign-in` instead, see
 `InvalidCredentialsError` → "Incorrect password", `SubscriptionActiveError` →
 a pointer at the Subscription section.
 
+### main-thread cost — measured, not assumed
+
+Import and export run on web's **main thread**, and that is a decision to
+re-check with numbers, not a default to defend or overturn by feel. Much of
+either flow is waiting, which a Web Worker doesn't speed up: the opening sync
+refresh is network, zip.js compresses in its own workers, and the import's write
+loop yields between `WRITE_CHUNK`s. The flows are also tied to main-thread state
+a worker would have to reach by message: the `db` instance, the sync engine's
+keys and queue, the interactive `onQuotaPrompt`, and export's
+`showSaveFilePicker`, which needs the click's user activation.
+
+So the question is never "is it fast". It is **how long does the longest single
+task hold the page**: a thirty-second import whose progress line keeps moving
+is fine, and a three-second freeze is not. Measure it with `npm run
+measure:data` ([e2e.md](./e2e.md), _measuring the data path_), which reports
+the longest task per leg at a CPU slowdown. Then find what **owns** that task
+before choosing a fix (`--trace`, then the DevTools Bottom-Up tab over the long
+task), and decide by the band:
+
+| longest task, slowed, at the size you care about | what to do                                                                         |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------- |
+| under ~200 ms                                    | leave it; record the reading here                                                  |
+| ~200 ms – 1 s                                    | split the owning loop into chunks with a yield between them                        |
+| over ~1 s                                        | a worker for that step **if the step is pure** (no store, no session); else chunks |
+
+A worker only helps a step that can run without the store. The one pure step
+the flows have is the file → `ImportedBundle` parse (`parseImportText` and the
+parsers under it, DOM-free on purpose), and **it is not what fills the long
+tasks** — see the readings. Store reads, per-record validation and the
+projection all touch Dexie or run between Dexie calls, so moving them means
+moving the store, which is the architecture change the paragraph above argues
+against. Keep the store writes, the sync kick and the quota prompt on the main
+thread whatever the reading says. The bands follow INP's (good ≤ 200 ms, poor >
+500 ms), widened at the top because an import is a rare, user-started action with
+a progress line, not a keystroke.
+
+**Paid plans have no link cap** (`maxLinks: null`), so no size is the worst
+case. Pick the sizes to measure and record them with the reading, along with
+the date, the machine, the Chrome version, the CPU factor, and whether it was
+the production export (the default) or `--dev`.
+
+#### readings
+
+**2026-09-25, before chunking** — Apple M1, 16 GB, macOS 26.5.2, Chrome 153.0.8010.53, CPU 4×
+slower, the production export. The run's calibration read the same fixed work
+at 127–130 ms at 1× and 519–539 ms at 4×. Checkout `353fa04` plus the
+uncommitted change that added the tool. Longest main-thread task per leg:
+
+| leg                   | 1,000 links | 10,000 links | 50,000 links |
+| --------------------- | ----------- | ------------ | ------------ |
+| import HTML bookmarks | < 50 ms     | 146 ms       | 659 ms       |
+| import backup         | 54 ms       | 432 ms       | 2,210 ms     |
+| export HTML bookmarks | < 50 ms     | 314 ms       | 1,808 ms     |
+| export CSV            | < 50 ms     | 303 ms       | 1,753 ms     |
+| export plain text     | < 50 ms     | 344 ms       | 1,661 ms     |
+| export backup         | < 50 ms     | 302 ms       | 1,562 ms     |
+
+Each long task grows with the library, and none of it is the parser or a
+serializer. A `--dev --trace` run at 10,000 links (same bands: 174–478 ms)
+put the time in these places. At 50,000 links, the production run's
+long-animation-frame entries show the same entry points.
+
+- **HTML import:** `projectImportedLinks`, which parses every address
+  (`hostFromText`) and mints an id per new entity (`randomUUID`), then the
+  dedupe's `canonicalUrlKey` per row. `parseImportText` never reached 50 ms.
+- **Backup import:** in `importBracemarkBackup`, the `classifyBundleLine` loop
+  (a JSON parse and a schema check per line) and the skip-existing
+  `db.items.bulkGet` over every path, which issues and collects one
+  IndexedDB `get` per entity in a single pass.
+- **Every export:** `gatherLinks`, where `parseBlob` decodes and validates every
+  link and then every extraction, fed by IndexedDB reads of the whole
+  namespace. `GATHER_CHUNK` splits the links loop but never awaits, so the
+  chunks still run as one task. `toNetscapeHtml` and `toRaindropCsv` don't
+  appear.
+
+**Decision:** no Web Worker for import or export. The owners fail the table's
+purity test: they are store reads and per-record work between them. The
+remedy is to yield inside the owning loops, which the second reading
+measures.
+
+**2026-09-25, after chunking** — same machine, Chrome, slowdown and sizes;
+calibration 127–131 ms at 1×, 518–532 ms at 4×. What changed: the loops above
+now await `yieldToMain` (web-react `lib/yield-to-main.ts`: `scheduler.yield()`,
+else a `setTimeout(0)` task) between chunks.
+
+- `gatherLinks` yields every `GATHER_CHUNK` (500) in both passes. The
+  extraction `bulkGet` is sliced to match.
+- The restore's classify pass and its skip-existing `bulkGet` go
+  `YIELD_CHUNK` (1,000) at a time, as does the interop dedupe.
+- The projection pauses every `PROJECT_CHUNK` (1,000) rows through
+  `projectImportedLinksInChunks`. That shares one generator body with the
+  synchronous `projectImportedLinks`, which expo and the specs still call, so
+  the two can't drift.
+
+| leg                   | 1,000 links | 10,000 links | 50,000 links |
+| --------------------- | ----------- | ------------ | ------------ |
+| import HTML bookmarks | < 50 ms     | 83 ms        | 424 ms       |
+| import backup         | < 50 ms     | < 50 ms      | 167 ms       |
+| export HTML bookmarks | < 50 ms     | 92 ms        | 371 ms       |
+| export CSV            | < 50 ms     | 81 ms        | 378 ms       |
+| export plain text     | < 50 ms     | 67 ms        | 290 ms       |
+| export backup         | < 50 ms     | 66 ms        | 302 ms       |
+
+Up to 10,000 links every leg is now in the first band. At 50,000 the backup
+restore dropped from 2.2 s to 167 ms and the exports from 1.5–1.8 s to
+0.3–0.4 s. Wall times barely moved (the 50,000-link restore went from 28 s to
+31 s), which is the trade: the page keeps painting while the work takes as long
+as it did.
+
+What owns the four 50,000-link legs still in the 200 ms – 1 s band is no longer
+a loop, so chunking can't reach it:
+
+- **HTML import (424 ms):** `TextDecoder.decode` and `parseImportText` over
+  the whole file, one synchronous call. This is the one pure step, and the
+  table's worker row applies to it once it crosses ~1 s. That is roughly two
+  and a half times this file, if it keeps scaling linearly. Until then it stays
+  on the main thread.
+- **HTML, CSV and text exports (290–378 ms):** the single `toArray()` in
+  `gatherLinks` that reads the whole `links/` namespace in one IndexedDB
+  request. The structured clone of every record lands in one task. The fix is
+  to read in keyed pages rather than to yield.
+- **Backup export (302 ms):** zip.js's main-thread side, handling
+  `items.jsonl` passed as one string (`TextReader`). The fix is to hand it the
+  lines in pieces.
+
+Neither of the last two has been changed, and expo's orchestrators are
+untouched and unmeasured. They still call the synchronous projection and loop
+without yielding; `measure:data` has no expo leg.
+
+The bookmark converter on the marketing site is a **separate decision**, already
+made. Its whole job is one synchronous call (up to `BOOKMARK_CONVERTER_MAX_ROWS`
+rows, parsed, serialized and read back) with no store or session around it, so
+its worker costs one small module and nothing else. What import measures does
+not move it either way.
+
 ### deferred
 
 - **Username release after a cooldown** — loosen the tombstone policy if

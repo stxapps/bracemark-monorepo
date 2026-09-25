@@ -62,6 +62,10 @@ export interface LaunchOptions {
   // column — so it must not be forced up to 1100 just to reach 2200 device px.
   // Splitting the two lets the shot pick 1000 CSS and still hand the script 3000.
   deviceScaleFactor?: number;
+  // The web origin, when it is not WEB_URL's. Only the data-path measurement
+  // (measure/data.ts) passes one: it serves a production export it built itself,
+  // and WEB_URL is fixed when env.ts loads, before a script could point it there.
+  baseURL?: string;
 }
 
 export async function launchApp(
@@ -74,7 +78,7 @@ export async function launchApp(
 
   const context = await chromium.launchPersistentContext(userDataDir, {
     executablePath: CHROME_PATH,
-    baseURL: WEB_URL,
+    baseURL: options.baseURL ?? WEB_URL,
     headless: !options.headed,
     slowMo: options.slowMo,
     // The repo's type sizes are small enough that a 1x screenshot is hard to read
