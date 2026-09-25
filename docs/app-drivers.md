@@ -228,6 +228,43 @@ shell` calls through it rather than through `command('adb', ['shell', …])`.
 Maestro's own steps are unaffected: it speaks to the device over its driver, not
 through a shell.
 
+#### ⚠ `input swipe` can arrive as a tap
+
+**`adb shell input swipe` is not a sequence of events; it is a clock.** The
+command (`InputShellCommand.sendSwipe`) injects the DOWN and waits for the app to
+_finish_ handling it (`INJECT_INPUT_EVENT_MODE_WAIT_FOR_FINISH`), then injects
+moves only while `now < down + duration`, then the UP at the end point. So if the
+app takes longer than the duration to finish the touch-down, the loop never runs
+and the whole gesture is a DOWN on one row and an UP far above it. If it takes
+nearly that long, one move sneaks in near the end.
+
+Over a list that is a tap, and it opens the row under the finger. No view saw a
+move, so the native ScrollView never took the gesture (it intercepts on a move
+past touch slop) and never cancelled the JS responder. React Native's
+`Pressable` checks its press rect only on moves, not on release, so it fires
+`onPress` on the lift. This is the "drag on the search results opens the link"
+that kept `VIEWPORT-KEYBOARD-001` intermittently red on Android. It is not an app
+bug, because a finger cannot produce it. A touchscreen keeps sampling while the
+app is busy, and Android hands a slow app its batched moves before the UP, so
+the ScrollView still gets the move it needs to take the gesture.
+
+Measured on the AVD's dev build. The stall shows up right after Maestro has run
+(an `inputText`, then a `maestro hierarchy` read, which is the runner's own
+order). Driven by `adb` alone, 0 of 40 drags pressed a row. Failing runs had the
+300 ms swipe command take 650–840 ms against ~400 ms normally, and JS logged
+`touchStart` then `touchEnd` at the swipe's end point with no move between them.
+`input motionevent DOWN`, then `UP` 520 px higher with nothing in between,
+opened the row 3 of 3 times with the search box focused. In the state where the
+stall was most frequent, `input swipe … 300` opened the row in 6 of 12 runs,
+`… 1500` in 0 of 4, and the same drag as explicit events in 0 of 8.
+
+**Drag with one `input motionevent` per step** (`DOWN`, several `MOVE`s, `UP`),
+each its own injection, so a slow app only slows the drag down and cannot drop
+its moves: `androidDrag` in `e2e/runner/mobile.ts`. A longer `input swipe`
+duration only moves the threshold. Maestro's own `swipe` is no escape either: it
+opened the link twice inside the case before the runner took the drag over. Its
+mechanism was not traced, but the symptom is the same.
+
 #### ⚠ an `am start` can decline to start anything
 
 **A second `am start` naming an activity that already has a task does not launch

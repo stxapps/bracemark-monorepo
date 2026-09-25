@@ -44,7 +44,7 @@ import { keyboardFrame } from './keyboard';
 import { provisionAccount } from './lib';
 import { type CaseStep, type CaseStepContext, prepareNativeRun } from './native-run';
 import { inkShare, screenshot } from './pixels';
-import { capture } from './process';
+import { adbShell, capture } from './process';
 import { selectCasesForPlatform, validateCaseRegistry } from './registry';
 import {
   assertMainAppStopped,
@@ -159,6 +159,31 @@ async function setPortReachable(deviceId: string, port: number, reachable: boole
 
 async function setApiReachable(deviceId: string, reachable: boolean): Promise<void> {
   await setPortReachable(deviceId, 8787, reachable);
+}
+
+// A drag on Android as explicit touch events: down, eight moves, up. Not `input
+// swipe`, which injects each event and waits for the app to finish it, then
+// spends what is left of its duration on moves — so a touch-down the app is
+// slow to finish (hundreds of ms on the dev build) leaves no time for any, and
+// the gesture reaches the app as a DOWN and an UP far apart. No view saw a move,
+// so no ScrollView took the gesture, and RN's Pressable, which checks the press
+// rect only on moves, fires `onPress` on that release. Here every step is its
+// own injection, so a slow app only slows the drag down.
+async function androidDrag(
+  deviceId: string,
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+): Promise<void> {
+  const steps = 8;
+  const at = (i: number) => [
+    String(Math.round(from.x + ((to.x - from.x) * i) / steps)),
+    String(Math.round(from.y + ((to.y - from.y) * i) / steps)),
+  ];
+  await adbShell(deviceId, ['input', 'motionevent', 'DOWN', ...at(0)]);
+  for (let i = 1; i <= steps; i++) {
+    await adbShell(deviceId, ['input', 'motionevent', 'MOVE', ...at(i)]);
+  }
+  await adbShell(deviceId, ['input', 'motionevent', 'UP', ...at(steps)]);
 }
 
 // A web profile's view of the account after an explicit pull: exactly one row
@@ -289,7 +314,8 @@ async function keyboardGone(
   if (findNodes(root, (attributes) => attributes['resource-id'] === stillShowing).length !== 1) {
     throw new Error(
       `${label}: #${stillShowing} is gone — the gesture did more than put the keyboard away ` +
-        '(on Android, see docs/e2e.md: a drag on the results delivered as a row press)',
+        '(a drag that reached the app as a tap opens a row — docs/app-drivers.md, ' +
+        '_`input swipe` can arrive as a tap_)',
     );
   }
   return null;
@@ -1005,26 +1031,19 @@ async function main(): Promise<void> {
             // The drag the next step makes: from the middle of the list's
             // visible stretch toward its top — on the rows, never on the keys.
             // (Maestro's directional swipe began on the keyboard, measured on
-            // iOS 26.5, and moved nothing.) On Android it is `input swipe`, a
-            // native gesture, so a press it produces is the app's to answer
-            // for: on the AVD such a drag is intermittently delivered as a PRESS
-            // on the row under it and opens the link — an open finding
-            // (docs/e2e.md, _scale, loading and offline_) that `keyboardGone`
-            // below reports by name.
+            // iOS 26.5, and moved nothing.) On Android it is one `input
+            // motionevent` per step, NOT `input swipe`: that command times its
+            // moves off the clock and waits for the app to finish each event,
+            // so a slow touch-down leaves no time for any move and it lifts at
+            // the far end — a tap on the row, which opened the link
+            // (docs/app-drivers.md, _`input swipe` can arrive as a tap_).
             const visibleBottom = Math.min(list.bottom, keyboard.top);
             const x = centerOf(list).x;
             const span = visibleBottom - list.top;
             const from = { x, y: list.top + Math.round(span * 0.5) };
             const to = { x, y: list.top + Math.round(span * 0.05) };
             if (context.platform === 'android') {
-              await capture('adb', [
-                '-s',
-                context.deviceId,
-                'shell',
-                'input',
-                'swipe',
-                ...[from.x, from.y, to.x, to.y, 300].map(String),
-              ]);
+              await androidDrag(context.deviceId, from, to);
               return null;
             }
             return writeDragFlow(context, 'search-results-drag', from, to, 250);

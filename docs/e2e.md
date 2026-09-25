@@ -1111,20 +1111,21 @@ because its panel leaves the accessibility tree while the keyboard is up
 ([soft-keyboard.md](./soft-keyboard.md), _verifying any of this_); a pass there
 would be a coordinate tap with nothing to confirm against.
 
-⚠ **Open, not chased: on Android a drag on the search results can open the
-link under the finger.** With text typed into the search box and the keyboard
-up, a native `adb shell input swipe` starting ~200px above the IME was
-delivered as a press on the row under it — the link opened in Chrome — in 3 of
-~15 tries on the Pixel 8 AVD's dev build, including after a 5-second settle;
-without typed text, 0 of 7; starting 500px above the IME, 0 of 6. Maestro's own
-swipe did the same twice inside the case. The row is a core RN `Pressable`
-inside the `on-drag` FlashList (`link-row.tsx`, `main.tsx`); the cause was not
-pinned down. The case drags from mid-list with a native gesture and requires
-the search box to still be on screen afterwards, so it catches this by name —
-and is therefore intermittently RED on Android (4 of 8 runs), which is why
-`VIEWPORT-KEYBOARD-001` stays open in `e2e/NEXT.md`. Reproduce it on a release
-build on a real phone before deciding it is the app's; if it is, the fix closes
-the case.
+⚠ **On Android the drag is explicit touch events, because `input swipe` can
+arrive as a tap.** The case was intermittently red there (4 of 8 runs): the drag
+on the search results opened the link under the finger. That was the driver,
+not the app. `input swipe` waits for the app to finish each injected event and
+spends only what is left of its duration on moves. A touch-down the dev build
+was slow to finish, which happened right after Maestro had typed and read the
+hierarchy, left no time for any move, so the app got a DOWN on a row and an UP
+far above it. No view saw a move, so the list never took the gesture and the
+row's `Pressable` fired on release. A finger cannot produce that, because the
+platform delivers a busy app its batched moves before the UP. The runner now
+drags with one `input motionevent` per step (`androidDrag`,
+`runner/mobile.ts`), and `keyboardGone` still requires the search box on screen
+afterwards, so a regression to a tap is still caught by name. Measurements and
+the AOSP mechanism: [app-drivers.md](./app-drivers.md), _`input swipe` can
+arrive as a tap_.
 
 ⚠ **An iOS simulator can hide its software keyboard with Simulator's setting
 correctly off.** The simulated device remembers a hardware keyboard

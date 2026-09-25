@@ -440,14 +440,15 @@ case already carries `online`) and are `full`, so they never block a smoke run;
       loading and offline_).
 - [x] `VIEWPORT-BULK-001` Enter/exit native bulk mode at a non-zero offset and
       prove the FlashList cells remain painted and the offset remains stable.
-- [ ] `VIEWPORT-KEYBOARD-001` At representative native editor/search/share
+- [x] `VIEWPORT-KEYBOARD-001` At representative native editor/search/share
       surfaces, capture the keyboard-present checkpoint and prove focused fields,
       controls, and dismissal gestures remain reachable. The share surface is
       Android-only: the iOS extension's panel leaves the accessibility tree
-      while the keyboard is up. **Open:** built and green on iOS; on Android the
-      drag that dismisses the search keyboard is intermittently delivered as a
-      press on a row (4 of 8 runs red) — an open finding in `docs/e2e.md`,
-      _scale, loading and offline_. Closes when that is resolved.
+      while the keyboard is up. The Android drag that dismisses the search
+      keyboard used to arrive as a press on a row (4 of 8 runs red). That was
+      `input swipe` dropping its moves, not the app, and the runner now drags
+      with explicit touch events (`docs/app-drivers.md`, _`input swipe` can
+      arrive as a tap_).
 
 ### Offline and reconnect
 
