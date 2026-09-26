@@ -1,6 +1,6 @@
 import { decodeHtmlEntities } from '../html/entities';
 import { normalizeUrl } from '../url/url';
-import type { ImportedLink } from './bundle';
+import type { ImportedLink, ImportObserver } from './bundle';
 import { parseEpoch } from './epoch';
 
 // LinkWarden backup parser — the second importer (with brace.ts) whose input is a
@@ -124,7 +124,7 @@ function tagNames(value: unknown): string[] {
     .filter((name): name is string => name !== undefined);
 }
 
-export function parseLinkwardenExport(text: string): ImportedLink[] {
+export function parseLinkwardenExport(text: string, observer?: ImportObserver): ImportedLink[] {
   const root: unknown = JSON.parse(text);
   if (!isRecord(root) || !Array.isArray(root.collections)) return [];
 
@@ -174,19 +174,29 @@ export function parseLinkwardenExport(text: string): ImportedLink[] {
   }
 
   const links: ImportedLink[] = [];
+  let position = 0;
   for (const collection of collections) {
-    if (!Array.isArray(collection.links)) continue;
     const path = folderPath(collection);
+    observer?.folder(path);
+    if (!Array.isArray(collection.links)) continue;
 
     for (const raw of collection.links) {
-      if (!isRecord(raw)) continue;
+      position++;
+      if (!isRecord(raw)) {
+        observer?.row(position, 'Invalid bookmark record');
+        continue;
+      }
       const row = raw as LwLink;
       // `url` is null on LinkWarden's uploaded files (`type: 'pdf' | 'image'`) —
       // those are documents in its archive, not addresses, and there is nothing
       // to import. normalizeUrl also drops anything non-web on the same rule the
       // other parsers use.
       const url = typeof row.url === 'string' ? normalizeUrl(row.url) : null;
-      if (url === null) continue;
+      if (url === null) {
+        observer?.row(position, 'No web address (possibly an uploaded document)');
+        continue;
+      }
+      observer?.row(position);
 
       const link: ImportedLink = { url, tagNames: tagNames(row.tags), folderPath: path };
 

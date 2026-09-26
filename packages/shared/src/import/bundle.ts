@@ -78,3 +78,10 @@ export interface ImportedBundle {
   // the same string) — the keyspace is the parser's business, not the caller's.
   images: Map<string, Uint8Array>;
 }
+
+// Optional evidence for file inspection. Positions are one-based source records
+// (CSV includes its header); a reason means the record did not become a link.
+export interface ImportObserver {
+  row(position: number, reason?: string): void;
+  folder(path: string[]): void;
+}

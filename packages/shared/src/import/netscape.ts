@@ -1,6 +1,6 @@
 import { decodeHtmlEntities } from '../html/entities';
 import { normalizeUrl } from '../url/url';
-import type { ImportedLink } from './bundle';
+import type { ImportedLink, ImportObserver } from './bundle';
 import { parseEpoch } from './epoch';
 import { FAVORITES_TAG, isRaindropHtml, withHighlights, withoutUnsorted } from './raindrop';
 
@@ -102,8 +102,9 @@ function descriptionText(value: string): string {
     .trim();
 }
 
-export function parseNetscapeHtml(text: string): ImportedLink[] {
+export function parseNetscapeHtml(text: string, observer?: ImportObserver): ImportedLink[] {
   const links: ImportedLink[] = [];
+  let position = 0;
   // Open <DL> scopes: a folder name, or null for an anonymous scope (the root
   // list). folderPath is the non-null names, root-first.
   const stack: (string | null)[] = [];
@@ -121,7 +122,10 @@ export function parseNetscapeHtml(text: string): ImportedLink[] {
   // arrive before the whole run has been seen, and the note goes first.
   const highlights = new Map<ImportedLink, string[]>();
 
-  for (const match of text.matchAll(TOKEN_RE)) {
+  // The app remains tolerant. Inspection also recognizes incomplete anchors so
+  // a damaged export cannot quietly lose records outside the normal tokenizer.
+  const tokens = observer ? new RegExp(TOKEN_RE.source + '|<a\\b[^>]*>', 'gi') : TOKEN_RE;
+  for (const match of text.matchAll(tokens)) {
     const token = match[0];
 
     // <dd>description. Checked FIRST, because the <dl> arm below dispatches on
@@ -145,6 +149,9 @@ export function parseNetscapeHtml(text: string): ImportedLink[] {
 
     if (token[1] === '/') {
       // </dl> — close the innermost scope.
+      if (observer && stack.length === 0) {
+        throw new Error('This bookmarks HTML has an unmatched folder ending. Export it again.');
+      }
       stack.pop();
       pendingFolder = null;
       noteTarget = undefined;
@@ -155,6 +162,10 @@ export function parseNetscapeHtml(text: string): ImportedLink[] {
     if (tag === 'd') {
       // <dl> — opens the pending header's folder, or an anonymous scope.
       stack.push(pendingFolder);
+      if (pendingFolder !== null) {
+        const path = stack.filter((name): name is string => name !== null);
+        observer?.folder(raindrop ? withoutUnsorted(path) : path);
+      }
       pendingFolder = null;
       noteTarget = undefined;
       continue;
@@ -169,14 +180,25 @@ export function parseNetscapeHtml(text: string): ImportedLink[] {
 
     // <a ...>title</a>
     const attrs = match[3];
+    if (observer && (attrs === undefined || /<a\b|<dt\b|<dl\b/i.test(match[4]))) {
+      throw new Error('This bookmarks HTML has an incomplete bookmark entry. Export it again.');
+    }
+    position++;
     // A dropped row still clears the note target: the <DD> after a bookmarklet
     // describes the bookmarklet, and would otherwise land on the last link kept.
     noteTarget = undefined;
     const href = attr(attrs, 'href');
-    if (href === undefined) continue;
+    if (href === undefined) {
+      observer?.row(position, 'No quoted address');
+      continue;
+    }
     const url = normalizeUrl(decodeHtmlEntities(href));
     // Non-web hrefs (bookmarklets, place:/mailto: rows) aren't storable links.
-    if (url === null) continue;
+    if (url === null) {
+      observer?.row(position, 'Not a web address');
+      continue;
+    }
+    observer?.row(position);
 
     const folderPath = stack.filter((name): name is string => name !== null);
     const link: ImportedLink = {

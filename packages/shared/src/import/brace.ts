@@ -1,6 +1,6 @@
 import { base64ToBytes } from '../crypto/encoding';
 import { normalizeUrl } from '../url/url';
-import type { ImportedBundle, ImportedLink } from './bundle';
+import type { ImportedBundle, ImportedLink, ImportObserver } from './bundle';
 
 // Brace.to export parser — the one importer whose input is a foreign app's whole
 // BACKUP rather than a bookmarks file. Brace.to (this project's predecessor) exports
@@ -66,6 +66,7 @@ const CD_ROOT = 'cdroot/';
 
 interface BraceEntry {
   path: string;
+  position: number;
   data: unknown;
 }
 
@@ -161,7 +162,7 @@ function latestSettings(entries: BraceEntry[]): Record<string, unknown> | undefi
 
 // --- the parse ------------------------------------------------------------------------
 
-export function parseBraceExport(text: string): ImportedBundle {
+export function parseBraceExport(text: string, observer?: ImportObserver): ImportedBundle {
   const empty: ImportedBundle = { links: [], images: new Map() };
 
   let json: unknown;
@@ -173,15 +174,21 @@ export function parseBraceExport(text: string): ImportedBundle {
   if (!Array.isArray(json)) return empty;
 
   const entries: BraceEntry[] = [];
-  for (const value of json) {
+  for (const [index, value] of json.entries()) {
     if (!isObject(value) || typeof value.path !== 'string') continue;
-    entries.push({ path: value.path, data: value.data });
+    entries.push({ path: value.path, data: value.data, position: index + 1 });
   }
 
   // The live revision per link, in file order (the export writes links first, so
   // this is Brace's own listing order — preserved so the import reads familiar).
   const linkIndex = new Map<string, number>();
-  const linkRows: { id: string; listName: string; updatedDT: number; data: unknown }[] = [];
+  const linkRows: {
+    position: number;
+    id: string;
+    listName: string;
+    updatedDT: number;
+    data: unknown;
+  }[] = [];
   // mainId → the newest sslt/pin says, and every tag name on the link.
   const listByMainId = new Map<string, { updatedDT: number; listName: string }>();
   const pinByMainId = new Map<string, { updatedDT: number; rank: string }>();
@@ -190,24 +197,33 @@ export function parseBraceExport(text: string): ImportedBundle {
   const images = new Map<string, Uint8Array>();
 
   for (const entry of entries) {
-    const { path, data } = entry;
+    const { path, data, position } = entry;
 
     if (path.startsWith(LINKS)) {
       const split = splitFPath(path, 3);
-      if (!split || !isObject(data)) continue;
+      if (!split || !isObject(data)) {
+        observer?.row(position, 'Invalid link record');
+        continue;
+      }
       const [, listName] = split.parts;
-      if (listName === '') continue;
+      if (listName === '') {
+        observer?.row(position, 'Missing list identity');
+        continue;
+      }
 
       const mainId = mainIdOf(split.id);
       const { updatedDT } = stampsOf(split.id);
       const at = linkIndex.get(mainId);
       if (at === undefined) {
         linkIndex.set(mainId, linkRows.length);
-        linkRows.push({ id: split.id, listName, updatedDT, data });
+        linkRows.push({ position, id: split.id, listName, updatedDT, data });
       } else if (updatedDT > linkRows[at].updatedDT) {
         // A newer revision of a link already seen — replace IN PLACE so the
         // surviving row keeps the position its first revision had.
-        linkRows[at] = { id: split.id, listName, updatedDT, data };
+        observer?.row(linkRows[at].position, 'Older revision of a link');
+        linkRows[at] = { position, id: split.id, listName, updatedDT, data };
+      } else {
+        observer?.row(position, 'Older revision of a link');
       }
       continue;
     }
@@ -275,14 +291,22 @@ export function parseBraceExport(text: string): ImportedBundle {
   const settings = latestSettings(settingsEntries);
   const listPaths = new Map<string, string[]>();
   walkListNameMap(settings?.listNameMap, [], listPaths);
+  for (const path of listPaths.values()) observer?.folder(path);
   const tagNames = readTagNameMap(settings?.tagNameMap);
 
   const links: ImportedLink[] = [];
   for (const row of linkRows) {
     if (!isObject(row.data)) continue;
-    if (typeof row.data.url !== 'string') continue;
+    if (typeof row.data.url !== 'string') {
+      observer?.row(row.position, 'No address');
+      continue;
+    }
     const url = normalizeUrl(row.data.url);
-    if (url === null) continue;
+    if (url === null) {
+      observer?.row(row.position, 'Not a web address');
+      continue;
+    }
+    observer?.row(row.position);
 
     const mainId = mainIdOf(row.id);
     const stamps = stampsOf(row.id);

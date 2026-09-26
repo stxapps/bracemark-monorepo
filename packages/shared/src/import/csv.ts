@@ -1,5 +1,5 @@
 import { normalizeUrl } from '../url/url';
-import type { ImportedLink } from './bundle';
+import type { ImportedLink, ImportObserver } from './bundle';
 import { parseEpoch } from './epoch';
 import {
   csvHighlights,
@@ -98,7 +98,7 @@ function folderPath(value: string, raindrop: boolean): string[] {
   return raindrop ? withoutUnsorted(path) : path;
 }
 
-export function parseRaindropCsv(text: string): ImportedLink[] {
+export function parseRaindropCsv(text: string, observer?: ImportObserver): ImportedLink[] {
   const rows = scanCsv(text).rows;
   if (rows.length < 2) return [];
 
@@ -125,9 +125,13 @@ export function parseRaindropCsv(text: string): ImportedLink[] {
   const cell = (row: string[], col: number) => (col === -1 ? '' : (row[col] ?? '')).trim();
 
   const links: ImportedLink[] = [];
-  for (const row of rows.slice(1)) {
+  for (const [index, row] of rows.slice(1).entries()) {
     const url = normalizeUrl(cell(row, urlCol));
-    if (url === null) continue;
+    if (url === null) {
+      observer?.row(index + 2, cell(row, urlCol) ? 'Not a web address' : 'No address');
+      continue;
+    }
+    observer?.row(index + 2);
 
     const link: ImportedLink = {
       url,

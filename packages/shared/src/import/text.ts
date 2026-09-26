@@ -1,5 +1,5 @@
 import { normalizeUrl } from '../url/url';
-import type { ImportedLink } from './bundle';
+import type { ImportedLink, ImportObserver } from './bundle';
 
 // Plain-text URL scanner — the read mirror of export/text.ts and the fallback
 // when a file is neither bookmarks HTML nor a links CSV. Pulls every URL-shaped
@@ -20,8 +20,21 @@ function stripTrailingPunctuation(token: string): string {
   return out;
 }
 
-export function parseUrlText(text: string): ImportedLink[] {
+export function parseUrlText(
+  text: string,
+  options: { linesOnly?: boolean; observer?: ImportObserver } = {},
+): ImportedLink[] {
   const links: ImportedLink[] = [];
+  if (options.linesOnly) {
+    for (const [index, line] of text.split(/\r?\n/).entries()) {
+      if (!line.trim()) continue;
+      const raw = line.trim();
+      const url = /^(https?:\/\/|www\.)\S+$/i.test(raw) ? normalizeUrl(raw) : null;
+      options.observer?.row(index + 1, url === null ? 'Not one web address per line' : undefined);
+      if (url !== null) links.push({ url, tagNames: [], folderPath: [] });
+    }
+    return links;
+  }
   for (const match of text.matchAll(URL_TOKEN_RE)) {
     const url = normalizeUrl(stripTrailingPunctuation(match[0]));
     if (url === null) continue;

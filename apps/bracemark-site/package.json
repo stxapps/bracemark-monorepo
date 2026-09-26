@@ -41,6 +41,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@zip.js/zip.js": "^2.8.26",
     "@mdx-js/mdx": "^3.1.1",
     "@stxapps/shared": "*",
     "@stxapps/web-ui": "*",

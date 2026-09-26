@@ -64,8 +64,9 @@ convention: the site has no auth stack, no data layer, and its own origin (see
   apex is a real CORS origin and not a redirect-only host.
 
 The marketing site's bookmark converter is a client component inside a static
-page. It reads a selected Raindrop.io CSV file in a browser worker and uses pure
-code in `@stxapps/shared` to inspect and serialize browser bookmarks HTML. It does
+page. It reads supported bookmark exports in a browser worker and uses pure
+code in `@stxapps/shared` to inspect and serialize HTML, CSV, and URL text.
+ZIP decoding stays at the site boundary, using native streams from zip.js. It does
 not import the signed-in web app's data layer or send file content to an API. The
 shared conversion checks its output by parsing it again before a download is
 offered; the page lists skipped rows, metadata the output cannot hold, and

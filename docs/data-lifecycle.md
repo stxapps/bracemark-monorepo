@@ -44,12 +44,27 @@ the three interop serializers are pure functions in `@stxapps/shared`
   importing deleted-pending links into a browser as live bookmarks is never
   wanted.
 
-The marketing site's separate `/tools/bookmark-converter` reads a selected
-Raindrop.io CSV file in the browser and writes bookmarks HTML. It uses the pure
-CSV importer and Netscape serializer from `shared`, with a strict source check,
-an inspection receipt, and a parse-back check on the generated file. It does not
-read or write a Bracemark account. The app can import the original CSV directly;
-the converter's download is for someone who needs an HTML bookmarks file.
+The marketing site's separate `/tools/bookmark-converter` reads portable
+bookmark files in a browser worker: Netscape HTML, URL-column CSV, strict
+URL-per-line text, LinkWarden JSON, Brace.to exports, and ZIPs containing those
+formats (including Pocket CSV parts). It writes HTML, spreadsheet-protected CSV,
+or URL text using the shared serializers. Optional parser observers account for
+source records, skipped records, and empty folders without changing app import
+behavior. Brace revision skips are distinct from repeated URLs, which are kept.
+
+Generated files are parsed again: their ordered URLs must agree, and changes to
+titles, paths, notes, tags, and dates appear in the receipt before download.
+HTML preserves identified empty folders; CSV/text report their removal. Archive
+and Trash links become ordinary named folders with an explicit warning. CSV
+formula-like cells gain an apostrophe, also disclosed. The tool does not read or
+write an account; original files still import directly through Settings → Data.
+Full Bracemark backups are rejected here and belong in the restore flow.
+
+Limits cover file and expanded ZIP bytes, archive entries, bookmark records,
+folder count and depth, plus a worker deadline. ZIP decoding uses native streams
+in the existing worker, checks CRCs, and measures emitted bytes as well as declared
+sizes. It never fetches saved addresses or archive references. Clear/cancel and
+unmount terminate work; changing the output replaces the receipt and download.
 
 Export reads the **local** store (unsynced edits on this device are included)
 after a pre-export sync refresh; a failed refresh downgrades to a warning —

@@ -8,56 +8,169 @@ import { APP_URL, SITE_URL } from '../../../lib/site';
 import { BookmarkConverter } from './bookmark-converter';
 
 export const metadata: Metadata = {
-  title: 'Bookmark file checker and converter',
+  title: 'Bookmark converter — HTML, CSV, JSON, ZIP, and text',
   description:
-    'Check a Raindrop.io CSV export in your browser, see what a conversion would lose, and download browser bookmarks HTML without an account.',
+    'Convert bookmark exports to browser HTML, CSV, or URL text in your browser. Read Raindrop.io, Pocket, LinkWarden, and Brace.to files. No upload or account needed.',
   alternates: { canonical: `${SITE_URL}/tools/bookmark-converter` },
 };
+
+const INPUTS = [
+  ['Bookmarks HTML', 'Browser exports, Raindrop.io, Karakeep, and other Netscape bookmark files.'],
+  [
+    'CSV',
+    'Raindrop.io, Pocket, Bracemark, or a CSV with a url column. Recognized fields: folder, title, note, tags, created, time_added, status, highlights, and favorite.',
+  ],
+  [
+    'JSON / Brace.to TXT',
+    'LinkWarden JSON and Brace.to exports. Other JSON layouts are not supported.',
+  ],
+  [
+    'URL text',
+    'One HTTP(S) address per line. Addresses beginning with www. are given an https:// prefix.',
+  ],
+  [
+    'ZIP',
+    'Pocket CSV parts and archives of the supported files above. Full Bracemark backups belong in Settings → Data.',
+  ],
+];
 
 export default function Page() {
   return (
     <PageShell
       eyebrow="Free tool"
-      title="Check a bookmark file. Convert it when you need to."
-      lede="Choose a Raindrop.io CSV export to see its links, skipped rows, and what a browser bookmarks HTML file can carry."
+      title="Your bookmarks. A different format."
+      lede="Convert a bookmark export to HTML, CSV, or plain text. See what carries over, what changes, and what gets left out before you download."
     >
       <BookmarkConverter appImportUrl={`${APP_URL}/settings/data`} />
-
-      <div className={cn('mt-12 grid gap-10 border-t border-border pt-10 sm:grid-cols-2')}>
+      <section
+        className={cn('mt-12 border-t border-border pt-10')}
+        aria-labelledby="formats-heading"
+      >
+        <h2
+          id="formats-heading"
+          className={cn('font-display text-2xl font-semibold tracking-tight')}
+        >
+          Which files can I convert?
+        </h2>
+        <p className={cn('mt-3 text-body text-muted-foreground')}>
+          Every supported input can be converted to any of the three output formats. JSON and ZIP
+          are input formats only.
+        </p>
+        <dl className={cn('mt-5 divide-y divide-border border-y border-border')}>
+          {INPUTS.map(([format, description]) => (
+            <div key={format} className={cn('grid gap-2 py-4 sm:grid-cols-[10rem_1fr] sm:gap-6')}>
+              <dt className={cn('text-sm font-semibold')}>{format}</dt>
+              <dd className={cn('text-sm leading-6 text-muted-foreground')}>{description}</dd>
+            </div>
+          ))}
+        </dl>
+      </section>
+      <section className={cn('mt-10')} aria-labelledby="fields-heading">
+        <h2
+          id="fields-heading"
+          className={cn('font-display text-2xl font-semibold tracking-tight')}
+        >
+          What survives the conversion?
+        </h2>
+        <div className={cn('mt-5 overflow-x-auto rounded-lg border border-border')}>
+          <table className={cn('w-full text-left text-sm')}>
+            <caption className={cn('sr-only')}>Fields carried by each output format</caption>
+            <thead className={cn('bg-muted/40')}>
+              <tr>
+                {['Field', 'HTML', 'CSV', 'URL text'].map((name) => (
+                  <th key={name} scope="col" className={cn('px-4 py-3 font-semibold')}>
+                    {name}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className={cn('divide-y divide-border')}>
+              {[
+                ['Web addresses', 'Yes', 'Yes', 'Yes'],
+                ['Titles', 'Yes', 'Yes', 'No'],
+                ['Folders', 'Nested folders', 'Slash-separated paths', 'No'],
+                ['Empty folders', 'Yes, when identified', 'No', 'No'],
+                ['Notes and tags', 'Written; apps may ignore them', 'Columns', 'No'],
+                ['Saved dates', 'Whole seconds', 'ISO dates', 'No'],
+                ['Updated dates', 'Whole seconds', 'No', 'No'],
+                ['Images and page copies', 'No', 'No', 'No'],
+              ].map(([field, ...values]) => (
+                <tr key={field}>
+                  <th scope="row" className={cn('px-4 py-3 font-medium')}>
+                    {field}
+                  </th>
+                  {values.map((value, index) => (
+                    <td key={index} className={cn('px-4 py-3 text-muted-foreground')}>
+                      {value}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className={cn('mt-3 text-body text-muted-foreground')}>
+          For example, a bookmark titled “Garden notes” in Reading keeps its title and folder in
+          HTML. CSV writes Reading in a folder column. URL text keeps only its address. The sample
+          file lets you compare all three.
+        </p>
+      </section>
+      <div className={cn('mt-10 grid gap-10 border-t border-border pt-10 sm:grid-cols-2')}>
         <section>
           <h2 className={cn('font-display text-xl font-semibold tracking-tight')}>
-            What this accepts
+            Does my file leave this device?
           </h2>
           <p className={cn('mt-3 text-body text-muted-foreground')}>
-            This first version reads a Raindrop.io CSV export and makes browser bookmarks HTML. It
-            keeps web addresses, titles, and folder paths. It writes notes, tags, and saved dates
-            where the HTML format allows them, though your destination may ignore those fields.
+            Your browser reads the selected file and creates the download. This tool doesn’t upload
+            its contents, save them in browser storage, or request any saved address. The page still
+            loads its normal site assets. Clear the file or close the tab when you’re finished.
           </p>
+        </section>
+        <section>
+          <h2 className={cn('font-display text-xl font-semibold tracking-tight')}>
+            Are duplicates removed?
+          </h2>
           <p className={cn('mt-3 text-body text-muted-foreground')}>
-            Raindrop.io also exports HTML directly. Use that original HTML file when you need its
-            exact folder nesting or want to import into Bracemark. See the{' '}
+            No. Repeated addresses can belong in different folders, and URL variants can mean
+            different pages. The receipt counts possible repeats and keeps them all. Older revisions
+            in a Brace.to export are reported separately as skipped records.
+          </p>
+        </section>
+        <section>
+          <h2 className={cn('font-display text-xl font-semibold tracking-tight')}>
+            Will it recreate my whole backup?
+          </h2>
+          <p className={cn('mt-3 text-body text-muted-foreground')}>
+            These downloads carry bookmarks. They don’t recreate account settings, images, archived
+            pages, or pin order. Archive and Trash statuses become ordinary folders, so another app
+            may import those links as active bookmarks. CSV cells that could be formulas receive a
+            leading apostrophe for spreadsheet protection.
+          </p>
+        </section>
+        <section>
+          <h2 className={cn('font-display text-xl font-semibold tracking-tight')}>
+            Moving to Bracemark?
+          </h2>
+          <p className={cn('mt-3 text-body text-muted-foreground')}>
+            You can import supported original files directly. Read the{' '}
+            <Link
+              href="/docs/import"
+              className={cn(
+                'text-signal underline underline-offset-2 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none',
+              )}
+            >
+              import guide
+            </Link>{' '}
+            or the{' '}
             <Link
               href="/docs/import-from-raindrop"
               className={cn(
                 'text-signal underline underline-offset-2 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none',
               )}
             >
-              Raindrop.io import guide
-            </Link>
-            .
-          </p>
-        </section>
-        <section>
-          <h2 className={cn('font-display text-xl font-semibold tracking-tight')}>
-            How the file is handled
-          </h2>
-          <p className={cn('mt-3 text-body text-muted-foreground')}>
-            Your browser reads the selected file and creates the download. This tool doesn’t upload
-            its contents or request any saved address. The page still loads its normal site assets.
-          </p>
-          <p className={cn('mt-3 text-body text-muted-foreground')}>
-            The receipt names excluded rows and populated fields that the HTML file can’t carry. We
-            leave repeats in place and keep the original file untouched.
+              Raindrop.io guide
+            </Link>{' '}
+            before choosing a file in Settings → Data.
           </p>
         </section>
       </div>
