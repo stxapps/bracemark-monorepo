@@ -832,8 +832,10 @@ task), and decide by the band:
 
 A worker only helps a step that can run without the store. The one pure step
 the flows have is the file → `ImportedBundle` parse (`parseImportText` and the
-parsers under it, DOM-free on purpose), and **it is not what fills the long
-tasks** — see the readings. Store reads, per-record validation and the
+parsers under it, DOM-free on purpose), and it doesn't need one: every parser
+is a generator that yields every `PARSE_CHUNK` records, and both orchestrators
+await `parseImportTextInChunks`, so the parse pauses like the loops do. See
+_readings — expo_, **2026-09-26, the parse**. Store reads, per-record validation and the
 projection all touch Dexie or run between Dexie calls, so moving them means
 moving the store, which is the architecture change the paragraph above argues
 against. Keep the store writes, the sync kick and the quota prompt on the main
@@ -921,7 +923,9 @@ a loop, so chunking can't reach it:
   the whole file, one synchronous call. This is the one pure step, and the
   table's worker row applies to it once it crosses ~1 s. That is roughly two
   and a half times this file, if it keeps scaling linearly. Until then it stays
-  on the main thread.
+  on the main thread. (Since split into chunks on both platforms, because
+  expo crossed the line first: _readings — expo_, **2026-09-26, the parse**.
+  Web not re-measured.)
 - **HTML, CSV and text exports (290–378 ms):** the single `toArray()` in
   `gatherLinks` that reads the whole `links/` namespace in one IndexedDB
   request. The structured clone of every record lands in one task. The fix is
@@ -1051,10 +1055,7 @@ What is still above the ~200 ms band, and why nothing more changed here:
 
 - **HTML import at 10,000 links (1,243 ms):** the one `parseImportText` call
   over the whole file, now linear (~0.8 s at this size by the Hermes CLI), plus
-  the decode around it. This is the table's worker row, and expo has no Web
-  Worker. The candidates are a second JS runtime (`react-native-worklets`) for
-  the pure parse, or a parser that pauses between tokens the way the
-  projection does. Neither is done.
+  the decode around it. Since changed: **2026-09-26, the parse**, below.
 - **Restore (389–648 ms):** a write chunk and its live-read re-run. Smaller
   chunks shrink the first half and multiply the second. What would help is
   suspending live reads for the duration of a bulk write.
@@ -1068,6 +1069,44 @@ has the same drizzle cost: `clearDrainedOps` and `stampItemUpdatedAts` issue a
 statement per path, about 0.6 s per 1,000-path commit in the profile. It belongs
 to the engine ([local-first-sync.md](./local-first-sync.md)) and is not changed
 here.
+
+**2026-09-26, the parse** — the Hermes CLI (the `hermes-engine` pod's build,
+`hermesc -O`) on the same M1, timing the shared parsers directly at 10,000
+records per format, with expo's `URL` (`whatwg-url-without-unicode`) installed
+as the app has it. Not a `measure:native` run: the stall the probe would see now
+is the largest of the decode, one parse chunk and the first dedupe chunk, and
+that reading is still to take.
+
+The whole parse took 0.5–0.8 s in **every** format, not only HTML (HTML 768 ms,
+CSV 711, LinkWarden 546, plain text 536, Brace 638). The token regex was not
+the owner. Broken down for the HTML file:
+
+| part of `parseNetscapeHtml`, 10,000 links    | Hermes | Node   |
+| -------------------------------------------- | ------ | ------ |
+| the whole parse                              | 743 ms | 110 ms |
+| the token scan alone                         | 17 ms  | 1 ms   |
+| `normalizeUrl` × 10,000 (its `new URL`)      | 511 ms | 71 ms  |
+| `attr` building a `RegExp` per call × 50,000 | 154 ms | 10 ms  |
+
+`new URL` is expo's pure-JS WHATWG parser, and every format's parser calls
+`normalizeUrl` once per record, so that cost is the same in all five. Neither
+option above was taken. A worklet runtime doesn't have expo's `URL`, so it
+would need its own copy of the costliest part, and the file and its 10,000 rows
+would be copied across runtimes on top of that. What changed:
+
+- **`attr` compiles each attribute's regex once** (`import/netscape.ts`). The
+  HTML parse went from 768 to 613 ms.
+- **Every parser is a generator** yielding every `PARSE_CHUNK` (500) records:
+  the Netscape token loop, the CSV character scan and its row loop, both
+  plain-text modes, LinkWarden's links, and each of Brace's passes plus every
+  image it decodes. `import/steps.ts` holds the two drivers, and the projection
+  now uses them too. `parseImportText` drains the generator synchronously for
+  the specs and the bookmark converter. `parseImportTextInChunks` pauses on
+  `yieldToMain`, and both orchestrators call it, web included.
+
+Longest single chunk after the change, same harness: HTML 26 ms, CSV 30,
+plain text 27, LinkWarden 38, Brace 30. The parse still takes as long in total.
+It just no longer holds the thread for all of it.
 
 The bookmark converter on the marketing site is a **separate decision**, already
 made. Its whole job is one synchronous call (up to `BOOKMARK_CONVERTER_MAX_ROWS`

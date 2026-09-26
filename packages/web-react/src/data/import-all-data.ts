@@ -88,7 +88,7 @@ import {
   isZipBytes,
   LINKS_PREFIX,
   parseBackupManifest,
-  parseImportText,
+  parseImportTextInChunks,
   pathFromId,
   PINS_PREFIX,
   projectImportedLinksInChunks,
@@ -370,7 +370,11 @@ async function parseInteropZip(byName: Map<string, FileEntry>): Promise<Imported
   const links: ImportedLink[] = [];
   const images = new Map<string, Uint8Array>();
   for (const [name, entry] of candidates) {
-    const parsed = parseImportText(await entry.getData(new TextWriter()), name);
+    const parsed = await parseImportTextInChunks(
+      await entry.getData(new TextWriter()),
+      name,
+      yieldToMain,
+    );
     links.push(...parsed.links);
     for (const [key, bytes] of parsed.images) images.set(key, bytes);
   }
@@ -444,7 +448,11 @@ export async function importAllData(options: {
     return { ...outcome, syncFailed };
   }
 
-  const parsed = parseImportText(new TextDecoder().decode(bytes), file.name);
+  const parsed = await parseImportTextInChunks(
+    new TextDecoder().decode(bytes),
+    file.name,
+    yieldToMain,
+  );
   const outcome = await importInterop(deps.username, parsed, maxLinks, onProgress, onQuotaPrompt);
   return { ...outcome, syncFailed };
 }

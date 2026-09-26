@@ -1,6 +1,7 @@
 import { base64ToBytes } from '../crypto/encoding';
 import { normalizeUrl } from '../url/url';
 import type { ImportedBundle, ImportedLink, ImportObserver } from './bundle';
+import { PARSE_CHUNK, runSteps } from './steps';
 
 // Brace.to export parser — the one importer whose input is a foreign app's whole
 // BACKUP rather than a bookmarks file. Brace.to (this project's predecessor) exports
@@ -163,6 +164,16 @@ function latestSettings(entries: BraceEntry[]): Record<string, unknown> | undefi
 // --- the parse ------------------------------------------------------------------------
 
 export function parseBraceExport(text: string, observer?: ImportObserver): ImportedBundle {
+  return runSteps(parseBraceExportSteps(text, observer));
+}
+
+// The parse as a generator (steps.ts): it yields after every PARSE_CHUNK entries
+// in each of its passes, and after every image, whose base64 decode is the one
+// per-entry cost here that grows with the entry rather than the count.
+export function* parseBraceExportSteps(
+  text: string,
+  observer?: ImportObserver,
+): Generator<void, ImportedBundle> {
   const empty: ImportedBundle = { links: [], images: new Map() };
 
   let json: unknown;
@@ -175,6 +186,7 @@ export function parseBraceExport(text: string, observer?: ImportObserver): Impor
 
   const entries: BraceEntry[] = [];
   for (const [index, value] of json.entries()) {
+    if (index > 0 && index % PARSE_CHUNK === 0) yield;
     if (!isObject(value) || typeof value.path !== 'string') continue;
     entries.push({ path: value.path, data: value.data, position: index + 1 });
   }
@@ -196,7 +208,8 @@ export function parseBraceExport(text: string, observer?: ImportObserver): Impor
   const settingsEntries: BraceEntry[] = [];
   const images = new Map<string, Uint8Array>();
 
-  for (const entry of entries) {
+  for (const [index, entry] of entries.entries()) {
+    if (index > 0 && index % PARSE_CHUNK === 0) yield;
     const { path, data, position } = entry;
 
     if (path.startsWith(LINKS)) {
@@ -282,6 +295,7 @@ export function parseBraceExport(text: string, observer?: ImportObserver): Impor
       const key = path.slice(at);
       const bytes = decodeDataUrl(data);
       if (bytes !== undefined) images.set(key, bytes);
+      yield;
       continue;
     }
 
@@ -295,7 +309,8 @@ export function parseBraceExport(text: string, observer?: ImportObserver): Impor
   const tagNames = readTagNameMap(settings?.tagNameMap);
 
   const links: ImportedLink[] = [];
-  for (const row of linkRows) {
+  for (const [index, row] of linkRows.entries()) {
+    if (index > 0 && index % PARSE_CHUNK === 0) yield;
     if (!isObject(row.data)) continue;
     if (typeof row.data.url !== 'string') {
       observer?.row(row.position, 'No address');

@@ -2,6 +2,7 @@ import { decodeHtmlEntities } from '../html/entities';
 import { normalizeUrl } from '../url/url';
 import type { ImportedLink, ImportObserver } from './bundle';
 import { parseEpoch } from './epoch';
+import { PARSE_CHUNK, runSteps } from './steps';
 
 // LinkWarden backup parser — the second importer (with brace.ts) whose input is a
 // foreign app's whole BACKUP rather than a bookmarks file, and the one that exists
@@ -125,6 +126,16 @@ function tagNames(value: unknown): string[] {
 }
 
 export function parseLinkwardenExport(text: string, observer?: ImportObserver): ImportedLink[] {
+  return runSteps(parseLinkwardenExportSteps(text, observer));
+}
+
+// The parse as a generator, yielding after every PARSE_CHUNK link records
+// (steps.ts). The `JSON.parse` in front of it is one native call and can't be
+// split; it is the records after it that cost.
+export function* parseLinkwardenExportSteps(
+  text: string,
+  observer?: ImportObserver,
+): Generator<void, ImportedLink[]> {
   const root: unknown = JSON.parse(text);
   if (!isRecord(root) || !Array.isArray(root.collections)) return [];
 
@@ -181,6 +192,7 @@ export function parseLinkwardenExport(text: string, observer?: ImportObserver): 
     if (!Array.isArray(collection.links)) continue;
 
     for (const raw of collection.links) {
+      if (position > 0 && position % PARSE_CHUNK === 0) yield;
       position++;
       if (!isRecord(raw)) {
         observer?.row(position, 'Invalid bookmark record');

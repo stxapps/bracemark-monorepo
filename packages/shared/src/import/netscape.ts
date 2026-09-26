@@ -3,6 +3,7 @@ import { normalizeUrl } from '../url/url';
 import type { ImportedLink, ImportObserver } from './bundle';
 import { parseEpoch } from './epoch';
 import { FAVORITES_TAG, isRaindropHtml, withHighlights, withoutUnsorted } from './raindrop';
+import { PARSE_CHUNK, runSteps } from './steps';
 
 // Netscape Bookmark File parser — the read mirror of export/netscape.ts, and the
 // one importer that covers web browsers (Chrome/Firefox/Safari/IE "Export
@@ -58,8 +59,19 @@ const TOKEN_RE =
 
 // One double-quoted attribute out of a tag's attribute text, case-insensitive.
 // Netscape files quote every attribute value; unquoted values don't occur.
+//
+// Compiled once per NAME, not per call: `attr` runs up to five times per anchor,
+// and building the RegExp each time was about 150 ms of a 10,000-link parse on
+// Hermes — more than the whole token scan. Non-global, so `exec` keeps no
+// `lastIndex` between calls and the shared instance is safe to reuse.
+const ATTR_RES = new Map<string, RegExp>();
 function attr(attrs: string, name: string): string | undefined {
-  const match = new RegExp(`\\b${name}\\s*=\\s*"([^"]*)"`, 'i').exec(attrs);
+  let re = ATTR_RES.get(name);
+  if (re === undefined) {
+    re = new RegExp(`\\b${name}\\s*=\\s*"([^"]*)"`, 'i');
+    ATTR_RES.set(name, re);
+  }
+  const match = re.exec(attrs);
   return match ? match[1] : undefined;
 }
 
@@ -112,7 +124,18 @@ function descriptionText(value: string): string {
 }
 
 export function parseNetscapeHtml(text: string, observer?: ImportObserver): ImportedLink[] {
+  return runSteps(parseNetscapeHtmlSteps(text, observer));
+}
+
+// The parse as a generator, yielding after every PARSE_CHUNK tokens so an
+// orchestrator can hand the thread back between them (steps.ts). The token scan
+// resumes where it stopped: `matchAll` holds its own position.
+export function* parseNetscapeHtmlSteps(
+  text: string,
+  observer?: ImportObserver,
+): Generator<void, ImportedLink[]> {
   const links: ImportedLink[] = [];
+  let tokenCount = 0;
   let position = 0;
   // Open <DL> scopes: a folder name, or null for an anonymous scope (the root
   // list). folderPath is the non-null names, root-first.
@@ -137,6 +160,8 @@ export function parseNetscapeHtml(text: string, observer?: ImportObserver): Impo
   // and an <a> inside it is counted as a second bookmark.
   const tokens = observer ? new RegExp(TOKEN_RE.source + '|<a\\b[^>]*>', TOKEN_RE.flags) : TOKEN_RE;
   for (const match of text.matchAll(tokens)) {
+    if (tokenCount > 0 && tokenCount % PARSE_CHUNK === 0) yield;
+    tokenCount++;
     const token = match[0];
 
     // <dd>description. Checked FIRST, because the <dl> arm below dispatches on

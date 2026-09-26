@@ -8,6 +8,7 @@ import {
   withHighlights,
   withoutUnsorted,
 } from './raindrop';
+import { PARSE_CHUNK, runSteps } from './steps';
 
 // CSV parser targeting Raindrop.io's export (and export/csv.ts's own output —
 // the two share the url/folder/title/note/tags/created columns) plus Pocket's
@@ -31,6 +32,13 @@ import {
 // One pass, character-wise — small and total: every input yields SOME row
 // split, garbage never throws, and the header gate above decides relevance.
 export function scanCsv(text: string): { rows: string[][]; malformed: boolean } {
+  return runSteps(scanCsvSteps(text));
+}
+
+// The scan as a generator, yielding after every PARSE_CHUNK rows (steps.ts). It
+// is a per-character loop, so on a big file it is a long task of its own before
+// the first row is read.
+function* scanCsvSteps(text: string): Generator<void, { rows: string[][]; malformed: boolean }> {
   const rows: string[][] = [];
   let row: string[] = [];
   let field = '';
@@ -69,6 +77,7 @@ export function scanCsv(text: string): { rows: string[][]; malformed: boolean } 
       rows.push(row);
       row = [];
       closedQuote = false;
+      if (rows.length % PARSE_CHUNK === 0) yield;
     } else {
       if (closedQuote) malformed = true;
       field += ch;
@@ -99,7 +108,15 @@ function folderPath(value: string, raindrop: boolean): string[] {
 }
 
 export function parseRaindropCsv(text: string, observer?: ImportObserver): ImportedLink[] {
-  const rows = scanCsv(text).rows;
+  return runSteps(parseRaindropCsvSteps(text, observer));
+}
+
+// The parse as a generator, yielding after every PARSE_CHUNK rows (steps.ts).
+export function* parseRaindropCsvSteps(
+  text: string,
+  observer?: ImportObserver,
+): Generator<void, ImportedLink[]> {
+  const rows = (yield* scanCsvSteps(text)).rows;
   if (rows.length < 2) return [];
 
   const header = rows[0].map((name) => name.trim().toLowerCase());
@@ -126,6 +143,7 @@ export function parseRaindropCsv(text: string, observer?: ImportObserver): Impor
 
   const links: ImportedLink[] = [];
   for (const [index, row] of rows.slice(1).entries()) {
+    if (index > 0 && index % PARSE_CHUNK === 0) yield;
     const url = normalizeUrl(cell(row, urlCol));
     if (url === null) {
       observer?.row(index + 2, cell(row, urlCol) ? 'Not a web address' : 'No address');

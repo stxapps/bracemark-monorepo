@@ -54,6 +54,7 @@ import { ARCHIVE_ID, TRASH_ID } from '../sync/system-lists';
 import { hostFromText } from '../url/url';
 import type { ImportedLink } from './bundle';
 import { ListResolver, type ResolverNode, TagResolver } from './resolve';
+import { runSteps, runStepsWithPauses } from './steps';
 
 // One entity to write, structurally the write edge's RawEntityEntry on both
 // platforms (data/mutations.ts) — which is where these go.
@@ -118,29 +119,20 @@ function namesOnlyTheAddress(title: string, url: string): boolean {
 // _main-thread cost_).
 export const PROJECT_CHUNK = 1000;
 
-// The whole import in one synchronous call. What expo and the specs use.
+// The whole import in one synchronous call. What the specs use.
 export function projectImportedLinks(options: ProjectImportOptions): ProjectedImport {
-  const steps = projectSteps(options);
-  for (;;) {
-    const step = steps.next();
-    if (step.done) return step.value;
-  }
+  return runSteps(projectSteps(options));
 }
 
 // The same projection, handing the thread back between chunks. At 50,000 rows
 // the synchronous call held web's main thread for ~0.6 s in one task; `pause`
-// is the platform's yield (web-react lib/yield-to-main.ts), awaited every
-// PROJECT_CHUNK rows. One body for both entry points, so the two can't drift.
-export async function projectImportedLinksInChunks(
+// is the platform's yield (web-react / expo-react lib/yield-to-main.ts), awaited
+// every PROJECT_CHUNK rows. One body for both entry points (steps.ts).
+export function projectImportedLinksInChunks(
   options: ProjectImportOptions,
   pause: () => Promise<void>,
 ): Promise<ProjectedImport> {
-  const steps = projectSteps(options);
-  for (;;) {
-    const step = steps.next();
-    if (step.done) return step.value;
-    await pause();
-  }
+  return runStepsWithPauses(projectSteps(options), pause);
 }
 
 // Yields (nothing) after every PROJECT_CHUNK rows; the drivers above decide

@@ -1,5 +1,6 @@
 import { normalizeUrl } from '../url/url';
 import type { ImportedLink, ImportObserver } from './bundle';
+import { PARSE_CHUNK, runSteps } from './steps';
 
 // Plain-text URL scanner — the read mirror of export/text.ts and the fallback
 // when a file is neither bookmarks HTML nor a links CSV. Pulls every URL-shaped
@@ -24,9 +25,19 @@ export function parseUrlText(
   text: string,
   options: { linesOnly?: boolean; observer?: ImportObserver } = {},
 ): ImportedLink[] {
+  return runSteps(parseUrlTextSteps(text, options));
+}
+
+// The scan as a generator, yielding after every PARSE_CHUNK lines or tokens
+// (steps.ts).
+export function* parseUrlTextSteps(
+  text: string,
+  options: { linesOnly?: boolean; observer?: ImportObserver } = {},
+): Generator<void, ImportedLink[]> {
   const links: ImportedLink[] = [];
   if (options.linesOnly) {
     for (const [index, line] of text.split(/\r?\n/).entries()) {
+      if (index > 0 && index % PARSE_CHUNK === 0) yield;
       if (!line.trim()) continue;
       const raw = line.trim();
       const url = /^(https?:\/\/|www\.)\S+$/i.test(raw) ? normalizeUrl(raw) : null;
@@ -35,7 +46,10 @@ export function parseUrlText(
     }
     return links;
   }
+  let tokenCount = 0;
   for (const match of text.matchAll(URL_TOKEN_RE)) {
+    if (tokenCount > 0 && tokenCount % PARSE_CHUNK === 0) yield;
+    tokenCount++;
     const url = normalizeUrl(stripTrailingPunctuation(match[0]));
     if (url === null) continue;
     links.push({ url, tagNames: [], folderPath: [] });

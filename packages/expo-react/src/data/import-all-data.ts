@@ -47,7 +47,7 @@ import {
   isZipBytes,
   LINKS_PREFIX,
   parseBackupManifest,
-  parseImportText,
+  parseImportTextInChunks,
   pathFromId,
   PINS_PREFIX,
   projectImportedLinksInChunks,
@@ -318,7 +318,7 @@ const INTEROP_ZIP_ENTRY_RE = /\.(csv|html?|txt|json)$/i;
 // (part_000000.csv, part_000001.csv, …) in sequence. Brace.to itself exports a
 // bare .txt, never a zip — but a user who zips that .txt lands here anyway, and
 // the entry sniffs as `brace` like any other (detection runs per entry).
-function parseInteropZip(byName: Map<string, Uint8Array>): ImportedBundle {
+async function parseInteropZip(byName: Map<string, Uint8Array>): Promise<ImportedBundle> {
   const candidates = [...byName.entries()]
     .filter(([name]) => {
       const base = name.slice(name.lastIndexOf('/') + 1);
@@ -336,7 +336,7 @@ function parseInteropZip(byName: Map<string, Uint8Array>): ImportedBundle {
   const links: ImportedLink[] = [];
   const images = new Map<string, Uint8Array>();
   for (const [name, bytes] of candidates) {
-    const parsed = parseImportText(decodeUtf8(bytes), name);
+    const parsed = await parseImportTextInChunks(decodeUtf8(bytes), name, yieldToMain);
     links.push(...parsed.links);
     for (const [key, blob] of parsed.images) images.set(key, blob);
   }
@@ -375,7 +375,7 @@ async function importZip(
   if (byName.has(BACKUP_MANIFEST_ENTRY)) {
     return importBracemarkBackup(username, byName, maxLinks, onProgress);
   }
-  const parsed = parseInteropZip(byName);
+  const parsed = await parseInteropZip(byName);
   return importInterop(username, parsed, maxLinks, onProgress, onQuotaPrompt);
 }
 
@@ -412,7 +412,7 @@ export async function importAllData(options: {
     return { ...outcome, syncFailed };
   }
 
-  const parsed = parseImportText(decodeUtf8(bytes), file.name);
+  const parsed = await parseImportTextInChunks(decodeUtf8(bytes), file.name, yieldToMain);
   const outcome = await importInterop(deps.username, parsed, maxLinks, onProgress, onQuotaPrompt);
   return { ...outcome, syncFailed };
 }
