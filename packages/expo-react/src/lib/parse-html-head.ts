@@ -86,13 +86,102 @@ export function decodeHtmlBytes(bytes: Uint8Array, contentType?: string): string
 // One tag's attributes as a lowercase-keyed map. Handles double-quoted, single-quoted
 // and bare values — all three appear in the wild, and a missed `content` is a missed
 // og:title.
+//
+// The value is OPTIONAL in the pattern so that a name with no `=` (`crossorigin`,
+// `async`, or a hostile page's 100 KB of letters) is consumed as a match and skipped.
+// Required, a failed `=` backtracks through the whole name and then retries from its
+// second letter, its third…: quadratic in the name's length on every engine.
 function parseAttrs(raw: string): Record<string, string> {
   const attrs: Record<string, string> = {};
-  const re = /([a-z_:][-a-z0-9_:.]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/gi;
+  const re = /([a-z_:][-a-z0-9_:.]*)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+)))?/gi;
   for (let m = re.exec(raw); m !== null; m = re.exec(raw)) {
-    attrs[m[1].toLowerCase()] = decodeHtmlEntities(m[2] ?? m[3] ?? m[4] ?? '');
+    const value = m[2] ?? m[3] ?? m[4];
+    if (value !== undefined) attrs[m[1].toLowerCase()] = decodeHtmlEntities(value);
   }
   return attrs;
+}
+
+// WHY THE SCAN BELOW IS HAND-ROLLED. Every construct it reads — a comment, a
+// script/style body, a `<title>`, a `<meta …>` — is an opener followed by a closer,
+// and the obvious regex for one (`/<meta\b[^>]*>/g`, `/<!--.*?-->/gs`) is quadratic
+// when an opener never closes: the engine scans to the end, fails, and starts over
+// from the NEXT opener, which fails the same way. The fact a regex can't use is that
+// a closer missing after one opener is missing after every later one — so these
+// helpers find the opener by regex, its end by searching forward from it, and stop
+// at the first miss. Each character is then scanned about once. Nothing a real page
+// does trips the regex version; a hostile one did, on every engine — `<meta ` ×
+// 32,000 (156 KB) held Hermes for 24 s. docs/link-extraction.md, _three collectors_.
+//
+// ⚠ Where a body IS matched by regex, it is `.*?` + `s`, never `[\s\S]*?`: on Hermes
+// the class spelling costs time in proportion to the rest of the input on every
+// match (`@stxapps/shared` import/netscape.ts). The `REGEX_SYNTAX` lint rule holds it.
+
+// The next tag `open` finds at or after `from` (`open` must be global): where it
+// starts, its attribute text, and the index just past its `>`. Undefined at the end,
+// or at the first opener with no `>` after it — no later one has one either.
+function nextTag(
+  text: string,
+  open: RegExp,
+  from: number,
+): { start: number; attrs: string; end: number } | undefined {
+  open.lastIndex = from;
+  const opener = open.exec(text);
+  if (opener === null) return undefined;
+  const attrsStart = opener.index + opener[0].length;
+  const gt = text.indexOf('>', attrsStart);
+  if (gt === -1) return undefined;
+  return { start: opener.index, attrs: text.slice(attrsStart, gt), end: gt + 1 };
+}
+
+// The next `open … close` span at or after `from` (both global; `openIsTag` when the
+// opener runs on to a `>`, as `<script …>` does and `<!--` doesn't): where it starts,
+// its body, and the index just past the closer. Undefined when there's no complete one.
+function nextSpan(
+  text: string,
+  open: RegExp,
+  close: RegExp,
+  openIsTag: boolean,
+  from: number,
+): { start: number; body: string; end: number } | undefined {
+  let start: number;
+  let bodyStart: number;
+  if (openIsTag) {
+    const tag = nextTag(text, open, from);
+    if (tag === undefined) return undefined;
+    ({ start, end: bodyStart } = tag);
+  } else {
+    open.lastIndex = from;
+    const opener = open.exec(text);
+    if (opener === null) return undefined;
+    start = opener.index;
+    bodyStart = opener.index + opener[0].length;
+  }
+  close.lastIndex = bodyStart;
+  const closer = close.exec(text);
+  if (closer === null) return undefined;
+  return {
+    start,
+    body: text.slice(bodyStart, closer.index),
+    end: closer.index + closer[0].length,
+  };
+}
+
+// Every complete `open … close` span replaced by a space; an unclosed opener and all
+// that follows it are left as they are (a page that never closes a comment keeps its
+// later metadata — the scanner's choice, not HTML's).
+function stripSpans(text: string, open: RegExp, close: RegExp, openIsTag: boolean): string {
+  const kept: string[] = [];
+  let pos = 0;
+  for (
+    let span = nextSpan(text, open, close, openIsTag, pos);
+    span !== undefined;
+    span = nextSpan(text, open, close, openIsTag, pos)
+  ) {
+    kept.push(text.slice(pos, span.start));
+    pos = span.end;
+  }
+  kept.push(text.slice(pos));
+  return kept.join(' ');
 }
 
 // Everything before `</head>` (or the whole capped input if the page never closes it),
@@ -102,12 +191,20 @@ function parseAttrs(raw: string): Record<string, string> {
 // them will happily collect it as if the page had declared it.
 function headOf(html: string): string {
   const capped = html.length > MAX_HEAD_CHARS ? html.slice(0, MAX_HEAD_CHARS) : html;
-  const stripped = capped
-    .replace(/<!--[\s\S]*?-->/g, ' ')
-    .replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, ' ')
-    .replace(/<style\b[^>]*>[\s\S]*?<\/style\s*>/gi, ' ');
+  let stripped = stripSpans(capped, /<!--/g, /-->/g, false);
+  stripped = stripSpans(stripped, /<script\b/gi, /<\/script\s*>/gi, true);
+  stripped = stripSpans(stripped, /<style\b/gi, /<\/style\s*>/gi, true);
   const end = stripped.search(/<\/head\s*>/i);
   return end === -1 ? stripped : stripped.slice(0, end);
+}
+
+// Every `<name …>` tag's attribute text, in document order.
+function tagAttrs(head: string, open: RegExp): string[] {
+  const found: string[] = [];
+  for (let tag = nextTag(head, open, 0); tag !== undefined; tag = nextTag(head, open, tag.end)) {
+    found.push(tag.attrs);
+  }
+  return found;
 }
 
 // Fill the shared candidate bag. FIRST non-empty value per key wins (head order ≈ page
@@ -117,12 +214,11 @@ export function parseHtmlHead(html: string): CollectedMeta {
   const head = headOf(html);
   const collected: CollectedMeta = {};
 
-  const title = /<title[^>]*>([\s\S]*?)<\/title\s*>/i.exec(head);
-  if (title) collected.docTitle = decodeHtmlEntities(title[1]);
+  const title = nextSpan(head, /<title/gi, /<\/title\s*>/gi, true, 0);
+  if (title) collected.docTitle = decodeHtmlEntities(title.body);
 
-  const metaRe = /<meta\b([^>]*)>/gi;
-  for (let m = metaRe.exec(head); m !== null; m = metaRe.exec(head)) {
-    const attrs = parseAttrs(m[1]);
+  for (const raw of tagAttrs(head, /<meta\b/gi)) {
+    const attrs = parseAttrs(raw);
     const content = attrs.content?.trim();
     if (!content) continue;
 
@@ -152,9 +248,8 @@ export function parseHtmlHead(html: string): CollectedMeta {
     }
   }
 
-  const linkRe = /<link\b([^>]*)>/gi;
-  for (let m = linkRe.exec(head); m !== null; m = linkRe.exec(head)) {
-    const attrs = parseAttrs(m[1]);
+  for (const raw of tagAttrs(head, /<link\b/gi)) {
+    const attrs = parseAttrs(raw);
     const rel = attrs.rel?.toLowerCase();
     const href = attrs.href?.trim();
     if (!rel || !href) continue;

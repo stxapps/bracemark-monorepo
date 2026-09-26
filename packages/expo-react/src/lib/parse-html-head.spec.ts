@@ -118,6 +118,24 @@ describe('parseHtmlHead', () => {
     expect(parseHtmlHead('<html><body><p>hi</p></body></html>')).toEqual({});
   });
 
+  // A boolean attribute has no `=`; the tokenizer consumes it as a bare name, and the
+  // attributes after it must still be read.
+  it('reads attributes that follow a valueless one', () => {
+    const collected = parseHtmlHead(`<link rel="icon" crossorigin href="/i.png">`);
+    expect(collected.icons?.map((i) => i.href)).toEqual(['/i.png']);
+  });
+
+  // The scanner's choice, not HTML's: an unclosed comment or script is left in place
+  // rather than swallowing the rest of the page, so the metadata after it survives.
+  it('keeps the metadata after an unclosed comment or script', () => {
+    const collected = parseHtmlHead(`
+      <!-- never closed
+      <script> never closed
+      <meta property="og:title" content="After">
+    `);
+    expect(collected.ogTitle).toBe('After');
+  });
+
   it('collects every icon rel in document order for the selector to rank', () => {
     const collected = parseHtmlHead(`
       <link rel="shortcut icon" href="/legacy.ico">
@@ -126,6 +144,47 @@ describe('parseHtmlHead', () => {
       <link rel="stylesheet" href="/app.css">
     `);
     expect(collected.icons?.map((i) => i.href)).toEqual(['/legacy.ico', '/at.png', '/pin.svg']);
+  });
+});
+
+// A page can be built to stall a regex scanner: thousands of openers with no closer
+// make a `[^>]*>` or `.*?-->` retry from each one to the end, quadratic on EVERY
+// engine (parse-html-head.ts, _why the scan below is hand-rolled_). The drain fetches
+// pages nobody gestured for, on the JS thread, so each case is sized near
+// MAX_HEAD_CHARS and must finish inside a budget. The margin is deliberately wide:
+// these take a few ms linear, and the regexes they replaced took 1–13 s each on V8,
+// so 250 ms neither flakes on a loaded machine nor passes a revert. Each also asserts
+// the real tag in front of the junk is still collected, which is the positive control.
+describe('parseHtmlHead on hostile input', () => {
+  const BUDGET_MS = 250;
+  const REAL = '<meta property="og:title" content="Real">';
+
+  const timed = (html: string): { ogTitle?: string; ms: number } => {
+    const start = performance.now();
+    const { ogTitle } = parseHtmlHead(html);
+    return { ogTitle, ms: performance.now() - start };
+  };
+
+  it.each([
+    ['comment', '<!--x'],
+    ['script', '<script>x'],
+    ['style', '<style>x'],
+    ['title', '<title>x'],
+    ['title with no `>`', '<title '],
+    ['meta with no `>`', '<meta '],
+    ['link with no `>`', '<link '],
+  ])('stays linear on thousands of unclosed %s openers', (_name, opener) => {
+    const { ogTitle, ms } = timed(REAL + opener.repeat(Math.floor(240_000 / opener.length)));
+    expect(ogTitle).toBe('Real');
+    expect(ms).toBeLessThan(BUDGET_MS);
+  });
+
+  it('stays linear on one enormous attribute name with no `=`', () => {
+    const { ogTitle, ms } = timed(
+      `<meta ${'a'.repeat(30_000)} property="og:title" content="Real">`,
+    );
+    expect(ogTitle).toBe('Real');
+    expect(ms).toBeLessThan(BUDGET_MS);
   });
 });
 

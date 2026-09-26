@@ -1018,7 +1018,9 @@ batching below removes most of both.
   malformed input included. [expo-dependencies.md](./expo-dependencies.md),
   _runtime polyfills_, has why the global is left alone.
 - **The Netscape token regex is `.*?` under `s`**, with a ⚠ note in
-  `import/netscape.ts`, since nothing on web would notice a revert.
+  `import/netscape.ts`. Nothing on web would notice a revert, so a
+  `no-restricted-syntax` rule (`REGEX_SYNTAX` in `eslint.config.mjs`) now
+  rejects `[\s\S]*?` and its other any-character spellings workspace-wide.
 - **The backup zip streams.** fflate's synchronous streaming `Zip` deflates
   `items.jsonl` 256 KiB at a time with a yield between pieces, and each blob
   gets its own turn. zip.js reads the result (data descriptors and all), and

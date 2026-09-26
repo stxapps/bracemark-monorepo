@@ -46,7 +46,8 @@ import { FAVORITES_TAG, isRaindropHtml, withHighlights, withoutUnsorted } from '
 // quadratic in the file's size. A 10,000-link bookmarks file held bracemark-expo's
 // JS thread for 31 s; the same scan with `.*?` is linear, and V8 runs every
 // spelling alike (docs/data-lifecycle.md, _readings — expo_). Nothing on web
-// shows the difference, so nothing but this note guards it.
+// shows the difference, so lint does: `REGEX_SYNTAX` in eslint.config.mjs
+// rejects the any-character lazy spellings workspace-wide.
 //
 // The <DD> arm ends on a LOOKAHEAD at the next block tag rather than at the next
 // `<`, so inline markup inside a description (a real file has <b>, <br>, an <a>)
@@ -134,9 +135,7 @@ export function parseNetscapeHtml(text: string, observer?: ImportObserver): Impo
   // a damaged export cannot quietly lose records outside the normal tokenizer.
   // Reuse TOKEN_RE's own flags: without `s`, a multi-line <DD> fails to match
   // and an <a> inside it is counted as a second bookmark.
-  const tokens = observer
-    ? new RegExp(TOKEN_RE.source + '|<a\\b[^>]*>', TOKEN_RE.flags)
-    : TOKEN_RE;
+  const tokens = observer ? new RegExp(TOKEN_RE.source + '|<a\\b[^>]*>', TOKEN_RE.flags) : TOKEN_RE;
   for (const match of text.matchAll(tokens)) {
     const token = match[0];
 

@@ -31,6 +31,34 @@ export const TYPOGRAPHY_SYNTAX = [
   },
 ];
 
+// An unbounded LAZY loop over a class that matches every character — `[\s\S]*?`,
+// its spellings `[\S\s]` `[\w\W]` `[\d\D]` `[^]`, and `+?` — is quadratic on
+// Hermes: every match costs time in proportion to the REST of the input. `.*?`
+// under the `s` flag matches the same characters and is linear; V8 runs both
+// alike, so no spec and no web run can see the difference. Measured on the
+// Hermes CLI, 4,000 matches over 391 KB: 2,532 ms against 3 ms. It held
+// bracemark-expo's JS thread for 31 s on a bookmarks import before this rule
+// (import/netscape.ts; docs/data-lifecycle.md, _readings — expo_). A narrow
+// class (`[^<]*?`), a greedy `[\s\S]*` and a bounded `{0,n}?` measured linear,
+// so they stay legal. Workspace-wide rather than only where Hermes runs, like
+// the apostrophe: one spelling, and nobody has to judge where a regex might end
+// up — `.*?`/`s` is ES2018, fine on every runtime here. Exported, and spread
+// alongside TYPOGRAPHY_SYNTAX, for the no-merge reason above.
+const ANY_CHAR_LAZY = String.raw`/\[(?:\\s\\S|\\S\\s|\\w\\W|\\W\\w|\\d\\D|\\D\\d|\^)\][*+]\?/`;
+const ANY_CHAR_LAZY_MESSAGE =
+  'A lazy `[\\s\\S]*?` (or `[^]*?`, `[\\w\\W]*?`, `+?`) is quadratic on Hermes — each match costs the rest of the input. Write `.*?` with the `s` flag: same characters, linear. eslint.config.mjs, ANY_CHAR_LAZY.';
+
+export const REGEX_SYNTAX = [
+  {
+    selector: `Literal[regex.pattern=${ANY_CHAR_LAZY}]`,
+    message: ANY_CHAR_LAZY_MESSAGE,
+  },
+  {
+    selector: `:matches(NewExpression, CallExpression)[callee.name="RegExp"] > Literal.arguments[value=${ANY_CHAR_LAZY}]`,
+    message: ANY_CHAR_LAZY_MESSAGE,
+  },
+];
+
 // The root's `@typescript-eslint/no-restricted-imports` paths — the `zod` shim
 // rule below carries the why. Exported for the same reason as the typography
 // selectors above: flat config gives a rule's options to the LAST block that
@@ -204,10 +232,13 @@ export default [
     // expo-react's parse-html-head.ts — and a selector over those would be
     // per-file disables forever. The single-quoted prose literal (`'the "Service"'`)
     // is the gap, and docs/brand-assets.md is what covers it.
+    //
+    // REGEX_SYNTAX rides in this block because the rule's options can't be split
+    // across two (see the exports). Specs share the ignore: they run on V8 only.
     files: ['**/*.ts', '**/*.tsx'],
     ignores: TYPOGRAPHY_IGNORES,
     rules: {
-      'no-restricted-syntax': ['error', ...TYPOGRAPHY_SYNTAX],
+      'no-restricted-syntax': ['error', ...TYPOGRAPHY_SYNTAX, ...REGEX_SYNTAX],
     },
   },
   {

@@ -955,6 +955,35 @@ because each parses a page with what its runtime has:
 | `bracemark-extractor` | `HTMLRewriter` (`lib/html.ts`)         | **decoded by us**        |
 | `bracemark-expo`      | a regex scanner (`parse-html-head.ts`) | **decoded by us**        |
 
+⚠ **The scanner must stay linear on a hostile page**, and nothing a real page
+does will show it isn't. Every construct it reads — a comment, a `<script>` or
+`<style>` body, a `<title>`, a `<meta …>` or `<link …>` — is an opener then a
+closer. The obvious regex for one (`/<meta\b[^>]*>/g`, `/<!--.*?-->/gs`) goes
+quadratic when openers never close: it scans to the end, fails, and starts over
+from the next opener. That is true on V8 too. The drain fetches pages nobody
+gestured for (the whole-library job, back-fill), on the JS thread, so a page
+built this way was a stall of tens of seconds. Measured on the Hermes CLI,
+before → after the rewrite: `<!--x` × 48,000 went from 32 s to 9 ms, `<meta ` ×
+40,000 from 38 s to 6 ms, and one 30,000-letter attribute name with no `=` from
+8.5 s to 1 ms. A real page with 200 scripts and comments reads the same, 5–6 ms,
+either way.
+
+So `parse-html-head.ts` finds each opener by regex, then searches forward for its
+`>` and its closer, and stops at the first one missing. A closer absent after one
+opener is absent after every later one, so each character is scanned about once.
+`parseAttrs` makes the value optional, so a name with no `=` is consumed rather
+than backtracked through. Its spec pins each hostile shape to a 250 ms budget.
+They take a few ms linear and 0.4–14 s under the old regexes on V8, so a revert
+fails there even though jest never runs Hermes.
+
+The regex spelling is the second tripwire. A body matched lazily is `.*?` under
+the `s` flag, **never `[\s\S]*?`**: on Hermes the class spelling costs time in
+proportion to the rest of the input on every match. The strip pass read 178 ms
+against 2 ms on a 244 KB head before the rewrite took the regex out of it. V8 runs
+both spellings alike; the `REGEX_SYNTAX` lint rule in `eslint.config.mjs` catches
+it. The same trap hit the Netscape import parser
+([data-lifecycle.md](./data-lifecycle.md), _readings — expo_).
+
 `HTMLRewriter` decodes **nothing** — not a `text()` chunk (a `<title>` is RCDATA)
 and not `getAttribute`, which is the surprising half, since the DOM method of the
 same name does. So both raw-HTML parsers run every collected value through

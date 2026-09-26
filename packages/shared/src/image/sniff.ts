@@ -63,8 +63,9 @@ const SVG_SNIFF_BYTES = 1024;
 // `<svg>` ANYWHERE in it, so "contains `<svg`" would accept exactly the thing
 // this check exists to reject, while "the document's FIRST tag is `<svg>`" puts
 // `<!DOCTYPE html>`/`<html>` out of reach.
-const SVG_ROOT =
-  /^\s*(?:(?:<\?xml[^>]*\?>|<!--[\s\S]*?-->|<!DOCTYPE\s+svg\b[^>]*>)\s*)*<svg[\s/>]/i;
+// The comment body is `.*?` + `s`, not `[\s\S]*?`: the Hermes trap in import/netscape.ts.
+// Harmless at 1 KB, but this runs on Hermes too, and the spelling gets copied.
+const SVG_ROOT = /^\s*(?:(?:<\?xml[^>]*\?>|<!--.*?-->|<!DOCTYPE\s+svg\b[^>]*>)\s*)*<svg[\s/>]/is;
 
 // Is this an SVG document? The one NON-raster format the icon path accepts, and
 // the reason it can: both platforms' icon renderers decode SVG (expo-image via

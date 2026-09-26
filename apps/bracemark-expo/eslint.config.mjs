@@ -1,6 +1,7 @@
 import nx from '@nx/eslint-plugin';
 
 import baseConfig, {
+  REGEX_SYNTAX,
   RESTRICTED_IMPORT_PATHS,
   TYPOGRAPHY_IGNORES,
   TYPOGRAPHY_SYNTAX,
@@ -44,15 +45,17 @@ export default [
     // docs/theme.md, _extending_, carries the measurements for every pairing in
     // this app.
     //
-    // The typography selectors are SPREAD IN rather than assumed: flat config
+    // The root's selectors are SPREAD IN rather than assumed: flat config
     // hands the last matching block's option list to the rule whole, so a bare
-    // `no-restricted-syntax` here would drop the apostrophe rule for this app.
+    // `no-restricted-syntax` here would drop the apostrophe rule — and the
+    // Hermes regex rule, in the one app that runs on Hermes — for this app.
     files: ['**/*.ts', '**/*.tsx'],
     ignores: TYPOGRAPHY_IGNORES,
     rules: {
       'no-restricted-syntax': [
         'error',
         ...TYPOGRAPHY_SYNTAX,
+        ...REGEX_SYNTAX,
         {
           selector: 'Literal[value=/(^|\\s)leading-none(\\s|$)/]',
           message:
