@@ -590,7 +590,18 @@ changes is mechanical, and only the substrate forces it:
   does not call the `sqlite3_update_hook` behind that listener. Whole-store
   writers keep the fast truncate path and call `invalidateLiveReads` once after
   commit; forcing a library-sized wipe through row-by-row deletes just to obtain
-  events would trade correctness for avoidable native/JS churn. So the
+  events would trade correctness for avoidable native/JS churn. A bulk writer
+  takes `holdLiveReads` for its writes: the import for its whole run, and a sync
+  cycle that writes at least `BULK_CYCLE_PATHS` (100) paths (sync/engine.ts),
+  never an ordinary one, since each edit kicks a cycle: a change then only marks the
+  read as having missed one, and the reads that did re-run together on a flush
+  every `HELD_FLUSH_MS` (2 s) and on release, instead of after every write chunk.
+  The first read and a `deps` change are never held. A `LiveReadPause` does the
+  same for a subtree nobody can see: the links section pauses while Settings
+  covers it, and catches up when it starts to reappear
+  (`features/links/use-paused-while-covered.ts`). Why the flush is periodic
+  rather than only on release, and what the per-chunk re-run cost:
+  [data-lifecycle.md](./data-lifecycle.md), _readings — expo_. So the
   **zone-echo constraint** the web `readLinks` carries — helper awaits reachable
   from a querier must be `Promise.resolve`-wrapped or writes silently stop
   re-firing the query — **does not exist here**; expo helpers await freely.

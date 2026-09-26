@@ -5,7 +5,7 @@
 // side-effect-light — no network, no React — so the queue has one owner,
 // mirroring sync-store's ownership of the bookkeeping row.
 
-import { and, count, eq, inArray } from 'drizzle-orm';
+import { and, count, eq, inArray, sql } from 'drizzle-orm';
 
 // Deep import, not the package barrel: the barrel executes the AES + Argon2 stack
 // (react-native-quick-crypto, readable-stream, buffer) — docs/share-sheet.md, _the
@@ -14,7 +14,15 @@ import { and, count, eq, inArray } from 'drizzle-orm';
 import { newId } from '@stxapps/expo-crypto/lib/ids';
 import { chunk } from '@stxapps/shared';
 
-import { type DbTx, getDb, pendingOps, rowsPerStatement, upsertExcludedSet } from './db';
+import {
+  type DbTx,
+  getDb,
+  pendingOps,
+  rowsPerStatement,
+  upsertExcludedSet,
+  valuesList,
+  valuesPerStatement,
+} from './db';
 
 // Same shape as web-react's PendingOpRecord (every column NOT NULL, so the
 // drizzle-inferred row already matches it exactly).
@@ -161,22 +169,24 @@ export async function countPendingOps(username: string): Promise<number> {
 // failure is silent: no error, no pending count, no retry (web-react
 // pending-store.ts, docs/local-first-sync.md — _a sync cycle_).
 //
-// One statement per op rather than an `inArray` sweep, because the predicate is
-// per-row; wrapped in a transaction so the batch still lands atomically. Unlike
-// web's Dexie port there is no read-then-filter step: sqlite evaluates the
-// `write_id` match INSIDE the DELETE, and the transaction callback is
+// Set-at-a-time: the per-row predicate is a row-value IN over a VALUES list of
+// the drained `(username, path, write_id)` triples, one DELETE per
+// `valuesPerStatement(3)` ops. A statement per op cost the JS thread ~0.6 s per
+// 1,000-path commit alongside stampItemUpdatedAts (docs/data-lifecycle.md,
+// _readings — expo_). The compare-and-delete is unchanged: sqlite still
+// evaluates the `write_id` match INSIDE the DELETE, the batches share one
+// transaction so they land atomically, and the transaction callback is
 // synchronous, so nothing can interleave between the test and the delete.
+// Unlike web's Dexie port there is no read-then-filter step.
 export async function clearDrainedOps(ops: PendingOpRecord[]): Promise<void> {
   if (ops.length === 0) return;
   getDb().transaction((tx) => {
-    for (const op of ops) {
+    for (const batch of chunk(ops, valuesPerStatement(3))) {
       tx.delete(pendingOps)
         .where(
-          and(
-            eq(pendingOps.username, op.username),
-            eq(pendingOps.path, op.path),
-            eq(pendingOps.writeId, op.writeId),
-          ),
+          sql`(${pendingOps.username}, ${pendingOps.path}, ${pendingOps.writeId}) IN (${valuesList(
+            batch.map((op) => [op.username, op.path, op.writeId]),
+          )})`,
         )
         .run();
     }

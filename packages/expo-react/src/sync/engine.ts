@@ -65,6 +65,7 @@ import {
   putItemsUnqueued,
   stampItemUpdatedAts,
 } from '../data/item-store';
+import { holdLiveReads } from '../data/live-read-invalidation';
 import { clearDrainedOps, listPendingOps, type PendingOpRecord } from '../data/pending-store';
 import { toItemRecord } from '../data/projection';
 import { advanceCursor, getSyncMeta, markFirstSyncDone, resetCursor } from '../data/sync-store';
@@ -144,6 +145,31 @@ function withRetryDeps(deps: SyncDeps): SyncDeps {
   return { ...deps, api: withRetry(deps.api) };
 }
 
+// A cycle that will write at least this many paths holds live reads
+// (holdLiveReads, data/live-read-invalidation.ts) for its writes. Without the
+// hold, every commit's restamp re-runs every live read on screen, and so does
+// every record a pull stores. A pull stores each record the moment it decrypts,
+// so the reads re-run back to back for as long as a large pull lasts. This is
+// the same per-chunk cost the import's hold removes (docs/data-lifecycle.md,
+// _readings — expo_).
+//
+// Not every cycle, because a hold delays the user's own edits too. Each edit
+// kicks a cycle, so an edit made during an ordinary one would stay unrendered
+// until the cycle ended or the next flush, up to HELD_FLUSH_MS. A cycle of a few paths costs a re-run or two, and
+// holding it would buy nothing. 100 paths is around four rounds of
+// DOWNLOAD_CONCURRENCY, where a pull starts to outlast a re-run or two. It is a
+// starting point, not a measured cut.
+const BULK_CYCLE_PATHS = 100;
+
+async function withBulkHold<T>(paths: number, run: () => Promise<T>): Promise<T> {
+  const release = paths >= BULK_CYCLE_PATHS ? holdLiveReads() : undefined;
+  try {
+    return await run();
+  } finally {
+    release?.();
+  }
+}
+
 // --- public flows -----------------------------------------------------------
 
 // First sync after a fresh sign-in on this device (docs flow #1). List the full
@@ -165,7 +191,7 @@ export async function runInitialSync(
 ): Promise<void> {
   deps = withRetryDeps(deps);
   const files = await listAllFiles(deps.api);
-  await storeDownloads(deps, files, onProgress);
+  await withBulkHold(files.length, () => storeDownloads(deps, files, onProgress));
   // Cursor is the newest compound `(updatedAt, path)` among ALL listed files
   // (content included, even though its blob is deferred) — the same
   // reconstruction the fallback cycle does from its full listing.
@@ -451,19 +477,25 @@ async function incrementalCycle(
 
   // 3. Push, 4. Pull — disjoint sets, so order is a sensible default, not a
   // requirement (local changes durable first).
-  const { committed, orphanedPaths } = await pushPending(deps, pending, outcome);
-  // Complete the self-heal: a wedged op the push dropped (uploadBlobs) had its
-  // path reserved for the push by the reconcile above, keeping the server's copy
-  // OUT of the download set — re-add whatever this window shows for it, so the
-  // heal restores the entity instead of leaving the path locally absent. (A path
-  // with no op in the window stays absent until a fallback re-lists it — the op
-  // that put it there is behind the cursor.)
-  for (const path of orphanedPaths) {
-    const op = serverOps.get(path);
-    if (op?.op === 'put') downloads.push({ path: op.path, updatedAt: op.updatedAt });
-  }
-  await storeDownloads(deps, downloads);
-  await applyDeletes(deps.username, localDeletes);
+  const { committed } = await withBulkHold(
+    pending.length + downloads.length + localDeletes.length,
+    async () => {
+      const pushed = await pushPending(deps, pending, outcome);
+      // Complete the self-heal: a wedged op the push dropped (uploadBlobs) had its
+      // path reserved for the push by the reconcile above, keeping the server's copy
+      // OUT of the download set — re-add whatever this window shows for it, so the
+      // heal restores the entity instead of leaving the path locally absent. (A path
+      // with no op in the window stays absent until a fallback re-lists it — the op
+      // that put it there is behind the cursor.)
+      for (const path of pushed.orphanedPaths) {
+        const op = serverOps.get(path);
+        if (op?.op === 'put') downloads.push({ path: op.path, updatedAt: op.updatedAt });
+      }
+      await storeDownloads(deps, downloads);
+      await applyDeletes(deps.username, localDeletes);
+      return pushed;
+    },
+  );
 
   // 5. Advance the cursor to the newest (updatedAt, path) seen across the whole
   // cycle — including our own just-committed uploads, so the next cycle doesn't
@@ -527,15 +559,21 @@ async function fallbackCycle(
   // learn of the deletion) and frees the path's file_sizes quota entry. Commit
   // is idempotent on both stores, so pushing unconditionally is always safe;
   // dropping the op would leak the quota entry forever.
-  const { committed, orphanedPaths } = await pushPending(deps, pending, outcome);
-  // Same heal as the incremental cycle: a dropped op's path was excluded from the
-  // download set above — re-add the listed server copy so it comes back.
-  for (const path of orphanedPaths) {
-    const updatedAt = serverFiles.get(path);
-    if (updatedAt !== undefined) downloads.push({ path, updatedAt });
-  }
-  await storeDownloads(deps, downloads);
-  await applyDeletes(deps.username, localDeletes);
+  const { committed } = await withBulkHold(
+    pending.length + downloads.length + localDeletes.length,
+    async () => {
+      const pushed = await pushPending(deps, pending, outcome);
+      // Same heal as the incremental cycle: a dropped op's path was excluded from the
+      // download set above — re-add the listed server copy so it comes back.
+      for (const path of pushed.orphanedPaths) {
+        const updatedAt = serverFiles.get(path);
+        if (updatedAt !== undefined) downloads.push({ path, updatedAt });
+      }
+      await storeDownloads(deps, downloads);
+      await applyDeletes(deps.username, localDeletes);
+      return pushed;
+    },
+  );
 
   // Cursor = newest (updatedAt, path) across ALL pages plus our commits. This is
   // reconstructed straight from R2 with no op-log dependence — resetCursor, not

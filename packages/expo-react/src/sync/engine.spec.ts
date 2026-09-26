@@ -53,6 +53,7 @@ import {
 import { getDb } from '../data/db';
 import { dataFileFor, ensureDataFilesDir } from '../data/file-store';
 import { getItem, markItemDataFile, putItemsTx, stampItemUpdatedAts } from '../data/item-store';
+import { liveReadsHeld } from '../data/live-read-invalidation';
 import { writeExtraction, writeFile } from '../data/mutations';
 import { enqueueDeleteTx, enqueuePutTx, listPendingOps } from '../data/pending-store';
 import { toItemRecord } from '../data/projection';
@@ -765,5 +766,89 @@ describe('the cycle, against this copy of it', () => {
     expect(committedPaths()).toEqual([OTHER_LINK_PATH]);
     expect(await pendingPaths()).toEqual([LINK_PATH]);
     expect(await bodyAt(LINK_PATH)).toBe('trashed locally');
+  });
+});
+
+// A cycle that writes BULK_CYCLE_PATHS or more holds live reads for its writes, so
+// the restamp of every commit and every record a pull stores don't each re-run the
+// reads on screen. A cycle below it must not hold: each edit kicks one, and an edit
+// made during a held cycle would wait for the flush to render. And no cycle may
+// leave a hold behind, or every live read in the app re-runs only on the flush from
+// then on, with nothing to say why.
+describe('the live-read hold', () => {
+  const inWindow = (): OpsListReply => ({
+    ops: [],
+    oldestUpdatedAt: 500,
+    newestUpdatedAt: 1500,
+    hasMore: false,
+  });
+  const manyLinkPaths = (n: number): string[] =>
+    Array.from({ length: n }, (_, i) =>
+      pathFromId(`l_${String(i).padStart(3, '0')}`, LINKS_PREFIX),
+    );
+
+  it('holds a bulk push while it commits and releases it after', async () => {
+    for (const path of manyLinkPaths(120)) seedQueued(path, 'imported');
+    const heldAtCommit: boolean[] = [];
+
+    await runIncrementalSync(
+      deps({ opsList: inWindow, opsCommit: () => void heldAtCommit.push(liveReadsHeld()) }),
+    );
+
+    expect(heldAtCommit.length).toBeGreaterThan(0);
+    expect(heldAtCommit.every(Boolean)).toBe(true);
+    expect(liveReadsHeld()).toBe(false);
+    expect(await pendingPaths()).toEqual([]);
+  });
+
+  it('holds a bulk pull while it stores the records', async () => {
+    const paths = manyLinkPaths(120);
+    const heldAtGet: boolean[] = [];
+    mockGetBlob.mockImplementation(async () => {
+      heldAtGet.push(liveReadsHeld());
+      return new Uint8Array([0xee, ...utf8('from another device')]);
+    });
+
+    await runIncrementalSync(
+      deps({
+        opsList: () => ({
+          ...inWindow(),
+          ops: paths.map((path, i) => ({ op: 'put' as const, path, updatedAt: 1100 + i })),
+        }),
+      }),
+    );
+
+    expect(heldAtGet).toHaveLength(paths.length);
+    expect(heldAtGet.every(Boolean)).toBe(true);
+    expect(liveReadsHeld()).toBe(false);
+    expect(await bodyAt(paths[0])).toBe('from another device');
+  });
+
+  it('does not hold an ordinary cycle', async () => {
+    seedQueued(LINK_PATH, 'one edit');
+    const heldAtCommit: boolean[] = [];
+
+    await runIncrementalSync(
+      deps({ opsList: inWindow, opsCommit: () => void heldAtCommit.push(liveReadsHeld()) }),
+    );
+
+    expect(heldAtCommit).toEqual([false]);
+  });
+
+  it('releases the hold when a bulk cycle fails', async () => {
+    for (const path of manyLinkPaths(120)) seedQueued(path, 'imported');
+
+    await expect(
+      runIncrementalSync(
+        deps({
+          opsList: inWindow,
+          filesSign: () => {
+            throw new ApiError(400, JSON.stringify({ error: 'bad_request' }));
+          },
+        }),
+      ),
+    ).rejects.toThrow();
+
+    expect(liveReadsHeld()).toBe(false);
   });
 });

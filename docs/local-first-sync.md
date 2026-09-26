@@ -797,8 +797,11 @@ conditional writes close it.
 > (`applyDeletes` / `putPulled`); expo-react composes the read into the write's own
 > synchronous sqlite transaction (`item-store`'s `putItemsUnqueued` /
 > `deleteItemsUnqueued` over `pending-store`'s `queuedPathsTx`), and clears with a
-> `WHERE write_id = ?` predicate evaluated inside the DELETE — so it needs no
-> read-then-filter step at all. expo's `write_id` is `NOT NULL` where web's is a
+> `(username, path, write_id) IN (VALUES …)` predicate evaluated inside the DELETE
+> — so it needs no read-then-filter step at all. It is one DELETE per batch of
+> ops, not one per op, because a statement per op cost ~0.6 s of JS thread per
+> 1,000-path commit together with the restamp beside it
+> ([data-lifecycle.md](./data-lifecycle.md), _readings — expo_). expo's `write_id` is `NOT NULL` where web's is a
 > plain required field: neither store validates, so in both cases it is the type
 > system that has to stop a future writer enqueueing an untagged row.
 >

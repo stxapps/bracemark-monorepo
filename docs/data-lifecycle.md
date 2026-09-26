@@ -1058,7 +1058,8 @@ What is still above the ~200 ms band, and why nothing more changed here:
   the decode around it. Since changed: **2026-09-26, the parse**, below.
 - **Restore (389–648 ms):** a write chunk and its live-read re-run. Smaller
   chunks shrink the first half and multiply the second. What would help is
-  suspending live reads for the duration of a bulk write.
+  suspending live reads for the duration of a bulk write. Since changed:
+  **2026-09-26, the live-read hold**, below.
 - **Exports at 10,000 links (318–376 ms):** not profiled at this size. By
   analogy with web's reading, the likely owner is the single `namespaceRows`
   read of the whole `links/` namespace, which materializes every row in one
@@ -1067,15 +1068,15 @@ What is still above the ~200 ms band, and why nothing more changed here:
 Outside the windows the probe measures, the sync push that follows an import
 has the same drizzle cost: `clearDrainedOps` and `stampItemUpdatedAts` issue a
 statement per path, about 0.6 s per 1,000-path commit in the profile. It belongs
-to the engine ([local-first-sync.md](./local-first-sync.md)) and is not changed
-here.
+to the engine ([local-first-sync.md](./local-first-sync.md)). Since changed:
+**2026-09-26, the live-read hold**, below.
 
 **2026-09-26, the parse** — the Hermes CLI (the `hermes-engine` pod's build,
 `hermesc -O`) on the same M1, timing the shared parsers directly at 10,000
 records per format, with expo's `URL` (`whatwg-url-without-unicode`) installed
 as the app has it. Not a `measure:native` run: the stall the probe would see now
 is the largest of the decode, one parse chunk and the first dedupe chunk, and
-that reading is still to take.
+that reading was taken later, in **2026-09-26, after the hold**.
 
 The whole parse took 0.5–0.8 s in **every** format, not only HTML (HTML 768 ms,
 CSV 711, LinkWarden 546, plain text 536, Brace 638). The token regex was not
@@ -1113,6 +1114,177 @@ made. Its whole job is one synchronous call (up to `BOOKMARK_CONVERTER_MAX_ROWS`
 rows, parsed, serialized and read back) with no store or session around it, so
 its worker costs one small module and nothing else. What import measures does
 not move it either way.
+
+**2026-09-26, the live-read hold** — three changes made from the readings above.
+All three come from what **2026-09-26, after** says owned the time, not from a
+new profile. The reading that follows them is below.
+
+- **Live reads are held for an import.** Every `useLiveRead` on screen names
+  `items`, and a change event carries a table, not a path. So each restore write
+  chunk re-ran lists, tags, settings, the quota count and the links screen, and
+  re-rendered them. The restore wrote 1,000 links in 1.2 s at 200 links a chunk,
+  about 240 ms a chunk, against stalls of 387–648 ms. That is why the re-run
+  looked like the rest of each stall. `importAllData` now takes `holdLiveReads`
+  (`data/live-read-invalidation.ts`) from the parse to the end, released in a
+  `finally`. While it is held, a change only marks a read as having missed one.
+  The reads that missed one re-run on the next flush, which comes every
+  `HELD_FLUSH_MS` (2 s) and on release. **The flush is periodic, not only on
+  release**, because the yields keep the app usable during an import. A hold for
+  the whole run (~34 s at 10,000 links) would hide an edit the user makes
+  meanwhile for as long, and that looks like a lost edit. So an edit waits at most
+  one interval. The first read and a `deps` change are never held, so a screen
+  opened mid-import still loads.
+- **The engine's two per-path statements are set-at-a-time.**
+  `stampItemUpdatedAts` is one `UPDATE … FROM (VALUES …)` per 250 stamps, and
+  `clearDrainedOps` one `DELETE … WHERE (username, path, write_id) IN (VALUES …)`
+  per 166 ops, still a compare-and-delete evaluated inside the DELETE. Both
+  build their rows with `valuesList` (db.ts), and SQLite's query plan searches
+  the primary key for both. A 1,000-path commit goes from ~2,000 statements to 11.
+- **A bulk sync cycle takes the same hold.** Every commit's restamp writes
+  `items`, and a pull stores each record the moment it decrypts, so a large push
+  or pull re-ran the reads on screen once per commit, or back to back for the
+  whole pull. The engine holds live reads for a cycle's writes when it will write
+  at least `BULK_CYCLE_PATHS` (100) paths, and for the initial sync's downloads.
+  Ordinary cycles are not held. Each edit kicks a cycle, and a hold there would
+  delay the edit's own re-render by up to a flush for nothing.
+
+**2026-09-26, after the hold** — `npm run measure:native`, the same iPhone 17
+simulator (iOS 26.5), Mac and production bundle as **2026-09-26, after**, from
+`2f27d0c` plus the uncommitted changes above; calibration 768–781 ms. It is
+also the first `measure:native` reading of **2026-09-26, the parse**. Longest
+single JS-thread stall per leg:
+
+| leg                   | 300 links | 1,000 links | 10,000 links |
+| --------------------- | --------- | ----------- | ------------ |
+| import HTML bookmarks | 112 ms    | 294 ms      | 323 ms       |
+| import backup         | 124 ms    | 130 ms      | 647 ms       |
+| export HTML bookmarks | < 50 ms   | 57 ms       | 310 ms       |
+| export CSV            | < 50 ms   | 69 ms       | 387 ms       |
+| export plain text     | < 50 ms   | 62 ms       | 346 ms       |
+| export backup         | 81 ms     | 131 ms      | 336 ms       |
+
+- **Restore at 300 and 1,000 links: 389 → 124 ms and 387 → 130 ms**, into the
+  first band. There the hold removed what it was meant to: the re-run that
+  landed on each write chunk.
+- **Restore at 10,000 links: 648 → 647 ms, with 102 stalls both times.** The
+  wall time fell from 34 s to 21.1 s, but the longest stall did not move. What
+  owns it is in **2026-09-26, the restore profiled**, below. It is not the
+  reads.
+- **HTML import at 10,000 links: 1,243 → 323 ms**, and 18.7 → 14.4 s of wall
+  time. This is the chunked parse and the hold together; the two aren't
+  separated here.
+- **The exports did not change** (every difference is within a run's noise).
+  They still carry the owners **2026-09-26, after** names.
+
+The sync changes are outside this reading: the probe windows import and export
+only. Each restore's push did complete through the new statements before its
+exports ran.
+
+**2026-09-26, the restore profiled** — a Hermes CPU profile of one 10,000-link
+restore, taken as _finding what owns a native stall_ in [e2e.md](./e2e.md)
+describes: the same simulator, an unminified `--no-dev` bundle, the profiler on
+the `React Native` target from after the cold launch to the end of the restore.
+The probe read the same run as 679 ms longest and 102 stalls, so the profiler
+did not change its shape. The samples come every ~12.5 ms, and a profile has no
+task boundaries, so "busy stretch" below means consecutive non-idle samples:
+several tasks can share one.
+
+- **The live reads are cheap.** 16 flushes, 9–39 ms of reading each.
+  `readNamespace` is the largest (166 ms across all 16). The guess in **after the
+  hold** was wrong.
+- **Every write chunk costs ~127 ms**, flat across the run (101 calls, 110–156
+  ms), and never grows with the library. Across the chunks: drizzle building
+  and preparing statements ~3.9 s, SQLite executing (`runSync`) ~4.2 s, the
+  projection (`toItemRecord`, its `new URL` included) ~2.5 s. Between flushes a
+  chunk is followed only by one ~20 ms commit (the progress line).
+- **A flush sets off React work next to a write chunk.** Every busy stretch of
+  500 ms or more that holds a flush is one write chunk plus 250–400 ms of React
+  work. (This read, at the time, as the owner of the longest stall. It is not:
+  see **2026-09-26, the pause**, below.) Reconciling came to 1.6 s over those stretches and
+  committing to 359 ms, most of the commit in Fabric's `completeRoot`. The
+  components that render are the **links screen** (`LinkRow`, FlashList's
+  `ViewHolderCollection`, `LinkRowMenu`, `LinkPreviewImage`) and the
+  **sidebar** (`Sidebar`, `NavItem`). Both stay mounted under Settings, because
+  Settings is pushed onto the same stack (`app/(app)/_layout.tsx`) and nothing
+  freezes a hidden screen. They re-render for data nobody can see. **Each flush
+  also commits several times**: every `useLiveRead` re-runs from its own
+  `setTimeout`, so each hook's result is a render and a commit of its own.
+- **Why 1,000 links didn't show it:** that restore takes 2.2 s, so no periodic
+  flush lands inside the window. Its 130 ms is one write chunk alone.
+
+Where the fix belongs, in order of what it removes:
+
+1. **Don't render hidden screens.** Made in **2026-09-26, the pause**, below.
+   That section also explains why it is a pause and not native-stack's
+   `freezeOnBlur`.
+2. **One commit per flush.** Not made. Run the flushed reads from one timer and apply
+   their results in one batch, not one `setTimeout` per hook.
+3. **A smaller write chunk** (`WRITE_CHUNK` 200 → 100) would halve the ~127 ms
+   floor. Not made. Only worth it once nothing longer than the chunk is left.
+
+**2026-09-26, the pause** — the hidden links screen's live reads now pause while
+Settings covers it, and the same `measure:native` run was taken again (same
+simulator, Mac and bundle; `2f27d0c` plus the uncommitted changes; calibration
+767–778 ms).
+
+- **Not `freezeOnBlur`.** On Fabric, native-stack never freezes the screen
+  directly below the focused one (`!isBelowFocused` in its
+  `NativeStackView.native.tsx`), because a back-swipe reveals that screen and
+  its animated values must stay live. Settings is one route in the `(app)` stack,
+  so the links screen is always that screen and the option would do nothing. A
+  freeze of our own would hide the frozen subtree (react-freeze suspends it),
+  which a back-swipe reveals before it could lift.
+- **What was made instead:** `LiveReadPause` (expo-react
+  `contexts/live-read-pause.tsx`). Under a paused one, `useLiveRead` only notes a
+  change, like the hold, and catches up when the pause lifts, even mid-hold. The
+  links layout pauses from when the route has **disappeared**
+  (`transitionEnd`, `closing`) to when it starts to **reappear**
+  (`transitionStart`, not `closing`), in `features/links/use-paused-while-covered.ts`.
+  Keyed on the native disappear, so the link editor's iOS pageSheet, which leaves
+  the links screen showing behind it, never pauses it. `DATA-IMPORT-NATIVE-001`
+  (an import from Settings, then its link, list and tag on the links screen once
+  Settings closes) passes on the iOS simulator.
+
+| leg (10,000 links) | before the pause                  | after the pause                  |
+| ------------------ | --------------------------------- | -------------------------------- |
+| import backup      | 647 ms · 13.1 s blocking · 21.1 s | 653 ms · 9.4 s blocking · 17.5 s |
+| import HTML        | 323 ms · 8.3 s blocking · 14.4 s  | 271 ms · 7.0 s blocking · 13.1 s |
+
+(Longest stall · total blocking · wall time.) The pause took 3.7 s of blocking
+and 3.6 s of wall time off the restore, which is the hidden screen's renders. It
+did **not** move the longest stall, and the three readings of it (648, 647, 653
+ms, before the hold, after it and after the pause) are too constant to be a
+render. The profile above has the owner, in the one busy stretch before the
+first write that it didn't break down: **`unzipSync` (~307 ms) then `decodeUtf8`
+of `items.jsonl` (~270 ms) then the first slice of the classify pass**, with no
+yield between them. `importZip` and `importBracemarkBackup` run all three in one
+task, and the classify loop's first yield comes only after 1,000 lines. At 1,000
+links that task is a tenth the size and hides under the ~130 ms write chunk.
+The 300- and 1,000-link legs and every export read as before, within a run's
+noise.
+
+The fix is to yield between the three steps (about half the stall), and after
+that to inflate and decode `items.jsonl` in pieces. Made in **2026-09-26, the
+whole-file yields**, below; the streaming is not.
+
+**2026-09-26, the whole-file yields** — `import-all-data.ts` now yields after
+`unzipSync` and after each whole-file `decodeUtf8` (`WHOLE_FILE_STEPS` there),
+so the inflate, the decode and the first slice of the classify or parse loop
+each run as a task of their own. `measure:native --links 10000 --no-exports`,
+same simulator, Mac and bundle, `2f27d0c` plus the uncommitted changes;
+calibration 771–775 ms:
+
+| leg (10,000 links) | before the yields                | after the yields                 |
+| ------------------ | -------------------------------- | -------------------------------- |
+| import backup      | 653 ms · 9.4 s blocking · 17.5 s | 322 ms · 9.5 s blocking · 17.7 s |
+| import HTML        | 271 ms · 7.0 s blocking · 13.1 s | 272 ms · 7.1 s blocking · 13.3 s |
+
+(Longest stall · total blocking · wall time.) The restore halved, as expected:
+its longest task is now about the inflate alone (~307 ms in the profile), with
+blocking and wall time unchanged. The HTML import didn't move, so its decode
+was never its longest task; what is has not been profiled. What would take the
+restore further is `unzipSync`: fflate's streaming `Unzip` would inflate the
+archive a piece per turn, as the backup export already deflates it. Not made.
 
 ### deferred
 

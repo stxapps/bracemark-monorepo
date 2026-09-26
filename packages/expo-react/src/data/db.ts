@@ -381,7 +381,31 @@ export function upsertExcludedSet<T extends SQLiteTable>(
 // (`MAX_BOUND_PARAMS`), far below sqlite's ceiling.
 export const MAX_BOUND_PARAMS = 500;
 export function rowsPerStatement(table: SQLiteTable): number {
-  return Math.max(1, Math.floor(MAX_BOUND_PARAMS / Object.keys(getTableColumns(table)).length));
+  return valuesPerStatement(Object.keys(getTableColumns(table)).length);
+}
+
+// The same budget for rows `width` values wide, for a `valuesList` below.
+export function valuesPerStatement(width: number): number {
+  return Math.max(1, Math.floor(MAX_BOUND_PARAMS / width));
+}
+
+// A `VALUES (…), (…)` list of bound rows, for the set-at-a-time statements that
+// match a batch of keys against a table in one statement (item-store's
+// stampItemUpdatedAts joins it, pending-store's clearDrainedOps IN-tests it). A
+// statement per row made drizzle build and prepare each one in JS, which the
+// write edge already measured as most of its cost (docs/data-lifecycle.md,
+// _readings — expo_). SQLite names the columns `column1`, `column2`, ….
+export function valuesList(rows: readonly (readonly unknown[])[]): SQL {
+  return sql`VALUES ${sql.join(
+    rows.map(
+      (row) =>
+        sql`(${sql.join(
+          row.map((value) => sql`${value}`),
+          sql`, `,
+        )})`,
+    ),
+    sql`, `,
+  )}`;
 }
 
 // Exported for the read edge's change subscription (hooks/use-live-read.ts):

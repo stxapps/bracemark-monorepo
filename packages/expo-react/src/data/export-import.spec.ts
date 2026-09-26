@@ -32,7 +32,7 @@
 // zip can survive it.
 
 import { sql } from 'drizzle-orm';
-import { unzipSync } from 'fflate';
+import { unzipSync, zipSync } from 'fflate';
 
 import {
   BACKUP_ITEMS_ENTRY,
@@ -64,6 +64,7 @@ import { assertZipWritable, exportAllData, ExportTooLargeError } from './export-
 import { dataFileFor, ensureDataFilesDir } from './file-store';
 import { importAllData } from './import-all-data';
 import { getItem, markItemDataFile, namespaceRows, putItemsTx } from './item-store';
+import { liveReadsHeld } from './live-read-invalidation';
 import { toItemRecord } from './projection';
 import { markFirstSyncDone } from './sync-store';
 
@@ -439,6 +440,41 @@ describe('the bracemark backup round trip, through fflate', () => {
 
     expect(storedEntities()[`${LINKS_PREFIX}l_work.enc`]).toEqual(edited);
     expect(restored.skippedCount).toBeGreaterThan(0);
+  });
+});
+
+// --- the live-read hold -----------------------------------------------------------
+
+// The import holds live reads (live-read-invalidation.ts) so they re-run on a flush
+// rather than after every write chunk. A hold left behind is the silent failure:
+// every live read on screen would then re-run only every couple of seconds, for the
+// life of the app, with nothing to say why.
+describe('the live-read hold', () => {
+  it('is held while the chunks are written and released when the import ends', async () => {
+    const heldWhileWriting: boolean[] = [];
+
+    await importAllData({
+      file: repick(utf8('https://a.invalid/one\nhttps://b.invalid/two\n'), 'links.txt'),
+      deps: deps(),
+      maxLinks: null,
+      onProgress: (progress) => {
+        if (progress.step === 'items') heldWhileWriting.push(liveReadsHeld());
+      },
+    });
+
+    expect(heldWhileWriting.length).toBeGreaterThan(0);
+    expect(heldWhileWriting.every(Boolean)).toBe(true);
+    expect(liveReadsHeld()).toBe(false);
+  });
+
+  it('is released when the import fails', async () => {
+    const notAnExport = zipSync({ 'photo.bin': new Uint8Array([1, 2, 3]) });
+
+    await expect(
+      importAllData({ file: repick(notAnExport, 'photos.zip'), deps: deps(), maxLinks: null }),
+    ).rejects.toThrow('neither a Bracemark backup nor a bookmarks export');
+
+    expect(liveReadsHeld()).toBe(false);
   });
 });
 

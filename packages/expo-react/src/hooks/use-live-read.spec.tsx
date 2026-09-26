@@ -15,14 +15,22 @@
 //     one beat after `deps` change. use-links depends on exactly that to tell a stale page
 //     from a fresh one via the echoed page identity, so "clear on deps change" would look
 //     tidier and would break paging.
+//   - THE PAUSE. A covered screen's reads only note a change and catch up when it shows
+//     again. One that never catches up shows stale rows once Settings closes.
+//   - THE BULK-WRITE HOLD. An import holds live reads so they re-run on a flush every
+//     HELD_FLUSH_MS instead of after every write chunk. Too loose and the restore stalls
+//     on a re-render per chunk again; too tight and a read that missed a change is never
+//     re-run, or the user's own mid-import edit stays hidden until the import ends.
 //
 // expo-sqlite's change listener is stubbed to a plain emitter — it is the OS seam, and what
 // is under test is everything the hook does with its events.
 
+import type { ReactNode } from 'react';
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 
+import { LiveReadPause } from '../contexts/live-read-pause';
 import { DB_NAME } from '../data/db';
-import { invalidateLiveReads } from '../data/live-read-invalidation';
+import { HELD_FLUSH_MS, holdLiveReads, invalidateLiveReads } from '../data/live-read-invalidation';
 import { useLiveRead } from './use-live-read';
 
 type ChangeEvent = {
@@ -56,9 +64,18 @@ function emit(
 // One macrotask, which is what the hook defers its re-run by.
 const flush = () => act(async () => void (await new Promise((resolve) => setTimeout(resolve, 0))));
 
+// The hold is process-wide; a test that fails while holding must not hold the next one.
+let releaseHold: (() => void) | undefined;
+
 beforeEach(() => {
   mockListeners.length = 0;
   mockRemove.mockClear();
+});
+
+afterEach(() => {
+  releaseHold?.();
+  releaseHold = undefined;
+  jest.useRealTimers();
 });
 
 describe('the first read', () => {
@@ -198,6 +215,228 @@ describe('change events', () => {
     await flush();
 
     expect(read.mock.calls.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe('the bulk-write hold', () => {
+  it('notes a change while held and re-runs once when the hold is released', async () => {
+    const read = jest.fn(async () => 1);
+    renderHook(() => useLiveRead(read, [], ['items']));
+    await waitFor(() => expect(read).toHaveBeenCalledTimes(1));
+
+    releaseHold = holdLiveReads();
+    act(() => {
+      for (let i = 0; i < 5; i += 1) emit('items');
+      invalidateLiveReads(['items']);
+    });
+    await flush();
+    expect(read).toHaveBeenCalledTimes(1);
+
+    act(() => releaseHold?.());
+    await flush();
+    expect(read).toHaveBeenCalledTimes(2);
+  });
+
+  // The reason for the periodic flush: the app stays usable during an import, and an
+  // edit the user makes meanwhile must show within one interval, not after the import.
+  it('re-runs on the periodic flush while the hold is still taken', async () => {
+    jest.useFakeTimers();
+    const read = jest.fn(async () => 1);
+    renderHook(() => useLiveRead(read, [], ['items']));
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(0);
+    });
+    expect(read).toHaveBeenCalledTimes(1);
+
+    releaseHold = holdLiveReads();
+    act(() => emit('items'));
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(HELD_FLUSH_MS - 1);
+    });
+    expect(read).toHaveBeenCalledTimes(1);
+
+    // The interval, then the hook's own zero-delay deferral (which the fake clock, like
+    // a real one, rounds up to a millisecond).
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(2);
+    });
+    expect(read).toHaveBeenCalledTimes(2);
+  });
+
+  // A flush is not a change: a read with nothing missed stays put, so a long import's
+  // flushes don't re-run the reads that don't depend on what it writes.
+  it('does not re-run a read that missed nothing', async () => {
+    const read = jest.fn(async () => 1);
+    renderHook(() => useLiveRead(read, [], ['pending_ops']));
+    await waitFor(() => expect(read).toHaveBeenCalledTimes(1));
+
+    releaseHold = holdLiveReads();
+    act(() => emit('items'));
+    act(() => releaseHold?.());
+    await flush();
+
+    expect(read).toHaveBeenCalledTimes(1);
+  });
+
+  // A screen opened mid-import must not sit blank until the import ends.
+  it('never holds the first read', async () => {
+    releaseHold = holdLiveReads();
+
+    const { result } = renderHook(() => useLiveRead(async () => 'rows', [], ['items']));
+
+    await waitFor(() => expect(result.current).toBe('rows'));
+  });
+
+  // Holds nest (an import inside another bulk writer): only the LAST release flushes,
+  // and releasing the same hold twice must not release someone else's.
+  it('flushes on the last release only, and each release counts once', async () => {
+    const read = jest.fn(async () => 1);
+    renderHook(() => useLiveRead(read, [], ['items']));
+    await waitFor(() => expect(read).toHaveBeenCalledTimes(1));
+
+    const outer = holdLiveReads();
+    const inner = holdLiveReads();
+    releaseHold = outer;
+    act(() => emit('items'));
+    act(() => {
+      inner();
+      inner();
+    });
+    await flush();
+    expect(read).toHaveBeenCalledTimes(1);
+
+    act(() => outer());
+    await flush();
+    expect(read).toHaveBeenCalledTimes(2);
+  });
+
+  it('stops listening for flushes on unmount', async () => {
+    const read = jest.fn(async () => 1);
+    const { unmount } = renderHook(() => useLiveRead(read, [], ['items']));
+    await waitFor(() => expect(read).toHaveBeenCalledTimes(1));
+
+    releaseHold = holdLiveReads();
+    act(() => emit('items'));
+    unmount();
+    act(() => releaseHold?.());
+    await flush();
+
+    expect(read).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('the pause', () => {
+  // The pause arrives through context, so each test renders under a wrapper whose
+  // `paused` it flips.
+  let paused = false;
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <LiveReadPause paused={paused}>{children}</LiveReadPause>
+  );
+
+  beforeEach(() => {
+    paused = false;
+  });
+
+  it('notes a change while paused and re-runs once when it lifts', async () => {
+    const read = jest.fn(async () => 1);
+    const { rerender } = renderHook(() => useLiveRead(read, [], ['items']), { wrapper });
+    await waitFor(() => expect(read).toHaveBeenCalledTimes(1));
+
+    paused = true;
+    rerender(undefined);
+    act(() => {
+      emit('items');
+      emit('items');
+    });
+    await flush();
+    expect(read).toHaveBeenCalledTimes(1);
+
+    paused = false;
+    rerender(undefined);
+    await flush();
+    expect(read).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not re-run on lift when nothing changed', async () => {
+    const read = jest.fn(async () => 1);
+    const { rerender } = renderHook(() => useLiveRead(read, [], ['items']), { wrapper });
+    await waitFor(() => expect(read).toHaveBeenCalledTimes(1));
+
+    paused = true;
+    rerender(undefined);
+    paused = false;
+    rerender(undefined);
+    await flush();
+
+    expect(read).toHaveBeenCalledTimes(1);
+  });
+
+  // A hold's flush is not a lift: a paused screen stays paused through it, or every
+  // flush of an import would re-render the screen the pause is hiding.
+  it('stays paused through a hold flush, and catches up when the pause lifts', async () => {
+    const read = jest.fn(async () => 1);
+    const { rerender } = renderHook(() => useLiveRead(read, [], ['items']), { wrapper });
+    await waitFor(() => expect(read).toHaveBeenCalledTimes(1));
+
+    paused = true;
+    rerender(undefined);
+    releaseHold = holdLiveReads();
+    act(() => emit('items'));
+    act(() => releaseHold?.());
+    await flush();
+    expect(read).toHaveBeenCalledTimes(1);
+
+    paused = false;
+    rerender(undefined);
+    await flush();
+    expect(read).toHaveBeenCalledTimes(2);
+  });
+
+  // Coming back to the links screen during an import reveals it: it catches up at
+  // once rather than waiting out the hold's next flush.
+  it('catches up at once when the pause lifts mid-hold', async () => {
+    const read = jest.fn(async () => 1);
+    const { rerender } = renderHook(() => useLiveRead(read, [], ['items']), { wrapper });
+    await waitFor(() => expect(read).toHaveBeenCalledTimes(1));
+
+    paused = true;
+    rerender(undefined);
+    releaseHold = holdLiveReads();
+    act(() => emit('items'));
+    paused = false;
+    rerender(undefined);
+    await flush();
+
+    expect(read).toHaveBeenCalledTimes(2);
+  });
+
+  // The first read is never paused: a screen mounted behind another must still
+  // have its data when it shows.
+  it('never pauses the first read', async () => {
+    paused = true;
+
+    const { result } = renderHook(() => useLiveRead(async () => 'rows', [], ['items']), {
+      wrapper,
+    });
+
+    await waitFor(() => expect(result.current).toBe('rows'));
+  });
+
+  it('pauses under any paused ancestor', async () => {
+    const read = jest.fn(async () => 1);
+    renderHook(() => useLiveRead(read, [], ['items']), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <LiveReadPause paused>
+          <LiveReadPause paused={false}>{children}</LiveReadPause>
+        </LiveReadPause>
+      ),
+    });
+    await waitFor(() => expect(read).toHaveBeenCalledTimes(1));
+
+    act(() => emit('items'));
+    await flush();
+
+    expect(read).toHaveBeenCalledTimes(1);
   });
 });
 

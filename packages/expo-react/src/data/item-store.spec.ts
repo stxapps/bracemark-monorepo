@@ -1,7 +1,8 @@
 // Store-level specs for the sync engine's local-wins guards, on the EXPO halves
 // that genuinely differ from web's: `queuedPathsTx` composed into the write's own
 // synchronous transaction (putItemsUnqueued / deleteItemsUnqueued), and
-// clearDrainedOps' `WHERE write_id = ?` predicate evaluated inside the DELETE.
+// clearDrainedOps' `(username, path, write_id) IN (VALUES …)` predicate evaluated
+// inside the DELETE, and stampItemUpdatedAts' `UPDATE … FROM (VALUES …)`.
 // web-react's engine.spec.ts is the canonical end-to-end coverage of the cycle
 // (docs/local-first-sync.md — a sync cycle); these pin the divergent SQL, so they
 // run against a REAL in-memory SQLite over the real DDL — a stubbed row scan
@@ -158,6 +159,25 @@ describe('clearDrainedOps', () => {
     expect(survivor.writeId).not.toBe(snapshot.writeId);
   });
 
+  // Set-at-a-time: the triples go out in several DELETEs of one transaction, so a
+  // drain bigger than one statement's batch has to clear every op past the first
+  // batch too, and still spare a re-edit that sits in a later one.
+  it('clears a drain spanning several statements, sparing a re-edit among them', async () => {
+    const paths = Array.from(
+      { length: 400 },
+      (_, i) => `links/l_${String(i).padStart(3, '0')}.enc`,
+    );
+    for (const path of paths) seedQueued(path, 'x');
+    const snapshot = await pendingOpsSorted();
+
+    seedQueued(paths[300], 'edited mid-push');
+    await clearDrainedOps(snapshot);
+
+    const left = await pendingOpsSorted();
+    expect(left.map((o) => o.path)).toEqual([paths[300]]);
+    expect(left[0].writeId).not.toBe(snapshot[300].writeId);
+  });
+
   it('spares a put→delete flip that landed since the snapshot', async () => {
     seedQueued(LINK_PATH, 'created');
     const [snapshot] = await listPendingOps(USER);
@@ -181,6 +201,49 @@ describe('stampItemUpdatedAts', () => {
 
     expect((await getItem(LINK_PATH))?.updatedAt).toBe(7777);
     expect(await bulkGetItems(['links/gone.enc'])).toEqual([undefined]);
+  });
+
+  it('restamps a batch spanning several statements', async () => {
+    const paths = Array.from(
+      { length: 600 },
+      (_, i) => `links/l_${String(i).padStart(3, '0')}.enc`,
+    );
+    inTx((tx) =>
+      putItemsTx(
+        tx,
+        paths.map((path) => toItemRecord(path, 1000, utf8('x'))),
+      ),
+    );
+
+    await stampItemUpdatedAts(paths.map((path, i) => ({ path, updatedAt: 2000 + i })));
+
+    const rows = await bulkGetItems(paths);
+    expect(rows.map((row) => row?.updatedAt)).toEqual(paths.map((_, i) => 2000 + i));
+  });
+
+  // An UPDATE … FROM that matches one row twice applies an arbitrary one, so the
+  // store dedupes first: the last stamp wins, as the per-path updates left it.
+  it('keeps the last stamp for a path repeated in the batch', async () => {
+    inTx((tx) => putItemsTx(tx, [toItemRecord(LINK_PATH, 1000, utf8('x'))]));
+
+    await stampItemUpdatedAts([
+      { path: LINK_PATH, updatedAt: 3000 },
+      { path: LINK_PATH, updatedAt: 2000 },
+    ]);
+
+    expect((await getItem(LINK_PATH))?.updatedAt).toBe(2000);
+  });
+
+  // Only the stamp moves: the payload and the rest of the row are the same row.
+  it('leaves the rest of the row alone', async () => {
+    inTx((tx) => putItemsTx(tx, [toItemRecord(LINK_PATH, 1000, utf8('body'))]));
+    await markItemDataFile(LINK_PATH, true);
+
+    await stampItemUpdatedAts([{ path: LINK_PATH, updatedAt: 2000 }]);
+
+    const row = await getItem(LINK_PATH);
+    expect(row?.data).toStrictEqual(utf8('body'));
+    expect(row?.hasDataFile).toBeTruthy();
   });
 });
 

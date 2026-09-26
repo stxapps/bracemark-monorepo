@@ -12,7 +12,7 @@
 // fields (`updatedAt`, `data`, `hasDataFile`), so reads don't join the junction
 // tables back in — the read layer queries those directly.
 
-import { and, eq, gte, inArray, lt } from 'drizzle-orm';
+import { and, eq, gte, inArray, lt, sql } from 'drizzle-orm';
 
 import { chunk } from '@stxapps/shared';
 
@@ -25,6 +25,8 @@ import {
   prefixEnd,
   rowsPerStatement,
   upsertExcludedSet,
+  valuesList,
+  valuesPerStatement,
 } from './db';
 // The queue's owner answers "is this path queued?" — this store composes that read
 // into its own guarded writes (putItemsUnqueued / deleteItemsUnqueued) rather than
@@ -203,17 +205,27 @@ export async function deleteItemsUnqueued(username: string, paths: string[]): Pr
 }
 
 // Stamp R2's authoritative `updatedAt` onto a batch of committed paths
-// (sync/engine.ts commitBatched) — one transaction for the whole batch rather
-// than a statement-per-path round trip through the driver. Each UPDATE is a
-// no-op if its row is gone (a committed delete has no record left to stamp) —
-// the same forgiveness as Dexie's `update`.
+// (sync/engine.ts commitBatched), in one transaction. Set-at-a-time: one
+// `UPDATE … FROM (VALUES …)` per `valuesPerStatement(2)` stamps, not an UPDATE
+// per path. At one per path, this and clearDrainedOps held the JS thread ~0.6 s
+// per 1,000-path commit after an import (docs/data-lifecycle.md, _readings —
+// expo_). A path whose row is gone joins nothing, so its stamp is a no-op (a
+// committed delete has no record left to stamp) — the same forgiveness as
+// Dexie's `update`. A path repeated in `input` keeps its LAST stamp, as the
+// same updates made one at a time would; the dedupe is needed because an
+// UPDATE … FROM that matches one row twice applies an arbitrary one of them.
 export async function stampItemUpdatedAts(
-  stamps: { path: string; updatedAt: number }[],
+  input: { path: string; updatedAt: number }[],
 ): Promise<void> {
-  if (stamps.length === 0) return;
+  if (input.length === 0) return;
+  const stamps = [...new Map(input.map((s) => [s.path, s.updatedAt])).entries()];
   getDb().transaction((tx) => {
-    for (const s of stamps) {
-      tx.update(items).set({ updatedAt: s.updatedAt }).where(eq(items.path, s.path)).run();
+    for (const batch of chunk(stamps, valuesPerStatement(2))) {
+      tx.run(
+        sql`UPDATE ${items} SET ${sql.identifier(items.updatedAt.name)} = v.column2
+          FROM (${valuesList(batch)}) AS v
+          WHERE ${items.path} = v.column1`,
+      );
     }
   });
 }

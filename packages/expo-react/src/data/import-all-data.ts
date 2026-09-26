@@ -17,7 +17,8 @@
 //    bulkWriteEntities' content path (file-store), not in the row.
 //  - Text is decoded by lib/utf8.ts, not TextDecoder — Hermes has none, and
 //    the polyfill Expo installs is slow enough to matter at a file's size.
-//  - Every write chunk waits on a real yield (WRITE_CHUNK below).
+//  - Every write chunk waits on a real yield (WRITE_CHUNK below), and live
+//    reads are held for the run (importAllData).
 //
 // Everything that isn't a divergence is now literally shared, not copied: the
 // archive contract (@stxapps/shared data/backup.ts), the outcome/progress
@@ -59,6 +60,7 @@ import { decodeUtf8 } from '../lib/utf8';
 import { yieldToMain } from '../lib/yield-to-main';
 import { runIncrementalSync, type SyncDeps } from '../sync/engine';
 import { bulkGetItems, namespaceRows } from './item-store';
+import { holdLiveReads } from './live-read-invalidation';
 import { bulkWriteEntities, type RawEntityEntry } from './mutations';
 import { readLists, readPins, readTags } from './queries';
 
@@ -77,6 +79,14 @@ export interface PickedFile {
 // for a 1,000-link restore on the simulator, 80 s at 10,000, with the progress
 // line frozen throughout (docs/data-lifecycle.md, _readings — expo_).
 const WRITE_CHUNK = 200;
+
+// WHOLE_FILE_STEPS. The whole-file steps at the front of an import are each one
+// synchronous call that no loop yield can split: fflate's `unzipSync` over the
+// archive, then `decodeUtf8` over a file. Each is followed by a yield, so the
+// next step runs in a task of its own. At 10,000 links the inflate (~0.3 s), the
+// decode of `items.jsonl` (~0.27 s) and the first classify slice ran as ONE task,
+// the restore's longest stall (docs/data-lifecycle.md, _the pause_). Splitting
+// them further means inflating and decoding in pieces.
 
 // Rows or lines handled between two yields in the loops that run BEFORE the
 // writes (dedupe, the backup's classify pass and its skip-existing lookup) —
@@ -210,6 +220,9 @@ async function importBracemarkBackup(
 
   const itemsBytes = byName.get(BACKUP_ITEMS_ENTRY);
   const itemsText = itemsBytes === undefined ? '' : decodeUtf8(itemsBytes);
+  // The decode is one synchronous call over the whole file; the classify pass
+  // starts in a task of its own (WHOLE_FILE_STEPS).
+  await yieldToMain();
 
   let invalidCount = 0;
   const classified: BundleEntry[] = [];
@@ -336,7 +349,9 @@ async function parseInteropZip(byName: Map<string, Uint8Array>): Promise<Importe
   const links: ImportedLink[] = [];
   const images = new Map<string, Uint8Array>();
   for (const [name, bytes] of candidates) {
-    const parsed = await parseImportTextInChunks(decodeUtf8(bytes), name, yieldToMain);
+    const text = decodeUtf8(bytes);
+    await yieldToMain(); // WHOLE_FILE_STEPS
+    const parsed = await parseImportTextInChunks(text, name, yieldToMain);
     links.push(...parsed.links);
     for (const [key, blob] of parsed.images) images.set(key, blob);
   }
@@ -368,6 +383,8 @@ async function importZip(
   // fflate keys entries by filename; directory entries end with '/' and carry
   // no bytes — drop them so the map mirrors zip.js's file-only view.
   const unzipped = unzipSync(bytes);
+  // WHOLE_FILE_STEPS: the decode that follows gets a task of its own.
+  await yieldToMain();
   const byName = new Map<string, Uint8Array>(
     Object.entries(unzipped).filter(([name]) => !name.endsWith('/')),
   );
@@ -405,14 +422,24 @@ export async function importAllData(options: {
     syncFailed = true;
   }
 
-  onProgress({ step: 'parse' });
-  const bytes = await new File(file.uri).bytes();
-  if (isZipBytes(bytes)) {
-    const outcome = await importZip(deps.username, bytes, maxLinks, onProgress, onQuotaPrompt);
-    return { ...outcome, syncFailed };
-  }
+  // Live reads re-run on a flush every couple of seconds from here on, not after
+  // every write chunk (holdLiveReads, live-read-invalidation.ts). Released in the
+  // `finally`, so a failed import can't leave the screen's reads held.
+  const releaseLiveReads = holdLiveReads();
+  try {
+    onProgress({ step: 'parse' });
+    const bytes = await new File(file.uri).bytes();
+    if (isZipBytes(bytes)) {
+      const outcome = await importZip(deps.username, bytes, maxLinks, onProgress, onQuotaPrompt);
+      return { ...outcome, syncFailed };
+    }
 
-  const parsed = await parseImportTextInChunks(decodeUtf8(bytes), file.name, yieldToMain);
-  const outcome = await importInterop(deps.username, parsed, maxLinks, onProgress, onQuotaPrompt);
-  return { ...outcome, syncFailed };
+    const text = decodeUtf8(bytes);
+    await yieldToMain(); // WHOLE_FILE_STEPS
+    const parsed = await parseImportTextInChunks(text, file.name, yieldToMain);
+    const outcome = await importInterop(deps.username, parsed, maxLinks, onProgress, onQuotaPrompt);
+    return { ...outcome, syncFailed };
+  } finally {
+    releaseLiveReads();
+  }
 }
