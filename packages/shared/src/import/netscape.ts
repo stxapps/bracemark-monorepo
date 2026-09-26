@@ -132,7 +132,11 @@ export function parseNetscapeHtml(text: string, observer?: ImportObserver): Impo
 
   // The app remains tolerant. Inspection also recognizes incomplete anchors so
   // a damaged export cannot quietly lose records outside the normal tokenizer.
-  const tokens = observer ? new RegExp(TOKEN_RE.source + '|<a\\b[^>]*>', 'gi') : TOKEN_RE;
+  // Reuse TOKEN_RE's own flags: without `s`, a multi-line <DD> fails to match
+  // and an <a> inside it is counted as a second bookmark.
+  const tokens = observer
+    ? new RegExp(TOKEN_RE.source + '|<a\\b[^>]*>', TOKEN_RE.flags)
+    : TOKEN_RE;
   for (const match of text.matchAll(tokens)) {
     const token = match[0];
 
