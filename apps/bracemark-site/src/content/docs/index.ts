@@ -30,17 +30,20 @@ export const DOC_GROUPS: DocGroup[] = [
       {
         slug: 'create-an-account',
         title: 'Create an account',
-        description: 'Choose a username and password, save a recovery code, and understand what you need to sign in again.',
+        description:
+          'Choose a username and password, save a recovery code, and understand what you need to sign in again.',
       },
       {
         slug: 'get-the-apps',
         title: 'Get the apps',
-        description: 'Use the web app, phone apps, or Chrome and Firefox browser extension, and sign in on each device.',
+        description:
+          'Use the web app, phone apps, or Chrome and Firefox browser extension, and sign in on each device.',
       },
       {
         slug: 'save-links',
         title: 'Save links',
-        description: 'Save a URL from the web app, phone apps, or browser extension, with a list, tags, and a note if you want.',
+        description:
+          'Save a URL from the web app, phone apps, or browser extension, with a list, tags, and a note if you want.',
       },
     ],
   },
@@ -50,27 +53,32 @@ export const DOC_GROUPS: DocGroup[] = [
       {
         slug: 'lists',
         title: 'Lists',
-        description: 'Give each link a place, make and manage lists, and understand Archive, Trash, and nested folders.',
+        description:
+          'Give each link a place, make and manage lists, and understand Archive, Trash, and nested folders.',
       },
       {
         slug: 'tags-and-notes',
         title: 'Tags and notes',
-        description: 'Add several flat tags and a note to a link, and find out where each can be searched.',
+        description:
+          'Add several flat tags and a note to a link, and find out where each can be searched.',
       },
       {
         slug: 'search',
         title: 'Search your links',
-        description: 'Search titles and addresses on your device, and use advanced fields to narrow results by note, list, or tag.',
+        description:
+          'Search titles and addresses on your device, and use advanced fields to narrow results by note, list, or tag.',
       },
       {
         slug: 'select-and-bulk-edit',
         title: 'Select and edit several links',
-        description: 'Select the links in a view, apply an action together, and understand the different actions in Trash.',
+        description:
+          'Select the links in a view, apply an action together, and understand the different actions in Trash.',
       },
       {
         slug: 'restore-a-link',
         title: 'Restore a link',
-        description: 'Bring a removed link back from Trash, and understand what can and cannot be recovered after an edit or deletion.',
+        description:
+          'Bring a removed link back from Trash, and understand what can and cannot be recovered after an edit or deletion.',
       },
     ],
   },
@@ -80,7 +88,8 @@ export const DOC_GROUPS: DocGroup[] = [
       {
         slug: 'link-previews',
         title: 'Link previews',
-        description: 'Learn where titles and images come from on each platform, what the optional server sees, and why a preview may fail.',
+        description:
+          'Learn where titles and images come from on each platform, what the optional server sees, and why a preview may fail.',
       },
     ],
   },
@@ -102,7 +111,8 @@ export const DOC_GROUPS: DocGroup[] = [
       {
         slug: 'sign-out',
         title: 'Sign out',
-        description: 'Remove this device’s local copy and session, sign out other devices, and let pending changes sync first.',
+        description:
+          'Remove this device’s local copy and session, sign out other devices, and let pending changes sync first.',
       },
     ],
   },
@@ -118,12 +128,14 @@ export const DOC_GROUPS: DocGroup[] = [
       {
         slug: 'app-lock-and-list-locks',
         title: 'App and list locks',
-        description: 'Set and open screen locks, use biometric unlock on a phone, and know what a forgotten lock password means.',
+        description:
+          'Set and open screen locks, use biometric unlock on a phone, and know what a forgotten lock password means.',
       },
       {
         slug: 'sync-and-devices',
         title: 'Sync and devices',
-        description: 'See how offline changes reach your other devices, how to check sync, and what happens when two devices edit the same link.',
+        description:
+          'See how offline changes reach your other devices, how to check sync, and what happens when two devices edit the same link.',
       },
     ],
   },
@@ -133,7 +145,8 @@ export const DOC_GROUPS: DocGroup[] = [
       {
         slug: 'manage-your-subscription',
         title: 'Manage your subscription',
-        description: 'Find your plan, manage billing in the store that sold it, restore a purchase, and understand what happens when it ends.',
+        description:
+          'Find your plan, manage billing in the store that sold it, restore a purchase, and understand what happens when it ends.',
       },
     ],
   },
@@ -143,17 +156,20 @@ export const DOC_GROUPS: DocGroup[] = [
       {
         slug: 'what-a-saved-link-includes',
         title: 'What a saved link includes',
-        description: 'See which details you add, which arrive from a preview, and what is available while your device is offline.',
+        description:
+          'See which details you add, which arrive from a preview, and what is available while your device is offline.',
       },
       {
         slug: 'sync-backup-and-export',
         title: 'Sync, backup, and export',
-        description: 'Choose the right copy for work across devices, restoring missing links, or moving to another app.',
+        description:
+          'Choose the right copy for work across devices, restoring missing links, or moving to another app.',
       },
       {
         slug: 'how-encryption-and-search-work',
         title: 'How encryption and search work',
-        description: 'Follow a saved link from device to encrypted sync and understand why search runs locally.',
+        description:
+          'Follow a saved link from device to encrypted sync and understand why search runs locally.',
       },
     ],
   },
@@ -163,7 +179,8 @@ export const DOC_GROUPS: DocGroup[] = [
       {
         slug: 'ways-to-keep-links',
         title: 'Ways to keep links',
-        description: 'Compare browser bookmarks, local files, hosted managers, and encrypted sync by the jobs each one does.',
+        description:
+          'Compare browser bookmarks, local files, hosted managers, and encrypted sync by the jobs each one does.',
       },
     ],
   },
@@ -173,32 +190,38 @@ export const DOC_GROUPS: DocGroup[] = [
       {
         slug: 'import-from-chrome',
         title: 'Move from Chrome bookmarks',
-        description: 'Export Chrome bookmarks as HTML, import the file, and check the resulting lists and links.',
+        description:
+          'Export Chrome bookmarks as HTML, import the file, and check the resulting lists and links.',
       },
       {
         slug: 'import-from-firefox',
         title: 'Move from Firefox bookmarks',
-        description: 'Export Firefox bookmarks as HTML on a computer, import the file, and check the result.',
+        description:
+          'Export Firefox bookmarks as HTML on a computer, import the file, and check the result.',
       },
       {
         slug: 'import-from-raindrop',
         title: 'Move from Raindrop.io',
-        description: 'Choose Raindrop.io’s HTML backup, import nested collections, and check which details come across.',
+        description:
+          'Choose Raindrop.io’s HTML backup, import nested collections, and check which details come across.',
       },
       {
         slug: 'import-from-linkwarden',
         title: 'Move from Linkwarden',
-        description: 'Import Linkwarden’s JSON backup with its collections, tags, notes, dates, and pins.',
+        description:
+          'Import Linkwarden’s JSON backup with its collections, tags, notes, dates, and pins.',
       },
       {
         slug: 'import-from-karakeep',
         title: 'Move from Karakeep',
-        description: 'Export Karakeep bookmarks as HTML, import the file, and check the lists and details that came across.',
+        description:
+          'Export Karakeep bookmarks as HTML, import the file, and check the lists and details that came across.',
       },
       {
         slug: 'import-from-brace-to',
         title: 'Move from Brace.to',
-        description: 'Export your Brace.to data, import the file into Bracemark, and check what came across.',
+        description:
+          'Export your Brace.to data, import the file into Bracemark, and check what came across.',
       },
       {
         slug: 'import-from-pocket-export',

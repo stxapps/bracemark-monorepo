@@ -256,7 +256,8 @@ export const FAQ_GROUPS: FaqGroup[] = [
             change while offline is queued and syncs the next time you have a network. What is on
             the device is your library — addresses, titles, tags, notes, and preview images.
             Following a link out to the live page is the one thing that still needs a connection.{' '}
-            <PageLink href="/docs/sync-and-devices">Sync and devices</PageLink> explains what happens to offline changes.
+            <PageLink href="/docs/sync-and-devices">Sync and devices</PageLink> explains what
+            happens to offline changes.
           </>
         ),
       },
@@ -546,8 +547,9 @@ export const FAQ_GROUPS: FaqGroup[] = [
           <>
             A username and a password. That is all we ask for — no email address, no phone number,
             no card. We suggest the password for you: seven random words, long enough to survive an
-            offline attack in a way most typed passwords are not. You can choose your own instead. See{' '}
-            <PageLink href="/docs/create-an-account">Create an account</PageLink> for the recovery step.
+            offline attack in a way most typed passwords are not. You can choose your own instead.
+            See <PageLink href="/docs/create-an-account">Create an account</PageLink> for the
+            recovery step.
           </>
         ),
       },
@@ -708,9 +710,9 @@ export const FAQ_GROUPS: FaqGroup[] = [
             Nothing is deleted and nothing is put out of reach. You keep reading, searching,
             editing, deleting, and exporting the whole library; new links stop saving until you
             upgrade or delete links permanently to make room. Moving a link to Trash still counts
-            toward the limit. Upgrading lifts the cap straight away. That is also what happens
-            if a trial ends with more than {FREE_LINKS} links in your library — they all stay, and
-            stay exportable; you just cannot add new ones until you are back under the cap or on{' '}
+            toward the limit. Upgrading lifts the cap straight away. That is also what happens if a
+            trial ends with more than {FREE_LINKS} links in your library — they all stay, and stay
+            exportable; you just cannot add new ones until you are back under the cap or on{' '}
             {PLAN_LABELS.plus}.
           </>
         ),
@@ -934,7 +936,8 @@ export const FAQ_GROUPS: FaqGroup[] = [
             checkout. If it hasn’t landed, open Settings → Subscription and restore your purchase;
             if it still hasn’t, write to <MailLink address={SUPPORT_EMAIL} /> with the date and the
             store you bought it from. See{' '}
-            <PageLink href="/docs/manage-your-subscription">Manage your subscription</PageLink> for the store-specific steps.
+            <PageLink href="/docs/manage-your-subscription">Manage your subscription</PageLink> for
+            the store-specific steps.
           </>
         ),
       },
@@ -985,7 +988,8 @@ export const FAQ_GROUPS: FaqGroup[] = [
             and pages whose text is assembled by JavaScript after they load. We stop retrying those,
             so they land in the failed count under Link previews in Settings rather than a queue
             that is still working on them. The link is saved either way, and you can give it a title
-            of your own. See <PageLink href="/docs/link-previews">Link previews</PageLink> for the settings.
+            of your own. See <PageLink href="/docs/link-previews">Link previews</PageLink> for the
+            settings.
           </>
         ),
       },
@@ -996,7 +1000,8 @@ export const FAQ_GROUPS: FaqGroup[] = [
           <>
             Yes, on {PLAN_LABELS.plus}. The free plan gives you flat lists, tags, and pins, which is
             enough structure for a library of {FREE_LINKS} links; nesting starts to matter at the
-            size the paid plan is for. See <PageLink href="/docs/lists">Lists</PageLink> for the controls.
+            size the paid plan is for. See <PageLink href="/docs/lists">Lists</PageLink> for the
+            controls.
           </>
         ),
       },
@@ -1123,7 +1128,8 @@ export const FAQ_GROUPS: FaqGroup[] = [
             lists from view. It sits on top of the encryption rather than replacing it — encryption
             protects your library from us and from anyone who gets the files; the lock protects it
             from whoever is standing behind you. See{' '}
-            <PageLink href="/docs/app-lock-and-list-locks">App and list locks</PageLink> for setup and recovery.
+            <PageLink href="/docs/app-lock-and-list-locks">App and list locks</PageLink> for setup
+            and recovery.
           </>
         ),
       },

@@ -63,7 +63,11 @@ export function DocsNav({ current, className }: { current?: string; className?: 
         </div>
       </details>
       <nav aria-label="Docs" className={cn('hidden lg:block')}>
-        <div className={cn('lg:sticky lg:top-28 lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto lg:pr-3')}>
+        <div
+          className={cn(
+            'lg:sticky lg:top-28 lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto lg:pr-3',
+          )}
+        >
           <Link
             href="/docs"
             className={cn(

@@ -2,11 +2,11 @@ Sync, backup, and export solve different problems. Knowing which copy you have m
 
 ## The three copies
 
-| Action | What it does | What it is for |
-| --- | --- | --- |
-| Sync | Sends each changed item as an encrypted file and brings changes to your other signed-in devices | Working across devices |
-| Bracemark backup | Writes a readable `.zip` containing links, lists, tags, pins, files, settings, and Trash, except locked lists | Restoring missing items or keeping a separate copy |
-| Other exports | Writes HTML bookmarks, CSV, or plain URLs, each with less detail than a backup | Moving links into another app or reading them outside Bracemark |
+| Action           | What it does                                                                                                  | What it is for                                                  |
+| ---------------- | ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| Sync             | Sends each changed item as an encrypted file and brings changes to your other signed-in devices               | Working across devices                                          |
+| Bracemark backup | Writes a readable `.zip` containing links, lists, tags, pins, files, settings, and Trash, except locked lists | Restoring missing items or keeping a separate copy              |
+| Other exports    | Writes HTML bookmarks, CSV, or plain URLs, each with less detail than a backup                                | Moving links into another app or reading them outside Bracemark |
 
 Sync is automatic when the device can connect; it does not keep earlier versions of an edit. An export is a snapshot made from this device’s copy. It checks for newer synced data first and tells you if it has to export the local copy without reaching the server. An exported file is readable by anyone who opens it, so store it deliberately.
 
