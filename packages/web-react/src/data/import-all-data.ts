@@ -450,14 +450,16 @@ export async function importAllData(options: {
   }
 
   onProgress({ step: 'parse' });
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  if (isZipBytes(bytes)) {
+  // Sniff the magic off the first bytes alone. zip.js reads a zip through the
+  // File a slice at a time, so reading the whole of it here would hold a
+  // multi-GB backup in memory for nothing but these four bytes.
+  if (isZipBytes(new Uint8Array(await file.slice(0, 4).arrayBuffer()))) {
     const outcome = await importZip(deps.username, file, maxLinks, onProgress, onQuotaPrompt);
     return { ...outcome, syncFailed };
   }
 
   const parsed = await parseImportTextInChunks(
-    new TextDecoder().decode(bytes),
+    new TextDecoder().decode(await file.arrayBuffer()),
     file.name,
     yieldToMain,
   );

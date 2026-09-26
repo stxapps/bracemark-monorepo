@@ -1,13 +1,14 @@
 // The import-all-data state machine over data/import-all-data.ts — the expo
 // sibling of web-react's hooks/use-import-all-data.ts (see there); the mirror
-// of use-export-all-data.ts. One run at a time. On success it kicks the
+// of use-export-all-data.ts. One run at a time per app — module state, so it
+// survives the view (web's run section has why). On success it kicks the
 // SyncProvider's requestSync so the freshly-queued pending ops drain through
 // the normal engine cycle (and the sync status card shows it), rather than
-// running a private sync of its own. The `quota` phase and its parked-promise
-// ref work exactly as web's does — see there for why the resolve fn lives in a
-// ref rather than in state.
+// running a private sync of its own. The `quota` phase and its parked resolve
+// fn work exactly as web's do — see there for why the resolve fn lives beside
+// the run rather than in its rendered state.
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useSyncExternalStore } from 'react';
 
 import { useApiClient } from '@stxapps/react';
 import type {
@@ -45,6 +46,67 @@ export interface UseImportAllDataResult {
   answerQuota: (answer: ImportQuotaAnswer) => void;
 }
 
+// --- the run, per app rather than per view ------------------------------------
+//
+// A run outlives the view that started it: leaving Settings → Data unmounts this
+// hook, but the orchestrator keeps writing. When the run lived in hook state, a
+// view mounted meanwhile read `idle` and offered the picker again, and a second
+// interop run deduped against a library the first had not finished writing, so
+// every link the first was still to write landed twice. The run is module state
+// instead: a view mounted mid-run shows its progress and then its receipt, and
+// `run` refuses a second one while the first is in flight.
+//
+// The rendered half is an immutable snapshot for useSyncExternalStore; the rest
+// is never rendered and lives beside it.
+interface RunSnapshot {
+  id: number;
+  username: string | null;
+  state: ImportState;
+}
+
+const IDLE: ImportState = { phase: 'idle' };
+let snapshot: RunSnapshot | null = null;
+let nextRunId = 1;
+// Still inside the orchestrator. The re-entrancy guard, and not tied to a view.
+let inFlight = false;
+// The suspended orchestrator's resolve fn while the `quota` phase is on screen.
+let resolveQuota: ((answer: ImportQuotaAnswer) => void) | null = null;
+// The run's quota prompt was answered 'cancel'. `resolveImportQuota` carries that
+// out by throwing ImportQuotaError — the very error the gate throws when it
+// refuses on its own — so the rejection handler needs this to tell the two apart.
+let cancelled = false;
+// Mounted views. The last one to unmount is what "the user left" means.
+let views = 0;
+const listeners = new Set<() => void>();
+
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+function getSnapshot(): RunSnapshot | null {
+  return snapshot;
+}
+
+// Publish a run's next state, unless a newer run (or the unmount below) has
+// already replaced it.
+function publish(id: number, state: ImportState): void {
+  if (snapshot?.id !== id) return;
+  snapshot = { ...snapshot, state };
+  for (const listener of listeners) listener();
+}
+
+// Settle an unanswered quota prompt as a cancel: nothing has been written, and
+// the answer resumes the orchestrator so it can close its archive and return.
+function cancelQuota(): void {
+  const resolve = resolveQuota;
+  if (resolve === null) return;
+  resolveQuota = null;
+  cancelled = true;
+  if (snapshot !== null) publish(snapshot.id, IDLE);
+  resolve('cancel');
+}
+
 export function useImportAllData(): UseImportAllDataResult {
   const { username } = useAuth();
   const { requestSync } = useSync();
@@ -52,34 +114,25 @@ export function useImportAllData(): UseImportAllDataResult {
   // The plan gates the orchestrator enforces: the upfront link cap and whether
   // folder paths may create nested lists.
   const { entitlements } = useEntitlements();
-  const [state, setState] = useState<ImportState>({ phase: 'idle' });
-  // Re-entrancy guard that doesn't wait for the state update to land.
-  const runningRef = useRef(false);
-  // The suspended orchestrator's resolve fn while the `quota` phase is on screen.
-  const quotaResolveRef = useRef<((answer: ImportQuotaAnswer) => void) | null>(null);
-  // The user answered 'cancel'. `resolveImportQuota` carries that out by throwing
-  // ImportQuotaError — the very error the gate throws when it refuses on its own
-  // — so the rejection handler below needs this to tell the two apart.
-  const cancelledRef = useRef(false);
-  const mountedRef = useRef(true);
+  const current = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  // A run belongs to the account that started it.
+  const state = current !== null && current.username === username ? current.state : IDLE;
+
   useEffect(() => {
-    mountedRef.current = true;
+    views += 1;
     return () => {
-      mountedRef.current = false;
-      // A quota decision has no owner once Settings unmounts. Settle it so the
-      // orchestrator can close its archive and release any live-read hold.
-      const resolve = quotaResolveRef.current;
-      quotaResolveRef.current = null;
-      resolve?.('cancel');
+      views -= 1;
+      if (views > 0) return;
+      // A quota decision has no owner once the last view unmounts.
+      cancelQuota();
+      // A settled run's receipt was for the view that watched it; the next view
+      // starts idle. A run still writing stays, so the next view shows it.
+      if (!inFlight) snapshot = null;
     };
   }, []);
 
   const answerQuota = useCallback((answer: ImportQuotaAnswer) => {
-    const resolve = quotaResolveRef.current;
-    if (resolve === null) return;
-    quotaResolveRef.current = null;
-    // 'import-what-fits' resumes the run, so it goes back to a spinner. 'cancel'
-    // ends it, and ends it as a NON-EVENT: nothing has been written, and the user
+    // 'cancel' ends the run as a NON-EVENT: nothing has been written, and the user
     // chose this a keystroke ago. So the view drops straight back to idle rather
     // than flashing a spinner on its way to an error phase that would restate the
     // counts as a refusal and ANNOUNCE (role="alert") a failure the user asked
@@ -87,49 +140,58 @@ export function useImportAllData(): UseImportAllDataResult {
     // is clutter, the same reason idle renders nothing at all. Only the cancel
     // path is quiet — the gate's own refusals (no room, a backup file) still land
     // on the error phase. docs/data-lifecycle.md — _the import's quota gate_.
-    cancelledRef.current = answer === 'cancel';
-    setState(answer === 'cancel' ? { phase: 'idle' } : { phase: 'running', step: 'items' });
+    if (answer === 'cancel') {
+      cancelQuota();
+      return;
+    }
+    // 'import-what-fits' resumes the run, so it goes back to a spinner.
+    const resolve = resolveQuota;
+    if (resolve === null || snapshot === null) return;
+    resolveQuota = null;
+    publish(snapshot.id, { phase: 'running', step: 'items' });
     resolve(answer);
   }, []);
 
   const run = useCallback(
     (file: PickedFile) => {
-      if (runningRef.current) return;
+      if (inFlight) return;
 
       const session = getSession();
       if (!username || !session) {
-        setState({ phase: 'error', message: 'You must be signed in to import.' });
+        snapshot = {
+          id: nextRunId++,
+          username,
+          state: { phase: 'error', message: 'You must be signed in to import.' },
+        };
+        for (const listener of listeners) listener();
         return;
       }
       const deps: SyncDeps = { username, encryptionKey: session.encryptionKey, api };
 
-      runningRef.current = true;
-      cancelledRef.current = false;
+      const id = nextRunId++;
+      inFlight = true;
+      cancelled = false;
       // No-ops unless a measurement build started the probe (lib/stall-probe.ts).
       beginStallWindow('import');
-      setState({ phase: 'running', step: 'sync' });
+      snapshot = { id, username, state: { phase: 'running', step: 'sync' } };
+      for (const listener of listeners) listener();
       void importAllData({
         file,
         deps,
         maxLinks: entitlements.maxLinks,
-        onProgress: (progress) => {
-          if (mountedRef.current) setState({ phase: 'running', ...progress });
-        },
+        onProgress: (progress) => publish(id, { phase: 'running', ...progress }),
         onQuotaPrompt: (prompt) =>
           new Promise((resolve) => {
-            // Parsing can finish after navigation away, before there was a
-            // resolver for the cleanup above to cancel.
-            if (!mountedRef.current) {
-              resolve('cancel');
-              return;
-            }
-            quotaResolveRef.current = resolve;
-            setState({ phase: 'quota', prompt });
+            resolveQuota = resolve;
+            // Parsing can finish after the last view has gone, when there was no
+            // prompt yet for its unmount to cancel.
+            if (views === 0) cancelQuota();
+            else publish(id, { phase: 'quota', prompt });
           }),
       })
         .then(
           (outcome) => {
-            if (mountedRef.current) setState({ phase: 'done', outcome });
+            publish(id, { phase: 'done', outcome });
             // Drain the queued ops through the normal cycle (coalesces with any
             // in-flight one) — the imported data starts syncing right away.
             requestSync();
@@ -137,8 +199,8 @@ export function useImportAllData(): UseImportAllDataResult {
           (err: unknown) => {
             // A cancelled run is already back on idle — its ImportQuotaError is
             // the answer being carried out, not a failure to report.
-            if (cancelledRef.current || !mountedRef.current) return;
-            setState({
+            if (cancelled) return;
+            publish(id, {
               phase: 'error',
               message: err instanceof Error ? err.message : String(err),
             });
@@ -146,10 +208,10 @@ export function useImportAllData(): UseImportAllDataResult {
         )
         .finally(() => {
           endStallWindow();
-          runningRef.current = false;
+          inFlight = false;
           // A run that ended without the prompt being answered (any other
           // failure while it was on screen) must not leave a live resolve behind.
-          quotaResolveRef.current = null;
+          resolveQuota = null;
         });
     },
     [username, api, entitlements.maxLinks, requestSync],

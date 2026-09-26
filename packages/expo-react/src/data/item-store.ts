@@ -104,12 +104,26 @@ export function itemUpdatedAtsTx(tx: DbTx, paths: string[]): Map<string, number>
 //
 // Rows come back RAW because the callers differ only in how they decode them —
 // the read edge merges the path in (queries.ts `readNamespace` → `WithPath`),
-// the backup keeps path and entity separate (export-all-data.ts
-// `readRawNamespace`), and the import side reads the projected columns with no
-// blob decode at all. Decoding belongs to each caller; the range belongs here.
+// and the backup keeps path and entity separate (export-all-data.ts
+// `readRawNamespace`). The import side needs no blob at all and reads
+// `namespaceUrlKeys` below. Decoding belongs to each caller; the range belongs here.
 export function namespaceRows(prefix: string): ItemRow[] {
   return getDb()
     .select()
+    .from(items)
+    .where(and(gte(items.path, prefix), lt(items.path, prefixEnd(prefix))))
+    .all();
+}
+
+// The same range, only the path and the two URL columns — what an import's
+// dedupe and quota count need of the library. `namespaceRows` would carry every
+// row's `data` blob across to JS as well, a library's worth of byte arrays that
+// the import never reads.
+export function namespaceUrlKeys(
+  prefix: string,
+): Pick<ItemRow, 'path' | 'itemUrl' | 'itemUrlKey'>[] {
+  return getDb()
+    .select({ path: items.path, itemUrl: items.itemUrl, itemUrlKey: items.itemUrlKey })
     .from(items)
     .where(and(gte(items.path, prefix), lt(items.path, prefixEnd(prefix))))
     .all();

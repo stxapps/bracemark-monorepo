@@ -122,7 +122,9 @@ The zip **container library** differs, and not by preference:
 - **web** — `@zip.js/zip.js`. Streams straight to disk through the File System
   Access API (`showSaveFilePicker`, claimed before the long phases while the
   click's user activation is alive), so an archive larger than memory never
-  materializes as one Blob, and zip64 engages automatically.
+  materializes as one Blob, and zip64 engages automatically. The restore reads
+  the picked File the same way, a slice at a time, and its format sniff reads
+  only the four magic bytes, never the whole file.
 - **expo** — `fflate`: its synchronous streaming `Zip` to write, fed a piece
   at a time with a yield between pieces (see _readings — expo_), and
   `unzipSync` to read. zip.js is not portable to
@@ -405,6 +407,18 @@ Leaving the import screen also settles an unanswered prompt as cancellation,
 including a prompt reached after the screen has already unmounted. An abandoned
 promise must not retain the archive or a live-read hold. Expo holds live reads
 only during the actual writes, after parsing, projection and the quota answer.
+
+**A run belongs to the app, not to the view.** Leaving Import (its back link,
+another Settings section, popping the screen on mobile) unmounts the hook but
+not the orchestrator, which keeps writing. So the run's state is module state in
+`use-import-all-data` (both platforms): a view opened mid-run shows its progress
+and then its receipt, and `run` refuses a second import while one is in flight.
+When the state lived in the hook, the reopened view read `idle` and offered the
+picker again, and a second interop run deduped against a library the first had
+not finished writing, so everything the first still had to write landed twice.
+A receipt is shown once: to the view that watched the run finish or, if none
+did, to the next one. `DATA-IMPORT-WEB-003` (`e2e/web/data-lifecycle.e2e.ts`)
+holds the api to keep a run in flight while the view is reopened.
 
 **A backup is still refused whole.** `assertUnderImportQuota` survives unchanged
 on the bracemark-backup path, and that path never prompts. The old reasoning — a

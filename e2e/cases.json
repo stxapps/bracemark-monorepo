@@ -250,6 +250,16 @@
     "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
   },
   {
+    "id": "DATA-IMPORT-WEB-003",
+    "title": "An import keeps its progress and receipt when its view is left and reopened, and cannot be started twice",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online"],
+    "fixture": "empty",
+    "path": "web/data-lifecycle.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
     "id": "DATA-EXPORT-WEB-RELEASE-001",
     "title": "Chrome's save dialog creates every offered export with the promised filename and receipt",
     "surface": "web",

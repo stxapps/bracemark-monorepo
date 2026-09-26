@@ -32,6 +32,7 @@ beforeEach(() => {
   answer = undefined;
   settled = false;
   mockRequestSync.mockClear();
+  mockImport.mockClear();
   mockImport.mockImplementation(
     async ({ onQuotaPrompt }: { onQuotaPrompt: ImportQuotaResolver }) => {
       ask = async () => {
@@ -84,4 +85,75 @@ it('still resumes an accepted import and requests its sync', async () => {
   expect(answer).toBe('import-what-fits');
   expect(result.current.state.phase).toBe('done');
   expect(mockRequestSync).toHaveBeenCalledTimes(1);
+});
+
+// The run is the app's, not the view's: leaving Settings → Data doesn't stop the
+// orchestrator, so a view mounted meanwhile must see it rather than offer a
+// second run that would dedupe against a half-written library.
+describe('a run that outlives its view', () => {
+  let finish: () => void;
+
+  beforeEach(() => {
+    const writing = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    mockImport.mockImplementation(
+      async ({ onProgress }: { onProgress: (progress: object) => void }) => {
+        onProgress({ step: 'items', done: 200, total: 1000 });
+        await writing;
+        return { linkCount: 1000 };
+      },
+    );
+  });
+
+  it('shows the next view its progress and refuses to start a second', async () => {
+    const first = renderHook(() => useImportAllData());
+    act(() => first.result.current.run(file));
+    first.unmount();
+
+    const second = renderHook(() => useImportAllData());
+    expect(second.result.current.state).toEqual({
+      phase: 'running',
+      step: 'items',
+      done: 200,
+      total: 1000,
+    });
+    act(() => second.result.current.run(file));
+    expect(mockImport).toHaveBeenCalledTimes(1);
+
+    await act(async () => finish());
+    expect(second.result.current.state.phase).toBe('done');
+    expect(mockRequestSync).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the receipt of a run that finished with no view for the next one', async () => {
+    const first = renderHook(() => useImportAllData());
+    act(() => first.result.current.run(file));
+    first.unmount();
+    await act(async () => finish());
+
+    const second = renderHook(() => useImportAllData());
+    expect(second.result.current.state).toEqual({
+      phase: 'done',
+      outcome: { linkCount: 1000 },
+    });
+    second.unmount();
+
+    // Seen once; the view after that starts over.
+    const third = renderHook(() => useImportAllData());
+    expect(third.result.current.state.phase).toBe('idle');
+  });
+
+  it('starts the next view idle once the watched run has settled', async () => {
+    const first = renderHook(() => useImportAllData());
+    act(() => first.result.current.run(file));
+    await act(async () => finish());
+    expect(first.result.current.state.phase).toBe('done');
+    first.unmount();
+
+    const second = renderHook(() => useImportAllData());
+    expect(second.result.current.state.phase).toBe('idle');
+    act(() => second.result.current.run(file));
+    expect(mockImport).toHaveBeenCalledTimes(2);
+  });
 });

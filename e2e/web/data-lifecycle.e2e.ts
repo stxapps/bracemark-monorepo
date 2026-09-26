@@ -3,6 +3,7 @@ import { waitForSync } from '../seed/steps';
 import { expect, test } from './fixtures/app';
 import { unique } from './fixtures/data';
 import { writeOverCapBookmarks, writeSmallDataArchive } from './fixtures/data-lifecycle';
+import { API_URL } from './fixtures/env';
 import { launchApp } from './fixtures/launch';
 
 test.describe('data lifecycle', () => {
@@ -85,6 +86,53 @@ test.describe('data lifecycle', () => {
 
       await app.page.goto('/links');
       await expect(app.page.getByText(fixture.firstTitle, { exact: true })).toBeVisible();
+    },
+  );
+
+  test(
+    'keeps a run on screen when its view is left and reopened, and never starts a second',
+    { tag: ['@DATA-IMPORT-WEB-003', '@full', '@online'] },
+    async ({ isolatedApp: app }, testInfo) => {
+      const namespace = unique('E2E reopen');
+      const path = testInfo.outputPath('reopen-bookmarks.html');
+      const fixture = await writeOverCapBookmarks(path, namespace, 3);
+      const importData = app.page.getByRole('button', { name: /^Import data/ });
+      const chooseFile = app.page.getByRole('button', { name: 'Choose a file' });
+      const refreshing = app.page.getByText('Refreshing from the server…');
+
+      await app.page.goto('/settings/data');
+      // Hold the api, so the run is still in its opening sync refresh when the
+      // view comes back, whatever the machine's speed. Delayed, never answered
+      // for it: every request still reaches the real api once released.
+      let release!: () => void;
+      const held = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const api = `${API_URL}/**`;
+      await app.page.route(api, async (route) => {
+        await held;
+        await route.continue().catch(() => undefined);
+      });
+
+      await importData.click();
+      await app.page.locator('input[type=file]').setInputFiles(path);
+      await expect(refreshing).toBeVisible();
+
+      // Back to the Data overview unmounts the import view; the run goes on.
+      // Reopened, the view must show that run, not an idle picker that would
+      // start a second one against a library the first hasn't finished writing.
+      await app.page.getByRole('button', { name: 'Data', exact: true }).click();
+      await expect(chooseFile).toHaveCount(0);
+      await importData.click();
+      await expect(refreshing).toBeVisible();
+      await expect(chooseFile).toBeDisabled();
+
+      release();
+      await app.page.unroute(api);
+      await expect(app.page.getByText(/^Imported 3 links\./)).toBeVisible({ timeout: 60_000 });
+
+      await app.page.goto('/links');
+      await expect(app.page.getByText(fixture.firstTitle, { exact: true })).toHaveCount(1);
     },
   );
 });

@@ -349,6 +349,8 @@ surface, orchestration, progress/receipt, visible result, and later sync.
 - [x] `DATA-IMPORT-WEB-002` Import one representative interop file and exercise the
       user-visible quota choice/cancel path. Parser-format matrices stay in unit
       tests.
+- [x] `DATA-IMPORT-WEB-003` Leave the import view mid-run and reopen it: the run is
+      still shown through to its receipt, and no second run can start.
 - [x] `DATA-IMPORT-NATIVE-001` Import the small archive through the iOS document
       picker, assert the receipt and visible result, then cold-start.
 - [x] `DATA-IMPORT-NATIVE-002` Repeat the system-picker boundary on Android.

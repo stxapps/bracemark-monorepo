@@ -59,7 +59,7 @@ import {
 import { decodeUtf8 } from '../lib/utf8';
 import { yieldToMain } from '../lib/yield-to-main';
 import { runIncrementalSync, type SyncDeps } from '../sync/engine';
-import { bulkGetItems, namespaceRows } from './item-store';
+import { bulkGetItems, namespaceUrlKeys } from './item-store';
 import { holdLiveReads } from './live-read-invalidation';
 import { bulkWriteEntities, type RawEntityEntry } from './mutations';
 import { readLists, readPins, readTags } from './queries';
@@ -101,18 +101,18 @@ interface ExistingLinks {
   count: number;
   ids: Set<string>;
   // canonicalUrlKey per link (falling back to the exact stored URL when the key
-  // can't be derived), off the projected columns, no blob decode.
+  // can't be derived), off the projected columns — no blob is even read.
   urlKeys: Set<string>;
 }
 
 function readExistingLinks(): ExistingLinks {
-  const records = namespaceRows(LINKS_PREFIX);
+  const records = namespaceUrlKeys(LINKS_PREFIX);
   const ids = new Set<string>();
   const urlKeys = new Set<string>();
   for (const record of records) {
     ids.add(idFromPath(record.path, LINKS_PREFIX));
     const key = record.itemUrlKey ?? record.itemUrl;
-    if (key !== null && key !== undefined) urlKeys.add(key);
+    if (key !== null) urlKeys.add(key);
   }
   return { count: records.length, ids, urlKeys };
 }
