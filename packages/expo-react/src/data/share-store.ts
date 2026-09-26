@@ -334,7 +334,12 @@ export type ShareSaveResult =
 // current as of the last time the app was open. What it can lag is a RUN of
 // shares taken without reopening the app: those are gated on the count as of
 // the first one, and the drain + refresh on next foreground re-syncs it.
-export function isAtLinkCap(): boolean {
+//
+// Both sources are the read edge's indexed COUNT (queries.ts `countLinks`), never
+// a row read: `namespaceRows` here pulled every link's blob across to JS just to
+// take `.length`, which on a large library kept over its cap (a lapsed paid plan)
+// made every Add wait on a whole-library read.
+export async function isAtLinkCap(): Promise<boolean> {
   if (Platform.OS === 'ios') {
     const group = appGroupDir();
     if (!group) return false;
@@ -348,7 +353,7 @@ export function isAtLinkCap(): boolean {
   if (!status) return false;
   const { maxLinks } = entitlementsOf(status.plan);
   if (maxLinks === null) return false;
-  return itemStore().namespaceRows(LINKS_PREFIX).length >= maxLinks;
+  return (await queries().countLinks()) >= maxLinks;
 }
 
 // One Add. The sheet checks `sessionPresent` before offering the form, so a
@@ -364,7 +369,7 @@ export async function saveSharedDraft(draft: ShareDraft, api: ApiClient): Promis
     // Before the outbox write, not after: a draft refused at the cap must not
     // become a file, because everything downstream of that file is designed to
     // never drop it (the drain applies it locally, the upload retries it).
-    if (isAtLinkCap()) return 'quota';
+    if (await isAtLinkCap()) return 'quota';
     const group = appGroupDir();
     if (!group) throw new Error('saveSharedDraft: no App Group container');
     const dir = outboxDir(group);
@@ -379,7 +384,7 @@ export async function saveSharedDraft(draft: ShareDraft, api: ApiClient): Promis
   }
   const session = getSession();
   if (!session) throw new Error('saveSharedDraft: no session');
-  if (isAtLinkCap()) return 'quota';
+  if (await isAtLinkCap()) return 'quota';
   await applyShareDraft(session.username, draft);
   // Inline sync kick: the pending op usually lands server-side while the share
   // activity's process is still alive (one entity, sub-second). Un-awaited JS

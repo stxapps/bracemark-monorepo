@@ -23,7 +23,7 @@ import {
   TRASH_ID,
 } from '@stxapps/shared';
 
-import { namespaceRows } from './item-store';
+import { countLinks } from './queries';
 import {
   buildShareLists,
   buildShareTags,
@@ -167,14 +167,12 @@ jest.mock('./session-store', () => ({
 jest.mock('./queries', () => ({
   readLists: jest.fn(async () => []),
   readTags: jest.fn(async () => []),
-  // readTaxonomyFromDb carries this onto the snapshot for the iOS cap gate.
+  // readTaxonomyFromDb carries this onto the snapshot for the iOS cap gate, and
+  // Android's isAtLinkCap counts through it live.
   countLinks: jest.fn(async () => 0),
 }));
 jest.mock('./item-store', () => ({
   getItem: jest.fn(async () => null),
-  // isAtLinkCap counts through this — the same trash-INCLUSIVE namespace read
-  // the server's own count matches.
-  namespaceRows: jest.fn(() => []),
 }));
 jest.mock('./subscription-store', () => ({ readCachedStatus: jest.fn(() => null) }));
 jest.mock('./review-prompt-store', () => ({ countReviewPromptSave: jest.fn() }));
@@ -422,7 +420,7 @@ describe('drainShareOutbox', () => {
 // every case where the answer is unknowable.
 describe('isAtLinkCap', () => {
   const TAXONOMY = 'group/share/taxonomy.json';
-  const rows = namespaceRows as jest.Mock;
+  const count = countLinks as jest.Mock;
   const cached = readCachedStatus as jest.Mock;
 
   const freeStatus = {
@@ -436,7 +434,7 @@ describe('isAtLinkCap', () => {
   beforeEach(() => {
     mockFiles.clear();
     mockDirs.clear();
-    rows.mockReset().mockReturnValue([]);
+    count.mockReset().mockResolvedValue(0);
     cached.mockReset().mockReturnValue(null);
   });
 
@@ -458,40 +456,40 @@ describe('isAtLinkCap', () => {
       );
     }
 
-    it('refuses a free account at its cap', () => {
+    it('refuses a free account at its cap', async () => {
       snapshot({ linkCount: 200, maxLinks: 200 });
-      expect(isAtLinkCap()).toBe(true);
+      expect(await isAtLinkCap()).toBe(true);
     });
 
-    it('allows a free account under its cap', () => {
+    it('allows a free account under its cap', async () => {
       snapshot({ linkCount: 199, maxLinks: 200 });
-      expect(isAtLinkCap()).toBe(false);
+      expect(await isAtLinkCap()).toBe(false);
     });
 
-    it('never refuses a paid account (maxLinks is unlimited)', () => {
+    it('never refuses a paid account (maxLinks is unlimited)', async () => {
       snapshot({ linkCount: 5000, maxLinks: null });
-      expect(isAtLinkCap()).toBe(false);
+      expect(await isAtLinkCap()).toBe(false);
     });
 
-    it('fails OPEN with no snapshot at all', () => {
+    it('fails OPEN with no snapshot at all', async () => {
       // A share taken before the main app has ever written one. Refusing here
       // would break the sheet for an account we know nothing about.
-      expect(isAtLinkCap()).toBe(false);
+      expect(await isAtLinkCap()).toBe(false);
     });
 
-    it('fails OPEN on a snapshot too old to carry the cap fields', () => {
+    it('fails OPEN on a snapshot too old to carry the cap fields', async () => {
       mockDirs.add('group/share');
       mockFiles.set(TAXONOMY, JSON.stringify({ sessionPresent: true, lists: [], tags: [] }));
-      expect(isAtLinkCap()).toBe(false);
+      expect(await isAtLinkCap()).toBe(false);
     });
 
-    it('reads the snapshot, never the store', () => {
+    it('reads the snapshot, never the store', async () => {
       // The whole reason the fields ride on the snapshot: this process must not
       // open sqlite (a shared-container file lock invites the 0xdead10cc kill),
-      // so neither the row scan nor the cached-plan read may be reached.
+      // so neither the count nor the cached-plan read may be reached.
       snapshot({ linkCount: 200, maxLinks: 200 });
-      isAtLinkCap();
-      expect(rows).not.toHaveBeenCalled();
+      await isAtLinkCap();
+      expect(count).not.toHaveBeenCalled();
       expect(cached).not.toHaveBeenCalled();
     });
   });
@@ -512,22 +510,22 @@ describe('isAtLinkCap', () => {
     });
 
     function atCount(n: number) {
-      rows.mockReturnValue(Array.from({ length: n }, (_, i) => ({ path: `links/${i}.enc` })));
+      count.mockResolvedValue(n);
     }
 
-    it('refuses a free account at its cap', () => {
+    it('refuses a free account at its cap', async () => {
       cached.mockReturnValue(freeStatus);
       atCount(200);
-      expect(isAtLinkCap()).toBe(true);
+      expect(await isAtLinkCap()).toBe(true);
     });
 
-    it('allows a free account under its cap', () => {
+    it('allows a free account under its cap', async () => {
       cached.mockReturnValue(freeStatus);
       atCount(199);
-      expect(isAtLinkCap()).toBe(false);
+      expect(await isAtLinkCap()).toBe(false);
     });
 
-    it('never refuses a paid account (maxLinks is unlimited)', () => {
+    it('never refuses a paid account (maxLinks is unlimited)', async () => {
       cached.mockReturnValue({
         plan: 'plus',
         status: 'active',
@@ -536,15 +534,15 @@ describe('isAtLinkCap', () => {
         willRenew: true,
       });
       atCount(5000);
-      expect(isAtLinkCap()).toBe(false);
+      expect(await isAtLinkCap()).toBe(false);
     });
 
-    it('fails OPEN with no cached status, rather than assuming free', () => {
+    it('fails OPEN with no cached status, rather than assuming free', async () => {
       // A fresh install that has not fetched `iap/status` yet. Guessing 'free'
       // here would tell a PAYING customer their library is full.
       cached.mockReturnValue(null);
       atCount(5000);
-      expect(isAtLinkCap()).toBe(false);
+      expect(await isAtLinkCap()).toBe(false);
     });
   });
 });
