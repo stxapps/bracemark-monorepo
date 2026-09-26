@@ -123,7 +123,9 @@ The zip **container library** differs, and not by preference:
   Access API (`showSaveFilePicker`, claimed before the long phases while the
   click's user activation is alive), so an archive larger than memory never
   materializes as one Blob, and zip64 engages automatically.
-- **expo** — `fflate`'s `zipSync`/`unzipSync`. zip.js is not portable to
+- **expo** — `fflate`: its synchronous streaming `Zip` to write, fed a piece
+  at a time with a yield between pieces (see _readings — expo_), and
+  `unzipSync` to read. zip.js is not portable to
   Hermes: its codec pipeline is built on `CompressionStream`/
   `DecompressionStream`, `TransformStream`/`ReadableStream`/`WritableStream`, a
   WASM module, and Web Workers — **none of which exist on React Native**. This
@@ -143,7 +145,7 @@ Both ceilings sit **inside what the paid plans sell** (`maxFiles` 1 000 000,
 `maxBytes` 5 GiB on Plus / 20 GiB on Pro — `@stxapps/shared` `iap/plans.ts`),
 so this is reachable rather than theoretical. `expo-react`
 `data/export-all-data.ts` therefore asserts them (`assertZipWritable`, before
-`zipSync` touches anything) and fails with a user-facing `ExportTooLargeError`
+anything is deflated) and fails with a user-facing `ExportTooLargeError`
 pointing at the web app. **Refusing to write a backup is always better than
 writing one that quietly drops half the library.** The guard is exported for its
 spec and driven there directly, on both sides of each boundary: crossing either
@@ -928,9 +930,142 @@ a loop, so chunking can't reach it:
   `items.jsonl` passed as one string (`TextReader`). The fix is to hand it the
   lines in pieces.
 
-Neither of the last two has been changed, and expo's orchestrators are
-untouched and unmeasured. They still call the synchronous projection and loop
-without yielding; `measure:data` has no expo leg.
+Neither of the last two has been changed.
+
+#### readings — expo
+
+**2026-09-25** — the iPhone 17 simulator (iOS 26.5) on the same M1, measured
+with `npm run measure:native` ([e2e.md](./e2e.md), _measuring the data path_).
+The JS is a production bundle (`--no-dev --minify`, Hermes) on the development
+client, against the local stack. Checkout `88721c3` plus uncommitted work.
+The instrument is expo-react's stall probe (a 16 ms timer's lateness), not the
+browser's `longtask`. Longest single JS-thread stall per leg:
+
+| leg                   | 300 links | 1,000 links | 10,000 links |
+| --------------------- | --------- | ----------- | ------------ |
+| import HTML bookmarks | 1,177 ms  | 3,809 ms    | 63,946 ms    |
+| import backup         | 1,963 ms  | 6,526 ms    | 80,439 ms    |
+| export HTML bookmarks | 108 ms    | 357 ms      | 3,948 ms     |
+| export CSV            | 114 ms    | 367 ms      | 3,797 ms     |
+| export plain text     | 98 ms     | 355 ms      | 3,637 ms     |
+| export backup         | 225 ms    | 648 ms      | 6,684 ms     |
+
+**A simulator is not a phone, and here that makes these a lower bound.** The
+simulator runs at the Mac's speed with no CPU throttle, so a mid-range phone
+freezes for longer than this. The probe's calibration (1.5e7 iterations of a
+fixed loop) read 771–782 ms on this Hermes. Web's calibration runs ten times
+the iterations in 127–131 ms on V8, so Hermes ran that tight loop about 60×
+slower. Real code narrows that gap, because a loop like this is where a JIT
+helps most, but the calibration is the number to compare devices by.
+
+**The run never yields, and that is the finding.** In every leg the one stall
+is nearly the whole run: the 10,000-link HTML import took 64.4 s, and 63.9 s of
+that was a single stall. The rest was the opening network refresh. So the
+progress line never repaints and a tap is not answered until the run is over.
+The stalls scale linearly (1.2 s → 3.8 s → 64 s for the HTML import), which
+points at per-entity work, not a fixed cost.
+
+**What owned it, profiled.** A Hermes CPU profile of the 1,000-link restore
+and CSV export, taken through Metro's inspector ([e2e.md](./e2e.md), _finding
+what owns a native stall_), and a Hermes CLI benchmark of the parser, found
+five owners:
+
+- **Nothing yielded.** The store calls are `async` in signature and
+  synchronous inside (expo-sqlite through drizzle's sync driver), so every
+  `await` between them resumed as a microtask in the same task. The
+  `WRITE_CHUNK` loop, and every other loop, ran as one block. This is why the
+  stall was the whole run.
+- **drizzle's per-statement cost on the write edge.** `bulkWriteEntities`
+  issued a select, an upsert, two junction deletes and a queue upsert per
+  entity. It took 6.0 s of the restore's 6.4 s stall: about 3.5 s was drizzle
+  building each statement in JS (`sqlToQuery` alone 1.9 s), and 1.1 s was
+  `prepareSync` plus statement construction, because drizzle's expo driver
+  prepares every one-shot query afresh. SQLite actually executing took 1.0 s.
+- **Expo's `TextDecoder`.** Hermes has none, and the one Expo's winter runtime
+  installs is a pure-JS polyfill. `bytesToUtf8` was 235 ms of the export's
+  279 ms of `parseBlob`; the JSON parse and zod check were the rest.
+- **The Netscape parser was quadratic on Hermes**, which the profile could not
+  show at 1,000 links and the 10,000-link HTML import (31 s in one stall, in a
+  run with the three fixes above) did. The Hermes CLI, timing the parser at
+  1,000/2,000/4,000 links, read 336/1,247/4,601 ms. The owner was the token
+  regex's lazy `[\s\S]*?` captures. On Hermes a lazy loop over a character class
+  costs time proportional to the rest of the input on every match; `.*?` under
+  the `s` flag matches the same characters and is linear (4,000 links: 3,553 ms
+  against 3 ms), and V8 runs both alike.
+- **`zipSync`** held the backup export for ~0.3 s per 1,000 links in one call.
+  `unzipSync` on the restore was small.
+
+**What changed.** Not `expo-sqlite`'s async API, last reading's structural
+candidate: SQLite executing was 1.0 s of the write edge's 6.0 s, and moving it
+off the thread would have left drizzle building every statement on it. The
+batching below removes most of both.
+
+- **The write edge is set-at-a-time.** item-store's `putItemsTx` sends one
+  multi-row upsert per `rowsPerStatement(items)` records, pending-store's
+  enqueue does the same (`enqueuePutsTx`), and `bulkWriteEntities` reads every
+  base stamp in one `itemUpdatedAtsTx`. The `excluded.*` SET clause comes from
+  the table's own columns (`upsertExcludedSet`, db.ts), so it keeps `put`'s
+  full-replace semantics. A path repeated within one call ends as its last
+  entry, as the per-entity loop left it. `mutations.spec.ts` pins that
+  contract. The same restore's write time fell from 6.0 s to 1.2 s.
+- **Real yields.** expo-react `lib/yield-to-main.ts` is a `setTimeout(0)`
+  macrotask, awaited where web awaits its own (the dedupe, the classify pass,
+  the skip-existing lookup, the projection through
+  `projectImportedLinksInChunks`, the gather's two passes) and also before
+  every write chunk and blob, where web's IndexedDB awaits yield by themselves.
+- **`decodeUtf8`** (expo-react `lib/utf8.ts`) decodes stored blobs and import
+  files with `TextDecoder`'s exact output: its spec holds it to Node's decoder,
+  malformed input included. [expo-dependencies.md](./expo-dependencies.md),
+  _runtime polyfills_, has why the global is left alone.
+- **The Netscape token regex is `.*?` under `s`**, with a ⚠ note in
+  `import/netscape.ts`, since nothing on web would notice a revert.
+- **The backup zip streams.** fflate's synchronous streaming `Zip` deflates
+  `items.jsonl` 256 KiB at a time with a yield between pieces, and each blob
+  gets its own turn. zip.js reads the result (data descriptors and all), and
+  `assertZipWritable` counts the 16-byte descriptor per entry.
+
+**2026-09-26, after** — same simulator, Mac and production bundle, from `88721c3`
+plus uncommitted work; calibration 767–776 ms. Longest single JS-thread stall
+per leg:
+
+| leg                   | 300 links | 1,000 links | 10,000 links |
+| --------------------- | --------- | ----------- | ------------ |
+| import HTML bookmarks | 130 ms    | 380 ms      | 1,243 ms     |
+| import backup         | 389 ms    | 387 ms      | 648 ms       |
+| export HTML bookmarks | < 50 ms   | 54 ms       | 329 ms       |
+| export CSV            | < 50 ms   | 58 ms       | 376 ms       |
+| export plain text     | < 50 ms   | < 50 ms     | 320 ms       |
+| export backup         | 79 ms     | 163 ms      | 318 ms       |
+
+The run now yields throughout. The 10,000-link restore went from one 80 s
+stall to 102 stalls of at most 648 ms over a 34 s run, and the HTML import from
+64 s to 18.7 s of wall time. The largest stall is at most 1.2 s at every size.
+The restore's stalls barely grow with the file (387 → 648 ms), because each one
+is a write chunk plus the live reads it triggers. Every commit re-runs the
+mounted `useLiveRead`s (lists, tags, settings, the links screen under Settings)
+and React re-renders, which before the fix happened only once, at the end.
+
+What is still above the ~200 ms band, and why nothing more changed here:
+
+- **HTML import at 10,000 links (1,243 ms):** the one `parseImportText` call
+  over the whole file, now linear (~0.8 s at this size by the Hermes CLI), plus
+  the decode around it. This is the table's worker row, and expo has no Web
+  Worker. The candidates are a second JS runtime (`react-native-worklets`) for
+  the pure parse, or a parser that pauses between tokens the way the
+  projection does. Neither is done.
+- **Restore (389–648 ms):** a write chunk and its live-read re-run. Smaller
+  chunks shrink the first half and multiply the second. What would help is
+  suspending live reads for the duration of a bulk write.
+- **Exports at 10,000 links (318–376 ms):** not profiled at this size. By
+  analogy with web's reading, the likely owner is the single `namespaceRows`
+  read of the whole `links/` namespace, which materializes every row in one
+  native call. The fix would be keyed pages.
+
+Outside the windows the probe measures, the sync push that follows an import
+has the same drizzle cost: `clearDrainedOps` and `stampItemUpdatedAts` issue a
+statement per path, about 0.6 s per 1,000-path commit in the profile. It belongs
+to the engine ([local-first-sync.md](./local-first-sync.md)) and is not changed
+here.
 
 The bookmark converter on the marketing site is a **separate decision**, already
 made. Its whole job is one synchronous call (up to `BOOKMARK_CONVERTER_MAX_ROWS`

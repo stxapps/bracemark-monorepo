@@ -372,6 +372,9 @@ export function SettingsBackLink({
   return (
     <Pressable
       role="button"
+      // Its label repeats the section title right above it ("Data" twice on
+      // screen), so a flow binds to the id rather than the text.
+      testID="settings-back"
       onPress={onPress}
       className={cn('-ml-1 flex-row items-center gap-1 self-start rounded-sm', className)}
     >

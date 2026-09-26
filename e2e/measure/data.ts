@@ -16,6 +16,7 @@ import { launchApp, type LaunchedApp } from '../web/fixtures/launch';
 import { grantPlusAndLoad } from '../web/fixtures/plan';
 import { writeBackupLibrary, writeBookmarksHtml } from './library';
 import {
+  band,
   calibrate,
   type Calibration,
   instrument,
@@ -322,14 +323,6 @@ async function exportLeg(
 }
 
 // --- the report ---------------------------------------------------------------------
-
-// The bands docs/data-lifecycle.md decides by. Printed beside each leg so a
-// reading does not need the doc open, but the doc is where they are argued.
-function band(longestTaskMs: number): string {
-  if (longestTaskMs < 200) return 'under 200 ms';
-  if (longestTaskMs < 1000) return '200 ms – 1 s';
-  return 'over 1 s';
-}
 
 function report(results: LegResult[]): void {
   const rows = results.map((result) => [

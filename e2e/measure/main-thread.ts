@@ -287,6 +287,15 @@ export async function calibrate(page: Page, cpuRate: number): Promise<Calibratio
   return { cpuRate, baseMs: base.longestTaskMs, slowedMs: slowed.longestTaskMs };
 }
 
+// The bands docs/data-lifecycle.md decides by, shared by the web and native
+// runners. Printed beside each leg so a reading does not need the doc open, but
+// the doc is where they are argued.
+export function band(longestMs: number): string {
+  if (longestMs < 200) return 'under 200 ms';
+  if (longestMs < 1000) return '200 ms – 1 s';
+  return 'over 1 s';
+}
+
 function describeScript(script: FrameScript): string {
   const where = script.url ? `${basename(script.url)}:${script.char}` : 'inline';
   const fn = script.fn || '(anonymous)';

@@ -405,6 +405,12 @@ Current public vars:
   origin: the pages a native app links out to (support, terms, privacy) live on
   the marketing site. (This var was `EXPO_PUBLIC_WEB_URL` and pointed at
   `app.*`, which was wrong — bracemark-web has no `/support` route.)
+- `EXPO_PUBLIC_MEASURE_STALLS` → `1` turns on expo-react's JS-thread stall
+  probe (`lib/stall-probe.ts`, started in `src/app/_layout.tsx`) and its
+  `measure-stall-reading` readout in the Data view. **It is in no env file, on
+  purpose.** Only `npm run measure:native` sets it, in the environment of the
+  Metro it starts, so a shipped build compiles the check to nothing
+  ([e2e.md](./e2e.md), _the native leg_).
 
 **A physical iPhone is the one target `localhost` cannot serve, and the
 `.env.local` switch is where that is fixed.** Both default URLs are `localhost`

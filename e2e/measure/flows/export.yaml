@@ -1,0 +1,56 @@
+# One export leg of `npm run measure:native`: from the Data overview, export in
+# FORMAT_LABEL's format and stop on the stall probe's reading. Runs in the same
+# app session as the restore before it — no cold launch — so the library is the
+# one that just synced.
+#
+# The share sheet this platform presents when a run finishes (data-section.tsx,
+# ExportView) is dismissed rather than used: the measured work is the run, and
+# the sheet only opens after it.
+#
+# Parameters: FORMAT_LABEL (the radio's label — 'HTML bookmarks', 'CSV',
+# 'Plain text', 'Bracemark backup').
+appId: com.bracemark.app
+---
+- tapOn:
+    id: 'export-data-open'
+# A prefix match: the radio row folds its label and hint into one accessible
+# name ("HTML bookmarks, For web browsers…"), so the label alone is no node.
+- tapOn: '${FORMAT_LABEL}.*'
+- tapOn:
+    id: 'export-data-submit'
+# The run's end and the share sheet race: the view presents the sheet the
+# moment the run is done, and on iOS it covers the receipt this waits for. So
+# it is a poll, like the AutoFill sheet in sign-in.yaml: until the receipt is
+# visible, dismiss a sheet if one is up (dismiss-share-sheet.yaml). The optional lookup paces each pass; 360
+# passes of a few seconds each cover the longest run this measures.
+- repeat:
+    times: 360
+    while:
+      notVisible:
+        id: 'export-data-complete'
+    commands:
+      - runFlow:
+          file: dismiss-share-sheet.yaml
+      - runFlow:
+          when:
+            platform: Android
+            visible: 'Share'
+          commands:
+            - back
+      - assertVisible:
+          id: 'export-data-complete'
+          optional: true
+- assertVisible:
+    id: 'export-data-complete'
+# A sheet that arrived after the receipt did.
+- runFlow:
+    file: dismiss-share-sheet.yaml
+
+- scrollUntilVisible:
+    element:
+      id: 'measure-stall-reading'
+- extendedWaitUntil:
+    visible:
+      id: 'measure-stall-reading'
+      text: '.*"label":"export".*'
+    timeout: 10000

@@ -14,7 +14,7 @@ import { and, count, eq, inArray } from 'drizzle-orm';
 import { newId } from '@stxapps/expo-crypto/lib/ids';
 import { chunk } from '@stxapps/shared';
 
-import { type DbTx, getDb, pendingOps } from './db';
+import { type DbTx, getDb, pendingOps, rowsPerStatement, upsertExcludedSet } from './db';
 
 // Same shape as web-react's PendingOpRecord (every column NOT NULL, so the
 // drizzle-inferred row already matches it exactly).
@@ -37,11 +37,22 @@ const IN_BATCH = 500;
 // NO non-tx enqueue: every enqueue is paired with a local-store put in ONE
 // transaction (mutations.ts), so a bare getDb() insert would silently write the
 // queue outside that atomicity.
-function enqueue(tx: DbTx, record: PendingOpRecord): void {
-  tx.insert(pendingOps)
-    .values(record)
-    .onConflictDoUpdate({ target: [pendingOps.username, pendingOps.path], set: record })
-    .run();
+//
+// Takes a batch — one multi-row upsert per `rowsPerStatement(pendingOps)` ops,
+// for the same reason as item-store's putItemsTx (a statement per op was most of
+// a restore's JS-thread time). A path repeated within the batch keeps its LAST
+// op, as the same enqueues made one at a time would.
+function enqueue(tx: DbTx, input: PendingOpRecord[]): void {
+  const records = [...new Map(input.map((r) => [r.path, r])).values()];
+  for (const batch of chunk(records, rowsPerStatement(pendingOps))) {
+    tx.insert(pendingOps)
+      .values(batch)
+      .onConflictDoUpdate({
+        target: [pendingOps.username, pendingOps.path],
+        set: upsertExcludedSet(pendingOps, [pendingOps.username, pendingOps.path]),
+      })
+      .run();
+  }
 }
 
 // Queue a create/edit for `path`, in the caller's transaction — for the write
@@ -56,7 +67,27 @@ export function enqueuePutTx(
   path: string,
   baseUpdatedAt: number,
 ): void {
-  enqueue(tx, { username, path, op: 'put', baseUpdatedAt, writeId: newId() });
+  enqueue(tx, [{ username, path, op: 'put', baseUpdatedAt, writeId: newId() }]);
+}
+
+// enqueuePutTx for many paths at once — the bulk write edge's form
+// (mutations.ts bulkWriteEntities), same contract per op, each under its own
+// fresh `writeId`.
+export function enqueuePutsTx(
+  tx: DbTx,
+  username: string,
+  puts: { path: string; baseUpdatedAt: number }[],
+): void {
+  enqueue(
+    tx,
+    puts.map(({ path, baseUpdatedAt }) => ({
+      username,
+      path,
+      op: 'put',
+      baseUpdatedAt,
+      writeId: newId(),
+    })),
+  );
 }
 
 // Queue a delete for `path`, in the caller's transaction — the delete-edge
@@ -70,7 +101,7 @@ export function enqueueDeleteTx(
   path: string,
   baseUpdatedAt: number,
 ): void {
-  enqueue(tx, { username, path, op: 'delete', baseUpdatedAt, writeId: newId() });
+  enqueue(tx, [{ username, path, op: 'delete', baseUpdatedAt, writeId: newId() }]);
 }
 
 // The full queue for an account, in no particular order — the engine imposes its

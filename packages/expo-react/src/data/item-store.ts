@@ -16,7 +16,16 @@ import { and, eq, gte, inArray, lt } from 'drizzle-orm';
 
 import { chunk } from '@stxapps/shared';
 
-import { type DbTx, getDb, itemFacetStatuses, items, itemTagIds, prefixEnd } from './db';
+import {
+  type DbTx,
+  getDb,
+  itemFacetStatuses,
+  items,
+  itemTagIds,
+  prefixEnd,
+  rowsPerStatement,
+  upsertExcludedSet,
+} from './db';
 // The queue's owner answers "is this path queued?" — this store composes that read
 // into its own guarded writes (putItemsUnqueued / deleteItemsUnqueued) rather than
 // querying `pending_ops` itself. One direction only; pending-store never imports back.
@@ -65,6 +74,25 @@ export async function bulkGetItems(paths: string[]): Promise<(ItemRow | undefine
   return paths.map((p) => byPath.get(p));
 }
 
+// The stored server stamp (`updatedAt`) of each of `paths` that has a row, in
+// the caller's transaction — the write edge's `baseUpdatedAt` read for a whole
+// batch in `IN_BATCH`-sized statements, rather than a select per path
+// (mutations.ts bulkWriteEntities). Only the two columns, so no `data` blob is
+// read off the page. Tx-taking for the reason pending-store's queuedPathsTx is:
+// the answer is only sound inside the transaction that writes on it.
+export function itemUpdatedAtsTx(tx: DbTx, paths: string[]): Map<string, number> {
+  const stamps = new Map<string, number>();
+  for (const batch of chunk(paths, IN_BATCH)) {
+    const rows = tx
+      .select({ path: items.path, updatedAt: items.updatedAt })
+      .from(items)
+      .where(inArray(items.path, batch))
+      .all();
+    for (const row of rows) stamps.set(row.path, row.updatedAt);
+  }
+  return stamps;
+}
+
 // The third key shape, after one path and many: every row under one namespace
 // PREFIX, as the half-open primary-key range `[prefix, prefixEnd(prefix))` — an
 // index range scan (the explicit form of Dexie's `startsWith`; a LIKE prefix
@@ -90,10 +118,21 @@ export function namespaceRows(prefix: string): ItemRow[] {
 // its pending op atomically) and putItemsUnqueued below. The invariant is unchanged:
 // junctions are written with their `items` row, replace-then-insert, from the same
 // projected record.
-export function putItemsTx(tx: DbTx, records: ItemRecord[]): void {
-  for (const record of records) {
-    const row = toRow(record);
-    tx.insert(items).values(row).onConflictDoUpdate({ target: items.path, set: row }).run();
+//
+// Batched: one multi-row upsert per `rowsPerStatement(items)` records, never a
+// statement per record. On the expo driver every statement is built in JS and
+// prepared natively from scratch, and at one per record that was most of a
+// restore's JS-thread time (docs/data-lifecycle.md, _readings — expo_). A path
+// repeated within `records` keeps its LAST record, which is what the same puts
+// made one at a time would leave — and keeps the junction inserts below from
+// meeting their own primary key twice.
+export function putItemsTx(tx: DbTx, input: ItemRecord[]): void {
+  const records = [...new Map(input.map((r) => [r.path, r])).values()];
+  for (const batch of chunk(records, rowsPerStatement(items))) {
+    tx.insert(items)
+      .values(batch.map(toRow))
+      .onConflictDoUpdate({ target: items.path, set: upsertExcludedSet(items, [items.path]) })
+      .run();
   }
   for (const paths of chunk(
     records.map((r) => r.path),

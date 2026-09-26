@@ -16,6 +16,7 @@ import {
   type ExportProgress,
 } from '../data/export-all-data';
 import { getSession } from '../data/session-store';
+import { beginStallWindow, endStallWindow } from '../lib/stall-probe';
 import type { SyncDeps } from '../sync/engine';
 
 export type ExportState =
@@ -51,6 +52,8 @@ export function useExportAllData(): UseExportAllDataResult {
       const deps: SyncDeps = { username, encryptionKey: session.encryptionKey, api };
 
       runningRef.current = true;
+      // No-ops unless a measurement build started the probe (lib/stall-probe.ts).
+      beginStallWindow('export');
       setState({ phase: 'running', step: 'sync' });
       void exportAllData({
         format,
@@ -67,6 +70,7 @@ export function useExportAllData(): UseExportAllDataResult {
             }),
         )
         .finally(() => {
+          endStallWindow();
           runningRef.current = false;
         });
     },

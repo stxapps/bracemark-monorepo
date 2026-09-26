@@ -238,6 +238,15 @@ npm run measure:data -- --links 10000,50000 --cpu 6
 npm run measure:data -- --trace                     # + a DevTools trace per leg
 ```
 
+The native leg (`e2e/measure/native.ts`) measures bracemark-expo through Maestro
+on a booted simulator or emulator, with a production bundle it serves from its
+own Metro (so :8081 must be free):
+
+```sh
+npm run measure:native -- --platform ios --device <udid>
+npm run measure:native -- --platform android --device <serial> --links 1000,10000
+```
+
 ## what a spec may depend on
 
 **No spec depends on a seeded account, and none should.** Every web spec creates

@@ -51,8 +51,17 @@
 // with the items snapshot) holds for the same reason web keeps both stores in
 // one Dexie database: one database, one transaction.
 
+import { getTableColumns, type SQL, sql } from 'drizzle-orm';
 import { drizzle, type ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
-import { customType, integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import {
+  customType,
+  integer,
+  primaryKey,
+  type SQLiteColumn,
+  type SQLiteTable,
+  sqliteTable,
+  text,
+} from 'drizzle-orm/sqlite-core';
 import { openDatabaseSync } from 'expo-sqlite';
 
 import type { LinksLayout, ThemeState } from '@stxapps/shared';
@@ -344,6 +353,35 @@ const schema = {
 // DDL that declares the primary key it describes.
 export function prefixEnd(prefix: string): string {
   return prefix.slice(0, -1) + String.fromCharCode(prefix.charCodeAt(prefix.length - 1) + 1);
+}
+
+// The SET clause of a MULTI-ROW upsert: every non-key column takes the
+// incoming row's value (`excluded.<column>`), which is the full-replace
+// semantics of Dexie's `put` that a single-row `set: row` gave. A multi-row
+// statement can't name one row's values, so this is how the bulk writers
+// (item-store's putItemsTx, pending-store's enqueueTx) keep that semantics
+// while sending one statement per batch rather than one per row — drizzle's
+// per-statement cost was most of a restore's JS-thread time
+// (docs/data-lifecycle.md, _readings — expo_). Derived from the table's own
+// columns, so a column added to the schema joins the upsert with no edit here.
+export function upsertExcludedSet<T extends SQLiteTable>(
+  table: T,
+  keyColumns: readonly SQLiteColumn[],
+): Record<string, SQL> {
+  const keys = new Set(keyColumns.map((column) => column.name));
+  const set: Record<string, SQL> = {};
+  for (const [field, column] of Object.entries(getTableColumns(table))) {
+    if (!keys.has(column.name)) set[field] = sql.raw(`excluded.${column.name}`);
+  }
+  return set;
+}
+
+// How many rows fit one multi-row statement for a table this wide, keeping its
+// bound variables under the same budget the stores' `IN (...)` batches keep
+// (`MAX_BOUND_PARAMS`), far below sqlite's ceiling.
+export const MAX_BOUND_PARAMS = 500;
+export function rowsPerStatement(table: SQLiteTable): number {
+  return Math.max(1, Math.floor(MAX_BOUND_PARAMS / Object.keys(getTableColumns(table)).length));
 }
 
 // Exported for the read edge's change subscription (hooks/use-live-read.ts):

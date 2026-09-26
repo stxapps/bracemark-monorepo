@@ -10,8 +10,9 @@
 //    instead of Dexie; `files/` blob bytes come off DISK (file-store — on this
 //    platform content lives decrypted on disk, not in the row), materialized
 //    for the backup by the engine's loadEntityContents.
-//  - Zip assembly is fflate's zipSync (pure JS, no Web Streams — zip.js needs
-//    a ReadableStream Hermes doesn't have). In-memory by construction, and
+//  - Zip assembly is fflate's synchronous streaming `Zip`, fed in pieces with
+//    yields between them (pure JS, no Web Streams — zip.js needs a
+//    ReadableStream Hermes doesn't have). In-memory by construction, and
 //    fflate writes classic zip32 ONLY, so this path carries two hard ceilings
 //    web's zip.js doesn't have — 65,535 entries and 4 GiB. Neither is checked
 //    by fflate, so both are enforced in assertZipWritable below rather than
@@ -71,6 +72,7 @@ import {
   utf8,
 } from '@stxapps/shared';
 
+import { yieldToMain } from '../lib/yield-to-main';
 import { loadEntityContents, runIncrementalSync, type SyncDeps } from '../sync/engine';
 import { dataFileFor } from './file-store';
 import { bulkGetItems, getItem, namespaceRows } from './item-store';
@@ -115,7 +117,8 @@ export interface ExportOutcome {
 
 // fflate emits a classic end-of-central-directory record and no zip64: the
 // entry count is 16 bits, the sizes/offsets 32. NEITHER is range-checked on the
-// write path — `zipSync` takes 70 000 entries, writes `70000 & 0xffff` = 4 464
+// write path — its `zipSync` (and the streaming `Zip` used below, which shares
+// the EOCD writer) takes 70 000 entries, writes `70000 & 0xffff` = 4 464
 // into the count field, and hands back an archive that reads back CLEAN with
 // 65 536 files missing. Silent data loss, in the one format that's supposed to
 // round-trip, so the ceilings are asserted here instead.
@@ -128,7 +131,7 @@ const ZIP32_MAX_ENTRIES = 65_535;
 const ZIP32_MAX_BYTES = 0xffff_ffff;
 
 // The library is too large for the zip this platform can write — thrown BEFORE
-// zipSync, so nothing is saved. The message is user-facing (the export view
+// anything is deflated, so nothing is saved. The message is user-facing (the export view
 // renders it verbatim, like ImportQuotaError's).
 export class ExportTooLargeError extends Error {
   readonly reason: 'entries' | 'bytes';
@@ -148,7 +151,8 @@ export class ExportTooLargeError extends Error {
 }
 
 // Refuse an archive zip32 can't represent. `archiveBytes` mirrors fflate's own
-// running total (per entry: 76 + 2×name + payload, plus the 22-byte EOCD) —
+// running total for its streaming `Zip` (per entry: 76 + 2×name + payload, plus
+// the 16-byte data descriptor a streamed entry carries; then the 22-byte EOCD) —
 // using each payload's UNCOMPRESSED length, so the estimate is an upper bound
 // for the deflated entries and exact for the stored (`level: 0`) ones.
 //
@@ -162,7 +166,7 @@ export function assertZipWritable(entries: [string, Uint8Array][]): void {
     throw new ExportTooLargeError('entries', entries.length);
   }
   let archiveBytes = 22;
-  for (const [name, bytes] of entries) archiveBytes += 76 + 2 * name.length + bytes.length;
+  for (const [name, bytes] of entries) archiveBytes += 92 + 2 * name.length + bytes.length;
   if (archiveBytes > ZIP32_MAX_BYTES) throw new ExportTooLargeError('bytes', archiveBytes);
 }
 
@@ -197,7 +201,10 @@ function readRawNamespace<T extends z.ZodTypeAny>(
 
 // Decode the whole `links/` namespace (newest first), join each survivor's
 // extraction, and drop locked-list links. O(library) by nature — the export IS
-// a full read — chunked only so progress ticks.
+// a full read — so both passes go a GATHER_CHUNK at a time with a real yield
+// between chunks, as on web. Without one the chunks only split the progress
+// count: the store reads are synchronous here, so the whole gather ran as one
+// block of the JS thread (docs/data-lifecycle.md, _readings — expo_).
 async function gatherLinks(
   excludedListIds: ReadonlySet<string>,
   onProgress: ProgressFn,
@@ -208,6 +215,7 @@ async function gatherLinks(
 
   const included: { path: string; link: Link }[] = [];
   for (let i = 0; i < records.length; i += GATHER_CHUNK) {
+    await yieldToMain();
     for (const record of records.slice(i, i + GATHER_CHUNK)) {
       const link = parseBlob(record.data ?? undefined, linkSchema);
       if (link === undefined || excludedListIds.has(link.listId)) continue;
@@ -217,15 +225,24 @@ async function gatherLinks(
   }
   included.sort((a, b) => b.link.createdAt - a.link.createdAt);
 
-  // Join the co-keyed extractions (the writer-split shadow of each link).
-  const exRecords = await bulkGetItems(
-    included.map(({ path }) => rekey(path, LINKS_PREFIX, EXTRACTIONS_PREFIX)),
-  );
-  return included.map(({ path, link }, i) => ({
-    path,
-    link,
-    extraction: parseBlob(exRecords[i]?.data ?? undefined, extractionSchema),
-  }));
+  // Join the co-keyed extractions (the writer-split shadow of each link), read
+  // and decoded a chunk at a time for the same reason.
+  const gathered: GatheredLink[] = [];
+  for (let i = 0; i < included.length; i += GATHER_CHUNK) {
+    await yieldToMain();
+    const slice = included.slice(i, i + GATHER_CHUNK);
+    const exRecords = await bulkGetItems(
+      slice.map(({ path }) => rekey(path, LINKS_PREFIX, EXTRACTIONS_PREFIX)),
+    );
+    slice.forEach(({ path, link }, j) => {
+      gathered.push({
+        path,
+        link,
+        extraction: parseBlob(exRecords[j]?.data ?? undefined, extractionSchema),
+      });
+    });
+  }
+  return gathered;
 }
 
 // --- the interop bundle ---------------------------------------------------------
@@ -295,12 +312,23 @@ function referencedFilePaths(links: GatheredLink[]): string[] {
 // as the lazy requires in data/share-store.ts; see jest.expo-base.cjs.
 const fflate = (): typeof import('fflate') => require('fflate');
 
+// `items.jsonl` bytes deflated between two yields while the backup zip streams.
+const ZIP_PIECE = 256 * 1024;
+
 // Assemble the backup zip in memory and write it to the cache file. A blob's
 // bytes come off disk (dataFileFor — materialized by the files phase, or
 // already local); a path that stayed unmaterialized is skipped here (already
 // counted for the outcome). Stored, not deflated (`level: 0`), for the media
 // entries — they're already-compressed formats. Throws ExportTooLargeError if
-// the result wouldn't fit zip32 — before zipSync, so nothing lands on disk.
+// the result wouldn't fit zip32 — before deflating, so nothing lands on disk.
+//
+// Streamed through fflate's `Zip`, not `zipSync`: `items.jsonl` is deflated
+// ZIP_PIECE bytes at a time with a real yield between pieces, and each blob
+// entry gets its own turn. zipSync deflated the whole library in one call —
+// ~300 ms of the JS thread per 1,000 links on the simulator, all of the backup
+// export's remaining stall once the gather yielded (docs/data-lifecycle.md,
+// _readings — expo_). The stream is still synchronous inside each push; the
+// pieces are what bound it.
 async function assembleBracemarkZip(
   outFile: File,
   links: GatheredLink[],
@@ -309,7 +337,7 @@ async function assembleBracemarkZip(
   pins: { path: string; entity: Pin }[],
   filePaths: string[],
 ): Promise<{ fileCount: number }> {
-  const { zipSync } = fflate();
+  const { Zip, ZipDeflate, ZipPassThrough } = fflate();
 
   const lines: string[] = [];
   for (const { path, entity } of lists) lines.push(jsonlLine(path, entity));
@@ -354,14 +382,37 @@ async function assembleBracemarkZip(
     ...fileEntries,
   ]);
 
-  const zipped = zipSync({
-    [BACKUP_MANIFEST_ENTRY]: manifestBytes,
-    [BACKUP_ITEMS_ENTRY]: itemsBytes,
-    ...Object.fromEntries(
-      fileEntries.map(([name, bytes]) => [name, [bytes, { level: 0 }] as const]),
-    ),
+  // The stream hands its output back synchronously, inside each push; an error
+  // is thrown from the push itself (fflate's sync streams), so there is no
+  // separate failure path to watch.
+  const out: Uint8Array[] = [];
+  const zip = new Zip((error, chunk) => {
+    if (error) throw error;
+    out.push(chunk);
   });
+  const manifest = new ZipDeflate(BACKUP_MANIFEST_ENTRY);
+  zip.add(manifest);
+  manifest.push(manifestBytes, true);
+  const itemsEntry = new ZipDeflate(BACKUP_ITEMS_ENTRY);
+  zip.add(itemsEntry);
+  for (let i = 0; i === 0 || i < itemsBytes.length; i += ZIP_PIECE) {
+    await yieldToMain();
+    itemsEntry.push(itemsBytes.subarray(i, i + ZIP_PIECE), i + ZIP_PIECE >= itemsBytes.length);
+  }
+  for (const [name, bytes] of fileEntries) {
+    await yieldToMain();
+    const entry = new ZipPassThrough(name);
+    zip.add(entry);
+    entry.push(bytes, true);
+  }
+  zip.end();
 
+  const zipped = new Uint8Array(out.reduce((sum, chunk) => sum + chunk.length, 0));
+  let offset = 0;
+  for (const chunk of out) {
+    zipped.set(chunk, offset);
+    offset += chunk.length;
+  }
   writeCacheFile(outFile, zipped);
   return { fileCount: fileEntries.length };
 }

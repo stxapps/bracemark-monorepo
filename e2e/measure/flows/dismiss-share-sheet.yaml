@@ -1,0 +1,15 @@
+# Dismiss the iOS share sheet, if it is up. It has no Close control: it is a
+# popover, and iOS exposes the dimmed area around it as `PopoverDismissRegion`
+# ("dismiss popup"), whose own box is the whole screen — so the tap goes to a
+# point near the top, which is outside the sheet (it rises from the bottom). The
+# condition keeps that tap from ever landing on the app when no sheet is up.
+appId: com.bracemark.app
+---
+- runFlow:
+    when:
+      platform: iOS
+      visible:
+        id: 'PopoverDismissRegion'
+    commands:
+      - tapOn:
+          point: '50%, 12%'

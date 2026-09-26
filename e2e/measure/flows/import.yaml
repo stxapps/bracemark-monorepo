@@ -1,0 +1,76 @@
+# One import leg of `npm run measure:native` (e2e/measure/native.ts): sign in,
+# import the one staged file through the real document picker, and stop on the
+# stall probe's reading. The runner reads that reading off the accessibility
+# tree after this flow exits. The navigation and the picker walk are
+# mobile/flows/import-data.yaml's, which carries the reasoning for each step.
+#
+# Parameters: USERNAME, PASSWORD, IMPORT_FILE_STEM (the file name without its
+# extension), EXPO_DEV_CLIENT_LINK.
+appId: com.bracemark.app
+---
+- runFlow:
+    file: ../../mobile/flows/subflows/sign-in.yaml
+
+- tapOn:
+    id: 'links-more-options'
+- tapOn:
+    id: 'links-open-settings'
+- tapOn:
+    id: 'settings-open-navigation'
+- tapOn:
+    id: 'settings-nav-data'
+- tapOn:
+    id: 'import-data-open'
+- tapOn:
+    id: 'import-data-choose'
+
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - tapOn: 'Browse'
+      - extendedWaitUntil:
+          visible: 'On My iPhone'
+          timeout: 20000
+      - tapOn: 'On My iPhone'
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - tapOn: 'Show roots'
+      - extendedWaitUntil:
+          visible: 'Downloads'
+          timeout: 20000
+      - tapOn: 'Downloads'
+
+# The STEM, not the file name: iOS Files hides a known extension, so a staged
+# `measure-bookmarks-300.html` is listed as `measure-bookmarks-300`.
+- extendedWaitUntil:
+    visible: '.*${IMPORT_FILE_STEM}.*'
+    timeout: 20000
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - tapOn:
+          point: '18%, 30%'
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - tapOn:
+          id: 'com.google.android.documentsui:id/item_root'
+
+# A 50,000-link import is minutes on a device, not seconds.
+- extendedWaitUntil:
+    visible:
+      id: 'import-data-complete'
+    timeout: 1800000
+- scrollUntilVisible:
+    element:
+      id: 'measure-stall-reading'
+- extendedWaitUntil:
+    visible:
+      id: 'measure-stall-reading'
+      text: '.*"label":"import".*'
+    timeout: 10000

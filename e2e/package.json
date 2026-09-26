@@ -50,6 +50,9 @@
       },
       "measure:data": {
         "cache": false
+      },
+      "measure:native": {
+        "cache": false
       }
     }
   },
@@ -71,7 +74,8 @@
     "shot:web": "tsx shot/web.ts",
     "shot:ext": "tsx shot/extension.ts",
     "shot:mobile": "tsx shot/mobile.ts",
-    "measure:data": "tsx measure/data.ts"
+    "measure:data": "tsx measure/data.ts",
+    "measure:native": "tsx measure/native.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",

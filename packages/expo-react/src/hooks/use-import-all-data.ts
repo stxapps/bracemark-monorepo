@@ -21,6 +21,7 @@ import { useAuth } from '../contexts/auth-provider';
 import { useSync } from '../contexts/sync-provider';
 import { importAllData, type PickedFile } from '../data/import-all-data';
 import { getSession } from '../data/session-store';
+import { beginStallWindow, endStallWindow } from '../lib/stall-probe';
 import type { SyncDeps } from '../sync/engine';
 import { useEntitlements } from './use-entitlements';
 
@@ -92,6 +93,8 @@ export function useImportAllData(): UseImportAllDataResult {
 
       runningRef.current = true;
       cancelledRef.current = false;
+      // No-ops unless a measurement build started the probe (lib/stall-probe.ts).
+      beginStallWindow('import');
       setState({ phase: 'running', step: 'sync' });
       void importAllData({
         file,
@@ -122,6 +125,7 @@ export function useImportAllData(): UseImportAllDataResult {
           },
         )
         .finally(() => {
+          endStallWindow();
           runningRef.current = false;
           // A run that ended without the prompt being answered (any other
           // failure while it was on screen) must not leave a live resolve behind.

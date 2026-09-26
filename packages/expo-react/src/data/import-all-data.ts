@@ -15,6 +15,9 @@
 //    a ReadableStream Hermes doesn't have). In-memory, matching export.
 //  - A restored `files/{id}` blob's bytes land on DISK through
 //    bulkWriteEntities' content path (file-store), not in the row.
+//  - Text is decoded by lib/utf8.ts, not TextDecoder — Hermes has none, and
+//    the polyfill Expo installs is slow enough to matter at a file's size.
+//  - Every write chunk waits on a real yield (WRITE_CHUNK below).
 //
 // Everything that isn't a divergence is now literally shared, not copied: the
 // archive contract (@stxapps/shared data/backup.ts), the outcome/progress
@@ -47,11 +50,13 @@ import {
   parseImportText,
   pathFromId,
   PINS_PREFIX,
-  projectImportedLinks,
+  projectImportedLinksInChunks,
   referencedFileIds,
   resolveImportQuota,
 } from '@stxapps/shared';
 
+import { decodeUtf8 } from '../lib/utf8';
+import { yieldToMain } from '../lib/yield-to-main';
 import { runIncrementalSync, type SyncDeps } from '../sync/engine';
 import { bulkGetItems, namespaceRows } from './item-store';
 import { bulkWriteEntities, type RawEntityEntry } from './mutations';
@@ -65,8 +70,20 @@ export interface PickedFile {
 }
 
 // Writes land in bounded transactions so SQLite isn't asked for one
-// transaction per link and progress can tick between chunks.
+// transaction per link and progress can tick between chunks — and, unlike web,
+// every chunk waits on a real yield first (`yieldToMain`). The store calls here are
+// synchronous under their `async` signatures, so awaiting one resumes at once,
+// and without the yield the whole import ran as ONE block of the JS thread: 6.5 s
+// for a 1,000-link restore on the simulator, 80 s at 10,000, with the progress
+// line frozen throughout (docs/data-lifecycle.md, _readings — expo_).
 const WRITE_CHUNK = 200;
+
+// Rows or lines handled between two yields in the loops that run BEFORE the
+// writes (dedupe, the backup's classify pass and its skip-existing lookup) —
+// web's constant and web's placement (web-react data/import-all-data.ts). The
+// projection pauses on its own chunk, PROJECT_CHUNK in @stxapps/shared
+// import/project.ts.
+const YIELD_CHUNK = 1000;
 
 // --- the existing library (what dedupe/quota/skip-existing check against) -------
 
@@ -104,7 +121,9 @@ async function importInterop(
   // Dedupe against the library and within the file, by canonical identity.
   const seen = new Set(existing.urlKeys);
   const rows: ImportedLink[] = [];
-  for (const row of bundle.links) {
+  for (let i = 0; i < bundle.links.length; i++) {
+    if (i > 0 && i % YIELD_CHUNK === 0) await yieldToMain();
+    const row = bundle.links[i];
     const key = canonicalUrlKey(row.url) ?? row.url;
     if (seen.has(key)) continue;
     seen.add(key);
@@ -126,15 +145,18 @@ async function importInterop(
   // titles, custom-image blobs, pin ranks. All of it is shared with web
   // (@stxapps/shared import/project.ts) — only the store reads around it and the
   // chunked writes below are this platform's.
-  const projected = projectImportedLinks({
-    rows: kept,
-    lists: await readLists(),
-    tags: await readTags(),
-    existingPinRanks: (await readPins()).map((pin) => pin.rank),
-    images: bundle.images,
-    newId,
-    now: Date.now(),
-  });
+  const projected = await projectImportedLinksInChunks(
+    {
+      rows: kept,
+      lists: await readLists(),
+      tags: await readTags(),
+      existingPinRanks: (await readPins()).map((pin) => pin.rank),
+      images: bundle.images,
+      newId,
+      now: Date.now(),
+    },
+    yieldToMain,
+  );
 
   // Blobs first (content before metadata), one at a time — they can be MB-sized,
   // unlike the small entity rows that follow. Their bytes land on DISK through
@@ -142,6 +164,7 @@ async function importInterop(
   if (projected.files.length > 0) {
     onProgress({ step: 'files', done: 0, total: projected.files.length });
     for (let i = 0; i < projected.files.length; i++) {
+      if (i > 0) await yieldToMain();
       await bulkWriteEntities(username, [projected.files[i]]);
       onProgress({ step: 'files', done: i + 1, total: projected.files.length });
     }
@@ -150,6 +173,7 @@ async function importInterop(
   const entries: RawEntityEntry[] = projected.entries;
   onProgress({ step: 'items', done: 0, total: entries.length });
   for (let i = 0; i < entries.length; i += WRITE_CHUNK) {
+    await yieldToMain();
     await bulkWriteEntities(username, entries.slice(i, i + WRITE_CHUNK));
     onProgress({
       step: 'items',
@@ -177,29 +201,36 @@ async function importBracemarkBackup(
   maxLinks: number | null,
   onProgress: (progress: ImportProgress) => void,
 ): Promise<Omit<ImportOutcome, 'syncFailed'>> {
-  const decoder = new TextDecoder();
-
   const manifestBytes = byName.get(BACKUP_MANIFEST_ENTRY);
   if (manifestBytes === undefined) {
     throw new Error('This zip is not a Bracemark backup (no manifest.json).');
   }
   // Format/version gate — throws the user-facing message (shared data/backup.ts).
-  parseBackupManifest(decoder.decode(manifestBytes));
+  parseBackupManifest(decodeUtf8(manifestBytes));
 
   const itemsBytes = byName.get(BACKUP_ITEMS_ENTRY);
-  const itemsText = itemsBytes === undefined ? '' : decoder.decode(itemsBytes);
+  const itemsText = itemsBytes === undefined ? '' : decodeUtf8(itemsBytes);
 
   let invalidCount = 0;
   const classified: BundleEntry[] = [];
-  for (const line of itemsText.split('\n')) {
+  const lines = itemsText.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    if (i > 0 && i % YIELD_CHUNK === 0) await yieldToMain();
+    const line = lines[i];
     if (line.trim() === '') continue;
     const entry = classifyBundleLine(line);
     if (entry === undefined) invalidCount += 1;
     else classified.push(entry);
   }
 
-  // SKIP-EXISTING: a path already in the local store is never touched.
-  const existingRecords = await bulkGetItems(classified.map((entry) => entry.path));
+  // SKIP-EXISTING: a path already in the local store is never touched. Looked
+  // up a slice at a time, with a yield between slices, as on web.
+  const existingRecords: unknown[] = [];
+  for (let i = 0; i < classified.length; i += YIELD_CHUNK) {
+    if (i > 0) await yieldToMain();
+    const slice = classified.slice(i, i + YIELD_CHUNK).map((entry) => entry.path);
+    existingRecords.push(...(await bulkGetItems(slice)));
+  }
   let skippedCount = 0;
   const fresh = classified.filter((_, i) => {
     if (existingRecords[i] === undefined) return true;
@@ -228,6 +259,7 @@ async function importBracemarkBackup(
 
   onProgress({ step: 'items', done: 0, total: entries.length });
   for (let i = 0; i < entries.length; i += WRITE_CHUNK) {
+    await yieldToMain();
     await bulkWriteEntities(
       username,
       entries.slice(i, i + WRITE_CHUNK).map(({ path, data }) => ({ path, data })),
@@ -250,6 +282,7 @@ async function importBracemarkBackup(
   for (let i = 0; i < fileIds.length; i++) {
     const bytes = byName.get(backupFileEntry(fileIds[i]));
     if (bytes !== undefined && !localFiles[i]?.hasDataFile) {
+      await yieldToMain();
       await bulkWriteEntities(username, [{ path: filePaths[i], data: bytes }]);
       fileCount += 1;
     }
@@ -286,7 +319,6 @@ const INTEROP_ZIP_ENTRY_RE = /\.(csv|html?|txt|json)$/i;
 // bare .txt, never a zip — but a user who zips that .txt lands here anyway, and
 // the entry sniffs as `brace` like any other (detection runs per entry).
 function parseInteropZip(byName: Map<string, Uint8Array>): ImportedBundle {
-  const decoder = new TextDecoder();
   const candidates = [...byName.entries()]
     .filter(([name]) => {
       const base = name.slice(name.lastIndexOf('/') + 1);
@@ -304,7 +336,7 @@ function parseInteropZip(byName: Map<string, Uint8Array>): ImportedBundle {
   const links: ImportedLink[] = [];
   const images = new Map<string, Uint8Array>();
   for (const [name, bytes] of candidates) {
-    const parsed = parseImportText(decoder.decode(bytes), name);
+    const parsed = parseImportText(decodeUtf8(bytes), name);
     links.push(...parsed.links);
     for (const [key, blob] of parsed.images) images.set(key, blob);
   }
@@ -380,7 +412,7 @@ export async function importAllData(options: {
     return { ...outcome, syncFailed };
   }
 
-  const parsed = parseImportText(new TextDecoder().decode(bytes), file.name);
+  const parsed = parseImportText(decodeUtf8(bytes), file.name);
   const outcome = await importInterop(deps.username, parsed, maxLinks, onProgress, onQuotaPrompt);
   return { ...outcome, syncFailed };
 }

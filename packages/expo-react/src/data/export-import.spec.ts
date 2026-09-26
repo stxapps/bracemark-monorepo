@@ -265,7 +265,7 @@ beforeEach(async () => {
 
 describe('the bracemark backup round trip, through fflate', () => {
   // The property the format claims, proved on THIS platform's container: what
-  // zipSync writes, unzipSync reads back, entity for entity and byte for byte.
+  // the streaming Zip writes, unzipSync reads back, entity for entity and byte for byte.
   // A drop on either side is invisible until someone restores a phone.
   it('restores every namespace verbatim into an empty library', async () => {
     seedEntities();
@@ -293,6 +293,55 @@ describe('the bracemark backup round trip, through fflate', () => {
     expect(restored.fileCount).toBe(1);
     expect(restored.invalidCount).toBe(0);
 
+    expect(storedEntities()).toEqual(before);
+  });
+
+  // The streamed zip deflates `items.jsonl` a piece at a time with a yield
+  // between pieces (export-all-data.ts ZIP_PIECE, 256 KiB). A library whose
+  // lines span several pieces must read back as whole as a one-piece one — a
+  // dropped or doubled piece would surface as a torn JSONL line, or as nothing.
+  // Non-ASCII notes put multi-byte sequences across the piece boundaries, and
+  // through lib/utf8.ts on the way back in.
+  it('restores a library whose items span several deflate pieces', async () => {
+    seedEntities();
+    const note = 'ไทย — naïve café 🧭 '.repeat(20).slice(0, 480);
+    getDb().transaction((tx) =>
+      putItemsTx(
+        tx,
+        Array.from({ length: 600 }, (_, n) =>
+          toItemRecord(
+            `${LINKS_PREFIX}l_bulk_${n}.enc`,
+            5000,
+            utf8(
+              JSON.stringify({
+                url: `https://bulk.invalid/${n}`,
+                listId: 'work',
+                tagIds: ['read'],
+                note: `${n} ${note}`,
+                createdAt: T + 10 + n,
+                updatedAt: T + 10 + n,
+              }),
+            ),
+          ),
+        ),
+      ),
+    );
+    const before = storedEntities();
+
+    const outcome = await exportBackup();
+    expect(outcome.linkCount).toBe(602);
+    const archive = stash(outcome.file.uri);
+    expect(unzipSaved(outcome.file.uri)[BACKUP_ITEMS_ENTRY].length).toBeGreaterThan(256 * 1024);
+
+    truncate();
+    resetFileSystem();
+    const restored = await importAllData({
+      file: repick(archive, outcome.file.name),
+      deps: deps(),
+      maxLinks: null,
+    });
+    expect(restored.linkCount).toBe(602);
+    expect(restored.invalidCount).toBe(0);
     expect(storedEntities()).toEqual(before);
   });
 

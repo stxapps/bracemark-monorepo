@@ -9,7 +9,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useCSSVariable } from 'uniwind';
 
-import { AuthProvider, useQueryManagers } from '@stxapps/expo-react';
+import { AuthProvider, startStallProbe, useQueryManagers } from '@stxapps/expo-react';
 import { ApiClientProvider } from '@stxapps/react';
 
 import { SplashHold } from '../components/splash-hold';
@@ -17,6 +17,12 @@ import { ThemeProvider } from '../components/theme-provider';
 import { apiClient } from '../lib/api-client';
 
 import '../../global.css';
+
+// The JS-thread stall probe (expo-react lib/stall-probe.ts), in measurement
+// bundles only. Metro inlines the flag at build time, and only the measurement
+// tool sets it — in Metro's environment, never in an env file
+// (e2e/measure/native.ts) — so every other build compiles this to nothing.
+if (process.env.EXPO_PUBLIC_MEASURE_STALLS === '1') startStallProbe();
 
 // The root route. expo-router auto-detects this `src/app` directory as the app
 // root (no EXPO_ROUTER_APP_ROOT needed), and `expo-router/entry` (package.json

@@ -61,9 +61,15 @@ import {
 
 import { type DbTx, getDb, items } from './db';
 import { dataFileFor, deleteDataFile, deleteDataFiles, ensureDataFilesDir } from './file-store';
-import { deleteItemsTx, type ItemRow, markItemDataFile, putItemsTx } from './item-store';
-import { enqueueDeleteTx, enqueuePutTx } from './pending-store';
-import { parseBlob, toItemRecord } from './projection';
+import {
+  deleteItemsTx,
+  type ItemRow,
+  itemUpdatedAtsTx,
+  markItemDataFile,
+  putItemsTx,
+} from './item-store';
+import { enqueueDeleteTx, enqueuePutsTx, enqueuePutTx } from './pending-store';
+import { type ItemRecord, parseBlob, toItemRecord } from './projection';
 import { type LinkItem, toItem } from './queries';
 
 // Persist one path's bytes locally and queue the upload, producing the bytes
@@ -162,19 +168,30 @@ export async function bulkWriteEntities(
     contentPaths.push(path);
   }
 
+  // Set-at-a-time, not row-at-a-time: one stamp read, one batched put and one
+  // batched enqueue for the whole call. A select + put + enqueue per entity was
+  // ~6 ms each on the simulator, nearly all of it drizzle building and
+  // preparing statements (docs/data-lifecycle.md, _readings — expo_).
   getDb().transaction((tx: DbTx) => {
+    const stamps = itemUpdatedAtsTx(
+      tx,
+      entries.map(({ path }) => path),
+    );
+    const records: ItemRecord[] = [];
+    const puts: { path: string; baseUpdatedAt: number }[] = [];
     for (const { path, data } of entries) {
-      const existing = tx.select().from(items).where(eq(items.path, path)).get();
-      const baseUpdatedAt = existing?.updatedAt ?? 0;
+      const baseUpdatedAt = stamps.get(path) ?? 0;
       // Content rows carry no bytes (the disk file above is the payload);
       // entity rows project their query columns from the encoded blob.
-      const record =
+      records.push(
         data instanceof Uint8Array
           ? toItemRecord(path, baseUpdatedAt)
-          : toItemRecord(path, baseUpdatedAt, utf8(JSON.stringify(data)));
-      putItemsTx(tx, [record]);
-      enqueuePutTx(tx, username, path, baseUpdatedAt);
+          : toItemRecord(path, baseUpdatedAt, utf8(JSON.stringify(data))),
+      );
+      puts.push({ path, baseUpdatedAt });
     }
+    putItemsTx(tx, records);
+    enqueuePutsTx(tx, username, puts);
   });
   for (const { path } of entries) dropCachedPath(path);
 

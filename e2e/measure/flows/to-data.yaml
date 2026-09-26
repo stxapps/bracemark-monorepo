@@ -1,0 +1,16 @@
+# Back from the import or export view to the Data overview, where the sync card
+# is — the runner polls it there until the restored library has synced.
+appId: com.bracemark.app
+---
+# The leg before scrolled down to the stall readout, which can leave the back
+# link above the fold.
+- scrollUntilVisible:
+    element:
+      id: 'settings-back'
+    direction: UP
+- tapOn:
+    id: 'settings-back'
+- extendedWaitUntil:
+    visible:
+      id: 'export-data-open'
+    timeout: 10000

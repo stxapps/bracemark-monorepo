@@ -37,15 +37,23 @@ import { FAVORITES_TAG, isRaindropHtml, withHighlights, withoutUnsorted } from '
 // one did — see ImportedLink.customTitle (bundle.ts).
 
 // One scan, five alternatives: folder header, link anchor, list open, list close,
-// description. [\s\S]*? for inner text because titles can contain newlines; \b
-// after the tag name so <address>/<abbr> never match as <a>.
+// description. `.*?` under the `s` flag for inner text, because titles can
+// contain newlines; \b after the tag name so <address>/<abbr> never match as <a>.
+//
+// ⚠ Spelled `.*?` + `s`, never `[\s\S]*?` (or `[^]*?`). They match the same
+// characters, but on Hermes a lazy loop over a character CLASS costs time in
+// proportion to the rest of the input on every match, so the scan goes
+// quadratic in the file's size. A 10,000-link bookmarks file held bracemark-expo's
+// JS thread for 31 s; the same scan with `.*?` is linear, and V8 runs every
+// spelling alike (docs/data-lifecycle.md, _readings — expo_). Nothing on web
+// shows the difference, so nothing but this note guards it.
 //
 // The <DD> arm ends on a LOOKAHEAD at the next block tag rather than at the next
 // `<`, so inline markup inside a description (a real file has <b>, <br>, an <a>)
 // stays inside the capture for innerText to strip, instead of truncating the
 // note at its first tag.
 const TOKEN_RE =
-  /<h3\b([^>]*)>([\s\S]*?)<\/h3\s*>|<a\b([^>]*)>([\s\S]*?)<\/a\s*>|<dl\b[^>]*>|<\/dl\s*>|<dd\b[^>]*>([\s\S]*?)(?=<dt\b|<dd\b|<dl\b|<\/dl\b|<h3\b|$)/gi;
+  /<h3\b([^>]*)>(.*?)<\/h3\s*>|<a\b([^>]*)>(.*?)<\/a\s*>|<dl\b[^>]*>|<\/dl\s*>|<dd\b[^>]*>(.*?)(?=<dt\b|<dd\b|<dl\b|<\/dl\b|<h3\b|$)/gis;
 
 // One double-quoted attribute out of a tag's attribute text, case-insensitive.
 // Netscape files quote every attribute value; unquoted values don't occur.
@@ -134,7 +142,7 @@ export function parseNetscapeHtml(text: string, observer?: ImportObserver): Impo
       if (noteTarget === undefined) continue;
       if (/^\s*<blockquote\b/i.test(match[5])) {
         // A <DD> that IS a <blockquote> is a highlight (Raindrop), not the note.
-        const quotes = [...match[5].matchAll(/<blockquote\b[^>]*>([\s\S]*?)<\/blockquote\s*>/gi)];
+        const quotes = [...match[5].matchAll(/<blockquote\b[^>]*>(.*?)<\/blockquote\s*>/gis)];
         const list = highlights.get(noteTarget) ?? [];
         for (const quote of quotes) list.push(descriptionText(quote[1]));
         highlights.set(noteTarget, list);

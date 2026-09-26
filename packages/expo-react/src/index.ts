@@ -57,5 +57,6 @@ export * from './lib/auth-api-client';
 export * from './lib/device-extraction';
 export * from './lib/image';
 export * from './lib/query-managers';
+export * from './lib/stall-probe';
 export * from './sync/engine';
 export * from './sync/r2';

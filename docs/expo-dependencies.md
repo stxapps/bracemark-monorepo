@@ -547,3 +547,17 @@ whole block from release bundles — the share extension's cold boot pays nothin
 What it cannot see is import **order**: a module that reads `globalThis.crypto`
 at its own init still loses if it evaluates before `polyfills.ts`, which is why
 that import is first in both entries and not lazy.
+
+**Present is not the same as fast.** The `TextDecoder` Expo installs is a
+pure-JS port of the text-encoding polyfill: it copies its input into a reversed
+token array and builds the result a character at a time. That is harmless for a
+favicon's `<head>`, and it was most of the blob-decode cost on the data path. A
+Hermes profile of a 1,000-link CSV export put 235 ms of its 279 ms of
+`parseBlob` inside it. So `expo-react` decodes stored blobs and import files
+with its own `lib/utf8.ts` (`decodeUtf8`), which produces `TextDecoder`'s exact
+output (its spec holds it to Node's decoder, malformed input included) without
+that overhead. The global is left alone: replacing it would change every
+caller's semantics at once, including the streaming and `fatal` modes nothing
+on the data path needs. Reach for `decodeUtf8` when decoding something
+library-sized on native. See [data-lifecycle.md](./data-lifecycle.md),
+_readings — expo_.

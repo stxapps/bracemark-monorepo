@@ -16,7 +16,6 @@
 // wherever it's read.
 
 import {
-  bytesToUtf8,
   canonicalUrlKey,
   EXTRACTIONS_PREFIX,
   extractionSchema,
@@ -30,6 +29,7 @@ import {
   z,
 } from '@stxapps/shared';
 
+import { decodeUtf8 } from '../lib/utf8';
 import type { ItemType } from './db';
 
 // The projector's output — the write-side shape of one `items` record, matching
@@ -70,14 +70,15 @@ const timestampedSchema = z.looseObject({
 // (db.ts); a parse/validate miss is a forward-incompatible shape from a newer
 // client — the read layer drops it from a view rather than crashing.
 // `looseObject` schemas keep unknown fields, so a decoded entity still
-// round-trips on re-encrypt.
+// round-trips on re-encrypt. The bytes go through lib/utf8.ts, not the runtime's
+// TextDecoder, which on Hermes is a slow JS polyfill (see there).
 export function parseBlob<T extends z.ZodTypeAny>(
   data: Uint8Array | undefined,
   schema: T,
 ): z.infer<T> | undefined {
   if (!data) return undefined;
   try {
-    const parsed = schema.safeParse(JSON.parse(bytesToUtf8(data)));
+    const parsed = schema.safeParse(JSON.parse(decodeUtf8(data)));
     return parsed.success ? (parsed.data as z.infer<T>) : undefined;
   } catch {
     return undefined;
