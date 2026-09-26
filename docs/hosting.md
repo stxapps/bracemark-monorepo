@@ -243,14 +243,19 @@ ordinary site given what the app holds in memory — `same-origin-allow-popups`
 rather than plain `same-origin` so a popup the app itself opens keeps working
 (Settings → Subscription reaches Paddle's portal through `window.open`). And a
 **`Permissions-Policy`** disabling the features neither app uses — camera,
-microphone, geolocation, and the sensor family. Leave `payment` out of that list
-and settle it deliberately at IAP integration time: its default allowlist is
-already `self`, so Paddle's cross-origin checkout iframe cannot use the Payment
-Request API unless the header **delegates** it to Paddle's origin. Note the
-allowlist there takes exact origins, so the `https://*.paddle.com` wildcard that
-works throughout the CSP is invalid in it. COEP is not wanted — it buys
-cross-origin isolation for `SharedArrayBuffer`, which the Argon2 worker does not
-need.
+microphone, geolocation, and the sensor family. **`payment` stays out of that
+list, deliberately — naming it in either direction breaks checkout.** Its
+default allowlist is `self`, which lets the page delegate it through an iframe's
+`allow` attribute, and Paddle.js creates its checkout iframe (overlay and inline
+alike) with `allow="payment"` — that delegation is what gives Apple Pay and
+Google Pay in the checkout the Payment Request API. `payment=()` would take the
+wallets away. Naming Paddle's origin instead would pin one host into a header
+that must track whichever one Paddle.js loads — the checkout host differs
+between sandbox and live, so the two tiers would need different values — and a
+Permissions-Policy allowlist takes exact origins, so the `https://*.paddle.com`
+wildcard that works throughout the CSP is invalid in it. COEP is not wanted — it
+buys cross-origin isolation for `SharedArrayBuffer`, which the Argon2 worker does
+not need.
 
 **The marketing site gets its own, much smaller policy — do not reuse the app's.**
 The apex holds no credentials, runs no crypto and has no service worker, so it
