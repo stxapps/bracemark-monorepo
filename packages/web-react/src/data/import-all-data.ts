@@ -290,19 +290,8 @@ async function importBracemarkBackup(
     return linkIds.has(idFromPath(entry.path, prefix));
   });
 
-  onProgress({ step: 'items', done: 0, total: entries.length });
-  for (let i = 0; i < entries.length; i += WRITE_CHUNK) {
-    await bulkWriteEntities(
-      username,
-      entries.slice(i, i + WRITE_CHUNK).map(({ path, data }) => ({ path, data })),
-    );
-    onProgress({
-      step: 'items',
-      done: Math.min(i + WRITE_CHUNK, entries.length),
-      total: entries.length,
-    });
-  }
-
+  // Content before metadata, as on the interop path: if a file fails, retrying
+  // still sees its owning entity as fresh and includes the file again.
   // The referenced blobs, one at a time (they can be MB-sized media): only
   // ids with a zip entry and no local record. A ref with no bytes stays a
   // normal not-yet-materialized lazy blob.
@@ -321,10 +310,29 @@ async function importBracemarkBackup(
     onProgress({ step: 'files', done: i + 1, total: fileIds.length });
   }
 
+  const writtenPaths = new Set<string>();
+  onProgress({ step: 'items', done: 0, total: entries.length });
+  for (let i = 0; i < entries.length; i += WRITE_CHUNK) {
+    const written = await bulkWriteEntities(
+      username,
+      entries.slice(i, i + WRITE_CHUNK).map(({ path, data }) => ({ path, data })),
+      { skipExisting: true },
+    );
+    for (const path of written) writtenPaths.add(path);
+    onProgress({
+      step: 'items',
+      done: Math.min(i + WRITE_CHUNK, entries.length),
+      total: entries.length,
+    });
+  }
+
+  const imported = entries.filter((entry) => writtenPaths.has(entry.path));
+  skippedCount += entries.length - imported.length;
+
   return {
-    linkCount: freshLinks.length,
-    listCount: entries.filter((entry) => entry.kind === 'list').length,
-    tagCount: entries.filter((entry) => entry.kind === 'tag').length,
+    linkCount: imported.filter((entry) => entry.kind === 'link').length,
+    listCount: imported.filter((entry) => entry.kind === 'list').length,
+    tagCount: imported.filter((entry) => entry.kind === 'tag').length,
     fileCount,
     skippedCount,
     invalidCount,

@@ -232,6 +232,16 @@ grace window (this device just edited, so it is the user's own change); or while
 idle (`engaged` false — [editors.md](./editors.md) for what engagement is). Held
 otherwise, and `hasPending` lights the refresh pill, which promotes on demand.
 
+Expo also carries the local-write nonce captured **before each read starts**
+with its result. A result that observes a newer nonce than the displayed
+snapshot promotes even after the grace window expires. Bulk holds flush every
+2 seconds, longer than the 1.5-second grace, and a screen covered by Settings
+can pause indefinitely. Without this acknowledgement, a local edit or wipe
+could remain behind the refresh pill after the read resumes. A read already
+in flight before the write cannot acknowledge it; subsequent remote changes
+still stage normally. `features/links/use-links.spec.tsx` covers both delays
+and the in-flight ordering.
+
 ⚠ **The grace window is for this device's WRITES, so a user's Sync must not open
 it.** The sync context has two triggers for the same cycle: `requestSync()`, which
 every mutation calls and which bumps `localWriteNonce`, and `syncNow()`, which
@@ -591,7 +601,7 @@ changes is mechanical, and only the substrate forces it:
   writers keep the fast truncate path and call `invalidateLiveReads` once after
   commit; forcing a library-sized wipe through row-by-row deletes just to obtain
   events would trade correctness for avoidable native/JS churn. A bulk writer
-  takes `holdLiveReads` for its writes: the import for its whole run, and a sync
+  takes `holdLiveReads` for its writes: the import after its quota decision, and a sync
   cycle that writes at least `BULK_CYCLE_PATHS` (100) paths (sync/engine.ts),
   never an ordinary one, since each edit kicks a cycle: a change then only marks the
   read as having missed one, and the reads that did re-run together on a flush

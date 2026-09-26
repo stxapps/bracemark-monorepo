@@ -14,7 +14,7 @@
 // re-renders on it, and resolving it twice is impossible because the ref is
 // cleared as it fires.
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useApiClient } from '@stxapps/react';
 import type {
@@ -67,6 +67,18 @@ export function useImportAllData(): UseImportAllDataResult {
   // ImportQuotaError — the very error the gate throws when it refuses on its own
   // — so the rejection handler below needs this to tell the two apart.
   const cancelledRef = useRef(false);
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      // A quota decision has no owner once Settings unmounts. Settle it so the
+      // orchestrator can close its archive and release any live-read hold.
+      const resolve = quotaResolveRef.current;
+      quotaResolveRef.current = null;
+      resolve?.('cancel');
+    };
+  }, []);
 
   const answerQuota = useCallback((answer: ImportQuotaAnswer) => {
     const resolve = quotaResolveRef.current;
@@ -104,16 +116,24 @@ export function useImportAllData(): UseImportAllDataResult {
         file,
         deps,
         maxLinks: entitlements.maxLinks,
-        onProgress: (progress) => setState({ phase: 'running', ...progress }),
+        onProgress: (progress) => {
+          if (mountedRef.current) setState({ phase: 'running', ...progress });
+        },
         onQuotaPrompt: (prompt) =>
           new Promise((resolve) => {
+            // Parsing can finish after navigation away, before there was a
+            // resolver for the cleanup above to cancel.
+            if (!mountedRef.current) {
+              resolve('cancel');
+              return;
+            }
             quotaResolveRef.current = resolve;
             setState({ phase: 'quota', prompt });
           }),
       })
         .then(
           (outcome) => {
-            setState({ phase: 'done', outcome });
+            if (mountedRef.current) setState({ phase: 'done', outcome });
             // Drain the queued ops through the normal cycle (coalesces with any
             // in-flight one) — the imported data starts syncing right away.
             requestSync();
@@ -121,7 +141,7 @@ export function useImportAllData(): UseImportAllDataResult {
           (err: unknown) => {
             // A cancelled run is already back on idle — its ImportQuotaError is
             // the answer being carried out, not a failure to report.
-            if (cancelledRef.current) return;
+            if (cancelledRef.current || !mountedRef.current) return;
             setState({
               phase: 'error',
               message: err instanceof Error ? err.message : String(err),

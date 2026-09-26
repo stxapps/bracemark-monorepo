@@ -18,7 +18,7 @@
 //  - Text is decoded by lib/utf8.ts, not TextDecoder — Hermes has none, and
 //    the polyfill Expo installs is slow enough to matter at a file's size.
 //  - Every write chunk waits on a real yield (WRITE_CHUNK below), and live
-//    reads are held for the run (importAllData).
+//    reads are held while writing (after parsing and the quota decision).
 //
 // Everything that isn't a divergence is now literally shared, not copied: the
 // archive contract (@stxapps/shared data/backup.ts), the outcome/progress
@@ -168,39 +168,44 @@ async function importInterop(
     yieldToMain,
   );
 
-  // Blobs first (content before metadata), one at a time — they can be MB-sized,
-  // unlike the small entity rows that follow. Their bytes land on DISK through
-  // bulkWriteEntities' content path, not in the row.
-  if (projected.files.length > 0) {
-    onProgress({ step: 'files', done: 0, total: projected.files.length });
-    for (let i = 0; i < projected.files.length; i++) {
-      if (i > 0) await yieldToMain();
-      await bulkWriteEntities(username, [projected.files[i]]);
-      onProgress({ step: 'files', done: i + 1, total: projected.files.length });
+  const releaseLiveReads = holdLiveReads();
+  try {
+    // Blobs first (content before metadata), one at a time — they can be MB-sized,
+    // unlike the small entity rows that follow. Their bytes land on DISK through
+    // bulkWriteEntities' content path, not in the row.
+    if (projected.files.length > 0) {
+      onProgress({ step: 'files', done: 0, total: projected.files.length });
+      for (let i = 0; i < projected.files.length; i++) {
+        if (i > 0) await yieldToMain();
+        await bulkWriteEntities(username, [projected.files[i]]);
+        onProgress({ step: 'files', done: i + 1, total: projected.files.length });
+      }
     }
-  }
 
-  const entries: RawEntityEntry[] = projected.entries;
-  onProgress({ step: 'items', done: 0, total: entries.length });
-  for (let i = 0; i < entries.length; i += WRITE_CHUNK) {
-    await yieldToMain();
-    await bulkWriteEntities(username, entries.slice(i, i + WRITE_CHUNK));
-    onProgress({
-      step: 'items',
-      done: Math.min(i + WRITE_CHUNK, entries.length),
-      total: entries.length,
-    });
-  }
+    const entries: RawEntityEntry[] = projected.entries;
+    onProgress({ step: 'items', done: 0, total: entries.length });
+    for (let i = 0; i < entries.length; i += WRITE_CHUNK) {
+      await yieldToMain();
+      await bulkWriteEntities(username, entries.slice(i, i + WRITE_CHUNK));
+      onProgress({
+        step: 'items',
+        done: Math.min(i + WRITE_CHUNK, entries.length),
+        total: entries.length,
+      });
+    }
 
-  return {
-    linkCount: projected.linkCount,
-    listCount: projected.listCount,
-    tagCount: projected.tagCount,
-    fileCount: projected.files.length,
-    skippedCount,
-    invalidCount: projected.invalidCount,
-    notImportedCount,
-  };
+    return {
+      linkCount: projected.linkCount,
+      listCount: projected.listCount,
+      tagCount: projected.tagCount,
+      fileCount: projected.files.length,
+      skippedCount,
+      invalidCount: projected.invalidCount,
+      notImportedCount,
+    };
+  } finally {
+    releaseLiveReads();
+  }
 }
 
 // --- the bracemark backup -------------------------------------------------------------
@@ -270,48 +275,61 @@ async function importBracemarkBackup(
     return linkIds.has(idFromPath(entry.path, prefix));
   });
 
-  onProgress({ step: 'items', done: 0, total: entries.length });
-  for (let i = 0; i < entries.length; i += WRITE_CHUNK) {
-    await yieldToMain();
-    await bulkWriteEntities(
-      username,
-      entries.slice(i, i + WRITE_CHUNK).map(({ path, data }) => ({ path, data })),
-    );
-    onProgress({
-      step: 'items',
-      done: Math.min(i + WRITE_CHUNK, entries.length),
-      total: entries.length,
-    });
-  }
-
-  // The referenced blobs, one at a time (they can be MB-sized media): only
-  // ids with a zip entry and no locally-materialized bytes. A ref with no bytes
-  // stays a normal not-yet-materialized lazy blob.
-  const fileIds = [...referencedFileIds(entries)];
-  const filePaths = fileIds.map((id) => pathFromId(id, FILES_PREFIX));
-  const localFiles = await bulkGetItems(filePaths);
-  let fileCount = 0;
-  onProgress({ step: 'files', done: 0, total: fileIds.length });
-  for (let i = 0; i < fileIds.length; i++) {
-    const bytes = byName.get(backupFileEntry(fileIds[i]));
-    if (bytes !== undefined && !localFiles[i]?.hasDataFile) {
-      await yieldToMain();
-      await bulkWriteEntities(username, [{ path: filePaths[i], data: bytes }]);
-      fileCount += 1;
+  const releaseLiveReads = holdLiveReads();
+  try {
+    // Content before metadata, as on the interop path: if a file fails, retrying
+    // still sees its owning entity as fresh and includes the file again.
+    // The referenced blobs, one at a time (they can be MB-sized media): only
+    // ids with a zip entry and no locally-materialized bytes. A ref with no bytes
+    // stays a normal not-yet-materialized lazy blob.
+    const fileIds = [...referencedFileIds(entries)];
+    const filePaths = fileIds.map((id) => pathFromId(id, FILES_PREFIX));
+    const localFiles = await bulkGetItems(filePaths);
+    let fileCount = 0;
+    onProgress({ step: 'files', done: 0, total: fileIds.length });
+    for (let i = 0; i < fileIds.length; i++) {
+      const bytes = byName.get(backupFileEntry(fileIds[i]));
+      if (bytes !== undefined && !localFiles[i]?.hasDataFile) {
+        await yieldToMain();
+        await bulkWriteEntities(username, [{ path: filePaths[i], data: bytes }]);
+        fileCount += 1;
+      }
+      onProgress({ step: 'files', done: i + 1, total: fileIds.length });
     }
-    onProgress({ step: 'files', done: i + 1, total: fileIds.length });
-  }
 
-  return {
-    linkCount: freshLinks.length,
-    listCount: entries.filter((entry) => entry.kind === 'list').length,
-    tagCount: entries.filter((entry) => entry.kind === 'tag').length,
-    fileCount,
-    skippedCount,
-    invalidCount,
-    // A backup either fits or is refused whole — it never truncates.
-    notImportedCount: 0,
-  };
+    const writtenPaths = new Set<string>();
+    onProgress({ step: 'items', done: 0, total: entries.length });
+    for (let i = 0; i < entries.length; i += WRITE_CHUNK) {
+      await yieldToMain();
+      const written = await bulkWriteEntities(
+        username,
+        entries.slice(i, i + WRITE_CHUNK).map(({ path, data }) => ({ path, data })),
+        { skipExisting: true },
+      );
+      for (const path of written) writtenPaths.add(path);
+      onProgress({
+        step: 'items',
+        done: Math.min(i + WRITE_CHUNK, entries.length),
+        total: entries.length,
+      });
+    }
+
+    const imported = entries.filter((entry) => writtenPaths.has(entry.path));
+    skippedCount += entries.length - imported.length;
+
+    return {
+      linkCount: imported.filter((entry) => entry.kind === 'link').length,
+      listCount: imported.filter((entry) => entry.kind === 'list').length,
+      tagCount: imported.filter((entry) => entry.kind === 'tag').length,
+      fileCount,
+      skippedCount,
+      invalidCount,
+      // A backup either fits or is refused whole — it never truncates.
+      notImportedCount: 0,
+    };
+  } finally {
+    releaseLiveReads();
+  }
 }
 
 // --- interop zips ------------------------------------------------------------------
@@ -422,24 +440,16 @@ export async function importAllData(options: {
     syncFailed = true;
   }
 
-  // Live reads re-run on a flush every couple of seconds from here on, not after
-  // every write chunk (holdLiveReads, live-read-invalidation.ts). Released in the
-  // `finally`, so a failed import can't leave the screen's reads held.
-  const releaseLiveReads = holdLiveReads();
-  try {
-    onProgress({ step: 'parse' });
-    const bytes = await new File(file.uri).bytes();
-    if (isZipBytes(bytes)) {
-      const outcome = await importZip(deps.username, bytes, maxLinks, onProgress, onQuotaPrompt);
-      return { ...outcome, syncFailed };
-    }
-
-    const text = decodeUtf8(bytes);
-    await yieldToMain(); // WHOLE_FILE_STEPS
-    const parsed = await parseImportTextInChunks(text, file.name, yieldToMain);
-    const outcome = await importInterop(deps.username, parsed, maxLinks, onProgress, onQuotaPrompt);
+  onProgress({ step: 'parse' });
+  const bytes = await new File(file.uri).bytes();
+  if (isZipBytes(bytes)) {
+    const outcome = await importZip(deps.username, bytes, maxLinks, onProgress, onQuotaPrompt);
     return { ...outcome, syncFailed };
-  } finally {
-    releaseLiveReads();
   }
+
+  const text = decodeUtf8(bytes);
+  await yieldToMain(); // WHOLE_FILE_STEPS
+  const parsed = await parseImportTextInChunks(text, file.name, yieldToMain);
+  const outcome = await importInterop(deps.username, parsed, maxLinks, onProgress, onQuotaPrompt);
+  return { ...outcome, syncFailed };
 }

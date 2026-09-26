@@ -151,22 +151,17 @@ export interface RawEntityEntry {
 // the row — file first, then the row+op transaction, then the `hasDataFile`
 // flag, so a crash at any point reads as "not materialized" and the store
 // never claims bytes the disk doesn't have (loadEntityContent's ordering).
+// skipExisting rechecks existence inside that transaction, because the restore's
+// earlier scan can be stale after a yield. Returns the paths actually written.
 export async function bulkWriteEntities(
   username: string,
   entries: RawEntityEntry[],
-): Promise<void> {
-  if (entries.length === 0) return;
+  options: { skipExisting?: boolean } = {},
+): Promise<string[]> {
+  if (entries.length === 0) return [];
+  const written: string[] = [];
 
   const contentPaths: string[] = [];
-  for (const { path, data } of entries) {
-    if (!(data instanceof Uint8Array)) continue;
-    ensureDataFilesDir();
-    deleteDataFile(path);
-    const file = dataFileFor(path);
-    file.create({ intermediates: true, overwrite: true });
-    file.write(data);
-    contentPaths.push(path);
-  }
 
   // Set-at-a-time, not row-at-a-time: one stamp read, one batched put and one
   // batched enqueue for the whole call. A select + put + enqueue per entity was
@@ -180,6 +175,16 @@ export async function bulkWriteEntities(
     const records: ItemRecord[] = [];
     const puts: { path: string; baseUpdatedAt: number }[] = [];
     for (const { path, data } of entries) {
+      if (options.skipExisting && stamps.has(path)) continue;
+      written.push(path);
+      if (data instanceof Uint8Array) {
+        ensureDataFilesDir();
+        deleteDataFile(path);
+        const file = dataFileFor(path);
+        file.create({ intermediates: true, overwrite: true });
+        file.write(data);
+        contentPaths.push(path);
+      }
       const baseUpdatedAt = stamps.get(path) ?? 0;
       // Content rows carry no bytes (the disk file above is the payload);
       // entity rows project their query columns from the encoded blob.
@@ -193,9 +198,10 @@ export async function bulkWriteEntities(
     putItemsTx(tx, records);
     enqueuePutsTx(tx, username, puts);
   });
-  for (const { path } of entries) dropCachedPath(path);
+  for (const path of written) dropCachedPath(path);
 
   for (const path of contentPaths) await markItemDataFile(path, true);
+  return written;
 }
 
 // The user-authored fields a link edit may touch — see web-react mutations.ts

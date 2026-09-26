@@ -33,6 +33,8 @@ const PAGE_SIZE = 50;
 // both re-runs the edit triggers (optimistic write, then its sync cycle).
 const LOCAL_WRITE_GRACE_MS = 1500;
 
+type ObservedLinks = LinksResult & { localWriteNonce: number };
+
 // Web's UseLinksResult, verbatim — see there for each field's contract.
 export interface UseLinksResult {
   links: LinkItem[];
@@ -92,8 +94,15 @@ export function useLinks(): UseLinksResult {
   }
 
   // The always-current result. Kept flowing; we choose WHEN to show it.
+  const writeNonceRef = useRef(localWriteNonce);
+  writeNonceRef.current = localWriteNonce;
   const live = useLiveRead(
-    () => readLinks(query, limit),
+    async (): Promise<ObservedLinks> => {
+      // Capture BEFORE the read: an older in-flight result cannot acknowledge
+      // a write that happened while it was awaiting the database.
+      const readNonce = writeNonceRef.current;
+      return { ...(await readLinks(query, limit)), localWriteNonce: readNonce };
+    },
     [query, limit],
     ['items', 'item_tag_ids'],
   );
@@ -101,7 +110,7 @@ export function useLinks(): UseLinksResult {
   liveRef.current = live;
 
   // What's actually rendered — a snapshot promoted from `live`.
-  const [displayed, setDisplayed] = useState<LinksResult>();
+  const [displayed, setDisplayed] = useState<ObservedLinks>();
 
   // Local-edit grace, opened DURING RENDER off the nonce — web's rationale
   // (either order is possible: the nonce bump is synchronous after the write, the
@@ -113,9 +122,9 @@ export function useLinks(): UseLinksResult {
     setWriteGrace({ nonce: localWriteNonce, until: graceUntil });
   }
 
-  // Promotion — web's rules, verbatim: first paint, the user's own
-  // query/limit change (page identity read off the result's echoed
-  // `query`/`limit`), the local-edit grace window, or idle. Decided DURING RENDER
+  // Promotion: first paint, the user's own query/limit change (page identity
+  // read off the result's echoed `query`/`limit`), an unacknowledged local edit,
+  // the local-edit grace window, or idle. Decided DURING RENDER
   // for web's reason too: `hasPending` is derived from `displayed`, so promoting
   // in an effect commits a frame that still reports it true and the refresh pill
   // flashes on every local edit.
@@ -127,6 +136,10 @@ export function useLinks(): UseLinksResult {
     const promoteNow =
       displayed === undefined || // first paint
       (liveReflectsCurrentPage && pageChanged) || // navigation / show more — once the new page arrives
+      // Holds flush every 2 s and hidden screens can pause indefinitely. Keep
+      // an edit pending until a read actually observes its nonce; elapsed time
+      // alone must never strand the user's own edit behind the refresh pill.
+      (liveReflectsCurrentPage && live.localWriteNonce > displayed.localWriteNonce) ||
       graceUntil > Date.now() || // this device just edited
       !engaged; // idle: nothing to disturb
 

@@ -295,6 +295,10 @@ The policy, decided once:
   within the file; skips are reported, never errors.
 - **The bracemark backup merges skip-existing by path** — a path already in the
   local store is never touched, so a restore can't clobber newer local edits.
+  The initial scan supports the quota gate; each metadata write rechecks
+  existence inside its transaction through `bulkWriteEntities`'s
+  `skipExisting` option. Sync can land a path between scan and write while the
+  importer yields. The receipt counts only paths actually written.
 - **The plan's link cap is enforced up front**, _before anything is written_ —
   see _the import's quota gate_ below for the shape, which differs between an
   interop file and a backup. This is one of the places that enforce the cap at
@@ -396,6 +400,11 @@ choice card unmounting is the feedback, and there is no receipt because there is
 no event; `idle` renders nothing, as it does before any import. The flag is
 scoped to that one answer — the gate's own refusals (no room at all, no resolver,
 a backup file) still surface as errors.
+
+Leaving the import screen also settles an unanswered prompt as cancellation,
+including a prompt reached after the screen has already unmounted. An abandoned
+promise must not retain the archive or a live-read hold. Expo holds live reads
+only during the actual writes, after parsing, projection and the quota answer.
 
 **A backup is still refused whole.** `assertUnderImportQuota` survives unchanged
 on the bracemark-backup path, and that path never prompts. The old reasoning — a
@@ -510,6 +519,13 @@ restore or migration keeps what it's given, and only a fresh pick in the editor
 goes through `resizeImage`. The whole export is one JSON string parsed at once —
 the same in-memory ceiling the bracemark backup has on mobile, failing loudly
 rather than guarded, so a very large library wants the desktop app.
+
+The Bracemark backup restore follows the same content-before-metadata order on
+both platforms. Previously its file phase came last: a failure there left the
+owning entities present, so retry skipped those entities and never revisited
+their missing files. The export/import suites interrupt the file phase, retry
+the archive, and verify that links and files are restored together. They also
+inject a concurrent write after the existence scan to prove it survives.
 
 ### importing from Raindrop.io
 
@@ -1125,8 +1141,9 @@ new profile. The reading that follows them is below.
   re-rendered them. The restore wrote 1,000 links in 1.2 s at 200 links a chunk,
   about 240 ms a chunk, against stalls of 387–648 ms. That is why the re-run
   looked like the rest of each stall. `importAllData` now takes `holdLiveReads`
-  (`data/live-read-invalidation.ts`) from the parse to the end, released in a
-  `finally`. While it is held, a change only marks a read as having missed one.
+  (`data/live-read-invalidation.ts`) during the writes, released in a
+  `finally`. Parsing and the quota decision remain outside the hold. While it
+  is held, a change only marks a read as having missed one.
   The reads that missed one re-run on the next flush, which comes every
   `HELD_FLUSH_MS` (2 s) and on release. **The flush is periodic, not only on
   release**, because the yields keep the app usable during an import. A hold for

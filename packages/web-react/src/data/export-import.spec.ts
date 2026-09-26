@@ -367,6 +367,64 @@ beforeEach(async () => {
 // --- the round trip ---------------------------------------------------------------
 
 describe('the bracemark backup round trip', () => {
+  it.each([0, 1])('recovers a restore interrupted after %i files', async (completedFiles) => {
+    await seed();
+    const before = await storedEntities();
+    await exportAllData({ format: 'bracemark', deps: deps(), excludedListIds: new Set() });
+    const file = savedZip();
+    await db.items.clear();
+    await db.pendingOps.clear();
+    await expect(
+      importAllData({
+        file,
+        deps: deps(),
+        maxLinks: null,
+        onProgress: (progress) => {
+          if (progress.step === 'files' && progress.done === completedFiles)
+            throw new Error('interrupted');
+        },
+      }),
+    ).rejects.toThrow('interrupted');
+    expect(
+      Object.keys(await storedEntities()).filter((path) => path.startsWith(LINKS_PREFIX)),
+    ).toEqual([]);
+    const retry = await importAllData({ file, deps: deps(), maxLinks: null });
+    expect(retry.linkCount).toBe(3);
+    expect(retry.fileCount).toBe(2 - completedFiles);
+    expect(await storedEntities()).toEqual(before);
+  });
+
+  it('rechecks skip-existing inside the write after a restore yields', async () => {
+    await seed();
+    await exportAllData({ format: 'bracemark', deps: deps(), excludedListIds: new Set() });
+    const file = savedZip();
+    await db.items.clear();
+    await db.pendingOps.clear();
+    const path = `${LINKS_PREFIX}l_work.enc`;
+    const edited = {
+      url: 'https://work.invalid/newer',
+      listId: 'my-list',
+      tagIds: [],
+      customTitle: 'Arrived during restore',
+      createdAt: T,
+      updatedAt: T + 100,
+    };
+    let concurrent: Promise<unknown> | undefined;
+    const outcome = await importAllData({
+      file,
+      deps: deps(),
+      maxLinks: null,
+      onProgress: (progress) => {
+        if (progress.step === 'items' && progress.done === 0) {
+          concurrent = db.items.put(toItemRecord(path, 6000, utf8(JSON.stringify(edited))));
+        }
+      },
+    });
+    await concurrent;
+    expect((await storedEntities())[path]).toEqual(edited);
+    expect(outcome.linkCount).toBe(2);
+    expect(outcome.skippedCount).toBe(1);
+  });
   // THE property of the format, and the one nothing else in the workspace can
   // hold: every namespace, its paths, its timestamps and its blob bytes come back
   // identical after a real zip has been written and read. A drop on either side —

@@ -38,9 +38,17 @@ tags: [DATA-IMPORT-NATIVE-001, DATA-IMPORT-NATIVE-002, full, online, ios, androi
     commands:
       - tapOn: 'Show roots'
       - extendedWaitUntil:
-          visible: 'Downloads'
+          visible:
+            text: 'Downloads'
+            childOf:
+              id: 'com.google.android.documentsui:id/roots_list'
           timeout: 20000
-      - tapOn: 'Downloads'
+      # The picker can reopen Downloads and keep its breadcrumb in the tree
+      # behind the drawer. An unscoped text match taps Recent at that position.
+      - tapOn:
+          text: 'Downloads'
+          childOf:
+            id: 'com.google.android.documentsui:id/roots_list'
 
 - extendedWaitUntil:
     visible: '.*${IMPORT_FILE_NAME}.*'

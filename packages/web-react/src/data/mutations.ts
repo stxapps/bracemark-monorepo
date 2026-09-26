@@ -141,18 +141,24 @@ export interface RawEntityEntry {
 // original timestamps), and callers validate each blob against its namespace
 // schema BEFORE calling — the same defensive parity, just hoisted out of the
 // batch. `baseUpdatedAt` per path from its existing record (0 for new), exactly
-// like writeBytesWith.
+// like writeBytesWith. With skipExisting, the existence check shares the write
+// transaction: an import's earlier scan is only a snapshot, and sync can land a
+// path while the importer yields. Returns the paths actually written.
 export async function bulkWriteEntities(
   username: string,
   entries: RawEntityEntry[],
-): Promise<void> {
-  if (entries.length === 0) return;
+  options: { skipExisting?: boolean } = {},
+): Promise<string[]> {
+  if (entries.length === 0) return [];
+  const written: string[] = [];
   await db.transaction('rw', db.items, db.pendingOps, async () => {
     const existing = await db.items.bulkGet(entries.map((entry) => entry.path));
     const records: ItemRecord[] = [];
     const ops: PendingOpRecord[] = [];
     for (let i = 0; i < entries.length; i++) {
       const { path, data } = entries[i];
+      if (options.skipExisting && existing[i] !== undefined) continue;
+      written.push(path);
       const baseUpdatedAt = existing[i]?.updatedAt ?? 0;
       const bytes = data instanceof Uint8Array ? data : utf8(JSON.stringify(data));
       records.push(toItemRecord(path, baseUpdatedAt, bytes));
@@ -164,7 +170,8 @@ export async function bulkWriteEntities(
     await db.items.bulkPut(records);
     await db.pendingOps.bulkPut(ops);
   });
-  for (const entry of entries) dropCachedPath(entry.path);
+  for (const path of written) dropCachedPath(path);
+  return written;
 }
 
 // Batched delete by path — the delete-side twin of bulkWriteEntities, and what a

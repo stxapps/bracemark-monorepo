@@ -265,6 +265,70 @@ beforeEach(async () => {
 // --- the round trip ---------------------------------------------------------------
 
 describe('the bracemark backup round trip, through fflate', () => {
+  it.each([0, 1])('recovers a restore interrupted after %i files', async (completedFiles) => {
+    seedEntities();
+    await seedContent();
+    const before = storedEntities();
+    const exported = await exportBackup();
+    const archive = stash(exported.file.uri);
+    truncate();
+    resetFileSystem();
+    const file = repick(archive, exported.file.name);
+    await expect(
+      importAllData({
+        file,
+        deps: deps(),
+        maxLinks: null,
+        onProgress: (progress) => {
+          if (progress.step === 'files' && progress.done === completedFiles)
+            throw new Error('interrupted');
+        },
+      }),
+    ).rejects.toThrow('interrupted');
+    expect(Object.keys(storedEntities()).filter((path) => path.startsWith(LINKS_PREFIX))).toEqual(
+      [],
+    );
+    const retry = await importAllData({ file, deps: deps(), maxLinks: null });
+    expect(retry.linkCount).toBe(2);
+    expect(retry.fileCount).toBe(1 - completedFiles);
+    expect(storedEntities()).toEqual(before);
+  });
+
+  it('rechecks skip-existing inside the write after a restore yields', async () => {
+    seedEntities();
+    await seedContent();
+    const exported = await exportBackup();
+    const archive = stash(exported.file.uri);
+    truncate();
+    resetFileSystem();
+    const file = repick(archive, exported.file.name);
+    const path = `${LINKS_PREFIX}l_work.enc`;
+    const edited = {
+      url: 'https://work.invalid/newer',
+      listId: 'my-list',
+      tagIds: [],
+      customTitle: 'Arrived during restore',
+      createdAt: T,
+      updatedAt: T + 100,
+    };
+
+    const outcome = await importAllData({
+      file,
+      deps: deps(),
+      maxLinks: null,
+      onProgress: (progress) => {
+        if (progress.step === 'items' && progress.done === 0) {
+          getDb().transaction((tx) =>
+            putItemsTx(tx, [toItemRecord(path, 6000, utf8(JSON.stringify(edited)))]),
+          );
+        }
+      },
+    });
+
+    expect(storedEntities()[path]).toEqual(edited);
+    expect(outcome.linkCount).toBe(1);
+    expect(outcome.skippedCount).toBe(1);
+  });
   // The property the format claims, proved on THIS platform's container: what
   // the streaming Zip writes, unzipSync reads back, entity for entity and byte for byte.
   // A drop on either side is invisible until someone restores a phone.
@@ -450,6 +514,40 @@ describe('the bracemark backup round trip, through fflate', () => {
 // every live read on screen would then re-run only every couple of seconds, for the
 // life of the app, with nothing to say why.
 describe('the live-read hold', () => {
+  it('does not hold unrelated live reads while waiting for a quota answer', async () => {
+    let heldAtPrompt: boolean | undefined;
+    await expect(
+      importAllData({
+        file: repick(utf8('https://a.invalid/one\nhttps://b.invalid/two\n'), 'links.txt'),
+        deps: deps(),
+        maxLinks: 1,
+        onQuotaPrompt: async () => {
+          heldAtPrompt = liveReadsHeld();
+          return 'cancel';
+        },
+      }),
+    ).rejects.toThrow();
+    expect(heldAtPrompt).toBe(false);
+    expect(liveReadsHeld()).toBe(false);
+  });
+
+  it('releases the hold when a write phase fails', async () => {
+    await expect(
+      importAllData({
+        file: repick(utf8('https://a.invalid/one'), 'links.txt'),
+        deps: deps(),
+        maxLinks: null,
+        onProgress: (progress) => {
+          if (progress.step === 'items') {
+            expect(liveReadsHeld()).toBe(true);
+            throw new Error('write failed');
+          }
+        },
+      }),
+    ).rejects.toThrow('write failed');
+    expect(liveReadsHeld()).toBe(false);
+  });
+
   it('is held while the chunks are written and released when the import ends', async () => {
     const heldWhileWriting: boolean[] = [];
 

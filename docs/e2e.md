@@ -413,7 +413,13 @@ accessible identity is untestable as well as inaccessible. Flows bind to `testID
 and accessible labels, **never to body copy** — copy in this repo changes often,
 and a flow keyed to a sentence turns every wording edit into a red run.
 
-Twenty-seven repo-specific gotchas:
+Twenty-eight repo-specific gotchas:
+
+- **Android's document picker keeps the current folder breadcrumb behind its
+  navigation drawer.** If it reopens Downloads, an unscoped `Downloads` text
+  selector can match that breadcrumb and tap the Recent row covering it. The
+  import flow scopes both its wait and tap to DocumentsUI's `roots_list`, then
+  asserts the staged filename and the app's import receipt.
 
 - **`launchApp` resumes, it does not cold-start.** Every flow that assumes a root
   screen needs its state wiped first, or it passes alone and fails in a directory
