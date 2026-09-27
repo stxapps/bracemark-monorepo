@@ -140,15 +140,15 @@ pages link to the relevant product page without repeating its pitch. Comparison
 pages need explicit criteria, sources and a review date so their facts stay
 current.
 
-| piece                               | what it is                                                                                                                    |
-| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `src/content/docs/index.ts`         | the manifest — groups, reading order, and each page's slug, title and description (the meta description, printed as the lede) |
-| `src/content/docs/<slug>.mdx`       | the prose, starting at `##` — the page prints its own `<h1>` from the manifest                                                |
-| `src/app/docs/[slug]/page.tsx`      | the one route; `generateStaticParams` from the manifest, `dynamicParams = false`                                              |
-| `src/lib/mdx/load.ts`               | reads the file and compiles it with `@mdx-js/mdx` at build time                                                               |
-| `src/lib/mdx/headings.ts`           | the heading-id rule and the rehype plugin that stamps it — the "On this page" column                                          |
-| `src/components/mdx-components.tsx` | everything a page may use beyond Markdown: `<AppLink path=…>`, `<FreeLinks />`, and on-site links via next/link               |
-| `.mdx-prose` (`globals.css`)        | the styling, as `.legal-prose` does for /terms and /privacy — so a page stays plain Markdown                                  |
+| piece                               | what it is                                                                                                                             |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/content/docs/index.ts`         | the manifest — groups, reading order, and each page's slug, title and description (the meta description, printed as the lede)          |
+| `src/content/docs/<slug>.mdx`       | the prose, starting at `##` — the page prints its own `<h1>` from the manifest                                                         |
+| `src/app/docs/[slug]/page.tsx`      | the one route; `generateStaticParams` from the manifest, `dynamicParams = false`                                                       |
+| `src/lib/mdx/load.ts`               | reads the file and compiles it with `@mdx-js/mdx` at build time                                                                        |
+| `src/lib/mdx/headings.ts`           | the heading-id rule and the rehype plugin that stamps it — the "On this page" column                                                   |
+| `src/components/mdx-components.tsx` | everything a page may use beyond Markdown: `<AppLink path=…>`, `<StoreLink store=…>`, `<FreeLinks />`, and on-site links via next/link |
+| `.mdx-prose` (`globals.css`)        | the styling, as `.legal-prose` does for /terms and /privacy — so a page stays plain Markdown                                           |
 
 The last four rows are shared with `/blog` (next section), which is why they are
 named for MDX rather than for docs; what only docs uses — `lib/docs/metadata.ts`,
@@ -172,9 +172,10 @@ The docs index and each page also set their own canonical URL and social preview
 metadata; each article's title and description come from that same manifest.
 
 **A page imports nothing.** Numbers come from `@stxapps/shared` through the
-component map (`<FreeLinks />` reads the plan table, never a typed 200), and a link
-into the app goes through `<AppLink>`, because the app's origin differs per tier
-and a cross-origin link must not be a next/link ([hosting.md](./hosting.md),
+component map (`<FreeLinks />` reads the plan table, never a typed 200), a store
+listing through `<StoreLink>` (shared's `stores/listings.ts`, the same URLs as the
+landing page's badges), and a link into the app goes through `<AppLink>`, because
+the app's origin differs per tier and a cross-origin link must not be a next/link ([hosting.md](./hosting.md),
 _crossing an origin_). A tag not in the map fails the build.
 
 ⚠ **MDX is outside every checker the rest of the site has** — ESLint, prettier and

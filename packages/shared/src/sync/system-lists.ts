@@ -51,10 +51,11 @@ export function isSystemListId(id: string): boolean {
   return SYSTEM_LIST_IDS.has(id);
 }
 
-// Trash takes no children: it's the deletion staging area (links pending the
-// purge window), so nesting a list inside it is incoherent. It can still be
-// moved/renamed and BE a child — it just can't be a parent. buildTree promotes
-// anything naming it as `parentId` back to the root; pass this to the list tree.
+// Trash takes no children: it's the deletion staging area (links held until the
+// user deletes them permanently — nothing purges on a timer), so nesting a list
+// inside it is incoherent. It can still be moved/renamed and BE a child — it
+// just can't be a parent. buildTree promotes anything naming it as `parentId`
+// back to the root; pass this to the list tree.
 export const LIST_NO_CHILDREN_IDS: ReadonlySet<string> = new Set([TRASH_ID]);
 
 // Default display names for the system selections, keyed by id. User list/tag

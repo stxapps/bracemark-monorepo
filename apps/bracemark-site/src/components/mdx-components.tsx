@@ -1,7 +1,14 @@
 import type { MDXComponents } from 'mdx/types';
 import Link from 'next/link';
 
-import { entitlementsOf, PLAN_LABELS } from '@stxapps/shared';
+import {
+  APP_STORE_URL,
+  CHROME_WEB_STORE_URL,
+  entitlementsOf,
+  FIREFOX_ADDONS_URL,
+  PLAN_LABELS,
+  PLAY_STORE_URL,
+} from '@stxapps/shared';
 
 import { APP_URL } from '../lib/site';
 
@@ -39,6 +46,32 @@ function AppLink({ path, children }: { path: string; children: React.ReactNode }
   return <a href={`${APP_URL}${path}`}>{children}</a>;
 }
 
+const STORE_URLS = {
+  chrome: CHROME_WEB_STORE_URL,
+  firefox: FIREFOX_ADDONS_URL,
+  ios: APP_STORE_URL,
+  android: PLAY_STORE_URL,
+} as const;
+
+/**
+ * A store listing, e.g. `<StoreLink store="chrome">Chrome Web Store</StoreLink>`,
+ * read from shared's stores/listings.ts rather than typed, so it moves with the
+ * landing page's badge row.
+ */
+function StoreLink({
+  store,
+  children,
+}: {
+  store: keyof typeof STORE_URLS;
+  children: React.ReactNode;
+}) {
+  // tsc never reads the MDX, so the `store` union guards nothing there: a typo
+  // must fail the build rather than ship href="undefined".
+  const href = STORE_URLS[store];
+  if (!href) throw new Error(`StoreLink: unknown store "${store}"`);
+  return <a href={href}>{children}</a>;
+}
+
 /** The free plan's link cap, read from the plan table rather than typed. */
 function FreeLinks() {
   return entitlementsOf('free').maxLinks;
@@ -54,4 +87,5 @@ export const MDX_COMPONENTS: MDXComponents = {
   AppLink,
   FreeLinks,
   PlanName,
+  StoreLink,
 };

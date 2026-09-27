@@ -1166,11 +1166,11 @@ export const FAQ_GROUPS: FaqGroup[] = [
         // because a reader expecting the old list back and getting the inbox
         // reads it as a second loss.
         //
-        // NO PURGE WINDOW IS PROMISED, because none ships. system-lists.ts calls
-        // Trash "the deletion staging area (links pending the purge window)", but
-        // nothing in the repo purges anything on a timer — Trash holds until the
-        // user empties it by hand. A "for 30 days" here would be inventing a
-        // feature, and it is the kind a reader plans around.
+        // NO PURGE WINDOW IS PROMISED, because none ships. Nothing in the repo
+        // purges anything on a timer — Trash holds until the user empties it by
+        // hand (system-lists.ts, LIST_NO_CHILDREN_IDS). A "for 30 days" here
+        // would be inventing a feature, and it is the kind a reader plans
+        // around.
         //
         // ⚠ THE EXPORT BACKSTOP IS NOT AN UNDO FOR THE EDIT THIS ANSWER IS
         // ABOUT, and "the full backup restores everything" said it was. The
