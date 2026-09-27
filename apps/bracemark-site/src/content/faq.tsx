@@ -1287,7 +1287,10 @@ export const FAQ_GROUPS: FaqGroup[] = [
             ). Export gives you the whole library on every plan: a full backup that restores
             everything, or one of three formats other apps read — a browser bookmarks file, a CSV
             carrying the address, list, title, note, tags, and date of every link, and a plain list
-            of URLs. A list you have locked is left out of the file until you unlock it. See{' '}
+            of URLs. A list you have locked is left out of the file until you unlock it. You can
+            turn a backup you kept into any of those three later with our{' '}
+            <PageLink href="/tools/bookmark-converter">bookmark converter</PageLink>, which runs in
+            your browser and needs no sign-in. See{' '}
             <PageLink href="/docs/import">Import your links</PageLink> and{' '}
             <PageLink href="/docs/export">Export your data</PageLink> for the steps and formats.
           </>

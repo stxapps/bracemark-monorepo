@@ -176,6 +176,10 @@ export const FOOTER_LINKS: { heading: string; links: FooterLink[] }[] = [
       // Footer only, for now: HEADER_LINKS above is at its four-link ceiling, and
       // Docs earns a header slot only by replacing one of them.
       { href: '/docs', label: 'Docs' },
+      // Footer only, like Docs: the header is at its ceiling. Here rather than a
+      // "Tools" column of one — promote it to its own group when a second tool
+      // lands, and widen the footer grid with it (a fourth group wraps at lg).
+      { href: '/tools/bookmark-converter', label: 'Bookmark converter' },
     ],
   },
   {
