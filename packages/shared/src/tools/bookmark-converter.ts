@@ -1,10 +1,11 @@
-import { toRaindropCsv } from '../export/csv';
 import {
-  type NetscapeBundle,
-  type NetscapeFolder,
-  type NetscapeLinkRow,
-  toNetscapeHtml,
-} from '../export/netscape';
+  bundleFromImported,
+  type ExportBundle,
+  type ExportFolder,
+  type ExportLinkRow,
+} from '../export/bundle';
+import { toRaindropCsv } from '../export/csv';
+import { toNetscapeHtml } from '../export/netscape';
 import { toUrlText } from '../export/text';
 import { parseBraceExport } from '../import/brace';
 import type { ImportedLink, ImportObserver } from '../import/bundle';
@@ -78,47 +79,12 @@ function record(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function exportRow(link: ImportedLink): NetscapeLinkRow {
-  return {
-    url: link.url,
-    title: link.customTitle ?? link.title ?? link.url,
-    tagNames: link.tagNames,
-    ...(link.note === undefined ? {} : { note: link.note }),
-    ...(link.createdAt === undefined ? {} : { createdAt: link.createdAt }),
-    ...(link.updatedAt === undefined ? {} : { updatedAt: link.updatedAt }),
-  };
-}
-
-function toBundle(links: ImportedLink[], paths: string[][]): NetscapeBundle {
-  const bundle: NetscapeBundle = { folders: [], rootLinks: [] };
-  const folders = new Map<string, NetscapeFolder>();
-  function ensure(path: string[]): NetscapeFolder | undefined {
-    let siblings = bundle.folders;
-    let folder: NetscapeFolder | undefined;
-    for (let length = 1; length <= path.length; length++) {
-      const key = JSON.stringify(path.slice(0, length));
-      folder = folders.get(key);
-      if (!folder) {
-        folder = { name: path[length - 1], links: [], children: [] };
-        folders.set(key, folder);
-        siblings.push(folder);
-      }
-      siblings = folder.children;
-    }
-    return folder;
-  }
-  for (const path of paths) ensure(path);
-  for (const link of links)
-    (ensure(link.folderPath)?.links ?? bundle.rootLinks)?.push(exportRow(link));
-  return bundle;
-}
-
-function flatten(bundle: NetscapeBundle): ImportedLink[] {
+function flatten(bundle: ExportBundle): ImportedLink[] {
   const out: ImportedLink[] = [];
-  function rows(links: NetscapeLinkRow[], path: string[]) {
+  function rows(links: ExportLinkRow[], path: string[]) {
     for (const link of links) out.push({ ...link, customTitle: link.title, folderPath: path });
   }
-  function walk(folder: NetscapeFolder, path: string[]) {
+  function walk(folder: ExportFolder, path: string[]) {
     const next = [...path, folder.name];
     rows(folder.links, next);
     for (const child of folder.children) walk(child, next);
@@ -353,7 +319,7 @@ export function convertBookmarkFiles(
     for (let length = 1; length <= link.folderPath.length; length++)
       occupied.add(JSON.stringify(link.folderPath.slice(0, length)));
   const emptyFolderCount = [...paths.keys()].filter((key) => !occupied.has(key)).length;
-  const bundle = toBundle(links, [...paths.values()]);
+  const bundle = bundleFromImported(links, [...paths.values()]);
   const expected = flatten(bundle);
   const content =
     output === 'html'

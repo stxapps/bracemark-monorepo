@@ -1,21 +1,4 @@
-import type { ExportLinkRow } from './bundle';
-
-// A file conversion can lack dates even when the app's own export snapshot never
-// does. Omit absent attributes rather than inventing the day of conversion.
-export type NetscapeLinkRow = Omit<ExportLinkRow, 'createdAt' | 'updatedAt'> &
-  Partial<Pick<ExportLinkRow, 'createdAt' | 'updatedAt'>>;
-
-export interface NetscapeFolder {
-  name: string;
-  links: NetscapeLinkRow[];
-  children: NetscapeFolder[];
-}
-
-export interface NetscapeBundle {
-  folders: NetscapeFolder[];
-  rootLinks?: NetscapeLinkRow[];
-  exportedAt?: number;
-}
+import type { ExportBundle, ExportFolder, ExportLinkRow } from './bundle';
 
 // Netscape Bookmark File serializer — the one interop format everything reads:
 // web browsers (Chrome/Firefox/Safari "Import bookmarks"), LinkWarden, and
@@ -39,7 +22,7 @@ function esc(value: string): string {
     .replace(/"/g, '&quot;');
 }
 
-function linkLines(link: NetscapeLinkRow, indent: string, includeNotes: boolean): string[] {
+function linkLines(link: ExportLinkRow, indent: string, includeNotes: boolean): string[] {
   const attrs = [`HREF="${esc(link.url)}"`];
   if (link.createdAt !== undefined) attrs.push(`ADD_DATE="${Math.floor(link.createdAt / 1000)}"`);
   if (link.updatedAt !== undefined)
@@ -51,7 +34,7 @@ function linkLines(link: NetscapeLinkRow, indent: string, includeNotes: boolean)
 }
 
 function pushFolder(
-  folder: NetscapeFolder,
+  folder: ExportFolder,
   indent: string,
   out: string[],
   includeNotes: boolean,
@@ -65,7 +48,7 @@ function pushFolder(
 }
 
 export function toNetscapeHtml(
-  bundle: NetscapeBundle,
+  bundle: ExportBundle,
   options: { includeNotes?: boolean } = {},
 ): string {
   const out: string[] = [

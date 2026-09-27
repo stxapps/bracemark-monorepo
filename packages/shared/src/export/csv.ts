@@ -1,4 +1,4 @@
-import type { NetscapeBundle, NetscapeFolder, NetscapeLinkRow } from './netscape';
+import type { ExportBundle, ExportFolder, ExportLinkRow } from './bundle';
 
 // CSV serializer targeting Raindrop.io's import (its documented columns:
 // url/folder/title/note/tags/created) — and any spreadsheet. Preferred over
@@ -20,7 +20,7 @@ function cell(value: string, spreadsheetSafe: boolean): string {
   return field(spreadsheetSafe && /^[\s]*[=+@-]|^[\t\r\n]/.test(value) ? "'" + value : value);
 }
 
-function pushLinks(links: NetscapeLinkRow[], path: string, out: string[], safe: boolean): void {
+function pushLinks(links: ExportLinkRow[], path: string, out: string[], safe: boolean): void {
   for (const link of links) {
     const row = [
       link.url,
@@ -34,19 +34,14 @@ function pushLinks(links: NetscapeLinkRow[], path: string, out: string[], safe: 
   }
 }
 
-function pushFolder(
-  folder: NetscapeFolder,
-  parentPath: string,
-  out: string[],
-  safe: boolean,
-): void {
+function pushFolder(folder: ExportFolder, parentPath: string, out: string[], safe: boolean): void {
   const path = parentPath === '' ? folder.name : `${parentPath}/${folder.name}`;
   pushLinks(folder.links, path, out, safe);
   for (const child of folder.children) pushFolder(child, path, out, safe);
 }
 
 export function toRaindropCsv(
-  bundle: NetscapeBundle,
+  bundle: ExportBundle,
   options: { spreadsheetSafe?: boolean } = {},
 ): string {
   const out = [HEADER.join(',')];
