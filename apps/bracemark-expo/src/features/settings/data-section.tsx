@@ -32,7 +32,6 @@ import {
 import {
   type DeleteAllState,
   type ExportedFile,
-  type ExportFormat,
   type ExportState,
   type ImportState,
   useDeleteAllData,
@@ -44,6 +43,7 @@ import {
   useSync,
 } from '@stxapps/expo-react';
 import {
+  type ExportFormat,
   formatSyncedAt,
   getSyncPhase,
   type ImportQuotaAnswer,

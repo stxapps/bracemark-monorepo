@@ -8,15 +8,10 @@
 import { useCallback, useRef, useState } from 'react';
 
 import { useApiClient } from '@stxapps/react';
+import type { ExportFormat, ExportOutcome, ExportProgress } from '@stxapps/shared';
 
 import { useAuth } from '../contexts/auth-provider';
-import {
-  exportAllData,
-  ExportCancelledError,
-  type ExportFormat,
-  type ExportOutcome,
-  type ExportProgress,
-} from '../data/export-all-data';
+import { exportAllData, ExportCancelledError } from '../data/export-all-data';
 import { getSession } from '../data/session-store';
 import type { SyncDeps } from '../sync/engine';
 

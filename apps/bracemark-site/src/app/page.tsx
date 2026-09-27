@@ -986,12 +986,11 @@ const DURABILITY: [string, React.ReactNode][] = [
   //
   // NO COUNT, AND NO LIST OF FORMATS — that trim has been taken, and the reason
   // is drift rather than length. `ExportFormat` is `'bracemark' | 'netscape' |
-  // 'csv' | 'text'`, declared in `web-react/src/data/export-all-data.ts` and
-  // again in `expo-react/src/data/export-all-data.ts`, and `bracemark-site`
-  // depends on NEITHER — it imports `shared` and nothing else. So a fifth format
-  // would leave a public commitment quietly false here with no lint error, type
-  // error or failing test, which is the /extractor-caps shape the tripwire list
-  // warns about. "Formats other apps read are there too" is count-free and stays
+  // 'csv' | 'text'`, declared once in `shared/src/data/export-run.ts`, which
+  // `bracemark-site` does import — but nothing checks a sentence of prose against
+  // a union. So a fifth format would leave a public commitment quietly false here
+  // with no lint error, type error or failing test, which is the /extractor-caps
+  // shape the tripwire list warns about. "Formats other apps read are there too" is count-free and stays
   // true whatever lands; /faq `import-export` is the ONE surface that enumerates
   // them, because it is where a reader goes for the list and where the next
   // format will actually get written down.

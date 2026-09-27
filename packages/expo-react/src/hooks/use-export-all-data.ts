@@ -7,14 +7,10 @@
 import { useCallback, useRef, useState } from 'react';
 
 import { useApiClient } from '@stxapps/react';
+import type { ExportFormat, ExportProgress } from '@stxapps/shared';
 
 import { useAuth } from '../contexts/auth-provider';
-import {
-  exportAllData,
-  type ExportFormat,
-  type ExportOutcome,
-  type ExportProgress,
-} from '../data/export-all-data';
+import { exportAllData, type ExportFileOutcome } from '../data/export-all-data';
 import { getSession } from '../data/session-store';
 import { beginStallWindow, endStallWindow } from '../lib/stall-probe';
 import type { SyncDeps } from '../sync/engine';
@@ -22,7 +18,7 @@ import type { SyncDeps } from '../sync/engine';
 export type ExportState =
   | { phase: 'idle' }
   | ({ phase: 'running' } & ExportProgress)
-  | { phase: 'done'; outcome: ExportOutcome }
+  | { phase: 'done'; outcome: ExportFileOutcome }
   | { phase: 'error'; message: string };
 
 export interface UseExportAllDataResult {

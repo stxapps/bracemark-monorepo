@@ -1215,12 +1215,10 @@ export const FAQ_GROUPS: FaqGroup[] = [
       {
         // THE ONLY SURFACE THAT ENUMERATES THE EXPORT FORMATS, and it holds that
         // job on purpose. `ExportFormat` is `'bracemark' | 'netscape' | 'csv' |
-        // 'text'`, declared in `web-react/src/data/export-all-data.ts` and again
-        // in `expo-react/src/data/export-all-data.ts`; `bracemark-site` depends
-        // on neither, importing `shared` and nothing else. Nothing therefore
-        // links this sentence to the union — a fifth format leaves it quietly
-        // wrong with no lint error, type error or failing test, the same shape
-        // as the /extractor caps. The landing page used to carry the count twice
+        // 'text'`, declared once in `shared/src/data/export-run.ts`. This app
+        // imports `shared`, but nothing links a sentence of prose to the union
+        // — a fifth format leaves it quietly wrong with no lint error, type
+        // error or failing test, the same shape as the /extractor caps. The landing page used to carry the count twice
         // and now carries it nowhere (DURABILITY names the archive's bytes and
         // says "Formats other apps read are there too"; the LIBRARY bullet says
         // "Several formats"), so a new format is a one-line edit HERE and only

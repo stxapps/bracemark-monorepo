@@ -36,7 +36,10 @@ import type { z } from 'zod';
 import type {
   ExportBundle,
   ExportFolder,
+  ExportFormat,
   ExportLinkRow,
+  ExportOutcome,
+  ExportProgress,
   Extraction,
   Link,
   List,
@@ -51,6 +54,8 @@ import {
   BACKUP_MANIFEST_ENTRY,
   backupFileEntry,
   buildTree,
+  EXPORT_MIME,
+  exportFileName,
   EXTRACTIONS_PREFIX,
   extractionSchema,
   FILES_PREFIX,
@@ -83,29 +88,6 @@ import { loadEntityContents, runIncrementalSync, type SyncDeps } from '../sync/e
 import { db } from './db';
 import { parseBlob } from './projection';
 import { readLists, readSettingsGeneral } from './queries';
-
-export type ExportFormat = 'bracemark' | 'netscape' | 'csv' | 'text';
-
-// The running phases, in order. `sync` and `assemble` are indeterminate;
-// `gather` counts link records, `files` counts blob downloads (bracemark only).
-export interface ExportProgress {
-  step: 'sync' | 'gather' | 'files' | 'assemble';
-  done?: number;
-  total?: number;
-}
-
-export interface ExportOutcome {
-  // Links written to the file (after the lock/Trash policy).
-  linkCount: number;
-  // `files/` blobs included in the zip (bracemark only; 0 otherwise).
-  fileCount: number;
-  // Referenced blobs that couldn't be included — deleted server-side or never
-  // known locally (dangling refs). Reported, never fatal.
-  missingFileCount: number;
-  // The pre-export refresh failed (offline / server down); the export carried
-  // on with this device's local copy. A warning, not an error — local-first.
-  syncFailed: boolean;
-}
 
 // The user dismissed the save dialog — not a failure; the caller returns to idle.
 export class ExportCancelledError extends Error {
@@ -296,7 +278,8 @@ async function assembleBracemarkZip(
   pins: { path: string; entity: Pin }[],
   filePaths: string[],
 ): Promise<{ fileCount: number }> {
-  const { BlobWriter, TextReader, Uint8ArrayReader, ZipWriter } = await import('@zip.js/zip.js/index-native.js');
+  const { BlobWriter, TextReader, Uint8ArrayReader, ZipWriter } =
+    await import('@zip.js/zip.js/index-native.js');
 
   const lines: string[] = [];
   for (const { path, entity } of lists) lines.push(jsonlLine(path, entity));
@@ -312,7 +295,7 @@ async function assembleBracemarkZip(
   if (settings !== undefined) lines.push(jsonlLine(SETTINGS_GENERAL_PATH, settings));
 
   const zipWriter = new ZipWriter<Blob>(
-    target.kind === 'blob' ? new BlobWriter('application/zip') : target.writable,
+    target.kind === 'blob' ? new BlobWriter(EXPORT_MIME.bracemark) : target.writable,
   );
 
   // Files stream one at a time from Dexie — a blob downloaded in the files
@@ -364,28 +347,6 @@ function downloadBlob(blob: Blob, filename: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
-// Local (not UTC) YYYY-MM-DD — the date the user sees on their clock.
-function datePart(date: Date): string {
-  const y = date.getFullYear();
-  const m = `${date.getMonth() + 1}`.padStart(2, '0');
-  const d = `${date.getDate()}`.padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
-
-export function exportFileName(format: ExportFormat, date = new Date()): string {
-  const stamp = datePart(date);
-  switch (format) {
-    case 'bracemark':
-      return `Bracemark backup ${stamp}.zip`;
-    case 'netscape':
-      return `Bracemark bookmarks ${stamp}.html`;
-    case 'csv':
-      return `Bracemark bookmarks ${stamp}.csv`;
-    case 'text':
-      return `Bracemark links ${stamp}.txt`;
-  }
-}
-
 // --- the flow -------------------------------------------------------------------
 
 export async function exportAllData(options: {
@@ -432,13 +393,13 @@ export async function exportAllData(options: {
       mergedLists,
       tags.map(({ entity }) => entity),
     );
-    const [content, mime] =
+    const content =
       format === 'netscape'
-        ? [toNetscapeHtml(bundle), 'text/html']
+        ? toNetscapeHtml(bundle)
         : format === 'csv'
-          ? [toRaindropCsv(bundle), 'text/csv']
-          : [toUrlText(bundle), 'text/plain'];
-    downloadBlob(new Blob([content], { type: `${mime};charset=utf-8` }), filename);
+          ? toRaindropCsv(bundle)
+          : toUrlText(bundle);
+    downloadBlob(new Blob([content], { type: `${EXPORT_MIME[format]};charset=utf-8` }), filename);
     return {
       linkCount: interopLinks.length,
       fileCount: 0,

@@ -40,6 +40,7 @@ import {
   ARCHIVE_ID,
   BACKUP_ITEMS_ENTRY,
   BACKUP_MANIFEST_ENTRY,
+  type ExportFormat,
   EXTRACTIONS_PREFIX,
   filesListEndpoint,
   filesSignEndpoint,
@@ -63,7 +64,7 @@ import {
 
 import type { SyncDeps } from '../sync/engine';
 import { db } from './db';
-import { exportAllData, type ExportFormat } from './export-all-data';
+import { exportAllData } from './export-all-data';
 import { importAllData } from './import-all-data';
 import { toItemRecord } from './projection';
 

@@ -17,6 +17,7 @@ export * from './crypto/recovery-code';
 export * from './crypto/salt';
 export * from './data/backup';
 export * from './data/endpoints';
+export * from './data/export-run';
 export * from './data/import-run';
 export * from './export/bundle';
 export * from './export/csv';

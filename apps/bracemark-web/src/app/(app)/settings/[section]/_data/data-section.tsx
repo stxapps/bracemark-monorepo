@@ -35,6 +35,7 @@ import {
 import Link from 'next/link';
 
 import {
+  type ExportFormat,
   formatSyncedAt,
   getSyncPhase,
   type ImportQuotaAnswer,
@@ -44,7 +45,6 @@ import {
 } from '@stxapps/shared';
 import {
   type DeleteAllState,
-  type ExportFormat,
   type ExportState,
   type ImportState,
   useDeleteAllData,

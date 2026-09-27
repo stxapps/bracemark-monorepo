@@ -29,7 +29,10 @@ import type { z } from 'zod';
 import type {
   ExportBundle,
   ExportFolder,
+  ExportFormat,
   ExportLinkRow,
+  ExportOutcome,
+  ExportProgress,
   Extraction,
   Link,
   List,
@@ -44,6 +47,8 @@ import {
   BACKUP_MANIFEST_ENTRY,
   backupFileEntry,
   buildTree,
+  EXPORT_MIME,
+  exportFileName,
   EXTRACTIONS_PREFIX,
   extractionSchema,
   FILES_PREFIX,
@@ -79,16 +84,6 @@ import { bulkGetItems, getItem, namespaceRows } from './item-store';
 import { parseBlob } from './projection';
 import { readLists, readSettingsGeneral } from './queries';
 
-export type ExportFormat = 'bracemark' | 'netscape' | 'csv' | 'text';
-
-// The running phases, in order. `sync` and `assemble` are indeterminate;
-// `gather` counts link records, `files` counts blob downloads (bracemark only).
-export interface ExportProgress {
-  step: 'sync' | 'gather' | 'files' | 'assemble';
-  done?: number;
-  total?: number;
-}
-
 // The written output, for the UI's share-sheet handoff. Lives in the CACHE dir
 // (transient by definition — the share sheet copies it out; an OS purge later
 // costs nothing).
@@ -98,18 +93,9 @@ export interface ExportedFile {
   mimeType: string;
 }
 
-export interface ExportOutcome {
-  // Links written to the file (after the lock/Trash policy).
-  linkCount: number;
-  // `files/` blobs included in the zip (bracemark only; 0 otherwise).
-  fileCount: number;
-  // Referenced blobs that couldn't be included — deleted server-side or never
-  // known locally (dangling refs). Reported, never fatal.
-  missingFileCount: number;
-  // The pre-export refresh failed (offline / server down); the export carried
-  // on with this device's local copy. A warning, not an error — local-first.
-  syncFailed: boolean;
-  // Where the output landed — the UI shares/saves it from here.
+// The shared counters plus where the output landed — the UI shares/saves it
+// from here.
+export interface ExportFileOutcome extends ExportOutcome {
   file: ExportedFile;
 }
 
@@ -424,35 +410,6 @@ function writeCacheFile(file: File, content: string | Uint8Array): void {
   file.write(content);
 }
 
-// Local (not UTC) YYYY-MM-DD — the date the user sees on their clock.
-function datePart(date: Date): string {
-  const y = date.getFullYear();
-  const m = `${date.getMonth() + 1}`.padStart(2, '0');
-  const d = `${date.getDate()}`.padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
-
-export function exportFileName(format: ExportFormat, date = new Date()): string {
-  const stamp = datePart(date);
-  switch (format) {
-    case 'bracemark':
-      return `Bracemark backup ${stamp}.zip`;
-    case 'netscape':
-      return `Bracemark bookmarks ${stamp}.html`;
-    case 'csv':
-      return `Bracemark bookmarks ${stamp}.csv`;
-    case 'text':
-      return `Bracemark links ${stamp}.txt`;
-  }
-}
-
-const EXPORT_MIME: Record<ExportFormat, string> = {
-  bracemark: 'application/zip',
-  netscape: 'text/html',
-  csv: 'text/csv',
-  text: 'text/plain',
-};
-
 // --- the flow -------------------------------------------------------------------
 
 export async function exportAllData(options: {
@@ -462,7 +419,7 @@ export async function exportAllData(options: {
   // included, so membership alone excludes a link/list.
   excludedListIds: ReadonlySet<string>;
   onProgress?: (progress: ExportProgress) => void;
-}): Promise<ExportOutcome> {
+}): Promise<ExportFileOutcome> {
   const { format, deps, excludedListIds } = options;
   const onProgress = options.onProgress ?? (() => undefined);
   const filename = exportFileName(format);

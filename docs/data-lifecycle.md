@@ -33,7 +33,11 @@ and keeps the identity; **delete account** takes both.
 
 `web-react` `data/export-all-data.ts` (behind `useExportAllData`) orchestrates;
 the three interop serializers are pure functions in `@stxapps/shared`
-(`export/`). Four formats, one deliberate asymmetry:
+(`export/`). What both platforms' orchestrators must agree on — the
+`ExportFormat` union, the progress phases, the outcome counters, the MIME types
+and the file name — is `data/export-run.ts`, the sibling of `data/import-run.ts`;
+expo's outcome extends the shared one with the cache file its share sheet
+presents. Four formats, one deliberate asymmetry:
 
 - **bracemark** — the complete backup: a zip of `manifest.json` + `items.jsonl`
   (raw `{path, data}` entities) + `files/{id}` (raw decrypted blob bytes). The
@@ -406,12 +410,13 @@ The policy, decided once:
 Only the platform-bound half of that lives in each orchestrator (the store
 reads, the zip library, the file API). The rest is shared, so the two can't
 drift: the archive contract is `data/backup.ts` (above), the outcome/progress
-vocabulary and the quota gate are `data/import-run.ts`, the format→parser
-dispatch is `import/parse.ts`, the rows→entities projection is
-`import/project.ts`, and the folder/tag find-or-create walks are
-`import/resolve.ts` — the last two take `newId` as an argument, since id minting
-is the one genuinely platform-specific piece (`web-crypto` vs. `expo-crypto`,
-neither reachable from `shared`).
+vocabulary and the quota gate are `data/import-run.ts` (export's vocabulary is
+its sibling `data/export-run.ts`), the format→parser dispatch is
+`import/parse.ts`, the rows→entities projection is `import/project.ts`, and
+the folder/tag find-or-create walks are `import/resolve.ts` — the last two take
+`newId` as an argument, since id minting is the one genuinely
+platform-specific piece (`web-crypto` vs. `expo-crypto`, neither reachable
+from `shared`).
 
 ### the import's quota gate
 
