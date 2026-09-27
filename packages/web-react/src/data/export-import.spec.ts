@@ -34,7 +34,7 @@
 
 // Type-only, so zip.js itself stays lazily imported here exactly as it is in the
 // source under test.
-import type { FileEntry } from '@zip.js/zip.js';
+import type { FileEntry } from '@zip.js/zip.js/index-native.js';
 
 import {
   ARCHIVE_ID,
@@ -324,7 +324,7 @@ async function storedEntities(): Promise<Record<string, unknown>> {
 }
 
 async function zipEntryNames(file: File): Promise<string[]> {
-  const { BlobReader, ZipReader } = await import('@zip.js/zip.js');
+  const { BlobReader, ZipReader } = await import('@zip.js/zip.js/index-native.js');
   const reader = new ZipReader(new BlobReader(file));
   try {
     return (await reader.getEntries()).map((entry) => entry.filename);
@@ -334,7 +334,7 @@ async function zipEntryNames(file: File): Promise<string[]> {
 }
 
 async function zipEntryText(file: File, name: string): Promise<string> {
-  const { BlobReader, TextWriter, ZipReader } = await import('@zip.js/zip.js');
+  const { BlobReader, TextWriter, ZipReader } = await import('@zip.js/zip.js/index-native.js');
   const reader = new ZipReader(new BlobReader(file));
   try {
     const entry = (await reader.getEntries()).find(

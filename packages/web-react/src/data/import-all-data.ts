@@ -69,7 +69,7 @@
 // platform-bound: Dexie reads, zip.js, and the DOM File.
 
 // Type-only — erased at compile time, so zip.js itself stays lazily imported.
-import type { FileEntry } from '@zip.js/zip.js';
+import type { FileEntry } from '@zip.js/zip.js/index-native.js';
 
 import type { BundleEntry, ImportOutcome, ImportProgress } from '@stxapps/shared';
 import {
@@ -231,7 +231,7 @@ async function importBracemarkBackup(
 ): Promise<Omit<ImportOutcome, 'syncFailed'>> {
   // Already loaded by importZip — this re-import just picks the writers off the
   // cached module.
-  const { TextWriter, Uint8ArrayWriter } = await import('@zip.js/zip.js');
+  const { TextWriter, Uint8ArrayWriter } = await import('@zip.js/zip.js/index-native.js');
 
   const manifestEntry = byName.get(BACKUP_MANIFEST_ENTRY);
   if (manifestEntry === undefined) {
@@ -359,7 +359,7 @@ const INTEROP_ZIP_ENTRY_RE = /\.(csv|html?|txt|json)$/i;
 // bare .txt, never a zip — but a user who zips that .txt lands here anyway, and
 // the entry sniffs as `brace` like any other (detection runs per entry).
 async function parseInteropZip(byName: Map<string, FileEntry>): Promise<ImportedBundle> {
-  const { TextWriter } = await import('@zip.js/zip.js');
+  const { TextWriter } = await import('@zip.js/zip.js/index-native.js');
 
   const candidates = [...byName.entries()]
     .filter(([name]) => {
@@ -402,7 +402,7 @@ async function importZip(
   onProgress: (progress: ImportProgress) => void,
   onQuotaPrompt?: ImportQuotaResolver,
 ): Promise<Omit<ImportOutcome, 'syncFailed'>> {
-  const { BlobReader, ZipReader } = await import('@zip.js/zip.js');
+  const { BlobReader, ZipReader } = await import('@zip.js/zip.js/index-native.js');
   const zipReader = new ZipReader(new BlobReader(file));
 
   try {

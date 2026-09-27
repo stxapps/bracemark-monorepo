@@ -5,6 +5,7 @@ import baseConfig, {
   RESTRICTED_IMPORT_PATHS,
   TYPOGRAPHY_IGNORES,
   TYPOGRAPHY_SYNTAX,
+  ZIP_JS_SYNTAX,
 } from '../../eslint.config.mjs';
 
 export default [
@@ -56,6 +57,7 @@ export default [
         'error',
         ...TYPOGRAPHY_SYNTAX,
         ...REGEX_SYNTAX,
+        ...ZIP_JS_SYNTAX,
         {
           selector: 'Literal[value=/(^|\\s)leading-none(\\s|$)/]',
           message:

@@ -59,6 +59,31 @@ export const REGEX_SYNTAX = [
   },
 ];
 
+// zip.js is imported from its native build, '@zip.js/zip.js/index-native.js',
+// never the bare specifier, which is the WASM build. Both build their streams
+// on the browser's CompressionStream; the WASM one differs in its fallback
+// codec, which the backup export's stored (`level: 0`) entries load and compile
+// on every export for nothing, fetching it from a `data:` URI that the app's
+// `connect-src` reports as a violation (and that fails outright on the
+// marketing site, which has no 'wasm-unsafe-eval'). Nothing else shows it: the
+// types are one file for both builds, and every spec passes either way.
+// docs/data-lifecycle.md, _which zip.js build_.
+//
+// Two halves because `no-restricted-imports` sees only import/export
+// DECLARATIONS, and zip.js is loaded lazily through `import()` — so the path
+// entry in RESTRICTED_IMPORT_PATHS catches a static import, and this selector
+// the dynamic one. Exported, and spread alongside TYPOGRAPHY_SYNTAX, for the
+// no-merge reason above.
+const ZIP_JS_MESSAGE =
+  "Import zip.js from '@zip.js/zip.js/index-native.js'. The bare specifier is the WASM build: the backup export would load its codec for nothing, from a data: URI the CSP blocks. docs/data-lifecycle.md, _which zip.js build_.";
+
+export const ZIP_JS_SYNTAX = [
+  {
+    selector: 'ImportExpression[source.value="@zip.js/zip.js"]',
+    message: ZIP_JS_MESSAGE,
+  },
+];
+
 // The root's `@typescript-eslint/no-restricted-imports` paths — the `zod` shim
 // rule below carries the why. Exported for the same reason as the typography
 // selectors above: flat config gives a rule's options to the LAST block that
@@ -71,6 +96,13 @@ export const RESTRICTED_IMPORT_PATHS = [
     name: 'zod',
     message:
       "Import { z } from '@stxapps/shared' (or '../zod' inside that package) — it sets `jitless` before any schema is built, which is what keeps 'unsafe-eval' out of the CSP. A type-only import may stay.",
+    allowTypeImports: true,
+  },
+  {
+    // The static half of ZIP_JS_SYNTAX, which carries the why. A type-only
+    // import erases, so it may stay.
+    name: '@zip.js/zip.js',
+    message: ZIP_JS_MESSAGE,
     allowTypeImports: true,
   },
 ];
@@ -238,7 +270,15 @@ export default [
     files: ['**/*.ts', '**/*.tsx'],
     ignores: TYPOGRAPHY_IGNORES,
     rules: {
-      'no-restricted-syntax': ['error', ...TYPOGRAPHY_SYNTAX, ...REGEX_SYNTAX],
+      'no-restricted-syntax': ['error', ...TYPOGRAPHY_SYNTAX, ...REGEX_SYNTAX, ...ZIP_JS_SYNTAX],
+    },
+  },
+  {
+    // The specs the block above skips still get the zip.js selector: a spec
+    // that imports the bare specifier tests a build the app does not ship.
+    files: ['**/*.spec.ts', '**/*.spec.tsx'],
+    rules: {
+      'no-restricted-syntax': ['error', ...ZIP_JS_SYNTAX],
     },
   },
   {

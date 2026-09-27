@@ -124,14 +124,51 @@ The zip **container library** differs, and not by preference:
   click's user activation is alive), so an archive larger than memory never
   materializes as one Blob, and zip64 engages automatically. The restore reads
   the picked File the same way, a slice at a time, and its format sniff reads
-  only the four magic bytes, never the whole file.
+  only the four magic bytes, never the whole file. Every import is of the
+  **native build**, `@zip.js/zip.js/index-native.js`, never the bare
+  specifier — see _which zip.js build_ below.
 - **expo** — `fflate`: its synchronous streaming `Zip` to write, fed a piece
   at a time with a yield between pieces (see _readings — expo_), and
   `unzipSync` to read. zip.js is not portable to
   Hermes: its codec pipeline is built on `CompressionStream`/
-  `DecompressionStream`, `TransformStream`/`ReadableStream`/`WritableStream`, a
-  WASM module, and Web Workers — **none of which exist on React Native**. This
-  isn't a polyfill away; it's the whole architecture of the library.
+  `DecompressionStream`, `TransformStream`/`ReadableStream`/`WritableStream`,
+  and Web Workers — **none of which exist on React Native**. This isn't a
+  polyfill away; it's the whole architecture of the library.
+
+**Which zip.js build.** Both of zip.js's builds deflate and inflate through the
+browser's own `CompressionStream`/`DecompressionStream`. They differ only in
+the **fallback codec**, used for deflate64 entries, for any `level` other than
+the default 6, and in a browser without the native streams: the default build
+(`@zip.js/zip.js`) falls back to a WASM zlib, while the native build
+(`index-native.js`) falls back to a pure-JS one. Web uses the native build,
+both here and in the marketing site's bookmark converter, because the WASM
+fallback costs more than it gives:
+
+- The backup's `files/` entries are stored (`level: 0`), and any level other
+  than 6 turns zip.js's native-stream path off for the entry. That makes the
+  default build load and compile its WASM module in every export, although
+  stored entries never run a codec. `manifest.json` and `items.jsonl` use the
+  default level, so they go through the browser's streams in either build.
+- The default build embeds that module as a `data:` URI and `fetch()`es it
+  first. The app's `connect-src` ([hosting.md](./hosting.md)) does not allow
+  `data:`, so each export would report a CSP violation before the loader's
+  `atob` fallback succeeded. That fallback works only because
+  `'wasm-unsafe-eval'` is in the policy for Argon2. On the marketing site,
+  which has no `'wasm-unsafe-eval'`, the codec would fail outright, so a
+  deflate64 ZIP could not be read.
+
+The native build needs nothing from either policy beyond the `worker-src blob:`
+its codec workers share with Argon2's. Lint holds the line, since nothing
+else would: both builds share one `index.d.ts` and every spec passes on
+either. The root `eslint.config.mjs` restricts the bare specifier twice,
+statically in `RESTRICTED_IMPORT_PATHS` and dynamically in `ZIP_JS_SYNTAX`
+(`no-restricted-imports` never sees an `import()`), specs included; a type-only
+import may stay. Revisit the choice only if the backup
+starts deflating at a non-default level: then the fallback codec does real
+work, and WASM outruns pure JS. Doing it cleanly means serving
+`dist/zip-module.wasm` same-origin via `configure({ wasmURI })` and writing
+stored entries as `{ compressionMethod: 0 }` rather than `{ level: 0 }`, so they
+keep the native path.
 
 fflate is the right pure-JS choice (jszip is strictly worse on size, speed, and
 peak memory, and no pure-JS zipper writes zip64). But it emits a **classic

@@ -284,7 +284,9 @@ async function pickBracemarkSaveTarget(filename: string): Promise<BracemarkSaveT
 // is the only code path that needs it); its close() finalizes AND closes an
 // underlying WritableStream (preventClose defaults false), and zip64 turns on
 // automatically past the zip32 limits, so Plus/Pro-sized backups (5–20 GiB,
-// >65k entries) stay valid.
+// >65k entries) stay valid. The native build, not the default WASM one: the
+// `level: 0` entries below would load the WASM codec for nothing
+// (docs/data-lifecycle.md, _which zip.js build_).
 async function assembleBracemarkZip(
   target: BracemarkSaveTarget,
   filename: string,
@@ -294,7 +296,7 @@ async function assembleBracemarkZip(
   pins: { path: string; entity: Pin }[],
   filePaths: string[],
 ): Promise<{ fileCount: number }> {
-  const { BlobWriter, TextReader, Uint8ArrayReader, ZipWriter } = await import('@zip.js/zip.js');
+  const { BlobWriter, TextReader, Uint8ArrayReader, ZipWriter } = await import('@zip.js/zip.js/index-native.js');
 
   const lines: string[] = [];
   for (const { path, entity } of lists) lines.push(jsonlLine(path, entity));
