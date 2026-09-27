@@ -22,7 +22,8 @@ import { PARSE_CHUNK, runSteps } from './steps';
 // Nesting: an <H3> names the folder that the NEXT <DL> opens, so the scanner
 // holds it as `pendingFolder` until a <DL> consumes it. A <DL> with no pending
 // header (the root list) pushes an anonymous scope — null — that contributes
-// nothing to folderPath. Unbalanced </DL>s (truncated files) just stop popping.
+// nothing to folderPath. Unbalanced </DL>s (truncated files) just stop popping,
+// and reach an observer as damage (see ImportObserver, bundle.ts).
 //
 // <DD> is the format's own description element, and the one construct here with
 // NO closing tag: the description runs from the tag to the next block one. Our
@@ -123,6 +124,8 @@ function descriptionText(value: string): string {
     .trim();
 }
 
+const INCOMPLETE_ENTRY = 'This bookmarks HTML has an incomplete bookmark entry. Export it again.';
+
 export function parseNetscapeHtml(text: string, observer?: ImportObserver): ImportedLink[] {
   return runSteps(parseNetscapeHtmlSteps(text, observer));
 }
@@ -154,10 +157,14 @@ export function* parseNetscapeHtmlSteps(
   // arrive before the whole run has been seen, and the note goes first.
   const highlights = new Map<ImportedLink, string[]>();
 
-  // The app remains tolerant. Inspection also recognizes incomplete anchors so
-  // a damaged export cannot quietly lose records outside the normal tokenizer.
-  // Reuse TOKEN_RE's own flags: without `s`, a multi-line <DD> fails to match
-  // and an <a> inside it is counted as a second bookmark.
+  // With an observer, the scan also recognizes an anchor with no </a>, so a
+  // damaged export cannot quietly lose records outside the normal tokenizer. The
+  // one branch on the observer, and it changes what is DETECTED, never which links
+  // come out: the extra arm only matches where no full anchor does, and the
+  // tolerant path skips such a token. Without an observer nobody would hear about
+  // it, so the plain scan keeps TOKEN_RE as is. Reuse TOKEN_RE's own flags:
+  // without `s`, a multi-line <DD> fails to match and an <a> inside it is counted
+  // as a second bookmark.
   const tokens = observer ? new RegExp(TOKEN_RE.source + '|<a\\b[^>]*>', TOKEN_RE.flags) : TOKEN_RE;
   for (const match of text.matchAll(tokens)) {
     if (tokenCount > 0 && tokenCount % PARSE_CHUNK === 0) yield;
@@ -185,8 +192,8 @@ export function* parseNetscapeHtmlSteps(
 
     if (token[1] === '/') {
       // </dl> — close the innermost scope.
-      if (observer && stack.length === 0) {
-        throw new Error('This bookmarks HTML has an unmatched folder ending. Export it again.');
+      if (stack.length === 0) {
+        observer?.damage('This bookmarks HTML has an unmatched folder ending. Export it again.');
       }
       stack.pop();
       pendingFolder = null;
@@ -216,9 +223,17 @@ export function* parseNetscapeHtmlSteps(
 
     // <a ...>title</a>
     const attrs = match[3];
-    if (observer && (attrs === undefined || /<a\b|<dt\b|<dl\b/i.test(match[4]))) {
-      throw new Error('This bookmarks HTML has an incomplete bookmark entry. Export it again.');
+    if (attrs === undefined) {
+      // An <a> with no </a> — only the observer's scan has this arm. Nothing to
+      // keep, and a <DD> after it describes it, not the link before.
+      observer?.damage(INCOMPLETE_ENTRY);
+      noteTarget = undefined;
+      continue;
     }
+    // A truncated anchor that the lazy scan closed at the NEXT entry's </a>,
+    // swallowing it. Still kept as one link, as the app always has; guarded on the
+    // observer only to spare the plain scan a test per anchor.
+    if (observer && /<a\b|<dt\b|<dl\b/i.test(match[4])) observer.damage(INCOMPLETE_ENTRY);
     position++;
     // A dropped row still clears the note target: the <DD> after a bookmarklet
     // describes the bookmarklet, and would otherwise land on the last link kept.

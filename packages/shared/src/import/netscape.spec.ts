@@ -313,6 +313,28 @@ describe('parseNetscapeHtml', () => {
 
   // Unsorted is Raindrop's inbox, so in ITS file the folder crosses as the
   // default list. The same folder name in a browser's file is one the user made.
+  // The failure this guards is an observer that turns the parse strict: an app
+  // that passed one only to count skipped rows would start refusing the damaged
+  // files it imports today. Throwing is the converter's policy, in its observer.
+  it('reports damage to an observer without changing the links a parse returns', () => {
+    for (const body of [
+      '<DT><A HREF="https://example.com">Good</A><DT><A HREF="https://lost.example.com">Truncated',
+      '<DT><A HREF="https://example.com">Truncated<DT><A HREF="https://lost.example.com">Good</A>',
+      '<DT><A HREF="https://example.com">Good</A></DL></DL>',
+    ]) {
+      const html = `<DL>${body}</DL>`;
+      const damage: string[] = [];
+      const links = parseNetscapeHtml(html, {
+        row: () => undefined,
+        folder: () => undefined,
+        damage: (reason) => damage.push(reason),
+      });
+
+      expect(damage).not.toEqual([]);
+      expect(links).toEqual(parseNetscapeHtml(html));
+    }
+  });
+
   it("lands Raindrop's Unsorted in the default list, and only Raindrop's", () => {
     const body = [
       '<DL><p>',

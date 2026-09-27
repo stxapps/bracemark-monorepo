@@ -245,6 +245,11 @@ export function convertBookmarkFiles(
         observedFolders.add(key);
         addFolder(path);
       },
+      // Strict where the app is tolerant: matching counts over a dropped bookmark
+      // would read as a clean conversion.
+      damage(reason) {
+        throw new Error(reason);
+      },
     };
     const format = detectTextImportFormat(text, source.name);
     let parsed: ImportedLink[];

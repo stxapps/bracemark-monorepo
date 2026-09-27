@@ -81,7 +81,16 @@ export interface ImportedBundle {
 
 // Optional evidence for file inspection. Positions are one-based source records
 // (CSV includes its header); a reason means the record did not become a link.
+//
+// Evidence only: a parser reports through it, and having one never changes which
+// links a parse returns or whether it throws. The
+// parsers stay tolerant — the app imports whatever a damaged file still yields —
+// so `damage` is structure the scan stepped over (a truncated entry, an unmatched
+// close), reported as a sentence the user can act on. Whether that is fatal is
+// the CALLER's policy: the bookmark converter throws it, since a count that
+// hides a dropped bookmark is worse than no output.
 export interface ImportObserver {
   row(position: number, reason?: string): void;
   folder(path: string[]): void;
+  damage(reason: string): void;
 }

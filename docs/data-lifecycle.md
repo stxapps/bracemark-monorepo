@@ -53,8 +53,11 @@ bookmark files in a browser worker: Netscape HTML, URL-column CSV, strict
 URL-per-line text, LinkWarden JSON, Brace.to exports, ZIPs containing those
 formats (including Pocket CSV parts), and Bracemark backups. It writes HTML,
 spreadsheet-protected CSV, or URL text using the shared serializers. Optional
-parser observers account for source records, skipped records, and empty folders
-without changing app import behavior. Brace revision skips are distinct from
+parser observers account for source records, skipped records, empty folders and
+structural damage without changing app import behavior: having an observer
+never changes which links a parse returns or whether it throws, and it is the
+converter's observer that turns damage (a truncated HTML entry) into an error.
+Brace revision skips are distinct from
 repeated URLs, which are kept.
 
 **A Bracemark backup converts the way the app exports.** Its `items.jsonl` goes
