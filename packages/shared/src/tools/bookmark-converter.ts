@@ -48,15 +48,14 @@ export const BOOKMARK_OUTPUTS = [
 export type BookmarkOutputFormat = (typeof BOOKMARK_OUTPUTS)[number]['id'];
 
 export interface BookmarkConversionReceipt {
-  sourceFormat: string;
-  outputFormat: string;
-  sourceRows: number;
-  webLinks: number;
-  skippedRows: number;
-  possibleDuplicates: number;
-  uniqueUrls: number;
-  folders: number;
-  emptyFolders: number;
+  sourceLabel: string;
+  outputLabel: string;
+  sourceRowCount: number;
+  linkCount: number;
+  duplicateCount: number;
+  uniqueUrlCount: number;
+  folderCount: number;
+  emptyFolderCount: number;
   examples: { title: string; url: string; folder: string }[];
   excludedRows: { row: number; reason: string; file: string }[];
   losses: string[];
@@ -148,11 +147,11 @@ export function convertBookmarkFiles(
   }
   const links: ImportedLink[] = [];
   const paths = new Map<string, string[]>();
-  const formats = new Set<string>();
+  const sourceLabels = new Set<string>();
   const losses = new Set<string>();
   const warnings = new Set<string>();
   const excludedRows: BookmarkConversionReceipt['excludedRows'] = [];
-  let sourceRows = 0;
+  let sourceRowCount = 0;
   const addFolder = (path: string[]) => {
     if (path.length > 100)
       throw new Error(
@@ -170,8 +169,8 @@ export function convertBookmarkFiles(
     const observedFolders = new Set<string>();
     const observer: ImportObserver = {
       row(row, reason) {
-        sourceRows++;
-        if (sourceRows > BOOKMARK_CONVERTER_MAX_ROWS)
+        sourceRowCount++;
+        if (sourceRowCount > BOOKMARK_CONVERTER_MAX_ROWS)
           throw new Error(
             'This file has too many rows for this tool. Split the export and try again.',
           );
@@ -201,7 +200,7 @@ export function convertBookmarkFiles(
       if (rows.slice(1).some((row) => row.length !== header.length))
         throw new Error('Some CSV rows have a different number of columns. Export the file again.');
       const raindrop = isRaindropCsvHeader(header);
-      formats.add(
+      sourceLabels.add(
         raindrop
           ? 'Raindrop.io CSV'
           : header.includes('time_added')
@@ -259,7 +258,7 @@ export function convertBookmarkFiles(
         );
       if ((text.match(/<dl\b/gi)?.length ?? 0) !== (text.match(/<\/dl\s*>/gi)?.length ?? 0))
         throw new Error('This bookmarks HTML has incomplete folders. Export it again.');
-      formats.add('Browser bookmarks HTML');
+      sourceLabels.add('Browser bookmarks HTML');
       parsed = parseNetscapeHtml(text, observer);
       warnings.add(
         'HTML descriptions are read as plain text. Formatting, folder descriptions, icons, and extra HTML attributes are not carried.',
@@ -281,7 +280,7 @@ export function convertBookmarkFiles(
           )
         )
           throw new Error('This LinkWarden export has an invalid collection. Export it again.');
-        formats.add('LinkWarden JSON');
+        sourceLabels.add('LinkWarden JSON');
         parsed = parseLinkwardenExport(text, observer);
         losses.add(
           'LinkWarden account settings, IDs, folder descriptions, feeds, icons, and archived page references are not included.',
@@ -299,7 +298,7 @@ export function convertBookmarkFiles(
             /^(links\/|sslts\/|pins\/|tags\/|images\/|settings)|\/images\//.test(entry.path),
         )
       ) {
-        formats.add('Brace.to export');
+        sourceLabels.add('Brace.to export');
         parsed = parseBraceExport(text, observer).links;
         losses.add(
           'Brace.to settings, images, extraction metadata, and tag colors are not included. Only the newest revision of each link is converted.',
@@ -322,7 +321,7 @@ export function convertBookmarkFiles(
         )
       )
         throw new Error('This is not a URL list. Use one web address per line.');
-      formats.add('URL text');
+      sourceLabels.add('URL text');
       parsed = parseUrlText(text, { linesOnly: true, observer });
       warnings.add(
         'Text input uses one address per line. Lines containing prose or unsupported addresses are skipped.',
@@ -345,7 +344,7 @@ export function convertBookmarkFiles(
       links.push(link);
     }
   }
-  if (links.length !== sourceRows - excludedRows.length)
+  if (links.length !== sourceRowCount - excludedRows.length)
     throw new Error('Could not account for every bookmark record. Export the file again.');
   if (!links.length)
     throw new Error('This file has no web addresses to convert. Choose another export.');
@@ -353,7 +352,7 @@ export function convertBookmarkFiles(
   for (const link of links)
     for (let length = 1; length <= link.folderPath.length; length++)
       occupied.add(JSON.stringify(link.folderPath.slice(0, length)));
-  const emptyFolders = [...paths.keys()].filter((key) => !occupied.has(key)).length;
+  const emptyFolderCount = [...paths.keys()].filter((key) => !occupied.has(key)).length;
   const bundle = toBundle(links, [...paths.values()]);
   const expected = flatten(bundle);
   const content =
@@ -389,8 +388,8 @@ export function convertBookmarkFiles(
     ).length;
     if (changed) losses.add(`${changed} ${name} are changed or omitted in ${target.label}.`);
   }
-  if (output !== 'html' && emptyFolders)
-    losses.add(`${emptyFolders} empty folders are not included.`);
+  if (output !== 'html' && emptyFolderCount)
+    losses.add(`${emptyFolderCount} empty folders are not included.`);
   const pins = links.filter((link) => link.pinRank !== undefined).length;
   if (pins) losses.add(`${pins} pin positions are not included.`);
   if (output === 'html')
@@ -418,15 +417,14 @@ export function convertBookmarkFiles(
     extension: target.extension,
     mime: `${target.mime};charset=utf-8`,
     receipt: {
-      sourceFormat: [...formats].join(' + '),
-      outputFormat: target.label,
-      sourceRows,
-      webLinks: links.length,
-      skippedRows: excludedRows.length,
-      possibleDuplicates: links.length - seen.size,
-      uniqueUrls: seen.size,
-      folders: paths.size,
-      emptyFolders,
+      sourceLabel: [...sourceLabels].join(' + '),
+      outputLabel: target.label,
+      sourceRowCount,
+      linkCount: links.length,
+      duplicateCount: links.length - seen.size,
+      uniqueUrlCount: seen.size,
+      folderCount: paths.size,
+      emptyFolderCount,
       examples: links.slice(0, 5).map((link) => ({
         title: link.customTitle ?? link.title ?? link.url,
         url: link.url,
@@ -443,15 +441,15 @@ export function bookmarkReceiptText(conversion: BookmarkConversion): string {
   const r = conversion.receipt;
   return [
     'Bookmark conversion receipt',
-    `${r.sourceFormat} → ${r.outputFormat}`,
+    `${r.sourceLabel} → ${r.outputLabel}`,
     '',
-    `Source records: ${r.sourceRows}`,
-    `Web links exported: ${r.webLinks}`,
-    `Records skipped: ${r.skippedRows}`,
-    `Unique canonical addresses: ${r.uniqueUrls}`,
-    `Possible repeats: ${r.possibleDuplicates} (kept)`,
-    `Source folders: ${r.folders}`,
-    `Empty folders: ${r.emptyFolders}`,
+    `Source records: ${r.sourceRowCount}`,
+    `Web links exported: ${r.linkCount}`,
+    `Records skipped: ${r.excludedRows.length}`,
+    `Unique canonical addresses: ${r.uniqueUrlCount}`,
+    `Possible repeats: ${r.duplicateCount} (kept)`,
+    `Source folders: ${r.folderCount}`,
+    `Empty folders: ${r.emptyFolderCount}`,
     '',
     'Excluded records',
     ...(r.excludedRows.length

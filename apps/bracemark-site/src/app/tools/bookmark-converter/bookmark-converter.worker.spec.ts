@@ -70,7 +70,7 @@ it('reads Pocket ZIP parts, preserves repeated links, and skips non-bookmark ent
   expect(result).toMatchObject({
     ok: true,
     conversion: {
-      receipt: { webLinks: 2, possibleDuplicates: 1, sourceFormat: expect.stringContaining('ZIP') },
+      receipt: { linkCount: 2, duplicateCount: 1, sourceLabel: expect.stringContaining('ZIP') },
     },
   });
 });

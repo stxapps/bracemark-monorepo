@@ -107,7 +107,7 @@ scope.onmessage = async (event) => {
     }
     const conversion = convertBookmarkFiles(sources, output);
     if (sources.length > 1 || file.name.toLowerCase().endsWith('.zip')) {
-      conversion.receipt.sourceFormat = `ZIP · ${conversion.receipt.sourceFormat}`;
+      conversion.receipt.sourceLabel = `ZIP · ${conversion.receipt.sourceLabel}`;
       conversion.receipt.warnings.push(
         'Only supported bookmark files inside the ZIP are read. Other archive entries are not included.',
       );

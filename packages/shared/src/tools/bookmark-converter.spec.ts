@@ -31,8 +31,10 @@ for (const name of fixtures) {
         .links.map((link) => link.url)
         .sort();
       const converted = convertBookmarkFiles([source], output.id);
-      expect(converted.receipt.webLinks).toBe(original.length);
-      expect(converted.receipt.sourceRows).toBe(original.length + converted.receipt.skippedRows);
+      expect(converted.receipt.linkCount).toBe(original.length);
+      expect(converted.receipt.sourceRowCount).toBe(
+        original.length + converted.receipt.excludedRows.length,
+      );
       const actual =
         output.id === 'text'
           ? converted.content.trim().split('\n')
@@ -40,7 +42,7 @@ for (const name of fixtures) {
               (link) => link.url,
             );
       expect(actual.sort()).toEqual(original);
-      expect(bookmarkReceiptText(converted)).toContain(converted.receipt.sourceFormat);
+      expect(bookmarkReceiptText(converted)).toContain(converted.receipt.sourceLabel);
     });
   }
 }
@@ -53,11 +55,10 @@ it('accounts for invalid rows, unknown columns, repeated addresses, and normaliz
     },
   ]);
   expect(result.receipt).toMatchObject({
-    sourceRows: 4,
-    webLinks: 2,
-    skippedRows: 2,
-    possibleDuplicates: 1,
-    uniqueUrls: 1,
+    sourceRowCount: 4,
+    linkCount: 2,
+    duplicateCount: 1,
+    uniqueUrlCount: 1,
   });
   expect(result.receipt.excludedRows).toEqual([
     { file: 'links.csv', row: 4, reason: 'Not a web address' },
@@ -78,7 +79,7 @@ it('preserves root bookmarks, exact punctuation in URLs, and absent dates in eve
       ],
       id,
     );
-    expect(result.receipt.webLinks).toBe(3);
+    expect(result.receipt.linkCount).toBe(3);
     expect(result.content).toContain('https://example.com/why?');
     expect(result.content).not.toContain('1970');
     if (id === 'csv') expect(scanCsv(result.content).rows[1][5]).toBe('');
@@ -93,7 +94,7 @@ it('preserves identified empty folders in HTML and reports removal in CSV and te
   expect(convertBookmarkFiles([source]).content).toContain('<H3>Empty</H3>');
   for (const output of ['csv', 'text'] as const) {
     const result = convertBookmarkFiles([source], output);
-    expect(result.receipt.emptyFolders).toBe(1);
+    expect(result.receipt.emptyFolderCount).toBe(1);
     expect(result.receipt.losses).toContain('1 empty folders are not included.');
   }
 });
@@ -176,7 +177,7 @@ it('keeps file provenance and repeats when combining archive parts', () => {
     { name: 'part_0.csv', text: 'url\nhttps://example.com\nmailto:a@b.com' },
     { name: 'part_1.csv', text: 'url\nhttps://example.com' },
   ]);
-  expect(result.receipt).toMatchObject({ sourceRows: 3, webLinks: 2, possibleDuplicates: 1 });
+  expect(result.receipt).toMatchObject({ sourceRowCount: 3, linkCount: 2, duplicateCount: 1 });
   expect(bookmarkReceiptText(result)).toContain('part_0.csv, record 3');
 });
 
@@ -195,5 +196,5 @@ it('identifies collapsed folder identities before download', () => {
     '<DL><DT><H3>Same</H3><DL><DT><A HREF="https://example.com/a">A</A></DL><DT><H3>Same</H3><DL><DT><A HREF="https://example.com/b">B</A></DL></DL>';
   const result = convertBookmarkFiles([{ name: 'duplicates.html', text }]);
   expect(result.receipt.warnings.join(' ')).toContain('Folders with identical paths');
-  expect(result.receipt.webLinks).toBe(2);
+  expect(result.receipt.linkCount).toBe(2);
 });

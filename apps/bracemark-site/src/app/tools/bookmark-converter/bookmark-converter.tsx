@@ -246,12 +246,12 @@ export function BookmarkConverter({ appImportUrl }: { appImportUrl: string }) {
       {receipt && conversion && (
         <div className={cn('px-5 py-6 sm:px-7')}>
           <p role="status" className={cn('sr-only')}>
-            Ready: {receipt.webLinks} web links in {receipt.outputFormat}. Review changes and
+            Ready: {receipt.linkCount} web links in {receipt.outputLabel}. Review changes and
             skipped records before downloading.
           </p>
           <p className={cn('eyebrow')}>Your conversion receipt</p>
           <h3 className={cn('mt-2 font-display text-xl font-semibold tracking-tight')}>
-            {receipt.sourceFormat} → {receipt.outputFormat}
+            {receipt.sourceLabel} → {receipt.outputLabel}
           </h3>
           <p
             className={cn('mt-2 truncate font-mono text-xs text-muted-foreground')}
@@ -265,10 +265,10 @@ export function BookmarkConverter({ appImportUrl }: { appImportUrl: string }) {
             )}
           >
             {[
-              ['Source records', receipt.sourceRows],
-              ['Web links', receipt.webLinks],
-              ['Skipped records', receipt.skippedRows],
-              ['Possible repeats', receipt.possibleDuplicates],
+              ['Source records', receipt.sourceRowCount],
+              ['Web links', receipt.linkCount],
+              ['Skipped records', receipt.excludedRows.length],
+              ['Possible repeats', receipt.duplicateCount],
             ].map(([label, value]) => (
               <div key={label} className={cn('flex flex-col bg-background px-4 py-4')}>
                 <dt className={cn('order-2 mt-1 text-xs text-muted-foreground')}>{label}</dt>
@@ -279,10 +279,10 @@ export function BookmarkConverter({ appImportUrl }: { appImportUrl: string }) {
             ))}
           </dl>
           <p className={cn('mt-3 text-sm leading-6 text-muted-foreground')}>
-            {receipt.uniqueUrls.toLocaleString()} unique canonical addresses ·{' '}
-            {receipt.folders.toLocaleString()} distinct folder paths (
-            {receipt.emptyFolders.toLocaleString()} empty). Possible repeats can differ by scheme or
-            fragment; every web link stays in the download.
+            {receipt.uniqueUrlCount.toLocaleString()} unique canonical addresses ·{' '}
+            {receipt.folderCount.toLocaleString()} distinct folder paths (
+            {receipt.emptyFolderCount.toLocaleString()} empty). Possible repeats can differ by
+            scheme or fragment; every web link stays in the download.
           </p>
           <div className={cn('mt-7 grid gap-6 md:grid-cols-2')}>
             <div className={cn('min-w-0')}>
@@ -319,7 +319,7 @@ export function BookmarkConverter({ appImportUrl }: { appImportUrl: string }) {
                       'cursor-pointer text-sm font-semibold focus-visible:ring-3 focus-visible:ring-ring/50',
                     )}
                   >
-                    Review {receipt.skippedRows} skipped records
+                    Review {receipt.excludedRows.length} skipped records
                   </summary>
                   <ul
                     className={cn(
@@ -332,7 +332,7 @@ export function BookmarkConverter({ appImportUrl }: { appImportUrl: string }) {
                       </li>
                     ))}
                   </ul>
-                  {receipt.skippedRows > 100 && (
+                  {receipt.excludedRows.length > 100 && (
                     <p className={cn('mt-3 text-xs text-muted-foreground')}>
                       Showing the first 100. The downloaded receipt contains every skipped record.
                     </p>
@@ -342,7 +342,7 @@ export function BookmarkConverter({ appImportUrl }: { appImportUrl: string }) {
             </div>
             <div className={cn('min-w-0')}>
               <h4 className={cn('text-sm font-semibold')}>
-                Changes and losses in {receipt.outputFormat}
+                Changes and losses in {receipt.outputLabel}
               </h4>
               <ul
                 className={cn(
@@ -398,7 +398,7 @@ export function BookmarkConverter({ appImportUrl }: { appImportUrl: string }) {
                   'rounded-md bg-signal px-4 py-2.5 text-sm font-medium text-white hover:bg-signal-strong focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-offset-2 focus-visible:outline-none',
                 )}
               >
-                Download {receipt.outputFormat}
+                Download {receipt.outputLabel}
               </button>
               <button
                 type="button"
