@@ -1,5 +1,5 @@
 import { toRaindropCsv } from '../export/csv';
-import { parseRaindropCsv } from './csv';
+import { parseRaindropCsv, scanCsv } from './csv';
 
 describe('parseRaindropCsv', () => {
   it('parses a real Raindrop-style export: extra columns, any order', () => {
@@ -247,5 +247,29 @@ describe('parseRaindropCsv', () => {
     expect(parseRaindropCsv(csv)).toEqual([
       { url: 'https://example.com/a', customTitle: 'A', tagNames: [], folderPath: [] },
     ]);
+  });
+});
+
+// The scanner builds a field from slices of runs, not a character at a time
+// (csv.ts, scanCsvSteps), so every place a run meets something else is a place
+// a character can be dropped or doubled: a quote opening or closing mid-field, a
+// doubled quote between two runs, the last field with no line break after it.
+describe('scanCsv', () => {
+  it.each([
+    [
+      'CRLF, LF and a lone CR between rows',
+      'a,b\r\nc,d\ne\rf',
+      [['a', 'b'], ['c', 'd'], ['e'], ['f']],
+      false,
+    ],
+    ['an unquoted last field with no line break', 'a,bc', [['a', 'bc']], false],
+    ['doubled quotes between runs', '"x""y""z",w\n', [['x"y"z', 'w']], false],
+    ['a comma and a line break inside quotes', '"a,\nb",c\n', [['a,\nb', 'c']], false],
+    ['empty fields', ',,\n', [['', '', '']], false],
+    ['text after a closing quote', '"ab"cd,e\n', [['abcd', 'e']], true],
+    ['a quote opening mid-field', 'ab"cd",e\n', [['abcd', 'e']], true],
+    ['a quote never closed', '"ab,c\nd', [['ab,c\nd']], true],
+  ])('reads %s', (_, text, rows, malformed) => {
+    expect(scanCsv(text)).toEqual({ rows, malformed });
   });
 });

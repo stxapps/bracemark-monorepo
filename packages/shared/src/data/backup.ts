@@ -1,8 +1,9 @@
 // The bracemark-backup archive contract — the ONE definition of the re-importable
 // zip both platforms write (the export orchestrators' `bracemark` format) and read
-// back (the import orchestrators' Bracemark-backup branch). Pure: no store, no zip
-// library, no React — a caller brings its own zip writer/reader (zip.js on web,
-// fflate on expo) and its own store, and uses these to agree on what goes in
+// back (the import orchestrators' Bracemark-backup branch) — and that the
+// marketing site's bookmark converter also reads, never writes. Pure: no store,
+// no zip library, no React — a caller brings its own zip writer/reader (zip.js on
+// web, fflate on expo) and its own store, and uses these to agree on what goes in
 // the archive and what a line of it means.
 //
 // It lives in `data/` — the data-lifecycle namespace beside endpoints.ts (see
@@ -95,6 +96,16 @@ export function serializeBackupManifest(counts: BackupCounts): string {
   return JSON.stringify(manifest, null, 2);
 }
 
+// The one manifest rejection the user can act on, by updating. A class of its own
+// so a reader that isn't the app — the marketing site's bookmark converter, which
+// has no app to update — can catch it and say so in its own words.
+export class BackupVersionError extends Error {
+  constructor() {
+    super('This backup was created by a newer version of Bracemark. Update the app and try again.');
+    this.name = 'BackupVersionError';
+  }
+}
+
 // Read + gate the manifest. Throws with the USER-FACING message the import view
 // renders verbatim. Four rejections: not JSON (or not an object), not our
 // format, a damaged `version`, and written by a newer app than this one (a
@@ -134,11 +145,7 @@ export function parseBackupManifest(text: string): BackupManifest {
     throw new Error('This zip is not a Bracemark backup (invalid manifest version).');
   }
   // Older versions stay readable on purpose — the gate is one-sided.
-  if (manifest.version > BRACEMARK_BACKUP_VERSION) {
-    throw new Error(
-      'This backup was created by a newer version of Bracemark. Update the app and try again.',
-    );
-  }
+  if (manifest.version > BRACEMARK_BACKUP_VERSION) throw new BackupVersionError();
   return manifest as BackupManifest;
 }
 

@@ -4,8 +4,15 @@ import { BlobWriter, TextReader, ZipWriter } from '@zip.js/zip.js/index-native.j
 import {
   BOOKMARK_CONVERTER_MAX_BYTES,
   type BookmarkOutputFormat,
+  BRACEMARK_BACKUP_FORMAT,
+  BRACEMARK_BACKUP_VERSION,
   convertBookmarkFiles,
 } from '@stxapps/shared';
+import {
+  BACKUP_FIXTURE_ARCHIVES,
+  readBackupFixture,
+  readBackupFixtureContents,
+} from '@stxapps/shared/testing';
 
 import type { ConversionMessage, ConversionRequest } from './bookmark-converter.worker';
 
@@ -74,11 +81,41 @@ it('reads Pocket ZIP parts, preserves repeated links, and skips non-bookmark ent
     },
   });
 });
-it('rejects Bracemark backups and oversized ZIP expansion', async () => {
-  expect(await roundTrip(await zip({ 'manifest.json': '{}', 'items.jsonl': '' }))).toMatchObject({
-    ok: false,
-    message: expect.stringContaining('backup archive'),
-  });
+it.each(BACKUP_FIXTURE_ARCHIVES)(
+  'converts %s, the backup either app writes, leaving Trash out',
+  async (name) => {
+    const file = new File([readBackupFixture(name)], 'Bracemark backup.zip');
+    expect(await roundTrip(file)).toMatchObject({
+      ok: true,
+      conversion: {
+        receipt: { sourceLabel: 'Bracemark backup', linkCount: 1, trashCount: 1 },
+      },
+    });
+  },
+);
+// A backup's `files/` blobs are most of its bytes. One past the portable limit
+// converts only if the worker never reads it and never counts it.
+it('leaves a backup’s files unread and outside the portable size limit', async () => {
+  const { entities } = readBackupFixtureContents();
+  const manifest = (version: number) =>
+    JSON.stringify({ format: BRACEMARK_BACKUP_FORMAT, version, exportedAt: 0 });
+  const items = entities.map((entity) => JSON.stringify(entity)).join('\n');
+  expect(
+    await roundTrip(
+      await zip({
+        'manifest.json': manifest(BRACEMARK_BACKUP_VERSION),
+        'items.jsonl': items,
+        'files/big': 'a'.repeat(BOOKMARK_CONVERTER_MAX_BYTES + 1),
+      }),
+    ),
+  ).toMatchObject({ ok: true, conversion: { receipt: { linkCount: 1 } } });
+  expect(
+    await roundTrip(
+      await zip({ 'manifest.json': manifest(BRACEMARK_BACKUP_VERSION + 1), 'items.jsonl': items }),
+    ),
+  ).toMatchObject({ ok: false, message: expect.stringContaining('than this converter reads') });
+});
+it('rejects oversized ZIP expansion', async () => {
   expect(
     await roundTrip(await zip({ 'large.txt': 'a'.repeat(BOOKMARK_CONVERTER_MAX_BYTES + 1) })),
   ).toMatchObject({ ok: false, message: expect.stringContaining('expands beyond') });

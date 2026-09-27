@@ -10,7 +10,7 @@
 // Because every device writes to that same deterministic path, file-level LWW
 // collapses concurrent edits to one file — no duplicate, no race — which is the
 // whole reason the defaults aren't seeded as blobs up front. On read, merge:
-// `stored override ?? default` (see mergeSystemLists in the web read layer).
+// `stored override ?? default` (mergeSystemLists, below).
 //
 // A link belongs to one of these exactly like any user list, via its `listId`
 // (`link.listId === id`), so filtering stays uniform across system and user
@@ -22,6 +22,8 @@
 // that system list itself.
 
 import type { List } from './entities';
+import type { ListItem } from './items';
+import { LISTS_PREFIX, pathFromId } from './paths';
 import { ranksBetween } from './rank';
 
 // `all` is the Show-All pseudo-list (no filter — every link), distinct from the
@@ -104,3 +106,23 @@ export const SYSTEM_LIST_DEFAULTS: readonly List[] = [
     updatedAt: 0,
   },
 ];
+
+// Overlay the stored lists onto the system-list defaults: a system list shows its
+// stored override blob if one exists (the user renamed/moved it), else the code
+// default. Custom lists pass through. Defaults carry a SYNTHESIZED path so the UI
+// can target a not-yet-overridden system list — `lists/{id}.enc` is exactly where
+// the first edit will write, so there's nothing to special-case downstream. The
+// merge is by id, so an override never duplicates its default; ordering is left
+// to buildTree (it sorts every sibling group by rank), so this just unions the
+// two sources. Both platforms' read layers call it, and so does anything reading
+// a backup's `lists/` lines, which hold overrides only, exactly like sync.
+export function mergeSystemLists(stored: ListItem[]): ListItem[] {
+  const storedById = new Map(stored.map((list) => [list.id, list]));
+  const resolved: ListItem[] = SYSTEM_LIST_DEFAULTS.map(
+    (def) => storedById.get(def.id) ?? { ...def, path: pathFromId(def.id, LISTS_PREFIX) },
+  );
+  for (const list of stored) {
+    if (!SYSTEM_LIST_IDS.has(list.id)) resolved.push(list);
+  }
+  return resolved;
+}

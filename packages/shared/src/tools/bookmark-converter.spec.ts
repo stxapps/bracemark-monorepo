@@ -1,10 +1,18 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import {
+  BRACEMARK_BACKUP_FORMAT,
+  BRACEMARK_BACKUP_VERSION,
+  jsonlLine,
+  serializeBackupItems,
+} from '../data/backup';
 import { scanCsv } from '../import/csv';
 import { parseNetscapeHtml } from '../import/netscape';
 import { parseImportText } from '../import/parse';
+import { readBackupFixtureContents } from '../testing/backup-fixtures';
 import {
+  BOOKMARK_CONVERTER_BACKUP_TOO_LARGE,
   BOOKMARK_CONVERTER_MAX_ROWS,
   BOOKMARK_OUTPUTS,
   bookmarkReceiptText,
@@ -27,13 +35,16 @@ for (const name of fixtures) {
   for (const output of BOOKMARK_OUTPUTS) {
     it(`converts ${name} to ${output.id} with accounted records and unchanged web addresses`, () => {
       const source = fixture(name);
-      const original = parseImportText(source.text, name)
-        .links.map((link) => link.url)
+      const parsed = parseImportText(source.text, name).links;
+      const original = parsed
+        .filter((link) => link.systemList !== 'trash')
+        .map((link) => link.url)
         .sort();
       const converted = convertBookmarkFiles([source], output.id);
       expect(converted.receipt.linkCount).toBe(original.length);
+      expect(converted.receipt.trashCount).toBe(parsed.length - original.length);
       expect(converted.receipt.sourceRowCount).toBe(
-        original.length + converted.receipt.excludedRows.length,
+        parsed.length + converted.receipt.excludedRows.length,
       );
       const actual =
         output.id === 'text'
@@ -197,4 +208,88 @@ it('identifies collapsed folder identities before download', () => {
   const result = convertBookmarkFiles([{ name: 'duplicates.html', text }]);
   expect(result.receipt.warnings.join(' ')).toContain('Folders with identical paths');
   expect(result.receipt.linkCount).toBe(2);
+});
+
+// A Bracemark backup source as the worker hands it over: items.jsonl as the
+// text, manifest.json beside it. Built from the golden fixture's entities — one
+// live link in a nested list, one in Trash.
+function backupSource(extraLines: string[] = [], version = BRACEMARK_BACKUP_VERSION) {
+  const { entities } = readBackupFixtureContents();
+  return {
+    name: 'items.jsonl',
+    text: serializeBackupItems([
+      ...entities.map((entity) => jsonlLine(entity.path, entity.data)),
+      ...extraLines,
+    ]),
+    backupManifest: JSON.stringify({ format: BRACEMARK_BACKUP_FORMAT, version, exportedAt: 0 }),
+  };
+}
+
+it('converts a Bracemark backup the way the app exports: lists as folders, the title override wins, Trash left out and counted', () => {
+  const result = convertBookmarkFiles([backupSource()]);
+  expect(parseNetscapeHtml(result.content)).toMatchObject([
+    {
+      url: 'https://a.invalid/spec',
+      folderPath: ['Wörk', 'Specs'],
+      customTitle: 'Die Spezifikation — süß',
+      tagNames: ['reading'],
+    },
+  ]);
+  expect(result.receipt).toMatchObject({
+    sourceLabel: 'Bracemark backup',
+    sourceRowCount: 2,
+    linkCount: 1,
+    trashCount: 1,
+    excludedRows: [],
+  });
+  // The system lists are folders even with no override stored — My List and
+  // Archive, empty here — and Trash is not.
+  expect(result.content).toContain('<H3>My List</H3>');
+  expect(result.content).toContain('<H3>Archive</H3>');
+  expect(result.content).not.toContain('Trash');
+  expect(result.receipt.emptyFolderCount).toBe(2);
+  expect(result.receipt.losses.join(' ')).toContain('1 link in Trash is not included');
+  expect(bookmarkReceiptText(result)).toContain('Links in Trash (not included): 1');
+});
+
+it('reports invalid backup lines as skipped records and leaves supporting records uncounted', () => {
+  const result = convertBookmarkFiles([
+    backupSource(['not json', jsonlLine('links/bad id.enc', { url: 'https://c.invalid' })]),
+  ]);
+  expect(result.receipt.sourceRowCount).toBe(4);
+  expect(result.receipt.excludedRows).toEqual([
+    { file: 'items.jsonl', row: 9, reason: 'Not a valid backup record' },
+    { file: 'items.jsonl', row: 10, reason: 'Not a valid backup record' },
+  ]);
+});
+
+it('says in its own words that a backup from a newer app cannot be read here', () => {
+  expect(() => convertBookmarkFiles([backupSource([], BRACEMARK_BACKUP_VERSION + 1)])).toThrow(
+    'newer version of Bracemark than this converter reads',
+  );
+});
+
+// A backup can't be split the way an export can, so the portable refusal's act
+// ("Split the export") would be one the reader cannot take.
+it('sends a backup past the record limit to the app’s own export, not to splitting', () => {
+  const lines = Array.from({ length: BOOKMARK_CONVERTER_MAX_ROWS }, (_, index) =>
+    jsonlLine(`links/l${index}.enc`, {
+      url: `https://example.com/${index}`,
+      listId: 'my-list',
+      tagIds: [],
+      createdAt: index,
+      updatedAt: index,
+    }),
+  );
+  expect(() => convertBookmarkFiles([backupSource(lines)], 'text')).toThrow(
+    BOOKMARK_CONVERTER_BACKUP_TOO_LARGE,
+  );
+});
+
+it('leaves Trash out of every source, not only backups', () => {
+  const result = convertBookmarkFiles([fixture('brace-export.json')]);
+  expect(result.receipt.trashCount).toBeGreaterThan(0);
+  expect(parseNetscapeHtml(result.content).map((link) => link.folderPath[0])).not.toContain(
+    'Trash',
+  );
 });

@@ -1,12 +1,21 @@
 import {
+  BackupVersionError,
+  type BundleEntry,
+  classifyBundleLine,
+  parseBackupManifest,
+} from '../data/backup';
+import {
   bundleFromImported,
+  bundleFromLibrary,
   type ExportBundle,
   type ExportFolder,
   type ExportLinkRow,
+  type LibraryLink,
 } from '../export/bundle';
 import { toRaindropCsv } from '../export/csv';
 import { toNetscapeHtml } from '../export/netscape';
 import { toUrlText } from '../export/text';
+import { entitlementsOf, PLANS } from '../iap/plans';
 import { parseBraceExport } from '../import/brace';
 import type { ImportedLink, ImportObserver } from '../import/bundle';
 import { parseRaindropCsv, scanCsv } from '../import/csv';
@@ -15,12 +24,34 @@ import { parseLinkwardenExport } from '../import/linkwarden';
 import { parseNetscapeHtml } from '../import/netscape';
 import { isRaindropCsvHeader } from '../import/raindrop';
 import { parseUrlText } from '../import/text';
+import type { Extraction, Link, List, Tag } from '../sync/entities';
+import { EXTRACTIONS_PREFIX, LINKS_PREFIX, rekey } from '../sync/paths';
+import { ARCHIVE_ID, mergeSystemLists, TRASH_ID } from '../sync/system-lists';
 import { canonicalUrlKey, normalizeUrl } from '../url/url';
 
-export const BOOKMARK_CONVERTER_MAX_MB = 16;
+// One set of limits for every input. The converter is client-only, so they
+// protect the tab, not a server: a browser out of memory kills the page with no
+// message, while a limit is a sentence the user can act on. Conversion memory
+// grows with the bookmark data (CSV output the most, and long notes most of
+// all), and these are sized from measurement so a phone's tab survives the peak
+// (docs/data-lifecycle.md, _the bookmark converter's limits_).
+export const BOOKMARK_CONVERTER_MAX_MB = 60;
 export const BOOKMARK_CONVERTER_MAX_BYTES = BOOKMARK_CONVERTER_MAX_MB * 1_000_000;
-export const BOOKMARK_CONVERTER_MAX_ROWS = 25_000;
+export const BOOKMARK_CONVERTER_MAX_ROWS = 100_000;
 export const BOOKMARK_CONVERTER_MAX_ENTRIES = 100;
+
+// A Bracemark backup is the exception in one respect only: the worker reads its
+// manifest.json and items.jsonl and never the `files/` blobs, which are most of
+// its bytes, so the ZIP itself has no size limit and its entry count is bounded
+// by what any plan can store (plus the two entries read). items.jsonl is held
+// to the limits above like any other input.
+//
+// A backup can't be split the way an export can, so past either limit the act is
+// the app's own export.
+export const BOOKMARK_CONVERTER_BACKUP_TOO_LARGE =
+  'This backup has more links than this converter reads at once. Export HTML or CSV in the app from Settings → Data instead.';
+export const BOOKMARK_CONVERTER_BACKUP_MAX_ENTRIES =
+  Math.max(...PLANS.map((plan) => entitlementsOf(plan).maxFiles)) + 2;
 
 export const BOOKMARK_OUTPUTS = [
   {
@@ -57,6 +88,9 @@ export interface BookmarkConversionReceipt {
   uniqueUrlCount: number;
   folderCount: number;
   emptyFolderCount: number;
+  // Links left out because they were in Trash — not skipped records: each was
+  // read and understood, and dropped on purpose.
+  trashCount: number;
   examples: { title: string; url: string; folder: string }[];
   excludedRows: { row: number; reason: string; file: string }[];
   losses: string[];
@@ -73,6 +107,9 @@ export interface BookmarkConversion {
 export interface BookmarkSource {
   text: string;
   name: string;
+  // Present ⇒ this source is a Bracemark backup: `text` is its items.jsonl and
+  // this is its manifest.json.
+  backupManifest?: string;
 }
 
 function record(value: unknown): value is Record<string, unknown> {
@@ -94,6 +131,57 @@ function flatten(bundle: ExportBundle): ImportedLink[] {
   return out;
 }
 
+// A Bracemark backup, read the way the app exports: its entities go through the
+// same bundleFromLibrary both platforms' export orchestrators call, so a
+// converted backup is the file the app would have written — same folders,
+// titles, order, and the same Trash rule. Only link lines and invalid lines are
+// records; lists, tags, pins, extractions, and settings support the links.
+function readBackup(
+  text: string,
+  observer: ImportObserver,
+): { bundle: ExportBundle; trashCount: number; archiveCount: number } {
+  const byKind = new Map<BundleEntry['kind'], BundleEntry[]>();
+  const lines = text.split('\n');
+  for (const [index, line] of lines.entries()) {
+    if (!line.trim()) continue;
+    const entry = classifyBundleLine(line);
+    if (!entry) {
+      observer.row(index + 1, 'Not a valid backup record');
+      continue;
+    }
+    if (entry.kind === 'link') observer.row(index + 1);
+    const entries = byKind.get(entry.kind);
+    if (entries) entries.push(entry);
+    else byKind.set(entry.kind, [entry]);
+  }
+  const of = (kind: BundleEntry['kind']) => byKind.get(kind) ?? [];
+  const extractions = new Map(of('extraction').map((entry) => [entry.path, entry.data]));
+  const links: LibraryLink[] = of('link').map((entry) => ({
+    link: entry.data as Link,
+    extraction: extractions.get(rekey(entry.path, LINKS_PREFIX, EXTRACTIONS_PREFIX)) as
+      Extraction | undefined,
+  }));
+  links.sort((a, b) => b.link.createdAt - a.link.createdAt);
+  const lists = mergeSystemLists(
+    of('list').map((entry) => ({ ...(entry.data as List), path: entry.path })),
+  );
+  const tags = of('tag').map((entry) => entry.data as Tag);
+  return {
+    bundle: bundleFromLibrary(links, lists, tags),
+    trashCount: links.filter(({ link }) => link.listId === TRASH_ID).length,
+    archiveCount: links.filter(({ link }) => link.listId === ARCHIVE_ID).length,
+  };
+}
+
+// Every folder path in the tree, parents before children — how a backup's lists,
+// empty ones included, reach the observer.
+function folderPaths(folders: ExportFolder[], parent: string[] = []): string[][] {
+  return folders.flatMap((folder) => {
+    const path = [...parent, folder.name];
+    return [path, ...folderPaths(folder.children, path)];
+  });
+}
+
 /** Strict file inspection around the tolerant app parsers. No URL mining fallback. */
 export function convertBookmarkFiles(
   sources: BookmarkSource[],
@@ -103,12 +191,15 @@ export function convertBookmarkFiles(
   if (!target) throw new Error('Choose a supported output format.');
   if (!sources.length || sources.length > BOOKMARK_CONVERTER_MAX_ENTRIES)
     throw new Error('Choose an export containing supported bookmark files.');
+  const backup = sources.some((source) => source.backupManifest !== undefined);
   if (
     sources.reduce((sum, source) => sum + new TextEncoder().encode(source.text).length, 0) >
     BOOKMARK_CONVERTER_MAX_BYTES
   ) {
     throw new Error(
-      `This file is too large. Choose an export up to ${BOOKMARK_CONVERTER_MAX_MB} MB when expanded.`,
+      backup
+        ? BOOKMARK_CONVERTER_BACKUP_TOO_LARGE
+        : `This file is too large. Choose an export up to ${BOOKMARK_CONVERTER_MAX_MB} MB when expanded.`,
     );
   }
   const links: ImportedLink[] = [];
@@ -118,6 +209,7 @@ export function convertBookmarkFiles(
   const warnings = new Set<string>();
   const excludedRows: BookmarkConversionReceipt['excludedRows'] = [];
   let sourceRowCount = 0;
+  let trashCount = 0;
   const addFolder = (path: string[]) => {
     if (path.length > 100)
       throw new Error(
@@ -138,7 +230,9 @@ export function convertBookmarkFiles(
         sourceRowCount++;
         if (sourceRowCount > BOOKMARK_CONVERTER_MAX_ROWS)
           throw new Error(
-            'This file has too many rows for this tool. Split the export and try again.',
+            backup
+              ? BOOKMARK_CONVERTER_BACKUP_TOO_LARGE
+              : 'This file has too many rows for this tool. Split the export and try again.',
           );
         if (reason) excludedRows.push({ row, reason, file: source.name });
       },
@@ -154,7 +248,27 @@ export function convertBookmarkFiles(
     };
     const format = detectTextImportFormat(text, source.name);
     let parsed: ImportedLink[];
-    if (format === 'csv') {
+    if (source.backupManifest !== undefined) {
+      try {
+        parseBackupManifest(source.backupManifest);
+      } catch (cause) {
+        if (cause instanceof BackupVersionError)
+          throw new Error(
+            'This backup is from a newer version of Bracemark than this converter reads yet. Export HTML or CSV in the app from Settings → Data instead.',
+          );
+        throw cause;
+      }
+      sourceLabels.add('Bracemark backup');
+      const read = readBackup(text, observer);
+      for (const path of folderPaths(read.bundle.folders)) observer.folder(path);
+      parsed = flatten(read.bundle);
+      trashCount += read.trashCount;
+      losses.add('Bracemark settings, pins, and images are not included.');
+      if (read.archiveCount)
+        warnings.add(
+          'Archived links are included in an ordinary folder named after your Archive list. Importing them elsewhere may make them active bookmarks.',
+        );
+    } else if (format === 'csv') {
       const { rows, malformed } = scanCsv(text);
       if (malformed)
         throw new Error('This CSV has an incomplete or misplaced quote. Export it again.');
@@ -300,20 +414,30 @@ export function convertBookmarkFiles(
           losses.add('Dates outside the supported calendar range are not included.');
         }
       }
-      if (link.systemList) {
+      // Trash is left out, as the app's own export does: importing links that
+      // are pending deletion into another app as live bookmarks is never wanted.
+      if (link.systemList === 'trash') {
+        trashCount++;
+        continue;
+      }
+      if (link.systemList === 'archive') {
         warnings.add(
-          'Archive and Trash links are included in ordinary folders with those names. Importing them elsewhere may make them active bookmarks.',
+          'Archived links are included in an ordinary Archive folder. Importing them elsewhere may make them active bookmarks.',
         );
-        link.folderPath = [link.systemList === 'archive' ? 'Archive' : 'Trash'];
+        link.folderPath = ['Archive'];
       }
       addFolder(link.folderPath);
       links.push(link);
     }
   }
-  if (links.length !== sourceRowCount - excludedRows.length)
+  if (links.length + trashCount !== sourceRowCount - excludedRows.length)
     throw new Error('Could not account for every bookmark record. Export the file again.');
   if (!links.length)
-    throw new Error('This file has no web addresses to convert. Choose another export.');
+    throw new Error(
+      trashCount
+        ? 'Every link in this file is in Trash, and Trash is not converted. Choose another export.'
+        : 'This file has no web addresses to convert. Choose another export.',
+    );
   const occupied = new Set<string>();
   for (const link of links)
     for (let length = 1; length <= link.folderPath.length; length++)
@@ -358,6 +482,12 @@ export function convertBookmarkFiles(
     losses.add(`${emptyFolderCount} empty folders are not included.`);
   const pins = links.filter((link) => link.pinRank !== undefined).length;
   if (pins) losses.add(`${pins} pin positions are not included.`);
+  if (trashCount)
+    losses.add(
+      trashCount === 1
+        ? '1 link in Trash is not included.'
+        : `${trashCount} links in Trash are not included.`,
+    );
   if (output === 'html')
     warnings.add(
       'Notes and tags are written as HTML descriptions and bookmark tags; destination apps may ignore them. Dates use whole seconds.',
@@ -391,6 +521,7 @@ export function convertBookmarkFiles(
       uniqueUrlCount: seen.size,
       folderCount: paths.size,
       emptyFolderCount,
+      trashCount,
       examples: links.slice(0, 5).map((link) => ({
         title: link.customTitle ?? link.title ?? link.url,
         url: link.url,
@@ -412,6 +543,7 @@ export function bookmarkReceiptText(conversion: BookmarkConversion): string {
     `Source records: ${r.sourceRowCount}`,
     `Web links exported: ${r.linkCount}`,
     `Records skipped: ${r.excludedRows.length}`,
+    `Links in Trash (not included): ${r.trashCount}`,
     `Unique canonical addresses: ${r.uniqueUrlCount}`,
     `Possible repeats: ${r.duplicateCount} (kept)`,
     `Source folders: ${r.folderCount}`,

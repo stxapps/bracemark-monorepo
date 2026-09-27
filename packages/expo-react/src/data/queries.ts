@@ -70,6 +70,7 @@ import {
   linkSchema,
   LISTS_PREFIX,
   listSchema,
+  mergeSystemLists,
   pathFromId,
   PINS_PREFIX,
   pinSchema,
@@ -78,8 +79,6 @@ import {
   setCachedLink,
   SETTINGS_GENERAL_PATH,
   settingsGeneralSchema,
-  SYSTEM_LIST_DEFAULTS,
-  SYSTEM_LIST_IDS,
   TAGS_PREFIX,
   tagSchema,
   TRASH_ID,
@@ -265,20 +264,6 @@ async function readNamespace<T extends z.ZodTypeAny>(
   return namespaceRows(prefix)
     .map((row) => decode(row, schema))
     .filter((entity): entity is WithPath<z.infer<T>> => entity !== undefined);
-}
-
-// Overlay the synced lists onto the system-list defaults — web queries.ts
-// `mergeSystemLists`, verbatim (defaults carry a SYNTHESIZED path so the UI can
-// target a not-yet-overridden system list).
-function mergeSystemLists(stored: ListItem[]): ListItem[] {
-  const storedById = new Map(stored.map((list) => [list.id, list]));
-  const resolved: ListItem[] = SYSTEM_LIST_DEFAULTS.map(
-    (def) => storedById.get(def.id) ?? { ...def, path: pathFromId(def.id, LISTS_PREFIX) },
-  );
-  for (const list of stored) {
-    if (!SYSTEM_LIST_IDS.has(list.id)) resolved.push(list);
-  }
-  return resolved;
 }
 
 // The full logical list set: synced lists merged with the system defaults

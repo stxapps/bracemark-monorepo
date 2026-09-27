@@ -10,7 +10,7 @@ import { BookmarkConverter } from './bookmark-converter';
 export const metadata: Metadata = {
   title: 'Bookmark converter — HTML, CSV, JSON, ZIP, and text',
   description:
-    'Convert bookmark exports to browser HTML, CSV, or URL text in your browser. Read Raindrop.io, Pocket, LinkWarden, and Brace.to files. No upload or account needed.',
+    'Convert bookmark exports to browser HTML, CSV, or URL text in your browser. Read exports from Raindrop.io, Pocket, LinkWarden, Brace.to, and Bracemark backups. No upload or account needed.',
   alternates: { canonical: `${SITE_URL}/tools/bookmark-converter` },
 };
 
@@ -28,9 +28,10 @@ const INPUTS = [
     'URL text',
     'One HTTP(S) address per line. Addresses beginning with www. are given an https:// prefix.',
   ],
+  ['ZIP', 'Pocket CSV parts and archives of the supported files above.'],
   [
-    'ZIP',
-    'Pocket CSV parts and archives of the supported files above. Full Bracemark backups belong in Settings → Data.',
+    'Bracemark backup',
+    'The ZIP from Settings → Data. The converter reads its links, lists, and tags and never opens the images, so the ZIP itself has no size limit.',
   ],
 ];
 
@@ -93,7 +94,7 @@ export default function Page() {
                 ['Notes and tags', 'Written; apps may ignore them', 'Columns', 'No'],
                 ['Saved dates', 'Whole seconds', 'ISO dates', 'No'],
                 ['Updated dates', 'Whole seconds', 'No', 'No'],
-                ['Images and page copies', 'No', 'No', 'No'],
+                ['Images and archived pages', 'No', 'No', 'No'],
               ].map(([field, ...values]) => (
                 <tr key={field}>
                   <th scope="row" className={cn('px-4 py-3 font-medium')}>
@@ -142,9 +143,10 @@ export default function Page() {
           </h2>
           <p className={cn('mt-3 text-body text-muted-foreground')}>
             These downloads carry bookmarks. They don’t recreate account settings, images, archived
-            pages, or pin order. Archive and Trash statuses become ordinary folders, so another app
-            may import those links as active bookmarks. CSV cells that could be formulas receive a
-            leading apostrophe for spreadsheet protection.
+            pages, or pin order. Links in Trash are left out, because another app would import them
+            as live bookmarks, and the receipt counts them. Archive becomes an ordinary folder, so
+            another app may import the links in it as active bookmarks. CSV cells that could be
+            formulas receive a leading apostrophe for spreadsheet protection.
           </p>
         </section>
         <section>

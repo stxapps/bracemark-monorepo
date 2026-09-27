@@ -1,4 +1,9 @@
 import type { ImportedLink } from '../import/bundle';
+import type { Extraction, Link, Tag } from '../sync/entities';
+import type { ListItem } from '../sync/items';
+import { LIST_NO_CHILDREN_IDS, MY_LIST_ID, TRASH_ID } from '../sync/system-lists';
+import { buildTree, type TreeNode } from '../sync/tree';
+import { hostFromText } from '../url/url';
 
 // The decoded, policy-filtered snapshot the interop export serializers consume
 // (netscape.ts / csv.ts / text.ts — the "export all data" formats other apps
@@ -10,10 +15,13 @@ import type { ImportedLink } from '../import/bundle';
 // Expo later) can reuse. The Bracemark-backup zip does NOT go through this: it
 // round-trips raw entities per path, not this display-resolved projection.
 //
-// It has a second producer: the marketing site's bookmark converter builds one
-// from parsed files (`bundleFromImported` below), so the same serializers write
-// its downloads. That caller is why the dates and `rootLinks` are optional — the
-// app's own snapshot always has dates and puts every link in a list.
+// Two builders below. `bundleFromLibrary` is the app's snapshot — both
+// platforms' export orchestrators call it with what they gathered, and the
+// marketing site's bookmark converter calls it with what a Bracemark backup
+// holds, so a converted backup and an in-app export are the same file.
+// `bundleFromImported` is the converter's other road in, from parsed files. That
+// one is why the dates and `rootLinks` are optional — the app's own snapshot
+// always has dates and puts every link in a list.
 
 // One link, display-resolved: `title` is the resolved display title
 // (`customTitle ?? extraction.title ?? host(url)` — the gatherer applies the
@@ -90,4 +98,60 @@ export function bundleFromImported(links: ImportedLink[], paths: string[][] = []
   for (const path of paths) ensure(path);
   for (const link of links) (ensure(link.folderPath)?.links ?? rootLinks).push(exportRow(link));
   return bundle;
+}
+
+// One link with its co-keyed extraction (the writer-split shadow that holds the
+// extracted title), both decoded.
+export interface LibraryLink {
+  link: Link;
+  extraction: Extraction | undefined;
+}
+
+// The library → the serializers' tree: the list tree minus Trash, each folder's
+// links display-resolved (title override-wins, tag ids → names) in the order
+// given — callers pass newest first, the app's display order. `lists` is the
+// MERGED set (mergeSystemLists), already without any locked subtree; a link
+// whose list is absent files under My List (a dangling ref — the list was
+// deleted on another device), unless My List itself is absent, in which case
+// it has no unlocked home and drops like its list's other links. Trash links
+// never appear: importing deleted-pending links into a browser as live
+// bookmarks is never wanted (docs/data-lifecycle.md, _export_).
+export function bundleFromLibrary(
+  links: readonly LibraryLink[],
+  lists: ListItem[],
+  tags: Tag[],
+): ExportBundle {
+  const visibleLists = lists.filter((list) => list.id !== TRASH_ID);
+  const tree = buildTree(visibleLists, { noChildrenIds: LIST_NO_CHILDREN_IDS });
+  const listIds = new Set(visibleLists.map((list) => list.id));
+  const tagNameById = new Map(tags.map((tag) => [tag.id, tag.name]));
+
+  const rowsByListId = new Map<string, ExportLinkRow[]>();
+  for (const { link, extraction } of links) {
+    if (link.listId === TRASH_ID) continue;
+    const listId = listIds.has(link.listId) ? link.listId : MY_LIST_ID;
+    if (!listIds.has(listId)) continue;
+
+    const row: ExportLinkRow = {
+      url: link.url,
+      title: link.customTitle ?? extraction?.title ?? hostFromText(link.url),
+      tagNames: link.tagIds
+        .map((id) => tagNameById.get(id))
+        .filter((name): name is string => name !== undefined),
+      createdAt: link.createdAt,
+      updatedAt: link.updatedAt,
+    };
+    if (link.note !== undefined) row.note = link.note;
+
+    const rows = rowsByListId.get(listId);
+    if (rows) rows.push(row);
+    else rowsByListId.set(listId, [row]);
+  }
+
+  const toFolder = (node: TreeNode<ListItem>): ExportFolder => ({
+    name: node.item.name,
+    links: rowsByListId.get(node.item.id) ?? [],
+    children: node.children.map(toFolder),
+  });
+  return { folders: tree.map(toFolder) };
 }

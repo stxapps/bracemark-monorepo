@@ -165,7 +165,8 @@ export function BookmarkConverter({ appImportUrl }: { appImportUrl: string }) {
             )}
             <p id="file-help" className={cn('mt-3 text-xs leading-5 text-muted-foreground')}>
               HTML, CSV, TXT, JSON, or ZIP. Up to {BOOKMARK_CONVERTER_MAX_MB} MB expanded and{' '}
-              {BOOKMARK_CONVERTER_MAX_ROWS.toLocaleString()} bookmark records.
+              {BOOKMARK_CONVERTER_MAX_ROWS.toLocaleString()} bookmark records, fewer if they carry
+              long notes. A Bracemark backup’s images don’t count toward the size.
             </p>
           </div>
           <fieldset className={cn('min-w-0')}>

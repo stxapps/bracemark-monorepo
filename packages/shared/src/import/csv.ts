@@ -38,31 +38,52 @@ export function scanCsv(text: string): { rows: string[][]; malformed: boolean } 
 // The scan as a generator, yielding after every PARSE_CHUNK rows (steps.ts). It
 // is a per-character loop, so on a big file it is a long task of its own before
 // the first row is read.
+//
+// It WALKS character by character but never BUILDS a field that way: ordinary
+// characters extend a run (`runStart`), and the run joins the field as one slice
+// at the next quote, comma or line break. Appending a character at a time made
+// every field a chain of one-character strings in V8, ~32 bytes a character
+// until something flattened it, and the chains lived as long as the rows — a
+// 16 MB CSV of 500-character notes held ~1 GB (docs/data-lifecycle.md, _the
+// bookmark converter's limits_).
 function* scanCsvSteps(text: string): Generator<void, { rows: string[][]; malformed: boolean }> {
   const rows: string[][] = [];
   let row: string[] = [];
   let field = '';
+  let runStart = -1;
   let inQuotes = false;
   let closedQuote = false;
   let malformed = false;
 
   const src = text.startsWith('﻿') ? text.slice(1) : text;
+  const flush = (end: number) => {
+    if (runStart < 0) return;
+    field += src.slice(runStart, end);
+    runStart = -1;
+  };
   for (let i = 0; i < src.length; i++) {
     const ch = src[i];
     if (inQuotes) {
-      if (ch === '"') {
-        if (src[i + 1] === '"') {
-          field += '"';
-          i++;
-        } else {
-          inQuotes = false;
-          closedQuote = true;
-        }
+      if (ch !== '"') {
+        if (runStart < 0) runStart = i;
+        continue;
+      }
+      flush(i);
+      if (src[i + 1] === '"') {
+        field += '"';
+        i++;
       } else {
-        field += ch;
+        inQuotes = false;
+        closedQuote = true;
       }
       continue;
     }
+    if (ch !== '"' && ch !== ',' && ch !== '\n' && ch !== '\r') {
+      if (closedQuote) malformed = true;
+      if (runStart < 0) runStart = i;
+      continue;
+    }
+    flush(i);
     if (ch === '"') {
       if (field !== '' || closedQuote) malformed = true;
       inQuotes = true;
@@ -70,7 +91,7 @@ function* scanCsvSteps(text: string): Generator<void, { rows: string[][]; malfor
       row.push(field);
       field = '';
       closedQuote = false;
-    } else if (ch === '\n' || ch === '\r') {
+    } else {
       if (ch === '\r' && src[i + 1] === '\n') i++;
       row.push(field);
       field = '';
@@ -78,11 +99,9 @@ function* scanCsvSteps(text: string): Generator<void, { rows: string[][]; malfor
       row = [];
       closedQuote = false;
       if (rows.length % PARSE_CHUNK === 0) yield;
-    } else {
-      if (closedQuote) malformed = true;
-      field += ch;
     }
   }
+  flush(src.length);
   if (inQuotes) malformed = true;
   // Flush a final row that has no trailing newline.
   if (field !== '' || row.length > 0) {

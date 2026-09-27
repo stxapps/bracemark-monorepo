@@ -27,40 +27,32 @@ import { File, Paths } from 'expo-file-system';
 import type { z } from 'zod';
 
 import type {
-  ExportBundle,
-  ExportFolder,
   ExportFormat,
-  ExportLinkRow,
   ExportOutcome,
   ExportProgress,
   Extraction,
   Link,
   List,
-  ListItem,
   Pin,
   ProgressFn,
   Tag,
-  TreeNode,
 } from '@stxapps/shared';
 import {
   BACKUP_ITEMS_ENTRY,
   BACKUP_MANIFEST_ENTRY,
   backupFileEntry,
-  buildTree,
+  bundleFromLibrary,
   EXPORT_MIME,
   exportFileName,
   EXTRACTIONS_PREFIX,
   extractionSchema,
   FILES_PREFIX,
-  hostFromText,
   idFromPath,
   jsonlLine,
   LINKS_PREFIX,
   linkSchema,
-  LIST_NO_CHILDREN_IDS,
   LISTS_PREFIX,
   listSchema,
-  MY_LIST_ID,
   pathFromId,
   PINS_PREFIX,
   pinSchema,
@@ -229,48 +221,6 @@ async function gatherLinks(
     });
   }
   return gathered;
-}
-
-// --- the interop bundle ---------------------------------------------------------
-
-// Project the gathered snapshot into the serializers' ExportBundle — web's
-// buildInteropBundle, verbatim.
-function buildInteropBundle(links: GatheredLink[], lists: ListItem[], tags: Tag[]): ExportBundle {
-  const visibleLists = lists.filter((list) => list.id !== TRASH_ID);
-  const tree = buildTree(visibleLists, { noChildrenIds: LIST_NO_CHILDREN_IDS });
-  const listIds = new Set(visibleLists.map((list) => list.id));
-  const tagNameById = new Map(tags.map((tag) => [tag.id, tag.name]));
-
-  const rowsByListId = new Map<string, ExportLinkRow[]>();
-  for (const { link, extraction } of links) {
-    if (link.listId === TRASH_ID) continue;
-    // Dangling list ref → My List, unless My List itself is excluded (then the
-    // link has no unlocked home and drops like its list's other links).
-    const listId = listIds.has(link.listId) ? link.listId : MY_LIST_ID;
-    if (!listIds.has(listId)) continue;
-
-    const row: ExportLinkRow = {
-      url: link.url,
-      title: link.customTitle ?? extraction?.title ?? hostFromText(link.url),
-      tagNames: link.tagIds
-        .map((id) => tagNameById.get(id))
-        .filter((name): name is string => name !== undefined),
-      createdAt: link.createdAt,
-      updatedAt: link.updatedAt,
-    };
-    if (link.note !== undefined) row.note = link.note;
-
-    const rows = rowsByListId.get(listId);
-    if (rows) rows.push(row);
-    else rowsByListId.set(listId, [row]);
-  }
-
-  const toFolder = (node: TreeNode<ListItem>): ExportFolder => ({
-    name: node.item.name,
-    links: rowsByListId.get(node.item.id) ?? [],
-    children: node.children.map(toFolder),
-  });
-  return { folders: tree.map(toFolder), exportedAt: Date.now() };
 }
 
 // --- the bracemark backup -----------------------------------------------------------
@@ -448,7 +398,7 @@ export async function exportAllData(options: {
     const mergedLists = (await readLists()).filter((list) => !excludedListIds.has(list.id));
     const tags = readRawNamespace(TAGS_PREFIX, tagSchema);
     const interopLinks = links.filter(({ link }) => link.listId !== TRASH_ID);
-    const bundle = buildInteropBundle(
+    const bundle = bundleFromLibrary(
       interopLinks,
       mergedLists,
       tags.map(({ entity }) => entity),

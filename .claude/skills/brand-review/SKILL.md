@@ -105,7 +105,9 @@ something the architecture does not support.** Flag as high severity:
   verify the build they were served ("verify", "provably", "audited"). Public
   source proves what the code does, not which build was served.
 - **Unshipped features** — read mode, screenshots, page copies and AI are planned.
-  `listing-copy.ts` names this rule; it binds the marketing site too.
+  `listing-copy.ts` keeps the list; _only what ships_ in `docs/brand-assets.md`
+  is the rule, and it binds every string a user reads — the marketing site, and a
+  tool's output such as the bookmark converter's receipt and errors.
 - **Numbers that can go stale** — a cap, a price, a trial length written as a
   literal rather than read from `iap/plans`. In store copy, a number at all.
 - **Superlatives and competitor comparisons** — "the only", "the most secure",

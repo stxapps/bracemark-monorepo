@@ -50,25 +50,44 @@ presents. Four formats, one deliberate asymmetry:
 
 The marketing site's separate `/tools/bookmark-converter` reads portable
 bookmark files in a browser worker: Netscape HTML, URL-column CSV, strict
-URL-per-line text, LinkWarden JSON, Brace.to exports, and ZIPs containing those
-formats (including Pocket CSV parts). It writes HTML, spreadsheet-protected CSV,
-or URL text using the shared serializers. Optional parser observers account for
-source records, skipped records, and empty folders without changing app import
-behavior. Brace revision skips are distinct from repeated URLs, which are kept.
+URL-per-line text, LinkWarden JSON, Brace.to exports, ZIPs containing those
+formats (including Pocket CSV parts), and Bracemark backups. It writes HTML,
+spreadsheet-protected CSV, or URL text using the shared serializers. Optional
+parser observers account for source records, skipped records, and empty folders
+without changing app import behavior. Brace revision skips are distinct from
+repeated URLs, which are kept.
+
+**A Bracemark backup converts the way the app exports.** Its `items.jsonl` goes
+through `bundleFromLibrary` (`export/bundle.ts`) — the same function both
+platforms' export orchestrators call — after `mergeSystemLists`, so a converted
+backup and an in-app export of the same library are the same file: the same
+folders (system lists included, overridden or not), override-wins titles,
+newest-first order. Locked lists never reach it; the backup already leaves them
+out. Only link lines and invalid lines count as records; lists, tags, pins,
+extractions and settings support them. A backup from a newer app is refused in
+the site's own words (`BackupVersionError`), since there is no app to update.
+Writing a backup is deliberately not offered: a converted file has no ids to
+dedupe by, so a restore's skip-existing-by-path merge would duplicate every link
+already saved, where importing the original file dedupes by URL.
+
+**Trash is left out of every source, as the app's export leaves it out** —
+importing links pending deletion into another app as live bookmarks is never
+wanted, whether the Trash came from a backup or a Brace.to export. The receipt
+counts them (`trashCount`) apart from skipped records, which are records that
+could not be read. Archive stays, as an ordinary folder with a warning.
 
 Generated files are parsed again: their ordered URLs must agree, and changes to
 titles, paths, notes, tags, and dates appear in the receipt before download.
-HTML preserves identified empty folders; CSV/text report their removal. Archive
-and Trash links become ordinary named folders with an explicit warning. CSV
+HTML preserves identified empty folders; CSV/text report their removal. CSV
 formula-like cells gain an apostrophe, also disclosed. The tool does not read or
 write an account; original files still import directly through Settings → Data.
-Full Bracemark backups are rejected here and belong in the restore flow.
 
 Limits cover file and expanded ZIP bytes, archive entries, bookmark records,
-folder count and depth, plus a worker deadline. ZIP decoding uses native streams
-in the existing worker, checks CRCs, and measures emitted bytes as well as declared
-sizes. It never fetches saved addresses or archive references. Clear/cancel and
-unmount terminate work; changing the output replaces the receipt and download.
+folder count and depth, plus a worker deadline — see _the bookmark converter's
+limits_ below. ZIP decoding uses native streams in the existing worker, checks
+CRCs, and measures emitted bytes as well as declared sizes. It never fetches
+saved addresses or archive references. Clear/cancel and unmount terminate work;
+changing the output replaces the receipt and download.
 
 Export reads the **local** store (unsynced edits on this device are included)
 after a pre-export sync refresh; a failed refresh downgrades to a warning —
@@ -106,6 +125,61 @@ The subtler zeros are deliberately not distinguished from each other. Telling
 "library is empty" apart from "the policy filtered everything" before the run
 would need a per-format pre-flight count; after the run the warnings already
 carry it.
+
+### the bookmark converter's limits
+
+The converter is client-only, so no limit protects a server. They protect the
+tab: a browser that runs out of memory kills the page with no message, while a
+limit is a sentence the user can act on. On a phone the budget is the tab, not
+the device's RAM — an iOS tab is killed well before the phone runs short.
+
+**One set of limits for every input: 60 MB expanded and 100,000 records**, plus
+100 entries in a ZIP of portable files. A Bracemark backup differs in one
+respect: the worker reads only `manifest.json` and `items.jsonl` at the
+archive's root, as the restore does, and never opens `files/`, so the archive
+itself has **no size limit** and its entry count is bounded by the largest
+plan's `maxFiles`. Its `items.jsonl` is held to the same 60 MB and 100,000. Past
+either limit a backup is sent to the app's own export rather than told to split
+the file, which a backup can't be.
+
+The two limits are set so that the record count is what an ordinary library
+meets: 100,000 bookmarks without long notes are 15–17 MB of HTML or CSV and
+~53 MB of `items.jsonl`, all under 60 MB. Long notes are what make the byte
+limit arrive first, which is why the help text says "fewer if they carry long
+notes" — a limit stated in copy is a claim ([brand-assets.md](./brand-assets.md),
+_only what ships_). A 50 MB backup limit was tried first and broke that sentence:
+it stopped a note-free library at ~94,000 links under a help text that said
+100,000.
+
+**2026-09-27, measured** in Node on a laptop — the memory each conversion adds
+above its input, at the limits. Portable rows are generated bookmarks files;
+backup rows are `e2e/seed`'s `plus-full` library.
+
+| input                  | records | notes     | size  | → HTML  | → CSV   |
+| ---------------------- | ------- | --------- | ----- | ------- | ------- |
+| bookmarks HTML         | 100,000 | none      | 17 MB | ~330 MB | ~350 MB |
+| CSV                    | 100,000 | none      | 15 MB | —       | ~350 MB |
+| bookmarks HTML         | 89,000  | 500 chars | 60 MB | ~500 MB | ~590 MB |
+| CSV                    | 91,000  | 500 chars | 59 MB | ~520 MB | ~620 MB |
+| backup (`items.jsonl`) | 100,000 | none      | 53 MB | ~230 MB | ~230 MB |
+| backup (`items.jsonl`) | 57,000  | 500 chars | 59 MB | ~340 MB | ~310 MB |
+
+All of it finished in under 2 seconds, inside the worker's 60-second deadline
+with room for a slower phone.
+
+**What made that possible was the CSV scanner, not the limit.** The limits were
+16 MB and 25,000 records for portable files until the same day, and even those
+were too high: `scanCsv` (`import/csv.ts`) built each field a character at a
+time, which V8 keeps as a chain of one-character strings until something
+flattens it, so a 16 MB CSV of 500-character notes held **~1.07 GB** — and the
+converter runs the scanner twice, on a CSV input and again on its own CSV output
+for the verification pass. Building fields from slices took that case to
+~213 MB and the 100,000-record CSV-with-notes case from ~2.7 GB to ~580 MB,
+with no change to what it parses (the old scanner passes `csv.spec.ts`'s
+boundary cases too). The
+app's own CSV import runs the same scanner on both platforms and got the same
+fix. If the limits ever need to rise again, look for the next thing holding the
+input several times over before moving the numbers.
 
 ### the bracemark zip is platform-split — and mobile has ceilings web doesn't
 

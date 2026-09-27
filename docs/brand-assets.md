@@ -468,6 +468,39 @@ Two forms, and the choice between them is whether the user can do anything.
 is the one with a worse failure mode: the text appears and nothing is announced.
 [accessibility.md](./accessibility.md) owns it.
 
+#### only what ships — and a tool's output is copy
+
+**Promise only what ships.** The list of what is planned and not shipped lives in
+one place, the copy rule at the top of `packages/shared/src/stores/listing-copy.ts`
+— read it there rather than copying it here, where it would go stale. The rule
+is older than this section and was written for store copy, which is why it sat
+in that file alone. It binds every string a user reads.
+
+**That includes what a tool prints.** The marketing site's bookmark converter
+writes a receipt — losses, warnings, skipped-record reasons — and its own
+errors, from `packages/shared/src/tools/bookmark-converter.ts` and the worker
+beside its page. None of that looks like copy: it is built in a loop, from
+counts, far from any page. It is still the product talking, it is held to this
+whole section, and nothing checks it — `listing-copy.spec.ts` walks the store
+strings only. The specimen: when Bracemark backups became a converter input, the
+receipt's losses line and the page's input row both listed page copies and
+screenshots among what a backup holds. Both are planned features, and a sentence
+saying they are "not included" tells the reader they exist.
+
+**Another app's feature, in its own words, is not the same finding.** The
+converter reads LinkWarden, whose exports carry archived pages, so "archived
+pages" on the converter's page describes that data and stays. What is barred is
+our name for our planned feature — "page copies", "screenshots" — which reads as
+ours wherever it appears.
+
+**A limit the copy states is a claim, and it has to hold for the ordinary
+case.** The same change printed "up to 100,000 links" beside a byte limit that
+stopped a note-free library at about 94,000; the fix moved the limit, not the
+sentence. Where two limits interact, the copy names the one the reader will meet
+and the condition under which they'll meet the other — "fewer if they carry long
+notes". [data-lifecycle.md](./data-lifecycle.md), _the bookmark converter's
+limits_, has the measurement.
+
 #### the mechanics
 
 Written down because they are already kept, not because they are being decided
