@@ -71,6 +71,7 @@ describe('SyncPill', () => {
     ['a failed first pull', 'error' as StoreStatus, 'idle' as BgSyncStatus, 'Sync failed'],
     ['a failed cycle', 'ready' as StoreStatus, 'error' as BgSyncStatus, 'Sync failed'],
     ['a quota refusal', 'ready' as StoreStatus, 'blocked-capacity' as BgSyncStatus, 'Storage full'],
+    ['an expired session', 'ready' as StoreStatus, 'paused' as BgSyncStatus, 'Sync paused'],
   ])('reads "%s" as %s', (_name, store, bg, label) => {
     setSync(store, bg);
 
@@ -119,19 +120,19 @@ describe('SyncDetail', () => {
     // live read of what is waiting to go out.
     mockUsePendingChangesCount.mockReturnValue(4);
 
-    render(<SyncDetail onBack={jest.fn()} />);
+    render(<SyncDetail onBack={jest.fn()} onResume={jest.fn()} />);
 
     expect(rows()['Pending changes']).toBe('4');
   });
 
   it('says "Never" rather than leaving the last-sync row blank', () => {
-    render(<SyncDetail onBack={jest.fn()} />);
+    render(<SyncDetail onBack={jest.fn()} onResume={jest.fn()} />);
 
     expect(rows()['Last sync']).toBe('Never');
   });
 
   it('omits the last-error row when there is nothing to report', () => {
-    render(<SyncDetail onBack={jest.fn()} />);
+    render(<SyncDetail onBack={jest.fn()} onResume={jest.fn()} />);
 
     expect(rows()['Last error']).toBeUndefined();
   });
@@ -139,13 +140,13 @@ describe('SyncDetail', () => {
   it('shows the failed cycle’s own message, not a generic one', () => {
     setSync('ready', 'error', { lastError: 'Failed to fetch' });
 
-    render(<SyncDetail onBack={jest.fn()} />);
+    render(<SyncDetail onBack={jest.fn()} onResume={jest.fn()} />);
 
     expect(rows()['Last error']).toBe('Failed to fetch');
   });
 
   it('offers a manual sync at rest', () => {
-    render(<SyncDetail onBack={jest.fn()} />);
+    render(<SyncDetail onBack={jest.fn()} onResume={jest.fn()} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Sync now' }));
 
@@ -158,7 +159,7 @@ describe('SyncDetail', () => {
   ])('offers one Retry for %s — it recovers both', (_name, store, bg) => {
     setSync(store, bg, { lastError: 'Failed to fetch' });
 
-    render(<SyncDetail onBack={jest.fn()} />);
+    render(<SyncDetail onBack={jest.fn()} onResume={jest.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
 
     expect(requestSync).toHaveBeenCalledTimes(1);
@@ -171,7 +172,7 @@ describe('SyncDetail', () => {
   ])('offers nothing to press during %s — there is nothing to trigger', (_name, store, bg) => {
     setSync(store, bg);
 
-    render(<SyncDetail onBack={jest.fn()} />);
+    render(<SyncDetail onBack={jest.fn()} onResume={jest.fn()} />);
 
     // Only the header's Back button remains.
     expect(screen.getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual([
@@ -182,7 +183,7 @@ describe('SyncDetail', () => {
   it('explains a quota refusal with its count, and offers no retry', () => {
     setSync('ready', 'blocked-capacity', { blockedCount: 12 });
 
-    render(<SyncDetail onBack={jest.fn()} />);
+    render(<SyncDetail onBack={jest.fn()} onResume={jest.fn()} />);
 
     expect(screen.getByText(/12 changes can’t sync/)).toBeTruthy();
     // The cycle completed; only freeing space clears this, so a Retry button
@@ -191,9 +192,24 @@ describe('SyncDetail', () => {
     expect(screen.queryByRole('button', { name: 'Sync now' })).toBeNull();
   });
 
+  // An EXPIRED session (docs/sessions.md): nothing failed and nothing is lost, so no
+  // Retry — a cycle could only earn the same answer. The one fix is a sign-in.
+  it('offers the resume, and no retry, while the session is expired', () => {
+    setSync('ready', 'paused');
+    const onResume = jest.fn();
+
+    render(<SyncDetail onBack={jest.fn()} onResume={onResume} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in to resume' }));
+
+    expect(onResume).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('status').textContent).toMatch(/still here/);
+    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Sync now' })).toBeNull();
+  });
+
   it('goes back to the save flow', () => {
     const onBack = jest.fn();
-    render(<SyncDetail onBack={onBack} />);
+    render(<SyncDetail onBack={onBack} onResume={jest.fn()} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Back' }));
 

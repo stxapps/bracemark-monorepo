@@ -192,3 +192,31 @@ describe('SignInForm — the recovery door', () => {
     expect(screen.queryByRole('alert')).toBeNull();
   });
 });
+
+// The expired state's resume (docs/sessions.md): a normal sign-in, but only as the
+// account whose library is on this device. The username is pre-filled and read-only —
+// still focusable and announced, and still submitted — on both doors.
+describe('SignInForm — resuming a locked username', () => {
+  it('submits the stored username with the password, and will not take another', async () => {
+    render(<SignInForm lockedUsername="alice" />);
+    const username = screen.getByLabelText('Username') as HTMLInputElement;
+
+    expect(username.value).toBe('alice');
+    expect(username.readOnly).toBe(true);
+    expect(username.disabled).toBe(false);
+
+    fill('Password', 'a-very-long-passphrase');
+    await submit(/^Sign in$/);
+
+    expect(signIn).toHaveBeenCalledWith({ username: 'alice', password: 'a-very-long-passphrase' });
+  });
+
+  it('keeps the username locked through the recovery door', async () => {
+    render(<SignInForm lockedUsername="alice" />);
+    useRecoveryDoor();
+
+    const username = screen.getByLabelText('Username') as HTMLInputElement;
+    expect(username.value).toBe('alice');
+    expect(username.readOnly).toBe(true);
+  });
+});

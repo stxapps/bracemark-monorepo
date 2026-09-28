@@ -36,7 +36,7 @@ import { toItemRecord } from './projection';
 import { readReviewPromptState, writeReviewPromptState } from './review-prompt-store';
 import { readSidebarCollapsedIds, writeSidebarCollapsedIds } from './sidebar-view-store';
 import { readCachedStatus, writeCachedStatus } from './subscription-store';
-import { getSyncMeta, isFirstSyncDone, markFirstSyncDone } from './sync-store';
+import { beginInitialSync, getSyncMeta, isFirstSyncDone, markFirstSyncDone } from './sync-store';
 
 jest.mock('expo-sqlite', () => require('../testing/node-sqlite'));
 jest.mock('expo-file-system', () => require('../testing/memory-file-system'));
@@ -98,6 +98,7 @@ async function seedSignedInAccountWithData(): Promise<void> {
     ]);
     enqueuePutTx(tx, USER, LINK_PATH, 0);
   });
+  await beginInitialSync(USER);
   await markFirstSyncDone(USER, 500, LINK_PATH);
   await putLock({ id: 'app', kind: 'app', salt: 'aa', hash: 'bb' });
   await putFavicon('example.com', new Uint8Array([1, 2, 3]));

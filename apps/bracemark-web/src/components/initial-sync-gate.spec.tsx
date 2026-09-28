@@ -34,6 +34,8 @@ import { InitialSyncGate } from './initial-sync-gate';
 
 let mockStoreStatus = 'ready';
 let mockProgress: InitialSyncProgress | null = null;
+let mockSessionState: 'active' | 'expired' = 'active';
+let mockLastError: string | null = null;
 const retryInitialSync = jest.fn();
 
 jest.mock('@stxapps/web-react', () => ({
@@ -41,7 +43,11 @@ jest.mock('@stxapps/web-react', () => ({
     storeStatus: mockStoreStatus,
     initialSyncProgress: mockProgress,
     retryInitialSync,
+    lastError: mockLastError,
   }),
+  useAuth: () => ({ username: 'alice', sessionState: mockSessionState }),
+  usePendingChangesCount: () => 0,
+  useSignOut: () => ({ mutate: jest.fn(), isPending: false }),
 }));
 
 function mount() {
@@ -69,6 +75,8 @@ describe('InitialSyncGate', () => {
     jest.useFakeTimers();
     mockStoreStatus = 'ready';
     mockProgress = null;
+    mockSessionState = 'active';
+    mockLastError = null;
     retryInitialSync.mockClear();
   });
 
@@ -79,6 +87,23 @@ describe('InitialSyncGate', () => {
   it('renders the app once the store is ready', () => {
     mount();
     expect(appIsShowing()).toBe(true);
+  });
+
+  // An EXPIRED session caught this device's first sync mid-way (docs/sessions.md).
+  // Nothing failed, so this is not the "Couldn’t sync" error, and retrying would
+  // only earn the same answer: the gate says sync is paused and offers the resume.
+  it('offers a sign-in, not a retry, when an expired session holds up the first sync', () => {
+    mockStoreStatus = 'error';
+    mockSessionState = 'expired';
+    mockLastError = 'Signing in again will finish setting up this device.';
+
+    mount();
+
+    expect(appIsShowing()).toBe(false);
+    expect(screen.getByRole('status').textContent).toContain('Sync is paused');
+    expect(screen.getByRole('button', { name: 'Sign in to resume' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
   describe('no flash', () => {

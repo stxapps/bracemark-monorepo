@@ -718,20 +718,26 @@ the folder separator.
 
 ### the sign-out teardown — close the gate, then wipe
 
-Every local wipe in this document funnels through one client primitive:
-`endSession` in each platform's `contexts/auth-provider.tsx`, which runs
-`clearData` (plus `clearSession` and, on web, `queryClient.clear()`) and then
-flips auth state. Deliberate sign-out, an invalidated session, and the last step
-of delete-account all end here. Which server answers count as an invalidated
-session, and so may wipe a device, is [sessions.md](./sessions.md)'s rule.
+Every local wipe in this document funnels through one client primitive: the
+teardown in each platform's `contexts/auth-provider.tsx`, which runs
+`clearSession`, then `clearData`, then `queryClient.clear()`, and then flips auth
+state. Exactly three things end here: a deliberate sign-out (`endSession`), the
+last step of delete-account (also `endSession`), and a `session_revoked` verdict
+for the session generation this device still holds. An expired or unknown
+session does NOT — it keeps everything and pauses sync. That rule, and why, is
+[sessions.md](./sessions.md)'s. On web the teardown runs under the cross-tab
+lifecycle lock and announces itself to the other tabs, which close their UI
+without wiping twice; `clearData` also drops the service worker's query-keyed
+cache entries ([offline-mode.md](./offline-mode.md), _sign-out leaves the worker
+alone_).
 
 The order inside it is load-bearing, and it is **three** steps, not two:
 
-| step |                                                     | why it can't move                                                                     |
-| ---- | --------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| 1    | `setStatus('ending')`                               | closes the auth gate — the app subtree unmounts **before** the store empties under it |
-| 2    | `clearSession` + `clearData`, `queryClient.clear()` | the actual wipe, with nothing mounted to observe it                                   |
-| 3    | `setStatus('unauthenticated')`                      | releases the exit navigation, now that the wipe has finished                          |
+| step |                                                         | why it can't move                                                                                                               |
+| ---- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | `setStatus('ending')`                                   | closes the auth gate — the app subtree unmounts **before** the store empties under it                                           |
+| 2    | `clearSession`, then `clearData`, `queryClient.clear()` | the actual wipe, with nothing mounted to observe it; the record goes first, so an interrupted wipe is finished by the next load |
+| 3    | `setStatus('unauthenticated')`                          | releases the exit navigation, now that the wipe has finished                                                                    |
 
 Step 1 is the one that isn't obvious. Without it there is a live frame where the
 store is already empty but status is still `authenticated`: the signed-in subtree
@@ -924,7 +930,9 @@ idempotent:
    all-or-nothing pairing create-account writes them with. Doors gone = the
    **cryptographic kill**: no wrapped DEK survives, so any stray ciphertext is
    permanently unreadable even if a copy escaped deletion.
-4. **Revoke every session** (`sessions.deleteByUserId`).
+4. **Revoke every session** (`revokeAllSessions`): each row keeps a revocation
+   marker rather than being deleted, so every device that comes back is told
+   `session_revoked` and erases the account's copy ([sessions.md](./sessions.md)).
 
 The tombstone lands _before_ the shard delete so the retry path can always
 recognize an in-progress deletion: tombstoned entry + missing user row =
@@ -943,6 +951,10 @@ what it always was — a server-side inconsistency to log and answer opaquely.
 - **`purchases` rows.** Money-adjacent audit state — a provider id plus our
   random userId, no personal data. Late provider webhooks for a deleted
   account already log-and-drop in `applyPaddleEvent`.
+- **The session rows, revoked.** Each keeps its marker for
+  `SESSION_RETENTION` (a year) after the revocation, so a device that connects
+  late still learns to erase its copy; the daily cron then purges it. The
+  /delete-account and /privacy pages say so.
 
 **The deleting client** (`web-react` `hooks/use-delete-account.ts` +
 bracemark-web's Account section): door fetch → `unlockAccount` (the wrong-password
@@ -1445,11 +1457,12 @@ archive a piece per turn, as the backup export already deflates it. Not made.
 - **Username release after a cooldown** — loosen the tombstone policy if
   reclaiming handles ever matters; the column (`deleted_at`) already carries
   the timestamp a policy would key on. Loosen-only: never re-tighten.
-- **"Sign out everywhere"** — `sessions.deleteByUserId` already exists for the
-  teardown; exposing it as a standalone Account action is a cheap, fully
-  reversible security control (distinct from deletion, which is why it isn't
-  bundled here).
+- **"Sign out everywhere"** — `revokeAllSessions` (`sessions.revokeByUserId`)
+  already exists for the teardown; exposing it as a standalone Account action is
+  a cheap, fully reversible security control (distinct from deletion, which is
+  why it isn't bundled here).
 - **Tombstone-teardown sweeper** — a crashed deletion whose session expired
   before a retry leaves a tombstoned name with shard rows still present (data
   already wiped; sign-in already refused). Harmless but untidy; sweep alongside
-  the orphan-claim sweeper and `sessions.deleteExpired` when that lands.
+  the orphan-claim sweeper in the daily cron that now runs session cleanup
+  (`worker.ts` `scheduled`, [sessions.md](./sessions.md)).

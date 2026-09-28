@@ -10,7 +10,7 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 import { Complete } from './Complete';
 import { Editor } from './Editor';
 import { PopupMessage, PopupShell } from './Shell';
-import { SignIn } from './SignIn';
+import { Resume, SignIn } from './SignIn';
 import { SyncDetail, SyncPill } from './Sync';
 
 // The active tab the popup is acting on. `null` once we know there's no usable tab
@@ -67,7 +67,8 @@ function App() {
 // `view` toggle rather than opening the options page.
 function AuthedApp() {
   const { requestSync } = useSync();
-  const [view, setView] = useState<'flow' | 'sync'>('flow');
+  const { sessionState } = useAuth();
+  const [view, setView] = useState<'flow' | 'sync' | 'resume'>('flow');
 
   // Kick a background cycle the moment the popup is authenticated. This subtree
   // mounts on BOTH entry paths — "opened while already signed in" (loading →
@@ -82,7 +83,18 @@ function AuthedApp() {
     requestSync();
   }, [requestSync]);
 
-  if (view === 'sync') return <SyncDetail onBack={() => setView('flow')} />;
+  // A resume that succeeded flips the session back to active: leave the form, and
+  // kick the cycle that pushes whatever was saved while sync was paused.
+  useEffect(() => {
+    if (view !== 'resume' || sessionState !== 'active') return;
+    setView('flow');
+    requestSync();
+  }, [view, sessionState, requestSync]);
+
+  if (view === 'resume') return <Resume onBack={() => setView('sync')} />;
+  if (view === 'sync') {
+    return <SyncDetail onBack={() => setView('flow')} onResume={() => setView('resume')} />;
+  }
 
   return (
     <PopupShell

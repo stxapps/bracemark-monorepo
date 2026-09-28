@@ -33,6 +33,7 @@ import {
 // querying `pending_ops` itself. One direction only; pending-store never imports back.
 import { queuedPathsTx } from './pending-store';
 import type { ItemRecord } from './projection';
+import { assertAccountOwnsStoreTx } from './sync-store';
 
 export type ItemRow = typeof items.$inferSelect;
 
@@ -184,9 +185,15 @@ export function putItemsTx(tx: DbTx, input: ItemRecord[]): void {
 // Returns the paths actually written, so a caller with a second, non-transactional
 // half to do (the engine tearing down a content path's stale plaintext file) can
 // apply it to exactly those.
+//
+// It also re-checks that this account still owns the store (sync-store's
+// AccountFencedError), in the same transaction: a cycle that outlived a sign-out
+// or an account switch must not write the old account's plaintext into the new
+// store.
 export async function putItemsUnqueued(username: string, records: ItemRecord[]): Promise<string[]> {
   if (records.length === 0) return [];
   return getDb().transaction((tx) => {
+    assertAccountOwnsStoreTx(tx, username);
     const queued = queuedPathsTx(
       tx,
       username,
@@ -208,9 +215,12 @@ export async function putItemsUnqueued(username: string, records: ItemRecord[]):
 // that hasn't been pushed yet.
 //
 // Returns the paths actually deleted, for the caller's disk-file half.
+//
+// Fenced on the account's bookkeeping row like putItemsUnqueued.
 export async function deleteItemsUnqueued(username: string, paths: string[]): Promise<string[]> {
   if (paths.length === 0) return [];
   return getDb().transaction((tx) => {
+    assertAccountOwnsStoreTx(tx, username);
     const queued = queuedPathsTx(tx, username, paths);
     const deletable = paths.filter((path) => !queued.has(path));
     if (deletable.length > 0) deleteItemsTx(tx, deletable);

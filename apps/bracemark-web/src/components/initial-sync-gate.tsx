@@ -2,8 +2,11 @@
 
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 
+import { SESSION_COPY } from '@stxapps/react';
 import { type InitialSyncProgress, initialSyncProgressLabel } from '@stxapps/shared';
-import { useSync } from '@stxapps/web-react';
+import { useAuth, useSync } from '@stxapps/web-react';
+
+import { SyncPausedActions } from './sync-paused-notice';
 
 // Renders the app subtree only once the local store is usable; otherwise shows an
 // in-route loading/error screen. This is a CONTENT SWAP, not a redirect: the
@@ -37,7 +40,8 @@ import { useSync } from '@stxapps/web-react';
 const MIN_SCREEN_MS = 500;
 
 export function InitialSyncGate({ children }: { children: ReactNode }) {
-  const { storeStatus, initialSyncProgress, retryInitialSync } = useSync();
+  const { storeStatus, initialSyncProgress, retryInitialSync, lastError } = useSync();
+  const { sessionState } = useAuth();
 
   // No-flash: 'checking' is a single IndexedDB read of the first-sync flag and
   // happens on every mount. We never want the decrypting screen for it, so we
@@ -71,6 +75,22 @@ export function InitialSyncGate({ children }: { children: ReactNode }) {
 
   // Only the blocking initial sync can land here: background syncs report on
   // bgSyncStatus and never set the gate's 'error'.
+  // The session EXPIRED before this device's first sync finished (docs/sessions.md).
+  // Nothing failed and nothing was lost — the pull resumes where it stopped — but
+  // the store isn't complete, so the gate stays closed and offers the one thing
+  // that finishes it. Status, not alert: the user didn't cause it.
+  if (storeStatus === 'error' && sessionState === 'expired') {
+    return (
+      <div className="flex min-h-dvh flex-col items-center justify-center gap-4 px-6 safe-area">
+        <div role="status" className="flex flex-col items-center gap-1">
+          <p className="text-sm font-medium">{SESSION_COPY.paused.title}</p>
+          <p className="max-w-xs text-center text-xs text-muted-foreground">{lastError}</p>
+        </div>
+        <SyncPausedActions />
+      </div>
+    );
+  }
+
   if (storeStatus === 'error') {
     return (
       <div className="flex min-h-dvh flex-col items-center justify-center gap-4 safe-area">

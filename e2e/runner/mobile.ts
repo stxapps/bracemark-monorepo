@@ -4,7 +4,7 @@ import { expect } from '@playwright/test';
 
 import { profileDir } from '../paths';
 import { importArchive, waitForSync } from '../seed/steps';
-import { type Credentials } from '../web/fixtures/account';
+import { type Credentials, newCredentials } from '../web/fixtures/account';
 import { unique, unresolvableUrl } from '../web/fixtures/data';
 import { writeSmallDataArchive } from '../web/fixtures/data-lifecycle';
 import { API_URL } from '../web/fixtures/env';
@@ -204,6 +204,30 @@ async function revokeOtherSessions(label: string, credentials: Credentials): Pro
     await app.page.getByRole('button', { name: /^Sign out other devices/ }).click();
     await app.page.getByRole('button', { name: 'Sign out other devices', exact: true }).click();
     await expect(app.page.getByText(/^Your other devices have been signed out\./)).toBeVisible();
+  } finally {
+    await app.close();
+  }
+}
+
+// Change the account's password from a separate web profile — the other device.
+// Its own session stays; every other session, the device's included, is EXPIRED and
+// never revoked (apps/bracemark-api/src/services/account.ts, changePasswordDoor).
+async function changePasswordElsewhere(
+  label: string,
+  credentials: Credentials,
+  newPassword: string,
+): Promise<void> {
+  const app = await launchApp(profileDir(label), { existing: credentials });
+  try {
+    await app.page.goto('/settings/account');
+    await app.page.getByRole('button', { name: /^Change password/ }).click();
+    await app.page.locator('#cp-current').fill(credentials.password);
+    await app.page.getByRole('button', { name: /choose my own/i }).click();
+    await app.page.locator('#cp-new-password').fill(newPassword);
+    await app.page.getByRole('button', { name: 'Change password', exact: true }).click();
+    await expect(app.page.getByText(/^Your password has been changed\./)).toBeVisible({
+      timeout: 60_000,
+    });
   } finally {
     await app.close();
   }
@@ -513,7 +537,11 @@ async function main(): Promise<void> {
             await addLink(app.page, conflictUrl);
             await syncAndWait(app.page);
           }
-          if (testCase.id.startsWith('OFFLINE-') || testCase.id === 'SESSION-INVALID-NATIVE-001') {
+          if (
+            testCase.id.startsWith('OFFLINE-') ||
+            testCase.id === 'SESSION-INVALID-NATIVE-001' ||
+            testCase.id === 'SESSION-EXPIRED-NATIVE-001'
+          ) {
             // What the device must still read once the api is gone — or, for
             // the revoked session, what the teardown must take and the return
             // must bring back.
@@ -1308,6 +1336,42 @@ async function main(): Promise<void> {
             return null;
           },
           'mobile/flows/parts/session-invalid-return.yaml',
+        ];
+      }
+      if (testCase.id === 'SESSION-EXPIRED-NATIVE-001') {
+        // docs/sessions.md: an expired session keeps everything. The device's
+        // session is expired the way a user expires it — a password change on
+        // another device — and the flow resumes with the new password.
+        const newPassword = newCredentials().password;
+        const queuedUrl = unresolvableUrl(`${run.runId}-expired-queued`);
+        env.KEPT_URL = offlineUrl;
+        env.QUEUED_URL = queuedUrl;
+        env.NEW_PASSWORD = newPassword;
+        steps = [
+          testCase.path,
+          async () => {
+            await changePasswordElsewhere(
+              `${run.runId}-${testCase.id}-changer`,
+              credentials,
+              newPassword,
+            );
+            return null;
+          },
+          'mobile/flows/parts/session-expired-paused.yaml',
+          async (context) => {
+            const rows = await localRows(context, 'store-paused');
+            if (rows === 0) throw new Error('the expired session emptied the local store');
+            return null;
+          },
+          'mobile/flows/parts/session-expired-resume.yaml',
+          async () => {
+            await readFromWeb(
+              `${run.runId}-${testCase.id}-reader`,
+              { username: credentials.username, password: newPassword },
+              [{ url: queuedUrl }],
+            );
+            return null;
+          },
         ];
       }
       if (testCase.id === 'SYNC-CONFLICT-001') {

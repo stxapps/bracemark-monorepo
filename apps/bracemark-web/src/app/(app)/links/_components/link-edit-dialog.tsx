@@ -34,6 +34,7 @@ import {
   readFileBytes,
   resizeImage,
   useLinkMutations,
+  useUnsavedDraft,
 } from '@stxapps/web-react';
 import { ListSelect } from '@stxapps/web-ui/components/links/list-select';
 import { TagsField } from '@stxapps/web-ui/components/links/tags-field';
@@ -181,6 +182,9 @@ function LinkEditForm({
     !sameIds(tagIds, link.tagIds) ||
     note.trim() !== (link.note ?? '') ||
     imageDirty;
+  // Also reported page-wide, so the "updated, reload" pill asks before a reload
+  // would discard it (docs/offline-mode.md, _update policy_).
+  useUnsavedDraft(isDirty);
 
   const onSubmit = async (e: React.SubmitEvent) => {
     e.preventDefault();

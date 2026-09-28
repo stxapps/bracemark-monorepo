@@ -1,33 +1,38 @@
-// Specs for the auth-aware fetch every web app's api client is built on. Its two jobs
-// pull against each other, and getting either wrong is silent:
+// Specs for the auth-aware fetch every web app's api client is built on. It attaches
+// the bearer token and REPORTS the server's verdict on it — and the rule it carries
+// (docs/sessions.md) is silent when broken, so it's pinned here as a table:
 //
-//   - ATTACH the bearer token, but only when there is a usable one. `getToken` withholds
-//     an expired token while `getSession` still holds the record (session-store.ts), and
-//     that gap is precisely the mid-session expiry this wrapper has to notice — without a
-//     round trip, since the request would only earn a 401.
-//   - INVALIDATE on a 401 — but only for a request it actually AUTHENTICATED. A 401 on an
-//     unauthenticated call is the endpoint's own business: a wrong-password sign-in
-//     answers 401, and treating that as "your session died" drops the user to signed-out
-//     from the very screen they are signing in on, with a form that just seems to reset.
+//   - only OUR session codes are verdicts. A codeless 401, an HTML 401 from a proxy,
+//     any other status, a network error — each is just a failed request. The fetch this
+//     replaced invalidated on `status === 401`, which let anything between the device
+//     and the api (or whoever holds the domain later) erase a user's library.
+//   - only for a request it AUTHENTICATED: a wrong-password sign-in answers 401 too.
+//   - tagged with the generation that SENT the request, so the provider can ignore a
+//     verdict on a token that has since been replaced.
+//   - no clock: a session is sent however old it is.
 //
 // Driven through a real `api.call` rather than by reaching for the wrapper directly, so a
 // build that constructed the auth fetch but forgot to hand it to `createApiClient` fails
-// here. `notifySessionInvalid` is real, not mocked: it is a pure fan-out over subscribers
-// (session-store.ts), so subscribing IS the observation — and a mock would let the
-// wrapper call something that no longer reaches the auth provider.
+// here. `notifySessionVerdict` is real, not mocked: subscribing IS the observation.
 
 import {
   ApiError,
   dataDeleteAllEndpoint,
   iapStatusEndpoint,
+  SESSION_ERROR,
   type SubscriptionStatus,
 } from '@stxapps/shared';
 
-import { clearSession, onSessionInvalid, saveSession } from '../data/session-store';
+import {
+  clearSession,
+  onSessionVerdict,
+  saveSession,
+  type SessionRecord,
+} from '../data/session-store';
 import { createAuthApiClient } from './auth-api-client';
 
 const BASE_URL = 'https://api.example.test';
-const HOUR = 60 * 60 * 1000;
+const YEAR = 365 * 24 * 60 * 60 * 1000;
 
 const FREE: SubscriptionStatus = {
   plan: 'free',
@@ -38,30 +43,33 @@ const FREE: SubscriptionStatus = {
 };
 
 let fetchMock: jest.Mock;
-let invalidated: jest.Mock;
+let verdicts: jest.Mock;
 let unsubscribe: () => void;
 
 beforeEach(async () => {
   await clearSession();
   fetchMock = jest.fn(async () => Response.json(FREE));
   globalThis.fetch = fetchMock as unknown as typeof fetch;
-  invalidated = jest.fn();
-  unsubscribe = onSessionInvalid(invalidated);
+  verdicts = jest.fn();
+  unsubscribe = onSessionVerdict(verdicts);
 });
 
 afterEach(() => {
   unsubscribe();
+  jest.restoreAllMocks();
 });
 
-async function signIn(expiresAt: number): Promise<void> {
+async function signIn(patch: Partial<SessionRecord> = {}): Promise<void> {
   await saveSession({
     username: 'alice',
     token: 'tok_live',
-    expiresAt,
     encryptionKey: await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, [
       'encrypt',
       'decrypt',
     ]),
+    state: 'active',
+    generation: 'gen-1',
+    ...patch,
   });
 }
 
@@ -80,6 +88,8 @@ const sentAuthHeader = (): string | null =>
     'authorization',
   );
 
+const envelope = (error: string) => Response.json({ error }, { status: 401 });
+
 describe('the auth-aware fetch', () => {
   it('sends no authorization header while signed out', async () => {
     await callStatus();
@@ -88,71 +98,136 @@ describe('the auth-aware fetch', () => {
     expect(sentAuthHeader()).toBeNull();
   });
 
-  it('attaches the bearer token of a live session', async () => {
-    await signIn(Date.now() + HOUR);
+  it('attaches the bearer token of the session', async () => {
+    await signIn();
 
     await callStatus();
 
     expect(sentAuthHeader()).toBe('Bearer tok_live');
   });
 
-  // The gap `getToken` opens on purpose: no usable token, but a session record still on
-  // the device. That combination can only mean the token expired mid-session, and the
-  // loop closes here rather than after a round trip that could only 401.
-  it('notices a token that expired mid-session, without sending it', async () => {
-    await signIn(Date.now() - 1);
+  // No clock: whatever time the device thinks it is, the token goes out and the server
+  // answers for it.
+  it('sends the token of a session signed in long ago, and reports nothing on success', async () => {
+    await signIn();
+    jest.spyOn(Date, 'now').mockReturnValue(Date.now() + 2 * YEAR);
 
     await callStatus();
 
-    expect(invalidated).toHaveBeenCalledTimes(1);
-    expect(sentAuthHeader()).toBeNull();
+    expect(sentAuthHeader()).toBe('Bearer tok_live');
+    expect(verdicts).not.toHaveBeenCalled();
   });
 
-  // Signed out is not "expired": there is no session record, so there is nothing to
-  // invalidate. Firing here would sign the user out on every public request the app makes
-  // — the username check on the create-account screen, for one.
-  it('does not invalidate when there is no session at all', async () => {
+  // The probe rides this: an expired session still sends its token.
+  it('sends the token of an expired session', async () => {
+    await signIn({ state: 'expired' });
+
     await callStatus();
 
-    expect(invalidated).not.toHaveBeenCalled();
+    expect(sentAuthHeader()).toBe('Bearer tok_live');
   });
 
-  it('invalidates when the server rejects a token it sent', async () => {
-    await signIn(Date.now() + HOUR);
-    fetchMock.mockResolvedValue(new Response('{}', { status: 401 }));
+  describe('the rule, as a table', () => {
+    it.each([
+      [SESSION_ERROR.revoked, 'revoked'],
+      [SESSION_ERROR.expired, 'expired'],
+      [SESSION_ERROR.unknown, 'expired'],
+    ])('reports our %s envelope as %s, for the generation that sent it', async (code, verdict) => {
+      await signIn({ generation: 'gen-sent' });
+      fetchMock.mockResolvedValue(envelope(code));
 
-    await callStatus();
+      await callStatus();
 
-    expect(invalidated).toHaveBeenCalledTimes(1);
+      expect(verdicts).toHaveBeenCalledTimes(1);
+      expect(verdicts).toHaveBeenCalledWith({ verdict, generation: 'gen-sent' });
+    });
+
+    it.each([
+      ['a codeless 401', () => new Response('', { status: 401 })],
+      ['an empty-object 401', () => new Response('{}', { status: 401 })],
+      [
+        'an HTML 401 from something that is not us',
+        () =>
+          new Response('<html><body><h1>401 Authorization Required</h1></body></html>', {
+            status: 401,
+            headers: { 'content-type': 'text/html' },
+          }),
+      ],
+      ['our envelope with another code', () => envelope('unauthorized')],
+      [
+        'session_revoked on a 403',
+        () => Response.json({ error: 'session_revoked' }, { status: 403 }),
+      ],
+      ['a 500', () => new Response('{}', { status: 500 })],
+      ['a 429', () => new Response('{}', { status: 429 })],
+    ])('reports nothing for %s', async (_name, response) => {
+      await signIn();
+      fetchMock.mockResolvedValue(response());
+
+      await callStatus();
+
+      expect(verdicts).not.toHaveBeenCalled();
+    });
+
+    it('reports nothing for a network error', async () => {
+      await signIn();
+      fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+
+      const api = createAuthApiClient({ baseUrl: BASE_URL });
+      await expect(api.call(iapStatusEndpoint, {})).rejects.toThrow('Failed to fetch');
+
+      expect(verdicts).not.toHaveBeenCalled();
+    });
   });
 
-  // THE ASYMMETRY THAT MATTERS: a 401 on a request we never authenticated. Only reachable
-  // while signed out, which is exactly when a wrong-password sign-in happens.
-  it('does not invalidate on a 401 for a request it never authenticated', async () => {
-    fetchMock.mockResolvedValue(new Response('{}', { status: 401 }));
+  // A delayed answer belongs to the session that SENT the request: if the token is
+  // replaced (a resume) while the request is in flight, the verdict still names the old
+  // generation, and the provider ignores it.
+  it('tags a verdict with the generation captured at send, not the one current at arrival', async () => {
+    await signIn({ generation: 'gen-old' });
+    let answer!: (res: Response) => void;
+    fetchMock.mockReturnValue(
+      new Promise<Response>((resolve) => {
+        answer = resolve;
+      }),
+    );
 
-    await callStatus();
+    const call = callStatus();
+    await Promise.resolve();
+    await signIn({ token: 'tok_new', generation: 'gen-new' });
+    answer(envelope(SESSION_ERROR.revoked));
+    await call;
 
-    expect(invalidated).not.toHaveBeenCalled();
+    expect(verdicts).toHaveBeenCalledWith({ verdict: 'revoked', generation: 'gen-old' });
   });
 
-  // Every other failure says nothing about whether this session is alive. Signing out
-  // over one would turn a transient server error into a re-derivation of the user's key.
-  it.each([403, 404, 429, 500])('leaves the session alone on a %i', async (status) => {
-    await signIn(Date.now() + HOUR);
-    fetchMock.mockResolvedValue(new Response('{}', { status }));
+  // A 401 on a request we never authenticated is the endpoint's own business — a
+  // wrong-password sign-in, while signed out.
+  it('reports nothing on a 401 for a request it never authenticated', async () => {
+    fetchMock.mockResolvedValue(envelope(SESSION_ERROR.revoked));
 
     await callStatus();
 
-    expect(invalidated).not.toHaveBeenCalled();
+    expect(verdicts).not.toHaveBeenCalled();
+  });
+
+  // The caller still reads the body it's owed — the verdict is read off a clone.
+  it('leaves the response body for the caller', async () => {
+    await signIn();
+    fetchMock.mockResolvedValue(envelope(SESSION_ERROR.expired));
+
+    const api = createAuthApiClient({ baseUrl: BASE_URL });
+    const err = await api.call(iapStatusEndpoint, {}).catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(ApiError);
+    expect((err as ApiError).body).toContain(SESSION_ERROR.expired);
   });
 
   // The caller's own init must survive the header being added — a wrapper that replaced
   // `init` rather than spreading it would strip the content-type and the body off every
-  // POST, and the failure would surface as a server-side parse error, not as anything
-  // pointing back here.
+  // POST.
   it('preserves the caller’s method, body and headers alongside the token', async () => {
-    await signIn(Date.now() + HOUR);
+    await signIn();
     const api = createAuthApiClient({ baseUrl: BASE_URL });
     fetchMock.mockResolvedValue(Response.json({ deletedCount: 0 }));
 

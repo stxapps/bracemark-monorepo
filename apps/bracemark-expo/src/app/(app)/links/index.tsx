@@ -3,6 +3,7 @@ import { View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { withUniwind } from 'uniwind';
 
+import { SyncPausedNotice } from '../../../components/sync-paused-notice';
 import { AddLinkFab } from '../../../features/links/add-link-fab';
 import { BulkTagsDialog } from '../../../features/links/bulk-tags-dialog';
 import { LinkAddPanel } from '../../../features/links/link-add-panel';
@@ -71,6 +72,10 @@ export default function LinksScreen() {
               is off, undismissed, AND links are actually waiting, and never over
               a locked list (see the component). Above Main so it reads as
               chrome, not a list item. */}
+          {/* Sync paused — the expired session's notice (docs/sessions.md);
+              null unless the server asked for a sign-in. Above the previews
+              offer, as on web. */}
+          <SyncPausedNotice />
           <PreviewsPrompt />
           <Main />
           {/* Screen-level, not in Main: the add affordance survives Main's

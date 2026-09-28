@@ -16,10 +16,12 @@ import { useAuth } from '@stxapps/expo-react';
 //
 // Where a non-authenticated user goes depends on WHY they're here (auth `reason`):
 // a deliberate 'signed-out' goes home to '/', since offering to return them to the
-// screen they just left would be silly. Everything else — an 'expired' session or
-// a direct/deep-link visit (reason null) — goes to /sign-in with the intended path
-// stashed in `?next=`, so sign-in can return them there instead of always /links
-// (GuestGuard reads the param).
+// screen they just left would be silly. Everything else — a 'revoked' session (the
+// server told this device to forget; /sign-in says so) or a direct/deep-link visit
+// (reason null) — goes to /sign-in with the intended path stashed in `?next=`, so
+// sign-in can return them there instead of always /links (GuestGuard reads the
+// param). An EXPIRED session never reaches this: it stays authenticated, library
+// open, with a "Sign in to resume" notice (docs/sessions.md).
 //
 // Divergence from web: `next` carries the pathname only, not `?query`. Web
 // preserves the query because it holds filter/search state in the URL;

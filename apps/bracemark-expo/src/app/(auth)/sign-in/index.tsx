@@ -1,3 +1,6 @@
+import { useAuth } from '@stxapps/expo-react';
+import { SESSION_COPY } from '@stxapps/react';
+
 import { AuthAltAction } from '../../../features/auth/auth-alt-action';
 import { AuthScreen } from '../../../features/auth/auth-screen';
 import { SignInForm } from '../../../features/auth/sign-in-form';
@@ -16,10 +19,16 @@ import { SignInForm } from '../../../features/auth/sign-in-form';
 // someone takes the other one. What's left that would hold in both modes is the
 // encryption story, and AuthScreen already says that once, below the card, for
 // both screens. A signup has expectations to set; a sign-in just needs to ask.
+//
+// The one line it may carry: after the server told this device to forget
+// (`session_revoked`), why the library is gone — web's sign-in page says the same
+// (docs/sessions.md). In memory only, so a relaunch drops it.
 export default function SignInScreen() {
+  const { reason } = useAuth();
   return (
     <AuthScreen
       title="Sign in"
+      description={reason === 'revoked' ? SESSION_COPY.revoked : undefined}
       footer={
         <AuthAltAction prompt="New to Bracemark?" href="/create-account" action="Create account" />
       }

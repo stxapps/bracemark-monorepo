@@ -64,6 +64,13 @@ export default defineBackground(() => {
 // leaf handlers (runSync/buildDeps, handle/currentUsername) be pure synchronous
 // getSession() readers — a new message op can't reintroduce the cold-worker
 // "no token" bug by forgetting to load, because it never holds that duty.
+//
+// ⚠ This worker carries the token and never acts on it (docs/sessions.md, _who
+// acts on a 401_): it runs no AuthProvider, so a session verdict its requests
+// provoke reaches no listener here, and it never writes the session record or
+// wipes anything. It READS the record's state — an expired session makes
+// runSync call nothing — and the popup/options page, the lifecycle owners on
+// this origin, do the rest.
 async function withSession<T>(run: () => Promise<T>): Promise<T> {
   await loadSession();
   return run();

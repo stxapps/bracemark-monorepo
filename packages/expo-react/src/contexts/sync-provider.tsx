@@ -9,7 +9,7 @@ import {
   useState,
 } from 'react';
 
-import { useApiClient } from '@stxapps/react';
+import { SESSION_COPY, useApiClient } from '@stxapps/react';
 import {
   bgStatusForOutcome,
   type BgSyncStatus,
@@ -116,7 +116,7 @@ interface SyncContextValue {
 const SyncContext = createContext<SyncContextValue | null>(null);
 
 export function SyncProvider({ children }: { children: ReactNode }) {
-  const { username, status: authStatus } = useAuth();
+  const { username, status: authStatus, sessionState } = useAuth();
   const api = useApiClient();
   const [storeStatus, setStoreStatus] = useState<StoreStatus>('checking');
   const [bgSyncStatus, setBgSyncStatus] = useState<BgSyncStatus>('idle');
@@ -159,6 +159,35 @@ export function SyncProvider({ children }: { children: ReactNode }) {
 
     const session = getSession();
     if (!session) return; // mirror not hydrated yet; the next render will retry
+
+    // EXPIRED (docs/sessions.md): the server wants a sign-in before it syncs
+    // again, so schedule nothing — a cycle would only earn the same answer. The
+    // store stays exactly as usable as offline; edits keep queueing as pending
+    // ops and push on resume. The one thing a pause can't give is a first sync
+    // that never finished: that store isn't complete, so the gate says why.
+    // Same branch as web-react's SyncProvider.
+    if (sessionState === 'expired') {
+      backgroundSyncRef.current = () => undefined;
+      setBgSyncStatus('paused');
+      setBlockedCount(0);
+      setInitialSyncProgress(null);
+      void isFirstSyncDone(username).then(
+        (done) => {
+          if (!activeRef.current) return;
+          if (done) {
+            setStoreStatus('ready');
+            setLastError(null);
+          } else {
+            setStoreStatus('error');
+            setLastError(SESSION_COPY.paused.beforeFirstSync);
+          }
+        },
+        () => undefined,
+      );
+      return () => {
+        activeRef.current = false;
+      };
+    }
 
     const deps: SyncDeps = { username, encryptionKey: session.encryptionKey, api };
     // Fresh slate for the indicator — a stale 'error' / stale timestamp from a
@@ -267,7 +296,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       backgroundSyncRef.current = () => undefined;
       if (progressTimer !== null) clearTimeout(progressTimer);
     };
-  }, [username, authStatus, attempt, api]);
+  }, [username, authStatus, sessionState, attempt, api]);
 
   const value = useMemo<SyncContextValue>(
     () => ({

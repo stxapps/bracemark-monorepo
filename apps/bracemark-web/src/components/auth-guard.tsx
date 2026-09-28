@@ -71,10 +71,14 @@ import { SITE_URL } from '@/lib/site';
 // the first navigation is what costs the window, and nothing on the site side can put
 // the user back in it. So an installed sign-out stays on this origin, at /sign-in.
 //
-// Everything else — an 'expired' session or a
+// Everything else — a 'revoked' session (the server told this device to forget:
+// sign out other devices, or the account deleted elsewhere — /sign-in says so) or a
 // direct visit (reason null) — bounces to /sign-in with the full intended path
 // (including any query string) stashed in `?next=`, so sign-in can return them there
-// instead of dumping everyone on /links (GuestGuard reads the param). The installed
+// instead of dumping everyone on /links (GuestGuard reads the param). An EXPIRED
+// session never reaches this branch: it stays 'authenticated' with the library open
+// and a "Sign in to resume" notice (docs/sessions.md), so nothing here navigates
+// away from a library the user can still read. The installed
 // sign-out above carries no `?next=`: a deliberate sign-out has no intended path to
 // come back to, which is the whole reason the browser-tab case leaves for the apex.
 //

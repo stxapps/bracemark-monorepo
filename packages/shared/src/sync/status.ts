@@ -93,6 +93,12 @@ export type BgSyncStatus =
   // it is written and never becomes a pending op at all — there is no partial
   // push to report, and no plan-blocked state to be in.
   | 'blocked-capacity'
+  // The session is EXPIRED (docs/sessions.md, _the expired state on the
+  // client_): the server wants a sign-in before it will sync again, so the
+  // engine schedules no cycles. Not 'error' — nothing a retry could fix, and
+  // the library is fully usable — and not 'idle', which would claim edits
+  // made now are reaching other devices. Clears on resume.
+  | 'paused'
   | 'error'; // the last cycle failed; requestSync retries (flips back to 'syncing')
 
 // What a completed cycle learned beyond "it worked" — the engines' return value,
@@ -152,6 +158,7 @@ export type SyncPhase =
   | 'syncing' // a background cycle is in flight
   | 'cycle-error' // the last background cycle failed → requestSync retries
   | 'capacity-blocked' // cycle fine, but the byte/object quota refused part of it
+  | 'paused' // the session expired; sync waits for a sign-in to resume
   | 'idle'; // settled; the last cycle (if any) succeeded
 
 // Shared derivation of the user-facing sync status. Every status surface —
@@ -163,6 +170,10 @@ export function getSyncPhase(store: StoreStatus, bg: BgSyncStatus): SyncPhase {
   if (store === 'checking') return 'checking';
   if (store === 'syncing-initial') return 'initial-syncing';
   if (store === 'error') return 'initial-error';
+  // Ahead of everything a cycle reports: while paused no cycle runs, so a
+  // leftover 'error' or 'blocked-*' from before the pause is history, and the
+  // one thing the user can do is sign in.
+  if (bg === 'paused') return 'paused';
   if (bg === 'syncing') return 'syncing';
   if (bg === 'error') return 'cycle-error';
   // After 'error': a cycle that both failed AND hit the quota gate is reported
@@ -184,6 +195,9 @@ export const SYNC_PHASE_LABELS: Record<SyncPhase, string> = {
   // other changes did sync, so this must not read as breakage. The surfaces add
   // the call to action on top.
   'capacity-blocked': 'Some changes aren’t syncing — storage full',
+  // Effect first, like capacity-blocked: nothing is broken and nothing is lost,
+  // so the words must not read as an error. The surfaces add "Sign in to resume".
+  paused: 'Sync paused',
   idle: 'Up to date',
 };
 

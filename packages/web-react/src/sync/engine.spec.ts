@@ -33,6 +33,7 @@ import {
 } from '../data/mutations';
 import { enqueuePut } from '../data/pending-store';
 import { toItemRecord } from '../data/projection';
+import { AccountFencedError } from '../data/sync-store';
 import {
   awaitInflightSync,
   loadEntityContent,
@@ -993,5 +994,72 @@ describe('the first-sync counter', () => {
   it('is optional — the browser extension passes no reporter', async () => {
     await expect(runInitialSync(deps({ filesList: () => LISTING }))).resolves.toBeUndefined();
     expect(await bodyAt(LINK_PATH)).toBe(LINK_PATH);
+  });
+});
+
+// --- the account fence -------------------------------------------------------
+
+// A cycle is many round trips long, and a sign-out, a revocation wipe or an account
+// switch can land in ANY context sharing this database while it's on the network
+// (docs/sessions.md, _concurrent requests and shared local state_). What it pulls
+// after that is the OLD account's plaintext, and the store it would write into is
+// empty — or already the next account's. Every pulled write re-checks, inside its own
+// transaction, that the account still owns the store (sync-store.ts).
+describe('a cycle that outlives its account', () => {
+  // The teardown's own writes (clear-data.ts), landed from inside a stub handler so it
+  // falls after the cycle started and before it applies anything.
+  const tearDown = () =>
+    Promise.all([db.items.clear(), db.pendingOps.clear(), db.syncMeta.clear()]);
+
+  beforeEach(() => {
+    mockGetBlob.mockImplementation(async () => new Uint8Array([0xee, ...utf8('server copy')]));
+  });
+
+  it('writes nothing into the store once the account is torn down mid-cycle', async () => {
+    const cycle = runIncrementalSync(
+      deps({
+        opsList: async () => {
+          await tearDown();
+          return {
+            ops: [{ op: 'put', path: LINK_PATH, updatedAt: 2000 }],
+            oldestUpdatedAt: 500,
+            newestUpdatedAt: 2000,
+            hasMore: false,
+          };
+        },
+      }),
+    );
+
+    await expect(cycle).rejects.toBeInstanceOf(AccountFencedError);
+    expect(await db.items.count()).toBe(0);
+    // …and the bookkeeping row isn't resurrected by the cursor write either.
+    expect(await db.syncMeta.count()).toBe(0);
+  });
+
+  it('cannot finish a first sync for an account torn down mid-pull', async () => {
+    await db.syncMeta.clear();
+
+    const pull = runInitialSync(
+      deps({
+        filesList: async () => {
+          await tearDown();
+          return [{ path: LINK_PATH, updatedAt: 2000 }];
+        },
+      }),
+    );
+
+    await expect(pull).rejects.toBeInstanceOf(AccountFencedError);
+    expect(await db.items.count()).toBe(0);
+    expect(await db.syncMeta.count()).toBe(0);
+  });
+
+  // The control: the fence must not stop a first sync that nobody interrupted.
+  it('lets an uninterrupted first sync through', async () => {
+    await db.syncMeta.clear();
+
+    await runInitialSync(deps({ filesList: () => [{ path: LINK_PATH, updatedAt: 2000 }] }));
+
+    expect(await bodyAt(LINK_PATH)).toBe('server copy');
+    expect((await db.syncMeta.get(USER))?.firstSyncDoneAt).toBeGreaterThan(0);
   });
 });

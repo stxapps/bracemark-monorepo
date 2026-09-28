@@ -22,6 +22,7 @@ import { useRef, useState } from 'react';
 import {
   CircleAlert,
   CircleCheck,
+  CloudOff,
   Download,
   FileText,
   Globe,
@@ -85,6 +86,10 @@ function SyncStatus() {
   // needed is some freed space, not a retry (which is also why it gets no Retry
   // button; pressing one would change nothing).
   const isBlocked = phase === 'capacity-blocked';
+  // The session expired (docs/sessions.md): no cycle runs until a sign-in, so no
+  // spinner and no button here — the "Sign in to resume" notice above the section
+  // carries the one action. Not an error either: nothing failed, nothing is lost.
+  const isPaused = phase === 'paused';
 
   // `size-5` is the SettingsRow icon size — the three action rows below, and
   // account-section's four. NOT the `size-4` the receipts and SettingsNotice use
@@ -94,6 +99,8 @@ function SyncStatus() {
     <CircleAlert className="size-5 text-destructive" />
   ) : isBlocked ? (
     <CircleAlert className="size-5 text-muted-foreground" />
+  ) : isPaused ? (
+    <CloudOff className="size-5 text-muted-foreground" />
   ) : phase === 'idle' ? (
     <CircleCheck className="size-5 text-muted-foreground" />
   ) : (

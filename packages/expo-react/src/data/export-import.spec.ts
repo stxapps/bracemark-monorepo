@@ -66,7 +66,7 @@ import { importAllData } from './import-all-data';
 import { getItem, markItemDataFile, namespaceRows, putItemsTx } from './item-store';
 import { liveReadsHeld } from './live-read-invalidation';
 import { toItemRecord } from './projection';
-import { markFirstSyncDone } from './sync-store';
+import { beginInitialSync, markFirstSyncDone } from './sync-store';
 
 // The two native seams, and nothing else (../sync/engine.spec.ts, same shims).
 jest.mock('expo-sqlite', () => require('../testing/node-sqlite'));
@@ -259,6 +259,7 @@ function repick(bytes: Uint8Array, name: string): { uri: string; name: string } 
 beforeEach(async () => {
   truncate();
   resetFileSystem();
+  await beginInitialSync(USER);
   await markFirstSyncDone(USER, CURSOR, `${LINKS_PREFIX}l_seed.enc`);
 });
 

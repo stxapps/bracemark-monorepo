@@ -8,6 +8,7 @@ import { CardContent, CardFooter, CardHeader, CardTitle } from '@stxapps/web-ui/
 import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { CardEyebrow, DogEaredCard, FocusedPage } from '@/components/focused-page';
+import { isChunkLoadError } from '@/lib/chunk-error';
 import { SUPPORT_URL } from '@/lib/site';
 
 // The root error boundary. It sits at `app/`, so it replaces EVERYTHING below the
@@ -36,21 +37,26 @@ export default function Error({
   useEffect(() => {
     console.error(error);
   }, [error]);
+  // A tab opened on an older build asked for one of its own chunks after a newer
+  // build's worker took over (lib/chunk-error.ts, docs/offline-mode.md, _version
+  // skew_). Retrying renders the same old code; the new build is the fix.
+  const stale = isChunkLoadError(error);
 
   return (
     <FocusedPage>
       <DogEaredCard>
         <CardHeader>
-          <CardEyebrow>Error</CardEyebrow>
+          <CardEyebrow>{stale ? 'Update' : 'Error'}</CardEyebrow>
           <CardTitle className={cn('text-xl font-semibold tracking-tight')}>
-            This page stopped short
+            {stale ? 'Bracemark was updated' : 'This page stopped short'}
           </CardTitle>
         </CardHeader>
 
         <CardContent>
           <p className={cn('text-sm leading-6 text-muted-foreground')}>
-            Something broke while the page was rendering. It’s most often a network hiccup — wait a
-            moment, check your connection, then try again.
+            {stale
+              ? 'This page was opened on an earlier version, and part of it has changed since. Reload to continue on the new one.'
+              : 'Something broke while the page was rendering. It’s most often a network hiccup — wait a moment, check your connection, then try again.'}
           </p>
 
           {/* The technical detail, kept visible rather than hidden behind a
@@ -91,9 +97,15 @@ export default function Error({
             second button leaves. Retry keeps the primary weight — it's the one
             that costs nothing and usually works. */}
         <CardFooter className={cn('gap-2')}>
-          <Button className={cn('flex-1')} onClick={() => reset()}>
-            Try again
-          </Button>
+          {stale ? (
+            <Button className={cn('flex-1')} onClick={() => window.location.reload()}>
+              Reload
+            </Button>
+          ) : (
+            <Button className={cn('flex-1')} onClick={() => reset()}>
+              Try again
+            </Button>
+          )}
           <Button asChild variant="ghost" className={cn('flex-1')}>
             <Link href="/links">Go to my links</Link>
           </Button>

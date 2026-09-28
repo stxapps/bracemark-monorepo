@@ -16,15 +16,22 @@ import { SyncProvider, useSync } from './sync-provider';
 
 const mockRunIncrementalSync = jest.fn(() => Promise.resolve({ blocked: false, blockedCount: 0 }));
 
+let mockSessionState: 'active' | 'expired' = 'active';
 jest.mock('./auth-provider', () => ({
-  useAuth: () => ({ username: 'alice', status: 'authenticated' }),
+  useAuth: () => ({ username: 'alice', status: 'authenticated', sessionState: mockSessionState }),
 }));
 // One client for the provider's lifetime: it is an effect dependency, and a new
 // object per render would re-run the effect forever.
 const mockApi = {};
-jest.mock('@stxapps/react', () => ({ useApiClient: () => mockApi }));
+jest.mock('@stxapps/react', () => ({
+  ...jest.requireActual('@stxapps/react'),
+  useApiClient: () => mockApi,
+}));
 jest.mock('../data/session-store', () => ({ getSession: () => ({ encryptionKey: {} }) }));
-jest.mock('../data/sync-store', () => ({ isFirstSyncDone: () => Promise.resolve(true) }));
+let mockFirstSyncDone = true;
+jest.mock('../data/sync-store', () => ({
+  isFirstSyncDone: () => Promise.resolve(mockFirstSyncDone),
+}));
 jest.mock('../sync/engine', () => ({
   runIncrementalSync: () => mockRunIncrementalSync(),
   runInitialSync: jest.fn(),
@@ -41,7 +48,11 @@ async function readySync() {
   return hook;
 }
 
-beforeEach(() => mockRunIncrementalSync.mockClear());
+beforeEach(() => {
+  mockRunIncrementalSync.mockClear();
+  mockSessionState = 'active';
+  mockFirstSyncDone = true;
+});
 
 it('marks a local write for requestSync', async () => {
   const { result } = await readySync();
@@ -59,4 +70,37 @@ it('runs the same cycle for syncNow without marking a local write', async () => 
   expect(result.current.localWriteNonce).toBe(before);
   expect(mockRunIncrementalSync).toHaveBeenCalledTimes(1);
   await waitFor(() => expect(result.current.bgSyncStatus).toBe('idle'));
+});
+
+// An EXPIRED session (docs/sessions.md): the library stays usable, but the engine
+// schedules nothing — a cycle could only earn the same `session_expired` — and the
+// indicator says 'paused', not 'error' (nothing failed) and not 'idle' (nothing syncs).
+describe('while the session is expired', () => {
+  beforeEach(() => {
+    mockSessionState = 'expired';
+  });
+
+  it('keeps the store open and runs no cycle, not even for a local write', async () => {
+    const { result } = renderHook(() => useSync(), { wrapper });
+
+    await waitFor(() => expect(result.current.storeStatus).toBe('ready'));
+    expect(result.current.bgSyncStatus).toBe('paused');
+    act(() => result.current.requestSync());
+    act(() => result.current.syncNow());
+
+    expect(mockRunIncrementalSync).not.toHaveBeenCalled();
+    // The edit is still marked, so the read edge shows it at once.
+    expect(result.current.localWriteNonce).toBe(1);
+  });
+
+  // The one thing a pause can't give: a first sync that never finished. That store is
+  // incomplete, so the gate stays closed and says what will finish it.
+  it('holds the gate on a first sync that never finished', async () => {
+    mockFirstSyncDone = false;
+    const { result } = renderHook(() => useSync(), { wrapper });
+
+    await waitFor(() => expect(result.current.storeStatus).toBe('error'));
+    expect(result.current.lastError).toMatch(/sign/i);
+    expect(mockRunIncrementalSync).not.toHaveBeenCalled();
+  });
 });

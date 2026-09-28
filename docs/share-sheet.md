@@ -693,8 +693,12 @@ hydrates the in-memory session mirror so the api client's synchronous
 `getToken()` works in a process that runs no AuthProvider. Every mirror
 write/delete is best-effort — a Keychain hiccup must not fail sign-in/out; a
 missing mirror just means no fast-path upload (the drain still delivers). The
-share extension never acts on a 401 itself: [sessions.md](./sessions.md), _who acts
-on a 401_.
+mirror carries the session's STATE, and the share extension reads it instead of
+a clock: while it is `expired` (`uploadQueuedDraft`, `data/share-store.ts`) no
+upload is attempted — the outbox file waits for the app's drain and the resume.
+The share extension never acts on a 401 itself: [sessions.md](./sessions.md),
+_who acts on a 401_. On Android, where the share activity runs in the app
+process, an expired session skips the inline sync kick the same way.
 
 **What the upload sends.** `uploadShareDraft` (`data/share-upload.ts`) builds
 the **complete entity set from the draft alone** — the new lists/tags (carrying

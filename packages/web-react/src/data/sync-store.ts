@@ -37,6 +37,45 @@ export function seedNewAccount(username: string): Promise<string> {
   });
 }
 
+// A stale sync cycle ran into a torn-down account: its bookkeeping row is gone,
+// so the local store it was writing into belongs to nobody — or to the NEXT
+// account signed in on this device. Every pulled write re-checks the row inside
+// its own transaction (the engine's putPulled/applyDeletes) and aborts with this,
+// so a cycle that outlived a sign-out, a revocation wipe or an account switch in
+// any context can't leave the old account's plaintext in the new store
+// (docs/sessions.md, _concurrent requests and shared local state_). The
+// teardown's clear and these writes are rw transactions on the same store, so
+// IndexedDB orders them: either the write lands first and the clear removes it,
+// or the clear lands first and the write finds no row.
+export class AccountFencedError extends Error {
+  constructor(username: string) {
+    super(`Sync for ${username} stopped: the account is no longer signed in on this device`);
+    this.name = 'AccountFencedError';
+  }
+}
+
+// Inside a transaction that includes db.syncMeta: throw unless `username` still
+// owns this device's store.
+export async function assertAccountStillOwnsStore(username: string): Promise<void> {
+  if (!(await db.syncMeta.get(username))) throw new AccountFencedError(username);
+}
+
+// Sign-in path: claim the bookkeeping row BEFORE the first pull writes anything,
+// with `firstSyncDoneAt: 0` — "not done", so the gate still blocks and an
+// interrupted pull re-runs. It exists so every write of that pull has a row to be
+// fenced on (AccountFencedError). An existing row is left as it is.
+export async function beginInitialSync(username: string): Promise<void> {
+  await db.transaction('rw', db.syncMeta, async () => {
+    if (await db.syncMeta.get(username)) return;
+    await db.syncMeta.put({
+      username,
+      syncCursorUpdatedAt: 0,
+      syncCursorPath: '',
+      firstSyncDoneAt: 0,
+    });
+  });
+}
+
 // Sign-in path: call once the initial full pull has finished (all blobs
 // downloaded, decrypted, written). Atomic on purpose — only flip the flag after
 // the snapshot is complete, so an interrupted first sync stays "not done" and
@@ -45,16 +84,22 @@ export function seedNewAccount(username: string): Promise<string> {
 // already stored at the listed `updatedAt`). The first cursor is the newest
 // compound `(updatedAt, path)` among the listed files — the same reconstruction
 // the fallback cycle does from a full listing.
-export function markFirstSyncDone(
+//
+// Fenced like the pull's writes: the row beginInitialSync claimed must still be
+// there, or the account was torn down mid-pull and this must not resurrect it.
+export async function markFirstSyncDone(
   username: string,
   syncCursorUpdatedAt: number,
   syncCursorPath: string,
-): Promise<string> {
-  return db.syncMeta.put({
-    username,
-    syncCursorUpdatedAt,
-    syncCursorPath,
-    firstSyncDoneAt: Date.now(),
+): Promise<void> {
+  await db.transaction('rw', db.syncMeta, async () => {
+    await assertAccountStillOwnsStore(username);
+    await db.syncMeta.put({
+      username,
+      syncCursorUpdatedAt,
+      syncCursorPath,
+      firstSyncDoneAt: Date.now(),
+    });
   });
 }
 

@@ -473,8 +473,12 @@ function UnlockedMain() {
                 refreshing={!bulkEditing && refreshing}
                 onRefresh={() => {
                   if (bulkEditing) return;
-                  setRefreshing(true);
                   applyPending();
+                  // Paused (an expired session, docs/sessions.md): no cycle runs,
+                  // so there is nothing for the spinner to wait on — arming it
+                  // would leave it spinning until a sign-in.
+                  if (bgSyncStatus === 'paused') return;
+                  setRefreshing(true);
                   requestSync();
                 }}
               />

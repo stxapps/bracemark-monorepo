@@ -21,10 +21,12 @@ export function useSignOut() {
   return useMutation({
     mutationFn: async () => {
       // Step 1: ask the server to revoke this session, while the bearer token is
-      // still live (authFetch attaches it — once endSession clears the local
+      // still held (authFetch attaches it — once endSession clears the local
       // session, the token is gone). Best-effort: a network/server failure here
-      // must NOT trap the user signed-in. The orphaned row ages out via its TTL,
-      // so we swallow the error and still drop the local session below.
+      // must NOT trap the user signed-in, and neither may an EXPIRED session (it
+      // answers `session_expired`, which changes nothing). An unrevoked row then
+      // idles out and is purged like any other, so we swallow the error and still
+      // drop the local session below.
       try {
         await api.call(signOutEndpoint, {});
       } catch {

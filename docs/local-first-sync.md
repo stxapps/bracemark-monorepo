@@ -295,12 +295,12 @@ leave on different terms:
 
 - **Dexie (`bracemark-data`) and the raw session database
   (`bracemark-session`).** Append `version(N)` (with an `upgrade()` for any
-  data reshape); never edit a shipped version. Every tab also needs a
-  `versionchange` handler **in the launch build**: the event fires in the
-  _old_ tab, so it's the old code that has to close the connection and reload.
-  A handler added alongside the first `version(2)` arrives one build too late
-  for every tab already open. The mechanics and the failure modes are in
-  [offline-mode.md](./offline-mode.md), _version skew_.
+  data reshape); never edit a shipped version, and bump `DATA_DB_VERSION`
+  (`db.ts`) with every Dexie `version(N)` — the newer-schema check compares
+  against it. The `versionchange` handler every tab needs is in place on both
+  databases (`data/update-required.ts`): the event fires in the _old_ tab, so it
+  had to ship before the first `version(2)`, and it has. The mechanics and the
+  failure modes are in [offline-mode.md](./offline-mode.md), _version skew_.
 - **expo-sqlite.** Replace the idempotent DDL with numbered migrations keyed
   on `PRAGMA user_version`, run on open before first use, append-only like the
   server's. One process opens the database at a time (the iOS share extension

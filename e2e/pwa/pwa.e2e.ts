@@ -1,4 +1,6 @@
-import { rm } from 'node:fs/promises';
+import { appendFile, cp, mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import { expect, type Page, test, type TestInfo } from '@playwright/test';
 
@@ -8,10 +10,22 @@ import { unique, unresolvableUrl } from '../web/fixtures/data';
 import { WEB_URL } from '../web/fixtures/env';
 import { exportPlainTextOffline } from '../web/fixtures/export';
 import { launchApp } from '../web/fixtures/launch';
-import { addLink, chooseRowMenuItem, linkRow, openSidebarItem } from '../web/fixtures/links';
+import {
+  addLink,
+  addLinkButton,
+  chooseRowMenuItem,
+  linkRow,
+  openSidebarItem,
+} from '../web/fixtures/links';
 import { syncAndWait } from '../web/fixtures/sync';
 import { type StaticOrigin, staticOrigin } from './fixtures/origin';
-import { freshProfile, installAndRegister, openProfile, pwaRoot } from './fixtures/pwa';
+import {
+  freshProfile,
+  installAndRegister,
+  openProfile,
+  pwaRoot,
+  restoreNetwork,
+} from './fixtures/pwa';
 
 // The PRODUCTION build of bracemark-web, as an installed app: the static export
 // with its serwist service worker (`src/sw.ts`, precache + `defaultCache`),
@@ -37,8 +51,12 @@ interface InstalledApp {
 // A fresh account in a fresh profile, installed, with its worker active, one
 // link saved and synced — and then one more ONLINE launch, whose document the
 // worker already serves. Closed on return: every case starts from a cold launch.
-async function installedApp(label: string, testInfo: TestInfo): Promise<InstalledApp> {
-  const origin = staticOrigin(pwaRoot(), WEB_URL);
+async function installedApp(
+  label: string,
+  testInfo: TestInfo,
+  root: string = pwaRoot(),
+): Promise<InstalledApp> {
+  const origin = staticOrigin(root, WEB_URL);
   await origin.start();
   const profile = profileDir(`${label}-w${testInfo.workerIndex}`);
   await freshProfile(profile);
@@ -126,7 +144,7 @@ test.describe('pwa', () => {
 
           // --- the network returns: origin and browser both ---------------------------
           await app.origin.start();
-          await context.setOffline(false);
+          await restoreNetwork(context);
           await syncAndWait(page);
         } finally {
           await context.close();
@@ -164,6 +182,11 @@ test.describe('pwa', () => {
         await app.origin.stop();
         const { context, page } = await openProfile(app.profile, { offline: true });
         try {
+          // …and the device clock two years past the sign-in. The client this
+          // replaced wiped itself once its clock passed the `expiresAt` it was
+          // handed, server or no server — the timed delete docs/sessions.md is
+          // built to rule out. There is no clock in the client now.
+          await page.clock.setFixedTime(Date.now() + 2 * 365 * 24 * 60 * 60 * 1000);
           const response = await page.goto('/links');
           expect(response?.fromServiceWorker()).toBe(true);
           await expect(linkRow(page, app.kept)).toBeVisible();
@@ -189,4 +212,216 @@ test.describe('pwa', () => {
       }
     },
   );
+  // docs/offline-mode.md, _when the worker registers_: after sign-in, in ANY display
+  // mode. No installAndRegister here — the app's own sign-in registers the worker in
+  // a normal tab. And the case never opens Settings while online, so Settings →
+  // Data can only come back from the precache, not from a runtime entry an online
+  // visit left behind (PWA-003 can't tell the two apart).
+  test(
+    'a normal tab registers the worker after sign-in, and a cold offline launch reaches Settings and Data it never visited',
+    { tag: ['@PWA-004', '@full', '@online', '@pwa'] },
+    // eslint-disable-next-line no-empty-pattern
+    async ({}, testInfo) => {
+      test.setTimeout(4 * 60 * 1000);
+      const origin = staticOrigin(pwaRoot(), WEB_URL);
+      await origin.start();
+      const profile = profileDir(`pwa-tab-w${testInfo.workerIndex}`);
+      await freshProfile(profile);
+      const kept = unresolvableUrl(unique('pwa-tab-kept'));
+      try {
+        const online = await openProfile(profile);
+        try {
+          await createAccount(online.page, newCredentials());
+          // Registered by the app itself, and installed (the precache downloaded).
+          await online.page.evaluate(async () => {
+            await navigator.serviceWorker.ready;
+          });
+          await expect
+            .poll(() => online.page.evaluate(() => navigator.serviceWorker.controller !== null))
+            .toBe(true);
+          await addLink(online.page, kept);
+          await syncAndWait(online.page);
+          // Next's link prefetch warms whatever section links are on screen (Account,
+          // Subscription); Data is the one the offline half needs cold.
+          expect(
+            await runtimeCacheUrls(online.page, (url) => url.pathname.startsWith('/settings/data')),
+          ).toEqual([]);
+        } finally {
+          await online.context.close();
+        }
+
+        await origin.stop();
+        const { context, page } = await openProfile(profile, { offline: true });
+        try {
+          const response = await page.goto('/links');
+          expect(response?.fromServiceWorker()).toBe(true);
+          await expect(linkRow(page, kept)).toBeVisible();
+          await page.getByRole('button', { name: /^More options/ }).click();
+          await page.getByRole('menuitem', { name: 'Settings' }).click();
+          await page.getByRole('link', { name: 'Data', exact: true }).click();
+          const text = await exportPlainTextOffline(page);
+          expect(text).toContain(kept);
+          await checkpoint(page, testInfo, 'pwa-tab-offline-export');
+        } finally {
+          await context.close();
+        }
+      } finally {
+        await origin.stop();
+        await rm(profile, { recursive: true, force: true });
+      }
+    },
+  );
+
+  // docs/offline-mode.md, _the worker caches the app, never data_: after a full
+  // online session — sync, the entitlement read, a query-carrying view — no cache the
+  // origin owns holds a cross-origin request. Every cache, not only the one
+  // `defaultCache` names `cross-origin`. And sign-out keeps the worker (the next
+  // sign-in stays reachable offline) while dropping the query-keyed entries, whose
+  // URLs name this account's lists and tags.
+  test(
+    'no cache holds a cross-origin response, and sign-out drops query-keyed entries but keeps the worker',
+    { tag: ['@PWA-005', '@full', '@online', '@pwa'] },
+    // eslint-disable-next-line no-empty-pattern
+    async ({}, testInfo) => {
+      test.setTimeout(4 * 60 * 1000);
+      const app = await installedApp('pwa-caches', testInfo);
+      try {
+        const { context, page } = await openProfile(app.profile);
+        try {
+          await page.goto('/links?sort=createdAt&order=asc');
+          await expect(linkRow(page, app.kept)).toBeVisible();
+          await syncAndWait(page);
+          await page.goto('/settings/subscription');
+          await page.goto('/links');
+          await syncAndWait(page);
+
+          const all = await runtimeCacheUrls(page, () => true, { includePrecache: true });
+          expect(all.length).toBeGreaterThan(0);
+          const origin = new URL(page.url()).origin;
+          expect(all.filter((url) => new URL(url).origin !== origin)).toEqual([]);
+
+          await page.getByRole('button', { name: /^More options/ }).click();
+          await page.getByRole('menuitem', { name: 'Sign out' }).click();
+          await expect(page).not.toHaveURL(/\/links/, { timeout: 60_000 });
+          await page.goto('/sign-in');
+          expect(await runtimeCacheUrls(page, (url) => url.search !== '')).toEqual([]);
+          expect(
+            await page.evaluate(
+              async () => (await navigator.serviceWorker.getRegistration()) != null,
+            ),
+          ).toBe(true);
+        } finally {
+          await context.close();
+        }
+      } finally {
+        await app.origin.stop();
+        await rm(app.profile, { recursive: true, force: true });
+      }
+    },
+  );
+
+  // docs/offline-mode.md, _navigations with a query string_: every route in the
+  // static export is one file whatever its query, so a restored tab or a bookmark
+  // at a query URL never visited that way online still opens with nothing on the
+  // network (sw.ts, `ignoreURLParametersMatching`).
+  test(
+    'a cold offline load of a list URL never visited with that query comes from the worker',
+    { tag: ['@PWA-006', '@full', '@online', '@pwa'] },
+    // eslint-disable-next-line no-empty-pattern
+    async ({}, testInfo) => {
+      test.setTimeout(4 * 60 * 1000);
+      const app = await installedApp('pwa-query', testInfo);
+      try {
+        await app.origin.stop();
+        const { context, page } = await openProfile(app.profile, { offline: true });
+        try {
+          const response = await page.goto(`/links?sort=createdAt&order=asc&q=${unique('never')}`);
+          expect(response?.fromServiceWorker()).toBe(true);
+          await expect(addLinkButton(page)).toBeVisible();
+          await expect(linkRow(page, app.kept)).toBeVisible();
+          await checkpoint(page, testInfo, 'pwa-query-cold-load');
+        } finally {
+          await context.close();
+        }
+      } finally {
+        await app.origin.stop();
+        await rm(app.profile, { recursive: true, force: true });
+      }
+    },
+  );
+  // docs/offline-mode.md, _update policy_: a new build's worker takes over at once
+  // (`skipWaiting: true`). Build B here is build A with a changed worker script — a
+  // new worker, the same precache — which is exactly the handover an open tab meets
+  // after a deploy. Two tabs open on A: both get the pill (not before B has taken
+  // over), the one left alone keeps working under B, and Reload lands the other on
+  // B with the pill gone.
+  test(
+    'tabs open when a new worker takes over show the update pill, keep working, and reload into it',
+    { tag: ['@PWA-007', '@full', '@online', '@pwa'] },
+    // eslint-disable-next-line no-empty-pattern
+    async ({}, testInfo) => {
+      test.setTimeout(4 * 60 * 1000);
+      const root = await mkdtemp(join(tmpdir(), 'bracemark-pwa-b-'));
+      await cp(pwaRoot(), root, { recursive: true });
+      const app = await installedApp('pwa-update', testInfo, root);
+      const added = unresolvableUrl(unique('pwa-update-added'));
+      try {
+        const { context, page } = await openProfile(app.profile);
+        try {
+          await page.goto('/links');
+          await expect(linkRow(page, app.kept)).toBeVisible();
+          const other = await context.newPage();
+          await other.goto('/links');
+          await expect(linkRow(other, app.kept)).toBeVisible();
+          const pill = (p: Page) =>
+            p.getByRole('status').filter({ hasText: 'Bracemark was updated' });
+          await expect(pill(page)).toHaveCount(0);
+
+          // Deploy B, and let the browser find it.
+          await appendFile(join(root, 'sw.js'), `\n// build B ${Date.now()}\n`);
+          await page.evaluate(async () => {
+            await (await navigator.serviceWorker.getRegistration())?.update();
+          });
+
+          await expect(pill(page)).toBeVisible({ timeout: 60_000 });
+          await expect(pill(other)).toBeVisible({ timeout: 30_000 });
+
+          // The tab left alone keeps working under the new worker.
+          await addLink(other, added);
+          await expect(linkRow(other, added)).toBeVisible();
+
+          await page.getByRole('button', { name: 'Reload' }).click();
+          await page.waitForLoadState('load');
+          await expect(linkRow(page, added)).toBeVisible({ timeout: 30_000 });
+          await expect(pill(page)).toHaveCount(0);
+          await checkpoint(page, testInfo, 'pwa-update-reloaded');
+        } finally {
+          await context.close();
+        }
+      } finally {
+        await app.origin.stop();
+        await rm(app.profile, { recursive: true, force: true });
+        await rm(root, { recursive: true, force: true });
+      }
+    },
+  );
 });
+
+// Every request URL held by the origin's caches that `keep` accepts — runtime caches
+// only unless asked, since the precache's keys are the build's own files.
+async function runtimeCacheUrls(
+  page: Page,
+  keep: (url: URL) => boolean,
+  options: { includePrecache?: boolean } = {},
+): Promise<string[]> {
+  const urls = await page.evaluate(async (includePrecache) => {
+    const out: string[] = [];
+    for (const name of await caches.keys()) {
+      if (!includePrecache && name.includes('precache')) continue;
+      const cache = await caches.open(name);
+      for (const request of await cache.keys()) out.push(request.url);
+    }
+    return out;
+  }, options.includePrecache ?? false);
+  return urls.filter((url) => keep(new URL(url)));
+}

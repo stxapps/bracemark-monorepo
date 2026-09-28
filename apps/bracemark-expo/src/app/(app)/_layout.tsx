@@ -102,6 +102,13 @@ export default function AppLayout() {
                           name="edit-link"
                           options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
                         />
+                        {/* "Sign in to resume" for an expired session
+                            (docs/sessions.md) — modal for the same reason: a form
+                            with a keyboard, over a library that stays open. */}
+                        <Stack.Screen
+                          name="resume"
+                          options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
+                        />
                       </Stack>
                     </PaywallProvider>
                   </InitialSyncGate>

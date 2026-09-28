@@ -51,23 +51,35 @@ import { PasswordInput } from './password-input';
 // new-password-field.tsx too.
 // The one `font-medium` that STAYS in this folder is auth-alt-action.tsx's link,
 // whose web twin is medium as well — that one is an affordance, not a label.
-export function SignInForm() {
+//
+// LOCKED USERNAME — the expired state's resume (docs/sessions.md), the port of
+// web-ui's `lockedUsername`: pre-filled with the stored username and not
+// editable, on both doors, so a resume can only sign back in as the account whose
+// library is on this device. `editable={false}` keeps it readable and focusable
+// for a screen reader; the value still submits with the form.
+export function SignInForm({ lockedUsername }: { lockedUsername?: string } = {}) {
   const [mode, setMode] = React.useState<'password' | 'recovery'>('password');
   return mode === 'password' ? (
-    <PasswordSignIn onUseRecovery={() => setMode('recovery')} />
+    <PasswordSignIn lockedUsername={lockedUsername} onUseRecovery={() => setMode('recovery')} />
   ) : (
-    <RecoverySignIn onUsePassword={() => setMode('password')} />
+    <RecoverySignIn lockedUsername={lockedUsername} onUsePassword={() => setMode('password')} />
   );
 }
 
-function PasswordSignIn({ onUseRecovery }: { onUseRecovery: () => void }) {
+function PasswordSignIn({
+  lockedUsername,
+  onUseRecovery,
+}: {
+  lockedUsername?: string;
+  onUseRecovery: () => void;
+}) {
   const {
     control,
     handleSubmit,
     setError,
     clearErrors,
     formState: { errors, isSubmitting },
-  } = useSignInForm();
+  } = useSignInForm(lockedUsername);
   const signIn = useSignIn();
 
   // The credential failure is a submit-level `root` error, not tied to a field,
@@ -111,6 +123,7 @@ function PasswordSignIn({ onUseRecovery }: { onUseRecovery: () => void }) {
               autoComplete="username"
               autoCapitalize="none"
               autoCorrect={false}
+              editable={!lockedUsername}
               className={cn(errors.username && 'border-destructive')}
               value={field.value}
               onBlur={field.onBlur}
@@ -174,14 +187,20 @@ function PasswordSignIn({ onUseRecovery }: { onUseRecovery: () => void }) {
 // itself on empty input, which made it the only submit in either auth form that
 // went dead with nothing on screen saying why; see the web twin and
 // docs/account.md, _when a submit is allowed to be `disabled`_.
-function RecoverySignIn({ onUsePassword }: { onUsePassword: () => void }) {
+function RecoverySignIn({
+  lockedUsername,
+  onUsePassword,
+}: {
+  lockedUsername?: string;
+  onUsePassword: () => void;
+}) {
   const {
     control,
     handleSubmit,
     setError,
     clearErrors,
     formState: { errors, isSubmitting },
-  } = useRecoverySignInForm();
+  } = useRecoverySignInForm(lockedUsername);
   const signIn = useSignInWithRecovery();
 
   const clearRootError = () => {
@@ -217,7 +236,8 @@ function RecoverySignIn({ onUsePassword }: { onUsePassword: () => void }) {
               autoComplete="username"
               autoCapitalize="none"
               autoCorrect={false}
-              autoFocus
+              autoFocus={!lockedUsername}
+              editable={!lockedUsername}
               className={cn(errors.username && 'border-destructive')}
               value={field.value}
               onBlur={field.onBlur}
@@ -241,6 +261,7 @@ function RecoverySignIn({ onUsePassword }: { onUsePassword: () => void }) {
               testID="sign-in-recovery-code"
               aria-label="Recovery code"
               aria-invalid={!!errors.recoveryCode}
+              autoFocus={!!lockedUsername}
               autoComplete="off"
               autoCapitalize="characters"
               autoCorrect={false}

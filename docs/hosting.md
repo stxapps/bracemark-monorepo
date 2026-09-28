@@ -765,6 +765,13 @@ first, which doubles as the check that its `database_id` is real and reachable b
 the token in hand. bracemark-extractor has no storage bindings at all and skips
 this entire phase.
 
+**bracemark-api carries a cron trigger** (`triggers.crons`, declared per env in
+`wrangler.jsonc`, daily): the `scheduled` handler in `src/worker.ts` purges
+finished session rows on their two retention clocks
+([sessions.md](./sessions.md)). It ships with the deploy like any other config;
+`wrangler dev` never fires it, and `curl
+"http://127.0.0.1:8787/cdn-cgi/handler/scheduled"` runs it locally.
+
 **Unfilled `TODO:` values are fatal on production and a warning on staging.**
 `wrangler` prints every `vars` value in its dry-run summary, which is the only
 place a placeholder that was never filled in is visible: a `TODO:` string is a

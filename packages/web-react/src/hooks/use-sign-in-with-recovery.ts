@@ -86,7 +86,6 @@ export function useSignInWithRecovery() {
       await setSession({
         username,
         token: session.token,
-        expiresAt: session.expiresAt,
         encryptionKey,
       });
     },

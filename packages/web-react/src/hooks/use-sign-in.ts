@@ -116,7 +116,6 @@ export function useSignIn() {
       await setSession({
         username,
         token: session.token,
-        expiresAt: session.expiresAt,
         encryptionKey,
       });
     },

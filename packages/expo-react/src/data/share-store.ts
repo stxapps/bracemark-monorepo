@@ -386,6 +386,9 @@ export async function saveSharedDraft(draft: ShareDraft, api: ApiClient): Promis
   if (!session) throw new Error('saveSharedDraft: no session');
   if (await isAtLinkCap()) return 'quota';
   await applyShareDraft(session.username, draft);
+  // An EXPIRED session syncs nothing until a sign-in resumes it (docs/sessions.md):
+  // the link is saved and queued like any offline edit, and pushes on resume.
+  if (session.state === 'expired') return 'saved';
   // Inline sync kick: the pending op usually lands server-side while the share
   // activity's process is still alive (one entity, sub-second). Un-awaited JS
   // on the app-level React host IS the doc's "application/process scope" — the
@@ -403,13 +406,16 @@ export async function saveSharedDraft(draft: ShareDraft, api: ApiClient): Promis
 
 // The iOS extension's fire-and-forget half of saveSharedDraft. Hydrates the
 // session from the shared-Keychain mirror (the extension runs no AuthProvider —
-// this is also what arms the api client's bearer token), skips when the token
-// has lapsed (the PUT would just 401), and swallows every failure: the outbox
-// file already written is the record of truth.
+// this is also what arms the api client's bearer token), skips when the mirror
+// says the session is EXPIRED (the main app recorded the server's verdict; the
+// PUT would only earn it again), and swallows every failure: the outbox file
+// already written is the record of truth. It reads a STATE, never a clock, and
+// it never acts on a 401 itself — a verdict it provokes reaches no listener in
+// this process (docs/sessions.md, _who acts on a 401_).
 async function uploadQueuedDraft(api: ApiClient, draft: ShareDraft): Promise<void> {
   try {
     const session = await loadSharedSession();
-    if (!session || session.expiresAt <= Date.now()) return;
+    if (!session || session.state === 'expired') return;
     await shareUpload().uploadShareDraft({ encryptionKey: session.encryptionKey, api }, draft);
   } catch {
     // Best-effort by design — the main app drains the outbox on next open.

@@ -1,3 +1,5 @@
+import { SESSION_COPY } from '@stxapps/react';
+import { useAuth } from '@stxapps/web-react';
 import { SignInForm } from '@stxapps/web-ui/components/auth/sign-in-form';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
@@ -61,11 +63,19 @@ import { WEB_APP_URL } from '@/utils/web-app-url';
 // matches `md:`, so they had been taking a branch that exists to stop iOS zooming
 // a focused field — on a desktop, with a mouse. See input.tsx.
 export function SignIn() {
+  // Set when the server told this browser to forget (`session_revoked`): the local
+  // copy is gone, and the popup says so rather than just reappearing signed out.
+  const { reason } = useAuth();
   return (
     <PopupShell>
       <PopupBody>
         <div className={cn('flex flex-col gap-1.5')}>
           <PopupTitle>Sign in</PopupTitle>
+          {reason === 'revoked' ? (
+            <p role="status" className={cn('text-xs leading-5 text-muted-foreground')}>
+              {SESSION_COPY.revoked}
+            </p>
+          ) : null}
           <p className={cn('text-xs leading-5 text-muted-foreground')}>
             Signing in here is separate from the web app — the extension keeps its own encryption
             key in this browser.
@@ -92,6 +102,24 @@ export function SignIn() {
             Create an account
           </button>
         </p>
+      </PopupBody>
+    </PopupShell>
+  );
+}
+
+// "Sign in to resume" — the expired session's way back (docs/sessions.md). The same
+// shared form as above, with the username locked to the account whose library is in
+// this browser: success replaces the token and keeps everything local, including the
+// saves queued while sync was paused. A failure leaves the paused state as it was.
+export function Resume({ onBack }: { onBack: () => void }) {
+  const { username } = useAuth();
+  return (
+    <PopupShell title={SESSION_COPY.resume.title} onBack={onBack}>
+      <PopupBody>
+        <p className={cn('text-xs leading-5 text-muted-foreground')}>
+          {SESSION_COPY.resume.description(username ?? '')}
+        </p>
+        {username ? <SignInForm density="dense" lockedUsername={username} /> : null}
       </PopupBody>
     </PopupShell>
   );

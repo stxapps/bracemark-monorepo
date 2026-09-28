@@ -1,6 +1,7 @@
 import { type Page } from '@playwright/test';
 
 import { profileDir } from '../paths';
+import { type Credentials, newCredentials } from './fixtures/account';
 import { expect, test } from './fixtures/app';
 import { unique, unresolvableUrl } from './fixtures/data';
 import { SITE_URL } from './fixtures/env';
@@ -191,10 +192,12 @@ test.describe('account', () => {
       await page.getByRole('button', { name: /^More options/ }).click();
       await page.getByRole('menuitem', { name: /^(Sync|Sync failed)/ }).click();
 
-      // An invalidated session is 'expired', not a sign-out: it stays on this
-      // origin and keeps where the user was, for sign-in to return them there
-      // (auth-guard.tsx) — unlike WEB-ACCOUNT-002's exit to the marketing site.
+      // A revoked session is not a sign-out: it stays on this origin and keeps
+      // where the user was, for sign-in to return them there (auth-guard.tsx) —
+      // unlike WEB-ACCOUNT-002's exit to the marketing site — and it says why the
+      // library is gone.
       await expect(page).toHaveURL(/\/sign-in\?next=%2Flinks/, { timeout: 60_000 });
+      await expect(page.getByRole('status')).toHaveText(/signed out from another device/);
       // The local store held DECRYPTED bookmarks; the teardown must take them
       // with the session (docs/data-lifecycle.md, _the sign-out teardown_).
       expect(await countSyncedItems(page)).toBe(0);
@@ -208,6 +211,152 @@ test.describe('account', () => {
       await page.getByRole('button', { name: /^Sign in$/ }).click();
       await expect(page).toHaveURL(/\/links/, { timeout: 60_000 });
       await expect(linkRow(page, kept)).toBeVisible({ timeout: 30_000 });
+    },
+  );
+
+  // docs/sessions.md: an EXPIRED session keeps everything. Expired the way a user
+  // expires it — changing the password on another device, which cuts every other
+  // session off WITHOUT telling it to forget. The page learns it on its next
+  // request, pauses sync, keeps the library open and editable in every tab, and a
+  // sign-in with the new password resumes it and pushes what queued meanwhile.
+  test(
+    'an expired session keeps the library and a queued edit in every tab, and resumes with the new password',
+    { tag: ['@SESSION-EXPIRED-WEB-001', '@full', '@online', '@destructive'] },
+    async ({ isolatedApp: app }, testInfo) => {
+      // Three Argon2id ceremonies (the account, the password change, the resume)
+      // plus a reader's sign-in.
+      test.setTimeout(5 * 60 * 1000);
+      const { page, context, credentials } = app;
+      const kept = unresolvableUrl(unique('expired-kept'));
+      const queued = unresolvableUrl(unique('expired-queued'));
+
+      await page.goto('/links');
+      await addLink(page, kept);
+      await syncAndWait(page);
+      const other = await context.newPage();
+      await other.goto('/links');
+      await expect(linkRow(other, kept)).toBeVisible();
+
+      const newPassword = newCredentials().password;
+      await changePasswordElsewhere(
+        profileDir(`expirer-w${testInfo.workerIndex}`),
+        credentials,
+        newPassword,
+      );
+
+      // The next request learns it — the user's own Sync.
+      await page.getByRole('button', { name: /^More options/ }).click();
+      await page.getByRole('menuitem', { name: /^(Sync|Sync failed)/ }).click();
+      await page.keyboard.press('Escape');
+      await expect(pausedNotice(page)).toBeVisible({ timeout: 60_000 });
+      // Nothing left the app, nothing was wiped.
+      await expect(page).toHaveURL(/\/links/);
+      await expect(linkRow(page, kept)).toBeVisible();
+      // The other tab hears it through the session channel, not its own request.
+      await expect(pausedNotice(other)).toBeVisible({ timeout: 30_000 });
+
+      // Edits still work while paused, and wait in the queue.
+      await addLink(page, queued);
+      await expect(linkRow(page, queued)).toBeVisible();
+      expect(await countPendingOps(page)).toBeGreaterThan(0);
+
+      // The state is persisted: a reload doesn't re-ask the server to find out.
+      await page.reload();
+      await expect(pausedNotice(page)).toBeVisible();
+      await expect(linkRow(page, queued)).toBeVisible();
+
+      // Resume from the OTHER tab: the username is the stored one, and locked.
+      await other.getByRole('button', { name: 'Sign in to resume' }).click();
+      const dialog = other.getByRole('dialog', { name: 'Sign in to resume' });
+      await expect(dialog.locator('#username')).toHaveValue(credentials.username);
+      await expect(dialog.locator('#username')).toHaveAttribute('readonly', '');
+      await dialog.locator('#password').fill(newPassword);
+      await dialog.getByRole('button', { name: /^Sign in$/ }).click();
+      await expect(pausedNotice(other)).toHaveCount(0, { timeout: 60_000 });
+      // …and this tab picks the resume up too, library untouched.
+      await expect(pausedNotice(page)).toHaveCount(0, { timeout: 30_000 });
+      await expect(linkRow(page, queued)).toBeVisible();
+
+      // What queued while paused reaches the server.
+      await syncAndWait(page);
+      expect(await countPendingOps(page)).toBe(0);
+      const reader = await launchApp(profileDir(`expired-reader-w${testInfo.workerIndex}`), {
+        existing: { username: credentials.username, password: newPassword },
+      });
+      try {
+        await reader.page.goto('/links');
+        await syncAndWait(reader.page);
+        await expect(linkRow(reader.page, queued)).toHaveCount(1);
+      } finally {
+        await reader.close();
+      }
+    },
+  );
+
+  // A token the server no longer has a row for — purged a year after it ended, or a
+  // sessions table that was emptied (docs/sessions.md, _the sessions database_) —
+  // answers `session_unknown`, which keeps everything exactly like an expiry. The
+  // stored token is replaced by one the server never issued, which is what a purge
+  // looks like from the device.
+  test(
+    'a token the server no longer knows keeps the library and an unsynced edit, and resumes',
+    { tag: ['@SESSION-UNKNOWN-WEB-001', '@full', '@online', '@destructive'] },
+    async ({ isolatedApp: app }) => {
+      test.setTimeout(4 * 60 * 1000);
+      const { page, credentials } = app;
+      const kept = unresolvableUrl(unique('unknown-kept'));
+      const unsynced = unresolvableUrl(unique('unknown-unsynced'));
+
+      await page.goto('/links');
+      await addLink(page, kept);
+      await syncAndWait(page);
+
+      await forgeStoredToken(page, `purged-${unique('tok')}`);
+      await page.reload();
+      await expect(linkRow(page, kept)).toBeVisible();
+
+      // The edit kicks a cycle; that cycle is the request that learns it.
+      await addLink(page, unsynced);
+      await expect(pausedNotice(page)).toBeVisible({ timeout: 60_000 });
+      await expect(page).toHaveURL(/\/links/);
+      await expect(linkRow(page, kept)).toBeVisible();
+      await expect(linkRow(page, unsynced)).toBeVisible();
+      expect(await countPendingOps(page)).toBeGreaterThan(0);
+
+      await page.getByRole('button', { name: 'Sign in to resume' }).click();
+      const dialog = page.getByRole('dialog', { name: 'Sign in to resume' });
+      await dialog.locator('#password').fill(credentials.password);
+      await dialog.getByRole('button', { name: /^Sign in$/ }).click();
+      await expect(pausedNotice(page)).toHaveCount(0, { timeout: 60_000 });
+
+      await syncAndWait(page);
+      expect(await countPendingOps(page)).toBe(0);
+      await expect(linkRow(page, unsynced)).toBeVisible();
+    },
+  );
+
+  // THE SPECIMEN (docs/sessions.md): the client this replaced wiped itself once the
+  // device clock passed the `expiresAt` it was handed at sign-in — a timed delete of
+  // every library that would fire even with the server gone. There is no clock in
+  // the client now; a session two years old on this device's clock is signed in.
+  test(
+    'a session minted two years ago on the device clock is still signed in, library intact',
+    { tag: ['@WEB-ACCOUNT-003', '@full', '@online', '@destructive'] },
+    async ({ isolatedApp: app }) => {
+      const { page } = app;
+      const kept = unresolvableUrl(unique('clock-kept'));
+
+      await page.goto('/links');
+      await addLink(page, kept);
+      await syncAndWait(page);
+
+      await page.clock.setFixedTime(Date.now() + 2 * 365 * 24 * 60 * 60 * 1000);
+      await page.reload();
+
+      await expect(page).toHaveURL(/\/links/);
+      await expect(linkRow(page, kept)).toBeVisible();
+      await expect(pausedNotice(page)).toHaveCount(0);
+      expect(await countSyncedItems(page)).toBeGreaterThan(0);
     },
   );
 });
@@ -236,4 +385,87 @@ async function countSyncedItems(page: Page): Promise<number> {
         };
       }),
   );
+}
+
+// The expired session's notice (apps/bracemark-web/src/components/sync-paused-notice.tsx),
+// by the status its words carry.
+function pausedNotice(page: Page) {
+  return page.getByRole('status').filter({ hasText: 'Sync is paused' });
+}
+
+// How many edits are waiting to push — the `pendingOps` table alone.
+async function countPendingOps(page: Page): Promise<number> {
+  return page.evaluate(
+    () =>
+      new Promise<number>((resolve, reject) => {
+        const open = indexedDB.open('bracemark-data');
+        open.onerror = () => reject(open.error ?? new Error('indexedDB.open failed'));
+        open.onsuccess = () => {
+          const db = open.result;
+          const tx = db.transaction('pendingOps', 'readonly');
+          const count = tx.objectStore('pendingOps').count();
+          tx.oncomplete = () => {
+            db.close();
+            resolve(count.result);
+          };
+          tx.onerror = () => reject(tx.error ?? new Error('count transaction failed'));
+        };
+      }),
+  );
+}
+
+// Replace the bearer token in this profile's session record — what a purged row
+// looks like from the device: the token is still sent, and the server has never
+// heard of it. The record's other fields (the key, the generation) stay.
+async function forgeStoredToken(page: Page, token: string): Promise<void> {
+  await page.evaluate(
+    (forged) =>
+      new Promise<void>((resolve, reject) => {
+        const open = indexedDB.open('bracemark-session');
+        open.onerror = () => reject(open.error ?? new Error('indexedDB.open failed'));
+        open.onsuccess = () => {
+          const db = open.result;
+          const tx = db.transaction('session', 'readwrite');
+          const store = tx.objectStore('session');
+          const read = store.get('current');
+          read.onsuccess = () => {
+            if (!read.result) {
+              reject(new Error('no session record to forge'));
+              return;
+            }
+            store.put({ ...read.result, token: forged }, 'current');
+          };
+          tx.oncomplete = () => {
+            db.close();
+            resolve();
+          };
+          tx.onerror = () => reject(tx.error ?? new Error('forge transaction failed'));
+        };
+      }),
+    token,
+  );
+}
+
+// Change the account's password from a separate profile — the other device. Its
+// own session stays; every other session is EXPIRED, never revoked
+// (apps/bracemark-api/src/services/account.ts, changePasswordDoor).
+async function changePasswordElsewhere(
+  profile: string,
+  credentials: Credentials,
+  newPassword: string,
+): Promise<void> {
+  const other = await launchApp(profile, { existing: credentials });
+  try {
+    await other.page.goto('/settings/account');
+    await other.page.getByRole('button', { name: /^Change password/ }).click();
+    await other.page.locator('#cp-current').fill(credentials.password);
+    await other.page.getByRole('button', { name: /choose my own/i }).click();
+    await other.page.locator('#cp-new-password').fill(newPassword);
+    await other.page.getByRole('button', { name: 'Change password', exact: true }).click();
+    await expect(other.page.getByText(/^Your password has been changed\./)).toBeVisible({
+      timeout: 60_000,
+    });
+  } finally {
+    await other.close();
+  }
 }

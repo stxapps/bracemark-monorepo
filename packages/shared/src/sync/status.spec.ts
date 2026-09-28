@@ -43,6 +43,19 @@ describe('getSyncPhase', () => {
   it('settles to idle', () => {
     expect(getSyncPhase('ready', 'idle')).toBe('idle');
   });
+
+  // An expired session pauses sync (docs/sessions.md). No cycle runs while
+  // paused, so nothing a cycle once reported may outrank it — and it must never
+  // read as a failure, because nothing failed and nothing is lost.
+  it('reports a paused session over any cycle outcome, and not as an error', () => {
+    expect(getSyncPhase('ready', 'paused')).toBe('paused');
+    expect(SYNC_PHASE_LABELS.paused).not.toBe(SYNC_PHASE_LABELS['cycle-error']);
+    expect(SYNC_PHASE_LABELS.paused).not.toBe(SYNC_PHASE_LABELS.idle);
+  });
+
+  it('still lets the store gate outrank a pause', () => {
+    expect(getSyncPhase('error', 'paused')).toBe('initial-error');
+  });
 });
 
 // The accumulator both engines write through. Its rules live in shared precisely

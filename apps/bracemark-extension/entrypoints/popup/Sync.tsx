@@ -1,5 +1,6 @@
 import { ChevronRight } from 'lucide-react';
 
+import { SESSION_COPY } from '@stxapps/react';
 import {
   formatSyncedAt,
   getSyncPhase,
@@ -48,6 +49,9 @@ const DOT_STYLES: Record<SyncPhase, string> = {
   // Red here would point the user at a connection problem instead of the fix
   // (see @stxapps/shared sync/status.ts, `blocked-capacity`).
   'capacity-blocked': 'bg-amber-500',
+  // The session expired: nothing failed and nothing is lost, but it wants a
+  // click — a sign-in — so it takes the attention colour, not the error one.
+  paused: 'bg-amber-500',
 };
 
 function StatusDot({ phase }: { phase: SyncPhase }) {
@@ -74,6 +78,8 @@ function pillLabel(phase: SyncPhase, lastSyncAt: number | null): string {
       return 'Sync failed';
     case 'capacity-blocked':
       return 'Storage full';
+    case 'paused':
+      return 'Sync paused — sign in to resume';
     case 'idle':
       return lastSyncAt ? `Synced ${formatSyncedAt(lastSyncAt)}` : 'Not synced yet';
   }
@@ -124,7 +130,7 @@ function DetailRow({ label, children }: { label: string; children: React.ReactNo
   );
 }
 
-export function SyncDetail({ onBack }: { onBack: () => void }) {
+export function SyncDetail({ onBack, onResume }: { onBack: () => void; onResume: () => void }) {
   const { storeStatus, bgSyncStatus, lastSyncAt, lastError, blockedCount, requestSync } = useSync();
   // Queued local edits the next cycle will push — live from the shared Dexie
   // store, not the background's mirror.
@@ -173,6 +179,19 @@ export function SyncDetail({ onBack }: { onBack: () => void }) {
           <p className={cn('wrap-break-words text-xs leading-5 text-muted-foreground')}>
             {blockedDetail}
           </p>
+        )}
+
+        {/* The expired session (docs/sessions.md): what is true, then the one
+            fix. A status, not an alert — the user didn't cause it. */}
+        {phase === 'paused' && (
+          <>
+            <p role="status" className={cn('text-xs leading-5 text-muted-foreground')}>
+              {SESSION_COPY.paused.description}
+            </p>
+            <Button size="sm" onClick={onResume}>
+              {SESSION_COPY.paused.resume}
+            </Button>
+          </>
         )}
 
         {actionLabel && (

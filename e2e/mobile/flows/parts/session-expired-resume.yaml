@@ -1,0 +1,54 @@
+# Part three of SESSION-EXPIRED-NATIVE-001, after the runner has counted the local
+# store still full. "Sign in to resume" opens the `/resume` modal with the stored
+# username locked in; the NEW password resumes the session, the modal closes, the
+# notice goes, and the link saved while paused is still there to push.
+appId: com.bracemark.app
+---
+- tapOn:
+    id: 'sync-paused-resume'
+- extendedWaitUntil:
+    visible:
+      id: 'sign-in-password'
+    timeout: 10000
+- assertVisible:
+    id: 'sign-in-username'
+    text: ${USERNAME}
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn:
+    id: 'sign-in-password'
+- inputText: ${NEW_PASSWORD}
+- hideKeyboard
+- tapOn:
+    id: 'sign-in-submit'
+# Argon2id on the device, and iOS's password sheet racing it — the same poll as
+# subflows/sign-in.yaml, which carries the full reasoning.
+- repeat:
+    times: 5
+    while:
+      visible:
+        id: 'sign-in-password'
+    commands:
+      - runFlow:
+          when:
+            platform: iOS
+          commands:
+            - tapOn:
+                text: 'Not Now'
+                optional: true
+      - extendedWaitUntil:
+          notVisible:
+            id: 'sign-in-password'
+          timeout: 30000
+          optional: true
+- extendedWaitUntil:
+    notVisible:
+      id: 'sync-paused-notice'
+    timeout: 120000
+- assertVisible: ".*${QUEUED_URL.replace('https://', '')}.*"
+# Push what queued while paused; the runner reads it back from the web.
+- tapOn:
+    id: 'links-more-options'
+- tapOn:
+    id: 'links-sync'
+- takeScreenshot: session-expired-resumed

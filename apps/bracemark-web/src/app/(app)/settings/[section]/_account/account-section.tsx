@@ -29,7 +29,12 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 
-import { hasRecoveryDoorQueryKey, RECOVERY_CODE_COPY, useSignOutOthers } from '@stxapps/react';
+import {
+  hasRecoveryDoorQueryKey,
+  RECOVERY_CODE_COPY,
+  SESSION_COPY,
+  useSignOutOthers,
+} from '@stxapps/react';
 import {
   InvalidCredentialsError,
   InvalidRecoveryCodeError,
@@ -278,8 +283,7 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
         <SettingsHeader back={{ label: 'Account', onClick: onBack }} title="Change password" />
         <p className="flex items-start gap-2 text-sm text-foreground">
           <ShieldCheck className="mt-0.5 size-4 shrink-0 text-primary" />
-          Your password has been changed. You’re still signed in on this device, and your other
-          devices have been signed out.
+          {SESSION_COPY.passwordChanged}
         </p>
         <p className="text-xs text-muted-foreground">
           This changed how you sign in, but didn’t re-encrypt data you’ve already synced. If your

@@ -27,7 +27,7 @@ import { setLocalSettings } from './local-settings-store';
 import { APP_LOCK_ID, putLock } from './lock-store';
 import { enqueuePut, listPendingOps } from './pending-store';
 import { readCachedStatus, writeCachedStatus } from './subscription-store';
-import { getSyncMeta, isFirstSyncDone, markFirstSyncDone } from './sync-store';
+import { beginInitialSync, getSyncMeta, isFirstSyncDone, markFirstSyncDone } from './sync-store';
 
 // Every call the module makes, in the order it made them — the only way to see that the
 // quiesce and the queue abandonment happened BEFORE the server was asked.
@@ -71,6 +71,7 @@ function installStorage(): void {
 
 async function seedSignedInAccountWithData(): Promise<void> {
   await db.items.put({ path: LINK_PATH, updatedAt: 1, itemType: 'link' });
+  await beginInitialSync(USER);
   await markFirstSyncDone(USER, 500, LINK_PATH);
   await enqueuePut(USER, LINK_PATH, 0);
   await putLock({ id: APP_LOCK_ID, kind: 'app', salt: 'aa', hash: 'bb' });

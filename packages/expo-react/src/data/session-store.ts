@@ -15,6 +15,11 @@
 // SECURITY: unlike web (XSS), the threat here is at-rest device access; the
 // Keychain/Keystore backing is the mitigation. In memory the key is plain bytes
 // available to any code in the JS runtime — same trust model as expo-crypto.
+//
+// ⚠ NO EXPIRY LIVES HERE, and none may be added (docs/sessions.md). The server
+// decides a session's lifetime and says so with a code; a client that reads a
+// deadline off its own clock is a client that wipes a user's only copy the day the
+// server stops answering. The record carries a STATE the server's verdicts set.
 
 import { File, Paths } from 'expo-file-system';
 import * as SecureStore from 'expo-secure-store';
@@ -30,7 +35,13 @@ import {
   getSharedKeychainItem,
   setSharedKeychainItem,
 } from '@stxapps/expo-crypto/lib/shared-keychain';
-import { bytesToHex, hexToBytes } from '@stxapps/shared';
+import {
+  bytesToHex,
+  hexToBytes,
+  newSessionGeneration,
+  type SessionState,
+  type SessionVerdict,
+} from '@stxapps/shared';
 
 import { APP_GROUP_ID } from './app-group';
 
@@ -39,21 +50,36 @@ export interface SessionRecord {
   username: string;
   // Bearer token the API authenticates each request with.
   token: string;
-  // Epoch ms when the token expires; lets the client pre-empt a stale request.
-  expiresAt: number;
   // Raw AES-256-GCM key bytes — native's stand-in for web's non-extractable
   // CryptoKey (no such handle exists here; see expo-crypto's Account).
   encryptionKey: Uint8Array;
+  // 'active', or 'expired' once the server answered this token
+  // `session_expired`/`session_unknown`: the library stays fully usable, sync
+  // pauses, and a sign-in with the same username resumes it. MIRRORED to the iOS
+  // share extension, which reads it instead of a clock (share-store.ts).
+  state: SessionState;
+  // Which adopted token this is — minted by sign-in, create-account and resume.
+  // A verdict only applies if it still matches the persisted record, so a slow
+  // response for a replaced token never expires or erases its replacement.
+  generation: string;
 }
+
+// What sign-in / create-account hand the provider: the credential material. The
+// provider mints the generation and the state when it adopts it.
+export type SessionCredentials = Pick<SessionRecord, 'username' | 'token' | 'encryptionKey'>;
 
 // The serialized shape that lands in secure-store (string values only). The key
 // crosses as hex — the workspace convention for key material over a
 // serialization boundary; shared's base64 pair needs `btoa`, which Hermes lacks.
+// `state`/`generation` are optional on READ only: a record written before the
+// session redesign has neither (and a stale `expiresAt`, ignored), and reads as an
+// active session rather than a corrupt one.
 interface PersistedSession {
   username: string;
   token: string;
-  expiresAt: number;
   encryptionKeyHex: string;
+  state?: SessionState;
+  generation?: string;
 }
 
 // One active session at a time, under a fixed key. Identifies the record in
@@ -136,52 +162,71 @@ function markInstalled(): void {
 let current: SessionRecord | null = null;
 
 // The live session record (in-memory), or null. Exposes the raw encryptionKey
-// for the data layer; NOT expiry-gated (the key still decrypts local data
-// offline even after the bearer token has lapsed).
+// for the data layer — in either state: an expired session still decrypts this
+// device's library.
 export function getSession(): SessionRecord | null {
   return current;
 }
 
-// The bearer token for the Authorization header, or null. Withheld once expired —
-// sending a known-stale token would just earn a 401.
+// The bearer token for the Authorization header, or null when signed out. Sent
+// in the expired state too: the probe needs it, and any request it rides on can
+// only earn another verdict for this same generation.
 export function getToken(): string | null {
-  if (!current || current.expiresAt <= Date.now()) return null;
-  return current.token;
+  return current?.token ?? null;
 }
 
-// "The active session is no longer valid" notifier. Fired by the api client when
-// the server rejects our bearer token (401) or a request is attempted with an
-// expired one; the auth provider subscribes and drops to signed-out. This keeps
-// the api client a pure reader — it signals, it doesn't mutate session state. The
-// provider stays the sole writer (saveSession/clearSession).
-type SessionInvalidListener = () => void;
-const invalidListeners = new Set<SessionInvalidListener>();
+// A server verdict on the token of one generation. Fired by the api client when a
+// request it AUTHENTICATED is answered with one of our session codes; the auth
+// provider subscribes and decides — under the lifecycle lock, against the
+// persisted generation — whether it still applies. The api client signals; the
+// provider stays the sole writer.
+export interface SessionVerdictEvent {
+  verdict: SessionVerdict;
+  generation: string;
+}
+type SessionVerdictListener = (event: SessionVerdictEvent) => void;
+const verdictListeners = new Set<SessionVerdictListener>();
 
 // Subscribe; returns an unsubscribe fn.
-export function onSessionInvalid(listener: SessionInvalidListener): () => void {
-  invalidListeners.add(listener);
-  return () => invalidListeners.delete(listener);
+export function onSessionVerdict(listener: SessionVerdictListener): () => void {
+  verdictListeners.add(listener);
+  return () => verdictListeners.delete(listener);
 }
 
-// Notify subscribers — a pure fan-out. Deduping any reaction (e.g. collapsing a
-// double sign-out from concurrent failing requests) is the subscriber's concern,
-// not this passive store's; it owns the lifecycle being guarded.
-export function notifySessionInvalid(): void {
-  for (const listener of invalidListeners) listener();
+// Notify subscribers — a pure fan-out. Deduping is the subscriber's concern.
+export function notifySessionVerdict(event: SessionVerdictEvent): void {
+  for (const listener of verdictListeners) listener(event);
+}
+
+// The LIFECYCLE LOCK: adopting, resuming, expiring and tearing down run one at a
+// time, each re-reading the record after it starts. One JS runtime owns the
+// lifecycle here (the main app process — the iOS share extension never writes),
+// so an in-process queue is the whole mechanism; web-react's sibling spans tabs
+// with Web Locks. Not re-entrant: never take it inside itself.
+let lifecycleQueue: Promise<unknown> = Promise.resolve();
+
+export function withSessionLock<T>(run: () => Promise<T>): Promise<T> {
+  const next = lifecycleQueue.then(run, run);
+  lifecycleQueue = next.catch(() => undefined);
+  return next;
 }
 
 function serialize(record: SessionRecord): string {
   const persisted: PersistedSession = {
     username: record.username,
     token: record.token,
-    expiresAt: record.expiresAt,
     encryptionKeyHex: bytesToHex(record.encryptionKey),
+    state: record.state,
+    generation: record.generation,
   };
   return JSON.stringify(persisted);
 }
 
 // Null on any malformed payload (bad JSON, missing/mistyped fields) — a corrupt
-// entry reads as signed-out rather than throwing into the auth provider.
+// entry reads as signed-out rather than throwing into the auth provider. A record
+// from before the session redesign (a stale `expiresAt`, no state, no generation)
+// is NOT malformed: it reads as active, whatever its old expiry said, with an
+// empty generation the lifecycle owner assigns.
 function parse(raw: string): SessionRecord | null {
   let persisted: Partial<PersistedSession>;
   try {
@@ -192,7 +237,6 @@ function parse(raw: string): SessionRecord | null {
   if (
     typeof persisted.username !== 'string' ||
     typeof persisted.token !== 'string' ||
-    typeof persisted.expiresAt !== 'number' ||
     typeof persisted.encryptionKeyHex !== 'string'
   ) {
     return null;
@@ -200,9 +244,15 @@ function parse(raw: string): SessionRecord | null {
   return {
     username: persisted.username,
     token: persisted.token,
-    expiresAt: persisted.expiresAt,
     encryptionKey: hexToBytes(persisted.encryptionKeyHex),
+    state: persisted.state === 'expired' ? 'expired' : 'active',
+    generation: typeof persisted.generation === 'string' ? persisted.generation : '',
   };
+}
+
+// Mint the persisted form of freshly adopted credentials.
+export function activeRecord(credentials: SessionCredentials): SessionRecord {
+  return { ...credentials, state: 'active', generation: newSessionGeneration() };
 }
 
 // Persist (or replace) the current session. Updates the in-memory mirror first
@@ -257,6 +307,8 @@ export async function clearSession(): Promise<void> {
 // the mirror write failed, or off iOS. Unlike loadSession this never deletes
 // anything: the MAIN APP owns the entry's lifecycle; a corrupt/stale mirror
 // just means no fast-path upload this share (the outbox drain still delivers).
+// The record carries the STATE: an expired one means "don't call the api at
+// all" to its reader (share-store.ts), which never acts on a verdict itself.
 export async function loadSharedSession(): Promise<SessionRecord | null> {
   const raw = await getSharedKeychainItem(APP_GROUP_ID, SESSION_KEY).catch(() => null);
   const record = raw === null ? null : parse(raw);

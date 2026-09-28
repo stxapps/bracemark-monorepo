@@ -8,6 +8,8 @@ import { InitialSyncGate } from './initial-sync-gate';
 
 let mockStoreStatus = 'ready';
 let mockProgress: InitialSyncProgress | null = null;
+let mockSessionState: 'active' | 'expired' = 'active';
+let mockLastError: string | null = null;
 const mockRetryInitialSync = jest.fn();
 
 jest.mock('@stxapps/expo-react', () => ({
@@ -15,8 +17,13 @@ jest.mock('@stxapps/expo-react', () => ({
     storeStatus: mockStoreStatus,
     initialSyncProgress: mockProgress,
     retryInitialSync: mockRetryInitialSync,
+    lastError: mockLastError,
   }),
+  useAuth: () => ({ username: 'alice', sessionState: mockSessionState }),
+  usePendingChangesCount: () => 0,
+  useSignOut: () => ({ mutate: jest.fn(), isPending: false }),
 }));
+jest.mock('expo-router', () => ({ router: { push: jest.fn() } }));
 
 function mount() {
   const view = render(
@@ -42,6 +49,8 @@ beforeEach(() => {
   jest.useFakeTimers();
   mockStoreStatus = 'ready';
   mockProgress = null;
+  mockSessionState = 'active';
+  mockLastError = null;
   mockRetryInitialSync.mockClear();
 });
 
@@ -53,6 +62,23 @@ test('renders the app once the local store is ready', () => {
   mount();
 
   expect(appIsShowing()).toBe(true);
+});
+
+// An EXPIRED session caught this device's first sync mid-way (docs/sessions.md): not
+// the "Couldn’t sync" error — nothing failed, and a retry would only earn the same
+// answer — but the resume.
+test('offers a sign-in, not a retry, when an expired session holds up the first sync', () => {
+  mockStoreStatus = 'error';
+  mockSessionState = 'expired';
+  mockLastError = 'Signing in again will finish setting up this device.';
+
+  mount();
+
+  expect(appIsShowing()).toBe(false);
+  expect(screen.getByText('Sync is paused')).toBeTruthy();
+  expect(screen.getByText('Sign in to resume')).toBeTruthy();
+  expect(screen.queryByText('Try again')).toBeNull();
+  expect(screen.queryByText('Couldn’t sync your links.')).toBeNull();
 });
 
 test('shows neither the app nor a loading screen while checking the local flag', () => {

@@ -19,13 +19,21 @@
 
 import { db } from './db';
 import {
+  AccountFencedError,
   advanceCursor,
+  beginInitialSync,
   getSyncMeta,
   isFirstSyncDone,
-  markFirstSyncDone,
+  markFirstSyncDone as markDone,
   resetCursor,
   seedNewAccount,
 } from './sync-store';
+
+// A first sync as the engine runs it: claim the row, then mark it done.
+async function markFirstSyncDone(username: string, updatedAt: number, path: string) {
+  await beginInitialSync(username);
+  await markDone(username, updatedAt, path);
+}
 
 const USER = 'alice';
 
@@ -62,6 +70,36 @@ describe('isFirstSyncDone', () => {
     await markFirstSyncDone(USER, 10, 'links/l_1.enc');
 
     expect(await isFirstSyncDone(USER)).toBe(true);
+  });
+});
+
+// The account fence (sync-store.ts, AccountFencedError): a first sync claims its row
+// before it writes anything, and finishing requires the row to still be there — a
+// sign-out mid-pull must not come back as a "completed" store for an account that
+// is no longer on the device.
+describe('beginInitialSync / markFirstSyncDone', () => {
+  it('claims a not-done row, so the gate keeps blocking until the pull finishes', async () => {
+    await beginInitialSync(USER);
+
+    expect(await getSyncMeta(USER)).toMatchObject({ firstSyncDoneAt: 0 });
+    expect(await isFirstSyncDone(USER)).toBe(false);
+  });
+
+  it('leaves an existing row alone', async () => {
+    await markFirstSyncDone(USER, 10, 'links/l_1.enc');
+
+    await beginInitialSync(USER);
+
+    expect(await isFirstSyncDone(USER)).toBe(true);
+    expect(await cursor()).toEqual([10, 'links/l_1.enc']);
+  });
+
+  it('refuses to finish a pull whose account was torn down mid-way', async () => {
+    await beginInitialSync(USER);
+    await db.syncMeta.clear();
+
+    await expect(markDone(USER, 10, 'links/l_1.enc')).rejects.toBeInstanceOf(AccountFencedError);
+    expect(await getSyncMeta(USER)).toBeUndefined();
   });
 });
 

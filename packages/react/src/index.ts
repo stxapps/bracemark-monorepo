@@ -13,3 +13,4 @@ export * from './lib/misc-settings-copy';
 export * from './lib/new-password-copy';
 export * from './lib/paywall-copy';
 export * from './lib/recovery-code-copy';
+export * from './lib/session-copy';

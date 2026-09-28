@@ -21,6 +21,8 @@ import Dexie, { type EntityTable, type Table } from 'dexie';
 
 import type { OpKind, ThemeState } from '@stxapps/shared';
 
+import { markUpdateRequired } from './update-required';
+
 // Per-account sync bookkeeping. The presence of a row with `firstSyncDoneAt > 0`
 // is the gate that lets the app render local data instead of blocking on a full
 // pull, and it's the ONLY way to tell "synced, zero items" apart from "never
@@ -292,6 +294,11 @@ export interface FaviconRecord {
   fetchedAt: number;
 }
 
+// The schema version THIS build declares (the highest `this.version(n)` below).
+// Bump it with every new `version(n)` — the update-required guard compares the
+// installed database against it.
+export const DATA_DB_VERSION = 1;
+
 class BracemarkDb extends Dexie {
   syncMeta!: EntityTable<SyncMetaRecord, 'username'>;
   items!: EntityTable<ItemRecord, 'path'>;
@@ -302,7 +309,7 @@ class BracemarkDb extends Dexie {
 
   constructor() {
     super('bracemark-data');
-    this.version(1).stores({
+    this.version(DATA_DB_VERSION).stores({
       // `username` primary key — one bookkeeping row per account.
       syncMeta: 'username',
       // `path` primary key + `updatedAt` index (the engine's R2-clock reconcile
@@ -340,6 +347,33 @@ class BracemarkDb extends Dexie {
       // Device-local favicon cache — one row per display host. Primary key only:
       // every read is an exact `get(host)` from a rendered row, never a scan.
       favicons: 'host',
+    });
+
+    // ⚠ THE VERSION-SKEW GUARD (docs/offline-mode.md, _version skew_). Every tab
+    // on the origin opens this one database; when a newer build opens it at a
+    // higher version, IndexedDB sends `versionchange` here, in the OLD tab.
+    // Dexie's default already closes the connection (holding it would hang the
+    // new tab's upgrade), but it leaves auto-open on, and IndexedDB never
+    // reopens at a lower version — so every later read and write would fail one
+    // by one. Close for good instead, and raise the update-required state
+    // (update-required.ts), which stops sync and asks for a reload. No dialog
+    // before the close: waiting on a person would block the upgrade.
+    this.on('versionchange', () => {
+      this.close({ disableAutoOpen: true });
+      markUpdateRequired('data');
+    });
+    // The other way to meet a newer schema: this tab's FIRST open happens after
+    // the upgrade, so no `versionchange` ever reaches it. Dexie 4 doesn't fail
+    // that open — on VersionError it retries at the installed version and runs
+    // this build's code over a schema it doesn't know. Refuse it here, the same
+    // way. (A patch-mode bump Dexie makes itself stays inside this version: its
+    // native number is `DATA_DB_VERSION * 10 + k`.)
+    this.on('ready', () => {
+      if (Math.floor(this.backendDB().version / 10) > DATA_DB_VERSION) {
+        this.close({ disableAutoOpen: true });
+        markUpdateRequired('data');
+        throw new Dexie.VersionError('bracemark-data was upgraded by a newer build');
+      }
     });
   }
 }

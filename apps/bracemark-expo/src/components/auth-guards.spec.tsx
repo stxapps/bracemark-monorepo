@@ -47,7 +47,7 @@ describe('AuthGuard', () => {
 
   test('returns an expired or direct session to sign-in with its intended path', () => {
     mockStatus = 'unauthenticated';
-    mockReason = 'expired';
+    mockReason = 'revoked';
     mockPathname = '/settings/subscription';
 
     render(

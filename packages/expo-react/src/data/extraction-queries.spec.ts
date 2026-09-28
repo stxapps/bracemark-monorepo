@@ -35,6 +35,7 @@ import { getDb } from './db';
 import { putItemsUnqueued } from './item-store';
 import { toItemRecord } from './projection';
 import { readExtractionFacetCounts, readRawPendingTitleImageCount } from './queries';
+import { seedNewAccount } from './sync-store';
 
 // The one seam that would reach native sqlite — everything above it (getDb, the PRAGMA,
 // the DDL, the schema objects, the junction writes) runs for real.
@@ -89,6 +90,9 @@ beforeEach(() => {
     sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'`,
   );
   for (const { name } of tables) getDb().run(sql.raw(`DELETE FROM "${name}"`));
+  // A signed-in account owns the store: pulled writes are fenced on its
+  // bookkeeping row (sync-store.ts, AccountFencedError).
+  void seedNewAccount(USER);
 });
 
 describe('readExtractionFacetCounts', () => {

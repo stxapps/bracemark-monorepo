@@ -42,7 +42,14 @@ import { decryptEntity, encryptEntity } from '@stxapps/web-crypto';
 import { db, type ItemRecord, type PendingOpRecord } from '../data/db';
 import { clearDrainedOps, listPendingOps } from '../data/pending-store';
 import { toItemRecord } from '../data/projection';
-import { advanceCursor, getSyncMeta, markFirstSyncDone, resetCursor } from '../data/sync-store';
+import {
+  advanceCursor,
+  assertAccountStillOwnsStore,
+  beginInitialSync,
+  getSyncMeta,
+  markFirstSyncDone,
+  resetCursor,
+} from '../data/sync-store';
 import { BlobRequestError, getBlob, putBlob } from './r2';
 
 // Everything the engine needs to run a sync, passed in by the caller (SyncProvider)
@@ -143,6 +150,9 @@ export async function runInitialSync(
   onProgress?: InitialSyncProgressFn,
 ): Promise<void> {
   deps = withRetryDeps(deps);
+  // Claim the bookkeeping row first, so every write below is fenced on it
+  // (sync-store.ts, AccountFencedError).
+  await beginInitialSync(deps.username);
   const files = await listAllFiles(deps.api);
   await storeDownloads(deps, files, onProgress);
   // Cursor is the newest compound `(updatedAt, path)` among ALL listed files
@@ -885,9 +895,15 @@ async function storeDownloads(
 // and would cost the resumability of storing each one the moment it's decrypted.
 // A pending DELETE counts too: local-wins means a queued deletion isn't resurrected
 // by the pull that raced it.
+//
+// It also re-checks that this account still owns the store (AccountFencedError,
+// sync-store.ts), inside the same transaction: a cycle that outlived a sign-out or
+// an account switch in any tab must not write the old account's plaintext into the
+// new store.
 async function putPulled(username: string, records: ItemRecord[]): Promise<void> {
   if (records.length === 0) return;
-  await db.transaction('rw', db.items, db.pendingOps, async () => {
+  await db.transaction('rw', db.items, db.pendingOps, db.syncMeta, async () => {
+    await assertAccountStillOwnsStore(username);
     const ops = await db.pendingOps.bulkGet(
       records.map((r) => [username, r.path] as [string, string]),
     );
@@ -916,9 +932,13 @@ async function putPulled(username: string, records: ItemRecord[]): Promise<void>
 // writeBytesWith either commits FIRST (its pending op is visible here → the path is
 // spared) or AFTER (this delete hits the stale record, and its put re-creates it). Both
 // orders end with the local write intact.
+//
+// Fenced on the account's bookkeeping row like putPulled — a stale cycle's deletes
+// would otherwise land in the next account's store.
 async function applyDeletes(username: string, paths: string[]): Promise<void> {
   if (paths.length === 0) return;
-  await db.transaction('rw', db.items, db.pendingOps, async () => {
+  await db.transaction('rw', db.items, db.pendingOps, db.syncMeta, async () => {
+    await assertAccountStillOwnsStore(username);
     const ops = await db.pendingOps.bulkGet(
       paths.map((path) => [username, path] as [string, string]),
     );

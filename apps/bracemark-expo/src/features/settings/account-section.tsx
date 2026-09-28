@@ -29,7 +29,12 @@ import {
   useHasRecoveryDoor,
   useRecoveryCode,
 } from '@stxapps/expo-react';
-import { hasRecoveryDoorQueryKey, RECOVERY_CODE_COPY, useSignOutOthers } from '@stxapps/react';
+import {
+  hasRecoveryDoorQueryKey,
+  RECOVERY_CODE_COPY,
+  SESSION_COPY,
+  useSignOutOthers,
+} from '@stxapps/react';
 
 import { ErrorText } from '../../components/error-text';
 import { Button } from '../../components/ui/button';
@@ -266,10 +271,7 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
         <SettingsHeader title="Change password" back={{ label: 'Account', onPress: onBack }} />
         <View className="mt-3 flex-row items-start gap-2">
           <Icon as={ShieldCheck} className="mt-0.5 size-4 shrink-0 text-primary" />
-          <Text className="min-w-0 flex-1 text-sm">
-            Your password has been changed. You’re still signed in on this device, and your other
-            devices have been signed out.
-          </Text>
+          <Text className="min-w-0 flex-1 text-sm">{SESSION_COPY.passwordChanged}</Text>
         </View>
         <Text className="mt-4 text-xs text-muted-foreground">
           This changed how you sign in, but didn’t re-encrypt data you’ve already synced. If your

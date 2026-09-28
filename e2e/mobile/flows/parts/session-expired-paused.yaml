@@ -1,0 +1,27 @@
+# Part two of SESSION-EXPIRED-NATIVE-001: the password changed on another device, and
+# the app still believes its session is live. A user's Sync is the request that
+# learns otherwise; its `session_expired` must PAUSE sync — the notice on the links
+# screen — and leave everything where it was: no sign-in screen, the library on
+# screen, and a new save still working, queued for after the resume.
+appId: com.bracemark.app
+---
+- tapOn:
+    id: 'links-more-options'
+- tapOn:
+    id: 'links-sync'
+- extendedWaitUntil:
+    visible:
+      id: 'sync-paused-notice'
+    timeout: 60000
+- assertVisible:
+    id: 'links-screen'
+- assertNotVisible:
+    id: 'sign-in-username'
+- assertVisible: ".*${KEPT_URL.replace('https://', '')}.*"
+- runFlow:
+    file: ../subflows/add-link.yaml
+    env:
+      URL: ${QUEUED_URL}
+- assertVisible:
+    id: 'sync-paused-notice'
+- takeScreenshot: session-expired-paused

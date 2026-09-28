@@ -25,7 +25,12 @@
 
 import { useState } from 'react';
 
-import { type LinkView, useLinkMutations, useTagMutations } from '@stxapps/web-react';
+import {
+  type LinkView,
+  useLinkMutations,
+  useTagMutations,
+  useUnsavedDraft,
+} from '@stxapps/web-react';
 import { TagsCommand } from '@stxapps/web-ui/components/links/tags-command';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import {
@@ -66,6 +71,8 @@ function BulkTagsForm({ links, onClose }: { links: LinkView[]; onClose: () => vo
   const [saving, setSaving] = useState(false);
 
   const isDirty = !sameIds(tagIds, seed);
+  // Reported page-wide for the "updated, reload" pill (use-unsaved-draft.ts).
+  useUnsavedDraft(isDirty);
 
   const toggle = (tagId: string) => {
     setTagIds((ids) => (ids.includes(tagId) ? ids.filter((id) => id !== tagId) : [...ids, tagId]));

@@ -90,6 +90,7 @@ import {
   readLinkByUrlKey,
   useLinkMutations,
   useLinkQuota,
+  useUnsavedDraft,
 } from '@stxapps/web-react';
 import { LinkQuotaBanner } from '@stxapps/web-ui/components/links/link-quota-banner';
 import { ListSelect } from '@stxapps/web-ui/components/links/list-select';
@@ -316,6 +317,10 @@ export function LinkAddSurface({
   // guarding it. Only the optional fields (note, tags, a non-default list)
   // represent effort worth protecting from a stray outside-click or Escape.
   const optionalDirty = optionalSet.length > 0;
+  // Reported page-wide for the "updated, reload" pill (use-unsaved-draft.ts).
+  // Wider than the close guard: a typed URL is cheap to retype after a stray
+  // click, but a reload the app starts should still not drop it unasked.
+  useUnsavedDraft(optionalDirty || url.trim() !== '');
 
   // Guard only the ACCIDENTAL close vectors (outside-click / overlay tap,
   // Escape, and the sheet's swipe-adjacent dismissals), and only when the

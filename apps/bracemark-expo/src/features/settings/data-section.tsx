@@ -18,6 +18,7 @@ import * as Sharing from 'expo-sharing';
 import {
   CircleAlert,
   CircleCheck,
+  CloudOff,
   Download,
   FileText,
   Globe,
@@ -42,6 +43,7 @@ import {
   useStallProbe,
   useSync,
 } from '@stxapps/expo-react';
+import { SESSION_COPY } from '@stxapps/react';
 import {
   type ExportFormat,
   formatSyncedAt,
@@ -53,6 +55,7 @@ import {
 } from '@stxapps/shared';
 
 import { ErrorText } from '../../components/error-text';
+import { SyncPausedActions } from '../../components/sync-paused-notice';
 import { Button } from '../../components/ui/button';
 import { Checkbox } from '../../components/ui/checkbox';
 import { Icon } from '../../components/ui/icon';
@@ -80,6 +83,10 @@ function SyncStatus() {
   // needed is some freed space, not a retry (which is also why it gets no Retry
   // button; pressing one would change nothing).
   const isBlocked = phase === 'capacity-blocked';
+  // The session expired (docs/sessions.md): no cycle runs until a sign-in, so no
+  // spinner and no Sync button — the card carries the resume itself, since the
+  // settings screens have no notice of their own. Not an error: nothing failed.
+  const isPaused = phase === 'paused';
 
   // `size-5` is the SettingsRow icon size (the three action rows at the bottom of
   // this file, account-section's four), not the `size-4` of the receipt lines and
@@ -91,6 +98,8 @@ function SyncStatus() {
     <Icon as={CircleAlert} className="size-5 text-destructive" />
   ) : isBlocked ? (
     <Icon as={CircleAlert} className="size-5 text-muted-foreground" />
+  ) : isPaused ? (
+    <Icon as={CloudOff} className="size-5 text-muted-foreground" />
   ) : phase === 'idle' ? (
     <Icon as={CircleCheck} className="size-5 text-muted-foreground" />
   ) : (
@@ -135,6 +144,14 @@ function SyncStatus() {
             <Text className="text-sm text-muted-foreground">
               {syncBlockedDetail(phase, blockedCount)} Everything already saved is safe.
             </Text>
+          )}
+          {isPaused && (
+            <>
+              <Text className="text-sm text-muted-foreground">
+                {SESSION_COPY.paused.description}
+              </Text>
+              <SyncPausedActions />
+            </>
           )}
           {pendingCount > 0 && (
             <Text className="text-sm text-muted-foreground">

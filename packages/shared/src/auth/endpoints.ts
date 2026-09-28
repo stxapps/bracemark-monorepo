@@ -83,17 +83,21 @@ export const createAccountRequestSchema = z.object({
 });
 export type CreateAccountRequest = z.infer<typeof createAccountRequestSchema>;
 
-// Only the raw bearer `token` (the capability the client authenticates with) and
-// its `expiresAt` cross the wire. The session row's PK (`sessionId`) is
-// server-internal — the auth guard resolves a session by hashing the token, and an
-// authenticated logout revokes it without the client ever holding its id.
+// Only the raw bearer `token` (the capability the client authenticates with)
+// crosses the wire. The session row's PK (`sessionId`) is server-internal — the
+// auth guard resolves a session by hashing the token, and an authenticated logout
+// revokes it without the client ever holding its id.
+//
+// NO `expiresAt`, deliberately. The lifetime is sliding and decided by the server
+// (docs/sessions.md, _lifetime_), so any deadline sent here would be stale by the
+// next request — and a client holding an expiry is a client that can wipe on its
+// own clock. One it never receives, it cannot act on.
 export const createAccountResponseSchema = z.object({
   token: z.string(),
-  expiresAt: z.number(),
 });
 export type CreateAccountResponse = z.infer<typeof createAccountResponseSchema>;
 
-// POST /v1/auth/create-account → { token, expiresAt }
+// POST /v1/auth/create-account → { token }
 // Registers an account: verifies proof-of-possession, claims the username, stores
 // the publicKey + wrapped DEK (password door), and returns a fresh session. The
 // directory claim re-checks uniqueness server-side to close the type→submit race.
@@ -176,13 +180,13 @@ export const signInRequestSchema = z.object({
 });
 export type SignInRequest = z.infer<typeof signInRequestSchema>;
 
+// `{ token }` only — no expiry, for the reason createAccountResponseSchema gives.
 export const signInResponseSchema = z.object({
   token: z.string(),
-  expiresAt: z.number(),
 });
 export type SignInResponse = z.infer<typeof signInResponseSchema>;
 
-// POST /v1/auth/sign-in → { token, expiresAt }
+// POST /v1/auth/sign-in → { token }
 // Verifies proof-of-possession, confirms the presented publicKey matches the
 // stored credential for the username, and returns a fresh session.
 export const signInEndpoint = defineEndpoint({
@@ -206,10 +210,11 @@ export const signOutResponseSchema = z.object({
 export type SignOutResponse = z.infer<typeof signOutResponseSchema>;
 
 // POST /v1/auth/sign-out → { ok: true }
-// Revokes the current session server-side (deletes its row, so the bearer token
-// stops authenticating). Protected: requires the session's bearer token. The
-// client also drops its local session regardless, so a network failure here
-// still signs the user out locally — the row then ages out via TTL.
+// Revokes the current session server-side (marks its row revoked, so the bearer
+// token stops authenticating and answers `session_revoked` from then on).
+// Protected: requires the session's bearer token. The client also drops its local
+// session regardless, so a network failure here still signs the user out locally
+// — the row then idles out and is purged like any other.
 export const signOutEndpoint = defineEndpoint({
   method: 'POST',
   path: `${API_V1}/auth/sign-out`,
@@ -222,8 +227,10 @@ export const signOutEndpoint = defineEndpoint({
 // the bearer token). Session-only, deliberately: this is the plural of sign-out
 // (also session-only), touches no doors or credentials, and is low-harm and
 // reversible (the owner just signs back in), so it does NOT require the fresh
-// signed proof that door rotations / delete-account do. It's also the primitive
-// change-password uses server-side to cut off other sessions after a rotation.
+// signed proof that door rotations / delete-account do. Change-password does NOT
+// use it: a password change EXPIRES the other sessions instead of revoking them,
+// so they keep their local copy and resume with the new password
+// (docs/sessions.md, _changing the password expires the other sessions_).
 export const signOutOthersRequestSchema = z.object({});
 export type SignOutOthersRequest = z.infer<typeof signOutOthersRequestSchema>;
 
@@ -238,6 +245,31 @@ export const signOutOthersEndpoint = defineEndpoint({
   path: `${API_V1}/auth/sign-out-others`,
   request: signOutOthersRequestSchema,
   response: signOutOthersResponseSchema,
+});
+
+// --- session probe -------------------------------------------------------------
+
+// No request fields: the session being asked about is the bearer token itself.
+export const sessionProbeRequestSchema = z.object({});
+export type SessionProbeRequest = z.infer<typeof sessionProbeRequestSchema>;
+
+export const sessionProbeResponseSchema = z.object({
+  ok: z.literal(true),
+});
+export type SessionProbeResponse = z.infer<typeof sessionProbeResponseSchema>;
+
+// GET /v1/auth/session → { ok: true }
+// The expired state's probe (docs/sessions.md, _the expired state on the
+// client_): one authenticated request with the old token, per launch or return
+// to the foreground, so an expired device can still hear a retained
+// `session_revoked`. Everything it answers is in the guard — this handler only
+// exists so the question has a cheap, side-effect-free address; a live session
+// gets `{ ok: true }` (and its idle deadline renewed, like any authed call).
+export const sessionProbeEndpoint = defineEndpoint({
+  method: 'GET',
+  path: `${API_V1}/auth/session`,
+  request: sessionProbeRequestSchema,
+  response: sessionProbeResponseSchema,
 });
 
 // --- delete account -----------------------------------------------------------

@@ -1,57 +1,75 @@
 'use client';
-import { Suspense, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { SerwistProvider } from '@serwist/next/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { ApiClientProvider, ExtractClientProvider } from '@stxapps/react';
-import { AuthProvider } from '@stxapps/web-react';
+import { AuthProvider, useAuth } from '@stxapps/web-react';
 import { ThemeProvider } from '@stxapps/web-ui/contexts/theme-provider';
 
+import { UpdatePill } from '../components/update-pill';
+import { UpdateRequired } from '../components/update-required';
 import { apiClient } from '../lib/api-client';
 import { extractClient } from '../lib/extract-client';
 
+// Registers the service worker — and so makes the library reachable with the
+// origin gone (docs/offline-mode.md, _when the worker registers_). The rule is
+// "once signed in", in ANY display mode: a signed-in user has a library on this
+// device worth keeping reachable, and a normal browser tab needs the worker
+// exactly as much as an installed window. A visitor who never signs in never
+// registers and never downloads the precache. A load that finds an existing
+// registration re-registers too (signed in or not), which is what lets the
+// browser check an installed worker for updates.
+//
+// Registration only STARTS the offline guarantee: it holds once the worker has
+// installed (the precache downloaded), which the first online session does in
+// the background.
+//
+// ⚠ This rides on the worker's cross-origin rule (sw.ts): registering after every
+// sign-in widens who runs the worker, so it must never cache account data.
 function Initializer() {
+  const { status } = useAuth();
+  const signedIn = status === 'authenticated';
+
   useEffect(() => {
     if (!('serviceWorker' in navigator && window.serwist !== undefined)) return;
 
-    const mediaQuery = window.matchMedia('(display-mode: standalone)');
-
-    let didListenMedia = false,
-      didRegister = false;
-    const onWaiting = () => {
-      //dispatch(showSWWUPopup());
-    };
+    // A new build's worker takes over at once (sw.ts, `skipWaiting: true`); the
+    // tab it takes over from learns through UpdatePill, which watches
+    // `controllerchange` itself.
+    let cancelled = false;
+    let didRegister = false;
     const register = () => {
-      if (didRegister) return;
+      if (cancelled || didRegister) return;
       window.serwist.register();
-      window.serwist.addEventListener('waiting', onWaiting);
       didRegister = true;
     };
-    const onMediaChange = () => {
-      if (mediaQuery.matches) register();
-    };
-    const check = async () => {
-      if (mediaQuery.matches) {
-        register();
-        return;
-      }
 
-      const reg = await navigator.serviceWorker.getRegistration();
-      if (reg) {
-        register();
-        return;
-      }
+    if (signedIn) {
+      register();
+    } else {
+      void navigator.serviceWorker.getRegistration().then((reg) => {
+        if (reg) register();
+      });
+    }
 
-      mediaQuery.addEventListener('change', onMediaChange);
-      didListenMedia = true;
-    };
-
-    check();
     return () => {
-      if (didListenMedia) mediaQuery.removeEventListener('change', onMediaChange);
-      if (didRegister) window.serwist.removeEventListener('waiting', onWaiting);
+      cancelled = true;
     };
-  }, []);
+  }, [signedIn]);
+
+  // Ask the browser not to evict this origin's storage under pressure — the
+  // library, its keys and the worker's precache (docs/offline-mode.md, _storage
+  // durability_). Chrome grants it on engagement or installation, Firefox asks
+  // the user; either may say no, and a granted origin can still be cleared by the
+  // user. Once per signed-in load; the answer is only information.
+  useEffect(() => {
+    if (!signedIn || !navigator.storage?.persist) return;
+    void navigator.storage
+      .persisted()
+      .then((already) => (already ? true : navigator.storage.persist()))
+      .catch(() => undefined);
+  }, [signedIn]);
 
   return null;
 }
@@ -64,10 +82,10 @@ export function InnerLayout({ children }: { children: React.ReactNode }) {
 
   return (
     // SerwistProvider sets up `window.serwist` (which the plugin used to inject
-    // automatically). We keep manual, conditional registration via Initializer
-    // below, so register/cacheOnNavigation/reloadOnOnline are all off here to
-    // preserve the previous behavior. Disabled in dev since `serwist build`
-    // only runs as part of the production build.
+    // automatically). Registration is manual, via Initializer below (after
+    // sign-in), so register/cacheOnNavigation/reloadOnOnline are all off here.
+    // Disabled in dev since `serwist build` only runs as part of the production
+    // build.
     <SerwistProvider
       swUrl="/sw.js"
       register={false}
@@ -75,13 +93,11 @@ export function InnerLayout({ children }: { children: React.ReactNode }) {
       reloadOnOnline={false}
       disable={process.env.NODE_ENV === 'development'}
     >
-      <Suspense fallback={null}>
-        <Initializer />
-      </Suspense>
       <QueryClientProvider client={queryClient}>
         <ApiClientProvider client={apiClient}>
           <ExtractClientProvider client={extractClient}>
             <AuthProvider>
+              <Initializer />
               {/* NO BLANKET `.safe-area` WRAPPER HERE — it used to sit around
                   `children`, and the bug was that it was a PARENT of the screens
                   rather than the screens themselves. Padding on a plain block box
@@ -93,7 +109,11 @@ export function InnerLayout({ children }: { children: React.ReactNode }) {
                   SAME element as its `h-dvh`/`min-h-dvh`, where `box-sizing:
                   border-box` takes the padding OUT of that height instead of
                   adding to it. docs/safe-area.md, _applying safe area_. */}
-              <ThemeProvider>{children}</ThemeProvider>
+              <ThemeProvider>
+                {children}
+                <UpdatePill />
+                <UpdateRequired />
+              </ThemeProvider>
             </AuthProvider>
           </ExtractClientProvider>
         </ApiClientProvider>

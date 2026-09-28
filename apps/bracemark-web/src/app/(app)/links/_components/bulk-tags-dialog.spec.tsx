@@ -34,6 +34,7 @@ jest.mock('@stxapps/web-react', () => ({
   useTags: jest.fn(),
   useLinkMutations: () => ({ updateMany: mockUpdateMany }),
   useTagMutations: () => ({ findOrCreate: mockFindOrCreate }),
+  useUnsavedDraft: () => undefined,
 }));
 
 jest.mock('../_contexts/view-state-provider', () => ({

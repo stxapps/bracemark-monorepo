@@ -21,8 +21,12 @@
 import { sql } from 'drizzle-orm';
 
 import { getDb } from './db';
+import { deleteItemsUnqueued, getItem, putItemsUnqueued } from './item-store';
+import { toItemRecord } from './projection';
 import {
+  AccountFencedError,
   advanceCursor,
+  beginInitialSync,
   getSyncMeta,
   isFirstSyncDone,
   markFirstSyncDone,
@@ -38,6 +42,7 @@ const USER = 'alice';
 
 beforeEach(() => {
   getDb().run(sql`DELETE FROM sync_meta`);
+  getDb().run(sql`DELETE FROM items`);
 });
 
 const cursor = async () => {
@@ -53,6 +58,7 @@ describe('isFirstSyncDone', () => {
   });
 
   it('is true once the first sync has been marked done', async () => {
+    await beginInitialSync(USER);
     await markFirstSyncDone(USER, 10, 'links/l_1.enc');
 
     expect(await isFirstSyncDone(USER)).toBe(true);
@@ -72,6 +78,7 @@ describe('seedNewAccount', () => {
   // Also the delete-all-data reset, which runs against an EXISTING row — so the upsert
   // has to overwrite rather than conflict.
   it('resets an existing row rather than failing on the conflict', async () => {
+    await beginInitialSync(USER);
     await markFirstSyncDone(USER, 500, 'links/l_z.enc');
 
     await seedNewAccount(USER);
@@ -82,6 +89,7 @@ describe('seedNewAccount', () => {
 
 describe('advanceCursor', () => {
   beforeEach(async () => {
+    await beginInitialSync(USER);
     await markFirstSyncDone(USER, 100, 'links/l_b.enc');
   });
 
@@ -143,6 +151,7 @@ describe('resetCursor', () => {
   // The whole point of the fallback: R2's listing is authoritative, so a cursor ahead of
   // what R2 holds has to come DOWN. The one call that may move backwards.
   it('lowers a cursor that has run ahead of what R2 actually holds', async () => {
+    await beginInitialSync(USER);
     await markFirstSyncDone(USER, 500, 'links/l_z.enc');
 
     await resetCursor(USER, 100, 'links/l_a.enc');
@@ -151,11 +160,60 @@ describe('resetCursor', () => {
   });
 
   it('leaves firstSyncDoneAt untouched', async () => {
+    await beginInitialSync(USER);
     await markFirstSyncDone(USER, 500, 'links/l_z.enc');
     const before = (await getSyncMeta(USER))?.firstSyncDoneAt;
 
     await resetCursor(USER, 1, 'links/l_a.enc');
 
     expect((await getSyncMeta(USER))?.firstSyncDoneAt).toBe(before);
+  });
+});
+
+// The account fence (docs/sessions.md): a sync cycle that outlives a sign-out — or an
+// account switch — must not write the old account's plaintext into the store the next
+// account gets. Every pulled write re-checks the account's bookkeeping row inside its
+// own transaction; a first sync claims that row before it writes anything.
+describe('the account fence', () => {
+  const LINK = 'links/l_a.enc';
+  const pulled = () => [toItemRecord(LINK, 2000, new TextEncoder().encode('{}'))];
+
+  it('lets pulled writes through while the account owns the store', async () => {
+    await seedNewAccount(USER);
+
+    expect(await putItemsUnqueued(USER, pulled())).toEqual([LINK]);
+    expect(await deleteItemsUnqueued(USER, [LINK])).toEqual([LINK]);
+  });
+
+  it('refuses pulled writes once the account’s row is gone, and writes nothing', async () => {
+    await expect(putItemsUnqueued(USER, pulled())).rejects.toBeInstanceOf(AccountFencedError);
+    expect(await getItem(LINK)).toBeUndefined();
+  });
+
+  it('refuses a pulled delete into a store the account no longer owns', async () => {
+    await seedNewAccount(USER);
+    await putItemsUnqueued(USER, pulled());
+    getDb().run(sql`DELETE FROM sync_meta`); // the teardown, landing mid-cycle
+
+    await expect(deleteItemsUnqueued(USER, [LINK])).rejects.toBeInstanceOf(AccountFencedError);
+  });
+
+  it('claims a not-done row for a first sync, and leaves an existing one alone', async () => {
+    await beginInitialSync(USER);
+    expect(await getSyncMeta(USER)).toMatchObject({ firstSyncDoneAt: 0 });
+
+    await markFirstSyncDone(USER, 10, 'links/l_1.enc');
+    await beginInitialSync(USER);
+    expect(await isFirstSyncDone(USER)).toBe(true);
+  });
+
+  it('refuses to finish a first sync whose account was torn down mid-pull', async () => {
+    await beginInitialSync(USER);
+    getDb().run(sql`DELETE FROM sync_meta`);
+
+    await expect(markFirstSyncDone(USER, 10, 'links/l_1.enc')).rejects.toBeInstanceOf(
+      AccountFencedError,
+    );
+    expect(await getSyncMeta(USER)).toBeUndefined();
   });
 });

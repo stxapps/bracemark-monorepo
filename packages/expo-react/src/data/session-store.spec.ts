@@ -52,8 +52,11 @@ jest.mock('expo-file-system', () => ({
 
 const SESSION_KEY = 'bracemark-session';
 const SENTINEL_URI = 'file:///documents/bracemark-install-sentinel';
+const SHARED_MIRROR_KEY = 'group.com.bracemark.app/bracemark-session';
+const YEAR = 365 * 24 * 60 * 60 * 1000;
 
 type SessionStore = typeof import('./session-store');
+type SessionRecord = import('./session-store').SessionRecord;
 type SecureStoreMock = typeof import('expo-secure-store');
 
 let store: SessionStore;
@@ -72,28 +75,32 @@ beforeEach(() => {
   secureStore = jest.requireMock<SecureStoreMock>('expo-secure-store');
 });
 
-const record = (overrides: Partial<import('./session-store').SessionRecord> = {}) => ({
+afterEach(() => {
+  jest.restoreAllMocks();
+});
+
+const record = (overrides: Partial<SessionRecord> = {}): SessionRecord => ({
   username: 'alice',
   token: 'token-1',
-  expiresAt: Date.now() + 60_000,
   encryptionKey: new Uint8Array([1, 2, 3, 255, 0, 128]),
+  state: 'active',
+  generation: 'gen-1',
   ...overrides,
 });
 
-const seedPersisted = (r = record()) => {
-  mockSecureEntries.set(
-    SESSION_KEY,
-    JSON.stringify({
-      username: r.username,
-      token: r.token,
-      expiresAt: r.expiresAt,
-      encryptionKeyHex: bytesToHex(r.encryptionKey),
-    }),
-  );
-};
+const serialized = (r: SessionRecord) =>
+  JSON.stringify({
+    username: r.username,
+    token: r.token,
+    encryptionKeyHex: bytesToHex(r.encryptionKey),
+    state: r.state,
+    generation: r.generation,
+  });
 
-test('saveSession then loadSession round-trips the record, key bytes intact', async () => {
-  const r = record();
+const seedPersisted = (r = record()) => mockSecureEntries.set(SESSION_KEY, serialized(r));
+
+test('saveSession then loadSession round-trips the record — key bytes, state and generation', async () => {
+  const r = record({ state: 'expired', generation: 'gen-7' });
   await store.saveSession(r);
 
   const loaded = await store.loadSession();
@@ -128,19 +135,51 @@ test('with the sentinel present, loadSession hydrates the persisted session', as
   expect(store.getSession()).toEqual(r);
 });
 
-test('getToken returns the token while valid and withholds it once expired', async () => {
-  await store.saveSession(record({ expiresAt: Date.now() + 60_000 }));
-  expect(store.getToken()).toBe('token-1');
+// THE RULE (docs/sessions.md): no local clock decides anything. The store this
+// replaced withheld the token after a local `expiresAt` — one step from the timed
+// wipe of every library.
+test('getToken serves the token however much time has passed', async () => {
+  await store.saveSession(record());
+  jest.spyOn(Date, 'now').mockReturnValue(Date.now() + 2 * YEAR);
 
-  await store.saveSession(record({ expiresAt: Date.now() - 1 }));
-  expect(store.getToken()).toBeNull();
+  expect(store.getToken()).toBe('token-1');
 });
 
-test('getSession is not expiry-gated (key still decrypts offline)', async () => {
-  const r = record({ expiresAt: Date.now() - 1 });
+// Expired keeps the token (the probe needs it) and the key (the library opens).
+test('an expired session keeps its token and key', async () => {
+  const r = record({ state: 'expired' });
   await store.saveSession(r);
 
-  expect(store.getSession()).toEqual(r);
+  expect(store.getToken()).toBe('token-1');
+  expect(store.getSession()?.encryptionKey).toEqual(r.encryptionKey);
+});
+
+// A dev device from before the redesign: an old `expiresAt`, no state, no
+// generation. parse() used to REQUIRE `expiresAt`; now a record without state is
+// active — with an empty generation the lifecycle owner assigns — never corrupt.
+test('a pre-redesign record reads as active, whatever its old expiry said', async () => {
+  mockFiles.add(SENTINEL_URI);
+  mockSecureEntries.set(
+    SESSION_KEY,
+    JSON.stringify({
+      username: 'alice',
+      token: 'token-old',
+      expiresAt: Date.now() - YEAR,
+      encryptionKeyHex: bytesToHex(new Uint8Array([9])),
+    }),
+  );
+
+  const loaded = await store.loadSession();
+
+  expect(loaded).toMatchObject({ username: 'alice', state: 'active', generation: '' });
+  expect(loaded).not.toHaveProperty('expiresAt');
+  expect(mockSecureEntries.has(SESSION_KEY)).toBe(true);
+});
+
+test('a record carries no expiry when written', async () => {
+  await store.saveSession(record());
+
+  expect(JSON.parse(mockSecureEntries.get(SESSION_KEY) ?? '{}')).not.toHaveProperty('expiresAt');
 });
 
 test('clearSession drops both the mirror and the persisted entry', async () => {
@@ -171,12 +210,14 @@ test('a well-formed entry with missing fields reads as signed-out', async () => 
   expect(await store.loadSession()).toBeNull();
 });
 
-const SHARED_MIRROR_KEY = 'group.com.bracemark.app/bracemark-session';
-
-test('saveSession mirrors the serialized session into the shared Keychain', async () => {
-  await store.saveSession(record());
+// The iOS share extension reads the mirror — and its STATE, instead of a clock.
+test('saveSession mirrors the serialized session, state included, into the shared Keychain', async () => {
+  await store.saveSession(record({ state: 'expired' }));
 
   expect(mockSharedKeychain.get(SHARED_MIRROR_KEY)).toBe(mockSecureEntries.get(SESSION_KEY));
+  expect(JSON.parse(mockSharedKeychain.get(SHARED_MIRROR_KEY) ?? '{}')).toMatchObject({
+    state: 'expired',
+  });
 });
 
 test('clearSession and the fresh-install wipe both drop the shared mirror', async () => {
@@ -193,16 +234,8 @@ test('clearSession and the fresh-install wipe both drop the shared mirror', asyn
 });
 
 test('loadSharedSession reads the mirror and hydrates the in-memory session', async () => {
-  const r = record();
-  mockSharedKeychain.set(
-    SHARED_MIRROR_KEY,
-    JSON.stringify({
-      username: r.username,
-      token: r.token,
-      expiresAt: r.expiresAt,
-      encryptionKeyHex: bytesToHex(r.encryptionKey),
-    }),
-  );
+  const r = record({ state: 'expired' });
+  mockSharedKeychain.set(SHARED_MIRROR_KEY, serialized(r));
 
   expect(await store.loadSharedSession()).toEqual(r);
   // The api client's synchronous readers see it — the extension runs no
@@ -220,18 +253,54 @@ test('loadSharedSession is null (not a throw) on a missing or corrupt mirror', a
   expect(mockSharedKeychain.has(SHARED_MIRROR_KEY)).toBe(true);
 });
 
-test('onSessionInvalid fans out to subscribers; unsubscribe stops delivery', () => {
+test('onSessionVerdict fans out to subscribers without deduping; unsubscribe stops delivery', () => {
   const a = jest.fn();
   const b = jest.fn();
-  const offA = store.onSessionInvalid(a);
-  store.onSessionInvalid(b);
+  const offA = store.onSessionVerdict(a);
+  store.onSessionVerdict(b);
+  const event = { verdict: 'revoked' as const, generation: 'gen-1' };
 
-  store.notifySessionInvalid();
-  expect(a).toHaveBeenCalledTimes(1);
-  expect(b).toHaveBeenCalledTimes(1);
+  store.notifySessionVerdict(event);
+  store.notifySessionVerdict(event);
+  expect(a).toHaveBeenCalledTimes(2);
+  expect(a).toHaveBeenCalledWith(event);
 
   offA();
-  store.notifySessionInvalid();
-  expect(a).toHaveBeenCalledTimes(1);
-  expect(b).toHaveBeenCalledTimes(2);
+  store.notifySessionVerdict(event);
+  expect(a).toHaveBeenCalledTimes(2);
+  expect(b).toHaveBeenCalledTimes(3);
+});
+
+test('withSessionLock runs transitions one at a time, in order, past a failure', async () => {
+  const order: string[] = [];
+  let release!: () => void;
+  const first = store.withSessionLock(async () => {
+    order.push('a:start');
+    await new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    order.push('a:end');
+    throw new Error('a failed');
+  });
+  const second = store.withSessionLock(async () => {
+    order.push('b');
+  });
+
+  await Promise.resolve();
+  release();
+  await expect(first).rejects.toThrow('a failed');
+  await second;
+
+  expect(order).toEqual(['a:start', 'a:end', 'b']);
+});
+
+test('activeRecord mints an active record with a fresh generation', () => {
+  const credentials = { username: 'alice', token: 't', encryptionKey: new Uint8Array([1]) };
+
+  const a = store.activeRecord(credentials);
+  const b = store.activeRecord(credentials);
+
+  expect(a.state).toBe('active');
+  expect(a.generation).not.toBe('');
+  expect(a.generation).not.toBe(b.generation);
 });

@@ -30,6 +30,7 @@ import { Linking, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
   CircleAlert,
+  CloudOff,
   LifeBuoy,
   Lock,
   LogOut,
@@ -67,6 +68,12 @@ export function MoreOptionsMenu() {
   // 'initial-error' and its retryInitialSync belong to the gate's own screen.
   const syncError = phase === 'cycle-error';
   const blocked = phase === 'capacity-blocked';
+  // The session expired (docs/sessions.md): no cycle runs until a sign-in, so the
+  // Sync item becomes the way to that sign-in — the `/resume` modal — rather than
+  // a press that could do nothing. (Web disables the item instead and leaves the
+  // resume to the notice under its topbar, which opens a dialog in place.) Dot
+  // like blocked: full-ink neutral, since changes are waiting and nothing is lost.
+  const paused = phase === 'paused';
 
   return (
     <DropdownMenu>
@@ -80,7 +87,9 @@ export function MoreOptionsMenu() {
               ? 'More options (sync failed)'
               : blocked
                 ? 'More options (storage full)'
-                : 'More options'
+                : paused
+                  ? 'More options (sync paused)'
+                  : 'More options'
           }
           // `left: 2` is half the `gap-1` to the search toggle (topbar.tsx's
           // drawer button carries the rule); `right: 8` is the clearance this
@@ -94,7 +103,7 @@ export function MoreOptionsMenu() {
           className="relative -mr-1"
         >
           <Icon as={MoreHorizontal} className="size-5 text-foreground" />
-          {(syncError || blocked) && (
+          {(syncError || blocked || paused) && (
             <View
               aria-hidden
               // 5px in (`1.25`), not 4: a size-5 glyph centred in a size-9 box
@@ -129,8 +138,16 @@ export function MoreOptionsMenu() {
       <DropdownMenuContent align="end" className="w-48">
         {/* syncNow, not requestSync: a press is not a local edit, so what it
             pulls stages behind the refresh pill while the list is engaged. */}
-        <DropdownMenuItem testID="links-sync" onPress={syncNow}>
-          {syncError ? (
+        <DropdownMenuItem
+          testID="links-sync"
+          onPress={paused ? () => router.push('/resume') : syncNow}
+        >
+          {paused ? (
+            <>
+              <Icon as={CloudOff} className="size-4" />
+              <Text>Sync paused — Sign in</Text>
+            </>
+          ) : syncError ? (
             <>
               {/* No `text-destructive`, matching web: that colour is for actions
                   that destroy something (Sign out below), and this one retries a

@@ -28,6 +28,7 @@
 
 import {
   CircleAlert,
+  CloudOff,
   LifeBuoy,
   Loader2,
   Lock,
@@ -61,6 +62,11 @@ export function MoreOptionsMenu() {
   // 'initial-error' and its retryInitialSync belong to the gate's own screen.
   const syncError = phase === 'cycle-error';
   const blocked = phase === 'capacity-blocked';
+  // The session expired (docs/sessions.md): sync waits for a sign-in, so the Sync
+  // item can't do anything and says so instead of offering a dead press. The
+  // resume itself is the notice under the topbar. Dot like blocked — full-ink
+  // neutral: changes are waiting, nothing is lost.
+  const paused = phase === 'paused';
 
   return (
     <DropdownMenu>
@@ -74,7 +80,9 @@ export function MoreOptionsMenu() {
               ? 'More options (sync failed)'
               : blocked
                 ? 'More options (storage full)'
-                : 'More options'
+                : paused
+                  ? 'More options (sync paused)'
+                  : 'More options'
           }
         >
           {/* The one glyph on the page that isn't `size-4`. Three dots at the
@@ -84,7 +92,7 @@ export function MoreOptionsMenu() {
               bulk-edit toolbar's own overflow trigger is bumped to match, since
               that bar swaps into the slot below this one. */}
           <MoreHorizontal className="size-5" />
-          {(syncError || blocked) && (
+          {(syncError || blocked || paused) && (
             /* The topbar's dot ladder, ranked by what the mark asks of the user
                rather than by how bad the state sounds: `bg-destructive` (the
                cycle failed — act), `bg-foreground` (blocked — changes are stuck,
@@ -107,6 +115,7 @@ export function MoreOptionsMenu() {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-52">
         <DropdownMenuItem
+          disabled={paused}
           onSelect={(e) => {
             // Keep the menu open: the Syncing… → settled transition on this item
             // IS the click's feedback (the engine coalesces, so re-clicks are safe).
@@ -120,6 +129,11 @@ export function MoreOptionsMenu() {
             <>
               <Loader2 className="size-4 animate-spin" />
               Syncing…
+            </>
+          ) : paused ? (
+            <>
+              <CloudOff className="size-4" />
+              Sync paused
             </>
           ) : syncError ? (
             <>

@@ -96,6 +96,16 @@ export function runSync(): Promise<void> {
       do {
         rerunRequested = false;
 
+        // EXPIRED (docs/sessions.md): the popup or options page recorded the
+        // server's `session_expired` on the shared session record. This worker
+        // never acts on a verdict itself — it runs no AuthProvider — but it reads
+        // the state and calls nothing: a cycle could only earn the same answer.
+        // Queued saves wait, as they would offline, and push after a resume.
+        if (getSession()?.state === 'expired') {
+          await setState({ bgSyncStatus: 'paused', blockedCount: 0 });
+          return;
+        }
+
         const deps = buildDeps();
         if (!deps) {
           // Signed out: nothing to sync; present a ready, idle store.

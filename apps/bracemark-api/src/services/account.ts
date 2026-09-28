@@ -2,14 +2,18 @@ import { DOOR_PASSWORD, DOOR_RECOVERY, type DoorType } from '@stxapps/shared';
 
 import { accountsDb, assignAccountDbId } from '../db/db-routes';
 import { accountKeysRepo } from '../db/repositories/account-keys';
-import { sessionsRepo } from '../db/repositories/sessions';
 import { usernamesRepo } from '../db/repositories/usernames';
 import { usersRepo } from '../db/repositories/users';
 import type { Bindings } from '../lib/env';
 import { HttpError } from '../lib/errors';
 import { newId } from '../lib/ids';
 import { getSubscriptionStatus } from './iap';
-import { type IssuedSession, issueSession, revokeOtherSessions } from './session';
+import {
+  expireOtherSessions,
+  type IssuedSession,
+  issueSession,
+  revokeAllSessions,
+} from './session';
 import { deleteAllUserData } from './sync';
 
 // Account creation under the DEK door model, across separate databases. The root
@@ -99,8 +103,9 @@ export async function createAccount(
     // (3) COMPENSATE: the account write failed after we claimed the name, so
     // release the claim to avoid orphaning the username. Best-effort — if this
     // also fails (e.g. the worker dies), a sweeper reclaims claims that have no
-    // backing `users` row after a short TTL (TODO: wire the sweeper alongside
-    // sessions.deleteExpired). Uniqueness is never violated either way.
+    // backing `users` row after a short TTL (TODO: wire the sweeper into the
+    // daily cron beside purgeSessions, worker.ts). Uniqueness is never violated
+    // either way.
     await directory.release(input.username, userId).catch(() => {
       // Best-effort: if the compensating release itself fails, the orphan claim
       // is reclaimed by the sweeper (TODO) — never block on cleanup here.
@@ -205,12 +210,18 @@ async function authorizeDoorRotation(
 // We only replace the 'password' door row; the DEK, publicKey, and data are
 // untouched.
 //
-// But we DO revoke every OTHER session (keeping this one — the UI stays signed in
-// on this device). A password change can't un-leak data an attacker already
+// And we EXPIRE every OTHER session (keeping this one — the UI stays signed in on
+// this device). A password change can't un-leak data an attacker already
 // exfiltrated (no DEK rotation — docs/account.md), but it must cut off ongoing
 // access: whoever had the old password can no longer mint new sessions, and any
-// session they already minted dies here. The upsert is the load-bearing mutation,
-// so it lands first; session revocation is idempotent hygiene after it.
+// session they already minted stops authenticating here — an expired row can't,
+// and renewal won't revive it. EXPIRED, not revoked: revocation would make the
+// user's own devices erase edits they haven't synced yet, and the one device
+// that should forget (an attacker's) would never cooperate with a wipe anyway.
+// They get `session_expired`, keep their copy, and resume with the new password
+// (docs/sessions.md, _changing the password expires the other sessions_). The
+// upsert is the load-bearing mutation, so it lands first; the expiry is
+// idempotent hygiene after it.
 export async function changePasswordDoor(
   env: Bindings,
   session: { id: string; userId: string; accountDbId: string },
@@ -225,7 +236,7 @@ export async function changePasswordDoor(
       iv: proof.door.iv,
     })
     .run();
-  await revokeOtherSessions(env, session);
+  await expireOtherSessions(env, session);
 }
 
 // Generate/regenerate the recovery door (authed + fresh proof). Upsert: writes the
@@ -296,6 +307,13 @@ export async function signIn(
 //   gate → wipe data (DO + R2) → tombstone the username → delete doors + user
 //   (one atomic shard batch — the credential and its keys leave together, the
 //   same pairing create-account writes them with) → revoke every session.
+// "Revoke", not delete: every session row KEEPS a revocation marker, so each
+// device that comes back is told `session_revoked` and erases the account's copy
+// — and so /delete-account and /privacy say the rows are kept (for
+// SESSION_RETENTION) rather than deleted (docs/sessions.md). The markers also
+// keep a retry possible: the token that started this teardown now answers
+// `session_revoked`, never passes requireAuth again, and a crash after this step
+// has nothing left to finish.
 // The tombstone lands BEFORE the shard delete so the retry path can always
 // recognize an in-progress deletion: a tombstoned entry with the user row gone
 // is a resumed teardown (finish the remaining steps), while a missing user row
@@ -381,5 +399,5 @@ export async function deleteAccount(
     accountKeysRepo(shard).deleteAllByUserIdStmt(session.userId),
     usersRepo(shard).deleteStmt(session.userId),
   ]);
-  await sessionsRepo(env.SESSIONS_DB).deleteByUserId(session.userId);
+  await revokeAllSessions(env, session.userId);
 }

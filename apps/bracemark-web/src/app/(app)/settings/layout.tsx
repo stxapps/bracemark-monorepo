@@ -1,6 +1,8 @@
 import { Sidebar } from './_panes/sidebar';
 import { Topbar } from './_panes/topbar';
 
+import { SyncPausedNotice } from '@/components/sync-paused-notice';
+
 // Shared chrome for every settings section route (`/settings/[section]`): the
 // two-pane frame — a full-height sidebar on the left; a topbar above the
 // scrolling main pane on the right. The active section's content (the matching
@@ -114,6 +116,9 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
       <div className="flex min-w-0 flex-1 flex-col">
         <main className="min-h-0 flex-1 scroll-pt-18 scrollbar-gutter-stable overflow-y-auto">
           <Topbar />
+          {/* The expired session's notice, on every section — Settings → Data is
+              where someone goes to export, and the notice says they still can. */}
+          <SyncPausedNotice />
           {children}
         </main>
       </div>

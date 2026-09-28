@@ -11,6 +11,8 @@ import {
   passwordDoorEndpoint,
   putRecoveryDoorEndpoint,
   recoveryDoorEndpoint,
+  SESSION_ERROR,
+  sessionProbeEndpoint,
   signInEndpoint,
   signOutEndpoint,
   signOutOthersEndpoint,
@@ -30,6 +32,19 @@ import { issueSession } from '../services/session';
 // Build request URLs from the shared contract path so these stay correct across
 // version-prefix changes (e.g. /v1 → /v2) without editing every literal here.
 const usernamePath = checkUsernameEndpoint.path;
+
+// What the api now answers this token with — through the probe endpoint, i.e.
+// the guard every protected route runs. `ok` for a live session, otherwise the
+// 401's code: the verdict a client acts on (docs/sessions.md).
+async function verdict(token: string): Promise<string> {
+  const res = await app.request(
+    sessionProbeEndpoint.path,
+    { headers: { authorization: `Bearer ${token}` } },
+    env,
+  );
+  if (res.ok) return 'ok';
+  return ((await res.json()) as { error: string }).error;
+}
 
 // app.request(path, init, env) — the third arg is the bindings the handlers see.
 // Under vitest-pool-workers `env` is the REAL local Workers env (D1/R2/DO/rate
@@ -167,13 +182,13 @@ describe('auth routes', () => {
       );
 
       expect(res.status).toBe(200);
-      const json = (await res.json()) as { token: string; expiresAt: number };
+      const json = (await res.json()) as Record<string, unknown>;
       expect(typeof json.token).toBe('string');
-      expect(typeof json.expiresAt).toBe('number');
-      // The session is real — resolvable by token hash, exactly what the auth guard reads.
-      expect(
-        await sessionsRepo(env.SESSIONS_DB).findByTokenHash(await hashToken(json.token)),
-      ).not.toBeNull();
+      // No expiry on the wire: the lifetime slides and is the server's to decide,
+      // and a client with a deadline is a client that can wipe on its own clock.
+      expect(Object.keys(json)).toEqual(['token']);
+      // The session is real — the guard accepts it.
+      expect(await verdict(json.token as string)).toBe('ok');
     });
 
     it('rejects a valid proof for an unknown username with an opaque 401', async () => {
@@ -247,20 +262,29 @@ describe('auth routes', () => {
         env,
       );
 
-    it('revokes the session for a valid bearer token', async () => {
-      // Mint a real session, then confirm it resolves BEFORE sign-out so the
-      // post-condition (it's gone) is meaningful rather than vacuously true.
+    it('revokes the session for a valid bearer token, keeping the row as the marker', async () => {
+      // Mint a real session, then confirm it authenticates BEFORE sign-out so the
+      // post-condition is meaningful rather than vacuously true.
       const { token } = await issueSession(env, { id: 'u_signout', accountDbId: '1' });
-      const tokenHash = await hashToken(token);
-      expect(await sessionsRepo(env.SESSIONS_DB).findByTokenHash(tokenHash)).not.toBeNull();
+      expect(await verdict(token)).toBe('ok');
 
       const res = await post({ authorization: `Bearer ${token}` });
 
       expect(res.status).toBe(200);
       await expect(res.json()).resolves.toEqual({ ok: true });
-      // The row is deleted, so the same token no longer authenticates — exactly
-      // what the auth guard checks on the next request.
-      expect(await sessionsRepo(env.SESSIONS_DB).findByTokenHash(tokenHash)).toBeNull();
+      // The token no longer authenticates, and says why: the row survives with
+      // its revocation marker, so the next request hears `session_revoked`.
+      expect(await verdict(token)).toBe(SESSION_ERROR.revoked);
+    });
+
+    it('answers a second sign-out with the verdict, not a new revocation', async () => {
+      const { token } = await issueSession(env, { id: 'u_signout2', accountDbId: '1' });
+      await post({ authorization: `Bearer ${token}` });
+
+      const res = await post({ authorization: `Bearer ${token}` });
+
+      expect(res.status).toBe(401);
+      await expect(res.json()).resolves.toMatchObject({ error: SESSION_ERROR.revoked });
     });
 
     it('rejects a request with no bearer token', async () => {
@@ -273,6 +297,26 @@ describe('auth routes', () => {
       const res = await post({ authorization: 'Bearer not-a-real-token' });
 
       expect(res.status).toBe(401);
+      await expect(res.json()).resolves.toMatchObject({ error: SESSION_ERROR.unknown });
+    });
+  });
+
+  describe(`GET ${sessionProbeEndpoint.path}`, () => {
+    it('answers a live session ok', async () => {
+      const { token } = await issueSession(env, { id: 'u_probe', accountDbId: '1' });
+
+      const res = await app.request(
+        sessionProbeEndpoint.path,
+        { headers: { authorization: `Bearer ${token}` } },
+        env,
+      );
+
+      expect(res.status).toBe(200);
+      await expect(res.json()).resolves.toEqual({ ok: true });
+    });
+
+    it('carries the guard’s verdict for a token it rejects', async () => {
+      expect(await verdict('tok_never_issued')).toBe(SESSION_ERROR.unknown);
     });
   });
 
@@ -289,29 +333,27 @@ describe('auth routes', () => {
       // other device.
       const mine = await issueSession(env, { id: 'u_soo', accountDbId: '1' });
       const other = await issueSession(env, { id: 'u_soo', accountDbId: '1' });
-      const mineHash = await hashToken(mine.token);
-      const otherHash = await hashToken(other.token);
-      expect(await sessionsRepo(env.SESSIONS_DB).findByTokenHash(otherHash)).not.toBeNull();
+      expect(await verdict(other.token)).toBe('ok');
 
       const res = await post({ authorization: `Bearer ${mine.token}` });
 
       expect(res.status).toBe(200);
       await expect(res.json()).resolves.toEqual({ ok: true });
-      // The other device is gone; the caller's own session still authenticates.
-      expect(await sessionsRepo(env.SESSIONS_DB).findByTokenHash(otherHash)).toBeNull();
-      expect(await sessionsRepo(env.SESSIONS_DB).findByTokenHash(mineHash)).not.toBeNull();
+      // The other device is REVOKED — the verdict that makes it erase its copy
+      // the next time it connects; the caller's own session still authenticates.
+      expect(await verdict(other.token)).toBe(SESSION_ERROR.revoked);
+      expect(await verdict(mine.token)).toBe('ok');
     });
 
     it('leaves OTHER accounts’ sessions untouched', async () => {
       const mine = await issueSession(env, { id: 'u_soo_a', accountDbId: '1' });
       const stranger = await issueSession(env, { id: 'u_soo_b', accountDbId: '1' });
-      const strangerHash = await hashToken(stranger.token);
 
       const res = await post({ authorization: `Bearer ${mine.token}` });
 
       expect(res.status).toBe(200);
       // A different user's session is never in scope of this account's revoke.
-      expect(await sessionsRepo(env.SESSIONS_DB).findByTokenHash(strangerHash)).not.toBeNull();
+      expect(await verdict(stranger.token)).toBe('ok');
     });
 
     it('rejects a request with no bearer token', async () => {
@@ -367,10 +409,13 @@ describe('auth routes', () => {
       // Shard rows gone — credential and doors together (the cryptographic kill).
       expect(await usersRepo(env.ACCOUNTS_DB_1).findById(acct.userId)).toBeNull();
       expect(await accountKeysRepo(env.ACCOUNTS_DB_1).findByUserId(acct.userId)).toEqual([]);
-      // Every session revoked — the token that made this very call is dead.
+      // Every session REVOKED, not deleted — the token that made this very call
+      // is dead, and says so: a device that comes back erases the account's copy.
+      expect(await verdict(acct.token)).toBe(SESSION_ERROR.revoked);
       expect(
-        await sessionsRepo(env.SESSIONS_DB).findByTokenHash(await hashToken(acct.token)),
-      ).toBeNull();
+        (await sessionsRepo(env.SESSIONS_DB).findByTokenHash(await hashToken(acct.token)))
+          ?.revokedAt,
+      ).not.toBeNull();
       // Data plane wiped.
       expect(await env.USER_FILES.head(userFileKey(acct.userId, 'links/x.enc'))).toBeNull();
       // Directory row TOMBSTONED, not deleted: still present (occupied), marked.
@@ -564,9 +609,7 @@ describe('auth routes', () => {
       // Proceeds despite the renewing subscription, and finishes the teardown.
       expect(res.status).toBe(200);
       expect(await usersRepo(env.ACCOUNTS_DB_1).findById(acct.userId)).toBeNull();
-      expect(
-        await sessionsRepo(env.SESSIONS_DB).findByTokenHash(await hashToken(acct.token)),
-      ).toBeNull();
+      expect(await verdict(acct.token)).toBe(SESSION_ERROR.revoked);
     });
   });
 
@@ -661,13 +704,14 @@ describe('auth routes', () => {
       });
     });
 
-    it('signs out other devices but keeps the caller’s own session', async () => {
+    // EXPIRED, not revoked (docs/sessions.md): the other devices are cut off as
+    // completely, but they keep their unsynced edits and resume with the new
+    // password — a revocation would make them erase their copy.
+    it('expires the other sessions without revoking them, and keeps the caller’s', async () => {
       const acct = await seedSessioned('pwrevoke');
       // A second device: another live session for the same account.
       const other = await issueSession(env, { id: acct.userId, accountDbId: '1' });
-      const otherHash = await hashToken(other.token);
-      const thisHash = await hashToken(acct.token);
-      expect(await sessionsRepo(env.SESSIONS_DB).findByTokenHash(otherHash)).not.toBeNull();
+      expect(await verdict(other.token)).toBe('ok');
 
       const req = await signedReq(acct.keyPair, payload('pwrevoke', acct.publicKey));
       const res = await app.request(
@@ -677,9 +721,10 @@ describe('auth routes', () => {
       );
 
       expect(res.status).toBe(200);
-      // The other device is revoked; the session that made this call survives.
-      expect(await sessionsRepo(env.SESSIONS_DB).findByTokenHash(otherHash)).toBeNull();
-      expect(await sessionsRepo(env.SESSIONS_DB).findByTokenHash(thisHash)).not.toBeNull();
+      expect(await verdict(other.token)).toBe(SESSION_ERROR.expired);
+      // ...and it stays expired: its own requests can't renew it back to life.
+      expect(await verdict(other.token)).toBe(SESSION_ERROR.expired);
+      expect(await verdict(acct.token)).toBe('ok');
     });
 
     it('rejects without a bearer token (session-only is never enough)', async () => {
@@ -768,7 +813,6 @@ describe('auth routes', () => {
     it('leaves other sessions alone (regenerating a recovery code is not a sign-out)', async () => {
       const acct = await seedSessioned('recoverykeepssessions', true);
       const other = await issueSession(env, { id: acct.userId, accountDbId: '1' });
-      const otherHash = await hashToken(other.token);
 
       const req = await signedReq(acct.keyPair, payload('recoverykeepssessions', acct.publicKey));
       const res = await app.request(
@@ -779,7 +823,7 @@ describe('auth routes', () => {
 
       expect(res.status).toBe(200);
       // Unlike change-password, both devices stay signed in.
-      expect(await sessionsRepo(env.SESSIONS_DB).findByTokenHash(otherHash)).not.toBeNull();
+      expect(await verdict(other.token)).toBe('ok');
     });
   });
 });

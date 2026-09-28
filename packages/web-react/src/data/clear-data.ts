@@ -11,15 +11,18 @@
 // PendingOpRecord in db.ts), so a scoped clear would leave the previous account's
 // plaintext behind.
 //
-// Called from auth-provider's endSession (and so the onSessionInvalid path)
-// alongside clearSession — so this is the ONE teardown choke point every sign-out
-// path (deliberate, expired-token, and the signed-out resolution guard) funnels
-// through; anything that must not outlive an account on this device belongs here.
+// Called from auth-provider's teardown (a deliberate sign-out, and the ONE
+// server verdict allowed to wipe: `session_revoked` for the current session
+// generation) right after clearSession, and from its no-session hydration branch
+// (finishing an interrupted teardown) — so this is the ONE teardown choke point;
+// anything that must not outlive an account on this device belongs here. An
+// EXPIRED session never comes here: it keeps everything (docs/sessions.md).
 // (delete-all-data.ts wipes a SUBSET while staying signed in — synced stores yes,
 // identity/device stores no; keep the two aligned when adding a store here.)
 
 import { clearDecodeCache } from '@stxapps/shared';
 
+import { purgeAccountCacheKeys } from './cache-storage';
 import { db } from './db';
 import { clearSidebarCollapsedIds } from './sidebar-view-store';
 import { clearCachedSubscriptionStatus } from './subscription-store';
@@ -46,4 +49,8 @@ export async function clearData(): Promise<void> {
   // store like localSettings, so it's wiped here on sign-out but NOT by
   // delete-all-data (which keeps device/identity stores).
   clearSidebarCollapsedIds();
+  // The service worker's runtime-cache KEYS that name this account's lists and
+  // tags (`/links?list=<id>`). The worker and its app-only caches stay — sign-out
+  // keeps the next sign-in reachable offline (cache-storage.ts).
+  await purgeAccountCacheKeys();
 }

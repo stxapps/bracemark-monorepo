@@ -40,6 +40,56 @@
     "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
   },
   {
+    "id": "SESSION-EXPIRED-WEB-001",
+    "title": "A session expired by a password change on another device keeps the library and a queued edit in every tab, resumes with the new password, and pushes the edit",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online", "destructive"],
+    "fixture": "empty",
+    "path": "web/account.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
+    "id": "SESSION-UNKNOWN-WEB-001",
+    "title": "A token the server no longer knows keeps the library and an unsynced edit, and a sign-in resumes and pushes it",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online", "destructive"],
+    "fixture": "empty",
+    "path": "web/account.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
+    "id": "WEB-ACCOUNT-003",
+    "title": "A session minted two years ago on the device clock is still signed in with its library intact",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online", "destructive"],
+    "fixture": "empty",
+    "path": "web/account.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
+    "id": "VERSION-SKEW-WEB-001",
+    "title": "A newer build upgrading the data database closes the old tab's connection at once, keeps an unsaved editor on screen, and offers the reload",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online", "destructive"],
+    "fixture": "empty",
+    "path": "web/version-skew.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
+    "id": "VERSION-SKEW-WEB-002",
+    "title": "A newer build upgrading the session database is never blocked by an old tab, which shows the update-required banner",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online", "destructive"],
+    "fixture": "empty",
+    "path": "web/version-skew.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
     "id": "WEB-LINK-001",
     "title": "A link added through quick-add survives reload",
     "surface": "web",
@@ -580,6 +630,46 @@
     "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report", "checkpoint"]
   },
   {
+    "id": "PWA-004",
+    "title": "A normal browser tab registers the worker after sign-in, and with the origin and api gone a cold launch reaches Settings and Data it never visited online",
+    "surface": "pwa",
+    "tier": "full",
+    "traits": ["online", "pwa"],
+    "fixture": "small",
+    "path": "pwa/pwa.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report", "checkpoint"]
+  },
+  {
+    "id": "PWA-005",
+    "title": "After a full online session no cache holds a cross-origin response, and sign-out drops the query-keyed entries while the worker stays",
+    "surface": "pwa",
+    "tier": "full",
+    "traits": ["online", "pwa"],
+    "fixture": "small",
+    "path": "pwa/pwa.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
+    "id": "PWA-006",
+    "title": "A cold offline load of a list URL never visited with that query string comes from the worker",
+    "surface": "pwa",
+    "tier": "full",
+    "traits": ["online", "pwa"],
+    "fixture": "small",
+    "path": "pwa/pwa.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report", "checkpoint"]
+  },
+  {
+    "id": "PWA-007",
+    "title": "Tabs open when a new build's worker takes over show the update pill, keep working, and reload into the new worker",
+    "surface": "pwa",
+    "tier": "full",
+    "traits": ["online", "pwa"],
+    "fixture": "small",
+    "path": "pwa/pwa.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report", "checkpoint"]
+  },
+  {
     "id": "PWA-RELEASE-001",
     "title": "Install and smoke the PWA through real browser chrome on the release device/browser matrix",
     "surface": "pwa",
@@ -1067,6 +1157,16 @@
     "traits": ["online", "destructive", "ios", "android"],
     "fixture": "small",
     "path": "mobile/flows/session-invalid.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "SESSION-EXPIRED-NATIVE-001",
+    "title": "A session expired by a password change on a web profile pauses sync and keeps the device's library and a link saved while paused, and resuming with the new password pushes it",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "destructive", "ios", "android"],
+    "fixture": "small",
+    "path": "mobile/flows/session-expired.yaml",
     "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
   },
   {

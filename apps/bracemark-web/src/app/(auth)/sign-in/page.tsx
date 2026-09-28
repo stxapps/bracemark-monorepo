@@ -5,6 +5,7 @@ import { CardContent, CardHeader, CardTitle } from '@stxapps/web-ui/components/u
 import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { AuthAltAction } from '../_components/auth-alt-action';
+import { RevokedNotice } from '../_components/revoked-notice';
 
 export const metadata: Metadata = { title: 'Sign in' };
 
@@ -30,6 +31,7 @@ export default function SignInPage() {
       </CardHeader>
 
       <CardContent>
+        <RevokedNotice />
         <SignInForm />
       </CardContent>
 

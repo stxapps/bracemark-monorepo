@@ -5,7 +5,7 @@
 // other layer: which one you get depends on the auth `reason` and on whether the
 // app is running installed — neither of which a rendered page shows.
 //
-//   expired / direct visit  → /sign-in?next=<the whole intended path>
+//   revoked / direct visit  → /sign-in?next=<the whole intended path>
 //   deliberate sign-out     → location.replace(SITE_URL), off this origin
 //   sign-out while INSTALLED→ /sign-in, staying in scope
 //   loading / ending        → nothing, and no navigation
@@ -119,9 +119,11 @@ describe('AuthGuard', () => {
   });
 
   describe('a session that ended without being asked to', () => {
+    // 'revoked': the server told this device to forget (docs/sessions.md). An
+    // EXPIRED session never gets here — it stays authenticated, library open.
     it('stashes the whole intended path, query string included', () => {
       mockStatus = 'unauthenticated';
-      mockReason = 'expired';
+      mockReason = 'revoked';
       mockPathname = '/links';
       mockSearch = 'list=list-abc&tag=tag-xyz';
       renderGuard();

@@ -3,64 +3,88 @@
 // the header here says the pair "must stay in step" — so a spec that passes on web's copy
 // is exactly the thing that proves nothing about this one.
 //
-// The `'ending'` phase is the reason this file exists. Its own header records that nothing
-// on this platform observes it TODAY — this client keeps its selection in React state, not
-// a URL, so it has no auto-navigating effect to misfire the way web's links page did. That
-// makes the phase deletable with no visible symptom on a device, and re-openable the moment
-// someone adds the first such effect. It is fully observable HERE, at the state machine,
-// which is where the rule actually lives.
+// THE RULE (docs/sessions.md) is the main reason it exists now: this provider is the one
+// place on the platform that can wipe the device, and it may do so only for an explicit
+// sign-out or a `session_revoked` verdict for the generation still persisted here. Expiry
+// and an unknown token keep everything; no clock is ever consulted; a verdict for a
+// replaced generation does nothing; a failed storage read is not "signed out". Pinned as a
+// table below — breaking any of it produces no error anywhere else.
 //
-// Two things bite HARDER on this platform than on web, and both are asserted:
-//   - the app process OUTLIVES a sign-out, so there is no reload to clean up behind a
-//     flip straight to 'unauthenticated' — the exit <Redirect> would race a wipe that
-//     still has decrypted bookmarks in sqlite and plaintext blobs on disk;
-//   - for the same reason, the react-query cache must be cleared explicitly: nothing else
-//     ever empties it, and its account-scoped reads are keyed by CONSTANTS, so the next
-//     account inherits the previous one's subscription answer.
+// The `'ending'` phase is the other. Nothing on this platform observes it TODAY (this
+// client keeps its selection in React state, not a URL), which makes it deletable with no
+// visible symptom on a device and re-openable the moment someone adds the first
+// auto-navigating effect. It is fully observable HERE. And because the app process
+// OUTLIVES a sign-out, the react-query cache must be cleared explicitly — nothing else
+// ever empties it.
 //
-// Two modules are stubbed and nothing else: `clearData` (so the wipe can be held open,
-// which is what makes the ordering observable) and the session store, whose real
-// implementation reaches secure-store. The stub keeps the one behaviour the provider leans
-// on — `notifySessionInvalid` fans out WITHOUT deduping, so the burst-collapse test is
-// measuring this provider and not a fake that collapsed the burst for it.
+// Two modules are stubbed and nothing else: `clearData` (so the wipe can be held open) and
+// the session store, whose real implementation reaches secure-store. The stub keeps what
+// the provider leans on: a synchronous mirror over a persisted record, a verdict fan-out
+// WITHOUT deduping, and a lifecycle lock that really serializes.
 
 import { useEffect } from 'react';
-import { Text, View } from 'react-native';
+import { AppState, Text, View } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, render, screen, waitFor } from '@testing-library/react-native';
 
-import {
-  clearSession,
-  getSession,
-  loadSession,
-  notifySessionInvalid,
-  saveSession,
-  type SessionRecord,
-} from '../data/session-store';
+import { ApiClientProvider } from '@stxapps/react';
+import { type ApiClient, sessionProbeEndpoint } from '@stxapps/shared';
+
+import type { SessionRecord } from '../data/session-store';
+import * as store from '../data/session-store';
 import { AuthProvider, useAuth } from './auth-provider';
+
+interface StoreStub {
+  __setPersisted: (record: SessionRecord | null) => void;
+  __persisted: () => SessionRecord | null;
+}
+const stub = store as unknown as typeof store & StoreStub;
 
 jest.mock('../data/session-store', () => {
   let current: SessionRecord | null = null;
-  const listeners = new Set<() => void>();
+  let persisted: SessionRecord | null = null;
+  let minted = 0;
+  // (The `mock` prefix on these parameter names is only for jest's hoist check.)
+  const listeners = new Set<(mockEvent: unknown) => void>();
+  let queue: Promise<unknown> = Promise.resolve();
   return {
     getSession: () => current,
-    saveSession: (record: SessionRecord) => {
+    saveSession: jest.fn((record: SessionRecord) => {
       current = record;
+      persisted = record;
       return Promise.resolve();
-    },
-    loadSession: jest.fn(() => Promise.resolve(current)),
-    clearSession: () => {
+    }),
+    loadSession: jest.fn(() => {
+      current = persisted;
+      return Promise.resolve(persisted);
+    }),
+    clearSession: jest.fn(() => {
       current = null;
+      persisted = null;
       return Promise.resolve();
-    },
-    onSessionInvalid: (listener: () => void) => {
+    }),
+    activeRecord: (credentials: object) => ({
+      ...credentials,
+      state: 'active',
+      generation: `minted-${++minted}`,
+    }),
+    onSessionVerdict: (listener: (mockEvent: unknown) => void) => {
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
     // No deduping — the real store's contract, and the thing this provider has to fix.
-    notifySessionInvalid: () => {
-      for (const listener of listeners) listener();
+    notifySessionVerdict: (event: unknown) => {
+      for (const listener of listeners) listener(event);
     },
+    withSessionLock: (run: () => Promise<unknown>) => {
+      const next = queue.then(run, run);
+      queue = next.catch(() => undefined);
+      return next;
+    },
+    __setPersisted: (record: SessionRecord | null) => {
+      persisted = record;
+    },
+    __persisted: () => persisted,
   };
 });
 
@@ -75,16 +99,16 @@ const mockClearData = jest.fn(
 );
 jest.mock('../data/clear-data', () => ({ clearData: () => mockClearData() }));
 
-const HOUR = 60 * 60 * 1000;
+const YEAR = 365 * 24 * 60 * 60 * 1000;
 
 function session(patch: Partial<SessionRecord> = {}): SessionRecord {
   return {
     username: 'alice',
     token: 'tok',
-    expiresAt: Date.now() + HOUR,
-    // Never read here — the provider deliberately keeps key material out of React state,
-    // which is half of what this file asserts by never needing a real one.
+    // Never read here — the provider deliberately keeps key material out of React state.
     encryptionKey: new Uint8Array(32),
+    state: 'active',
+    generation: 'gen-1',
     ...patch,
   };
 }
@@ -105,30 +129,51 @@ function Probe() {
       <Text testID="status">{value.status}</Text>
       <Text testID="username">{value.username ?? '-'}</Text>
       <Text testID="reason">{value.reason ?? '-'}</Text>
+      <Text testID="state">{value.sessionState ?? '-'}</Text>
     </View>
   );
 }
 
 let queryClient: QueryClient;
+let apiCall: jest.Mock;
 
 function renderProvider() {
   queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  apiCall = jest.fn(() => new Promise(() => undefined)); // the probe never answers here
+  const api = { call: apiCall } as unknown as ApiClient;
   return render(
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <Probe />
-      </AuthProvider>
+      <ApiClientProvider client={api}>
+        <AuthProvider>
+          <Probe />
+        </AuthProvider>
+      </ApiClientProvider>
     </QueryClientProvider>,
   );
 }
 
-const status = () => screen.getByTestId('status').props.children;
 const textOf = (id: string) => screen.getByTestId(id).props.children;
+const status = () => textOf('status');
 
-beforeEach(async () => {
+async function signedIn(patch: Partial<SessionRecord> = {}) {
+  stub.__setPersisted(session(patch));
+  renderProvider();
+  await waitFor(() => expect(status()).toBe('authenticated'));
+  statuses.length = 0;
+  mockClearData.mockClear();
+}
+
+async function verdict(v: 'revoked' | 'expired', generation = 'gen-1') {
+  await act(async () => {
+    store.notifySessionVerdict({ verdict: v, generation });
+    await new Promise((r) => setTimeout(r, 0));
+  });
+}
+
+beforeEach(() => {
   statuses = [];
   releaseWipe = undefined;
-  mockClearData.mockClear();
+  jest.clearAllMocks();
   mockClearData.mockImplementation(
     () =>
       new Promise<void>((resolve) => {
@@ -136,68 +181,144 @@ beforeEach(async () => {
         else releaseWipe = () => resolve();
       }),
   );
-  await clearSession();
+  stub.__setPersisted(null);
 });
 
 describe('hydration', () => {
-  it('starts at loading, so no screen flashes a signed-out state on cold start', async () => {
+  it('starts at loading, so nothing flashes a signed-out screen', async () => {
     renderProvider();
 
     expect(status()).toBe('loading');
     await waitFor(() => expect(status()).toBe('unauthenticated'));
   });
 
-  it('adopts a live persisted session', async () => {
-    await saveSession(session());
+  it('adopts a persisted session in the state it was persisted with', async () => {
+    stub.__setPersisted(session({ state: 'expired' }));
 
     renderProvider();
 
     await waitFor(() => expect(status()).toBe('authenticated'));
     expect(textOf('username')).toBe('alice');
-    expect(textOf('reason')).toBe('-');
+    expect(textOf('state')).toBe('expired');
   });
 
-  // 'expired' is what sends the user to /sign-in?next= instead of home — the difference
-  // between resuming where they were and losing the screen they were on.
-  it('records `expired` for a stored session whose token has lapsed', async () => {
-    await saveSession(session({ expiresAt: Date.now() - 1 }));
+  // THE SPECIMEN: the code this replaced cleared a stored session whose `expiresAt` had
+  // passed on the DEVICE clock.
+  it('signs a session in however long ago it was minted, and wipes nothing', async () => {
+    stub.__setPersisted({ ...session(), expiresAt: Date.now() - YEAR } as SessionRecord);
+    jest.spyOn(Date, 'now').mockReturnValue(Date.now() + 2 * YEAR);
 
     renderProvider();
 
-    await waitFor(() => expect(status()).toBe('unauthenticated'));
-    expect(textOf('reason')).toBe('expired');
+    await waitFor(() => expect(status()).toBe('authenticated'));
+    expect(mockClearData).not.toHaveBeenCalled();
+    jest.restoreAllMocks();
   });
 
-  it('leaves the reason null on a launch that never had a session', async () => {
+  it('assigns and persists a generation for a pre-redesign record', async () => {
+    stub.__setPersisted(session({ generation: '' }));
+
     renderProvider();
 
-    await waitFor(() => expect(status()).toBe('unauthenticated'));
-    expect(textOf('reason')).toBe('-');
+    await waitFor(() => expect(status()).toBe('authenticated'));
+    expect(stub.__persisted()?.generation).not.toBe('');
   });
 
-  // THE INTERRUPTED-EXIT GAP, and it is wider here than on web: clearData's table wipe is
-  // one transaction, but the file-system deletes cannot join it, so a launch killed
-  // mid-clear leaves orphan PLAINTEXT blobs on disk with no rows pointing at them. Running
-  // the wipe on every resolution to signed-out — not only on an expired session — is what
-  // catches them on the next launch.
-  it('wipes the device even when there was no session to expire', async () => {
+  it('finishes an interrupted teardown when the store has no session', async () => {
     renderProvider();
 
     await waitFor(() => expect(status()).toBe('unauthenticated'));
     expect(mockClearData).toHaveBeenCalledTimes(1);
+    expect(textOf('reason')).toBe('-');
   });
 
-  it('resolves to signed-out if hydration itself fails', async () => {
-    (loadSession as jest.Mock).mockRejectedValueOnce(new Error('secure-store unavailable'));
+  it('resolves to signed-out WITHOUT wiping if secure-store cannot be read', async () => {
+    (store.loadSession as jest.Mock).mockRejectedValueOnce(new Error('keychain unavailable'));
 
     renderProvider();
 
     await waitFor(() => expect(status()).toBe('unauthenticated'));
+    expect(mockClearData).not.toHaveBeenCalled();
+  });
+});
+
+describe('the rule, as a table', () => {
+  it('wipes on `session_revoked` for the current generation, and says why', async () => {
+    await signedIn();
+
+    await verdict('revoked');
+
+    await waitFor(() => expect(status()).toBe('unauthenticated'));
+    expect(mockClearData).toHaveBeenCalledTimes(1);
+    expect(stub.__persisted()).toBeNull();
+    expect(textOf('reason')).toBe('revoked');
+  });
+
+  it('keeps everything on `session_expired`/`session_unknown`, and pauses', async () => {
+    await signedIn();
+
+    await verdict('expired');
+
+    await waitFor(() => expect(textOf('state')).toBe('expired'));
+    expect(status()).toBe('authenticated');
+    expect(mockClearData).not.toHaveBeenCalled();
+    expect(stub.__persisted()).toMatchObject({ state: 'expired', generation: 'gen-1' });
+  });
+
+  it.each(['revoked', 'expired'] as const)(
+    'ignores `%s` for a generation that is no longer current',
+    async (v) => {
+      await signedIn({ generation: 'gen-new' });
+
+      await verdict(v, 'gen-old');
+
+      expect(status()).toBe('authenticated');
+      expect(textOf('state')).toBe('active');
+      expect(mockClearData).not.toHaveBeenCalled();
+    },
+  );
+
+  it('collapses a burst of revocations into one teardown', async () => {
+    await signedIn();
+
+    await act(async () => {
+      store.notifySessionVerdict({ verdict: 'revoked', generation: 'gen-1' });
+      store.notifySessionVerdict({ verdict: 'revoked', generation: 'gen-1' });
+      store.notifySessionVerdict({ verdict: 'revoked', generation: 'gen-1' });
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    await waitFor(() => expect(status()).toBe('unauthenticated'));
+    expect(mockClearData).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('the probe', () => {
+  it('asks once on launch while expired, and again on return to the foreground', async () => {
+    const listeners: ((next: string) => void)[] = [];
+    jest.spyOn(AppState, 'addEventListener').mockImplementation((_type, listener) => {
+      listeners.push(listener as (next: string) => void);
+      return { remove: () => undefined } as ReturnType<typeof AppState.addEventListener>;
+    });
+    await signedIn({ state: 'expired' });
+
+    expect(apiCall).toHaveBeenCalledTimes(1);
+    expect(apiCall).toHaveBeenCalledWith(sessionProbeEndpoint, {});
+
+    act(() => listeners.forEach((listener) => listener('active')));
+    expect(apiCall).toHaveBeenCalledTimes(2);
+    jest.restoreAllMocks();
+  });
+
+  it('asks nothing while active', async () => {
+    await signedIn();
+
+    expect(apiCall).not.toHaveBeenCalled();
   });
 });
 
 describe('setSession', () => {
-  it('persists the session and flips to authenticated', async () => {
+  it('persists a fresh active generation and flips to authenticated', async () => {
     renderProvider();
     await waitFor(() => expect(status()).toBe('unauthenticated'));
 
@@ -205,32 +326,35 @@ describe('setSession', () => {
 
     expect(status()).toBe('authenticated');
     expect(textOf('username')).toBe('bob');
-    expect(getSession()?.username).toBe('bob');
+    expect(stub.__persisted()?.generation).toMatch(/^minted-/);
   });
 
-  it('clears the previous end reason', async () => {
-    await saveSession(session({ expiresAt: Date.now() - 1 }));
-    renderProvider();
-    await waitFor(() => expect(textOf('reason')).toBe('expired'));
+  // RESUME: token and generation replaced, state active, local store untouched.
+  it('resumes an expired session without touching the local store', async () => {
+    await signedIn({ state: 'expired', token: 'tok-old' });
 
-    await act(async () => void (await auth.setSession(session())));
+    await act(async () => void (await auth.setSession({ ...session(), token: 'tok-new' })));
 
-    expect(textOf('reason')).toBe('-');
+    expect(textOf('state')).toBe('active');
+    expect(stub.__persisted()).toMatchObject({ token: 'tok-new', state: 'active' });
+    expect(mockClearData).not.toHaveBeenCalled();
+  });
+
+  it('tears a different account down before adopting a new one', async () => {
+    await signedIn();
+
+    await act(async () => void (await auth.setSession(session({ username: 'bob' }))));
+
+    expect(mockClearData).toHaveBeenCalledTimes(1);
+    expect(textOf('username')).toBe('bob');
   });
 });
 
 describe('endSession', () => {
   beforeEach(async () => {
-    await saveSession(session());
-    renderProvider();
-    await waitFor(() => expect(status()).toBe('authenticated'));
-    statuses.length = 0;
-    mockClearData.mockClear();
+    await signedIn();
   });
 
-  // THE ORDERING, and the reason this file exists: nothing on a device observes the phase
-  // today, so deleting it breaks nothing visible — until the first auto-navigating effect
-  // lands. It is observable here, at the state machine, which is where the rule lives.
   it('closes the gate before the wipe, and redirects only after it', async () => {
     releaseWipe = () => undefined; // hold the wipe open
     let ended: Promise<void>;
@@ -239,7 +363,7 @@ describe('endSession', () => {
     });
 
     await waitFor(() => expect(status()).toBe('ending'));
-    expect(mockClearData).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(mockClearData).toHaveBeenCalledTimes(1));
 
     await act(async () => {
       releaseWipe?.();
@@ -247,33 +371,18 @@ describe('endSession', () => {
     });
 
     expect(status()).toBe('unauthenticated');
-    // …and it passed THROUGH 'ending' rather than jumping straight there: flipping to
-    // 'unauthenticated' up front fires the exit <Redirect> against a store that still holds
-    // decrypted bookmarks and on-disk plaintext, and this process outlives the sign-out, so
-    // no reload cleans up behind it.
     expect(statuses).toEqual(['ending', 'unauthenticated']);
   });
 
-  it('drops the username and the persisted session', async () => {
+  it('drops the username and the persisted session, and records a deliberate sign-out', async () => {
     await act(async () => void (await auth.endSession()));
 
     expect(textOf('username')).toBe('-');
-    expect(getSession()).toBeNull();
-  });
-
-  it('records a deliberate sign-out by default and the caller’s reason when given one', async () => {
-    await act(async () => void (await auth.endSession()));
+    expect(stub.__persisted()).toBeNull();
     expect(textOf('reason')).toBe('signed-out');
-
-    await act(async () => void (await auth.setSession(session())));
-    await act(async () => void (await auth.endSession('expired')));
-    expect(textOf('reason')).toBe('expired');
   });
 
-  // The third per-account store, and the one the device wipe cannot reach. It bites harder
-  // here than on web: the process outlives the sign-out, so nothing else ever empties it,
-  // and the account-scoped reads are keyed by constants rather than by user.
-  it('clears the query cache, which the device wipe cannot reach', async () => {
+  it('clears the query cache, which nothing else in this process ever empties', async () => {
     const cleared = jest.spyOn(queryClient, 'clear');
 
     await act(async () => void (await auth.endSession()));
@@ -281,70 +390,13 @@ describe('endSession', () => {
     expect(cleared).toHaveBeenCalled();
   });
 
-  // Both clears run regardless of which one rejects — a failed device wipe must not leave
-  // the user stuck signed in with a dead session and no way out.
   it('still reaches signed-out when the wipe fails', async () => {
-    mockClearData.mockRejectedValueOnce(new Error('database is locked'));
+    mockClearData.mockRejectedValueOnce(new Error('sqlite is gone'));
 
     await act(async () => void (await auth.endSession()));
 
     expect(status()).toBe('unauthenticated');
-    expect(getSession()).toBeNull();
-  });
-});
-
-describe('the invalid-session listener', () => {
-  beforeEach(async () => {
-    await saveSession(session());
-    renderProvider();
-    await waitFor(() => expect(status()).toBe('authenticated'));
-    mockClearData.mockClear();
-  });
-
-  it('signs out as `expired` when the api client reports an invalid session', async () => {
-    await act(async () => {
-      notifySessionInvalid();
-      await Promise.resolve();
-    });
-
-    await waitFor(() => expect(status()).toBe('unauthenticated'));
-    expect(textOf('reason')).toBe('expired');
-  });
-
-  // The store fans out every notification without deduping, on purpose — collapsing the
-  // burst is THIS module's job. Two concurrent failing requests must be one sign-out, not
-  // two overlapping wipes of the same tables and files.
-  it('collapses a burst of concurrent 401s into a single sign-out', async () => {
-    await act(async () => {
-      notifySessionInvalid();
-      notifySessionInvalid();
-      notifySessionInvalid();
-      await Promise.resolve();
-    });
-
-    await waitFor(() => expect(status()).toBe('unauthenticated'));
-    expect(mockClearData).toHaveBeenCalledTimes(1);
-  });
-
-  // …but the guard resets. A latch that stuck would leave the next expiry undetected for
-  // the life of the process — which, on this platform, is the life of the app.
-  it('can invalidate again after a later sign-in', async () => {
-    await act(async () => {
-      notifySessionInvalid();
-      await Promise.resolve();
-    });
-    await waitFor(() => expect(status()).toBe('unauthenticated'));
-
-    await act(async () => void (await auth.setSession(session())));
-    mockClearData.mockClear();
-
-    await act(async () => {
-      notifySessionInvalid();
-      await Promise.resolve();
-    });
-
-    await waitFor(() => expect(status()).toBe('unauthenticated'));
-    expect(mockClearData).toHaveBeenCalledTimes(1);
+    expect(stub.__persisted()).toBeNull();
   });
 });
 

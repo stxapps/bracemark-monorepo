@@ -5,6 +5,8 @@ import { Main } from './_panes/main';
 import { Sidebar } from './_panes/sidebar';
 import { Topbar } from './_panes/topbar';
 
+import { SyncPausedNotice } from '@/components/sync-paused-notice';
+
 // The links page. A server component that just composes the client pieces: the
 // two-pane frame (full-height sidebar on the left; a topbar above the scrolling
 // main pane on the right), all wrapped in LinksPageProvider so the sidebar (sets
@@ -56,6 +58,11 @@ export default function LinksPage() {
         <LinksViewStateProvider>
           <div className="flex min-w-0 flex-1 flex-col">
             <Topbar />
+            {/* Sync paused — the expired session's notice (docs/sessions.md).
+                Renders null unless the server asked for a sign-in; above the
+                previews offer, because it is the one of the two that concerns
+                whether today's edits reach other devices. */}
+            <SyncPausedNotice />
             {/* The first-run link-previews offer — renders null unless previews are
                 still off AND links are actually waiting, and never over a locked
                 list (see the component). Above Main so it reads as chrome rather

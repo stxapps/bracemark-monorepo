@@ -214,7 +214,8 @@ storage-state shortcut, or test-only message.
 
 `e2e-pwa` is the only e2e run against bracemark-web's **production** build, and
 that is its reason to exist: the serwist service worker (`src/sw.ts` — the
-precache plus `@serwist/next`'s `defaultCache`) is built by `serwist build`
+precache, a network-only rule for cross-origin requests, then `@serwist/next`'s
+`defaultCache`) is built by `serwist build`
 after `next build` and is disabled outright in development
 (`SerwistProvider disable`), so no `e2e-web` case ever meets it. What the
 worker must and must not do, and the cases it still needs, is
@@ -236,16 +237,25 @@ preflight requires the port free — the marketing site's dev server also wants 
 window, and nothing fails when it doesn't.** CDP `PWA.install` is real — it
 applies Chrome's installability checks and refuses a wrong manifest id — but a
 `PWA.launch`-ed app still reports `display-mode: browser` (measured, Chrome 153),
-and Chrome ignores `display-mode` in media emulation. bracemark-web registers its
-worker only when standalone or when a registration already exists
-(`inner-layout.tsx`), so the case makes that first registration itself, with the
-same script URL, and every later load takes the app's existing-registration
-branch. The run manifest records `standaloneWindowProven: false`;
-`PWA-RELEASE-001` (`web/RELEASE.md`) owns the real install surfaces and the
-standalone trigger. Emulating the display mode would not be installation proof
-even if it worked.
+and Chrome ignores `display-mode` in media emulation. That no longer matters to
+registration — bracemark-web registers its worker after sign-in in any display
+mode (`inner-layout.tsx`; `PWA-004` proves it in a plain tab) — so the installed
+cases' own registration only makes them wait for activation before going
+offline. The run manifest records `standaloneWindowProven: false`;
+`PWA-RELEASE-001` (`web/RELEASE.md`) owns the real install surfaces. Emulating
+the display mode would not be installation proof even if it worked.
 
-What the three cases prove, on a profile that is closed and reopened (a cold
+⚠ **`offline: true` does not take the network away from the service worker,
+and nothing fails when it doesn't.** Chromium's offline emulation covers the
+page, not fetches the worker makes itself, and the worker re-fetches every
+cross-origin request (its network-only rule). Measured: an "offline" page's
+`GET /v1/auth/session` reached the local api through its worker. So
+`pwa/fixtures/pwa.ts`'s `openProfile({ offline: true })` also aborts every
+request leaving the app's origin — context routing does reach worker requests —
+and `restoreNetwork()` undoes both. Before that, "the api is gone" in
+`PWA-002`/`003` was not actually true. Keep it in any new offline case.
+
+What the cases prove, on a profile that is closed and reopened (a cold
 launch — `pwa/fixtures/pwa.ts` keeps the profile where `launch.ts` deletes it):
 `PWA-001`, that with the origin stopped and the browser offline the document
 comes from the worker (`response.fromServiceWorker()`), the library comes back
@@ -254,7 +264,17 @@ and an edit made there are queued, reported as a failed cycle, and reach an
 independent profile once origin and network return; `PWA-003`, that with both
 still gone the menu's Settings link and the section list's Data link — client
 route changes whose payloads only the worker can supply — reach Export, and a
-plain-text export carries the synced link and one written offline. Cut the worker's caching
+plain-text export carries the synced link and one written offline, with the
+device clock two years ahead (no client clock may end a session,
+[sessions.md](./sessions.md)); `PWA-004`, that a plain tab registers the worker
+at sign-in and, offline, reaches a Settings section it never opened online —
+from the precache, since the case asserts no runtime entry for it; `PWA-005`,
+that no cache the origin owns holds a cross-origin key after a full session, and
+that sign-out drops the query-keyed entries and keeps the worker; `PWA-006`, that
+a never-visited query URL loads cold and offline; `PWA-007`, that a new worker
+(the staged export with a changed `sw.js`, served from a copy) takes over two
+open tabs, both show the "updated, reload" pill, the untouched one keeps working,
+and Reload lands on the new worker. Cut the worker's caching
 (`precacheEntries` AND `runtimeCaching` emptied) and `PWA-001` fails at the
 worker assertion. Emptying the precache alone does NOT fail it — the online
 launch the case makes first leaves `defaultCache` holding the document and its
@@ -1192,21 +1212,39 @@ them differently:
   so the next request earns a real 401. That, and only that, ends in the
   teardown: the local store is counted empty by table name (as `store-hold.ts`
   addresses it) and the page lands on `/sign-in?next=`. Signing back in brings
-  the library back from the server. Which 401s may wipe is
+  the library back from the server — and the sign-in screen says this device
+  was signed out from another. Which 401s may wipe is
   [sessions.md](./sessions.md)'s rule.
+- **The api says the session is over, but not to forget.** Every other ending
+  keeps the library. `SESSION-EXPIRED-WEB-001` expires the session the way a
+  user does — a password change on a second profile (`session_expired`); the
+  page pauses sync in both its tabs, keeps its library and an edit queued while
+  paused through a reload, resumes in the other tab with the new password, and
+  the queued edit reaches a fresh reader. `SESSION-UNKNOWN-WEB-001` replaces the
+  stored token with one the server never issued — what a purged row looks like
+  from the device (`session_unknown`) — and resumes the same way.
+  `WEB-ACCOUNT-003` reloads with the device clock two years ahead: still signed
+  in, library intact.
+- **A newer build takes the database.** `VERSION-SKEW-WEB-001`/`002` open each
+  local database one version up from a second tab, under an open editor with a
+  typed title: the upgrade must not block, the old tab shows the update-required
+  banner, and the draft is still on screen ([offline-mode.md](./offline-mode.md),
+  _version skew_). Isolated profiles: the upgrade is permanent for the profile.
 
-⚠ **An offline browser tab cannot reach Settings.** Found writing
+⚠ **An offline DEV-SERVER tab cannot reach Settings.** Found writing
 `OFFLINE-EXPORT-WEB-001`: offline, the menu's Settings link took the open page to
 Chrome's error page — the same `router.push`-falls-back-to-a-document-load as the
-sidebar bug above, on a route the History API fix does not cover. A browser tab
-has no service worker (`inner-layout.tsx` registers one only when installed), so
-nothing can supply the route's payload. The web case therefore opens
-`/settings/data` in a second tab before the network goes; the in-app route is
-proved on the installed app, where the worker serves it (`PWA-003`). Nothing
-fails when this regresses for the tab, because nothing covers the tab.
+sidebar bug above, on a route the History API fix does not cover. The dev server
+runs no service worker (`SerwistProvider disable` in development), so nothing
+can supply the route's payload. The web case therefore opens `/settings/data`
+in a second tab before the network goes. In the production build a plain tab
+registers the worker at sign-in, and the precache carries every route's RSC
+payload, so the in-app route works offline there: `PWA-004` proves it in a tab,
+`PWA-003` in the installed app.
 
 **The server gone, on a device** (`OFFLINE-EXPORT-IOS-001`/`-ANDROID-001`,
-`OFFLINE-API-ERROR-ANDROID-001`, `SESSION-INVALID-NATIVE-001`). The same three
+`OFFLINE-API-ERROR-ANDROID-001`, `SESSION-INVALID-NATIVE-001`,
+`SESSION-EXPIRED-NATIVE-001` — run on iOS, not yet on Android). The same three
 questions, each answered from outside the app. Export reaches Settings in-app —
 native navigation needs no network, so the tab's gap has no native twin — and
 the runner reads the plain-text file out of the app's cache

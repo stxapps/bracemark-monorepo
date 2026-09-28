@@ -1,0 +1,23 @@
+# Sign in to an account holding one link written on the web, then hand the device
+# to the runner, which changes the account's password from a separate web profile.
+# That EXPIRES this device's session — it does not revoke it (docs/sessions.md,
+# _changing the password expires the other sessions_). parts/session-expired-paused.yaml
+# makes the request that learns it and saves a link while sync is paused; the runner
+# counts the local store (not empty — nothing was wiped); parts/session-expired-resume.yaml
+# signs back in with the new password; and the runner reads the queued link from a
+# fresh web profile.
+#
+#   maestro test mobile/flows/session-expired.yaml -e USERNAME=… -e PASSWORD=… \
+#     -e KEPT_URL=https://….invalid/expired-kept
+appId: com.bracemark.app
+tags: [SESSION-EXPIRED-NATIVE-001, full, online, destructive, ios, android]
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+- extendedWaitUntil:
+    visible: ".*${KEPT_URL.replace('https://', '')}.*"
+    timeout: 60000
+- tapOn:
+    text: 'Dismiss'
+    optional: true
+- takeScreenshot: session-expired-base

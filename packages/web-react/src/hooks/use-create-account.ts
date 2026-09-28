@@ -135,7 +135,6 @@ export function useCreateAccount() {
       await setSession({
         username,
         token: session.token,
-        expiresAt: session.expiresAt,
         encryptionKey,
       });
     },

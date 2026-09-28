@@ -18,17 +18,23 @@ that a revocation runs, and _delete account_), [local-first-sync.md](./local-fir
 sign-in), [offline-mode.md](./offline-mode.md) (the other half of the
 dead-server promise: whether the library can still be opened).
 
-> **STATUS — designed, not built.** What runs today is a fixed 30-day session
-> (`SESSION_TTL_MS` in `apps/bracemark-api/src/services/session.ts`), and every
-> client wipes itself **on its own clock** once `expiresAt` passes, online or
-> not. See [what this replaces](#what-this-replaces). There are no real users
-> and no production launch yet, so the client contract can change directly.
-> The marketing site already describes this design, not today's code: /privacy
-> (_How long we keep it_), /delete-account (_What is deleted_, _What is kept_),
-> the _Sign out_ help page and the FAQ's _Can I change my password?_. **It ships before launch, or those pages are
-> wrong.** **The database and bracemark-api are already deployed**, however: server
-> schema changes require new append-only migrations even before launch. See
-> [local-first-sync.md](./local-first-sync.md), _schema changes_.
+> **STATUS — built, not yet deployed.** The api answers the three session codes
+> and slides the idle window (`middleware/auth.ts`, `services/session.ts`),
+> revocation is a retained marker (`sessions` migration `0002_revoked_at.sql`),
+> cleanup runs from a daily cron (`worker.ts` `scheduled`), and every client —
+> bracemark-web, the browser extension, bracemark-expo and its iOS share
+> extension — keeps its library on anything but its own sign-out or a
+> `session_revoked` for the generation it holds. See [what this
+> replaced](#what-this-replaced). The marketing site's pages that describe this
+> design (/privacy _How long we keep it_, /delete-account _What is deleted_ and
+> _What is kept_, the _Sign out_ help page, the FAQ's _Can I change my
+> password?_) are now true of the code. **The database and bracemark-api are
+> already deployed**, so the order at the next deploy matters: apply
+> `0002_revoked_at.sql` to `SESSIONS_DB` before the Worker that reads
+> `revoked_at` goes out ([hosting.md](./hosting.md), _deploying the workers_;
+> `tools/scripts/deploy-worker.sh` applies migrations first), and the cron
+> trigger ships with that deploy. Server schema changes stay append-only
+> ([local-first-sync.md](./local-first-sync.md), _schema changes_).
 
 ### the promise, and the rule that carries it
 
@@ -78,10 +84,8 @@ which say "a year" by reading it. A spec pins the two together.
 
 An authenticated request may move the session's `expires_at` to
 `now + SESSION_IDLE_MS`, at most once per `SESSION_SLIDE_MS`. The guard does
-this in `requireAuth`, `middleware/auth.ts`. Its note already asks for a
-throttled write off the critical path, though it suggests a 10-minute
-`last_seen_at` throttle and calls the lookup replica-served, which it isn't
-(below); rewrite the note with the change. The shape:
+this in `requireAuth`, `middleware/auth.ts`, through `renewSession`
+(`services/session.ts`) and `sessionsRepo.renew`. The shape:
 
 - **Throttled atomically.** The read can skip an unnecessary renewal, but the
   `UPDATE` itself must require `revoked_at IS NULL`, `expires_at >= now`, and
@@ -99,12 +103,16 @@ throttled write off the critical path, though it suggests a 10-minute
   and handle/report its failure. The already-authorized request can finish,
   but a failed renewal leaves the old deadline intact. A later request retries
   while the session remains valid; a failure near expiry can require sign-in.
+  Where there is no execution context (`app.request()` in the specs) the
+  renewal is awaited inline instead.
 - **`last_seen_at` moves with it.** The column already exists and was waiting
   for this. It will serve a future sessions/devices list.
 
 **Sliding alone needs no new columns.** `expires_at`, `last_seen_at` and
-`idx_sessions_expires_at` already exist. The explicit revocation marker below
-does need an append-only server migration and a matching canonical schema update.
+`idx_sessions_expires_at` already existed. The explicit revocation marker below
+is the append-only migration `0002_revoked_at.sql` (plus
+`idx_sessions_revoked_at`, cleanup's second clock), folded into
+`db/schemas/sessions.sql`.
 
 Regular successful authenticated traffic keeps a session alive. Opening the
 app offline does not renew it, and a 90-day window is not a guarantee for every
@@ -137,8 +145,11 @@ are 401s in the uniform error envelope (`{ "error": "<code>" }`,
 | row found, `revoked_at` is set    | `session_revoked` | **wipe** only if the request's session generation is still current |
 | unrevoked row, `expires_at < now` | `session_expired` | **keep everything**, enter the expired state                       |
 
-The codes live in `@stxapps/shared` next to the auth endpoints, so the API and
-both client stacks import one constant rather than retyping a string.
+The codes live in `@stxapps/shared` (`SESSION_ERROR`, `auth/sessions.ts`), so the
+API and both client stacks import one constant rather than retyping a string.
+The same module turns a response into a verdict (`sessionVerdictFromResponse`:
+`session_revoked` → `revoked`; `session_expired` and `session_unknown` →
+`expired`; anything else, including a codeless or foreign 401, → `null`).
 
 **Why a marker, and not "no row means wipe"?** Deleting the row already revokes
 API access: today's guard rejects both missing and expired rows with
@@ -166,17 +177,18 @@ dropped entirely, deleting rows would be enough and no column would be needed;
 this design keeps remote wipe, so it keeps the evidence. Being prelaunch
 removes client compatibility work, not this distinction.
 
-**Revocation needs a retained marker.** Add nullable `revoked_at` to the sessions
-table and return it from the repository. Check revocation before expiry. Three
-of today's deletion paths become explicit revocation writes, including for
-already-expired rows: `revokeSession` (sign-out), `revokeOtherSessions` where it
-backs _sign out other devices_, and `deleteByUserId` (delete account). Keep the
-original revocation timestamp on retries. The row survives account teardown so
-an old token can still receive the verdict; /delete-account and /privacy say so.
+**Revocation needs a retained marker.** Nullable `revoked_at` on the sessions
+table, returned by the repository; the guard checks revocation before expiry.
+The three deletion paths are explicit revocation writes, including for
+already-expired rows: `revokeSession` (sign-out), `revokeOtherSessions` (_sign
+out other devices_), and `revokeAllSessions` (delete account). Each keeps the
+original revocation timestamp on retries (`COALESCE(revoked_at, ?)`). The row
+survives account teardown so an old token can still receive the verdict;
+/delete-account and /privacy say so.
 
 **Changing the password expires the other sessions; it doesn't revoke them.**
-`changePasswordDoor` reuses `revokeOtherSessions` today. It gets its own write
-instead: move `expires_at` into the past on every other unrevoked session,
+`changePasswordDoor` has its own write, `expireOtherSessions`: move `expires_at`
+into the past (`MIN(expires_at, now - 1)`) on every other unrevoked session,
 never forward, and never touch `revoked_at`. That cuts off whoever had the old
 password as completely as revocation does. An expired row can't authenticate,
 and the renewal predicate (`expires_at >= now`) won't revive it. What it
@@ -209,11 +221,12 @@ wrong wipe destroys what may be the only copy, and can't be undone. Extending
 delivery means longer marker retention or a different revocation protocol, never
 mapping absence to revocation.
 
-- The starting point is `sessionsRepo.deleteExpired`, which exists but is not
-  called. Replace its predicate with the two retention cases above. Wiring it
-  up means a `scheduled` handler in `apps/bracemark-api/src/worker.ts` and a
-  `triggers.crons` entry in `wrangler.jsonc` (daily is plenty); see
-  [hosting.md](./hosting.md) before deploying either. The same cron is the
+- Cleanup is `sessionsRepo.purge` (the two retention cases above), run by
+  `purgeSessions` from the `scheduled` handler in
+  `apps/bracemark-api/src/worker.ts`, on a `triggers.crons` entry declared in
+  each env of `wrangler.jsonc` (daily, `17 3 * * *`); see
+  [hosting.md](./hosting.md) before deploying. `wrangler dev` never fires it; `curl
+"http://127.0.0.1:8787/cdn-cgi/handler/scheduled"` does. The same cron is the
   natural home for the orphan-claim and tombstone-teardown sweepers
   ([data-lifecycle.md](./data-lifecycle.md), _deferred_).
 - ⚠ **No missing row is evidence of revocation.** Cleanup, a restore, and an
@@ -221,12 +234,13 @@ mapping absence to revocation.
   Retention changes affect how long revocation can be delivered, never whether
   an ordinary expired device keeps its data.
 
-**Only our own code counts.** The client branches on `apiErrorCode(e)`
-(`packages/shared/src/api/client.ts`), which returns null for any body that
-isn't our JSON envelope. So a proxy's HTML 401, a gateway's error page, or a
-parse failure is just a failed request, handled like any other network error:
-the sync cycle fails and retries later. A bare `res.status === 401`
-check, as `authFetch` has today, is exactly what this rule forbids.
+**Only our own code counts.** The client branches on
+`sessionVerdictFromResponse` (`packages/shared/src/auth/sessions.ts`), which
+returns null for any body that isn't our JSON envelope with one of the three
+codes. So a proxy's HTML 401, a gateway's error page, or a parse failure is just
+a failed request, handled like any other network error: the sync cycle fails and
+retries later. A bare `res.status === 401` check — what `authFetch` did before
+this design — is exactly what this rule forbids.
 
 **Residual trust.** A server that sends our exact `session_revoked` envelope can
 wipe a device that reaches it with the matching current session. This protocol
@@ -252,8 +266,9 @@ device gets `session_unknown`, keeps its library and pending ops, and signs in
 again. The cost is the pending remote wipes the table carried, which go with
 it (_what a remote wipe can't reach_, above). Losing the database outright
 costs the same. [server-backups.md](./server-backups.md) carries the rule from
-the backup side. Until this design ships the reverse is true: today's clients
-wipe on any 401, so emptying the table would erase every signed-in device.
+the backup side. (Before this design the reverse was true — clients wiped on any
+401 — so the safety of emptying the table holds only for clients that run this
+code; there are no older builds in users' hands.)
 
 ### the expired state on the client
 
@@ -271,12 +286,26 @@ In **expired**:
   The sign-in form is pre-filled with the stored username, and the username is
   locked. See [accessibility.md](./accessibility.md) before writing the notice.
 - **One probe per launch or return to foreground, when online:** a single
-  authenticated request with the old token. It keeps answering
-  `session_expired` while its expired row is retained, `session_unknown` after
-  purge, or `session_revoked` while an explicit revocation marker is retained.
-  Only the last answer can wipe, subject to the generation check below. Without
-  the probe, an expired device would never receive a retained revocation. A
-  failed or codeless probe preserves the current state and all local data.
+  authenticated request with the old token — `GET /v1/auth/session`
+  (`sessionProbeEndpoint`), whose only answers are the guard's. It keeps
+  answering `session_expired` while its expired row is retained,
+  `session_unknown` after purge, or `session_revoked` while an explicit
+  revocation marker is retained. Only the last answer can wipe, subject to the
+  generation check below. Without the probe, an expired device would never
+  receive a retained revocation. A failed or codeless probe preserves the
+  current state and all local data. The auth providers fire it on launch, on
+  `visibilitychange`/`online` (web) and on `AppState` `active` (expo).
+
+Where the notice and the resume live: bracemark-web's
+`components/sync-paused-notice.tsx` under the links topbar and at the top of
+Settings (resume in a dialog, over web-ui's `SignInForm lockedUsername`);
+bracemark-expo's `components/sync-paused-notice.tsx` on the links screen and in
+Settings → Data, with resume as the `/resume` modal route; the browser
+extension popup's sync pill ("Sync paused — sign in to resume") and its detail
+view, with a `Resume` view. The sync indicator's `BgSyncStatus` is `paused`
+(`@stxapps/shared` `sync/status.ts`) — not `error`, not `idle`. A first sync the
+pause interrupted keeps the initial-sync gate closed with the same two actions.
+The words are `SESSION_COPY` (`packages/react/src/lib/session-copy.ts`).
 
 **Resume** is a normal sign-in (password or recovery code) with the username
 locked to the stored one. On success the client replaces the token (and the
@@ -314,6 +343,12 @@ current generation under the same lifecycle lock used for replacement and wipe.
 A delayed response for the old token must not expire or erase the resumed session.
 Never include raw tokens in cross-context notifications or logs.
 
+As built: the generation is an opaque local string (`newSessionGeneration`,
+compared for equality only, never sent anywhere); `authFetch` captures it with
+the token and reports `{ verdict, generation }`; the auth provider decides under
+`withSessionLock` against the persisted record (`session-store.ts` in both
+stacks).
+
 On web, each tab currently has its own in-memory session mirror. Persisting the
 new state alone does not refresh another tab. The implementation must coordinate
 all contexts sharing the session/data databases, including the browser extension's
@@ -330,6 +365,24 @@ popup, options page and background worker on their own origin:
   rely on aborting a fetch alone to cancel its already-running continuations.
 - Resume in another tab must refresh the token and state without clearing local
   data. Sign-out must close the old account's UI and writers in every context.
+
+As built on the web (`packages/web-react/src/data/session-store.ts`,
+`contexts/auth-provider.tsx`): the lifecycle lock is a Web Lock
+(`bracemark-session-lifecycle`, spanning every context of the origin, with an
+in-context queue where Web Locks are missing); the notification is a
+`BroadcastChannel` (`bracemark-session`) carrying the generation or `null` and,
+for a teardown, its reason — never the token; every context re-reads the record
+on a notification, on `visibilitychange` and on `pageshow`. A teardown deletes
+the record, announces it, then wipes, so a context that learns of it only closes
+its UI and never wipes a second time. A new account can't be adopted over
+another one's library: `setSession` tears the old one down first, under the
+same lock. In-flight completions are fenced **in the database**, not by
+aborting fetches: every pulled write re-checks, inside its own transaction, that
+the account's sync bookkeeping row still exists (`AccountFencedError`,
+`data/sync-store.ts`; a first sync claims the row before it writes), and the
+teardown's clear of that row is a transaction on the same store, so IndexedDB
+orders the two. Expo applies the same fence in its sqlite store, and an
+in-process queue as its lock.
 
 Expo applies the same generation rule to requests in the main process. Update
 the shared-Keychain mirror with the state; retain the outbox's existing account
@@ -350,31 +403,35 @@ main process. Two other processes carry the token and must **never** act on it:
 
 On any 401 they stop (the share extension's outbox file is already the record
 of truth, and the main app drains it). Both **read** the stored state: when it
-is `expired` they don't call the API at all. That replaces
-the `session.expiresAt <= Date.now()` check at `share-store.ts:412`, which is a
-clock check and falls under the rule above.
+is `expired` they don't call the API at all — the browser extension's
+`utils/sync-runner.ts` mirrors `paused` and returns, and the share extension's
+`uploadQueuedDraft` (`share-store.ts`) skips the upload. That replaced a
+`session.expiresAt <= Date.now()` check there, which was a clock check and fell
+under the rule above. A verdict their requests provoke reaches no listener: they
+run no `AuthProvider`.
 
 ### the contract
 
-- **`expiresAt` leaves the wire.** It comes out of `createAccountResponseSchema`
-  and `signInResponseSchema` (`packages/shared/src/auth/endpoints.ts`), and out
-  of `SessionRecord` in both session stores (`packages/web-react/src/data/session-store.ts`,
+- **`expiresAt` is off the wire.** It is gone from `createAccountResponseSchema`
+  and `signInResponseSchema` (`packages/shared/src/auth/endpoints.ts`, which now
+  answer `{ token }`), and from `SessionRecord` in both session stores
+  (`packages/web-react/src/data/session-store.ts`,
   `packages/expo-react/src/data/session-store.ts`, including the latter's
   `PersistedSession` and `parse`). A client with no expiry to read cannot wipe
   on one, and that structural guarantee is worth more than a comment
   saying not to. The server keeps `expires_at` for itself.
-- **The three session codes are added to `@stxapps/shared`,** and `requireAuth`
-  emits them. `unauthorized` keeps its current meaning, "no bearer token".
+- **The three session codes are in `@stxapps/shared`** (`SESSION_ERROR`), and
+  `requireAuth` emits them. `unauthorized` keeps its meaning, "no bearer token".
+- **`GET /v1/auth/session`** (`sessionProbeEndpoint`) is the probe's address:
+  `requireAuth` and `{ ok: true }`, nothing else.
 - **State and generation are persisted** in both client session records; the
   iOS share extension's mirror carries the state. Local lifecycle notifications
   carry the generation; they are not new server authentication credentials.
 - **A persisted record from before the change** has a stale `expiresAt` and no
-  state field. On Expo, `parse()` currently rejects a record missing
-  `expiresAt`; when it stops requiring the field, it should treat a record
-  without a state as `active`, assigning its generation under lifecycle
-  coordination, not treating it as corrupt. There are no production client
-  records, so this only matters for dev devices, but a corrupt-read path that signs a
-  developer out is noise worth avoiding.
+  state field. Both stores read it as `active` with an empty generation (the
+  `expiresAt` is dropped unread, and never written back), and the auth provider
+  assigns and persists a generation under the lifecycle lock — never treating it
+  as corrupt. Expo's `parse()` no longer requires `expiresAt`.
 
 ### the dead-server path
 
@@ -385,74 +442,96 @@ bracemark-web's service worker, the browser extension's missing export, the
 Safari question) is [offline-mode.md](./offline-mode.md), _the promise_. The
 landing page's claim needs both docs' rules to hold.
 
-### what this replaces
+### what this replaced
 
-The implementation replaces the local-clock/blanket-401 paths and changes the
-server's revocation and cleanup contracts:
+The implementation replaced the local-clock/blanket-401 paths and changed the
+server's revocation and cleanup contracts. Kept here as the list of specimens,
+because each looked harmless:
 
 - `packages/web-react/src/contexts/auth-provider.tsx` — the hydrate branch
   `s.expiresAt > Date.now()` and its `clearData()` for a stored-but-expired
-  session. The **no-session** residue cleanup stays, but must recheck the
-  persisted absence under lifecycle coordination before clearing anything.
-  A failed read or a concurrent sign-in must not take that branch.
+  session. The **no-session** residue cleanup stays, deciding on a read made
+  under the lifecycle lock; a failed read throws past it, so it never clears.
 - `packages/web-react/src/data/session-store.ts` — `getToken()`'s expiry check.
-- `packages/web-react/src/lib/auth-api-client.ts` — the branch that treats "no
+- `packages/web-react/src/lib/auth-api-client.ts` — the branch that treated "no
   token but a record" as an expiry, and `res.status === 401` without a code.
 - `packages/expo-react/src/contexts/auth-provider.tsx`,
   `packages/expo-react/src/data/session-store.ts`,
   `packages/expo-react/src/lib/auth-api-client.ts` — the same three, mirrored.
 - `packages/expo-react/src/data/share-store.ts` — the share extension's clock check.
-- `EndReason`'s `'expired'`, which now means "revoked": `AuthGuard`
+- `EndReason`'s `'expired'`, now `'revoked'`: `AuthGuard`
   (`apps/bracemark-web/src/components/auth-guard.tsx`,
   `apps/bracemark-expo/src/components/auth-guard.tsx`) sends a revoked device
-  to sign-in with a line saying this device was signed out. An expired device
-  never leaves the app.
-- `SESSION_TTL_MS` in `services/session.ts` becomes `SESSION_IDLE_MS`.
-- The session repository's revocation deletes become marker writes, and the
-  cleanup predicate distinguishes expired rows from revoked rows. Add the
-  server migration before deploying the new guard.
-- `changePasswordDoor` (`services/account.ts`) stops calling
-  `revokeOtherSessions` and expires the other sessions instead.
-- The change-password confirmation in both `account-section.tsx` files
-  (bracemark-web's `settings/[section]/_account/`, bracemark-expo's
-  `features/settings/`) stops saying the other devices "have been signed out":
-  they keep their copy and are asked to sign in again. The marketing site's
-  _Sign out_ help page already says so.
+  to sign-in, which says this device was signed out (`SESSION_COPY.revoked`). An
+  expired device never leaves the app.
+- `SESSION_TTL_MS` in `services/session.ts`, now `SESSION_IDLE_MS`.
+- The session repository's revocation deletes, now marker writes, and
+  `deleteExpired`, now `purge` with its two retention clocks.
+- `changePasswordDoor` (`services/account.ts`) calling `revokeOtherSessions`;
+  it expires the other sessions instead.
+- The change-password confirmation in both `account-section.tsx` files, which
+  said the other devices "have been signed out"; it now says they keep their
+  copy and ask for the new password (`SESSION_COPY.passwordChanged`), as the
+  marketing site's _Sign out_ help page and FAQ already did.
 
-Docs that change when this design is implemented: [account.md](./account.md),
-_the two identifiers_ ("the same 30-day TTL" in the replay-window note) and the
-door-rotation STATUS note (change-password "revokes every other session");
-[data-lifecycle.md](./data-lifecycle.md), _the sign-out teardown_ (the
-teardown's triggers), _delete account_ (step 4 and _What's deliberately kept_:
-the revocation markers) and _deferred_ (the cleanup job lands);
-[api-contracts.md](./api-contracts.md) (the `authFetch` row); this doc's STATUS.
-The public pages named in STATUS were changed ahead of the code, and
-[server-backups.md](./server-backups.md) already carries the restore rule.
+The docs this touched: [account.md](./account.md) (the replay-window note and
+the door-rotation STATUS note), [data-lifecycle.md](./data-lifecycle.md) (the
+sign-out teardown's triggers, _delete account_, _deferred_),
+[api-contracts.md](./api-contracts.md) (the `authFetch` row),
+[share-sheet.md](./share-sheet.md), [browser-extension.md](./browser-extension.md),
+[e2e.md](./e2e.md). [server-backups.md](./server-backups.md) already carried the
+restore rule.
 
 ### testing
 
-The layers ([testing.md](./testing.md)):
+The layers ([testing.md](./testing.md)), and where each part of the rule is pinned:
 
-- **api (vitest):** the guard's four failure codes; revocation takes precedence
-  over expiry; concurrent renewal attempts change the row once; a renewal
-  racing revocation cannot revive it; a failed renewal leaves the old deadline.
-  Cleanup respects both retention clocks and turns purged tokens into
-  `session_unknown`. Each revocation path, including account deletion and an
-  already-expired session, retains the marker and answers `session_revoked`.
-  A password change answers `session_expired` to the other sessions, never
-  `session_revoked`; none of them can renew, and the caller's own is untouched.
-- **clients (jest / vitest):** the rule as a table, per stack. `session_revoked`
-  for the current generation wipes; `session_expired`, `session_unknown`, a
-  codeless 401, an HTML 401, a 500 and a network error do not. A record with a
-  year-old clock time still hydrates as signed in. Delayed expiry/revocation
-  responses for a replaced generation do nothing. Probes preserve pending ops
-  unless the current session is explicitly revoked. A failed resume leaves the
-  expired state, the library and the pending ops as they were.
-- **e2e ([e2e.md](./e2e.md)):** both stacks already have a "server-revoked
-  session's wipe" case. They gain an **expired → keep, resume, push the queued
-  edit** case, and the PWA target's dead-origin export (`PWA-003`) gains a
-  session whose sign-in is far in the past on the device clock. That combination
-  is the specimen for the rule. Add a purged-token resume with an unsynced edit,
-  two-tab expiry/resume, and sign-out/account-switch races with a sleeping tab
-  and in-flight sync. Assert both preservation of queued edits on resume and
-  absence of old-account writes after teardown.
+- **api (vitest):** `middleware/auth.spec.ts` — the guard's four failure codes;
+  revocation before expiry; renewal sliding a due session, writing nothing
+  inside the slide window, changing the row once under five concurrent
+  attempts, never reviving a revoked or expired row, and a failed renewal
+  letting the request through with the old deadline; the original revocation
+  time kept on retry; an already-expired session revoked; account-wide and
+  except-caller revocation; the password-change expiry (never revoked, never
+  moved forward, the caller untouched); cleanup on both retention clocks, and a
+  purged token — revoked or not — answering `session_unknown`.
+  `routes/auth.spec.ts` drives the same through the routes (sign-out, sign out
+  other devices, delete account, change password, the probe, `{ token }` with no
+  expiry on the wire). `worker.spec.ts` runs the cron entry.
+- **shared (jest):** `auth/sessions.spec.ts` — the rule as a table:
+  `session_revoked` → wipe-eligible; `session_expired` and `session_unknown` →
+  keep; a codeless 401, an HTML 401, another code, our code on another status →
+  nothing. `sync/status.spec.ts` — `paused` outranks every cycle outcome and is
+  neither `error` nor `idle`.
+- **clients (jest):** per stack, `lib/auth-api-client.spec.ts` (web) — the same
+  table through a real `api.call`, a network error, the generation captured at
+  send and not at arrival, no clock; `contexts/auth-provider.spec.tsx` (both
+  stacks) — `session_revoked` for the current generation wipes and says why,
+  expiry keeps everything and persists `expired`, a replaced generation's
+  verdicts do nothing, a record two years old on the device clock hydrates
+  signed in, a pre-redesign record gets a generation, a failed read doesn't
+  wipe, bursts collapse, the probe fires on launch and foreground, resume keeps
+  the store, a different account is torn down before it's adopted, and (web)
+  another context's teardown or resume is adopted without a second wipe;
+  `data/session-store.spec.ts` (both); `contexts/sync-provider.spec.tsx` (web) —
+  paused runs no cycle; the account fence in `sync/engine.spec.ts` and
+  `data/sync-store.spec.ts` (web) and `data/sync-store.spec.ts` (expo) — a
+  teardown mid-cycle or mid-first-sync leaves nothing written.
+- **e2e ([e2e.md](./e2e.md)):** `SESSION-INVALID-WEB-001` (revoked → wiped,
+  sign-in says why) and `SESSION-INVALID-NATIVE-001` (revoked, on device);
+  `SESSION-EXPIRED-WEB-001` — expired by a password change on another profile,
+  the library kept in two tabs, an edit queued while paused, the state surviving
+  a reload, resume in the OTHER tab with the new password picked up by the
+  first, and the queued edit reaching a fresh reader; `SESSION-UNKNOWN-WEB-001`
+  — the stored token replaced by one the server never issued (what a purge looks
+  like from the device), an unsynced edit kept and pushed after resume;
+  `WEB-ACCOUNT-003` — a session two years old on the device clock is signed in
+  with its library; and `PWA-003` now runs its dead-origin export with the
+  device clock two years ahead — the specimen for the rule.
+- `SESSION-EXPIRED-NATIVE-001` — the same expiry on a device (the runner
+  changes the password from a web profile, the flow pauses, saves a link,
+  resumes through the `/resume` modal, and the runner reads the link from the
+  web). Passes on the iOS simulator; not yet run on an Android emulator.
+- **Not covered end to end:** the sleeping-tab /
+  in-flight-sync / account-switch races, which are pinned at the unit level by
+  the account fence and the generation checks rather than driven in a browser.

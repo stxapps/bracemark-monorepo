@@ -57,7 +57,7 @@ import { liveReadsHeld } from '../data/live-read-invalidation';
 import { writeExtraction, writeFile } from '../data/mutations';
 import { enqueueDeleteTx, enqueuePutTx, listPendingOps } from '../data/pending-store';
 import { toItemRecord } from '../data/projection';
-import { markFirstSyncDone } from '../data/sync-store';
+import { beginInitialSync, markFirstSyncDone } from '../data/sync-store';
 import {
   File as MemFile,
   listFileUris,
@@ -354,6 +354,7 @@ beforeEach(async () => {
   // Past the first-sync gate, with a cursor inside the op log's retained range
   // so a test picks its cycle by what it makes ops/list answer, not by leftover
   // state.
+  await beginInitialSync(USER);
   await markFirstSyncDone(USER, 1000, 'links/l_seed.enc');
 });
 

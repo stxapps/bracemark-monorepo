@@ -3,12 +3,14 @@ import { ActivityIndicator, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { withUniwind } from 'uniwind';
 
-import { useSync } from '@stxapps/expo-react';
+import { useAuth, useSync } from '@stxapps/expo-react';
+import { SESSION_COPY } from '@stxapps/react';
 import { type InitialSyncProgress, initialSyncProgressLabel } from '@stxapps/shared';
 
 import { Button } from './ui/button';
 import { Text } from './ui/text';
 import { ErrorText } from './error-text';
+import { SyncPausedActions } from './sync-paused-notice';
 
 const StyledSafeAreaView = withUniwind(SafeAreaView);
 
@@ -40,7 +42,8 @@ const StyledSafeAreaView = withUniwind(SafeAreaView);
 const MIN_SCREEN_MS = 500;
 
 export function InitialSyncGate({ children }: { children: ReactNode }) {
-  const { storeStatus, initialSyncProgress, retryInitialSync } = useSync();
+  const { storeStatus, initialSyncProgress, retryInitialSync, lastError } = useSync();
+  const { sessionState } = useAuth();
 
   // No-flash: 'checking' is a single SQLite read of the first-sync flag and
   // happens on every mount. We never want the decrypting screen for it, so we
@@ -74,6 +77,26 @@ export function InitialSyncGate({ children }: { children: ReactNode }) {
 
   // Only the blocking initial sync can land here: background syncs report on
   // bgSyncStatus and never set the gate's 'error'.
+  // The session EXPIRED before this device's first sync finished (docs/sessions.md)
+  // — web's gate carries the same branch. Nothing failed and nothing was lost, but
+  // the store isn't complete, so the gate stays closed and offers the resume. A
+  // status, not ErrorText: the user didn't cause it.
+  if (storeStatus === 'error' && sessionState === 'expired') {
+    return (
+      <StyledSafeAreaView className="flex-1 bg-background">
+        <View className="flex-1 items-center justify-center gap-4 px-6">
+          <View className="items-center gap-1">
+            <Text role="status" className="text-center text-sm font-medium">
+              {SESSION_COPY.paused.title}
+            </Text>
+            <Text className="text-center text-xs text-muted-foreground">{lastError}</Text>
+          </View>
+          <SyncPausedActions />
+        </View>
+      </StyledSafeAreaView>
+    );
+  }
+
   if (storeStatus === 'error') {
     return (
       <StyledSafeAreaView className="flex-1 bg-background">

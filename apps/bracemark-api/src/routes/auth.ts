@@ -22,6 +22,8 @@ import {
   type PutRecoveryDoorResponse,
   recoveryDoorEndpoint,
   type RecoveryDoorResponse,
+  sessionProbeEndpoint,
+  type SessionProbeResponse,
   signInEndpoint,
   signInPayloadSchema,
   type SignInResponse,
@@ -107,7 +109,6 @@ export const authRoutes = new Hono<AppEnv>()
 
       const body: CreateAccountResponse = {
         token: result.session.token,
-        expiresAt: result.session.expiresAt,
       };
       return c.json(body, 201);
     },
@@ -177,24 +178,37 @@ export const authRoutes = new Hono<AppEnv>()
 
       const body: SignInResponse = {
         token: result.session.token,
-        expiresAt: result.session.expiresAt,
       };
+      return c.json(body);
+    },
+  )
+  .get(
+    sessionProbeEndpoint.path,
+    // The expired state's probe (docs/sessions.md). Everything it answers is
+    // requireAuth's: session_unknown / session_revoked / session_expired, or —
+    // for a live session — this { ok: true }, with the idle deadline renewed
+    // like any authenticated call. Read-only and cheap, so the global
+    // 'standard' tier is enough.
+    requireAuth,
+    (c) => {
+      const body: SessionProbeResponse = { ok: true };
       return c.json(body);
     },
   )
   .post(
     signOutEndpoint.path,
     // Protected: the bearer token names the session to revoke. requireAuth
-    // resolves it onto the context (404/expired tokens 401 out before here).
-    // No 'tight' tier here (unlike the pre-auth routes above): this is authed,
-    // cheap (one idempotent delete), and self-limiting — the first call removes
-    // the row, so repeats 401 at requireAuth before the handler. Tightening it
-    // would also be counterproductive: sign-out should reliably succeed so the
-    // token actually gets revoked. The global 'standard' tier is enough.
+    // resolves it onto the context (unknown/revoked/expired tokens 401 out
+    // before here). No 'tight' tier here (unlike the pre-auth routes above):
+    // this is authed, cheap (one idempotent update), and self-limiting — the
+    // first call marks the row revoked, so repeats 401 at requireAuth before the
+    // handler. Tightening it would also be counterproductive: sign-out should
+    // reliably succeed so the token actually gets revoked. The global
+    // 'standard' tier is enough.
     requireAuth,
     async (c) => {
-      // Idempotent delete — a token that already passed requireAuth has a live
-      // row; deleting it makes the token stop authenticating immediately.
+      // Marks the row revoked rather than deleting it: the token stops
+      // authenticating immediately, and answers `session_revoked` from now on.
       await revokeSession(c.env, c.get('session').id);
       const body: SignOutResponse = { ok: true };
       return c.json(body);
@@ -206,7 +220,8 @@ export const authRoutes = new Hono<AppEnv>()
     // fresh proof: this touches no doors or credentials and is low-harm and
     // reversible (the owner just signs back in), so requireAuth is the right gate,
     // exactly as for sign-out. Same 'standard' tier reasoning too — authed, cheap,
-    // idempotent (re-running just deletes nothing more).
+    // idempotent (a re-run keeps each marker's original revocation time). Each
+    // other device erases its local copy the next time it reaches the api.
     requireAuth,
     async (c) => {
       await revokeOtherSessions(c.env, c.get('session'));

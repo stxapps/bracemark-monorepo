@@ -196,6 +196,11 @@
         "bindings": [{ "name": "USER_DATA", "class_name": "UserDataDO" }],
       },
       "migrations": [{ "tag": "v1", "new_sqlite_classes": ["UserDataDO"] }],
+      // The daily cron → worker.ts `scheduled` (session cleanup, docs/sessions.md).
+      // `wrangler dev` never fires it on its own; trigger it by hand with
+      // `curl "http://127.0.0.1:8787/cdn-cgi/handler/scheduled"`. Declared per
+      // env, like everything else here, so no env silently runs without it.
+      "triggers": { "crons": ["17 3 * * *"] },
       // Native rate-limit bindings, one per volume tier (middleware/rate-limit.ts).
       // period is 10 or 60 only; 'tight' (10/10s ≈ 1 req/s) is the strictest the
       // native binding allows. namespace_id is any unique positive integer.
@@ -324,6 +329,10 @@
         "bindings": [{ "name": "USER_DATA", "class_name": "UserDataDO" }],
       },
       "migrations": [{ "tag": "v1", "new_sqlite_classes": ["UserDataDO"] }],
+      // The daily cron → worker.ts `scheduled`: session cleanup on its two
+      // retention clocks (docs/sessions.md). Daily is plenty — the retention is
+      // a year. Deploying it is a config change; read docs/hosting.md first.
+      "triggers": { "crons": ["17 3 * * *"] },
       // Not inherited from the top level — each env declares its own.
       "ratelimits": [
         {
@@ -429,6 +438,10 @@
         "bindings": [{ "name": "USER_DATA", "class_name": "UserDataDO" }],
       },
       "migrations": [{ "tag": "v1", "new_sqlite_classes": ["UserDataDO"] }],
+      // The daily cron → worker.ts `scheduled`: session cleanup on its two
+      // retention clocks (docs/sessions.md). Daily is plenty — the retention is
+      // a year. Deploying it is a config change; read docs/hosting.md first.
+      "triggers": { "crons": ["17 3 * * *"] },
       // Not inherited from the top level — each env declares its own.
       "ratelimits": [
         {

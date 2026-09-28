@@ -11,7 +11,7 @@ import {
   useState,
 } from 'react';
 
-import { useApiClient } from '@stxapps/react';
+import { SESSION_COPY, useApiClient } from '@stxapps/react';
 import {
   bgStatusForOutcome,
   type BgSyncStatus,
@@ -22,6 +22,7 @@ import {
 
 import { getSession } from '../data/session-store';
 import { isFirstSyncDone } from '../data/sync-store';
+import { isUpdateRequired, onUpdateRequired } from '../data/update-required';
 import { runIncrementalSync, runInitialSync, type SyncDeps } from '../sync/engine';
 import { useAuth } from './auth-provider';
 
@@ -113,7 +114,7 @@ interface SyncContextValue {
 const SyncContext = createContext<SyncContextValue | null>(null);
 
 export function SyncProvider({ children }: { children: ReactNode }) {
-  const { username, status: authStatus } = useAuth();
+  const { username, status: authStatus, sessionState } = useAuth();
   const api = useApiClient();
   const [storeStatus, setStoreStatus] = useState<StoreStatus>('checking');
   const [bgSyncStatus, setBgSyncStatus] = useState<BgSyncStatus>('idle');
@@ -125,6 +126,10 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const [attempt, setAttempt] = useState(0);
   // Bumped by requestSync() — the local-edit signal the read edge keys on.
   const [localWriteNonce, setLocalWriteNonce] = useState(0);
+  // A newer build took over this origin's databases (update-required.ts): this
+  // tab can no longer read or write them, so it must stop scheduling cycles.
+  const [halted, setHalted] = useState(isUpdateRequired);
+  useEffect(() => onUpdateRequired(() => setHalted(true)), []);
 
   // Guards against a stale async resolution writing state after the account
   // changed or the provider unmounted.
@@ -153,9 +158,39 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     // Only meaningful once auth has settled on a signed-in user; AuthGuard keeps
     // us out of the tree otherwise, but guard anyway.
     if (authStatus !== 'authenticated' || !username) return;
+    // The database belongs to a newer build now; nothing here may touch it.
+    if (halted) return;
 
     const session = getSession();
     if (!session) return; // mirror not hydrated yet; the next render will retry
+
+    // EXPIRED (docs/sessions.md): the server wants a sign-in before it syncs
+    // again, so schedule nothing — a cycle would only earn the same answer. The
+    // store stays exactly as usable as offline; edits keep queueing as pending
+    // ops and push on resume. The one thing a pause can't give is a first sync
+    // that never finished: that store isn't complete, so the gate says why.
+    if (sessionState === 'expired') {
+      backgroundSyncRef.current = () => undefined;
+      setBgSyncStatus('paused');
+      setBlockedCount(0);
+      setInitialSyncProgress(null);
+      void isFirstSyncDone(username).then(
+        (done) => {
+          if (!activeRef.current) return;
+          if (done) {
+            setStoreStatus('ready');
+            setLastError(null);
+          } else {
+            setStoreStatus('error');
+            setLastError(SESSION_COPY.paused.beforeFirstSync);
+          }
+        },
+        () => undefined,
+      );
+      return () => {
+        activeRef.current = false;
+      };
+    }
 
     const deps: SyncDeps = { username, encryptionKey: session.encryptionKey, api };
     // Fresh slate for the indicator — a stale 'error' / stale timestamp from a
@@ -264,7 +299,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       backgroundSyncRef.current = () => undefined;
       if (progressTimer !== null) clearTimeout(progressTimer);
     };
-  }, [username, authStatus, attempt, api]);
+  }, [username, authStatus, sessionState, halted, attempt, api]);
 
   const value = useMemo<SyncContextValue>(
     () => ({
@@ -324,6 +359,11 @@ export function ExternalSyncProvider({
   requestSync: () => void;
 }) {
   const [localWriteNonce, setLocalWriteNonce] = useState(0);
+  // The session state is this context's own to read (it runs the AuthProvider),
+  // and fresher than the mirror: an expiry recorded here shows as 'paused' at
+  // once, rather than after the engine's context next writes its status.
+  const { sessionState } = useAuth();
+  const effectiveBgSyncStatus: BgSyncStatus = sessionState === 'expired' ? 'paused' : bgSyncStatus;
   const requestSyncWithNonce = useCallback(() => {
     setLocalWriteNonce((n) => n + 1);
     requestSync();
@@ -332,7 +372,7 @@ export function ExternalSyncProvider({
   const value = useMemo<SyncContextValue>(
     () => ({
       storeStatus,
-      bgSyncStatus,
+      bgSyncStatus: effectiveBgSyncStatus,
       lastSyncAt,
       lastError,
       blockedCount,
@@ -352,7 +392,7 @@ export function ExternalSyncProvider({
     }),
     [
       storeStatus,
-      bgSyncStatus,
+      effectiveBgSyncStatus,
       lastSyncAt,
       lastError,
       blockedCount,

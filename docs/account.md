@@ -185,17 +185,21 @@ row) — no re-encryption, as long as the DEK itself wasn't exposed.
 > generate/regenerate-recovery are wired as tier-1 rotations: prove an existing
 > door (current password **or** recovery code) to recover the DEK, re-wrap it, and
 > `upsert` that one `account_keys` row — the publicKey and data are untouched.
-> **Sessions:** change-password additionally **revokes every other session**
+> **Sessions:** change-password additionally **expires every other session**
 > (keeping the caller's own — the UI stays signed in on this device) via
-> `sessions.deleteByUserIdExcept`: a password change can't un-leak already-copied
-> data, but it cuts off ongoing access, so whoever had the old password loses both
-> the ability to mint new sessions and any session they'd already minted.
-> Regenerating a recovery code does **not** touch sessions (it isn't a "someone may
-> be in my account" action; it only invalidates the old code). The same
-> except-current primitive backs **"sign out other devices"** (POST
-> `/v1/auth/sign-out-others`, `useSignOutOthers`): session-only (`requireAuth`, no
-> fresh proof — the plural of sign-out, low-harm and reversible), it revokes every
-> other session and keeps the caller's own.
+> `expireOtherSessions` (`sessions.expireByUserIdExcept`): a password change can't
+> un-leak already-copied data, but it cuts off ongoing access, so whoever had the
+> old password loses both the ability to mint new sessions and any session they'd
+> already minted. EXPIRED, not revoked — those devices answer `session_expired`,
+> keep their copy and unsynced edits, and resume with the new password
+> ([sessions.md](./sessions.md), _changing the password expires the other
+> sessions_). Regenerating a recovery code does **not** touch sessions (it isn't a
+> "someone may be in my account" action; it only invalidates the old code).
+> **"Sign out other devices"** (POST `/v1/auth/sign-out-others`,
+> `useSignOutOthers`) is the revocation: session-only (`requireAuth`, no fresh
+> proof — the plural of sign-out, low-harm and reversible), it marks every other
+> session revoked and keeps the caller's own, and each of those devices erases its
+> local copy the next time it connects.
 > Endpoints POST `/v1/auth/change-password` and POST
 > `/v1/auth/recovery-door` (`routes/auth.ts`, `services/account.ts`), each
 > double-guarded like delete-account (bearer token **and** a fresh signed proof, so
@@ -782,8 +786,9 @@ Ed25519 private key at create-account / sign-in.
 > as a bearer token** to whoever can read it, so request bodies must never be
 > logged on the auth paths. A replayed create-account proof is harmless (the
 > directory claim 409s); a replayed sign-in proof mints a session for the
-> attacker, the same prize as a stolen session token, with the same 30-day TTL
-> ([sessions.md](./sessions.md) replaces the TTL with a sliding idle window).
+> attacker, the same prize as a stolen session token, with the same lifetime: a
+> 90-day idle window that slides while it is used ([sessions.md](./sessions.md),
+> _lifetime_), until the owner signs out other devices or changes the password.
 > We accept this: the exposure window is minutes, the capture vector (TLS
 > interception, body logging) already yields live bearer tokens anyway, and a
 > nonce costs an extra round trip on every sign-in. **Upgrade path, if replay
@@ -1181,8 +1186,9 @@ the data is gone."**
   which verifies the signature then matches `payload.publicKey` against the stored
   key — see [the two identifiers](#the-two-identifiers)) are both wired
   (`services/account.ts`, `routes/auth.ts`). Still open: the **orphan-claim
-  sweeper** (reclaim claims with no backing `users` row, alongside
-  `sessions.deleteExpired`).
+  sweeper** (reclaim claims with no backing `users` row) — its home is the daily
+  cron that already runs session cleanup (`worker.ts` `scheduled`,
+  [sessions.md](./sessions.md)).
 - **CSP on bracemark-web** — the bearer token and the (non-extractable) encryption
   key live in IndexedDB, readable by any JS on the origin (see the SECURITY note
   in `data/session-store.ts`); a strong CSP is the real mitigation — chiefly

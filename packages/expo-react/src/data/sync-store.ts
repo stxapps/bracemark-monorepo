@@ -7,7 +7,7 @@
 
 import { eq } from 'drizzle-orm';
 
-import { getDb, syncMeta } from './db';
+import { type DbTx, getDb, syncMeta } from './db';
 
 // Same shape as web-react's SyncMetaRecord (every column NOT NULL, so the
 // drizzle-inferred row already matches it exactly).
@@ -48,20 +48,61 @@ export async function seedNewAccount(username: string): Promise<void> {
   });
 }
 
+// A stale sync cycle ran into a torn-down account: its bookkeeping row is gone,
+// so the store it was writing into belongs to nobody — or to the NEXT account
+// signed in here. Every pulled write re-checks the row inside its own transaction
+// (item-store's putItemsUnqueued / deleteItemsUnqueued) and aborts with this, so a
+// cycle that outlived a sign-out, a revocation wipe or an account switch can't
+// leave the old account's plaintext in the new store (docs/sessions.md). Same
+// fence as web-react's sync-store.
+export class AccountFencedError extends Error {
+  constructor(username: string) {
+    super(`Sync for ${username} stopped: the account is no longer signed in on this device`);
+    this.name = 'AccountFencedError';
+  }
+}
+
+// Inside the caller's transaction: throw unless `username` still owns the store.
+export function assertAccountOwnsStoreTx(tx: DbTx, username: string): void {
+  const meta = tx
+    .select({ username: syncMeta.username })
+    .from(syncMeta)
+    .where(eq(syncMeta.username, username))
+    .get();
+  if (!meta) throw new AccountFencedError(username);
+}
+
+// Sign-in path: claim the bookkeeping row BEFORE the first pull writes anything,
+// with `firstSyncDoneAt: 0` — "not done", so the gate still blocks and an
+// interrupted pull re-runs — so every write of that pull has a row to be fenced
+// on. An existing row is left as it is.
+export async function beginInitialSync(username: string): Promise<void> {
+  getDb().transaction((tx) => {
+    const meta = tx.select().from(syncMeta).where(eq(syncMeta.username, username)).get();
+    if (meta) return;
+    tx.insert(syncMeta)
+      .values({ username, syncCursorUpdatedAt: 0, syncCursorPath: '', firstSyncDoneAt: 0 })
+      .run();
+  });
+}
+
 // Sign-in path: call once the initial full pull has finished (all blobs
 // downloaded, decrypted, written) — only then does the flag flip, so an
 // interrupted first sync stays "not done" and re-blocks (resuming, not
-// restarting) on the next load.
+// restarting) on the next load. Fenced like the pull's writes: the row
+// beginInitialSync claimed must still be there, or the account was torn down
+// mid-pull and this must not resurrect it.
 export async function markFirstSyncDone(
   username: string,
   syncCursorUpdatedAt: number,
   syncCursorPath: string,
 ): Promise<void> {
-  putSyncMeta({
-    username,
-    syncCursorUpdatedAt,
-    syncCursorPath,
-    firstSyncDoneAt: Date.now(),
+  getDb().transaction((tx) => {
+    assertAccountOwnsStoreTx(tx, username);
+    tx.update(syncMeta)
+      .set({ syncCursorUpdatedAt, syncCursorPath, firstSyncDoneAt: Date.now() })
+      .where(eq(syncMeta.username, username))
+      .run();
   });
 }
 

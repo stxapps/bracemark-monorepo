@@ -36,8 +36,28 @@ export async function openProfile(
     viewport: { width: 1280, height: 900 },
     offline: options.offline,
   });
+  // ⚠ `offline` alone does NOT take the network away from the SERVICE WORKER:
+  // Chromium's offline emulation covers the page, not fetches the worker makes
+  // itself — and the worker's cross-origin rule re-fetches every api request in
+  // the worker (sw.ts). Measured: an "offline" page whose worker forwarded
+  // `GET /v1/auth/session` got the local api's 401. So "the api is gone" was
+  // never true in these cases until every request leaving the app's origin was
+  // also aborted here, which context routing does apply to worker requests.
+  if (options.offline) {
+    const appOrigin = new URL(WEB_URL).origin;
+    await context.route(
+      (url) => url.origin !== appOrigin,
+      (route) => route.abort('internetdisconnected'),
+    );
+  }
   const page = context.pages()[0] ?? (await context.newPage());
   return { context, page };
+}
+
+// Undo `openProfile({ offline: true })`: the page's network and the worker's.
+export async function restoreNetwork(context: BrowserContext): Promise<void> {
+  await context.unrouteAll({ behavior: 'ignoreErrors' });
+  await context.setOffline(false);
 }
 
 // Chrome's own install, then the real service worker.
@@ -46,12 +66,13 @@ export async function openProfile(
 // manifest, applies Chrome's installability checks, and records the app in the
 // profile — a wrong manifest id or an uninstallable manifest is refused
 // outright. What automation cannot give us is the app WINDOW: a
-// `PWA.launch`-ed app still reports `display-mode: browser` under Playwright
-// (measured, Chrome 153), and Chrome ignores `display-mode` in media emulation.
-// So the app's own trigger — `inner-layout.tsx` registers only when standalone
-// or when a registration already exists — never fires here. The case makes
-// that first registration with the same script URL `window.serwist.register()`
-// uses, after which every load takes the app's existing-registration branch.
+// `PWA.launch`-ed app still reports `display-mode: browser` (measured, Chrome 153),
+// and Chrome ignores `display-mode` in media emulation. The app no longer needs
+// the window to register — `inner-layout.tsx` registers after sign-in in any
+// display mode (PWA-004 proves that path on its own) — so the explicit
+// registration here only makes the installed cases wait for ACTIVATION
+// deterministically before they go offline. Same script URL
+// `window.serwist.register()` uses, so it is the same registration the app makes.
 // The real standalone window is PWA-RELEASE-001's (web/RELEASE.md).
 export async function installAndRegister(page: Page): Promise<void> {
   const cdp = await page.context().newCDPSession(page);

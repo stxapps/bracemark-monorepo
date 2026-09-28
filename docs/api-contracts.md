@@ -104,12 +104,12 @@ _configured_ client into its hooks. It's a dependency-inversion seam — each la
 adds one concern and refuses to know the next one up, so the only thing that knows
 the runtime URL is the app:
 
-| layer       | piece                                                           | adds                                                                                                           | deliberately doesn't know    |
-| ----------- | --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ---------------------------- |
-| `shared`    | `createApiClient({ baseUrl, fetch? })`                          | the typed transport (contracts → `fetch`)                                                                      | auth, React, the environment |
-| `react`     | `ApiClientProvider` / `useApiClient`                            | a React **seam** — a context hole the hooks read                                                               | which client, which baseUrl  |
-| `web-react` | `createAuthApiClient({ baseUrl })`                              | bearer-token `authFetch` (+ the mid-session 401/expiry → `notifySessionInvalid` loop, reading `session-store`) | the environment              |
-| app         | `const baseUrl = <env>; api = createAuthApiClient({ baseUrl })` | the **one** concrete client + provides it                                                                      | — (it's the top)             |
+| layer       | piece                                                           | adds                                                                                                                                                                                | deliberately doesn't know    |
+| ----------- | --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| `shared`    | `createApiClient({ baseUrl, fetch? })`                          | the typed transport (contracts → `fetch`)                                                                                                                                           | auth, React, the environment |
+| `react`     | `ApiClientProvider` / `useApiClient`                            | a React **seam** — a context hole the hooks read                                                                                                                                    | which client, which baseUrl  |
+| `web-react` | `createAuthApiClient({ baseUrl })`                              | bearer-token `authFetch` (+ reporting our session codes — never a bare 401 — as a verdict tagged with the sending generation, `notifySessionVerdict`; [sessions.md](./sessions.md)) | the environment              |
+| app         | `const baseUrl = <env>; api = createAuthApiClient({ baseUrl })` | the **one** concrete client + provides it                                                                                                                                           | — (it's the top)             |
 
 Which 401s that loop may act on, and which may wipe a device, is
 [sessions.md](./sessions.md).

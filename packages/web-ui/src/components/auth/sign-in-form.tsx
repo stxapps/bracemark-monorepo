@@ -57,12 +57,33 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 //     (field.tsx: 1:3 is what keeps a label attached to ITS control), and a ratio
 //     holds at either label size. Density is a TYPE tier here, nothing else — if
 //     the popup ever needs a tighter rhythm that is a separate, visible decision.
-export function SignInForm({ density = 'standard' }: { density?: 'standard' | 'dense' }) {
+//
+// LOCKED USERNAME — the expired state's resume (docs/sessions.md, _the expired
+// state on the client_). Resume is a normal sign-in, password or recovery code,
+// but only as the account whose library is on this device: the field is
+// pre-filled with the stored username and read-only. Read-only rather than
+// disabled, so it stays in the tab order and is still announced — the user is
+// told whose account this is, and the value still submits with the form.
+export function SignInForm({
+  density = 'standard',
+  lockedUsername,
+}: {
+  density?: 'standard' | 'dense';
+  lockedUsername?: string;
+}) {
   const [mode, setMode] = React.useState<'password' | 'recovery'>('password');
   return mode === 'password' ? (
-    <PasswordSignIn density={density} onUseRecovery={() => setMode('recovery')} />
+    <PasswordSignIn
+      density={density}
+      lockedUsername={lockedUsername}
+      onUseRecovery={() => setMode('recovery')}
+    />
   ) : (
-    <RecoverySignIn density={density} onUsePassword={() => setMode('password')} />
+    <RecoverySignIn
+      density={density}
+      lockedUsername={lockedUsername}
+      onUsePassword={() => setMode('password')}
+    />
   );
 }
 
@@ -78,9 +99,11 @@ function modeSwitchClass(density: 'standard' | 'dense') {
 
 function PasswordSignIn({
   density,
+  lockedUsername,
   onUseRecovery,
 }: {
   density: 'standard' | 'dense';
+  lockedUsername?: string;
   onUseRecovery: () => void;
 }) {
   const {
@@ -89,7 +112,7 @@ function PasswordSignIn({
     setError,
     clearErrors,
     formState: { errors, isSubmitting },
-  } = useSignInForm();
+  } = useSignInForm(lockedUsername);
   const signIn = useSignIn();
 
   // The credential failure is a submit-level `root` error, not tied to a field,
@@ -122,7 +145,8 @@ function PasswordSignIn({
             id="username"
             type="text"
             autoComplete="username"
-            autoFocus
+            autoFocus={!lockedUsername}
+            readOnly={!!lockedUsername}
             aria-invalid={!!errors.username}
             {...register('username', { onChange: clearRootError })}
           />
@@ -135,6 +159,7 @@ function PasswordSignIn({
           <PasswordInput
             id="password"
             autoComplete="current-password"
+            autoFocus={!!lockedUsername}
             aria-invalid={!!errors.password}
             {...register('password', { onChange: clearRootError })}
           />
@@ -176,9 +201,11 @@ function PasswordSignIn({
 // _when a submit is allowed to be `disabled`_.
 function RecoverySignIn({
   density,
+  lockedUsername,
   onUsePassword,
 }: {
   density: 'standard' | 'dense';
+  lockedUsername?: string;
   onUsePassword: () => void;
 }) {
   const {
@@ -187,7 +214,7 @@ function RecoverySignIn({
     setError,
     clearErrors,
     formState: { errors, isSubmitting },
-  } = useRecoverySignInForm();
+  } = useRecoverySignInForm(lockedUsername);
   const signIn = useSignInWithRecovery();
 
   // Same as the password path: the failure is a submit-level `root` error, not tied
@@ -221,7 +248,8 @@ function RecoverySignIn({
             id="rec-username"
             type="text"
             autoComplete="username"
-            autoFocus
+            autoFocus={!lockedUsername}
+            readOnly={!!lockedUsername}
             aria-invalid={!!errors.username}
             {...register('username', { onChange: clearRootError })}
           />
@@ -234,6 +262,7 @@ function RecoverySignIn({
           <Input
             id="rec-code"
             type="text"
+            autoFocus={!!lockedUsername}
             autoComplete="off"
             autoCapitalize="characters"
             spellCheck={false}
