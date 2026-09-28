@@ -106,7 +106,7 @@ it('preserves identified empty folders in HTML and reports removal in CSV and te
   for (const output of ['csv', 'text'] as const) {
     const result = convertBookmarkFiles([source], output);
     expect(result.receipt.emptyFolderCount).toBe(1);
-    expect(result.receipt.losses).toContain('1 empty folders are not included.');
+    expect(result.receipt.losses).toContain('1 empty folders aren’t included.');
   }
 });
 
@@ -248,7 +248,7 @@ it('converts a Bracemark backup the way the app exports: lists as folders, the t
   expect(result.content).toContain('<H3>Archive</H3>');
   expect(result.content).not.toContain('Trash');
   expect(result.receipt.emptyFolderCount).toBe(2);
-  expect(result.receipt.losses.join(' ')).toContain('1 link in Trash is not included');
+  expect(result.receipt.losses.join(' ')).toContain('1 link in Trash isn’t included');
   expect(bookmarkReceiptText(result)).toContain('Links in Trash (not included): 1');
 });
 

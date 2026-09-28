@@ -444,7 +444,7 @@ export function MiscSection() {
           submitLabel="Remove"
           onSubmit={async (password) => {
             if (!(await removeAppLock(password))) {
-              throw new Error('Password is not correct. Please try again.');
+              throw new Error('Password isn’t correct. Please try again.');
             }
           }}
         />

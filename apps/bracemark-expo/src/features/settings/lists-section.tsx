@@ -674,7 +674,7 @@ export function ListsSection() {
           submitLabel="Unlock"
           onSubmit={async (password) => {
             if (!(await unlockList(lockDialog.listId, password))) {
-              throw new Error('Password is not correct. Please try again.');
+              throw new Error('Password isn’t correct. Please try again.');
             }
           }}
         />
@@ -687,7 +687,7 @@ export function ListsSection() {
           submitLabel="Remove"
           onSubmit={async (password) => {
             if (!(await removeListLock(lockDialog.listId, password))) {
-              throw new Error('Password is not correct. Please try again.');
+              throw new Error('Password isn’t correct. Please try again.');
             }
           }}
         />

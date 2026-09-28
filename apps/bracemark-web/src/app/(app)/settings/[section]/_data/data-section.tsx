@@ -635,7 +635,7 @@ function DeleteView({ onBack }: { onBack: () => void }) {
               device has changes that haven’t synced yet, those changes may sync back afterward.
               Consider exporting a copy first.
             </p>
-            <p className="font-medium text-destructive">This action cannot be undone.</p>
+            <p className="font-medium text-destructive">This action can’t be undone.</p>
           </>
         }
       />

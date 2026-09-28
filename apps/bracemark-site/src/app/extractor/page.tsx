@@ -10,7 +10,7 @@ import { ABUSE_EMAIL, SOURCE } from '../../lib/site';
 export const metadata: Metadata = {
   title: 'bracemark-extractor',
   description:
-    'What bracemark-extractor is, why it fetched your page, the caps it holds itself to, and how to stop it if you would rather it did not.',
+    'What bracemark-extractor is, why it fetched your page, the caps it holds itself to, and how to stop it if you would rather it didn’t.',
 };
 
 // The page every outbound fetch promises. `bracemark-extractor` identifies itself
@@ -201,7 +201,7 @@ const NEVER: [string, string][] = [
   ],
   [
     'Write down the address you saved',
-    'The whole reason this service is separate from the rest of Bracemark is that the URL it sees stays transient. Observability is counts, latency, and error rates — that address never reaches a log line. The one you connect FROM is a different thing and we do hold it, briefly: the rate limiter counts requests against it for a few seconds so that a single source cannot flood the service. It is never written down beside the URL, and the privacy policy inventories it.',
+    'The whole reason this service is separate from the rest of Bracemark is that the URL it sees stays transient. Observability is counts, latency, and error rates — that address never reaches a log line. The one you connect FROM is a different thing and we do hold it, briefly: the rate limiter counts requests against it for a few seconds so that a single source can’t flood the service. It is never written down beside the URL, and the privacy policy inventories it.',
   ],
   [
     'Know who asked',
@@ -238,11 +238,11 @@ export default function Page() {
           </p>
           <p className={cn('mt-5 text-body text-muted-foreground')}>
             Bracemark is an end-to-end encrypted bookmark manager. When someone saves a link in the
-            web app — or asks us to fill in ones they saved or imported earlier — the browser will
-            not let that page fetch yours, so this service fetches it instead: reads the title and
-            the preview image, hands both back to the person’s own device, and forgets the address.
-            It is the only server of ours that fetches a page at all: every other way of saving a
-            link reads it on the person’s own device, from their own address.
+            web app — or asks us to fill in ones they saved or imported earlier — the browser won’t
+            let that page fetch yours, so this service fetches it instead: reads the title and the
+            preview image, hands both back to the person’s own device, and forgets the address. It
+            is the only server of ours that fetches a page at all: every other way of saving a link
+            reads it on the person’s own device, from their own address.
           </p>
         </section>
 
@@ -274,8 +274,8 @@ export default function Page() {
               saved by hand or brought with them from another bookmark manager — nothing here
               discovers a page. One extraction attempt for one saved link makes one document request
               to you, plus one for a preview image if your document names one. A transient failure
-              can be retried later. The person’s browser cannot read that image cross-origin any
-              more than it could read your page — that’s why we need the second request.
+              can be retried later. The person’s browser can’t read that image cross-origin any more
+              than it could read your page — that’s why we need the second request.
             </p>
             <p>
               There is a backlog, though, and it is theirs rather than ours. Links saved before
@@ -303,7 +303,7 @@ export default function Page() {
                 that we keep nothing. */}
             <p>
               The person who asked keeps what comes back: it lives on their own devices from then
-              on, encrypted, so saving the same address again does not re-ask you for it.
+              on, encrypted, so saving the same address again doesn’t re-ask you for it.
             </p>
             <p>
               It also only runs for people who turned it on. Fetching on someone’s behalf means
@@ -380,12 +380,12 @@ export default function Page() {
 
         <section>
           <h2 className={cn('font-display text-2xl font-semibold tracking-tight')}>
-            It does not read your robots.txt
+            It doesn’t read your robots.txt
           </h2>
           <div className={cn('mt-4 space-y-4 text-base leading-7 text-muted-foreground')}>
             <p>
               Said plainly, because this is the page where you came looking for it. A robots
-              directive will not stop this fetcher, and we would rather disclose that than let you
+              directive won’t stop this fetcher, and we would rather disclose that than let you
               write a rule that quietly does nothing.
             </p>
             <p>
@@ -400,7 +400,7 @@ export default function Page() {
             <p>
               That is an argument, and one we could lose. It rests entirely on the request being one
               person’s and on there being exactly one of them. If this service ever fetches on its
-              own initiative, or at a volume that a single save cannot account for, the argument is
+              own initiative, or at a volume that a single save can’t account for, the argument is
               gone and this section gets rewritten rather than defended. Blocking by user agent
               works either way, which is why that is documented below.
             </p>
@@ -459,7 +459,7 @@ export default function Page() {
             </p>
             <p>
               <strong className={cn('font-semibold text-foreground')}>
-                Do not block it by address.
+                Don’t block it by address.
               </strong>{' '}
               It runs on Cloudflare Workers, so its requests leave from a shared pool that has
               nothing else to do with us, and banning those addresses costs you traffic you wanted
@@ -467,7 +467,7 @@ export default function Page() {
             </p>
             <p>
               What blocking does to the person who saved the link: they get your hostname as the
-              title and no preview image. The link still works, they are not told why, and nothing
+              title and no preview image. The link still works, they aren’t told why, and nothing
               else about your site is affected.
             </p>
           </div>

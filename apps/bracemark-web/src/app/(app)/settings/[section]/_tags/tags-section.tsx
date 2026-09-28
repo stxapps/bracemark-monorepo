@@ -237,7 +237,7 @@ export function TagsSection() {
     <SettingsPane>
       <SettingsHeader
         title="Tags"
-        description="Create, rename, and reorder your tags. A link can have several tags; tags do not nest."
+        description="Create, rename, and reorder your tags. A link can have several tags; tags don’t nest."
       />
 
       {error && <SettingsNotice tone="error">{error}</SettingsNotice>}

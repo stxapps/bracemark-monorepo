@@ -54,7 +54,7 @@ it.each(['html', 'csv', 'text'] as const)(
 it('reports a refused file with an actionable reason', async () => {
   expect(await roundTrip(new File(['{"url":"https://example.com"}'], 'wrong.json'))).toMatchObject({
     ok: false,
-    message: expect.stringContaining('not supported'),
+    message: expect.stringContaining('isn’t supported'),
   });
 });
 it('refuses oversized files before reading them', async () => {

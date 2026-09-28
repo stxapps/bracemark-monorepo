@@ -176,7 +176,7 @@ export function ExtractionSection() {
     <SettingsPane>
       <SettingsHeader
         title="Link previews"
-        description="The browser extension tries to fill in a title and preview image whenever you save. The mobile app fetches previews on-device: saved links by default, or every pending link that comes into view when its setting covers All links. This web app cannot fetch other sites directly. Turn on server previews below and pending links fill in as you browse; Generate all covers the full library."
+        description="The browser extension tries to fill in a title and preview image whenever you save. The mobile app fetches previews on-device: saved links by default, or every pending link that comes into view when its setting covers All links. This web app can’t fetch other sites directly. Turn on server previews below and pending links fill in as you browse; Generate all covers the full library."
       />
 
       <SettingsRow

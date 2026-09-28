@@ -137,7 +137,7 @@ describe('the manifest round trip', () => {
     // TypeError — from the one function whose entire job is to produce the
     // message the import view renders verbatim.
     for (const text of ['null', '123', '"bracemark-backup"']) {
-      expect(() => parseBackupManifest(text)).toThrow(/not a Bracemark backup/);
+      expect(() => parseBackupManifest(text)).toThrow(/isn’t a Bracemark backup/);
     }
   });
 

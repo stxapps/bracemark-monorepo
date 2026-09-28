@@ -268,7 +268,7 @@ export function convertBookmarkFiles(
       for (const path of folderPaths(read.bundle.folders)) observer.folder(path);
       parsed = flatten(read.bundle);
       trashCount += read.trashCount;
-      losses.add('Bracemark settings, pins, and images are not included.');
+      losses.add('Bracemark settings, pins, and images aren’t included.');
       if (read.archiveCount)
         warnings.add(
           'Archived links are included in an ordinary folder named after your Archive list. Importing them elsewhere may make them active bookmarks.',
@@ -307,7 +307,7 @@ export function convertBookmarkFiles(
       for (const [index, name] of header.entries()) {
         const populated = rows.slice(1).filter((row) => row[index]?.trim()).length;
         if (!supported.has(name) && populated)
-          losses.add(`${populated} values in the CSV column “${name}” are not included.`);
+          losses.add(`${populated} values in the CSV column “${name}” aren’t included.`);
       }
       if (header.includes('folder'))
         warnings.add(
@@ -331,22 +331,22 @@ export function convertBookmarkFiles(
         .slice(1)
         .filter((row) => normalizeUrl(row[urlIndex]) !== null && row[dateIndex]?.trim()).length;
       const unreadDates = dates - parsed.filter((link) => link.createdAt !== undefined).length;
-      if (unreadDates > 0) losses.add(`${unreadDates} unrecognized saved dates are not included.`);
+      if (unreadDates > 0) losses.add(`${unreadDates} unrecognized saved dates aren’t included.`);
       if (header.includes('status'))
         warnings.add(
-          'Archive status becomes an ordinary Archive folder. Other status values are not carried.',
+          'Archive status becomes an ordinary Archive folder. Other status values aren’t carried.',
         );
     } else if (format === 'netscape') {
       if (!/<dl\b/i.test(text) || !/<dt\b/i.test(text))
         throw new Error(
-          'This HTML is not a browser bookmarks export. Export bookmarks from your browser or bookmark manager.',
+          'This HTML isn’t a browser bookmarks export. Export bookmarks from your browser or bookmark manager.',
         );
       if ((text.match(/<dl\b/gi)?.length ?? 0) !== (text.match(/<\/dl\s*>/gi)?.length ?? 0))
         throw new Error('This bookmarks HTML has incomplete folders. Export it again.');
       sourceLabels.add('Browser bookmarks HTML');
       parsed = parseNetscapeHtml(text, observer);
       warnings.add(
-        'HTML descriptions are read as plain text. Formatting, folder descriptions, icons, and extra HTML attributes are not carried.',
+        'HTML descriptions are read as plain text. Formatting, folder descriptions, icons, and extra HTML attributes aren’t carried.',
       );
       warnings.add(
         'HTML favorites become tags, and highlights are combined with notes when present.',
@@ -368,7 +368,7 @@ export function convertBookmarkFiles(
         sourceLabels.add('LinkWarden JSON');
         parsed = parseLinkwardenExport(text, observer);
         losses.add(
-          'LinkWarden account settings, IDs, folder descriptions, feeds, icons, and archived page references are not included.',
+          'LinkWarden account settings, IDs, folder descriptions, feeds, icons, and archived page references aren’t included.',
         );
         warnings.add(
           'LinkWarden folder order follows the export’s collection order. Pinned records are references to existing links, not extra bookmarks.',
@@ -386,11 +386,11 @@ export function convertBookmarkFiles(
         sourceLabels.add('Brace.to export');
         parsed = parseBraceExport(text, observer).links;
         losses.add(
-          'Brace.to settings, images, extraction metadata, and tag colors are not included. Only the newest revision of each link is converted.',
+          'Brace.to settings, images, extraction metadata, and tag colors aren’t included. Only the newest revision of each link is converted.',
         );
       } else
         throw new Error(
-          'This JSON layout is not supported. Choose a LinkWarden or Brace.to export.',
+          'This JSON layout isn’t supported. Choose a LinkWarden or Brace.to export.',
         );
     } else {
       // A URL list is explicit: arbitrary prose, JSON, and HTML never fall
@@ -398,14 +398,14 @@ export function convertBookmarkFiles(
       const lines = text.split(/\r?\n/).filter((line) => line.trim());
       if (!lines.length || !lines.some((line) => /^(https?:\/\/|www\.)\S+$/i.test(line.trim())))
         throw new Error(
-          'This file format is not recognized. Choose bookmarks HTML, CSV, LinkWarden JSON, a Brace.to export, or one URL per line.',
+          'This file format isn’t recognized. Choose bookmarks HTML, CSV, LinkWarden JSON, a Brace.to export, or one URL per line.',
         );
       if (
         lines.some(
           (line) => /[<>{}[\]]/.test(line) && !/^(https?:\/\/|www\.)\S+$/i.test(line.trim()),
         )
       )
-        throw new Error('This is not a URL list. Use one web address per line.');
+        throw new Error('This isn’t a URL list. Use one web address per line.');
       sourceLabels.add('URL text');
       parsed = parseUrlText(text, { linesOnly: true, observer });
       warnings.add(
@@ -416,7 +416,7 @@ export function convertBookmarkFiles(
       for (const field of ['createdAt', 'updatedAt'] as const) {
         if (link[field] !== undefined && !Number.isFinite(new Date(link[field]).getTime())) {
           delete link[field];
-          losses.add('Dates outside the supported calendar range are not included.');
+          losses.add('Dates outside the supported calendar range aren’t included.');
         }
       }
       // Trash is left out, as the app's own export does: importing links that
@@ -440,7 +440,7 @@ export function convertBookmarkFiles(
   if (!links.length)
     throw new Error(
       trashCount
-        ? 'Every link in this file is in Trash, and Trash is not converted. Choose another export.'
+        ? 'Every link in this file is in Trash, and Trash isn’t converted. Choose another export.'
         : 'This file has no web addresses to convert. Choose another export.',
     );
   const occupied = new Set<string>();
@@ -484,14 +484,14 @@ export function convertBookmarkFiles(
     if (changed) losses.add(`${changed} ${name} are changed or omitted in ${target.label}.`);
   }
   if (output !== 'html' && emptyFolderCount)
-    losses.add(`${emptyFolderCount} empty folders are not included.`);
+    losses.add(`${emptyFolderCount} empty folders aren’t included.`);
   const pins = links.filter((link) => link.pinRank !== undefined).length;
-  if (pins) losses.add(`${pins} pin positions are not included.`);
+  if (pins) losses.add(`${pins} pin positions aren’t included.`);
   if (trashCount)
     losses.add(
       trashCount === 1
-        ? '1 link in Trash is not included.'
-        : `${trashCount} links in Trash are not included.`,
+        ? '1 link in Trash isn’t included.'
+        : `${trashCount} links in Trash aren’t included.`,
     );
   if (output === 'html')
     warnings.add(
@@ -567,6 +567,6 @@ export function bookmarkReceiptText(conversion: BookmarkConversion): string {
     'Format caveats',
     ...r.warnings,
     '',
-    'The original file was not changed. Nothing was imported into Bracemark.',
+    'The original file wasn’t changed. Nothing was imported into Bracemark.',
   ].join('\n');
 }

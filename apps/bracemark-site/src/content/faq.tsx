@@ -147,11 +147,11 @@ export const FAQ_GROUPS: FaqGroup[] = [
         q: 'Why not just keep links in a folder of files?',
         a: (
           <>
-            It is a good instinct and we are not going to argue you out of it. But a folder is
-            either readable by anyone who reaches the disk — a backup, a synced drive, a borrowed
-            laptop — or it is encrypted, and the moment it is encrypted you have taken on the hard
-            half yourself: getting it onto a phone, opening it there, searching it without a server
-            to search for you, and never losing the key. That is the work Bracemark is. What you get
+            It is a good instinct and we aren’t going to argue you out of it. But a folder is either
+            readable by anyone who reaches the disk — a backup, a synced drive, a borrowed laptop —
+            or it is encrypted, and the moment it is encrypted you have taken on the hard half
+            yourself: getting it onto a phone, opening it there, searching it without a server to
+            search for you, and never losing the key. That is the work Bracemark is. What you get
             for handing it over is that the folder is still waiting at the end: the complete backup
             is a zip of one JSON line per item, your preview images beside it as ordinary files,
             decrypted, readable in a text editor with nothing of ours installed. Export as often as
@@ -194,16 +194,16 @@ export const FAQ_GROUPS: FaqGroup[] = [
           <>
             That may well be the right call, and nothing here punishes you for waiting: the free
             plan is {FREE_LINKS} links with no time limit, and export is free on every plan, so
-            starting now costs you nothing you cannot walk back. A suite gives you two things we
-            cannot: one subscription instead of two, and one account to keep safe rather than
-            another password and another recovery code. What the second subscription buys is a
-            product that does only this: the lists, the tags, the search, the previews, the browser
-            extension, and sharing into the app from anywhere are the whole of what we work on,
-            rather than a feature fitted in beside the rest of a suite. And one thing does not
-            change with the size of the company behind it — a server that cannot read your links
-            cannot search them for you either, so anything encrypted the way this is inherits the
-            same trade we did: search that runs on your device, and no server-side features. If a
-            suite ships one that fits you better, take it. Your library leaves with you.
+            starting now costs you nothing you can’t walk back. A suite gives you two things we
+            can’t: one subscription instead of two, and one account to keep safe rather than another
+            password and another recovery code. What the second subscription buys is a product that
+            does only this: the lists, the tags, the search, the previews, the browser extension,
+            and sharing into the app from anywhere are the whole of what we work on, rather than a
+            feature fitted in beside the rest of a suite. And one thing doesn’t change with the size
+            of the company behind it — a server that cannot read your links cannot search them for
+            you either, so anything encrypted the way this is inherits the same trade we did: search
+            that runs on your device, and no server-side features. If a suite ships one that fits
+            you better, take it. Your library leaves with you.
           </>
         ),
       },
@@ -424,8 +424,8 @@ export const FAQ_GROUPS: FaqGroup[] = [
             and the metadata that rides with them — a path, a size, the time each last changed —
             together with the account record: the username you chose, the public key your sign-ins
             are checked against, the sessions that keep your devices signed in, and a subscription
-            record if you pay. It does not reach a link, a title, a tag, or a note, and there is no
-            key on our side to compel, because one was never there. An order also does not have to
+            record if you pay. It doesn’t reach a link, a title, a tag, or a note, and there is no
+            key on our side to compel, because one was never there. An order also doesn’t have to
             come to us at all: Cloudflare stores the encrypted files and the account databases,
             Amazon Web Services serves this website and the app, and Paddle holds the payment
             details we never see — each can be served for its own part, and the{' '}
@@ -484,7 +484,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
             encryption happens, and what each of those servers is given. One caveat we would rather
             state than have you assume: reading the source proves what the code does, not that the
             bundle your browser downloaded was built from it. That needs reproducible builds, and we
-            do not publish them yet.
+            don’t publish them yet.
           </>
         ),
       },
@@ -525,11 +525,11 @@ export const FAQ_GROUPS: FaqGroup[] = [
             we ship — web, mobile, and the browser extension — have our API’s address compiled in
             when they are built, so there is no setting that points one somewhere else, and the
             mobile and browser extension builds reach you through stores that only we can publish
-            to. Behind that, the sync server is not a container you can run: it is a Cloudflare
-            Worker wired to Cloudflare’s own databases and object storage, and its subscriptions run
-            through our Paddle account. The {SOURCE.license} does not stop you building your own
-            from the repository, and the code being public is what makes that possible — but it is
-            not a path we document, and not one we can help you debug.
+            to. Behind that, our API isn’t a container you can run: it is a Cloudflare Worker wired
+            to Cloudflare’s own databases and object storage, and its subscriptions run through our
+            Paddle account. The {SOURCE.license} doesn’t stop you building your own from the
+            repository, and the code being public is what makes that possible — but it isn’t a path
+            we document, and not one we can help you debug.
           </>
         ),
       },
@@ -547,7 +547,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
           <>
             A username and a password. That is all we ask for — no email address, no phone number,
             no card. We suggest the password for you: seven random words, long enough to survive an
-            offline attack in a way most typed passwords are not. You can choose your own instead.
+            offline attack in a way most typed passwords aren’t. You can choose your own instead.
             See <PageLink href="/docs/create-an-account">Create an account</PageLink> for the
             recovery step.
           </>
@@ -638,10 +638,10 @@ export const FAQ_GROUPS: FaqGroup[] = [
             Yes, in Settings. It re-locks your key with the new password rather than re-encrypting
             your library, so it takes a moment, not an afternoon — and every other device has to
             sign in again with the new one, which cuts off anyone signed in with the old one. Your
-            own devices keep their copy, and any changes not yet synced, until you do. What it
-            cannot do is unmake a copy: the key itself does not change, so anything someone already
+            own devices keep their copy, and any changes not yet synced, until you do. What it can’t
+            do is unmake a copy: the key itself doesn’t change, so anything someone already
             decrypted stays readable to them. Changing your password is the right move after a
-            scare; it is not a way to undo a break-in that already happened.
+            scare; it isn’t a way to undo a break-in that already happened.
           </>
         ),
       },
@@ -713,7 +713,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
             upgrade or delete links permanently to make room. Moving a link to Trash still counts
             toward the limit. Upgrading lifts the cap straight away. That is also what happens if a
             trial ends with more than {FREE_LINKS} links in your library — they all stay, and stay
-            exportable; you just cannot add new ones until you are back under the cap or on{' '}
+            exportable; you just can’t add new ones until you are back under the cap or on{' '}
             {PLAN_LABELS.plus}.
           </>
         ),
@@ -1202,7 +1202,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
           <>
             A deleted link, yes: removing a link puts it in Trash, and it stays there until you
             delete it permanently. Restore brings it back — to My List, since nothing records which
-            list it came from. An edit is the half we cannot help with. Saving a title, a note, or a
+            list it came from. An edit is the half we can’t help with. Saving a title, a note, or a
             set of tags replaces what was there, and we hold nothing readable from your links to
             have kept the earlier version in, so there is no history to roll back through and
             nothing we could hand you. An export is the backstop worth having, with one thing to

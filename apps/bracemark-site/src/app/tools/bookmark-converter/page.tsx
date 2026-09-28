@@ -22,7 +22,7 @@ const INPUTS = [
   ],
   [
     'JSON / Brace.to TXT',
-    'LinkWarden JSON and Brace.to exports. Other JSON layouts are not supported.',
+    'LinkWarden JSON and Brace.to exports. Other JSON layouts aren’t supported.',
   ],
   [
     'URL text',

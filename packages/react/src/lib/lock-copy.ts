@@ -38,7 +38,7 @@ export const LOCK_COPY = {
   errors: {
     empty: 'Please enter a password',
     /** `onUnlock` resolving false. Everything else it may throw gets `failed`. */
-    wrong: 'Password is not correct. Please try again.',
+    wrong: 'Password isn’t correct. Please try again.',
     failed: 'Could not unlock. Please try again.',
   },
 

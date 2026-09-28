@@ -94,7 +94,7 @@ async function readSources(file: File): Promise<BookmarkSource[]> {
       const { text: backupManifest } = await entryText(
         manifest,
         BOOKMARK_CONVERTER_MAX_BYTES,
-        'This ZIP is not a Bracemark backup (unreadable manifest).',
+        'This ZIP isn’t a Bracemark backup (unreadable manifest).',
       );
       const { text } = items
         ? await entryText(items, BOOKMARK_CONVERTER_MAX_BYTES, BOOKMARK_CONVERTER_BACKUP_TOO_LARGE)
@@ -149,7 +149,7 @@ scope.onmessage = async (event) => {
     if (!backup && (sources.length > 1 || file.name.toLowerCase().endsWith('.zip'))) {
       conversion.receipt.sourceLabel = `ZIP · ${conversion.receipt.sourceLabel}`;
       conversion.receipt.warnings.push(
-        'Only supported bookmark files inside the ZIP are read. Other archive entries are not included.',
+        'Only supported bookmark files inside the ZIP are read. Other archive entries aren’t included.',
       );
     }
     scope.postMessage({ ok: true, conversion });

@@ -150,7 +150,7 @@ const TRADEOFFS: [string, string][] = [
   // overwrite mode, both are wrong rather than stale.
   [
     'No version history',
-    'Each link is its own encrypted file and the newest write is the one that survives. We hold no readable copy of your links to keep earlier versions in, so an edit you regret cannot be rolled back from our side. A backup export taken beforehand keeps the old version where you can read it. Restoring that backup brings back links you deleted and leaves the ones you still have untouched, so an old title or note is yours to copy back in.',
+    'Each link is its own encrypted file and the newest write is the one that survives. We hold no readable copy of your links to keep earlier versions in, so an edit you regret can’t be rolled back from our side. A backup export taken beforehand keeps the old version where you can read it. Restoring that backup brings back links you deleted and leaves the ones you still have untouched, so an old title or note is yours to copy back in.',
   ],
   // "AND WHY WE CANNOT OFFER TO SEARCH FOR YOU" was the closing clause, and the
   // negative attaches to the wrong noun: read quickly it says there is no search
@@ -171,7 +171,7 @@ const TRADEOFFS: [string, string][] = [
   // it is the same fact /privacy inventories, said from the search end.
   [
     'No server-side search',
-    'Search runs on your device, over the copy of the library it already holds. That is why it is instant, and why it reaches only as far as that copy: our servers have nothing readable to search, so a device that has not finished syncing has nothing to search either.',
+    'Search runs on your device, over the copy of the library it already holds. That is why it is instant, and why it reaches only as far as that copy: our servers have nothing readable to search, so a device that hasn’t finished syncing has nothing to search either.',
   ],
   // The one entry that is NOT a consequence of the encryption — which is exactly
   // why it was missing. Every other cost in this list is architectural, so the
@@ -263,7 +263,7 @@ export default function Page() {
               What it costs to build it this way
             </h2>
             <p className={cn('mt-4 text-base leading-7 text-muted-foreground')}>
-              Each of these is something you can do in an ordinary bookmark manager and cannot do
+              Each of these is something you can do in an ordinary bookmark manager and can’t do
               here. We would rather you knew now.
             </p>
             {/* Two columns whatever the entry count, and no third: this shell is a
@@ -462,8 +462,8 @@ export default function Page() {
                 >
                   {PLAN_LABELS.plus} costs ${PLAN_USD_PER_YEAR.plus} a year
                 </Link>{' '}
-                pays for is the part that is not cheap: four clients, two servers, and the people
-                who keep all of them working on platforms that change every year.
+                pays for is the part that isn’t cheap: four clients, two servers, and the people who
+                keep all of them working on platforms that change every year.
               </p>
               <p>
                 We intend to keep today’s free features free, and to never show an advertisement. If
@@ -540,7 +540,7 @@ export default function Page() {
                 Being precise about what that buys you: you can read exactly what we do, and you can
                 check that the encryption happens where we say it does. You cannot, from the source
                 alone, prove that the code your browser just ran was built from it — that would take
-                reproducible builds, which we do not yet publish. Anyone who tells you otherwise
+                reproducible builds, which we don’t yet publish. Anyone who tells you otherwise
                 about their own app is overselling it. What open source removes here is our ability
                 to describe the design as one thing while shipping another.
               </p>

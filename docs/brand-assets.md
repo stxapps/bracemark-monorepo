@@ -548,6 +548,23 @@ look, so we cannot be asked to." The uncontracted form is the heavier one and is
 reserved for the sentence making the claim most flatly. Everywhere else the
 contraction is right, and reaching for "cannot" in helper text just sounds stiff.
 
+**"Most flatly" needs a test, because it is a judgement and nothing enforces
+it.** Two sentences of the same kind spelled two ways is the only real
+inconsistency here — the two forms side by side are ordinary English — so the
+line has to fall in the same place for every author. It is: **"cannot" when the
+subject is us or our server and the verb is about reaching the library** — read,
+open, decrypt, search, index, sign you in. "Of your library we hold ciphertext
+we cannot open", "a server that cannot read your links cannot search them for
+you either", "we cannot sign you in or decrypt your account for you". Everything
+else contracts, including sentences about us: "we can’t offer payment", "an edit
+you regret can’t be rolled back from our side" (a missing feature, not the
+architecture), "Permanent deletion can’t be undone". **The brand lines are the
+exception**, in the other direction: the tagline and the slogan ("We built it so
+we can’t") are spoken lines, set once in `brand/brand.ts`, and keep their
+contraction although they state the claim. The contraction sweep that put this
+test into practice left /terms, /privacy and /security uncontracted on purpose:
+those three pages write out every negation, and that register is theirs.
+
 ⚠ **The apostrophe is the typographic `’` in everything a user reads — an
 editorial choice, not a consequence of the quote character.** The distinction
 matters because the codebase spent a long stretch making it the other way round.

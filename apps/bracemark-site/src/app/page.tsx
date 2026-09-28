@@ -961,7 +961,7 @@ const GUARANTEES: [string, string][] = [
 const DURABILITY: [string, React.ReactNode][] = [
   [
     'It is already on your device',
-    'Bracemark is local-first: the copy you open, search, and edit is held on the machine in front of you, and syncing is how your other devices catch up. The library does not need us to be reachable in order to open.',
+    'Bracemark is local-first: the copy you open, search, and edit is held on the machine in front of you, and syncing is how your other devices catch up. The library doesn’t need us to be reachable in order to open.',
   ],
   // THE CANONICAL STATEMENT OF WHAT COMES OUT, and the only one on the page: the
   // LIBRARY band's Export bullet stays a bullet ("Several formats, one a complete
@@ -1042,7 +1042,7 @@ const DURABILITY: [string, React.ReactNode][] = [
       >
         a single GitHub repository
       </a>{' '}
-      under the {SOURCE.license}. We do not support self-hosting today, but the code does not stop
+      under the {SOURCE.license}. We don’t support self-hosting today, but the code doesn’t stop
       existing when a company does.
     </>,
   ],
@@ -1725,7 +1725,7 @@ export default function Page() {
       <Band
         label="If we disappear"
         title="The library outlives the company."
-        lede="Every subscription should have to answer this, and ours cannot answer it with a promise about our future. Three properties of how it is built, ordered by how little each one needs from us."
+        lede="Every subscription should have to answer this, and ours can’t answer it with a promise about our future. Three properties of how it is built, ordered by how little each one needs from us."
       >
         <dl className={cn('grid gap-x-10 gap-y-8 sm:grid-cols-2 lg:grid-cols-3')}>
           {DURABILITY.map(([term, detail]) => (

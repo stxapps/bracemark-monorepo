@@ -76,7 +76,7 @@ test.describe('locks', () => {
       await unlockPane(page, `${password}-wrong`);
       // Filtered: Next's route announcer is a role="alert" too.
       await expect(
-        page.getByRole('alert').filter({ hasText: /Password is not correct/ }),
+        page.getByRole('alert').filter({ hasText: /Password isn’t correct/ }),
       ).toBeVisible();
       await expect(page.getByRole('heading', { name: 'Bracemark is locked' })).toBeVisible();
       expect(await readTrace(page)).not.toContain('app');
@@ -180,7 +180,7 @@ test.describe('locks', () => {
       await unlockPane(page, `${password}-wrong`);
       // Filtered: Next's route announcer is a role="alert" too.
       await expect(
-        page.getByRole('alert').filter({ hasText: /Password is not correct/ }),
+        page.getByRole('alert').filter({ hasText: /Password isn’t correct/ }),
       ).toBeVisible();
       await expectCoveredAbsent();
       await unlockPane(page, password);

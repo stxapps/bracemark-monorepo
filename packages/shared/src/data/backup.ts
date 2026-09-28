@@ -118,13 +118,13 @@ export function parseBackupManifest(text: string): BackupManifest {
   try {
     parsed = JSON.parse(text);
   } catch {
-    throw new Error('This zip is not a Bracemark backup (unreadable manifest).');
+    throw new Error('This zip isn’t a Bracemark backup (unreadable manifest).');
   }
   // JSON.parse SUCCEEDS on `null` and on any bare scalar, and reading `.format`
   // off null throws — a raw TypeError escaping the one function whose whole job
   // is to produce the message the import view renders verbatim.
   if (typeof parsed !== 'object' || parsed === null) {
-    throw new Error('This zip is not a Bracemark backup (unreadable manifest).');
+    throw new Error('This zip isn’t a Bracemark backup (unreadable manifest).');
   }
   const manifest = parsed as {
     format?: unknown;
@@ -133,7 +133,7 @@ export function parseBackupManifest(text: string): BackupManifest {
     counts?: unknown;
   };
   if (manifest.format !== BRACEMARK_BACKUP_FORMAT) {
-    throw new Error('This zip is not a Bracemark backup (unrecognized format).');
+    throw new Error('This zip isn’t a Bracemark backup (unrecognized format).');
   }
   // A `version` that is not a number at all means the manifest is DAMAGED —
   // truncated, hand-edited, or written by something that isn't us despite the
@@ -142,7 +142,7 @@ export function parseBackupManifest(text: string): BackupManifest {
   // which no update can fix. (JSON cannot carry NaN or Infinity, so a numeric
   // `version` here is always a real number.)
   if (typeof manifest.version !== 'number') {
-    throw new Error('This zip is not a Bracemark backup (invalid manifest version).');
+    throw new Error('This zip isn’t a Bracemark backup (invalid manifest version).');
   }
   // Older versions stay readable on purpose — the gate is one-sided.
   if (manifest.version > BRACEMARK_BACKUP_VERSION) throw new BackupVersionError();

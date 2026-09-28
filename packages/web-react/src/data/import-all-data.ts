@@ -235,7 +235,7 @@ async function importBracemarkBackup(
 
   const manifestEntry = byName.get(BACKUP_MANIFEST_ENTRY);
   if (manifestEntry === undefined) {
-    throw new Error('This zip is not a Bracemark backup (no manifest.json).');
+    throw new Error('This zip isn’t a Bracemark backup (no manifest.json).');
   }
   // Format/version gate — throws the user-facing message (shared data/backup.ts).
   parseBackupManifest(await manifestEntry.getData(new TextWriter()));

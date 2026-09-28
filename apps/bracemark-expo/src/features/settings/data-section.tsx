@@ -683,7 +683,7 @@ function DeleteView({ onBack }: { onBack: () => void }) {
               Consider exporting a copy first (Settings → Data).
             </Text>
             <Text className="text-sm font-medium text-destructive">
-              This action cannot be undone.
+              This action can’t be undone.
             </Text>
           </>
         }

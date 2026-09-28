@@ -17,7 +17,7 @@ import {
 export const metadata: Metadata = {
   title: 'Support',
   description:
-    'How to get help with Bracemark: one email address, what to put in it, and the things we genuinely cannot do for you.',
+    'How to get help with Bracemark: one email address, what to put in it, and the things we genuinely can’t do for you.',
 };
 
 // A reachable support URL is a store-listing requirement, so this
@@ -72,7 +72,7 @@ const ELSEWHERE: ElsewhereCard[] = [
   {
     href: '/privacy',
     title: 'What we store about you',
-    body: 'The complete inventory, including the parts that are not encrypted.',
+    body: 'The complete inventory, including the parts that aren’t encrypted.',
   },
 ];
 
@@ -215,9 +215,9 @@ export default function Page() {
           <p className={cn('mt-4 text-body text-muted-foreground')}>
             We aim to acknowledge a report within {SECURITY_ACK_WINDOW}, and to tell you what we
             intend to do about it within {SECURITY_TRIAGE_WINDOW}. We are a small team, so there is
-            no bug bounty and we cannot offer payment — we will credit you when a report leads to a
-            fix, unless you would rather we did not. The scope, the things we are most interested
-            in, and the handful of behaviours that are known and by design are in{' '}
+            no bug bounty and we can’t offer payment — we will credit you when a report leads to a
+            fix, unless you would rather we didn’t. The scope, the things we are most interested in,
+            and the handful of behaviours that are known and by design are in{' '}
             <a
               className={cn(
                 'rounded-sm text-signal underline decoration-signal-line underline-offset-2 hover:decoration-signal',
