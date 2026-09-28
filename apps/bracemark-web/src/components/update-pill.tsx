@@ -42,7 +42,7 @@ import { reloadPage } from '@/lib/reload-page';
 // discards an editor's unsaved work silently — if one is open and dirty
 // (useUnsavedDraft), the user either keeps editing or explicitly discards.
 //
-// The update-required banner (update-required.tsx) outranks it: once a newer
+// The update-required banner (update-required-banner.tsx) outranks it: once a newer
 // build has taken the DATABASE, this tab can't save at all, and that banner says so.
 export function UpdatePill() {
   const [updated, setUpdated] = useState(false);

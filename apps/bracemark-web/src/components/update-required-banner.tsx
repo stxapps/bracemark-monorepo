@@ -26,7 +26,7 @@ import { Button } from '@stxapps/web-ui/components/ui/button';
 //
 // An alert, not a status: it arrives unasked, but every save the user makes from
 // here on fails, and they need to know before the next one.
-export function UpdateRequired() {
+export function UpdateRequiredBanner() {
   const [required, setRequired] = useState(isUpdateRequired);
   const [reloading, setReloading] = useState(false);
   useEffect(() => onUpdateRequired(() => setRequired(true)), []);

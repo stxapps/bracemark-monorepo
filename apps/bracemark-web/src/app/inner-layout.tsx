@@ -8,7 +8,7 @@ import { AuthProvider, useAuth } from '@stxapps/web-react';
 import { ThemeProvider } from '@stxapps/web-ui/contexts/theme-provider';
 
 import { UpdatePill } from '../components/update-pill';
-import { UpdateRequired } from '../components/update-required';
+import { UpdateRequiredBanner } from '../components/update-required-banner';
 import { apiClient } from '../lib/api-client';
 import { extractClient } from '../lib/extract-client';
 
@@ -112,7 +112,7 @@ export function InnerLayout({ children }: { children: React.ReactNode }) {
               <ThemeProvider>
                 {children}
                 <UpdatePill />
-                <UpdateRequired />
+                <UpdateRequiredBanner />
               </ThemeProvider>
             </AuthProvider>
           </ExtractClientProvider>

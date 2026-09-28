@@ -241,7 +241,7 @@ different builds, and a phone and a laptop can too. Three contracts hold:
    code over a schema it doesn't know — so an `on('ready')` check refuses any
    installed version above `DATA_DB_VERSION`. Every path raises the same signal.
    The sync providers stop scheduling cycles on it, and the web app shows the
-   **update-required banner** (`apps/bracemark-web/src/components/update-required.tsx`).
+   **update-required banner** (`apps/bracemark-web/src/components/update-required-banner.tsx`).
 
    It is a banner, not a modal: an unsaved draft stays on screen and selectable
    to copy, and Save now fails against the closed database with the editor's
