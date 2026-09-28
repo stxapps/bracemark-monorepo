@@ -153,7 +153,9 @@ describe('a run that outlives its view', () => {
 
     const second = renderHook(() => useImportAllData());
     expect(second.result.current.state.phase).toBe('idle');
-    act(() => second.result.current.run(file));
+    // `writing` is already resolved, so this run settles at once — inside act, so its
+    // `done` lands in the test rather than after it.
+    await act(async () => second.result.current.run(file));
     expect(mockImport).toHaveBeenCalledTimes(2);
   });
 });
