@@ -19,9 +19,11 @@ target_ (`PWA-001`–`003`, the only run that meets the worker),
 
 > **STATUS — partly built.** The worker exists (`apps/bracemark-web/src/sw.ts`,
 > built by `serwist build` after `next build`). It registers only when the app
-> runs standalone, and `PWA-001`–`003` prove the installed PWA opens, edits and
-> exports with the origin gone. Everything below that changes the worker (the
-> cache rule, registering after sign-in, the update policy, the `versionchange`
+> runs standalone or an existing registration is found. `PWA-001`–`003` cover
+> opening, editing and exporting with the origin gone and a fresh, unexpired
+> session. They do not prove survival past today's session expiry. Everything
+> below that changes the worker (the cache rule, registering after sign-in,
+> the update policy, the `versionchange`
 > guard) is designed, not built. See [build order](#build-order).
 
 ### the promise
@@ -31,22 +33,30 @@ library does not need us to be reachable in order to open." Two things have to
 hold for that sentence to be true:
 
 1. **Nothing wipes the library.** That is [sessions.md](./sessions.md)'s rule:
-   no clock, and no 401 that isn't our own `session_revoked`.
+   no clock, and only an explicit `session_revoked` verdict for the current
+   session generation may trigger a session-driven wipe. Expired and unknown
+   tokens preserve data.
 2. **Something can still open it.** That is this doc.
 
-Cold launch with the origin gone, per platform:
+Reachability with the origin gone, per platform. **Every row assumes that the
+local library, keys and required app files remain on the device.** Today it also
+depends on the session not having expired or been rejected. The future column
+requires **both** this design and the session redesign to be implemented.
 
-| platform                          | today                           | after this design                        |
-| --------------------------------- | ------------------------------- | ---------------------------------------- |
-| Expo app (iOS, Android)           | works: code ships in the binary | same                                     |
-| browser extension                 | opens, but has no export        | same (a stated boundary, see below)      |
-| bracemark-web, installed PWA      | works (`PWA-001`–`003`)         | same                                     |
-| bracemark-web, a tab already open | works: the page is in memory    | same                                     |
-| bracemark-web, fresh tab          | **fails**: no worker in a tab   | works, in any browser the user signed in |
-| bracemark-web, never signed in    | fails                           | fails, and holds no library to lose      |
+| platform                          | today                                                                   | after this design                                             |
+| --------------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------- |
+| Expo app (iOS, Android)           | opens with an unexpired session; code ships in the binary               | opens with retained local data and keys                       |
+| browser extension                 | opens, but has no export                                                | same (a stated boundary, see below)                           |
+| bracemark-web, installed PWA      | opens with a fresh session and installed worker (`PWA-001`–`003`)       | opens after worker installation, subject to storage retention |
+| bracemark-web, a tab already open | loaded views remain available; uncached routes/assets may fail          | offline routes require the installed worker and cached assets |
+| bracemark-web, fresh tab          | fails without an existing worker; an existing registration can serve it | opens after worker installation, subject to storage retention |
+| bracemark-web, never signed in    | fails                                                                   | fails, and holds no library to lose                           |
 
-The last row is the honest edge of the claim, and it is empty by construction:
-a browser that never signed in has no copy of anyone's library.
+A browser that never signed in has no local library. Signing in alone does not
+prove offline readiness: the local library must have been created or synced and
+the worker installation must have completed. Browser eviction, user-cleared data
+and incomplete local downloads remain boundaries; content never downloaded cannot
+be recovered from a dead server. See _storage durability_ below.
 
 ### ⚠ the worker caches the app, never data
 
@@ -57,9 +67,11 @@ those three properties.
 
 This is not the current behaviour, and nothing flags it. `sw.ts` passes
 `@serwist/next`'s `defaultCache` as `runtimeCaching`, and that list ends with a
-catch-all for **every cross-origin GET**: `NetworkFirst`, cache `cross-origin`,
+catch-all for **remaining cross-origin GETs**: `NetworkFirst`, cache `cross-origin`,
 32 entries, one hour (`node_modules/@serwist/next/dist/index.worker.mjs`, the
-`!sameOrigin` matcher). For Bracemark that catches:
+`!sameOrigin` matcher). Earlier image, font and other asset matchers also accept
+cross-origin URLs, so the cache used depends on which rule matches first.
+Together these rules can cache:
 
 - the api's authenticated reads: `GET /v1/ops/list`, `GET /v1/files/list`,
   `GET /v1/iap/status`;
@@ -73,25 +85,42 @@ Cache Storage keys on the URL, not on the `Authorization` header, so:
 - **Sign-out leaves residue.** The teardown wipes IndexedDB and the React Query
   cache ([data-lifecycle.md](./data-lifecycle.md), _the sign-out teardown_) but
   never Cache Storage. The previous account's `iap/status` and a list of image
-  URLs from its saved pages stay on the device for up to an hour. The next
-  account to sign in inside that hour can be served the previous account's
+  URLs from its saved pages can remain on the device after sign-out. The next
+  account to sign in within the cache's freshness window can be served the previous account's
   `iap/status` when the network is slow or down.
+  Cache freshness limits are not timed deletion guarantees: expiration cleanup
+  runs when the worker uses the cache, and earlier asset rules have different
+  retention settings.
 - **Offline stops looking offline.** `NetworkFirst` with a 10-second timeout
   answers from the cache when the network fails or is slow, so a request that
   should fail can return an old answer. The sync engine and the entitlement fold
   are built to handle a failed request. They aren't built to handle a stale
   success.
 
-The fix is a route placed **before** `defaultCache` that sends every
-cross-origin request to `NetworkOnly`, or a `defaultCache` filtered to drop its
-cross-origin entry. Either way, the rule is the thing to keep, not the
-mechanism. Today only the installed PWA carries this cache. Registering in
-every signed-in tab (below) would put it in all of them, so **this lands
-first**.
+The fix is a cross-origin `NetworkOnly` GET route placed **before every
+runtime caching rule**. Other methods must remain network-only too. An
+alternative is to constrain every caching matcher to approved same-origin app
+resources. **Removing only the final cross-origin entry is insufficient**:
+the earlier asset matchers would still cache third-party responses.
 
-With the rule in place, what the worker holds is the same for every user: the
-static export's pages, RSC payloads and chunks. That is why sign-out does not
-need to touch it ([below](#sign-out-leaves-the-worker-alone)).
+**Prelaunch: reset development profiles, without a legacy-cache migration.**
+There are no real users or production installs to migrate. Before verifying
+the new worker, manually unregister the old worker and clear its Cache Storage
+and expiration metadata in development/test profiles, or use a fresh profile.
+This is a development reset, not activation-time product code or a requirement
+to support upgrades from the current unsafe cache rules. A routing change alone
+does not remove old entries from a reused test profile.
+
+Ship the cross-origin network-only rule in the first public build. Existing
+registrations can also control ordinary tabs, and registering after every
+sign-in widens that population, so **the rule lands first**. Once real users
+exist, any later change that leaves account data in old caches must include a
+cleanup path; the prelaunch reset policy no longer applies to their devices.
+
+With the rule in place from the first public build, cached response bodies
+contain the static export's pages, RSC payloads and chunks. Sign-out can retain those app
+resources, subject to the cache-key boundary
+[below](#sign-out-leaves-the-worker-alone).
 
 ### when the worker registers — after sign-in, in any display mode
 
@@ -113,23 +142,26 @@ for an anonymous visitor. None of them holds for a signed-in user:
   manifest screenshots `ss-*.png`, the `opengraph-image`/`twitter-image`.
   Excluding them through `globIgnores` in `serwist.config.mjs` leaves about
   1.7 MB, almost all of it JS chunks. Later deploys only fetch entries whose
-  revision changed, and hashed chunks that didn't change are never fetched
-  again.
+  revision changed or whose cache entry is missing; unchanged hashed chunks
+  can be reused while their entries remain cached.
 - **"The worker's update rules shouldn't strand a tab on an old build."** True
   of `skipWaiting: false`, which is today's config. The update policy below
-  removes it.
+  addresses it, subject to the update verification gate below.
 - **"Lean on Next.js before adding machinery."** Next has no way to load a page
   offline from a cold start. Something has to answer the navigation, and
   Serwist is already a dependency. Nothing new gets added.
 
-**Keep the `waiting`/`controllerchange` listeners in the same place.** The
-update pill (below) hangs off them.
+**Keep worker lifecycle listeners with registration.** Retain the existing
+`waiting` listener and add the activation/controller-change handling needed by
+the update pill. Distinguish first installation from a replacement worker so
+first-time control does not announce a spurious update.
 
 **The offline guarantee starts when the install finishes, not when the user
 signs in.** Sign-in needs the network, so the first session is always online,
 and the precache downloads in the background during it. A user who signs in
 and closes the tab within seconds may not have a full precache yet. That is
-acceptable: their next online visit completes it.
+not yet offline-ready. A later online visit can retry installation; installation
+failures and storage quota limits must remain visible in readiness checks.
 
 #### navigations with a query string — verify
 
@@ -143,48 +175,71 @@ whatever its query, so the likely fix is `ignoreURLParametersMatching: [/.*/]`
 for the precache. **Verify first:** `PWA-001` loads bare `/links`, so no case
 has tried this.
 
-### update policy — the new worker takes over at once, tabs update on reload
+### update policy — immediate takeover requires verification
 
-**`skipWaiting: true`** (currently `false` in `sw.ts`), with `clientsClaim: true`
-(already set). A new worker takes over as soon as it has installed. Open tabs
-keep running the code they already loaded, and any reload or new tab gets the
-new version.
+The proposed policy is **`skipWaiting: true`** (currently `false` in `sw.ts`),
+with `clientsClaim: true` (already set). **Do not enable it until the two-build
+offline tests below pass and draft protection exists.** New worker code can
+take over old pages while those pages still request old assets. This is a real
+compatibility boundary, documented in
+[Chrome's worker lifecycle guidance](https://developer.chrome.com/docs/workbox/service-worker-lifecycle).
 
-The two alternatives, and why neither:
+After the replacement has installed and activated,
+open tabs keep their loaded code and a reload can load the new build. A reload
+that only starts the update check may still load the old build. The pill must
+track completed activation, not promise a new version merely because a deploy
+exists.
+
+The alternatives have different costs:
 
 - **Wait until every tab closes** (`skipWaiting: false`, today). A waiting
   worker activates only once no page is using the old one, and **a reload
   doesn't count**: the reloading page is still a client of the old worker
   while its navigation is in flight. So the refresh button does nothing for
   an update, and people with the PWA installed rarely close every window.
-  They could run an old build indefinitely.
+  They could run an old build indefinitely. This remains the current safe
+  default until the immediate-takeover verification gate passes. A waiting
+  worker can also be activated explicitly through a coordinated update flow;
+  changing `skipWaiting` globally is not the only possible update mechanism.
 - **Force every tab to reload on update.** That reloads the user mid-task and
-  loses any text in an open editor. It isn't safer, either: open tabs can
-  already run different versions today (next section).
+  can lose text in an open editor. It reduces version skew only if coordinated
+  successfully, and still needs the draft and pending-save protection below.
 
-**A reload doesn't lose queued edits.** Every local write goes to IndexedDB
-(`items` plus the `pendingOps` queue) before any sync is attempted, so a reload
-at any moment loses only text typed into an editor that hasn't been saved. The
-dirty-editor close guard ([editors.md](./editors.md)) already covers that.
+**Committed edits survive a reload; drafts and unfinished writes need protection.**
+The `items`/`pendingOps` transaction must finish before a save is considered
+durable. The existing dirty-editor guard ([editors.md](./editors.md)) blocks
+accidental dialog dismissal, such as Escape and backdrop clicks. It does not
+intercept document reloads. A new app-level update coordinator must account for
+dirty editors and pending local saves; a `beforeunload` warning alone is not
+durable draft recovery.
 
 **The "updated, reload" pill.** A tab that was open when the new worker took
-over (it sees `controllerchange`) shows a quiet pill offering a reload. The
-dirty-editor guard applies to it like any other navigation away. The tab never
-reloads on its own for a routine update. The one exception is the schema
-change below, where the old tab can no longer read the database.
+over shows a quiet pill offering a reload. Its action waits for pending local
+saves to commit and lets the user finish editing or explicitly discard the
+draft before reloading. A routine update never reloads the tab on its own.
+Schema changes require the separate connection-closing and draft-recovery flow
+below, because the old tab can no longer save to the upgraded database.
 
-### version skew — why tabs on different versions are safe
+### version skew — the conditions for safe mixed versions
 
 Tabs running different builds is not something the worker introduces. Without
 any worker, a tab opened before a deploy and one opened after it already run
-different builds, and a phone and a laptop always do. Three things keep it
-safe, and only the third is new work:
+different builds, and a phone and a laptop can too. That does not prove safety
+under worker takeover. Three separate contracts have to hold:
 
 1. **Old chunks.** An old tab can lazily load a chunk its build names. Online,
    [hosting.md](./hosting.md) keeps every `_next/` file forever, so it loads.
-   Offline, the new worker's precache no longer has it, the chunk load fails,
-   and Next falls back to a full page load, which is the new version. That is
-   a graceful update, not an error.
+   Offline, activation can remove old precache entries while a tab still needs
+   them. **Do not assume Next turns every chunk failure into a safe reload.**
+   Its installed navigation-failure handler is conditional, and
+   `experimental.appNavFailHandling` defaults to false; even a fallback reload
+   needs draft protection. Before immediate takeover ships, verify old tabs
+   opening unvisited routes offline after the new worker activates. If this
+   fails, retain the old assets needed by live clients or implement explicit,
+   draft-safe recovery to the new build. Specify when retained assets can be
+   removed and test repeated updates; one previous cache alone does not protect
+   a tab that survives several deploys. Until that policy is implemented and
+   verified, keep the waiting-worker behavior.
 2. **Synced payloads.** Every entity schema in `packages/shared/src/sync/entities.ts`
    is a `z.looseObject`, so an old reader keeps fields it doesn't know and
    writes them back unchanged. The blob frame carries a version byte, and
@@ -206,12 +261,29 @@ safe, and only the third is new work:
    bump there leaves the **new** tab's `loadSession()` blocked behind the old
    tab, and auth never resolves.
 
-   **So every tab handles `versionchange` on both databases by closing the
-   connection and reloading.** It shows a line first ("Bracemark was updated in another tab")
-   and waits for the dirty-editor guard, but it can't wait long, because it
-   can no longer save. Nothing in lint, types or tests notices this is
-   missing. The symptom is one tab of an existing user silently failing to
-   save after a deploy.
+   **Every tab handles `versionchange` on both databases by stopping database
+   work and closing the affected connection promptly.** Stop sync scheduling,
+   gate new reads/writes, and account for transactions already running. Do not
+   hold the connection open while waiting for a person to answer a dialog;
+   that blocks the new tab's upgrade. Do not offer Save against a closed or
+   incompatible database.
+
+   Show an update-required state, retaining any unsaved draft in memory with
+   a way to copy it and an explicit discard-and-reload action. Automatic
+   reload is allowed only when there is no draft or the draft has been durably
+   preserved for recovery. If automatic draft recovery is implemented, it
+   needs a versioned, account-bound store independent of the database being
+   upgraded, a restore path in the new build, and sign-out cleanup. A failure
+   to preserve a draft must leave the recovery UI open rather than reload.
+   Do not use the unavailable old database as the only draft backup.
+
+   An old page whose first database open happens after the upgrade can get
+   `VersionError` without receiving `versionchange`; route it to the same
+   update-required UI. Once safe to reload, ensure the target build can open
+   the new schema. In particular, a waiting old worker must not serve the old
+   shell again and create a reload loop. Verify the new app shell is available
+   offline before automatically reloading an offline tab. Database-open errors
+   must never be interpreted as a missing session that permits a data wipe.
 
    **⚠ The handler has to be in the build being replaced, not the one
    replacing it.** `versionchange` fires in the _old_ tab, so the old code is
@@ -223,16 +295,21 @@ safe, and only the third is new work:
 
 ### sign-out leaves the worker alone
 
-**Don't unregister on sign-out, and don't clear its caches.** Once the worker
-caches only the app, it holds nothing about the account. What it holds is
-identical for every user of the origin. Unregistering would take offline
-support away from the next sign-in and re-download the precache for nothing.
-The IndexedDB wipe already covers everything sign-out owes the user
-([data-lifecycle.md](./data-lifecycle.md), _the sign-out teardown_).
+**Don't unregister on sign-out, and retain app-only response caches.** This
+policy relies on the cross-origin routing fix shipping in the first public build.
+Cached response bodies then contain static app resources rather than account
+data. Unregistering would take offline support away from the next sign-in and
+require registration again without an account-cleanup benefit.
+Account teardown still clears the stores listed in
+[data-lifecycle.md](./data-lifecycle.md), _the sign-out teardown_, plus any new
+draft-recovery store. Runtime cache keys can include list/tag/search query
+parameters even when their response bodies are static. Normalize those keys
+only where response equivalence is proven, or remove account-bearing entries
+on sign-out; app-only response bodies do not justify retaining private URLs.
 
-This depends on the cache rule above. If the worker ever caches data again,
-the sign-out teardown has to clear that cache, and this section has to be
-rewritten.
+This depends on the cache rule above. If the worker ever caches
+data again, the sign-out teardown has to clear that cache, and this section
+has to be rewritten.
 
 ### storage durability — verify before promising
 
@@ -241,7 +318,9 @@ settle before the claim covers every browser:
 
 - **Ask for persistence.** Call `navigator.storage.persist()` after sign-in.
   Chrome grants it based on engagement or installation, Firefox asks the user,
-  and a persisted origin is not evicted under storage pressure.
+  and a persisted origin is protected from automatic storage-pressure eviction.
+  Check the result; the request can be denied, and persistence does not prevent
+  the user from clearing site data.
 - **Safari.** WebKit deletes all of a site's script-writable storage,
   IndexedDB and the worker registration included, after 7 days of Safari use
   without an interaction with the site, unless it was added to the Home Screen.
@@ -256,7 +335,8 @@ settle before the claim covers every browser:
 - **Reachability:** built in. The code ships in the binary, and the local
   store is expo-sqlite plus expo-file-system. Maestro covers offline cold
   start, read, write and export on both OSes, plus a 500/404 api's cold start
-  and export on Android ([e2e.md](./e2e.md)).
+  and export on Android ([e2e.md](./e2e.md)). These fresh-session cases do not
+  remove today's local-expiry wipe; the session redesign is still required.
 - **Updates:** store builds only. `expo-updates` is **not installed** (it
   appears in `app.config.ts` only on the share extension's excluded-packages
   list), so there's no over-the-air policy to design and no update server
@@ -279,17 +359,19 @@ settle before the claim covers every browser:
 
 - **Reachability:** the code ships in the package, so the popup and options
   pages open offline.
-- **Updates:** the browser restarts every part of the extension together on
-  update, so no two versions ever run side by side. Its IndexedDB belongs to
-  the extension's own origin, so it never shares a database with a web tab.
-  Nothing from _version skew_ applies.
+- **Updates:** packaged updates avoid the web worker's precache handover. Its
+  IndexedDB belongs to the browser extension's own origin, so it never shares
+  a database with a web app tab. Popup, options and background contexts still
+  share local state: keep session-generation coordination and database-upgrade
+  handling, and verify their lifecycle during an installed-package update.
 - **Boundary: no export.** The popup is quick-save plus a recent list, and the
   options page is account and theme ([browser-extension.md](./browser-extension.md)).
   If the server disappeared, the extension's local copy couldn't be exported
   from the extension. That's accepted: the extension has no library view, so
-  it isn't anyone's only client. The library a user reads is on web or mobile,
-  and that's where export lives. If the extension ever gains a library view,
-  it gains an export in the same change.
+  export requires a retained web or mobile copy. A link saved only in the
+  browser extension and never synced may exist nowhere else; do not claim
+  that another client necessarily has it. If the browser extension gains a
+  library view, it gains an export in the same change.
 - **The 401 rule:** the MV3 background worker never wipes. See
   [sessions.md](./sessions.md), _who acts on a 401_.
 
@@ -300,36 +382,61 @@ worker. It gains:
 
 - **A normal tab, cold, never warmed.** Registration happens after sign-in in
   a normal tab, not standalone, and the case **never visits Settings while
-  online**. `PWA-003` today reaches Export after an online launch that fills
-  `defaultCache`, so it can't tell "the precache supplies Settings → Data"
-  apart from "the runtime cache remembered it". This case can.
+  online**. `PWA-003` today includes an online launch under the worker. Make
+  absence of warmed Settings/Data runtime entries an explicit assertion so
+  the new case proves those routes are available from the precache.
 - **No cross-origin entries.** After a full online session (sync, images,
-  entitlement), `caches.keys()` has no `cross-origin` cache and no entry for
-  the api's or the extractor's origin.
-- **Update on reload.** Serve build A, then build B. One reload in one tab
-  runs B. A second tab that stayed open shows the pill and still works.
+  entitlement), inspect requests in **every** app-owned cache, not only the
+  cache named `cross-origin`. Include cross-origin image/font URLs matching
+  the earlier asset rules and presigned downloads. Start from a fresh or
+  manually reset test profile; no legacy-cache upgrade case is required before
+  launch. Check sign-out removes account-bearing URL keys. The two-build update
+  cases below use builds with the safe cache rule already in place.
+- **Update on reload.** Serve build A, then build B, wait for B's installation
+  and activation, then reload into B. A second tab that stayed open
+  shows the pill and still works. Also reload while B is still installing:
+  the UI must not incorrectly claim the tab is already on B.
+- **Old tab, new worker, no network.** After B takes over A, go offline and
+  open previously unvisited routes, including Settings → Data → Export.
+  Repeat across multiple updates and with an unsaved editor. Verify old-asset
+  retention or explicit recovery, with no automatic draft loss or reload loop.
 - **`versionchange`.** A build with `version(2)` opened beside a tab on
-  `version(1)`: the old tab reloads into the new build and loses no queued op.
-  This is the specimen for the ⚠ rule, and it needs the handler in build A,
-  which is the point.
+  `version(1)`, for both databases: the old connection closes without waiting
+  for user input, and the new tab is not blocked. Test a committed queued op,
+  an in-flight save, and an unsaved editor separately. The draft remains
+  recoverable or is discarded only by explicit choice. Cover an old tab's
+  first open receiving `VersionError`, offline recovery, and a waiting worker
+  still serving A. The handler must already be in build A.
 - **A query-string cold load**, for the verify item above.
+- **Session prerequisites.** Run cold launch/export after local clock advance
+  past the old TTL and after server expiry or token purge, with an unsynced
+  edit present. Those cases depend on [sessions.md](./sessions.md)'s redesign;
+  the current fresh-session PWA cases cannot stand in for them.
 
 ### build order
 
-Each step is safe on its own. The order is set by what the next step depends
-on:
+The order is set by what the next step depends on. The verification gates are
+part of each step, not work to defer until after enabling the behavior:
 
-1. **The cache rule.** Cross-origin requests go to the network only. This comes
-   first because every later step widens who has the worker.
+1. **The cache rule.** Cross-origin requests go to the network only, starting
+   with the first public build. Reset old development/test profiles manually;
+   no legacy-cache migration ships. This comes first because every later step
+   widens who has the worker.
 2. **The `versionchange` guard**, on `bracemark-data` (Dexie) and
    `bracemark-session` (raw IndexedDB), both in `@stxapps/web-react`. The
-   browser extension inherits it harmlessly, since nothing there triggers it.
-   It must ship before launch.
-3. **`skipWaiting: true`** plus the reload pill.
+   browser extension inherits the same protection. Include the update-required
+   UI, pending-save handling, draft recovery/discard flow, and a compatible
+   reload target. It must ship before launch and before any schema bump.
+3. **The reload pill and two-build verification.** Enable `skipWaiting: true`
+   only after old-tab offline navigation and draft protection pass. Otherwise
+   retain the waiting worker until an asset-retention or recovery policy passes.
 4. **Register after sign-in**, with the PNG `globIgnores` and, if the verify
    item confirms it, `ignoreURLParametersMatching`.
 5. **`navigator.storage.persist()`** after sign-in, then the Safari measurement.
 
-Once step 4 ships, [sessions.md](./sessions.md) and this doc's platform table
-show the fresh-tab row as working, and the landing page's claim holds without
-a qualifier, apart from what the Safari measurement finds.
+Step 4 establishes normal-tab worker registration, not the whole dead-server
+promise. Before updating the platform table or public claim, also land the
+[session redesign](./sessions.md), pass the cold-launch/export and update cases,
+and establish the supported browsers' storage-retention boundaries. The claim
+covers data already available on a device whose app files, keys and storage
+remain intact; signing in once is not an unconditional durability guarantee.
