@@ -23,8 +23,8 @@ target_ (`PWA-001`–`007`, the only run that meets the worker),
 > (`skipWaiting: true`) behind an "updated, reload" pill, and ignores query
 > strings on precache lookups. It registers once a user is signed in, in any
 > display mode. Both local databases let go on `versionchange` and raise an
-> update-required banner. Sign-out drops query-keyed cache entries and keeps the
-> worker. The app asks for persistent storage after sign-in. The session redesign
+> update-required banner. Sign-out keeps the worker, and as a safeguard drops any
+> query-keyed runtime cache entry (none is written today). The app asks for persistent storage after sign-in. The session redesign
 > ([sessions.md](./sessions.md)) has landed too, so nothing on the device wipes it
 > on a clock. `PWA-001`–`007` and `VERSION-SKEW-WEB-001`/`002` cover it
 > ([testing](#testing)). **Still open:** whether Safari's 7-day storage cap
@@ -267,13 +267,26 @@ different builds, and a phone and a laptop can too. Three contracts hold:
 **Sign-out doesn't unregister the worker, and keeps its app-only caches.**
 Cached response bodies contain static app resources, not account data (the
 cross-origin rule above), and unregistering would take offline support away
-from the next sign-in. What a body-clean cache can still hold is an
-account-bearing KEY: the runtime page caches key on the full URL, and
-`/links?list=<id>&tag=<id>` names the account's lists and tags. So the sign-out
+from the next sign-in. What a body-clean cache could still hold is an
+account-bearing KEY: `defaultCache`'s runtime page caches key on the full URL,
+and `/links?list=<id>&tag=<id>` names the account's lists and tags.
+
+**Today no such key is written.** Serwist registers the precache route ahead of
+`runtimeCaching`, the precache ignores every query
+([navigations with a query string](#navigations-with-a-query-string--verified)), and every
+route is precached — so a query URL, a full load or an in-app move, and its
+`?_rsc=` payload are answered from the precache and never reach a runtime cache.
+`PWA-005` asserts it before sign-out, after a full load of a query URL and an
+in-app move to `?list=archive`.
+
+**The purge is a safeguard for the day that stops holding** — a route left out
+of the precache, or a narrower `ignoreURLParametersMatching`. The sign-out
 teardown (`clearData` → `purgeAccountCacheKeys`,
-`packages/web-react/src/data/cache-storage.ts`) deletes every runtime entry whose
+`packages/web-react/src/data/service-worker-cache.ts`) deletes every runtime entry whose
 URL carries a query, and never touches the precache, whose keys carry Serwist's
-own revision query. `PWA-005` signs out and checks both.
+own revision query. `PWA-005` checks both after sign-out; if its pre-sign-out
+check ever fails, the purge has started doing real work, and this section is
+the place to say why.
 
 If the worker ever caches data again, the sign-out teardown has to clear that
 cache, and this section has to be rewritten.
@@ -362,8 +375,9 @@ worker:
 - `PWA-004` — a **normal tab**: the app registers the worker itself at sign-in,
   and the case never opens Settings → Data online (asserted: no runtime entry
   for it), so offline the section can only come from the precache.
-- `PWA-005` — after a full online session no cache holds a cross-origin key;
-  sign-out drops the query-keyed entries and keeps the registration.
+- `PWA-005` — after a full online session no cache holds a cross-origin key and
+  no runtime cache a query-keyed one, before sign-out or after; sign-out keeps
+  the registration.
 - `PWA-006` — a never-visited query URL loads cold and offline.
 - `PWA-007` — build B (A with a changed worker script) takes over two open tabs:
   both show the pill, the untouched one keeps working, Reload lands on B.
@@ -372,7 +386,7 @@ worker:
   tab shows the update-required banner, and the draft is still on screen.
 - Unit specs: `update-pill.spec.tsx` (first install vs update, chunk failures,
   the draft confirm, flush before reload), `chunk-error.spec.ts`,
-  `cache-storage.spec.ts`, `use-unsaved-draft.spec.tsx`, and the session
+  `service-worker-cache.spec.ts`, `use-unsaved-draft.spec.tsx`, and the session
   database's `versionchange` case in `session-store.spec.ts`.
 
 **⚠ `offline: true` does not take the network away from the service worker.**

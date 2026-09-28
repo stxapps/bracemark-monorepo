@@ -727,9 +727,9 @@ for the session generation this device still holds. An expired or unknown
 session does NOT — it keeps everything and pauses sync. That rule, and why, is
 [sessions.md](./sessions.md)'s. On web the teardown runs under the cross-tab
 lifecycle lock and announces itself to the other tabs, which close their UI
-without wiping twice; `clearData` also drops the service worker's query-keyed
-cache entries ([offline-mode.md](./offline-mode.md), _sign-out leaves the worker
-alone_).
+without wiping twice; `clearData` also drops any query-keyed entry from the
+service worker's runtime caches — a safeguard, since none is written today
+([offline-mode.md](./offline-mode.md), _sign-out leaves the worker alone_).
 
 The order inside it is load-bearing, and it is **three** steps, not two:
 

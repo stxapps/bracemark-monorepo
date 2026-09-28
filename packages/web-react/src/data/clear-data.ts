@@ -22,8 +22,8 @@
 
 import { clearDecodeCache } from '@stxapps/shared';
 
-import { purgeAccountCacheKeys } from './cache-storage';
 import { db } from './db';
+import { purgeAccountCacheKeys } from './service-worker-cache';
 import { clearSidebarCollapsedIds } from './sidebar-view-store';
 import { clearCachedSubscriptionStatus } from './subscription-store';
 
@@ -49,8 +49,9 @@ export async function clearData(): Promise<void> {
   // store like localSettings, so it's wiped here on sign-out but NOT by
   // delete-all-data (which keeps device/identity stores).
   clearSidebarCollapsedIds();
-  // The service worker's runtime-cache KEYS that name this account's lists and
-  // tags (`/links?list=<id>`). The worker and its app-only caches stay — sign-out
-  // keeps the next sign-in reachable offline (cache-storage.ts).
+  // A safeguard: any service-worker runtime-cache KEY that names this account's
+  // lists and tags (`/links?list=<id>`) — none is written today. The worker and its
+  // app-only caches stay — sign-out keeps the next sign-in reachable offline
+  // (service-worker-cache.ts).
   await purgeAccountCacheKeys();
 }

@@ -641,7 +641,7 @@
   },
   {
     "id": "PWA-005",
-    "title": "After a full online session no cache holds a cross-origin response, and sign-out drops the query-keyed entries while the worker stays",
+    "title": "After a full online session no cache holds a cross-origin response and no runtime cache a query-keyed one, before sign-out or after, and sign-out keeps the worker",
     "surface": "pwa",
     "tier": "full",
     "traits": ["online", "pwa"],

@@ -275,11 +275,14 @@ test.describe('pwa', () => {
   // docs/offline-mode.md, _the worker caches the app, never data_: after a full
   // online session — sync, the entitlement read, a query-carrying view — no cache the
   // origin owns holds a cross-origin request. Every cache, not only the one
-  // `defaultCache` names `cross-origin`. And sign-out keeps the worker (the next
-  // sign-in stays reachable offline) while dropping the query-keyed entries, whose
-  // URLs name this account's lists and tags.
+  // `defaultCache` names `cross-origin`. No runtime cache holds a query-keyed URL
+  // either, before sign-out as well as after it: the precache ignores every query,
+  // so `/links?list=<id>` — a full load or an in-app move — is answered from the
+  // precache and never written to a runtime cache. The sign-out purge of such keys
+  // is a safeguard; the pre-sign-out check is what fails if that ever changes. And
+  // sign-out keeps the worker (the next sign-in stays reachable offline).
   test(
-    'no cache holds a cross-origin response, and sign-out drops query-keyed entries but keeps the worker',
+    'no cache holds a cross-origin or query-keyed response, and sign-out keeps the worker',
     { tag: ['@PWA-005', '@full', '@online', '@pwa'] },
     // eslint-disable-next-line no-empty-pattern
     async ({}, testInfo) => {
@@ -299,6 +302,10 @@ test.describe('pwa', () => {
           expect(all.length).toBeGreaterThan(0);
           const origin = new URL(page.url()).origin;
           expect(all.filter((url) => new URL(url).origin !== origin)).toEqual([]);
+
+          await openSidebarItem(page, 'Archive');
+          await expect(page).toHaveURL(/\/links\?list=archive$/);
+          expect(await runtimeCacheUrls(page, (url) => url.search !== '')).toEqual([]);
 
           await page.getByRole('button', { name: /^More options/ }).click();
           await page.getByRole('menuitem', { name: 'Sign out' }).click();

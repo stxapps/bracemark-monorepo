@@ -269,8 +269,9 @@ device clock two years ahead (no client clock may end a session,
 [sessions.md](./sessions.md)); `PWA-004`, that a plain tab registers the worker
 at sign-in and, offline, reaches a Settings section it never opened online —
 from the precache, since the case asserts no runtime entry for it; `PWA-005`,
-that no cache the origin owns holds a cross-origin key after a full session, and
-that sign-out drops the query-keyed entries and keeps the worker; `PWA-006`, that
+that no cache the origin owns holds a cross-origin key after a full session, that
+no runtime cache holds a query-keyed one before sign-out or after, and that
+sign-out keeps the worker; `PWA-006`, that
 a never-visited query URL loads cold and offline; `PWA-007`, that a new worker
 (the staged export with a changed `sw.js`, served from a copy) takes over two
 open tabs, both show the "updated, reload" pill, the untouched one keeps working,

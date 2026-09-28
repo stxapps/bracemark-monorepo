@@ -7,7 +7,7 @@
 // Node has no Cache Storage, so a small in-memory one stands in: the function only
 // ever calls keys/open/keys/delete.
 
-import { purgeAccountCacheKeys } from './cache-storage';
+import { purgeAccountCacheKeys } from './service-worker-cache';
 
 type FakeCaches = Map<string, Map<string, Request>>;
 

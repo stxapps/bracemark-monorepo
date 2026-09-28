@@ -6,10 +6,15 @@
 // The worker caches the APP, never data: every cross-origin request is
 // network-only (bracemark-web's sw.ts), so no response body in these caches holds
 // account data, and sign-out keeps the worker and its caches — the next sign-in
-// stays reachable offline. What a body-clean cache can still hold is an
+// stays reachable offline. What a body-clean cache could still hold is an
 // account-bearing KEY: the runtime page caches key on the full URL, and a URL like
-// `/links?list=<id>&tag=<id>` names this account's lists and tags. So the teardown
-// drops every runtime entry whose URL carries a query, and nothing else.
+// `/links?list=<id>&tag=<id>` names this account's lists and tags.
+//
+// A SAFEGUARD: today no such key is written — the precache route comes first and
+// ignores every query, so a query URL is answered from the precache and never
+// reaches a runtime cache (PWA-005 asserts it before sign-out). If a route ever
+// falls out of the precache, the teardown still drops every runtime entry whose
+// URL carries a query, and nothing else.
 //
 // The PRECACHE is never touched. Its keys carry serwist's own revision query on
 // unhashed files, and deleting them would take offline support away until the
