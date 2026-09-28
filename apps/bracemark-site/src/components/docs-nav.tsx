@@ -62,23 +62,25 @@ export function DocsNav({ current, className }: { current?: string; className?: 
           <PageList current={current} />
         </div>
       </details>
-      <nav aria-label="Docs" className={cn('hidden lg:block')}>
-        <div
+      {/* Sticky on the <nav> itself: its parent is the grid item, stretched to the
+          row's height, so it has room to stick. On a child of the <nav> it would
+          stick inside a box exactly its own height, and scroll away with the page. */}
+      <nav
+        aria-label="Docs"
+        className={cn(
+          'hidden lg:sticky lg:top-28 lg:block lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto lg:pr-3',
+        )}
+      >
+        <Link
+          href="/docs"
           className={cn(
-            'lg:sticky lg:top-28 lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto lg:pr-3',
+            'inline-block rounded-sm text-sm font-medium focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none',
           )}
         >
-          <Link
-            href="/docs"
-            className={cn(
-              'inline-block rounded-sm text-sm font-medium focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none',
-            )}
-          >
-            Docs
-          </Link>
-          <div className={cn('mt-6')}>
-            <PageList current={current} />
-          </div>
+          Docs
+        </Link>
+        <div className={cn('mt-6')}>
+          <PageList current={current} />
         </div>
       </nav>
     </div>
