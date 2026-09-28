@@ -692,7 +692,9 @@ truth: only the extension reads it, via `loadSharedSession()`, which also
 hydrates the in-memory session mirror so the api client's synchronous
 `getToken()` works in a process that runs no AuthProvider. Every mirror
 write/delete is best-effort — a Keychain hiccup must not fail sign-in/out; a
-missing mirror just means no fast-path upload (the drain still delivers).
+missing mirror just means no fast-path upload (the drain still delivers). The
+share extension never acts on a 401 itself: [sessions.md](./sessions.md), _who acts
+on a 401_.
 
 **What the upload sends.** `uploadShareDraft` (`data/share-upload.ts`) builds
 the **complete entity set from the draft alone** — the new lists/tags (carrying

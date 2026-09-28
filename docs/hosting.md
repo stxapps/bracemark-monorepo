@@ -689,7 +689,9 @@ _N_ days" rule on the prefix therefore deletes files the current build needs,
 N days after they first shipped, with no deploy anywhere near it: the app
 starts failing chunk loads and CloudFront answers each with `/404.html`. If old
 builds ever need pruning, prune by **reference** — delete the `_next/` keys that
-none of the last few builds' `out/` contains — never by age.
+none of the last few builds' `out/` contains — never by age. Old tabs rely on
+this rule once the service worker can hand them a new build
+([offline-mode.md](./offline-mode.md), _version skew_).
 
 **No `--acl public-read` anywhere.** Buckets created since April 2023 have ACLs
 disabled by default (`BucketOwnerEnforced`), which makes that flag an

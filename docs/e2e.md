@@ -216,7 +216,9 @@ storage-state shortcut, or test-only message.
 that is its reason to exist: the serwist service worker (`src/sw.ts` — the
 precache plus `@serwist/next`'s `defaultCache`) is built by `serwist build`
 after `next build` and is disabled outright in development
-(`SerwistProvider disable`), so no `e2e-web` case ever meets it.
+(`SerwistProvider disable`), so no `e2e-web` case ever meets it. What the
+worker must and must not do, and the cases it still needs, is
+[offline-mode.md](./offline-mode.md).
 
 `runner/pwa.ts` builds `nx build @stxapps/bracemark-web -c development` — a
 production-mode build of `.env.development`'s origins, through the same
@@ -1190,7 +1192,8 @@ them differently:
   so the next request earns a real 401. That, and only that, ends in the
   teardown: the local store is counted empty by table name (as `store-hold.ts`
   addresses it) and the page lands on `/sign-in?next=`. Signing back in brings
-  the library back from the server.
+  the library back from the server. Which 401s may wipe is
+  [sessions.md](./sessions.md)'s rule.
 
 ⚠ **An offline browser tab cannot reach Settings.** Found writing
 `OFFLINE-EXPORT-WEB-001`: offline, the menu's Settings link took the open page to

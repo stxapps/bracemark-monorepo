@@ -782,7 +782,8 @@ Ed25519 private key at create-account / sign-in.
 > as a bearer token** to whoever can read it, so request bodies must never be
 > logged on the auth paths. A replayed create-account proof is harmless (the
 > directory claim 409s); a replayed sign-in proof mints a session for the
-> attacker, the same prize as a stolen session token, with the same 30-day TTL.
+> attacker, the same prize as a stolen session token, with the same 30-day TTL
+> ([sessions.md](./sessions.md) replaces the TTL with a sliding idle window).
 > We accept this: the exposure window is minutes, the capture vector (TLS
 > interception, body logging) already yields live bearer tokens anyway, and a
 > nonce costs an extra round trip on every sign-in. **Upgrade path, if replay

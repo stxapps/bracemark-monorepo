@@ -111,6 +111,9 @@ the runtime URL is the app:
 | `web-react` | `createAuthApiClient({ baseUrl })`                              | bearer-token `authFetch` (+ the mid-session 401/expiry → `notifySessionInvalid` loop, reading `session-store`) | the environment              |
 | app         | `const baseUrl = <env>; api = createAuthApiClient({ baseUrl })` | the **one** concrete client + provides it                                                                      | — (it's the top)             |
 
+Which 401s that loop may act on, and which may wipe a device, is
+[sessions.md](./sessions.md).
+
 Why the seam exists: the query/mutation hooks in `@stxapps/react` need _a_ client,
 but importing one would drag an app's env var into a package — forbidden by the
 `type:`/`platform:` boundaries. So the hooks read `useApiClient()` from context and

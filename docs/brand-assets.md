@@ -851,7 +851,10 @@ repo is a real part of the answer to — the code outliving the company is a
 property, not a promise — and it sits two thirds down, in the argued register,
 where a reader has already been given the pitch. Note what the band does **not**
 do: it makes no claim about verifying a served bundle, so the boundary above is
-untouched. Its link also **carries the prose** — "a single GitHub repository",
+untouched. Its durability sentence, "The library does not need us to be
+reachable in order to open", is only as true as [sessions.md](./sessions.md)
+(nothing wipes) and [offline-mode.md](./offline-mode.md) (something can still
+open it) make it. Its link also **carries the prose** — "a single GitHub repository",
 not the bare URL beside it — because the two surfaces whose job is to print the
 string rather than link it are the footer and /about's colophon, and setting a
 40-character URL inside an argued paragraph spends a clause on it.

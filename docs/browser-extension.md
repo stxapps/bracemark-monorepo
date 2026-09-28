@@ -248,7 +248,10 @@ origin, and the extension runs on a separate `chrome-extension://` origin. So
 the extension unlocks **on its own** — its own sign-in, deriving its own keys
 from (username, password) via `@stxapps/web-crypto` — rather than reading the
 web app's session. (This supersedes an earlier idea that the extension would
-inherit the session out of shared storage.)
+inherit the session out of shared storage.) Which of its contexts may act on a
+401, and which must never, is in [sessions.md](./sessions.md), _who acts on a
+401_; what it can still open with the server gone is in
+[offline-mode.md](./offline-mode.md), _the browser extension_.
 
 ### the functional E2E target and the toolbar boundary
 

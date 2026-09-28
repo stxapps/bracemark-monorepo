@@ -722,7 +722,8 @@ Every local wipe in this document funnels through one client primitive:
 `endSession` in each platform's `contexts/auth-provider.tsx`, which runs
 `clearData` (plus `clearSession` and, on web, `queryClient.clear()`) and then
 flips auth state. Deliberate sign-out, an invalidated session, and the last step
-of delete-account all end here.
+of delete-account all end here. Which server answers count as an invalidated
+session, and so may wipe a device, is [sessions.md](./sessions.md)'s rule.
 
 The order inside it is load-bearing, and it is **three** steps, not two:
 
