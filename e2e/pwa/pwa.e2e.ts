@@ -6,6 +6,7 @@ import { profileDir } from '../paths';
 import { createAccount, type Credentials, newCredentials } from '../web/fixtures/account';
 import { unique, unresolvableUrl } from '../web/fixtures/data';
 import { WEB_URL } from '../web/fixtures/env';
+import { exportPlainTextOffline } from '../web/fixtures/export';
 import { launchApp } from '../web/fixtures/launch';
 import { addLink, chooseRowMenuItem, linkRow, openSidebarItem } from '../web/fixtures/links';
 import { syncAndWait } from '../web/fixtures/sync';
@@ -141,6 +142,46 @@ test.describe('pwa', () => {
           await expect(linkRow(reader.page, app.kept)).toContainText(title);
         } finally {
           await reader.close();
+        }
+      } finally {
+        await app.origin.stop();
+        await rm(app.profile, { recursive: true, force: true });
+      }
+    },
+  );
+
+  test(
+    'the offline installed app reaches Settings in-app and exports its library, an offline write included',
+    { tag: ['@PWA-003', '@full', '@online', '@pwa'] },
+    // eslint-disable-next-line no-empty-pattern
+    async ({}, testInfo) => {
+      test.setTimeout(4 * 60 * 1000);
+      const app = await installedApp('pwa-export', testInfo);
+      const added = unresolvableUrl(unique('pwa-export-added'));
+      try {
+        // Nothing answers: not the origin, not the api. This is the whole of
+        // "the server is gone" as an installed user meets it.
+        await app.origin.stop();
+        const { context, page } = await openProfile(app.profile, { offline: true });
+        try {
+          const response = await page.goto('/links');
+          expect(response?.fromServiceWorker()).toBe(true);
+          await expect(linkRow(page, app.kept)).toBeVisible();
+          await addLink(page, added);
+
+          // The way a user gets there, not a typed URL: the menu, then the
+          // section list. Each is a client route change whose payload only the
+          // worker can supply now; a browser tab without one falls to Chrome's
+          // error page on the first click (OFFLINE-EXPORT-WEB-001).
+          await page.getByRole('button', { name: /^More options/ }).click();
+          await page.getByRole('menuitem', { name: 'Settings' }).click();
+          await page.getByRole('link', { name: 'Data', exact: true }).click();
+          const text = await exportPlainTextOffline(page);
+          expect(text).toContain(app.kept);
+          expect(text).toContain(added);
+          await checkpoint(page, testInfo, 'pwa-offline-export');
+        } finally {
+          await context.close();
         }
       } finally {
         await app.origin.stop();

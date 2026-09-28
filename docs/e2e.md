@@ -243,13 +243,16 @@ branch. The run manifest records `standaloneWindowProven: false`;
 standalone trigger. Emulating the display mode would not be installation proof
 even if it worked.
 
-What the two cases prove, on a profile that is closed and reopened (a cold
+What the three cases prove, on a profile that is closed and reopened (a cold
 launch — `pwa/fixtures/pwa.ts` keeps the profile where `launch.ts` deletes it):
 `PWA-001`, that with the origin stopped and the browser offline the document
 comes from the worker (`response.fromServiceWorker()`), the library comes back
 from IndexedDB, and an in-app view change still works; `PWA-002`, that a link
 and an edit made there are queued, reported as a failed cycle, and reach an
-independent profile once origin and network return. Cut the worker's caching
+independent profile once origin and network return; `PWA-003`, that with both
+still gone the menu's Settings link and the section list's Data link — client
+route changes whose payloads only the worker can supply — reach Export, and a
+plain-text export carries the synced link and one written offline. Cut the worker's caching
 (`precacheEntries` AND `runtimeCaching` emptied) and `PWA-001` fails at the
 worker assertion. Emptying the precache alone does NOT fail it — the online
 launch the case makes first leaves `defaultCache` holding the document and its
@@ -354,7 +357,10 @@ It lives at the unit layer instead, with a real zip container in both packages'
 `data/export-import.spec.ts` and golden cross-platform archives in `shared`
 ([testing.md](./testing.md), _the ported pair_). What is left for this layer, if
 it is ever wanted, is thin: that the button produces a download with the right
-name and that the receipt announces the right counts.
+name and that the receipt announces the right counts. The plain-text export is
+driven for a narrower claim — that the local library leaves the device with the
+server gone (_scale, loading and offline_, below) — and asserts only the URLs it
+must contain and the receipt's this-device's-copy warning.
 
 **A real Paddle purchase.** Every paid state is reachable without one — the seed
 writes a `manual` purchase row straight into D1 (_seeding a dev account_ below),
@@ -1160,6 +1166,83 @@ route's RSC payload and falls back to a full document load when it cannot. The
 links page's view changes now go through the History API
 ([search.md](./search.md), _two writers, not a mirror_); the same click
 before the fix fails the case at its first view change.
+
+**The server gone** (`OFFLINE-EXPORT-WEB-001`, `OFFLINE-API-ERROR-WEB-001`,
+`SESSION-INVALID-WEB-001`, `PWA-003`, and the native four below). The question
+they answer together: a
+signed-in, synced user whose server disappears keeps a working library and can
+take it away. Each fault shape gets its own case, because the app must answer
+them differently:
+
+- **No network.** `OFFLINE-EXPORT-WEB-001` exports as plain text (an ordinary
+  download; the backup's save dialog is out of reach — _what e2e may not
+  assert_) with the browser offline, and the file carries a link written offline
+  and never pushed. The receipt must say the file is this device's copy.
+- **The api answers, wrongly.** `OFFLINE-API-ERROR-WEB-001` fulfils every api
+  request with 500, then 404 — WITH CORS headers, or the browser would refuse
+  the response and the app would see the offline case again (a probe during
+  authoring counted real 500s and 404s arriving). Only the api is gone, so the
+  page can reload, and that is the sharp half: a boot that read either status as
+  "signed out" would wipe a library it could no longer re-download. It then
+  exports, and drains the queue to a second profile once the api returns.
+- **The api says the session is dead.** `SESSION-INVALID-WEB-001` revokes the
+  session the way a user does — Sign out other devices, from a second profile —
+  so the next request earns a real 401. That, and only that, ends in the
+  teardown: the local store is counted empty by table name (as `store-hold.ts`
+  addresses it) and the page lands on `/sign-in?next=`. Signing back in brings
+  the library back from the server.
+
+⚠ **An offline browser tab cannot reach Settings.** Found writing
+`OFFLINE-EXPORT-WEB-001`: offline, the menu's Settings link took the open page to
+Chrome's error page — the same `router.push`-falls-back-to-a-document-load as the
+sidebar bug above, on a route the History API fix does not cover. A browser tab
+has no service worker (`inner-layout.tsx` registers one only when installed), so
+nothing can supply the route's payload. The web case therefore opens
+`/settings/data` in a second tab before the network goes; the in-app route is
+proved on the installed app, where the worker serves it (`PWA-003`). Nothing
+fails when this regresses for the tab, because nothing covers the tab.
+
+**The server gone, on a device** (`OFFLINE-EXPORT-IOS-001`/`-ANDROID-001`,
+`OFFLINE-API-ERROR-ANDROID-001`, `SESSION-INVALID-NATIVE-001`). The same three
+questions, each answered from outside the app. Export reaches Settings in-app —
+native navigation needs no network, so the tab's gap has no native twin — and
+the runner reads the plain-text file out of the app's cache
+(`runner/device-files.ts`: the simulator's data container, or `run-as` on
+Android's debuggable build), since Maestro sees the share sheet and not the
+file. The revoked session is counted the same way: `bracemark-data.db` and its
+WAL copied off the device and read with `sqlite3`, non-empty before the revoke
+and empty after.
+
+The 500/404 case is **Android only**, and not for want of a lever on iOS: the
+emulator reaches the api through its `adb reverse` mapping, so pointing that
+mapping at a stand-in (`runner/api-fault.ts`) is a per-device fault that leaves
+the real api serving everyone else. The simulator shares this Mac's loopback,
+so its `:8787` IS the real api's listener — the only fault it can be given is
+the freeze, a hang. The stand-in's body is plain text, not the api's error
+shape: a server that has gone does not speak the contract. Its cold start under
+404 is the native reload, and must restore the session.
+
+Two things the export flow waits on deliberately (`subflows/export-plain-text.yaml`):
+
+- **The share sheet, not the receipt.** A finished export presents the sheet
+  over its own receipt, and the receipt paints a beat FIRST — so the measurement
+  leg's shape, "poll for the receipt, dismiss a sheet if one is up", ends on the
+  bare receipt and the sheet lands on it afterwards (both orders measured on the
+  Pixel 8 AVD). The flow waits for the sheet, which the run always presents, and
+  puts it away before reading the receipt.
+- **⚠ Android 16's chooser is titled "Sharing 1 file"**, not "Share": the
+  measurement leg's `dismiss-share-sheet.yaml` matches `'Share'` and so does not
+  find it on that image.
+
+⚠ **`OFFLINE-EXPORT-IOS-001` is red, and the product is why.** With the api
+frozen — connections accepted, never answered — the export sat on "Refreshing
+from the server…" for the flow's whole six-minute budget (measured on the
+iPhone 17 Pro simulator, iOS 26.5). The export's opening sync refresh has no
+timeout of its own, and neither does any api call under it, so a hung server
+blocks the export for as long as the platform's networking waits. A refusal
+(Android's removed route) or a 500/404 fails fast, which is why every other
+export case is green. The case is left as it is: it asserts exactly what a user
+needs, and goes green when the refresh is bounded.
 
 ### subscriptions
 

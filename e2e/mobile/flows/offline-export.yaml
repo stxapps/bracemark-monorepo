@@ -1,0 +1,20 @@
+# Sign in to an account holding one link written on the web, then hand the device
+# to the runner, which cuts it off the api exactly as OFFLINE-*-001 does: Android
+# by removing its `adb reverse` route (a refusal), iOS by freezing the api (a
+# hang; runner/api-pause.ts). parts/offline-export-local.yaml writes a second
+# link and exports, and the runner reads both URLs out of the exported file.
+#
+#   maestro test mobile/flows/offline-export.yaml -e USERNAME=… -e PASSWORD=… \
+#     -e SYNCED_URL=https://….invalid/offline-export-synced
+appId: com.bracemark.app
+tags: [OFFLINE-EXPORT-IOS-001, OFFLINE-EXPORT-ANDROID-001, full, online, destructive, ios, android]
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+- extendedWaitUntil:
+    visible: ".*${SYNCED_URL.replace('https://', '')}.*"
+    timeout: 60000
+- tapOn:
+    text: 'Dismiss'
+    optional: true
+- takeScreenshot: offline-export-base

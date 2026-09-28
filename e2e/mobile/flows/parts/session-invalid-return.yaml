@@ -1,0 +1,59 @@
+# Part three of SESSION-INVALID-NATIVE-001, after the runner has counted the
+# local store empty. A cold start must stay signed out — the session went with
+# the data — and signing back in on the SAME install (no state wipe, unlike
+# subflows/sign-in.yaml) brings the library back from the server: only this
+# device's copy was taken.
+appId: com.bracemark.app
+---
+- stopApp
+- launchApp
+# Wherever the cold start lands — the landing, or the sign-in screen the
+# teardown left — it is not the app.
+- extendedWaitUntil:
+    visible: 'Sign in'
+    timeout: 60000
+- assertNotVisible:
+    id: 'links-screen'
+- runFlow:
+    when:
+      notVisible:
+        id: 'sign-in-username'
+    commands:
+      - tapOn: 'Sign in'
+- runFlow:
+    file: ../subflows/sign-in-fields.yaml
+- tapOn:
+    id: 'sign-in-submit'
+# Argon2id on the device, and iOS's "Save Password?" sheet racing it — the same
+# poll as subflows/sign-in.yaml, which carries the full reasoning.
+- repeat:
+    times: 5
+    while:
+      notVisible:
+        id: 'links-screen'
+    commands:
+      - runFlow:
+          when:
+            platform: iOS
+          commands:
+            - tapOn:
+                text: 'Not Now'
+                optional: true
+      - assertVisible:
+          id: 'links-screen'
+          optional: true
+- extendedWaitUntil:
+    visible:
+      id: 'links-screen'
+    timeout: 120000
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - tapOn:
+          text: 'Not Now'
+          optional: true
+- extendedWaitUntil:
+    visible: ".*${KEPT_URL.replace('https://', '')}.*"
+    timeout: 60000
+- takeScreenshot: session-invalid-returned

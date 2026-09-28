@@ -1,0 +1,19 @@
+# Part two of SESSION-INVALID-NATIVE-001: the session is dead on the server, and
+# the app still believes it is signed in. A user's Sync is the request that
+# learns otherwise; its 401 must end in the teardown and the sign-in screen —
+# `/sign-in?next=`, not the landing a deliberate sign-out takes
+# (components/auth-guard.tsx) — with the library gone from the screen.
+appId: com.bracemark.app
+---
+- tapOn:
+    id: 'links-more-options'
+- tapOn:
+    id: 'links-sync'
+- extendedWaitUntil:
+    visible:
+      id: 'sign-in-username'
+    timeout: 60000
+- assertNotVisible:
+    id: 'links-screen'
+- assertNotVisible: ".*${KEPT_URL.replace('https://', '')}.*"
+- takeScreenshot: session-invalid-signed-out

@@ -780,6 +780,9 @@ Coverage, stated exactly, because the two halves are not equally testable:
   deleted. So the spec pins the `location.replace` half, and it needs a real router
   plus a real IndexedDB wipe to do it — no jest/vitest layer can stand in
   ([e2e.md](./e2e.md)).
+- The invalidated-session path — a real 401 on an open page — is
+  `SESSION-INVALID-WEB-001` in the same spec: the local store must count empty and
+  the page must land on `/sign-in?next=`, not on the marketing site.
 - The step-1 ordering has **no test, and can't have one today**. With
   `location.replace` in place the stray `router.replace` is absorbed — that is the
   whole point of keeping both defences — so removing `'ending'` breaks nothing
