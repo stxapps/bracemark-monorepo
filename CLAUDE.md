@@ -75,6 +75,8 @@ that reading comes _before_ the edit; nothing downstream will tell you.
 | the read edge — indexes, liveQuery, virtual scrolling, paging                  | `client-queries.md` ⚠           |
 | links-page search (the URL⇄`LinkQuery` grammar, the UI); expo route params     | `search.md` ⚠                   |
 | accounts — key derivation, username/password rules                             | `account.md` ⚠                  |
+| **sessions — lifetime, expiry, revocation; anything that wipes a device**      | `sessions.md` ⚠                 |
+| **the service worker — what it caches, when it registers, how it updates**     | `offline-mode.md` ⚠             |
 | server backups — D1 export, R2 replication, **an R2 lifecycle rule**, restores | `server-backups.md` ⚠           |
 | API endpoints (contract-first, typed once in `shared`)                         | `api-contracts.md`              |
 | link editors, list/tag trees, bulk edit                                        | `editors.md`                    |

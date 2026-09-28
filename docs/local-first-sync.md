@@ -286,6 +286,39 @@ no migration step. Compatibility with a past no user has is cost with no
 beneficiary — [share-sheet.md](./share-sheet.md) reaches the same answer about the
 outbox file, for the same reason.
 
+**⚠ The client leaves this regime the day the first build reaches a user, and
+it has to be ready before that day, not on it.** From then on, "delete the app,
+clear its data" stops being a dev chore. It deletes a library that, with the
+server unreachable or gone, exists nowhere else
+([offline-mode.md](./offline-mode.md), _the promise_). The three client shapes
+leave on different terms:
+
+- **Dexie (`bracemark-data`) and the raw session database
+  (`bracemark-session`).** Append `version(N)` (with an `upgrade()` for any
+  data reshape); never edit a shipped version. Every tab also needs a
+  `versionchange` handler **in the launch build**: the event fires in the
+  _old_ tab, so it's the old code that has to close the connection and reload.
+  A handler added alongside the first `version(2)` arrives one build too late
+  for every tab already open. The mechanics and the failure modes are in
+  [offline-mode.md](./offline-mode.md), _version skew_.
+- **expo-sqlite.** Replace the idempotent DDL with numbered migrations keyed
+  on `PRAGMA user_version`, run on open before first use, append-only like the
+  server's. One process opens the database at a time (the iOS share extension
+  writes its outbox file, not the database; [share-sheet.md](./share-sheet.md)),
+  so there's no multi-tab counterpart to `versionchange`. The migration
+  runner can land with the first migration; it's the _policy_ that has to
+  change at launch. The comments at the top of
+  `packages/expo-react/src/data/db.ts` and the "greenfield no-migrations
+  policy" in [architecture.md](./architecture.md) go in the same change.
+- **R2 payloads** are already built to cross versions. Every entity is a
+  `z.looseObject` (`packages/shared/src/sync/entities.ts`), so an older client
+  passes fields it doesn't know through unchanged, and the blob frame's version
+  byte makes an unknown layout fail loudly rather than misread
+  ([crypto boundary](#crypto-boundary--what-the-server-still-learns)). After
+  launch, what changes is only the licence to _rewrite_ a shape: fields are
+  added, never renamed or repurposed, because a device that last synced a year
+  ago will still write the old name back.
+
 **`bracemark-api` is deployed, and nothing at the call site says so.** Its two
 SERVER schemas have left that regime:
 `apps/bracemark-api/src/db/migrations/<role>/0001_init.sql` is recorded as applied
