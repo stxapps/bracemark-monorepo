@@ -23,7 +23,10 @@ dead-server promise: whether the library can still be opened).
 > client wipes itself **on its own clock** once `expiresAt` passes, online or
 > not. See [what this replaces](#what-this-replaces). There are no real users
 > and no production launch yet, so the client contract can change directly.
-> **The database and bracemark-api are already deployed**, however: server
+> The marketing site already describes this design, not today's code: /privacy
+> (_How long we keep it_), /delete-account (_What is deleted_, _What is kept_),
+> the _Sign out_ help page and the FAQ's _Can I change my password?_. **It ships before launch, or those pages are
+> wrong.** **The database and bracemark-api are already deployed**, however: server
 > schema changes require new append-only migrations even before launch. See
 > [local-first-sync.md](./local-first-sync.md), _schema changes_.
 
@@ -68,10 +71,17 @@ tidy housekeeping and was actually a timed delete of every user's library.
 | `SESSION_SLIDE_MS` | 1 day    | minimum interval between successful renewals of one session                     |
 | `SESSION_PURGE_MS` | 365 days | retention after expiry for unrevoked rows, or after revocation for revoked rows |
 
+`SESSION_PURGE_MS` is a public promise, so its number lives in `@stxapps/shared`
+as `SESSION_RETENTION` (`auth/sessions.ts`): `days` for the api's cleanup
+(`SESSION_PURGE_MS` is `days` in ms), `label` for /privacy and /delete-account,
+which say "a year" by reading it. A spec pins the two together.
+
 An authenticated request may move the session's `expires_at` to
 `now + SESSION_IDLE_MS`, at most once per `SESSION_SLIDE_MS`. The guard does
-this in `requireAuth`, `middleware/auth.ts`, which already carries a note asking
-for exactly this shape:
+this in `requireAuth`, `middleware/auth.ts`. Its note already asks for a
+throttled write off the critical path, though it suggests a 10-minute
+`last_seen_at` throttle and calls the lookup replica-served, which it isn't
+(below); rewrite the note with the change. The shape:
 
 - **Throttled atomically.** The read can skip an unnecessary renewal, but the
   `UPDATE` itself must require `revoked_at IS NULL`, `expires_at >= now`, and
@@ -130,29 +140,53 @@ are 401s in the uniform error envelope (`{ "error": "<code>" }`,
 The codes live in `@stxapps/shared` next to the auth endpoints, so the API and
 both client stacks import one constant rather than retyping a string.
 
-**Why a marker instead of deleting the row?** Deletion is already sufficient
-to revoke API access: today's guard rejects both missing and expired rows with
-`401 unauthorized`. It does not establish why a row is missing. Explicit
-revocation, expired-session cleanup and missing records after database recovery
-would all look identical to a client deciding whether to erase local data.
+**Why a marker, and not "no row means wipe"?** Deleting the row already revokes
+API access: today's guard rejects both missing and expired rows with
+`401 unauthorized`. What a deletion can't do is say _why_ the row is gone. A
+missing row is the absence of a message, not a message, and rows go missing
+when nobody chose it:
 
-This design keeps both remote wipe on explicit revocation and cleanup of old
-sessions, so it needs retained revocation evidence. A nullable `revoked_at` on
-the existing row is the chosen representation. If remote wipe were dropped,
-deleting the row and requiring reauthentication while preserving local data
-would be simpler and would need no new column. Treating every missing row as
-a wipe instruction would instead require retaining expired rows indefinitely
-and accepting accidental wipes after session-record loss; that does not meet
-this design's preservation rule. Being prelaunch removes client compatibility
-work, not this distinction between future cleanup and explicit revocation.
+- **cleanup**: under "no row means wipe", an expired row could never be
+  deleted, or a device idle past cleanup would get the clock wipe back with a
+  longer fuse;
+- **the database lost, or recreated empty**: [server-backups.md](./server-backups.md)
+  keeps no copy of it;
+- **a backward restore**, which drops every row newer than the restore point;
+- **a bug**: a changed token hash, a bad migration, or a deploy bound to the
+  wrong database makes every token unknown at once;
+- **the public repo**: anyone who deploys the AGPL code with an empty database
+  at our domain after we're gone answers "no row" to every token. That is the
+  _If we disappear_ scenario exactly.
+
+Under "no row means wipe", each of these erases every device that comes back,
+pending ops included. With a marker, each costs a sign-in. The marker costs one
+nullable column, one append-only migration, a two-case cleanup predicate, and
+a year of retained rows that the public pages disclose. If remote wipe were
+dropped entirely, deleting rows would be enough and no column would be needed;
+this design keeps remote wipe, so it keeps the evidence. Being prelaunch
+removes client compatibility work, not this distinction.
 
 **Revocation needs a retained marker.** Add nullable `revoked_at` to the sessions
-table and return it from the repository. Check revocation before expiry. The
-current deletion paths — `revokeSession` (sign-out), `deleteByUserIdExcept`
-(sign out other devices, change password), and `deleteByUserId` (delete account)
-— must become explicit revocation writes, including for already-expired rows.
-Keep the original revocation timestamp on retries. The token hash and marker
-must survive account teardown so an old token can still receive the verdict.
+table and return it from the repository. Check revocation before expiry. Three
+of today's deletion paths become explicit revocation writes, including for
+already-expired rows: `revokeSession` (sign-out), `revokeOtherSessions` where it
+backs _sign out other devices_, and `deleteByUserId` (delete account). Keep the
+original revocation timestamp on retries. The row survives account teardown so
+an old token can still receive the verdict; /delete-account and /privacy say so.
+
+**Changing the password expires the other sessions; it doesn't revoke them.**
+`changePasswordDoor` reuses `revokeOtherSessions` today. It gets its own write
+instead: move `expires_at` into the past on every other unrevoked session,
+never forward, and never touch `revoked_at`. That cuts off whoever had the old
+password as completely as revocation does. An expired row can't authenticate,
+and the renewal predicate (`expires_at >= now`) won't revive it. What it
+doesn't do is wipe. A password change is routine hygiene or a response to a
+leak, and neither is a reason to destroy edits the user's own phone hasn't
+synced yet. In the leak case, the one device that should forget, the
+attacker's, would never cooperate with a wipe anyway. The other devices enter
+the expired state and resume with the new password; the DEK is unchanged, so
+resume is the ordinary path. _Sign out other devices_ stays a revocation: it
+is the control whose purpose is to make a lost device forget.
 
 **Cleanup never turns inactivity into a wipe.** Delete unrevoked rows only when
 `expires_at < now - SESSION_PURGE_MS`, and revoked rows only when
@@ -160,13 +194,20 @@ must survive account teardown so an old token can still receive the verdict.
 gets `session_unknown`: preserve its library and pending ops and ask it to sign
 in. Its latest edits may never have reached the server.
 
-This bounds remote-wipe delivery: the device must contact the API while its
-revocation marker exists. A token purged before a later account-wide revocation
-cannot receive that verdict either. It already cannot authenticate, but its
-device copy survives. Remote wipe is best-effort for a cooperating client, not
-a guarantee of erasure on an offline or attacker-controlled device. Extending
-that delivery window requires longer marker retention or a different revocation
-protocol; mapping absence to revocation is not an acceptable substitute.
+**What a remote wipe can't reach, and why that's accepted.** A revoked device
+keeps its copy when:
+
+- it doesn't reach the API within `SESSION_PURGE_MS` of the revocation;
+- its row was purged before a later account-wide revocation (it can't
+  authenticate either);
+- the sessions table was lost or emptied (_the sessions database_, below);
+- it is offline for good, or controlled by an attacker. No protocol erases a
+  device that won't cooperate.
+
+The trade is deliberate. A missed wipe leaves a copy the device already had; a
+wrong wipe destroys what may be the only copy, and can't be undone. Extending
+delivery means longer marker retention or a different revocation protocol, never
+mapping absence to revocation.
 
 - The starting point is `sessionsRepo.deleteExpired`, which exists but is not
   called. Replace its predicate with the two retention cases above. Wiring it
@@ -194,6 +235,25 @@ of who issued it. TLS, domain control and Cloudflare protect that origin. A wipe
 can lose unsynced edits permanently, even if the account still exists. The code
 check prevents an unrelated HTML 401 from triggering a wipe; it does not defeat
 a malicious replacement server that deliberately copies the envelope.
+
+### the sessions database — never restored backward
+
+**⚠ Never restore `SESSIONS_DB` to an earlier point. If it is damaged, empty the
+`sessions` table.** D1 Time Travel is always on and can't be turned off, so
+`wrangler d1 time-travel restore` is always one command away, and here it is
+the wrong one. Revocation and the password-change expiry are writes, so a
+restore to before them undoes them. A phone signed out through _Sign out other
+devices_ after it was lost authenticates again, and so does a session the old
+password minted. Nothing flags it: the restored rows are well-formed, and the
+guard accepts them.
+
+Emptying the table is safe because of the rule this doc is built on. Every
+device gets `session_unknown`, keeps its library and pending ops, and signs in
+again. The cost is the pending remote wipes the table carried, which go with
+it (_what a remote wipe can't reach_, above). Losing the database outright
+costs the same. [server-backups.md](./server-backups.md) carries the rule from
+the backup side. Until this design ships the reverse is true: today's clients
+wipe on any 401, so emptying the table would erase every signed-in device.
 
 ### the expired state on the client
 
@@ -235,12 +295,20 @@ other devices, including a fallback listing if the cursor is too old.
   `userId` in the sign-in response and in the session record.
 - **"Use a different account" is sign-out.** It runs the full teardown and
   warns first if pending ops exist. Their only copy is this device.
+- **Resume can fail for good.** If the account was deleted and this device's
+  marker already purged, the probe answers `session_unknown`, and sign-in can
+  never succeed: a deleted username answers exactly like one that never
+  existed ([data-lifecycle.md](./data-lifecycle.md), _delete account_). The
+  client can't tell that from a mistyped password and must not guess. A failed
+  resume leaves the expired state as it was: the library stays readable and
+  exportable, the notice stays, and _Use a different account_ is the way out.
 
 ### concurrent requests and shared local state
 
 **⚠ A verdict belongs to the session that sent the request.** Capture a local
-session generation together with its token for each request and probe. Resume replaces the token and
-advances that generation atomically in the persisted session record. Before an
+session generation together with its token for each request and probe. Resume
+replaces the token and advances that generation atomically in the persisted
+session record. Before an
 expiry or revocation changes state, compare its generation with the persisted
 current generation under the same lifecycle lock used for replacement and wipe.
 A delayed response for the old token must not expire or erase the resumed session.
@@ -263,9 +331,9 @@ popup, options page and background worker on their own origin:
 - Resume in another tab must refresh the token and state without clearing local
   data. Sign-out must close the old account's UI and writers in every context.
 
-Expo applies the same generation rule to requests in the main process and to
-reports from the iOS share extension. Update the shared-Keychain mirror with the
-state/generation; retain the outbox's existing account boundary. The exact
+Expo applies the same generation rule to requests in the main process. Update
+the shared-Keychain mirror with the state; retain the outbox's existing account
+boundary. The exact
 cross-context locking and notification mechanism is implementation work, but
 these races are acceptance requirements, not optional follow-up hardening.
 
@@ -280,10 +348,9 @@ main process. Two other processes carry the token and must **never** act on it:
 - the iOS **share extension** (`loadSharedSession()`, which reads the
   shared-Keychain mirror, [share-sheet.md](./share-sheet.md)).
 
-Both only report back with the request's generation. On any 401 they stop (the
-share extension's outbox file is already the record of truth, and the main app
-drains it). Both **read** the
-stored state: when it is `expired` they don't call the API at all. That replaces
+On any 401 they stop (the share extension's outbox file is already the record
+of truth, and the main app drains it). Both **read** the stored state: when it
+is `expired` they don't call the API at all. That replaces
 the `session.expiresAt <= Date.now()` check at `share-store.ts:412`, which is a
 clock check and falls under the rule above.
 
@@ -298,9 +365,9 @@ clock check and falls under the rule above.
   saying not to. The server keeps `expires_at` for itself.
 - **The three session codes are added to `@stxapps/shared`,** and `requireAuth`
   emits them. `unauthorized` keeps its current meaning, "no bearer token".
-- **State and generation are persisted** in both client session records and
-  the iOS share extension's mirror. Local lifecycle notifications carry the
-  generation; they are not new server authentication credentials.
+- **State and generation are persisted** in both client session records; the
+  iOS share extension's mirror carries the state. Local lifecycle notifications
+  carry the generation; they are not new server authentication credentials.
 - **A persisted record from before the change** has a stale `expiresAt` and no
   state field. On Expo, `parse()` currently rejects a record missing
   `expiresAt`; when it stops requiring the field, it should treat a record
@@ -344,13 +411,23 @@ server's revocation and cleanup contracts:
 - The session repository's revocation deletes become marker writes, and the
   cleanup predicate distinguishes expired rows from revoked rows. Add the
   server migration before deploying the new guard.
+- `changePasswordDoor` (`services/account.ts`) stops calling
+  `revokeOtherSessions` and expires the other sessions instead.
+- The change-password confirmation in both `account-section.tsx` files
+  (bracemark-web's `settings/[section]/_account/`, bracemark-expo's
+  `features/settings/`) stops saying the other devices "have been signed out":
+  they keep their copy and are asked to sign in again. The marketing site's
+  _Sign out_ help page already says so.
 
-Docs that change when this design is implemented: [account.md](./account.md), _the two
-identifiers_ ("the same 30-day TTL" in the replay-window note);
+Docs that change when this design is implemented: [account.md](./account.md),
+_the two identifiers_ ("the same 30-day TTL" in the replay-window note) and the
+door-rotation STATUS note (change-password "revokes every other session");
 [data-lifecycle.md](./data-lifecycle.md), _the sign-out teardown_ (the
-teardown's triggers and account-deletion retention of revocation markers) and
-_deferred_ (the cleanup job lands); [api-contracts.md](./api-contracts.md) (the `authFetch` row);
-this doc's STATUS.
+teardown's triggers), _delete account_ (step 4 and _What's deliberately kept_:
+the revocation markers) and _deferred_ (the cleanup job lands);
+[api-contracts.md](./api-contracts.md) (the `authFetch` row); this doc's STATUS.
+The public pages named in STATUS were changed ahead of the code, and
+[server-backups.md](./server-backups.md) already carries the restore rule.
 
 ### testing
 
@@ -362,13 +439,15 @@ The layers ([testing.md](./testing.md)):
   Cleanup respects both retention clocks and turns purged tokens into
   `session_unknown`. Each revocation path, including account deletion and an
   already-expired session, retains the marker and answers `session_revoked`.
+  A password change answers `session_expired` to the other sessions, never
+  `session_revoked`; none of them can renew, and the caller's own is untouched.
 - **clients (jest / vitest):** the rule as a table, per stack. `session_revoked`
   for the current generation wipes; `session_expired`, `session_unknown`, a
   codeless 401, an HTML 401, a 500 and a network error do not. A record with a
-  year-old clock time still hydrates as signed in.
-  Delayed expiry/revocation responses and background reports for a replaced
-  generation do nothing. Probes preserve pending ops unless the current session
-  is explicitly revoked.
+  year-old clock time still hydrates as signed in. Delayed expiry/revocation
+  responses for a replaced generation do nothing. Probes preserve pending ops
+  unless the current session is explicitly revoked. A failed resume leaves the
+  expired state, the library and the pending ops as they were.
 - **e2e ([e2e.md](./e2e.md)):** both stacks already have a "server-revoked
   session's wipe" case. They gain an **expired → keep, resume, push the queued
   edit** case, and the PWA target's dead-origin export (`PWA-003`) gains a

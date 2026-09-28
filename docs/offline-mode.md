@@ -48,7 +48,7 @@ requires **both** this design and the session redesign to be implemented.
 | Expo app (iOS, Android)           | opens with an unexpired session; code ships in the binary               | opens with retained local data and keys                       |
 | browser extension                 | opens, but has no export                                                | same (a stated boundary, see below)                           |
 | bracemark-web, installed PWA      | opens with a fresh session and installed worker (`PWA-001`–`003`)       | opens after worker installation, subject to storage retention |
-| bracemark-web, a tab already open | loaded views remain available; uncached routes/assets may fail          | offline routes require the installed worker and cached assets |
+| bracemark-web, a tab already open | loaded views remain available; uncached routes/assets may fail          | opens any route after worker installation                     |
 | bracemark-web, fresh tab          | fails without an existing worker; an existing registration can serve it | opens after worker installation, subject to storage retention |
 | bracemark-web, never signed in    | fails                                                                   | fails, and holds no library to lose                           |
 
@@ -67,11 +67,13 @@ those three properties.
 
 This is not the current behaviour, and nothing flags it. `sw.ts` passes
 `@serwist/next`'s `defaultCache` as `runtimeCaching`, and that list ends with a
-catch-all for **remaining cross-origin GETs**: `NetworkFirst`, cache `cross-origin`,
+catch-all for **cross-origin GETs**: `NetworkFirst`, cache `cross-origin`,
 32 entries, one hour (`node_modules/@serwist/next/dist/index.worker.mjs`, the
-`!sameOrigin` matcher). Earlier image, font and other asset matchers also accept
-cross-origin URLs, so the cache used depends on which rule matches first.
-Together these rules can cache:
+`!sameOrigin` matcher). The earlier asset rules don't take these first. A
+regex route handles a cross-origin URL only when the pattern matches from the
+URL's first character, so `/\.(?:jpg|png|…)$/i` never matches
+`https://api.bracemark.com/…`. Only the two Google Fonts rules are anchored to a
+host. So this one rule is what can cache:
 
 - the api's authenticated reads: `GET /v1/ops/list`, `GET /v1/files/list`,
   `GET /v1/iap/status`;
@@ -97,11 +99,13 @@ Cache Storage keys on the URL, not on the `Authorization` header, so:
   are built to handle a failed request. They aren't built to handle a stale
   success.
 
-The fix is a cross-origin `NetworkOnly` GET route placed **before every
-runtime caching rule**. Other methods must remain network-only too. An
-alternative is to constrain every caching matcher to approved same-origin app
-resources. **Removing only the final cross-origin entry is insufficient**:
-the earlier asset matchers would still cache third-party responses.
+The fix is one `NetworkOnly` route for cross-origin requests, placed **ahead
+of `defaultCache`** in `runtimeCaching`. Filtering the `!sameOrigin` entry out
+of `defaultCache` would also work today, because cross-origin GETs would then
+fall through to the list's final `/.*/i` `NetworkOnly`. But that means picking
+an upstream list apart by its internals, and it stops holding the day a Serwist
+upgrade adds another host-anchored rule. A route ahead of the list doesn't
+depend on what the list contains. No rule caches a non-GET request.
 
 **Prelaunch: reset development profiles, without a legacy-cache migration.**
 There are no real users or production installs to migrate. Before verifying
@@ -387,8 +391,8 @@ worker. It gains:
   the new case proves those routes are available from the precache.
 - **No cross-origin entries.** After a full online session (sync, images,
   entitlement), inspect requests in **every** app-owned cache, not only the
-  cache named `cross-origin`. Include cross-origin image/font URLs matching
-  the earlier asset rules and presigned downloads. Start from a fresh or
+  cache named `cross-origin`. Include an image-proxy URL and a presigned
+  download. Start from a fresh or
   manually reset test profile; no legacy-cache upgrade case is required before
   launch. Check sign-out removes account-bearing URL keys. The two-build update
   cases below use builds with the safe cache rule already in place.

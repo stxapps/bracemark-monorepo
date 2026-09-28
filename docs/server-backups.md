@@ -12,7 +12,7 @@ what R2 and the Durable Object hold is [local-first-sync.md](./local-first-sync.
 | --------------------------------------- | -------------------------------------------- | ------------------------------------------------------ | -------------------------------------------- |
 | `DIRECTORY_DB` (D1)                     | `usernames`, `purchases`, `paddle_checkouts` | **Tier-0** — the only path from a handle to an account | Time Travel + encrypted off-Cloudflare dumps |
 | each account shard (`ACCOUNTS_DB_1`, …) | `users`, `account_keys` (wrapped DEKs)       | **Tier-0** — lose it and the account is dead           | Time Travel + encrypted off-Cloudflare dumps |
-| `SESSIONS_DB` (D1)                      | `sessions`                                   | disposable — loss signs everyone out                   | none                                         |
+| `SESSIONS_DB` (D1)                      | `sessions`                                   | disposable — loss costs a sign-in (below)              | none, and ⚠ never restored backward          |
 | `USER_FILES` (R2)                       | every user's encrypted files                 | **source of truth** for bookmark data                  | off-Cloudflare mirror with dated history     |
 | `USER_DATA` (Durable Object, per user)  | op log, `file_sizes` quota map               | op log disposable; quota map derivable from R2         | built-in 30-day PITR only                    |
 
@@ -29,6 +29,15 @@ what R2 and the Durable Object hold is [local-first-sync.md](./local-first-sync.
   below). That copy is for independence, not for longer history: it keeps the
   same 30 days (_Retention is a public promise_). (`SESSIONS_DB` is not Tier-0,
   so it's skipped.)
+- **`SESSIONS_DB` — ⚠ never restored backward; empty it instead.** Time Travel
+  covers it like every D1 database and can't be turned off, which makes
+  `wrangler d1 time-travel restore` the tempting fix and the wrong one: a
+  restore to before a revocation or a password change un-revokes and un-expires
+  those sessions, so a lost phone signed out through _Sign out other devices_
+  authenticates again. If the table is damaged or lost, empty it. Under
+  [sessions.md](./sessions.md) every device then gets `session_unknown`, keeps
+  its library, and signs in again; what's lost is the pending remote wipes the
+  table carried.
 - **R2 (bulk ciphertext):** R2 is durable but **not versioned**, and it is the
   **source of truth** for bookmark data
   ([local-first-sync.md](./local-first-sync.md#source-of-truth-r2-is-truth-the-op-log-is-an-accelerator)).

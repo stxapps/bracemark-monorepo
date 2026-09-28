@@ -127,7 +127,7 @@ export const PADDLE_REFUND_POLICY_URL = 'https://www.paddle.com/legal/refund-pol
 // so the two documents can never claim different vintages of the same rewrite —
 // and so bumping one after an edit is a deliberate act, not a forgotten one.
 export const TERMS_UPDATED = '18 September 2026';
-export const PRIVACY_UPDATED = '24 September 2026';
+export const PRIVACY_UPDATED = '28 September 2026';
 
 // How long a backup outlives what it copies — the window /privacy (_Backups_,
 // and the key-blob line above it) and /delete-account (_What is deleted_, _What

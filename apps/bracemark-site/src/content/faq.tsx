@@ -636,11 +636,12 @@ export const FAQ_GROUPS: FaqGroup[] = [
         a: (
           <>
             Yes, in Settings. It re-locks your key with the new password rather than re-encrypting
-            your library, so it takes a moment, not an afternoon — and it signs out every other
-            device, which cuts off anyone signed in with the old one. What it cannot do is unmake a
-            copy: the key itself does not change, so anything someone already decrypted stays
-            readable to them. Changing your password is the right move after a scare; it is not a
-            way to undo a break-in that already happened.
+            your library, so it takes a moment, not an afternoon — and every other device has to
+            sign in again with the new one, which cuts off anyone signed in with the old one. Your
+            own devices keep their copy, and any changes not yet synced, until you do. What it
+            cannot do is unmake a copy: the key itself does not change, so anything someone already
+            decrypted stays readable to them. Changing your password is the right move after a
+            scare; it is not a way to undo a break-in that already happened.
           </>
         ),
       },

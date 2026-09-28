@@ -524,7 +524,7 @@ function SignOutOtherDevicesView({ onBack }: { onBack: () => void }) {
         description={
           done
             ? undefined
-            : 'End every other signed-in session. Any other browser or device will have to sign in again — this one stays signed in. Your data isn’t touched.'
+            : 'End every other signed-in session — this one stays signed in. Each of the others erases its local copy the next time it connects.'
         }
       />
       {done ? (

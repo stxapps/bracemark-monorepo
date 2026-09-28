@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
-import { PLAN_LABELS } from '@stxapps/shared';
+import { PLAN_LABELS, SESSION_RETENTION } from '@stxapps/shared';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { PageShell } from '../../components/page-shell';
@@ -504,7 +504,10 @@ export default function Page() {
             you delete is gone from both within the same window.
           </li>
           <li>
-            <strong>Sessions</strong> — until they expire or you sign that device out.
+            <strong>Sessions</strong> — while the device stays signed in, then for{' '}
+            {SESSION_RETENTION.label}
+            after it is signed out or its session expires, so a device that connects late can still
+            be told whether to erase its copy.
           </li>
           <li>
             <strong>Subscription records</strong> — for as long as the subscription is live, and

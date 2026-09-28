@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
+import { SESSION_RETENTION } from '@stxapps/shared';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { MailLink } from '../../components/mail-link';
@@ -33,14 +34,18 @@ export const metadata: Metadata = {
 //     why cancelling is the user's step and happens where it was bought.
 //   - WHAT IS DELETED is the teardown in order — `deleteAllUserData`, then the
 //     doors with the user row, then every session. "Other devices erase their
-//     copy" is `endSession` on the session-invalid path, which runs the full
-//     `clearData` (web-react and expo-react auth-provider.tsx) — the next time
-//     that device reaches the server, not at the moment of deletion.
+//     copy" is a `session_revoked` answer running the full `clearData` on that
+//     device (docs/sessions.md) — the next time it reaches the server, not at
+//     the moment of deletion, and only while its revocation marker exists.
+//     "Within a year" is that marker's retention, read from
+//     `SESSION_RETENTION` (@stxapps/shared, auth/sessions.ts) like the
+//     kept-sessions line below and /privacy's _Sessions_ line.
 //   - WHAT IS DELETED is scoped to "the storage your devices sync with", never
 //     "our storage": the backups are our storage too, and they are listed two
 //     sections down as kept. An unscoped "immediately" is disproved on this page.
 //   - WHAT IS KEPT matches /privacy, _How long we keep it_, and must keep
-//     matching it: the tombstoned username, subscription records under tax law,
+//     matching it: the tombstoned username, the ended sessions' records for a
+//     year, subscription records under tax law,
 //     support mail and the paraphrased questions kept from it, providers' logs,
 //     and backups for their 30-day window
 //     (/privacy's header comment, _BACKUPS ARE A 30-DAY WINDOW_). The same
@@ -173,9 +178,10 @@ export default function Page() {
               open your data even if a copy of it survived.
             </li>
             <li className={bullet}>
-              Your account record and every signed-in session. The device you delete from erases its
-              local copy at once; your other devices are signed out and erase theirs the next time
-              they connect.
+              Your account record. Every signed-in session ends with it: the device you delete from
+              erases its local copy at once, and your other devices are signed out and erase theirs
+              the next time they connect within {SESSION_RETENTION.label}. One that stays offline
+              longer keeps its copy until you sign out on it.
             </li>
           </ul>
         </section>
@@ -186,6 +192,11 @@ export default function Page() {
             <li className={bullet}>
               Your username, forever. It is retired rather than released, so nobody can register it
               later and be mistaken for you.
+            </li>
+            <li className={bullet}>
+              A record of each session that ended — a hashed token, the account it belonged to, and
+              timestamps — for {SESSION_RETENTION.label}, so a device that connects late is still
+              told to erase its copy. After that it is deleted automatically.
             </li>
             <li className={bullet}>
               Subscription records, for as long as tax and accounting law requires. Apple, Google,

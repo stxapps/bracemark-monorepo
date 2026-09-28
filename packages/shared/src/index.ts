@@ -7,6 +7,7 @@ export * from './async/progress';
 export * from './async/with-timeout';
 export * from './auth/credentials';
 export * from './auth/endpoints';
+export * from './auth/sessions';
 export * from './brand/brand';
 export * from './crypto/contract-vectors';
 export * from './crypto/doors';
