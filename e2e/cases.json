@@ -30,6 +30,16 @@
     "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
   },
   {
+    "id": "SESSION-INVALID-WEB-001",
+    "title": "A session revoked from another device wipes the open page's local store and lands on sign-in, and signing back in restores the library",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online", "destructive"],
+    "fixture": "empty",
+    "path": "web/account.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
     "id": "WEB-LINK-001",
     "title": "A link added through quick-add survives reload",
     "surface": "web",
@@ -360,6 +370,26 @@
     "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report", "checkpoint"]
   },
   {
+    "id": "OFFLINE-API-ERROR-WEB-001",
+    "title": "With the api answering 500 and then 404, the app stays signed in, reads, writes, survives a reload, exports this device's copy, and drains its queue to another profile",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online", "destructive"],
+    "fixture": "small",
+    "path": "web/offline.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report", "checkpoint"]
+  },
+  {
+    "id": "OFFLINE-EXPORT-WEB-001",
+    "title": "An open page reaches Settings offline and exports its local library, offline writes included, as this device's copy",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online"],
+    "fixture": "empty",
+    "path": "web/offline.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
     "id": "IAP-WEB-001",
     "title": "A free account sees the Plus price and checkout, opens the real Paddle overlay, closes it and returns without buying",
     "surface": "web",
@@ -532,6 +562,16 @@
   {
     "id": "PWA-002",
     "title": "An edit made in the offline installed production build syncs to an independent client once the network returns",
+    "surface": "pwa",
+    "tier": "full",
+    "traits": ["online", "pwa"],
+    "fixture": "small",
+    "path": "pwa/pwa.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report", "checkpoint"]
+  },
+  {
+    "id": "PWA-003",
+    "title": "The offline installed production build, with the origin and api gone, reaches Settings in-app and exports its library with an offline write included",
     "surface": "pwa",
     "tier": "full",
     "traits": ["online", "pwa"],
@@ -987,6 +1027,46 @@
     "traits": ["online", "destructive", "android"],
     "fixture": "small",
     "path": "mobile/flows/offline.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "OFFLINE-EXPORT-IOS-001",
+    "title": "iOS saves a link with the api frozen, reaches Export in-app, and exports a plain-text file holding it and the synced link as this device's copy",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "destructive", "ios"],
+    "fixture": "small",
+    "path": "mobile/flows/offline-export.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "OFFLINE-EXPORT-ANDROID-001",
+    "title": "Android saves a link with its api route removed, reaches Export in-app, and exports a plain-text file holding it and the synced link as this device's copy",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "destructive", "android"],
+    "fixture": "small",
+    "path": "mobile/flows/offline-export.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "OFFLINE-API-ERROR-ANDROID-001",
+    "title": "With the api answering 500 and then 404, Android stays signed in, reads, writes, survives a cold start, exports this device's copy, and drains its queue to a web profile",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "destructive", "android"],
+    "fixture": "small",
+    "path": "mobile/flows/api-error.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "SESSION-INVALID-NATIVE-001",
+    "title": "A session revoked from a web profile wipes the device's local store on its next request and lands on sign-in, and signing back in restores the library",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "destructive", "ios", "android"],
+    "fixture": "small",
+    "path": "mobile/flows/session-invalid.yaml",
     "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
   },
   {

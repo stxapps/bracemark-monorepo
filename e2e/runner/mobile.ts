@@ -20,9 +20,10 @@ import { grantPlus, grantPlusAndLoad } from '../web/fixtures/plan';
 import { type ScaleLibrary, writeScaleLibrary } from '../web/fixtures/scale-library';
 import { syncAndWait } from '../web/fixtures/sync';
 import { createInSettings } from '../web/fixtures/taxonomy';
+import { startFaultApi } from './api-fault';
 import { type ApiControl, controlApi } from './api-pause';
 import { parseNativeCli } from './cli';
-import { stageDocumentPickerFile } from './device-files';
+import { countAppRows, readAppCacheFile, stageDocumentPickerFile } from './device-files';
 import {
   type Box,
   boxById,
@@ -159,6 +160,53 @@ async function setPortReachable(deviceId: string, port: number, reachable: boole
 
 async function setApiReachable(deviceId: string, reachable: boolean): Promise<void> {
   await setPortReachable(deviceId, 8787, reachable);
+}
+
+// Point an Android device's api route at another host port — a stand-in that
+// answers wrongly (runner/api-fault.ts) — without touching the app, which still
+// calls localhost:8787. `setApiReachable(…, true)` points it back.
+async function routeApiTo(deviceId: string, hostPort: number): Promise<void> {
+  await capture('adb', ['-s', deviceId, 'reverse', 'tcp:8787', `tcp:${hostPort}`]);
+}
+
+// The file an export left in the app's cache, as text, required to hold every
+// URL in `urls`. Plain text is URL-per-line, so containment is the whole check.
+async function assertExported(context: CaseStepContext, urls: string[]): Promise<void> {
+  const text = await readAppCacheFile({
+    platform: context.platform,
+    deviceId: context.deviceId,
+    prefix: 'Bracemark links ',
+  });
+  for (const url of urls) {
+    if (!text.includes(url)) throw new Error(`the exported file does not hold ${url}`);
+  }
+}
+
+// Synced entities plus the unpushed queue: what the sign-out teardown must take
+// with the session (docs/data-lifecycle.md, _the sign-out teardown_).
+async function localRows(context: CaseStepContext, label: string): Promise<number> {
+  return countAppRows({
+    platform: context.platform,
+    deviceId: context.deviceId,
+    tables: ['items', 'pending_ops'],
+    workDir: join(context.caseDir, `${context.index}-${label}`),
+  });
+}
+
+// Revoke every OTHER session of the account — the device's — from a separate
+// web profile, the way a user does it: Settings → Account → Sign out other
+// devices. No test hook: the api's answer to the device's token is then a real
+// 401.
+async function revokeOtherSessions(label: string, credentials: Credentials): Promise<void> {
+  const app = await launchApp(profileDir(label), { existing: credentials });
+  try {
+    await app.page.goto('/settings/account');
+    await app.page.getByRole('button', { name: /^Sign out other devices/ }).click();
+    await app.page.getByRole('button', { name: 'Sign out other devices', exact: true }).click();
+    await expect(app.page.getByText(/^Your other devices have been signed out\./)).toBeVisible();
+  } finally {
+    await app.close();
+  }
 }
 
 // A drag on Android as explicit touch events: down, eight moves, up. Not `input
@@ -465,8 +513,10 @@ async function main(): Promise<void> {
             await addLink(app.page, conflictUrl);
             await syncAndWait(app.page);
           }
-          if (testCase.id.startsWith('OFFLINE-')) {
-            // What the device must still read once the api is gone.
+          if (testCase.id.startsWith('OFFLINE-') || testCase.id === 'SESSION-INVALID-NATIVE-001') {
+            // What the device must still read once the api is gone — or, for
+            // the revoked session, what the teardown must take and the return
+            // must bring back.
             await app.page.goto('/links');
             await addLink(app.page, offlineUrl);
             await syncAndWait(app.page);
@@ -1170,6 +1220,94 @@ async function main(): Promise<void> {
             ]);
             return null;
           },
+        ];
+      }
+      if (
+        testCase.id === 'OFFLINE-EXPORT-IOS-001' ||
+        testCase.id === 'OFFLINE-EXPORT-ANDROID-001'
+      ) {
+        env.SYNCED_URL = offlineUrl;
+        env.ADDED_URL = unresolvableUrl(`${run.runId}-offline-export-added`);
+        // The same two cuts as OFFLINE-*-001: a refusal on Android, a hang on iOS.
+        let api: ApiControl | undefined;
+        cleanupActions.push(async () => {
+          if (run.platform === 'android') await setApiReachable(run.deviceId, true);
+          else api?.resume();
+        });
+        steps = [
+          testCase.path,
+          async () => {
+            if (run.platform === 'android') {
+              await setApiReachable(run.deviceId, false);
+            } else {
+              api = await controlApi();
+              api.pause();
+            }
+            return null;
+          },
+          'mobile/flows/parts/offline-export-local.yaml',
+          async (context) => {
+            await assertExported(context, [env.SYNCED_URL, env.ADDED_URL]);
+            return null;
+          },
+        ];
+      }
+      if (testCase.id === 'OFFLINE-API-ERROR-ANDROID-001') {
+        env.EDITED_URL = offlineUrl;
+        env.ADDED_URL = unresolvableUrl(`${run.runId}-api-error-added`);
+        env.TITLE = unique('E2E api error title');
+        const fault = await startFaultApi();
+        cleanupActions.push(async () => {
+          await setApiReachable(run.deviceId, true);
+          await fault.close();
+        });
+        steps = [
+          testCase.path,
+          async () => {
+            fault.answer(500);
+            await routeApiTo(run.deviceId, fault.port);
+            return null;
+          },
+          'mobile/flows/parts/api-error-local.yaml',
+          async () => {
+            fault.answer(404);
+            return null;
+          },
+          'mobile/flows/parts/api-error-relaunch.yaml',
+          async (context) => {
+            await assertExported(context, [env.EDITED_URL, env.ADDED_URL]);
+            await setApiReachable(run.deviceId, true);
+            return null;
+          },
+          'mobile/flows/parts/offline-reconnect.yaml',
+          async () => {
+            await readFromWeb(`${run.runId}-${testCase.id}-reader`, credentials, [
+              { url: env.ADDED_URL },
+              { url: env.EDITED_URL, text: env.TITLE },
+            ]);
+            return null;
+          },
+        ];
+      }
+      if (testCase.id === 'SESSION-INVALID-NATIVE-001') {
+        env.KEPT_URL = offlineUrl;
+        steps = [
+          testCase.path,
+          async (context) => {
+            // Non-empty first, or the empty count after would prove nothing.
+            const before = await localRows(context, 'store-before');
+            if (before === 0) throw new Error('the local store is empty before the revoke');
+            await revokeOtherSessions(`${run.runId}-${testCase.id}-revoker`, credentials);
+            return null;
+          },
+          'mobile/flows/parts/session-invalid-revoked.yaml',
+          async (context) => {
+            const after = await localRows(context, 'store-after');
+            if (after !== 0)
+              throw new Error(`${after} rows survived the revoked session’s teardown`);
+            return null;
+          },
+          'mobile/flows/parts/session-invalid-return.yaml',
         ];
       }
       if (testCase.id === 'SYNC-CONFLICT-001') {

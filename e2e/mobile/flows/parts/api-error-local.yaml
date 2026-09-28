@@ -1,0 +1,49 @@
+# Part two of OFFLINE-API-ERROR-ANDROID-001: every api request answers 500. Read
+# through in-app navigation, then write: retitle the one link and save a second. Both
+# land locally and wait in the queue — and the app is still signed in, which is
+# the claim: a 500 is a failed sync, not a dead session.
+appId: com.bracemark.app
+---
+- tapOn:
+    id: 'links-open-navigation'
+- tapOn:
+    id: 'links-nav-all'
+- extendedWaitUntil:
+    visible: ".*${EDITED_URL.replace('https://', '')}.*"
+    timeout: 20000
+
+# One link on the account, so the row menu's trigger is unambiguous (the new
+# link is saved after it). The title starts blank, so typing sets it outright.
+- tapOn:
+    id: 'link-options'
+- tapOn:
+    id: 'link-menu-edit'
+- tapOn:
+    id: 'edit-link-title'
+- inputText: ${TITLE}
+- tapOn:
+    id: 'edit-link-save'
+- extendedWaitUntil:
+    visible: '.*${TITLE}.*'
+    timeout: 10000
+- runFlow:
+    file: ../subflows/add-link.yaml
+    env:
+      URL: ${ADDED_URL}
+
+# The writes' own sync attempt runs into the 500s; the Data card counts what is
+# still waiting once it has given up.
+- runFlow:
+    file: ../subflows/open-settings.yaml
+    env:
+      SECTION: data
+- extendedWaitUntil:
+    visible: '.*waiting to sync.*'
+    timeout: 60000
+- takeScreenshot: api-error-queued
+- tapOn:
+    id: 'settings-close'
+- extendedWaitUntil:
+    visible:
+      id: 'links-screen'
+    timeout: 10000

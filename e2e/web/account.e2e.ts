@@ -1,9 +1,12 @@
 import { type Page } from '@playwright/test';
 
+import { profileDir } from '../paths';
 import { expect, test } from './fixtures/app';
-import { unique } from './fixtures/data';
+import { unique, unresolvableUrl } from './fixtures/data';
 import { SITE_URL } from './fixtures/env';
-import { addLinkButton } from './fixtures/links';
+import { launchApp } from './fixtures/launch';
+import { addLink, addLinkButton, linkRow } from './fixtures/links';
+import { syncAndWait } from './fixtures/sync';
 
 // Both ways out of a session land on the marketing site's origin by a cross-origin
 // `location.replace`. See the sign-out spec below for why it is stubbed.
@@ -150,4 +153,87 @@ test.describe('account', () => {
       await expect(page).toHaveURL(/\/sign-in/);
     },
   );
+
+  test(
+    'a session the server revokes wipes this device and lands on sign-in, and signing back in restores the library',
+    { tag: ['@SESSION-INVALID-WEB-001', '@full', '@online', '@destructive'] },
+    async ({ isolatedApp: app }, testInfo) => {
+      // Three Argon2id ceremonies: the account, the revoking profile, the return.
+      test.setTimeout(4 * 60 * 1000);
+      const { page, credentials } = app;
+      const kept = unresolvableUrl(unique('revoked-kept'));
+
+      await page.goto('/links');
+      await addLink(page, kept);
+      await syncAndWait(page);
+      expect(await countSyncedItems(page)).toBeGreaterThan(0);
+
+      // Revoked the way a user revokes it, from another device: no test hook,
+      // and the api's own answer to this token from now on is a real 401.
+      const other = await launchApp(profileDir(`revoker-w${testInfo.workerIndex}`), {
+        existing: credentials,
+      });
+      try {
+        await other.page.goto('/settings/account');
+        await other.page.getByRole('button', { name: /^Sign out other devices/ }).click();
+        await other.page
+          .getByRole('button', { name: 'Sign out other devices', exact: true })
+          .click();
+        await expect(
+          other.page.getByText(/^Your other devices have been signed out\./),
+        ).toBeVisible();
+      } finally {
+        await other.close();
+      }
+
+      // The page is still open and still believes it is signed in; its next
+      // request is the one that learns otherwise. Sync is the user's own trigger.
+      await page.getByRole('button', { name: /^More options/ }).click();
+      await page.getByRole('menuitem', { name: /^(Sync|Sync failed)/ }).click();
+
+      // An invalidated session is 'expired', not a sign-out: it stays on this
+      // origin and keeps where the user was, for sign-in to return them there
+      // (auth-guard.tsx) — unlike WEB-ACCOUNT-002's exit to the marketing site.
+      await expect(page).toHaveURL(/\/sign-in\?next=%2Flinks/, { timeout: 60_000 });
+      // The local store held DECRYPTED bookmarks; the teardown must take them
+      // with the session (docs/data-lifecycle.md, _the sign-out teardown_).
+      expect(await countSyncedItems(page)).toBe(0);
+      await page.goto('/links');
+      await expect(page).toHaveURL(/\/sign-in/);
+
+      // Only this device's copy went: the account's library is still on the
+      // server and comes back with a fresh session.
+      await page.locator('#username').fill(credentials.username);
+      await page.locator('#password').fill(credentials.password);
+      await page.getByRole('button', { name: /^Sign in$/ }).click();
+      await expect(page).toHaveURL(/\/links/, { timeout: 60_000 });
+      await expect(linkRow(page, kept)).toBeVisible({ timeout: 30_000 });
+    },
+  );
 });
+
+// How many rows bracemark-web's local store holds — synced entities (`items`) and
+// the unpushed queue (`pendingOps`) together. By the store's schema names
+// (packages/web-react/src/data/db.ts), as fixtures/store-hold.ts addresses them:
+// the teardown clears the tables and keeps the database, and an assertion
+// through the UI could not tell "wiped" from "signed out and not shown".
+async function countSyncedItems(page: Page): Promise<number> {
+  return page.evaluate(
+    () =>
+      new Promise<number>((resolve, reject) => {
+        const open = indexedDB.open('bracemark-data');
+        open.onerror = () => reject(open.error ?? new Error('indexedDB.open failed'));
+        open.onsuccess = () => {
+          const db = open.result;
+          const tx = db.transaction(['items', 'pendingOps'], 'readonly');
+          const items = tx.objectStore('items').count();
+          const pending = tx.objectStore('pendingOps').count();
+          tx.oncomplete = () => {
+            db.close();
+            resolve(items.result + pending.result);
+          };
+          tx.onerror = () => reject(tx.error ?? new Error('count transaction failed'));
+        };
+      }),
+  );
+}

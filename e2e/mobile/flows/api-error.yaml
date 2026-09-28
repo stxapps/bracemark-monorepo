@@ -1,0 +1,23 @@
+# Sign in to an account holding one link written on the web, then hand the
+# device to the runner, which points its api route at a stand-in that answers
+# every request with 500, and later 404 (runner/api-fault.ts). The server is
+# gone but still answers — and a client that read either status as "signed out"
+# would wipe a library it could no longer download again.
+#
+# Android only: the iOS simulator shares this Mac's loopback, so there is no
+# per-device api route to point elsewhere (runner/api-fault.ts).
+#
+#   maestro test mobile/flows/api-error.yaml -e USERNAME=… -e PASSWORD=… \
+#     -e EDITED_URL=https://….invalid/api-error-edited
+appId: com.bracemark.app
+tags: [OFFLINE-API-ERROR-ANDROID-001, full, online, destructive, android]
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+- extendedWaitUntil:
+    visible: ".*${EDITED_URL.replace('https://', '')}.*"
+    timeout: 60000
+- tapOn:
+    text: 'Dismiss'
+    optional: true
+- takeScreenshot: api-error-base

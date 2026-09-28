@@ -1,0 +1,20 @@
+# Part two of OFFLINE-EXPORT-*-001: the api is out of reach. Save a link — local
+# and queued, never pushed — then reach Export the way a person does and export
+# as plain text. The runner reads the file afterwards: both the synced link and
+# this one must be in it.
+appId: com.bracemark.app
+---
+- runFlow:
+    file: ../subflows/add-link.yaml
+    env:
+      URL: ${ADDED_URL}
+- runFlow:
+    file: ../subflows/open-settings.yaml
+    env:
+      SECTION: data
+- extendedWaitUntil:
+    visible: '.*waiting to sync.*'
+    timeout: 20000
+- runFlow:
+    file: ../subflows/export-plain-text.yaml
+- takeScreenshot: offline-export-receipt

@@ -1,0 +1,60 @@
+# Export all data as plain text, from Settings → Data's overview, and stop on the
+# receipt. Pulled in with `runFlow`; never run directly. The runner then reads the
+# file the export left in the app's cache (runner/device-files.ts) — Maestro can
+# see the share sheet, not what is in the file.
+#
+# Every caller exports with the api out of reach, so the receipt must say the file
+# is this device's copy. That wording is asserted, the one sentence of body copy
+# these flows bind to (docs/e2e.md, _the testID contract_): it is the whole of
+# what tells a user what they got.
+appId: com.bracemark.app
+---
+- tapOn:
+    id: 'export-data-open'
+# A prefix match: the radio row folds its label and hint into one accessible
+# name ("Plain text, Just the URLs…"), so the label alone is no node.
+- tapOn: 'Plain text.*'
+- tapOn:
+    id: 'export-data-submit'
+
+# A finished run presents the system share sheet over its own receipt
+# (data-section.tsx, ExportView) — and the receipt paints a beat BEFORE the sheet
+# arrives, so polling for the receipt and dismissing "a sheet if one is up" races
+# it: the poll ends on the bare receipt and the sheet lands on top afterwards
+# (measured on the Pixel 8 AVD, both orders). So wait for the sheet itself — the
+# run always presents it, which is also the claim that the file reached the OS —
+# then put it away. The budget is the export's: its opening sync refresh retries
+# an unreachable api before it gives up, and against a hung one each try waits
+# out the platform's own request timeout.
+#
+# Android's chooser is titled by what it carries ("Sharing 1 file"), and a back
+# press closes it. iOS's has no Close control: it is a popover, and iOS exposes
+# the dimmed area around it as `PopoverDismissRegion`, whose box is the whole
+# screen — so the tap goes near the top, outside the sheet (as in the native
+# measurement leg, measure/flows/dismiss-share-sheet.yaml).
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - extendedWaitUntil:
+          visible: 'Sharing \d+ files?'
+          timeout: 360000
+      - back
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - extendedWaitUntil:
+          visible:
+            id: 'PopoverDismissRegion'
+          timeout: 360000
+      - tapOn:
+          point: '50%, 12%'
+- extendedWaitUntil:
+    visible:
+      id: 'export-data-complete'
+    timeout: 10000
+# The receipt sits under the format list, below the fold on a phone.
+- scrollUntilVisible:
+    element: '.*Couldn’t refresh from the server first.*'
+    timeout: 10000

@@ -1,0 +1,40 @@
+# Part three of OFFLINE-API-ERROR-ANDROID-001: the api now answers 404. A cold
+# start — the native reload — must restore the session from secure-store and the
+# library from SQLite, the queued writes included, and never mistake the 404 for
+# a signed-out account. Then export: the runner reads both links out of the
+# file.
+appId: com.bracemark.app
+---
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible:
+      id: 'links-screen'
+    timeout: 60000
+- tapOn:
+    text: 'Dismiss'
+    optional: true
+- tapOn:
+    id: 'links-open-navigation'
+- tapOn:
+    id: 'links-nav-all'
+- extendedWaitUntil:
+    visible: ".*${ADDED_URL.replace('https://', '')}.*"
+    timeout: 20000
+- extendedWaitUntil:
+    visible: '.*${TITLE}.*'
+    timeout: 20000
+
+- runFlow:
+    file: ../subflows/open-settings.yaml
+    env:
+      SECTION: data
+- runFlow:
+    file: ../subflows/export-plain-text.yaml
+- takeScreenshot: api-error-exported
+- tapOn:
+    id: 'settings-close'
+- extendedWaitUntil:
+    visible:
+      id: 'links-screen'
+    timeout: 10000

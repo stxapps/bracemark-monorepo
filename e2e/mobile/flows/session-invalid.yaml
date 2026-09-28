@@ -1,0 +1,22 @@
+# Sign in to an account holding one link written on the web, then hand the
+# device to the runner, which counts the app's local store (non-empty) and
+# revokes this device's session the way a user does: a separate web profile's
+# Settings → Account → Sign out other devices. The api then answers the device's
+# token with a real 401. parts/session-invalid-revoked.yaml makes the request
+# that learns it; the runner counts the store again (empty); and
+# parts/session-invalid-return.yaml signs back in.
+#
+#   maestro test mobile/flows/session-invalid.yaml -e USERNAME=… -e PASSWORD=… \
+#     -e KEPT_URL=https://….invalid/revoked-kept
+appId: com.bracemark.app
+tags: [SESSION-INVALID-NATIVE-001, full, online, destructive, ios, android]
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+- extendedWaitUntil:
+    visible: ".*${KEPT_URL.replace('https://', '')}.*"
+    timeout: 60000
+- tapOn:
+    text: 'Dismiss'
+    optional: true
+- takeScreenshot: session-invalid-base
