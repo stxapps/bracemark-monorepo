@@ -57,7 +57,7 @@ export const requireAuth = createMiddleware<AppEnv>(async (c, next) => {
   // through the Sessions API (withSession), which this worker doesn't use —
   // adopting it would have to answer revocation freshness first.
   if (session.expiresAt < now + SESSION_IDLE_MS - SESSION_SLIDE_MS) {
-    await offCriticalPath(c, renewOrReport(c, session.id, now));
+    await offCriticalPath(c, renewOrReport(c, session.id, now, session.expiresAt));
   }
 
   c.set('session', {
@@ -71,9 +71,14 @@ export const requireAuth = createMiddleware<AppEnv>(async (c, next) => {
 // A failed renewal leaves the old deadline intact — the request it rides on was
 // already authorized — so it is reported, never thrown. A later request retries
 // while the session stays valid.
-async function renewOrReport(c: Context<AppEnv>, sessionId: string, now: number): Promise<void> {
+async function renewOrReport(
+  c: Context<AppEnv>,
+  sessionId: string,
+  now: number,
+  observedExpiresAt: number,
+): Promise<void> {
   try {
-    await renewSession(c.env, sessionId, now);
+    await renewSession(c.env, sessionId, now, observedExpiresAt);
   } catch (err) {
     console.error('requireAuth: session renewal failed', err);
   }

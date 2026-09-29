@@ -28,7 +28,6 @@
 // The store and its writes are REAL (node:sqlite + the in-memory filesystem), so the facets
 // asserted on are the ones the pending query would read. `./image` is stubbed — it is a
 // pair of native decoders with its own spec, and here it stands for "the image was usable".
-
 import { sql } from 'drizzle-orm';
 
 import { type LinkItem, LINKS_PREFIX, MY_LIST_ID, pathFromId } from '@stxapps/shared';
@@ -36,6 +35,7 @@ import { type LinkItem, LINKS_PREFIX, MY_LIST_ID, pathFromId } from '@stxapps/sh
 import { getDb } from '../data/db';
 import { readFavicon } from '../data/favicon-store';
 import { readExtraction } from '../data/queries';
+import { seedNewAccount } from '../data/sync-store';
 import { runDeviceTitleImageBatch } from './device-extraction';
 import { USER_AGENT } from './user-agent';
 
@@ -102,7 +102,7 @@ function routes(table: Record<string, () => Response | Promise<Response>>): void
 const requestedUrls = (): string[] => fetchMock.mock.calls.map(([url]) => url as string);
 const facetOf = async (id: string) => (await readExtraction(id))?.facets.titleImage;
 
-beforeEach(() => {
+beforeEach(async () => {
   mockIds = 0;
   mockProbeSize = { width: 800, height: 600 };
   resetFileSystem();
@@ -110,6 +110,7 @@ beforeEach(() => {
     sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'`,
   );
   for (const { name } of tables) getDb().run(sql.raw(`DELETE FROM "${name}"`));
+  await seedNewAccount(USER);
   fetchMock = jest.fn();
   globalThis.fetch = fetchMock as unknown as typeof fetch;
 });

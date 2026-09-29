@@ -26,7 +26,6 @@
 // fake-indexeddb, so the facets asserted on are the ones the pending query would read.
 // `resizeImage` needs no stub — it falls back to the original bytes when there is no
 // `createImageBitmap` (resize-image.ts), which is exactly the case under node.
-
 import {
   ApiError,
   type ExtractClient,
@@ -41,6 +40,7 @@ import {
 
 import { db } from '../data/db';
 import { readExtraction } from '../data/queries';
+import { seedNewAccount } from '../data/sync-store';
 import { runServerTitleImageBatch } from './server-extraction';
 
 const USER = 'alice';
@@ -83,6 +83,8 @@ function client(overrides: Partial<Record<keyof ExtractClient, unknown>> = {}): 
 const facetOf = async (id: string) => (await readExtraction(id))?.facets.titleImage;
 
 beforeEach(async () => {
+  await db.syncMeta.clear();
+  await seedNewAccount(USER);
   await Promise.all([db.items.clear(), db.pendingOps.clear()]);
 });
 

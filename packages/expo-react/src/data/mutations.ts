@@ -26,7 +26,6 @@
 // rows first, files after, the same crash-safe order clear-data uses — and a
 // restored blob's bytes land on disk with the row's `hasDataFile` flag marked
 // LAST (the engine's materialize ordering).
-
 import { eq } from 'drizzle-orm';
 import type { File } from 'expo-file-system';
 
@@ -71,6 +70,7 @@ import {
 import { enqueueDeleteTx, enqueuePutsTx, enqueuePutTx } from './pending-store';
 import { type ItemRecord, parseBlob, toItemRecord } from './projection';
 import { type LinkItem, toItem } from './queries';
+import { assertAccountOwnsStoreTx } from './sync-store';
 
 // Persist one path's bytes locally and queue the upload, producing the bytes
 // INSIDE the transaction from the path's current row — the base primitive every
@@ -83,6 +83,7 @@ function writeBytesWith(
   produce: (existing: ItemRow | undefined) => Uint8Array,
 ): void {
   getDb().transaction((tx: DbTx) => {
+    assertAccountOwnsStoreTx(tx, username);
     const existing = tx.select().from(items).where(eq(items.path, path)).get();
     const baseUpdatedAt = existing?.updatedAt ?? 0;
     const bytes = produce(existing);
@@ -124,6 +125,7 @@ function writeEntity<T extends WithPath<object>>(username: string, item: T): voi
 // surface, and callers gate the higher-level rules.
 function deleteEntity(username: string, path: string): void {
   getDb().transaction((tx: DbTx) => {
+    assertAccountOwnsStoreTx(tx, username);
     const existing = tx.select().from(items).where(eq(items.path, path)).get();
     const baseUpdatedAt = existing?.updatedAt ?? 0;
     deleteItemsTx(tx, [path]);
@@ -168,6 +170,7 @@ export async function bulkWriteEntities(
   // ~6 ms each on the simulator, nearly all of it drizzle building and
   // preparing statements (docs/data-lifecycle.md, _readings — expo_).
   getDb().transaction((tx: DbTx) => {
+    assertAccountOwnsStoreTx(tx, username);
     const stamps = itemUpdatedAtsTx(
       tx,
       entries.map(({ path }) => path),
@@ -228,6 +231,7 @@ export interface LinkEdit {
 export async function bulkDeleteEntities(username: string, paths: string[]): Promise<void> {
   if (paths.length === 0) return;
   getDb().transaction((tx: DbTx) => {
+    assertAccountOwnsStoreTx(tx, username);
     for (const path of paths) {
       const existing = tx.select().from(items).where(eq(items.path, path)).get();
       const baseUpdatedAt = existing?.updatedAt ?? 0;
@@ -248,6 +252,7 @@ export async function bulkWriteLinks(username: string, edits: LinkEdit[]): Promi
   if (edits.length === 0) return;
   const now = Date.now();
   getDb().transaction((tx: DbTx) => {
+    assertAccountOwnsStoreTx(tx, username);
     for (const { link, patch } of edits) {
       const { path, ...snapshot } = link;
       const existing = tx.select().from(items).where(eq(items.path, path)).get();
@@ -501,11 +506,11 @@ export async function deleteExtraction(username: string, linkId: string): Promis
 export async function writeFile(username: string, fileId: string, source: File): Promise<void> {
   const path = pathFromId(fileId, FILES_PREFIX);
 
-  ensureDataFilesDir();
-  deleteDataFile(path);
-  source.copy(dataFileFor(path));
-
   getDb().transaction((tx: DbTx) => {
+    assertAccountOwnsStoreTx(tx, username);
+    ensureDataFilesDir();
+    deleteDataFile(path);
+    source.copy(dataFileFor(path));
     const existing = tx.select().from(items).where(eq(items.path, path)).get();
     const baseUpdatedAt = existing?.updatedAt ?? 0;
     putItemsTx(tx, [toItemRecord(path, baseUpdatedAt)]);

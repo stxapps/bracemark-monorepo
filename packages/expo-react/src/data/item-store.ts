@@ -240,10 +240,12 @@ export async function deleteItemsUnqueued(username: string, paths: string[]): Pr
 // UPDATE … FROM that matches one row twice applies an arbitrary one of them.
 export async function stampItemUpdatedAts(
   input: { path: string; updatedAt: number }[],
+  username?: string,
 ): Promise<void> {
   if (input.length === 0) return;
   const stamps = [...new Map(input.map((s) => [s.path, s.updatedAt])).entries()];
   getDb().transaction((tx) => {
+    if (username !== undefined) assertAccountOwnsStoreTx(tx, username);
     for (const batch of chunk(stamps, valuesPerStatement(2))) {
       tx.run(
         sql`UPDATE ${items} SET ${sql.identifier(items.updatedAt.name)} = v.column2

@@ -82,19 +82,27 @@ export function sessionsRepo(db: D1Database) {
     // caller's read: concurrent requests can all read the same old deadline, and
     // only the first UPDATE to land still matches `expires_at < now + idle -
     // slide`, so one renewal changes the row however many are attempted. The
-    // same predicate refuses to resurrect: a revoked row (`revoked_at IS NULL`)
-    // or an expired one (`expires_at >= now`) — including one a password change
-    // just pushed into the past — never moves. Returns whether it renewed.
-    async renew(id: string, now: number, idleMs: number, slideMs: number): Promise<boolean> {
+    // same predicate refuses revoked or expired rows. Matching the observed
+    // expiry also rejects a password change that landed after this request's
+    // timestamp: that newly expired deadline can still be later than `now`.
+    // Returns whether it renewed.
+    async renew(
+      id: string,
+      now: number,
+      idleMs: number,
+      slideMs: number,
+      observedExpiresAt: number,
+    ): Promise<boolean> {
       const res = await db
         .prepare(
           `UPDATE sessions SET expires_at = ?, last_seen_at = ?
             WHERE id = ?
               AND revoked_at IS NULL
               AND expires_at >= ?
-              AND expires_at < ?`,
+              AND expires_at < ?
+              AND expires_at = ?`,
         )
-        .bind(now + idleMs, now, id, now, now + idleMs - slideMs)
+        .bind(now + idleMs, now, id, now, now + idleMs - slideMs, observedExpiresAt)
         .run();
       return res.meta.changes > 0;
     },

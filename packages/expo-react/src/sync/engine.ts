@@ -68,13 +68,7 @@ import {
 import { holdLiveReads } from '../data/live-read-invalidation';
 import { clearDrainedOps, listPendingOps, type PendingOpRecord } from '../data/pending-store';
 import { toItemRecord } from '../data/projection';
-import {
-  advanceCursor,
-  beginInitialSync,
-  getSyncMeta,
-  markFirstSyncDone,
-  resetCursor,
-} from '../data/sync-store';
+import { advanceCursor, getSyncMeta, markFirstSyncDone, resetCursor } from '../data/sync-store';
 import { BlobRequestError, getBlob, getBlobToFile, putBlob, putBlobFromFile } from './r2';
 
 // Everything the engine needs to run a sync, passed in by the caller (the sync
@@ -196,9 +190,9 @@ export async function runInitialSync(
   onProgress?: InitialSyncProgressFn,
 ): Promise<void> {
   deps = withRetryDeps(deps);
-  // Claim the bookkeeping row first, so every write below is fenced on it
-  // (sync-store.ts, AccountFencedError).
-  await beginInitialSync(deps.username);
+  // Auth claims the bookkeeping row under the lifecycle lock. A stale cycle
+  // must never recreate that row after teardown (sync-store.ts).
+
   const files = await listAllFiles(deps.api);
   await withBulkHold(files.length, () => storeDownloads(deps, files, onProgress));
   // Cursor is the newest compound `(updatedAt, path)` among ALL listed files
@@ -808,7 +802,7 @@ async function commitBatched(deps: SyncDeps, ops: PendingOpRecord[]): Promise<Co
     committed.push(...results);
     // All of a batch's restamps ride one transaction (stampItemUpdatedAts) rather
     // than a statement-per-result round trip; each row-gone stamp is still a no-op.
-    await stampItemUpdatedAts(results);
+    await stampItemUpdatedAts(results, deps.username);
     const accepted = new Set(results.map((r) => r.path));
     await clearDrainedOps(batch.filter((o) => accepted.has(o.path)));
   }

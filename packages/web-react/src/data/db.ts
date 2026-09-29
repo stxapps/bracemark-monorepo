@@ -21,7 +21,7 @@ import Dexie, { type EntityTable, type Table } from 'dexie';
 
 import type { OpKind, ThemeState } from '@stxapps/shared';
 
-import { markUpdateRequired } from './update-required';
+import { isUpdateRequired, markUpdateRequired, onUpdateRequired } from './update-required';
 
 // Per-account sync bookkeeping. The presence of a row with `firstSyncDoneAt > 0`
 // is the gate that lets the app render local data instead of blocking on a full
@@ -368,13 +368,21 @@ class BracemarkDb extends Dexie {
     // this build's code over a schema it doesn't know. Refuse it here, the same
     // way. (A patch-mode bump Dexie makes itself stays inside this version: its
     // native number is `DATA_DB_VERSION * 10 + k`.)
-    this.on('ready', () => {
-      if (Math.floor(this.backendDB().version / 10) > DATA_DB_VERSION) {
-        this.close({ disableAutoOpen: true });
-        markUpdateRequired('data');
-        throw new Dexie.VersionError('bracemark-data was upgraded by a newer build');
-      }
-    });
+    this.on(
+      'ready',
+      () => {
+        if (isUpdateRequired()) {
+          this.close({ disableAutoOpen: true });
+          throw new Dexie.VersionError('A local database was upgraded by a newer build');
+        }
+        if (Math.floor(this.backendDB().version / 10) > DATA_DB_VERSION) {
+          this.close({ disableAutoOpen: true });
+          markUpdateRequired('data');
+          throw new Dexie.VersionError('bracemark-data was upgraded by a newer build');
+        }
+      },
+      true,
+    ); // Keep the guard for every reopen, not only the first ready event.
   }
 }
 
@@ -382,3 +390,8 @@ class BracemarkDb extends Dexie {
 // importing this on the server (where there's no IndexedDB) is inert — only the
 // awaited reads/writes below touch IDB, and those run in client effects.
 export const db = new BracemarkDb();
+// A session-schema upgrade also invalidates this build's account ownership
+// checks. Stop every data writer, including editors and in-flight sync, even
+// when the data schema itself has not changed. The ready guard above also
+// refuses an explicit reopen, or a first open after the sticky signal.
+onUpdateRequired(() => db.close({ disableAutoOpen: true }));

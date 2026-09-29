@@ -26,6 +26,7 @@ import {
   type SessionVerdictEvent,
   withSessionLock,
 } from '../data/session-store';
+import { beginInitialSync, seedNewAccount } from '../data/sync-store';
 
 // App-level auth state — the expo sibling of web-react's contexts/auth-provider,
 // and THE LIFECYCLE OWNER on this platform (docs/sessions.md, _who acts on a
@@ -71,7 +72,10 @@ interface AuthContextValue {
   // Adopt credentials from sign-in / create-account — or RESUME: signing in again
   // with the stored username replaces the token, mints a new generation, sets the
   // session active and KEEPS the local store (with its queued edits) untouched.
-  setSession: (credentials: SessionCredentials) => Promise<void>;
+  setSession: (
+    credentials: SessionCredentials,
+    options?: { newAccount?: boolean },
+  ) => Promise<void>;
   // The full local teardown — the sign-out PRIMITIVE. Server-side revocation lives
   // in the user-driven useSignOut hook (which POSTs sign-out, then calls this).
   // Defaults to a deliberate 'signed-out' (→ '/').
@@ -88,6 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [username, setUsername] = useState<string | null>(null);
   const [sessionState, setSessionState] = useState<SessionState | null>(null);
   const [reason, setReason] = useState<EndReason | null>(null);
+  const [generation, setGeneration] = useState<string | null>(null);
   // For the teardown below: the react-query cache is the one per-account store
   // clearData can't reach (it's in-memory React state, not a device store).
   const queryClient = useQueryClient();
@@ -103,6 +108,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (usernameRef.current !== null && usernameRef.current !== record.username) {
         queryClient.clear();
       }
+      setGeneration(record.generation);
       setUsername(record.username);
       setSessionState(record.state);
       setReason(null);
@@ -132,12 +138,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // orphan plaintext blobs with no rows. Decided by the read just made, and a
       // FAILED read throws past it rather than clearing anything.
       if (!record) await clearData().catch(() => undefined);
+      else await beginInitialSync(record.username);
       return record;
     }).then(
       (record) => {
         if (!active) return;
         if (record) adopt(record);
         else {
+          setGeneration(null);
           setUsername(null);
           setStatus('unauthenticated');
         }
@@ -154,7 +162,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [adopt]);
 
   // The teardown, for a caller already holding the lifecycle lock. Order:
-  //   1. 'ending' — CLOSE THE GATE FIRST, before a single byte is wiped. Without it
+  //   1. Delete the session record (failure leaves the library intact), then
+  //      'ending' — CLOSE THE GATE FIRST, before a single byte is wiped. Without it
   //      there's a live frame where the store is empty but status is still
   //      'authenticated', so the signed-in group stays mounted and its queries
   //      re-read a wiped database. Nothing here auto-navigates on data vanishing
@@ -172,28 +181,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   //      clearData can't reach it, and a second account in this process would
   //      inherit the first one's answers.
   const teardown = useCallback(
-    async (why: EndReason) => {
+    async (why: EndReason, requireClean = false) => {
+      // A failed record deletion must not be followed by a data wipe: otherwise
+      // relaunch would adopt a still-persisted session over an empty library.
+      await clearSession();
       setStatus('ending');
-      await clearSession().catch(() => undefined);
-      await clearData().catch(() => undefined);
+      let cleanupError: unknown;
+      await clearData().catch((error: unknown) => {
+        cleanupError = error;
+      });
       queryClient.clear();
+      setGeneration(null);
       setUsername(null);
       setSessionState(null);
       setReason(why);
       setStatus('unauthenticated');
+      if (requireClean && cleanupError) throw cleanupError;
     },
     [queryClient],
   );
 
   const setSession = useCallback(
-    async (credentials: SessionCredentials) => {
+    async (credentials: SessionCredentials, options?: { newAccount?: boolean }) => {
       const record = await withSessionLock(async () => {
-        const persisted = await loadSession().catch(() => null);
+        const persisted = await loadSession();
         // Another account's library is still on this device: tear it down before
         // adopting a new one (a same-username sign-in is a RESUME, and keeps it).
         if (persisted && persisted.username !== credentials.username) {
-          await teardown('signed-out');
+          await teardown('signed-out', true);
+        } else if (!persisted) {
+          // Also finish residue from an interrupted/failed wipe in this process.
+          // No new account may inherit it, even on a retry without a reload.
+          await clearData();
         }
+        if (options?.newAccount) await seedNewAccount(credentials.username);
+        else await beginInitialSync(credentials.username);
         const next = activeRecord(credentials);
         await saveSession(next);
         return next;
@@ -204,8 +226,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const endSession = useCallback(
-    (why: EndReason = 'signed-out') => withSessionLock(() => teardown(why)),
-    [teardown],
+    (why: EndReason = 'signed-out') =>
+      withSessionLock(async () => {
+        const persisted = await loadSession();
+        // The caller can be returning from a slow sign-out/delete-account request.
+        // Its callback belongs to the generation visible when that action began.
+        if (!persisted || persisted.generation !== generation) {
+          if (persisted) adopt(persisted);
+          return;
+        }
+        await teardown(why);
+      }),
+    [adopt, generation, teardown],
   );
 
   // A server verdict on the token of one generation (auth-api-client.ts), decided
@@ -240,7 +272,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [adopt, teardown],
   );
 
-  useEffect(() => onSessionVerdict((event) => void onVerdict(event)), [onVerdict]);
+  useEffect(
+    () => onSessionVerdict((event) => void onVerdict(event).catch(() => undefined)),
+    [onVerdict],
+  );
 
   // THE PROBE (docs/sessions.md, _the expired state on the client_): while
   // expired, one authenticated request with the old token per launch or return to

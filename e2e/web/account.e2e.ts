@@ -335,6 +335,72 @@ test.describe('account', () => {
     },
   );
 
+  test(
+    'a delayed sign-out and revoked response cannot wipe a session resumed in another tab',
+    { tag: ['@SESSION-RACE-WEB-001', '@full', '@online', '@destructive'] },
+    async ({ isolatedApp: app }) => {
+      const { page, context, credentials } = app;
+      const kept = unresolvableUrl(unique('race-kept'));
+      const queued = unresolvableUrl(unique('race-queued'));
+      await page.goto('/links');
+      await addLink(page, kept);
+      await syncAndWait(page);
+      await forgeStoredToken(page, `unknown-${unique('race')}`);
+      await page.reload();
+      await expect(pausedNotice(page)).toBeVisible({ timeout: 60_000 });
+
+      const other = await context.newPage();
+      await other.goto('/links');
+      await expect(pausedNotice(other)).toBeVisible();
+      let release!: () => void;
+      const held = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      let started!: () => void;
+      const requestStarted = new Promise<void>((resolve) => {
+        started = resolve;
+      });
+      await page.route('**/v1/auth/sign-out', async (route) => {
+        started();
+        await held;
+        await route.fulfill({
+          status: 401,
+          contentType: 'application/json',
+          body: '{"error":"session_revoked"}',
+        });
+      });
+      try {
+        await page.getByRole('button', { name: 'Use a different account' }).click();
+        await page.getByRole('alertdialog').getByRole('button', { name: 'Sign out' }).click();
+        await requestStarted;
+
+        await other.getByRole('button', { name: 'Sign in to resume' }).click();
+        const resume = other.getByRole('dialog', { name: 'Sign in to resume' });
+        await resume.locator('#password').fill(credentials.password);
+        await resume.getByRole('button', { name: /^Sign in$/ }).click();
+        await expect(pausedNotice(other)).toHaveCount(0, { timeout: 60_000 });
+        await expect(pausedNotice(page)).toHaveCount(0);
+        // The replacement owns an edit that exists only on this device.
+        await context.route('**/v1/ops/**', (route) => route.abort());
+        await addLink(other, queued);
+        expect(await countPendingOps(other)).toBeGreaterThan(0);
+
+        const arrived = page.waitForResponse('**/v1/auth/sign-out');
+        release();
+        await arrived;
+        // A further round-trip through persisted auth proves the old continuation
+        // finished without clearing the replacement or its unsynced edit.
+        await expect(linkRow(page, queued)).toBeVisible();
+        await other.reload();
+        await expect(linkRow(other, queued)).toBeVisible();
+        await expect(linkRow(other, kept)).toBeVisible();
+        expect(await countPendingOps(other)).toBeGreaterThan(0);
+      } finally {
+        release();
+      }
+    },
+  );
+
   // THE SPECIMEN (docs/sessions.md): the client this replaced wiped itself once the
   // device clock passed the `expiresAt` it was handed at sign-in — a timed delete of
   // every library that would fire even with the server gone. There is no clock in

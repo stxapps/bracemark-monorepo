@@ -89,7 +89,11 @@ this in `requireAuth`, `middleware/auth.ts`, through `renewSession`
 
 - **Throttled atomically.** The read can skip an unnecessary renewal, but the
   `UPDATE` itself must require `revoked_at IS NULL`, `expires_at >= now`, and
-  `expires_at < now + SESSION_IDLE_MS - SESSION_SLIDE_MS`. Concurrent requests
+  `expires_at < now + SESSION_IDLE_MS - SESSION_SLIDE_MS`, and equality with
+  the expiry read when the request authenticated. The equality check prevents
+  a delayed renewal from undoing a password change: the request timestamp
+  predates that change, so a timestamp predicate alone still accepts its newly
+  expired deadline. Concurrent requests
   can read the same old expiry; the SQL predicate makes only the first renewal
   change the row. Use a consistent server timestamp and never resurrect an
   expired or revoked session. This bounds successful renewals, not the number
@@ -376,13 +380,23 @@ on a notification, on `visibilitychange` and on `pageshow`. A teardown deletes
 the record, announces it, then wipes, so a context that learns of it only closes
 its UI and never wipes a second time. A new account can't be adopted over
 another one's library: `setSession` tears the old one down first, under the
-same lock. In-flight completions are fenced **in the database**, not by
+same lock. A failed session read or failed cleanup aborts adoption, and a
+retry with no session first finishes the old cleanup. The in-memory token
+changes only after its durable write or delete succeeds. New-account seeding
+also runs inside this lock, after cleanup. A delayed explicit sign-out checks
+the generation captured when the action began, just like a server verdict.
+
+In-flight completions are fenced **in the database**, not by
 aborting fetches: every pulled write re-checks, inside its own transaction, that
 the account's sync bookkeeping row still exists (`AccountFencedError`,
-`data/sync-store.ts`; a first sync claims the row before it writes), and the
-teardown's clear of that row is a transaction on the same store, so IndexedDB
-orders the two. Expo applies the same fence in its sqlite store, and an
-in-process queue as its lock.
+`data/sync-store.ts`). Local entity writes, imports, and commit restamps check
+the same ownership. Auth claims the row during adoption or hydration under
+the lifecycle lock; a sync cycle cannot recreate it after teardown. The web
+teardown clears ownership and data in one transaction, so a write either lands
+first and is wiped, or sees no ownership and fails. Expo applies the same
+transactional checks in its sqlite store, and an in-process queue as its lock.
+Each sync-provider effect owns its cancellation flag, so a replacement effect
+cannot let an old completion overwrite the paused state.
 
 Expo applies the same generation rule to requests in the main process. Update
 the shared-Keychain mirror with the state; retain the outbox's existing account
@@ -532,6 +546,9 @@ The layers ([testing.md](./testing.md)), and where each part of the rule is pinn
   changes the password from a web profile, the flow pauses, saves a link,
   resumes through the `/resume` modal, and the runner reads the link from the
   web). Passes on the iOS simulator; not yet run on an Android emulator.
+- `SESSION-RACE-WEB-001` — a delayed sign-out and revoked response arrive
+  after resume in another tab; the replacement session and its unsynced edit
+  survive, including reload.
 - **Not covered end to end:** the sleeping-tab /
   in-flight-sync / account-switch races, which are pinned at the unit level by
   the account fence and the generation checks rather than driven in a browser.

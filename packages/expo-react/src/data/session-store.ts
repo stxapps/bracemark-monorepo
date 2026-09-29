@@ -260,10 +260,10 @@ export function activeRecord(credentials: SessionCredentials): SessionRecord {
 // save ever lands before the first loadSession() of a fresh install, the next
 // launch's fresh-install wipe must not eat this session.
 export async function saveSession(record: SessionRecord): Promise<void> {
-  current = record;
   markInstalled();
   const serialized = serialize(record);
   await SecureStore.setItemAsync(SESSION_KEY, serialized, SECURE_OPTIONS);
+  current = record;
   await mirrorSharedSession(serialized);
 }
 
@@ -295,8 +295,8 @@ export async function loadSession(): Promise<SessionRecord | null> {
 }
 
 export async function clearSession(): Promise<void> {
-  current = null;
   await SecureStore.deleteItemAsync(SESSION_KEY, SECURE_OPTIONS);
+  current = null;
   await mirrorSharedSession(null);
 }
 

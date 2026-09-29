@@ -45,7 +45,6 @@ import { toItemRecord } from '../data/projection';
 import {
   advanceCursor,
   assertAccountStillOwnsStore,
-  beginInitialSync,
   getSyncMeta,
   markFirstSyncDone,
   resetCursor,
@@ -150,9 +149,9 @@ export async function runInitialSync(
   onProgress?: InitialSyncProgressFn,
 ): Promise<void> {
   deps = withRetryDeps(deps);
-  // Claim the bookkeeping row first, so every write below is fenced on it
-  // (sync-store.ts, AccountFencedError).
-  await beginInitialSync(deps.username);
+  // Auth claims the bookkeeping row under the lifecycle lock. A stale cycle
+  // must never recreate that row after teardown (sync-store.ts).
+
   const files = await listAllFiles(deps.api);
   await storeDownloads(deps, files, onProgress);
   // Cursor is the newest compound `(updatedAt, path)` among ALL listed files
@@ -289,7 +288,8 @@ export async function loadEntityContent(
   // the engine's staleness skip only re-downloads when the server stamp moves
   // again. Losing the race just skips the cache: the caller still gets the bytes
   // it asked for, and the next call fetches the newer version.
-  await db.transaction('rw', db.items, async () => {
+  await db.transaction('rw', db.items, db.syncMeta, async () => {
+    await assertAccountStillOwnsStore(deps.username);
     const current = await db.items.get(path);
     if (current?.updatedAt === rec.updatedAt) await db.items.update(path, { data });
   });
@@ -347,7 +347,8 @@ export async function loadEntityContents(
         : undefined;
       if (blob) {
         const data = await decryptEntity(deps.encryptionKey, blob);
-        await db.transaction('rw', db.items, async () => {
+        await db.transaction('rw', db.items, db.syncMeta, async () => {
+          await assertAccountStillOwnsStore(deps.username);
           const current = await db.items.get(path);
           if (current?.updatedAt === baseStamps.get(path)) await db.items.update(path, { data });
         });
@@ -717,7 +718,8 @@ async function commitBatched(deps: SyncDeps, ops: PendingOpRecord[]): Promise<Co
     // opened a transaction each, which made a 1000-op commit pay a thousand IDB
     // round trips for what is one logical write. update() still no-ops per row
     // when the record is gone (a committed delete has nothing to stamp).
-    await db.transaction('rw', db.items, async () => {
+    await db.transaction('rw', db.items, db.syncMeta, async () => {
+      await assertAccountStillOwnsStore(deps.username);
       for (const r of results) await db.items.update(r.path, { updatedAt: r.updatedAt });
     });
     const accepted = new Set(results.map((r) => r.path));

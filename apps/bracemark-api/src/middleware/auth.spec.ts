@@ -189,11 +189,14 @@ describe('sliding expiry', () => {
   // The throttle is in the UPDATE's predicate, not the guard's read: requests
   // that all read the same stale deadline still produce one renewal.
   it('changes the row once however many renewals are attempted at once', async () => {
-    const { id } = await seedSession({ expiresAt: Date.now() + SESSION_IDLE_MS - 2 * DAY_MS });
+    const expiresAt = Date.now() + SESSION_IDLE_MS - 2 * DAY_MS;
+    const { id } = await seedSession({ expiresAt });
     const now = Date.now();
 
     const results = await Promise.all(
-      Array.from({ length: 5 }, () => repo().renew(id, now, SESSION_IDLE_MS, SESSION_SLIDE_MS)),
+      Array.from({ length: 5 }, () =>
+        repo().renew(id, now, SESSION_IDLE_MS, SESSION_SLIDE_MS, expiresAt),
+      ),
     );
 
     expect(results.filter(Boolean)).toHaveLength(1);
@@ -204,7 +207,9 @@ describe('sliding expiry', () => {
     const { id, tokenHash } = await seedSession({ expiresAt });
     await revokeSession(env, id);
 
-    expect(await repo().renew(id, Date.now(), SESSION_IDLE_MS, SESSION_SLIDE_MS)).toBe(false);
+    expect(await repo().renew(id, Date.now(), SESSION_IDLE_MS, SESSION_SLIDE_MS, expiresAt)).toBe(
+      false,
+    );
     expect((await row(tokenHash))?.expiresAt).toBe(expiresAt);
   });
 
@@ -212,8 +217,32 @@ describe('sliding expiry', () => {
     const expiresAt = Date.now() - 1;
     const { id, tokenHash } = await seedSession({ expiresAt });
 
-    expect(await repo().renew(id, Date.now(), SESSION_IDLE_MS, SESSION_SLIDE_MS)).toBe(false);
+    expect(await repo().renew(id, Date.now(), SESSION_IDLE_MS, SESSION_SLIDE_MS, expiresAt)).toBe(
+      false,
+    );
     expect((await row(tokenHash))?.expiresAt).toBe(expiresAt);
+  });
+
+  it('does not undo password-change expiry when an earlier request renews late', async () => {
+    const requestStartedAt = Date.now() - 1000;
+    const { id, tokenHash } = await seedSession({
+      expiresAt: requestStartedAt + SESSION_IDLE_MS - 2 * DAY_MS,
+    });
+    // waitUntil can land after the password-change write. Its timestamp still
+    // belongs to the request that authenticated BEFORE that write.
+    const changedAt = requestStartedAt + 500;
+    await repo().expireByUserIdExcept('u_guarded', 'password-change-caller', changedAt);
+
+    expect(
+      await repo().renew(
+        id,
+        requestStartedAt,
+        SESSION_IDLE_MS,
+        SESSION_SLIDE_MS,
+        requestStartedAt + SESSION_IDLE_MS - 2 * DAY_MS,
+      ),
+    ).toBe(false);
+    expect((await row(tokenHash))?.expiresAt).toBe(changedAt - 1);
   });
 
   // A failed renewal must not fail the request it rides on (already authorized),

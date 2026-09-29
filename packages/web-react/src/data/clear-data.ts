@@ -28,18 +28,22 @@ import { clearSidebarCollapsedIds } from './sidebar-view-store';
 import { clearCachedSubscriptionStatus } from './subscription-store';
 
 export async function clearData(): Promise<void> {
-  await Promise.all([
-    db.items.clear(),
-    db.syncMeta.clear(),
-    db.pendingOps.clear(),
-    db.localSettings.clear(),
-    // Locks are device-local passwords for this account's session; wiping them
-    // here IS the "forgot a lock password → sign out" recovery path (db.ts).
-    db.locks.clear(),
-    // Each icon is public, but the SET of hosts is this account's browsing shape —
-    // so the cache goes with the plaintext it describes (db.ts, FaviconRecord).
-    db.favicons.clear(),
-  ]);
+  // The ownership row and its data disappear atomically. Otherwise an old
+  // writer can observe ownership after the items clear and repopulate them.
+  await db.transaction('rw', db.tables, async () => {
+    await Promise.all([
+      db.items.clear(),
+      db.syncMeta.clear(),
+      db.pendingOps.clear(),
+      db.localSettings.clear(),
+      // Locks are device-local passwords for this account's session; wiping them
+      // here IS the "forgot a lock password → sign out" recovery path (db.ts).
+      db.locks.clear(),
+      // Each icon is public, but the SET of hosts is this account's browsing shape —
+      // so the cache goes with the plaintext it describes (db.ts, FaviconRecord).
+      db.favicons.clear(),
+    ]);
+  });
   clearDecodeCache(); // drop decoded-link plaintext too — mirrors this items wipe (decode-cache.ts)
   // Drop the device's last-known subscription copy for the same "next account
   // must not inherit this one's state" reason as localSettings (subscription-store.ts).

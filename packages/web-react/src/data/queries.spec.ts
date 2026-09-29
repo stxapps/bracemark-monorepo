@@ -26,7 +26,6 @@
 // table of expectations against SQLite — the two implementations are independent (a JS
 // bulkGet+decode join here, a LEFT JOIN on the token junction there), so agreeing on
 // these cases is the point.
-
 import {
   emptyQuery,
   type LinkQuery,
@@ -40,6 +39,7 @@ import {
 import { db } from './db';
 import { writeExtraction, writeLink } from './mutations';
 import { readExtractionFacetCounts, readLinks, readRawPendingTitleImageCount } from './queries';
+import { seedNewAccount } from './sync-store';
 
 const USER = 'alice';
 
@@ -80,6 +80,8 @@ function seedFacet(id: string, status: 'done' | 'failed' | 'permanent'): Promise
 }
 
 beforeEach(async () => {
+  await db.syncMeta.clear();
+  await seedNewAccount(USER);
   await db.items.clear();
   await db.pendingOps.clear();
 });

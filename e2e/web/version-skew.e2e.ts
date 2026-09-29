@@ -77,7 +77,13 @@ test.describe('version skew', () => {
     async ({ isolatedApp: app }) => {
       const { page, context } = app;
       await page.goto('/links');
-      await expect(linkRow(page, 'https://never.invalid')).toHaveCount(0);
+      const kept = unresolvableUrl(unique('session-skew-kept'));
+      const draft = unique('session-skew-draft');
+      await addLink(page, kept);
+      await syncAndWait(page);
+      await chooseRowMenuItem(page, kept, 'Edit');
+      const dialog = page.getByRole('dialog', { name: 'Edit link' });
+      await dialog.getByRole('textbox', { name: 'Title' }).fill(draft);
 
       // The raw session database never closes a connection on its own; without the
       // handler this open blocks until the old tab goes away.
@@ -86,6 +92,11 @@ test.describe('version skew', () => {
       expect(await upgradeFrom(newer, 'bracemark-session', 2)).toBe(2);
 
       await expect(banner(page)).toBeVisible({ timeout: 10_000 });
+      await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+      // A session schema change must stop writes as well as sync scheduling.
+      await expect(dialog).toBeVisible();
+      await expect(dialog.getByRole('textbox', { name: 'Title' })).toHaveValue(draft);
+      await expect(linkRow(page, kept)).not.toContainText(draft);
     },
   );
 });

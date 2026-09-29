@@ -227,11 +227,12 @@ function storedEntities(): Record<string, unknown> {
   return out;
 }
 
-function truncate(): void {
+async function truncate(): Promise<void> {
   const tables = getDb().all<{ name: string }>(
     sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'`,
   );
   for (const { name } of tables) getDb().run(sql.raw(`DELETE FROM "${name}"`));
+  await beginInitialSync(USER);
 }
 
 async function exportBackup(excludedListIds = new Set<string>()) {
@@ -257,7 +258,7 @@ function repick(bytes: Uint8Array, name: string): { uri: string; name: string } 
 }
 
 beforeEach(async () => {
-  truncate();
+  await truncate();
   resetFileSystem();
   await beginInitialSync(USER);
   await markFirstSyncDone(USER, CURSOR, `${LINKS_PREFIX}l_seed.enc`);
@@ -272,7 +273,7 @@ describe('the bracemark backup round trip, through fflate', () => {
     const before = storedEntities();
     const exported = await exportBackup();
     const archive = stash(exported.file.uri);
-    truncate();
+    await truncate();
     resetFileSystem();
     const file = repick(archive, exported.file.name);
     await expect(
@@ -300,7 +301,7 @@ describe('the bracemark backup round trip, through fflate', () => {
     await seedContent();
     const exported = await exportBackup();
     const archive = stash(exported.file.uri);
-    truncate();
+    await truncate();
     resetFileSystem();
     const file = repick(archive, exported.file.name);
     const path = `${LINKS_PREFIX}l_work.enc`;
@@ -345,7 +346,7 @@ describe('the bracemark backup round trip, through fflate', () => {
     expect(outcome.syncFailed).toBe(false);
 
     const archive = stash(outcome.file.uri);
-    truncate();
+    await truncate();
     resetFileSystem();
 
     const restored = await importAllData({
@@ -399,7 +400,7 @@ describe('the bracemark backup round trip, through fflate', () => {
     const archive = stash(outcome.file.uri);
     expect(unzipSaved(outcome.file.uri)[BACKUP_ITEMS_ENTRY].length).toBeGreaterThan(256 * 1024);
 
-    truncate();
+    await truncate();
     resetFileSystem();
     const restored = await importAllData({
       file: repick(archive, outcome.file.name),
@@ -423,7 +424,7 @@ describe('the bracemark backup round trip, through fflate', () => {
     expect([...entries['files/img_work']]).toEqual([...IMAGE_BYTES]);
 
     const archive = stash(outcome.file.uri);
-    truncate();
+    await truncate();
     resetFileSystem();
     await importAllData({
       file: repick(archive, outcome.file.name),

@@ -131,10 +131,6 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const [halted, setHalted] = useState(isUpdateRequired);
   useEffect(() => onUpdateRequired(() => setHalted(true)), []);
 
-  // Guards against a stale async resolution writing state after the account
-  // changed or the provider unmounted.
-  const activeRef = useRef(true);
-
   // Latest background-sync runner; requestSync goes through this ref so its
   // identity stays stable while the account/session underneath changes. Reset to
   // a no-op on cleanup so a late caller can't sync a signed-out account.
@@ -153,7 +149,9 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    activeRef.current = true;
+    // Each effect owns its cancellation flag. A replacement must never revive
+    // an older cycle by setting a shared ref back to true.
+    let active = true;
 
     // Only meaningful once auth has settled on a signed-in user; AuthGuard keeps
     // us out of the tree otherwise, but guard anyway.
@@ -176,7 +174,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       setInitialSyncProgress(null);
       void isFirstSyncDone(username).then(
         (done) => {
-          if (!activeRef.current) return;
+          if (!active) return;
           if (done) {
             setStoreStatus('ready');
             setLastError(null);
@@ -188,7 +186,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
         () => undefined,
       );
       return () => {
-        activeRef.current = false;
+        active = false;
       };
     }
 
@@ -210,7 +208,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     let pendingProgress: InitialSyncProgress | null = null;
     const flushProgress = () => {
       progressTimer = null;
-      if (!activeRef.current || !pendingProgress) return;
+      if (!active || !pendingProgress) return;
       setInitialSyncProgress(pendingProgress);
       pendingProgress = null;
     };
@@ -237,7 +235,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       setBgSyncStatus('syncing');
       void runIncrementalSync(deps).then(
         (outcome) => {
-          if (!activeRef.current) return;
+          if (!active) return;
           // A completed cycle is 'idle' UNLESS the plan/quota gate refused part
           // of the push — that resolves rather than rejects (the rest of the
           // cycle succeeded), so it would otherwise read as a clean sync while
@@ -251,7 +249,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
           setLastError(null);
         },
         (err: unknown) => {
-          if (!activeRef.current) return;
+          if (!active) return;
           setBgSyncStatus('error');
           setBlockedCount(0);
           setLastSyncAt(Date.now());
@@ -264,17 +262,17 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     void (async () => {
       try {
         if (await isFirstSyncDone(username)) {
-          if (!activeRef.current) return;
+          if (!active) return;
           setStoreStatus('ready');
           backgroundSync();
           return;
         }
-        if (!activeRef.current) return;
+        if (!active) return;
 
         // First sign-in on this device: block on the full pull.
         setStoreStatus('syncing-initial');
         await runInitialSync(deps, reportProgress);
-        if (!activeRef.current) return;
+        if (!active) return;
 
         settleProgress(true);
         setStoreStatus('ready');
@@ -286,7 +284,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
         // kicks a cycle, on both branches.
         backgroundSync();
       } catch (err) {
-        if (!activeRef.current) return;
+        if (!active) return;
         settleProgress(false);
         setStoreStatus('error');
         setLastSyncAt(Date.now());
@@ -295,7 +293,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     })();
 
     return () => {
-      activeRef.current = false;
+      active = false;
       backgroundSyncRef.current = () => undefined;
       if (progressTimer !== null) clearTimeout(progressTimer);
     };

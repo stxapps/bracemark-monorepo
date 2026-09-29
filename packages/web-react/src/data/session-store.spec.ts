@@ -87,6 +87,32 @@ afterEach(() => {
 });
 
 describe('getSession / getToken', () => {
+  it('keeps the prior mirror when a replacement cannot be persisted', async () => {
+    const previous = await record();
+    await saveSession(previous);
+    // Functions cannot be structured-cloned into IndexedDB: a real failed put.
+    const invalid = {
+      ...previous,
+      token: 'new',
+      encryptionKey: (() => undefined) as unknown as CryptoKey,
+    };
+    await expect(saveSession(invalid)).rejects.toThrow();
+    expect(getSession()).toEqual(previous);
+    expect(await peekSession()).toEqual(previous);
+  });
+
+  it('keeps the prior mirror when deleting the durable record fails', async () => {
+    const previous = await record();
+    await saveSession(previous);
+    const remove = jest.spyOn(IDBObjectStore.prototype, 'delete').mockImplementationOnce(() => {
+      throw new Error('delete failed');
+    });
+    await expect(clearSession()).rejects.toThrow('delete failed');
+    remove.mockRestore();
+    expect(getSession()).toEqual(previous);
+    expect(await peekSession()).toEqual(previous);
+  });
+
   it('are null with no session', () => {
     expect(getSession()).toBeNull();
     expect(getToken()).toBeNull();

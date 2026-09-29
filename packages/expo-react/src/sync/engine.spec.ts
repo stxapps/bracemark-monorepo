@@ -50,7 +50,7 @@ import {
   utf8,
 } from '@stxapps/shared';
 
-import { getDb } from '../data/db';
+import { getDb, syncMeta } from '../data/db';
 import { dataFileFor, ensureDataFilesDir } from '../data/file-store';
 import { getItem, markItemDataFile, putItemsTx, stampItemUpdatedAts } from '../data/item-store';
 import { liveReadsHeld } from '../data/live-read-invalidation';
@@ -71,6 +71,7 @@ import {
   loadEntityContent,
   loadEntityContents,
   runIncrementalSync,
+  runInitialSync,
   type SyncDeps,
 } from './engine';
 import { BlobRequestError, getBlob, getBlobToFile, putBlob, putBlobFromFile } from './r2';
@@ -568,6 +569,12 @@ describe('a delete the pull applied', () => {
 });
 
 // --- the lazy materializer ---------------------------------------------------
+
+it('cannot recreate ownership when an old first sync starts after teardown', async () => {
+  getDb().delete(syncMeta).run();
+  await expect(runInitialSync(deps())).rejects.toThrow(/no longer signed in/);
+  expect(getDb().select().from(syncMeta).all()).toHaveLength(0);
+});
 
 describe('loadEntityContent', () => {
   beforeEach(() => {

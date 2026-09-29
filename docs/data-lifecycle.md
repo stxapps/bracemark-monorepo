@@ -733,11 +733,18 @@ service worker's runtime caches — a safeguard, since none is written today
 
 The order inside it is load-bearing, and it is **three** steps, not two:
 
-| step |                                                         | why it can't move                                                                                                               |
-| ---- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| 1    | `setStatus('ending')`                                   | closes the auth gate — the app subtree unmounts **before** the store empties under it                                           |
-| 2    | `clearSession`, then `clearData`, `queryClient.clear()` | the actual wipe, with nothing mounted to observe it; the record goes first, so an interrupted wipe is finished by the next load |
-| 3    | `setStatus('unauthenticated')`                          | releases the exit navigation, now that the wipe has finished                                                                    |
+| step |                                            | why it can't move                                                                                                               |
+| ---- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | `clearSession`, then `setStatus('ending')` | closes the auth gate — the app subtree unmounts **before** the store empties under it                                           |
+| 2    | `clearData`, `queryClient.clear()`         | the actual wipe, with nothing mounted to observe it; the record goes first, so an interrupted wipe is finished by the next load |
+| 3    | `setStatus('unauthenticated')`             | releases the exit navigation, now that the wipe has finished                                                                    |
+
+A failed session deletion leaves the existing library and authenticated state
+intact and reports the failure to an explicit caller. The session mirror is
+updated only after deletion succeeds. Account adoption also stops if cleanup
+fails, and retries finish any residue before persisting new credentials.
+The web table wipe is one transaction, including the ownership row, matching
+the SQLite wipe. Local writes check that ownership inside their transactions.
 
 Step 1 is the one that isn't obvious. Without it there is a live frame where the
 store is already empty but status is still `authenticated`: the signed-in subtree

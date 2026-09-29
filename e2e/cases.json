@@ -60,6 +60,16 @@
     "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
   },
   {
+    "id": "SESSION-RACE-WEB-001",
+    "title": "A delayed sign-out and revoked response preserve a resumed session and its unsynced edits in every tab",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online", "destructive"],
+    "fixture": "empty",
+    "path": "web/account.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
     "id": "WEB-ACCOUNT-003",
     "title": "A session minted two years ago on the device clock is still signed in with its library intact",
     "surface": "web",

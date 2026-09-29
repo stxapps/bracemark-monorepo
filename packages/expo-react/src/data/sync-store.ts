@@ -72,7 +72,9 @@ export function assertAccountOwnsStoreTx(tx: DbTx, username: string): void {
   if (!meta) throw new AccountFencedError(username);
 }
 
-// Sign-in path: claim the bookkeeping row BEFORE the first pull writes anything,
+// Auth-only: claim the bookkeeping row under the lifecycle lock, before
+// exposing the adopted session or starting a first pull. A sync cycle must
+// never call this to recreate ownership after teardown. The row begins
 // with `firstSyncDoneAt: 0` — "not done", so the gate still blocks and an
 // interrupted pull re-runs — so every write of that pull has a row to be fenced
 // on. An existing row is left as it is.

@@ -92,6 +92,20 @@ afterEach(() => {
 });
 
 describe('clearData', () => {
+  it('rolls back the table wipe if the ownership row cannot be cleared', async () => {
+    await seedEverything();
+    const before = await remaining();
+    const clear = jest
+      .spyOn(db.syncMeta, 'clear')
+      .mockRejectedValueOnce(new Error('storage failed'));
+    try {
+      await expect(clearData()).rejects.toThrow('storage failed');
+      expect(await remaining()).toEqual(before);
+    } finally {
+      clear.mockRestore();
+    }
+  });
+
   // The seed itself is an assertion: if a store stopped accepting the write below, the
   // wipe assertion after it would pass vacuously.
   it('leaves nothing behind in any device-local store', async () => {

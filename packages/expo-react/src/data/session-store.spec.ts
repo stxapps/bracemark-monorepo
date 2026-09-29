@@ -99,6 +99,25 @@ const serialized = (r: SessionRecord) =>
 
 const seedPersisted = (r = record()) => mockSecureEntries.set(SESSION_KEY, serialized(r));
 
+test.each(['save', 'clear'] as const)(
+  'keeps the prior mirror when a durable %s fails',
+  async (operation) => {
+    const previous = record();
+    await store.saveSession(previous);
+    const failure = new Error('secure store unavailable');
+    if (operation === 'save') {
+      jest.mocked(secureStore.setItemAsync).mockRejectedValueOnce(failure);
+      await expect(store.saveSession(record({ token: 'new' }))).rejects.toThrow(failure);
+    } else {
+      jest.mocked(secureStore.deleteItemAsync).mockRejectedValueOnce(failure);
+      await expect(store.clearSession()).rejects.toThrow(failure);
+    }
+    expect(store.getSession()).toEqual(previous);
+    expect(await store.loadSession()).toEqual(previous);
+    expect(mockSharedKeychain.get(SHARED_MIRROR_KEY)).toBe(serialized(previous));
+  },
+);
+
 test('saveSession then loadSession round-trips the record — key bytes, state and generation', async () => {
   const r = record({ state: 'expired', generation: 'gen-7' });
   await store.saveSession(r);

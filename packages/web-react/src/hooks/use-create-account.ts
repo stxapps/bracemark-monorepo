@@ -14,7 +14,6 @@ import {
 import { createAccount } from '@stxapps/web-crypto';
 
 import { useAuth } from '../contexts/auth-provider';
-import { seedNewAccount } from '../data/sync-store';
 
 // App-local because account creation is web-only and the submit sequence reaches
 // for web-only crypto — `platform:web` deps can't live in the `platform:agnostic`
@@ -129,14 +128,16 @@ export function useCreateAccount() {
       // A brand-new account has no server data, so mark its first sync done up
       // front (empty cursor). This lets InitialSyncGate render the app immediately with
       // no pull — the sign-in path, which has no such flag, blocks on a full
-      // sync instead. Seed before setSession so the flag is in place by the time
+      // sync instead. Seed inside setSession so the flag is in place by the time
       // the auth flip navigates into the (app) layout. See sync-store.
-      await seedNewAccount(username);
-      await setSession({
-        username,
-        token: session.token,
-        encryptionKey,
-      });
+      await setSession(
+        {
+          username,
+          token: session.token,
+          encryptionKey,
+        },
+        { newAccount: true },
+      );
     },
   });
 }

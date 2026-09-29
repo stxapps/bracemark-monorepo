@@ -12,7 +12,6 @@ import {
 } from '@stxapps/shared';
 
 import { useAuth } from '../contexts/auth-provider';
-import { seedNewAccount } from '../data/sync-store';
 
 // The expo sibling of web-react's hooks/use-create-account.ts: the SAME submit
 // sequence (username uniqueness → client KDF → sign → session), only the
@@ -121,14 +120,16 @@ export function useCreateAccount() {
       // A brand-new account has no server data, so mark its first sync done up
       // front (empty cursor) — the app renders immediately with no pull; the
       // sign-in path, which has no such flag, blocks on a full sync instead.
-      // Seed before setSession so the flag is in place by the time the auth flip
+      // Seed inside setSession so the flag is in place by the time the auth flip
       // navigates into the (app) layout. See sync-store.
-      await seedNewAccount(username);
-      await setSession({
-        username,
-        token: session.token,
-        encryptionKey,
-      });
+      await setSession(
+        {
+          username,
+          token: session.token,
+          encryptionKey,
+        },
+        { newAccount: true },
+      );
     },
   });
 }

@@ -114,6 +114,10 @@ const mockClearData = jest.fn(
     }),
 );
 jest.mock('../data/clear-data', () => ({ clearData: () => mockClearData() }));
+jest.mock('../data/sync-store', () => ({
+  seedNewAccount: jest.fn(() => Promise.resolve()),
+  beginInitialSync: jest.fn(() => Promise.resolve()),
+}));
 
 const YEAR = 365 * 24 * 60 * 60 * 1000;
 
@@ -389,6 +393,39 @@ describe('the probe', () => {
 });
 
 describe('setSession', () => {
+  it('refuses adoption when the previous account cannot be read', async () => {
+    await signedIn({ state: 'expired' });
+    const failure = new Error('session storage temporarily unavailable');
+    (store.peekSession as jest.Mock).mockRejectedValueOnce(failure);
+
+    await act(async () => {
+      await expect(auth.setSession(session({ username: 'bob' }))).rejects.toThrow(failure);
+    });
+
+    expect(stub.__persisted()).toMatchObject({ username: 'alice', generation: 'gen-1' });
+    expect(store.saveSession).not.toHaveBeenCalled();
+    expect(mockClearData).not.toHaveBeenCalled();
+  });
+
+  it('refuses adoption when the previous account wipe fails', async () => {
+    await signedIn();
+    const failure = new Error('local data could not be cleared');
+    mockClearData.mockRejectedValueOnce(failure);
+
+    await act(async () => {
+      await expect(auth.setSession(session({ username: 'bob' }))).rejects.toThrow(failure);
+    });
+
+    expect(store.saveSession).not.toHaveBeenCalled();
+    expect(stub.__persisted()?.username).not.toBe('bob');
+    // Retrying in the same mounted provider must finish the interrupted wipe.
+    await act(async () => {
+      await auth.setSession(session({ username: 'bob' }));
+    });
+    expect(mockClearData).toHaveBeenCalledTimes(2);
+    expect(stub.__persisted()).toMatchObject({ username: 'bob' });
+  });
+
   it('persists a fresh active generation and flips to authenticated', async () => {
     renderProvider();
     await waitFor(() => expect(status()).toBe('unauthenticated'));
@@ -478,6 +515,33 @@ describe('endSession', () => {
       generation: null,
       reason: 'signed-out',
     });
+  });
+
+  it('does not let an older sign-out continuation wipe a replacement session', async () => {
+    // useSignOut captures this callback before awaiting its network request.
+    const finishOldSignOut = auth.endSession;
+    await act(async () => {
+      await auth.setSession(session({ username: 'bob' }));
+    });
+    mockClearData.mockClear();
+    await act(async () => {
+      await finishOldSignOut();
+    });
+
+    expect(stub.__persisted()).toMatchObject({ username: 'bob' });
+    expect(status()).toBe('authenticated');
+    expect(mockClearData).not.toHaveBeenCalled();
+  });
+
+  it('does not wipe data when deletion of the session record fails', async () => {
+    const failure = new Error('session deletion failed');
+    (store.clearSession as jest.Mock).mockRejectedValueOnce(failure);
+    await act(async () => {
+      await expect(auth.endSession()).rejects.toThrow(failure);
+    });
+    expect(mockClearData).not.toHaveBeenCalled();
+    expect(stub.__persisted()).toMatchObject({ username: 'alice' });
+    expect(status()).toBe('authenticated');
   });
 
   it('records a deliberate sign-out by default', async () => {

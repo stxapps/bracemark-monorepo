@@ -104,3 +104,32 @@ describe('while the session is expired', () => {
     expect(mockRunIncrementalSync).not.toHaveBeenCalled();
   });
 });
+
+it.each(['resolve', 'reject'] as const)(
+  'keeps sync paused when the old active cycle later %ss',
+  async (settlement) => {
+    let resolve!: (value: { blocked: boolean; blockedCount: number }) => void;
+    let reject!: (error: Error) => void;
+    mockRunIncrementalSync.mockImplementationOnce(
+      () =>
+        new Promise((yes, no) => {
+          resolve = yes;
+          reject = no;
+        }),
+    );
+    const { result, rerender } = renderHook(() => useSync(), { wrapper });
+    await waitFor(() => expect(result.current.bgSyncStatus).toBe('syncing'));
+
+    mockSessionState = 'expired';
+    rerender();
+    await waitFor(() => expect(result.current.bgSyncStatus).toBe('paused'));
+    await act(async () => {
+      if (settlement === 'resolve') resolve({ blocked: false, blockedCount: 0 });
+      else reject(new Error('the old request failed'));
+    });
+
+    expect(result.current.bgSyncStatus).toBe('paused');
+    expect(result.current.storeStatus).toBe('ready');
+    expect(result.current.lastError).toBeNull();
+  },
+);

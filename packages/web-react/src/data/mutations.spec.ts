@@ -28,6 +28,7 @@ import {
 import { db } from './db';
 import { bulkDeleteEntities, bulkWriteLinks, writeExtraction, writeLink } from './mutations';
 import { type LinkItem, readExtraction, readLinkById } from './queries';
+import { seedNewAccount } from './sync-store';
 
 const USER = 'alice';
 const LINK_ID = 'l_a';
@@ -40,6 +41,18 @@ function pendingFor(path: string) {
 beforeEach(async () => {
   await db.items.clear();
   await db.pendingOps.clear();
+  await db.syncMeta.clear();
+  await seedNewAccount(USER);
+});
+
+it('refuses a late local write after another account owns the store', async () => {
+  await db.syncMeta.clear();
+  await seedNewAccount('bob');
+  await expect(
+    writeExtraction(USER, LINK_ID, { fields: { title: 'old account' } }),
+  ).rejects.toThrow(/no longer signed in/);
+  expect(await db.items.count()).toBe(0);
+  expect(await db.pendingOps.count()).toBe(0);
 });
 
 describe('writeExtraction', () => {

@@ -1224,13 +1224,18 @@ them differently:
   the queued edit reaches a fresh reader. `SESSION-UNKNOWN-WEB-001` replaces the
   stored token with one the server never issued — what a purged row looks like
   from the device (`session_unknown`) — and resumes the same way.
+  `SESSION-RACE-WEB-001` holds a sign-out request while another tab resumes,
+  then delivers a revoked response for the old token. The replacement session
+  and a link queued after resume must survive that response and a reload.
   `WEB-ACCOUNT-003` reloads with the device clock two years ahead: still signed
   in, library intact.
 - **A newer build takes the database.** `VERSION-SKEW-WEB-001`/`002` open each
   local database one version up from a second tab, under an open editor with a
   typed title: the upgrade must not block, the old tab shows the update-required
   banner, and the draft is still on screen ([offline-mode.md](./offline-mode.md),
-  _version skew_). Isolated profiles: the upgrade is permanent for the profile.
+  _version skew_). The session-schema case also attempts Save: the obsolete
+  tab must refuse the write and keep the draft available to copy. Isolated
+  profiles: the upgrade is permanent for the profile.
 
 ⚠ **An offline DEV-SERVER tab cannot reach Settings.** Found writing
 `OFFLINE-EXPORT-WEB-001`: offline, the menu's Settings link took the open page to

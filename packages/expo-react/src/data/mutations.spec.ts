@@ -12,11 +12,12 @@ import { sql } from 'drizzle-orm';
 
 import { LINKS_PREFIX, linkSchema, pathFromId, utf8 } from '@stxapps/shared';
 
-import { getDb, items, itemTagIds, rowsPerStatement } from './db';
+import { getDb, items, itemTagIds, rowsPerStatement, syncMeta } from './db';
 import { getItem, putItemsTx } from './item-store';
 import { bulkWriteEntities } from './mutations';
 import { listPendingOps } from './pending-store';
 import { parseBlob, toItemRecord } from './projection';
+import { seedNewAccount } from './sync-store';
 
 jest.mock('expo-sqlite', () => require('../testing/node-sqlite'));
 jest.mock('expo-file-system', () => require('../testing/memory-file-system'));
@@ -40,11 +41,22 @@ const link = (n: number, tagIds: string[] = []) => ({
 });
 const linkPath = (n: number) => pathFromId(`l_${String(n).padStart(4, '0')}`, LINKS_PREFIX);
 
-beforeEach(() => {
+beforeEach(async () => {
   const tables = getDb().all<{ name: string }>(
     sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'`,
   );
   for (const { name } of tables) getDb().run(sql.raw(`DELETE FROM "${name}"`));
+  await seedNewAccount(USER);
+});
+
+it('refuses a late import batch after another account owns the store', async () => {
+  getDb().delete(syncMeta).run();
+  await seedNewAccount('bob');
+  await expect(bulkWriteEntities(USER, [{ path: linkPath(1), data: link(1) }])).rejects.toThrow(
+    /no longer signed in/,
+  );
+  expect(getDb().select().from(items).all()).toHaveLength(0);
+  expect(await listPendingOps(USER)).toHaveLength(0);
 });
 
 it('writes more entities than one statement holds, each row and op intact', async () => {

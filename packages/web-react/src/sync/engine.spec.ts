@@ -9,7 +9,6 @@
 // engine takes its api in `SyncDeps` (never a module singleton) precisely so a test
 // can hand it one. The mid-cycle write is injected FROM a stub handler — that's what
 // puts it after the snapshot and before the apply, deterministically, with no timers.
-
 import {
   ApiError,
   DEFAULT_LIST_ID,
@@ -33,6 +32,7 @@ import {
 } from '../data/mutations';
 import { enqueuePut } from '../data/pending-store';
 import { toItemRecord } from '../data/projection';
+import { beginInitialSync } from '../data/sync-store';
 import { AccountFencedError } from '../data/sync-store';
 import {
   awaitInflightSync,
@@ -930,6 +930,7 @@ describe('the first-sync counter', () => {
     // No first-sync flag — this IS the first sync (the shared beforeEach seeds a
     // returning client).
     await db.syncMeta.clear();
+    await beginInitialSync(USER);
     serveBlobs();
   });
 
@@ -1038,6 +1039,7 @@ describe('a cycle that outlives its account', () => {
 
   it('cannot finish a first sync for an account torn down mid-pull', async () => {
     await db.syncMeta.clear();
+    await beginInitialSync(USER);
 
     const pull = runInitialSync(
       deps({
@@ -1056,10 +1058,19 @@ describe('a cycle that outlives its account', () => {
   // The control: the fence must not stop a first sync that nobody interrupted.
   it('lets an uninterrupted first sync through', async () => {
     await db.syncMeta.clear();
+    await beginInitialSync(USER);
 
     await runInitialSync(deps({ filesList: () => [{ path: LINK_PATH, updatedAt: 2000 }] }));
 
     expect(await bodyAt(LINK_PATH)).toBe('server copy');
     expect((await db.syncMeta.get(USER))?.firstSyncDoneAt).toBeGreaterThan(0);
+  });
+
+  it('cannot recreate ownership when an old first sync starts after teardown', async () => {
+    await tearDown();
+    await expect(runInitialSync(deps({ filesList: () => [] }))).rejects.toBeInstanceOf(
+      AccountFencedError,
+    );
+    expect(await db.syncMeta.count()).toBe(0);
   });
 });

@@ -240,6 +240,10 @@ different builds, and a phone and a laptop can too. Three contracts hold:
    `VersionError` it retries at the installed version and would run this build's
    code over a schema it doesn't know — so an `on('ready')` check refuses any
    installed version above `DATA_DB_VERSION`. Every path raises the same signal.
+   Either database raising this signal also closes the data store, even when
+   only the session schema changed. Explicit reopens are refused while the
+   signal is set, so editors and late writes cannot continue under obsolete
+   session handling.
    The sync providers stop scheduling cycles on it, and the web app shows the
    **update-required banner** (`apps/bracemark-web/src/components/update-required-banner.tsx`).
 

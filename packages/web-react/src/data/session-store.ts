@@ -265,9 +265,8 @@ export async function saveSession(record: SessionRecord): Promise<void> {
     state: record.state,
     generation: record.generation,
   };
+  if (hasIndexedDb()) await tx('readwrite', (s) => s.put(clean, CURRENT));
   current = clean;
-  if (!hasIndexedDb()) return;
-  await tx('readwrite', (s) => s.put(clean, CURRENT));
 }
 
 // Read the persisted session WITHOUT touching the mirror — for a check that must
@@ -289,9 +288,8 @@ export async function loadSession(): Promise<SessionRecord | null> {
 }
 
 export async function clearSession(): Promise<void> {
+  if (hasIndexedDb()) await tx('readwrite', (s) => s.delete(CURRENT));
   current = null;
-  if (!hasIndexedDb()) return;
-  await tx('readwrite', (s) => s.delete(CURRENT));
 }
 
 // Mint the persisted form of freshly adopted credentials.

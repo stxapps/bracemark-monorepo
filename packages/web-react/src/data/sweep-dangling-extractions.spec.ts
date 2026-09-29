@@ -20,7 +20,6 @@
 // Written through the real write edge (mutations.ts) against fake-indexeddb, so the
 // index scan under test is the real `[itemType+itemUpdatedAt]` scan and the queued deletes
 // are the real pending ops.
-
 import {
   EXTRACTIONS_PREFIX,
   FILES_PREFIX,
@@ -35,6 +34,7 @@ import { db } from './db';
 import { writeExtraction, writeFile, writeLink } from './mutations';
 import { listPendingOps } from './pending-store';
 import { sweepDanglingExtractions } from './sweep-dangling-extractions';
+import { seedNewAccount } from './sync-store';
 
 // The teardown ORDER is the thing under test below, and the finished state can't show it
 // — the queue is keyed on (account, path), so it comes back in path order however the
@@ -93,6 +93,8 @@ async function seedExtraction(
 const exists = async (path: string): Promise<boolean> => (await db.items.get(path)) !== undefined;
 
 beforeEach(async () => {
+  await db.syncMeta.clear();
+  await seedNewAccount(USER);
   teardown.length = 0;
   await Promise.all([db.items.clear(), db.pendingOps.clear()]);
 });

@@ -22,9 +22,9 @@ export async function isFirstSyncDone(username: string): Promise<boolean> {
 }
 
 // Account-creation path: there is NO server data to pull (a brand-new account is
-// empty by definition), so we mark the first sync done immediately with an empty
-// cursor. This is what lets create-account render the app instantly with no
-// network round-trip — the create-account hook calls this alongside setSession.
+// empty by definition), so auth marks the first sync done under the lifecycle
+// lock with an empty cursor. This lets create-account render instantly with no
+// network round-trip — setSession seeds it after cleanup, before exposing auth.
 // Encoding "new account" as a persisted flag here (rather than threading a
 // create-vs-sign-in boolean through React) keeps SyncProvider's logic uniform.
 // The cursor starts empty — `(0, '')` — since there's nothing pulled yet.
@@ -60,7 +60,9 @@ export async function assertAccountStillOwnsStore(username: string): Promise<voi
   if (!(await db.syncMeta.get(username))) throw new AccountFencedError(username);
 }
 
-// Sign-in path: claim the bookkeeping row BEFORE the first pull writes anything,
+// Auth-only: claim the bookkeeping row under the lifecycle lock, before
+// exposing the adopted session or starting a first pull. A sync cycle must
+// never call this to recreate ownership after teardown. The row begins
 // with `firstSyncDoneAt: 0` — "not done", so the gate still blocks and an
 // interrupted pull re-runs. It exists so every write of that pull has a row to be
 // fenced on (AccountFencedError). An existing row is left as it is.

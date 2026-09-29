@@ -55,8 +55,19 @@ export async function issueSession(
 // Slide an authenticated session's idle deadline (the throttle and the
 // no-resurrection rules live in the repository's predicate). `now` is the
 // guard's own timestamp — the one it judged the session live at.
-export function renewSession(env: Bindings, sessionId: string, now: number): Promise<boolean> {
-  return sessionsRepo(env.SESSIONS_DB).renew(sessionId, now, SESSION_IDLE_MS, SESSION_SLIDE_MS);
+export function renewSession(
+  env: Bindings,
+  sessionId: string,
+  now: number,
+  observedExpiresAt: number,
+): Promise<boolean> {
+  return sessionsRepo(env.SESSIONS_DB).renew(
+    sessionId,
+    now,
+    SESSION_IDLE_MS,
+    SESSION_SLIDE_MS,
+    observedExpiresAt,
+  );
 }
 
 // Sign-out: mark this session revoked. The row stays, so the token answers

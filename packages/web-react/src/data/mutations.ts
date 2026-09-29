@@ -45,6 +45,7 @@ import { db, type ItemRecord, type PendingOpRecord } from './db';
 import { enqueueDelete, enqueuePut, pendingDeleteRecord, pendingPutRecord } from './pending-store';
 import { parseBlob, toItemRecord } from './projection';
 import { type LinkItem, toItem, type WithPath } from './queries';
+import { assertAccountStillOwnsStore } from './sync-store';
 
 // Persist one path's bytes locally and queue the upload, producing the bytes INSIDE
 // the transaction from the path's current record — the base primitive the JSON-entity
@@ -71,7 +72,8 @@ async function writeBytesWith(
   path: string,
   produce: (existing: ItemRecord | undefined) => Uint8Array,
 ): Promise<void> {
-  await db.transaction('rw', db.items, db.pendingOps, async () => {
+  await db.transaction('rw', db.items, db.pendingOps, db.syncMeta, async () => {
+    await assertAccountStillOwnsStore(username);
     const existing = await db.items.get(path);
     const baseUpdatedAt = existing?.updatedAt ?? 0;
     const bytes = produce(existing);
@@ -151,7 +153,8 @@ export async function bulkWriteEntities(
 ): Promise<string[]> {
   if (entries.length === 0) return [];
   const written: string[] = [];
-  await db.transaction('rw', db.items, db.pendingOps, async () => {
+  await db.transaction('rw', db.items, db.pendingOps, db.syncMeta, async () => {
+    await assertAccountStillOwnsStore(username);
     const existing = await db.items.bulkGet(entries.map((entry) => entry.path));
     const records: ItemRecord[] = [];
     const ops: PendingOpRecord[] = [];
@@ -188,7 +191,8 @@ export async function bulkWriteEntities(
 // commits or none of it does.
 export async function bulkDeleteEntities(username: string, paths: string[]): Promise<void> {
   if (paths.length === 0) return;
-  await db.transaction('rw', db.items, db.pendingOps, async () => {
+  await db.transaction('rw', db.items, db.pendingOps, db.syncMeta, async () => {
+    await assertAccountStillOwnsStore(username);
     const existing = await db.items.bulkGet(paths);
     // Through the shared factory, never an inline row literal — see
     // bulkWriteEntities, and db.ts on `writeId`.
@@ -211,7 +215,8 @@ export async function bulkDeleteEntities(username: string, paths: string[]): Pro
 // every namespace deletes by one definition; the named per-namespace deletes
 // below are the public surface, and callers gate the higher-level rules.
 async function deleteEntity(username: string, path: string): Promise<void> {
-  await db.transaction('rw', db.items, db.pendingOps, async () => {
+  await db.transaction('rw', db.items, db.pendingOps, db.syncMeta, async () => {
+    await assertAccountStillOwnsStore(username);
     const existing = await db.items.get(path);
     const baseUpdatedAt = existing?.updatedAt ?? 0;
     await db.items.delete(path);
@@ -289,7 +294,8 @@ export async function writeLink(
 export async function bulkWriteLinks(username: string, edits: LinkEdit[]): Promise<void> {
   if (edits.length === 0) return;
   const now = Date.now();
-  await db.transaction('rw', db.items, db.pendingOps, async () => {
+  await db.transaction('rw', db.items, db.pendingOps, db.syncMeta, async () => {
+    await assertAccountStillOwnsStore(username);
     const existing = await db.items.bulkGet(edits.map((edit) => edit.link.path));
     const records: ItemRecord[] = [];
     const ops: PendingOpRecord[] = [];
