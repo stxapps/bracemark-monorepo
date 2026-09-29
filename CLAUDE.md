@@ -52,6 +52,7 @@ responsibilities, and the reasoning: `docs/architecture.md`.
 - Use the root scripts where they exist: `npm run lint`, `npm run typecheck`, `npm run test`, `npm run build`, `npm run dev`, `npm run reset`.
 - **Whole workspace vs. one project.** The root scripts above fan out to every project (`nx run-many`). To run a target on a single app/package after a change, scope it by the project's full Nx name: `npx nx <target> <project>`, e.g. `npx nx typecheck @stxapps/bracemark-web`, `npx nx test @stxapps/bracemark-api`, `npx nx build @stxapps/bracemark-web` (`npx nx show projects` lists them). To check only what a change affected across the graph, use `npx nx affected -t <target>`.
 - **After making changes, autofix before checking.** Run the fixer first so `lint`/`typecheck` only report what needs real attention: whole-workspace `npm run fix` (ESLint `--fix` + prettier), or scoped `npx nx lint @stxapps/<project> --fix` for a single project. Then run `npm run lint` and `npm run typecheck` (or their scoped forms).
+- **Long-running commands** (build, test, e2e, a dev server): run in the background and check its output; treat ~3 min with no new output as a hang — kill it and investigate rather than waiting out the tool timeout. A healthy run keeps printing (the e2e `list` reporter logs every test); a hung one — a stuck worker teardown, a Next dev server that accepts a request and never answers — goes silent. Probe a dev server with `curl --max-time 10`, never a bare `curl`.
 
 # Docs
 
