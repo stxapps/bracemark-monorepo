@@ -138,11 +138,11 @@ test('with the sentinel present, loadSession hydrates the persisted session', as
 // THE RULE (docs/sessions.md): no local clock decides anything. The store this
 // replaced withheld the token after a local `expiresAt` — one step from the timed
 // wipe of every library.
-test('getToken serves the token however much time has passed', async () => {
+test('getSession serves the token however much time has passed', async () => {
   await store.saveSession(record());
   jest.spyOn(Date, 'now').mockReturnValue(Date.now() + 2 * YEAR);
 
-  expect(store.getToken()).toBe('token-1');
+  expect(store.getSession()?.token).toBe('token-1');
 });
 
 // Expired keeps the token (the probe needs it) and the key (the library opens).
@@ -150,7 +150,7 @@ test('an expired session keeps its token and key', async () => {
   const r = record({ state: 'expired' });
   await store.saveSession(r);
 
-  expect(store.getToken()).toBe('token-1');
+  expect(store.getSession()?.token).toBe('token-1');
   expect(store.getSession()?.encryptionKey).toEqual(r.encryptionKey);
 });
 
@@ -238,10 +238,9 @@ test('loadSharedSession reads the mirror and hydrates the in-memory session', as
   mockSharedKeychain.set(SHARED_MIRROR_KEY, serialized(r));
 
   expect(await store.loadSharedSession()).toEqual(r);
-  // The api client's synchronous readers see it — the extension runs no
-  // AuthProvider to hydrate them otherwise.
+  // The api client's synchronous reader sees it — the extension runs no
+  // AuthProvider to hydrate it otherwise.
   expect(store.getSession()).toEqual(r);
-  expect(store.getToken()).toBe(r.token);
 });
 
 test('loadSharedSession is null (not a throw) on a missing or corrupt mirror', async () => {

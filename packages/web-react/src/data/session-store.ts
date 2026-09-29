@@ -65,17 +65,12 @@ const CURRENT = 'current';
 let current: SessionRecord | null = null;
 
 // The live session record (in-memory), or null. Exposes the non-extractable
-// encryptionKey for the data layer — in either state: an expired session still
-// decrypts this device's library.
+// encryptionKey for the data layer, and the token and generation for the api
+// client — in either state: an expired session still decrypts this device's
+// library, and its token is still sent (the probe needs it, and any request it
+// rides on can only earn another verdict for this same generation).
 export function getSession(): SessionRecord | null {
   return current;
-}
-
-// The bearer token for the Authorization header, or null when signed out. Sent
-// in the expired state too: the probe needs it, and any request it rides on can
-// only earn another verdict for this same generation.
-export function getToken(): string | null {
-  return current?.token ?? null;
 }
 
 // --- verdicts ------------------------------------------------------------------
@@ -280,7 +275,7 @@ export async function peekSession(): Promise<SessionRecord | null> {
 // Read the persisted session into the in-memory mirror and return it. Called by
 // the auth provider on load and on every cross-context wake-up, and by the
 // browser extension's background worker before each trigger; thereafter
-// getSession/getToken read the mirror synchronously. Throws on a failed read —
+// getSession reads the mirror synchronously. Throws on a failed read —
 // which is NOT "signed out" and must never be treated as permission to clear.
 export async function loadSession(): Promise<SessionRecord | null> {
   if (!hasIndexedDb()) return current;

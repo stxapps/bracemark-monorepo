@@ -34,7 +34,7 @@ import {
 // the shared-Keychain mirror (session-store) and never acts on a verdict. Only
 // `username`/`status`/`sessionState` enter React state — the bearer token and the
 // raw `encryptionKey` bytes stay in the session store (read where needed via
-// getToken/getSession), keeping key material out of the component tree.
+// getSession), keeping key material out of the component tree.
 //
 // ⚠ WHAT MAY WIPE THIS DEVICE. Exactly two things: an explicit sign-out here
 // (endSession), or a `session_revoked` verdict from bracemark-api for the session

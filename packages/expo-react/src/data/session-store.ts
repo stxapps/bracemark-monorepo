@@ -162,17 +162,12 @@ function markInstalled(): void {
 let current: SessionRecord | null = null;
 
 // The live session record (in-memory), or null. Exposes the raw encryptionKey
-// for the data layer — in either state: an expired session still decrypts this
-// device's library.
+// for the data layer, and the token and generation for the api client — in
+// either state: an expired session still decrypts this device's library, and
+// its token is still sent (the probe needs it, and any request it rides on can
+// only earn another verdict for this same generation).
 export function getSession(): SessionRecord | null {
   return current;
-}
-
-// The bearer token for the Authorization header, or null when signed out. Sent
-// in the expired state too: the probe needs it, and any request it rides on can
-// only earn another verdict for this same generation.
-export function getToken(): string | null {
-  return current?.token ?? null;
 }
 
 // A server verdict on the token of one generation. Fired by the api client when a
@@ -268,8 +263,8 @@ export async function saveSession(record: SessionRecord): Promise<void> {
 }
 
 // Read the persisted session into the in-memory mirror and return it. Called
-// once by the auth provider on launch to hydrate; thereafter getSession/getToken
-// read the mirror synchronously. On a fresh install this instead wipes any
+// once by the auth provider on launch to hydrate; thereafter getSession reads
+// the mirror synchronously. On a fresh install this instead wipes any
 // Keychain leftover from a previous install (see INSTALL_SENTINEL) and reads as
 // signed-out.
 export async function loadSession(): Promise<SessionRecord | null> {
@@ -302,7 +297,7 @@ export async function clearSession(): Promise<void> {
 
 // The iOS share extension's loadSession: read the shared-Keychain MIRROR (the
 // only session the extension process can see) and hydrate the in-memory mirror
-// so the api client's synchronous getToken()/getSession() work — the extension
+// so the api client's synchronous getSession() works — the extension
 // runs no AuthProvider, so nothing else hydrates it. Null when signed out, when
 // the mirror write failed, or off iOS. Unlike loadSession this never deletes
 // anything: the MAIN APP owns the entry's lifecycle; a corrupt/stale mirror
