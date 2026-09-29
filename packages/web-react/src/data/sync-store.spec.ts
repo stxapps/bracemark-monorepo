@@ -22,6 +22,7 @@ import {
   AccountFencedError,
   advanceCursor,
   beginInitialSync,
+  claimIfStillSignedIn,
   getSyncMeta,
   isFirstSyncDone,
   markFirstSyncDone as markDone,
@@ -35,10 +36,32 @@ async function markFirstSyncDone(username: string, updatedAt: number, path: stri
   await markDone(username, updatedAt, path);
 }
 
+// The lifecycle half, stubbed: which account is persisted, and a lock that records
+// whether a read ran inside it.
+let mockPersisted: { username: string } | null = null;
+let mockLockHeld = false;
+let mockReadUnderLock: boolean[] = [];
+jest.mock('./session-store', () => ({
+  peekSession: () => {
+    mockReadUnderLock.push(mockLockHeld);
+    return Promise.resolve(mockPersisted);
+  },
+  withSessionLock: async (run: () => Promise<unknown>) => {
+    mockLockHeld = true;
+    try {
+      return await run();
+    } finally {
+      mockLockHeld = false;
+    }
+  },
+}));
+
 const USER = 'alice';
 
 beforeEach(async () => {
   await db.syncMeta.clear();
+  mockPersisted = null;
+  mockReadUnderLock = [];
 });
 
 const cursor = async () => {
@@ -192,5 +215,38 @@ describe('resetCursor', () => {
     await resetCursor(USER, 1, 'links/l_a.enc');
 
     expect((await getSyncMeta(USER))?.firstSyncDoneAt).toBe(before);
+  });
+});
+
+// The claim a sync may ask for — but only through the lifecycle lock, and only for
+// the account still persisted. Asked for by a context that has not yet heard its
+// account was torn down, it must not recreate the row the teardown dropped.
+describe('claimIfStillSignedIn', () => {
+  it('claims a not-done row while the account is still the persisted one', async () => {
+    mockPersisted = { username: USER };
+
+    await claimIfStillSignedIn(USER);
+
+    expect(await getSyncMeta(USER)).toMatchObject({ firstSyncDoneAt: 0 });
+  });
+
+  it.each([
+    ['no account', null],
+    ['another account', { username: 'bob' }],
+  ])('claims nothing once %s is persisted', async (_, persisted) => {
+    mockPersisted = persisted;
+
+    await claimIfStillSignedIn(USER);
+
+    expect(await getSyncMeta(USER)).toBeUndefined();
+  });
+
+  it('reads the persisted account under the lifecycle lock', async () => {
+    mockPersisted = { username: USER };
+    mockLockHeld = false;
+
+    await claimIfStillSignedIn(USER);
+
+    expect(mockReadUnderLock).toEqual([true]);
   });
 });

@@ -724,10 +724,13 @@ the folder separator.
 Every local wipe in this document funnels through one client primitive: the
 teardown in each platform's `contexts/auth-provider.tsx`, which runs
 `clearSession`, then `clearData`, then `queryClient.clear()`, and then flips auth
-state. Exactly three things end here: a deliberate sign-out (`endSession`), the
-last step of delete-account (also `endSession`), and a `session_revoked` verdict
-for the session generation this device still holds. An expired or unknown
-session does NOT — it keeps everything and pauses sync. That rule, and why, is
+state. Exactly three things end here: a deliberate sign-out (`endSession`, for
+the generation whose token it sent), the last step of delete-account (also
+`endSession`, for the deleted account), and a `session_revoked` verdict for the
+session generation this device still holds. Each is decided under the lock
+against the persisted record, so a slow answer that finds a replacement there — a
+resume, another account — ends nothing. An expired or unknown session does NOT —
+it keeps everything and pauses sync. That rule, and why, is
 [sessions.md](./sessions.md)'s. On web the teardown runs under the cross-tab
 lifecycle lock and announces itself to the other tabs, which close their UI
 without wiping twice; `clearData` also drops any query-keyed entry from the
@@ -736,24 +739,32 @@ service worker's runtime caches — a safeguard, since none is written today
 
 The order inside it is load-bearing, and it is **three** steps, not two:
 
-| step |                                            | why it can't move                                                                                                               |
-| ---- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
-| 1    | `clearSession`, then `setStatus('ending')` | closes the auth gate — the app subtree unmounts **before** the store empties under it                                           |
-| 2    | `clearData`, `queryClient.clear()`         | the actual wipe, with nothing mounted to observe it; the record goes first, so an interrupted wipe is finished by the next load |
-| 3    | `setStatus('unauthenticated')`             | releases the exit navigation, now that the wipe has finished                                                                    |
+| step |                                            | why it can't move                                                                                                                                                 |
+| ---- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | `clearSession`, then `setStatus('ending')` | the record goes first, so an interrupted wipe is finished by the next load; then the gate closes — the app subtree unmounts **before** the store empties under it |
+| 2    | `clearData`, `queryClient.clear()`         | the actual wipe, with nothing mounted to observe it                                                                                                               |
+| 3    | `setStatus('unauthenticated')`             | releases the exit navigation, now that the wipe has finished                                                                                                      |
 
-A failed session deletion leaves the existing library and authenticated state
-intact and reports the failure to an explicit caller. The session mirror is
-updated only after deletion succeeds. Account adoption also stops if cleanup
-fails, and retries finish any residue before persisting new credentials.
-The web table wipe is one transaction, including the ownership row, matching
-the SQLite wipe. Local writes check that ownership inside their transactions.
+The record and the wipe fail differently. If the record can't be deleted, the
+teardown stops there: the library and the signed-in state stay as they were, and
+an explicit caller (sign-out, delete-account) gets the error — wiping under a
+record that survives would have the next launch adopt a session over an empty
+library. (The in-memory mirror follows the durable delete, never leads it.) If
+the wipe fails after the record is gone, the teardown still reaches
+`unauthenticated` and the next load finishes it — except inside `setSession`'s
+account switch, which throws rather than adopt a new account over residue; a
+retry finds no session and wipes first. On web the table wipe is one Dexie
+transaction that includes the ownership row (`syncMeta`), as the SQLite wipe
+already was, and every local write checks that row inside its own transaction —
+so a write either lands before the wipe and goes with it, or finds no owner and
+fails (the account fence, [sessions.md](./sessions.md)).
 
-Step 1 is the one that isn't obvious. Without it there is a live frame where the
-store is already empty but status is still `authenticated`: the signed-in subtree
-stays mounted, every liveQuery re-fires against a wiped database, and **every user
-list and tag disappears at once while the app believes it is signed in**. Anything
-that reacts to data _disappearing_ then misfires on what looks like a mass delete.
+Step 1's gate is the one that isn't obvious. Without it there is a live frame
+where the store is already empty but status is still `authenticated`: the
+signed-in subtree stays mounted, every liveQuery re-fires against a wiped
+database, and **every user list and tag disappears at once while the app believes
+it is signed in**. Anything that reacts to data _disappearing_ then misfires on
+what looks like a mass delete.
 
 bracemark-web hit this in its sharpest form. The links page keeps its selection in
 the URL, so on `/links?list=<id>` the wipe made page-provider's `isStaleSelection`
@@ -984,7 +995,8 @@ what it always was — a server-side inconsistency to log and answer opaquely.
 
 **The deleting client** (`web-react` `hooks/use-delete-account.ts` +
 bracemark-web's Account section): door fetch → `unlockAccount` (the wrong-password
-check is the GCM tag, exactly as at sign-in) → sign → POST → `endSession()`,
+check is the GCM tag, exactly as at sign-in) → sign → POST →
+`endSession({ username })`,
 which runs the full `clearData` wipe and drops the local session (in the
 three-step order [above](#the-sign-out-teardown--close-the-gate-then-wipe) — the
 gate closes before the wipe, so nothing is mounted to watch the data vanish);

@@ -26,12 +26,15 @@ jest.mock('@stxapps/react', () => ({
 }));
 jest.mock('../data/session-store', () => ({ getSession: () => ({ encryptionKey: {} }) }));
 let mockFirstSyncDone = true;
+const mockClaim = jest.fn((_username: string) => Promise.resolve());
+const mockRunInitialSync = jest.fn(() => Promise.resolve());
 jest.mock('../data/sync-store', () => ({
+  claimIfStillSignedIn: (username: string) => mockClaim(username),
   isFirstSyncDone: () => Promise.resolve(mockFirstSyncDone),
 }));
 jest.mock('../sync/engine', () => ({
   runIncrementalSync: () => mockRunIncrementalSync(),
-  runInitialSync: jest.fn(),
+  runInitialSync: () => mockRunInitialSync(),
 }));
 
 const wrapper = ({ children }: { children: ReactNode }) => <SyncProvider>{children}</SyncProvider>;
@@ -46,6 +49,8 @@ async function readySync() {
 }
 
 beforeEach(() => {
+  mockClaim.mockClear();
+  mockRunInitialSync.mockClear();
   mockRunIncrementalSync.mockClear();
   mockSessionState = 'active';
   mockFirstSyncDone = true;
@@ -67,6 +72,26 @@ it('runs the same cycle for syncNow without marking a local write', async () => 
   expect(result.current.localWriteNonce).toBe(before);
   expect(mockRunIncrementalSync).toHaveBeenCalledTimes(1);
   await waitFor(() => expect(result.current.bgSyncStatus).toBe('idle'));
+});
+
+// A first sync's writes are fenced on the account's ownership row, and a session
+// adopted by an older build may have none. The claim is made here, just before the
+// pull, and never at startup — where it would wait on the data store.
+it('claims the account before a first sync, and only then', async () => {
+  mockFirstSyncDone = false;
+  const { result } = renderHook(() => useSync(), { wrapper });
+
+  await waitFor(() => expect(result.current.storeStatus).toBe('ready'));
+  expect(mockClaim).toHaveBeenCalledWith('alice');
+  const [claimed] = mockClaim.mock.invocationCallOrder;
+  const [pulled] = mockRunInitialSync.mock.invocationCallOrder;
+  expect(claimed).toBeLessThan(pulled);
+});
+
+it('claims nothing for a store whose first sync is done', async () => {
+  await readySync();
+
+  expect(mockClaim).not.toHaveBeenCalled();
 });
 
 // An EXPIRED session (docs/sessions.md): the library stays usable, but the engine

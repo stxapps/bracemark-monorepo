@@ -8,6 +8,7 @@ import {
   TAGS_PREFIX,
 } from '@stxapps/shared';
 import {
+  claimIfStillSignedIn,
   getSession,
   isFirstSyncDone,
   runIncrementalSync,
@@ -128,6 +129,12 @@ export function runSync(): Promise<void> {
           blockedCount = outcome.blockedCount;
         } else {
           await setState({ storeStatus: 'syncing-initial' });
+          // The pull's writes are fenced on the account's ownership row, and the
+          // engine never claims it. The popup's sign-in does; a session an older
+          // build adopted may have none, and this worker may be the first to pull.
+          // The claim takes the lifecycle lock and re-reads the persisted account,
+          // so it is not this worker acting on a session (web-react sync-store.ts).
+          await claimIfStillSignedIn(deps.username);
           await runInitialSync(deps);
         }
         await setState({

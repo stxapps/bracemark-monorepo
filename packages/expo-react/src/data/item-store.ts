@@ -238,14 +238,15 @@ export async function deleteItemsUnqueued(username: string, paths: string[]): Pr
 // Dexie's `update`. A path repeated in `input` keeps its LAST stamp, as the
 // same updates made one at a time would; the dedupe is needed because an
 // UPDATE … FROM that matches one row twice applies an arbitrary one of them.
+// Fenced on `username` like every other write (sync-store.ts, AccountFencedError).
 export async function stampItemUpdatedAts(
+  username: string,
   input: { path: string; updatedAt: number }[],
-  username?: string,
 ): Promise<void> {
   if (input.length === 0) return;
   const stamps = [...new Map(input.map((s) => [s.path, s.updatedAt])).entries()];
   getDb().transaction((tx) => {
-    if (username !== undefined) assertAccountOwnsStoreTx(tx, username);
+    assertAccountOwnsStoreTx(tx, username);
     for (const batch of chunk(stamps, valuesPerStatement(2))) {
       tx.run(
         sql`UPDATE ${items} SET ${sql.identifier(items.updatedAt.name)} = v.column2

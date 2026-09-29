@@ -383,15 +383,29 @@ another one's library: `setSession` tears the old one down first, under the
 same lock. A failed session read or failed cleanup aborts adoption, and a
 retry with no session first finishes the old cleanup. The in-memory token
 changes only after its durable write or delete succeeds. New-account seeding
-also runs inside this lock, after cleanup. A delayed explicit sign-out checks
-the generation captured when the action began, just like a server verdict.
+also runs inside this lock, after cleanup. An explicit end names its target when
+its action begins, and is decided under the lock like a server verdict: sign-out
+names the generation whose token it sends, so a resume while its request is in
+flight survives the late local step; delete-account names the account, so every
+generation of it goes — but never an account adopted since. The target is an
+argument to `endSession`, never read from the render that finishes the request:
+a mutation's `onSuccess` runs the latest render's callbacks, not the ones that
+were current when it started.
 
 In-flight completions are fenced **in the database**, not by
 aborting fetches: every pulled write re-checks, inside its own transaction, that
 the account's sync bookkeeping row still exists (`AccountFencedError`,
 `data/sync-store.ts`). Local entity writes, imports, and commit restamps check
-the same ownership. Auth claims the row during adoption or hydration under
-the lifecycle lock; a sync cycle cannot recreate it after teardown. The web
+the same ownership. The row is claimed only under the lifecycle lock and only
+for the persisted account: by `setSession` before it exposes the session, and —
+for a session an older build adopted without one — by the sync provider just
+before a first pull (`claimIfStillSignedIn`), which re-reads the record and
+claims nothing if it has moved on. So a sync cycle cannot recreate ownership
+after a teardown. **Hydration never touches the data store**: a wait there — a
+long transaction in another tab, a newer build's upgrade — would hold the app
+blank, and the lifecycle lock with it, for as long as it lasts
+(`SKELETON-WEB-001` holds the `items` store from a second tab, and a startup
+claim left the page empty behind it). The web
 teardown clears ownership and data in one transaction, so a write either lands
 first and is wiped, or sees no ownership and fails. Expo applies the same
 transactional checks in its sqlite store, and an in-process queue as its lock.
@@ -549,6 +563,9 @@ The layers ([testing.md](./testing.md)), and where each part of the rule is pinn
 - `SESSION-RACE-WEB-001` — a delayed sign-out and revoked response arrive
   after resume in another tab; the replacement session and its unsynced edit
   survive, including reload.
+- `WEB-ACCOUNT-004` — two accounts in turn on one profile: the second starts
+  empty and writable, the first returns to only its own library. The sequential
+  account switch; its RACES are the line below.
 - **Not covered end to end:** the sleeping-tab /
   in-flight-sync / account-switch races, which are pinned at the unit level by
   the account fence and the generation checks rather than driven in a browser.

@@ -85,14 +85,20 @@ export function useDeleteAccount() {
         if (err instanceof ApiError && err.status === 401) throw new InvalidCredentialsError();
         throw err;
       }
+      // The account now gone — onSuccess ends ITS session, not whatever this
+      // render's callbacks see by the time the request returns.
+      return username;
     },
     // The server tore everything down (including every session); drop the local
     // session + all local data. Hook-level (not the component's continuation) so
     // a success that lands after navigation isn't lost — same reasoning as
     // use-sign-in. The default 'signed-out' reason sends the user home ('/'),
     // not to /sign-in?next=.
-    onSuccess: async () => {
-      await endSession();
+    // Every generation of the deleted account goes (a resume that raced the
+    // request was revoked with the rest), but only that account: another one
+    // adopted meanwhile keeps its library.
+    onSuccess: async (deleted) => {
+      await endSession({ username: deleted });
     },
   });
 }

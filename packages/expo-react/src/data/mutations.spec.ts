@@ -9,12 +9,20 @@
 // stubbed store would prove nothing.
 
 import { sql } from 'drizzle-orm';
+import { File } from 'expo-file-system';
 
-import { LINKS_PREFIX, linkSchema, pathFromId, utf8 } from '@stxapps/shared';
+import { FILES_PREFIX, LINKS_PREFIX, linkSchema, pathFromId, utf8 } from '@stxapps/shared';
 
+import {
+  listFileUris,
+  readFileBytes,
+  resetFileSystem,
+  writeFileBytes,
+} from '../testing/memory-file-system';
 import { getDb, items, itemTagIds, rowsPerStatement, syncMeta } from './db';
+import { dataFileFor } from './file-store';
 import { getItem, putItemsTx } from './item-store';
-import { bulkWriteEntities } from './mutations';
+import { bulkWriteEntities, writeFile } from './mutations';
 import { listPendingOps } from './pending-store';
 import { parseBlob, toItemRecord } from './projection';
 import { seedNewAccount } from './sync-store';
@@ -122,4 +130,37 @@ it('ends a path repeated within one call as its last entry, as one write at a ti
   expect(parseBlob(stored?.data ?? undefined, linkSchema)?.url).toBe('https://example.com/second');
   expect(getDb().select().from(itemTagIds).all()).toEqual([{ path: linkPath(1), tagId: 't_a' }]);
   expect(await listPendingOps(USER)).toHaveLength(2);
+});
+
+// writeFile puts a PLAINTEXT blob on disk (file-store.ts), outside anything a
+// transaction can roll back. Copied before the ownership check, it would land for
+// an account that had already signed out — after clearData's wipe, with no row to
+// find it by.
+describe('writeFile', () => {
+  const picked = 'file:///cache/picked.png';
+  const bytes = new Uint8Array([1, 2, 3]);
+  const path = pathFromId('f_1', FILES_PREFIX);
+
+  beforeEach(() => {
+    resetFileSystem();
+    writeFileBytes(picked, bytes);
+  });
+
+  it('copies the file into the store, then flags the row and queues its upload', async () => {
+    await writeFile(USER, 'f_1', new File(picked));
+
+    expect(readFileBytes(dataFileFor(path).uri)).toEqual(bytes);
+    expect((await getItem(path))?.hasDataFile).toBeTruthy();
+    expect((await listPendingOps(USER)).map((op) => op.path)).toEqual([path]);
+  });
+
+  it('leaves no plaintext on disk once another account owns the store', async () => {
+    getDb().delete(syncMeta).run();
+    await seedNewAccount('bob');
+
+    await expect(writeFile(USER, 'f_1', new File(picked))).rejects.toThrow(/no longer signed in/);
+
+    expect(listFileUris()).toEqual([picked]);
+    expect(getDb().select().from(items).all()).toHaveLength(0);
+  });
 });

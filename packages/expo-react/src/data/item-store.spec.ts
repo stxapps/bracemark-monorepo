@@ -198,7 +198,7 @@ describe('stampItemUpdatedAts', () => {
   it('restamps its rows and no-ops for missing ones', async () => {
     inTx((tx) => putItemsTx(tx, [toItemRecord(LINK_PATH, 1000, utf8('x'))]));
 
-    await stampItemUpdatedAts([
+    await stampItemUpdatedAts(USER, [
       { path: LINK_PATH, updatedAt: 7777 },
       { path: 'links/gone.enc', updatedAt: 7777 },
     ]);
@@ -219,7 +219,10 @@ describe('stampItemUpdatedAts', () => {
       ),
     );
 
-    await stampItemUpdatedAts(paths.map((path, i) => ({ path, updatedAt: 2000 + i })));
+    await stampItemUpdatedAts(
+      USER,
+      paths.map((path, i) => ({ path, updatedAt: 2000 + i })),
+    );
 
     const rows = await bulkGetItems(paths);
     expect(rows.map((row) => row?.updatedAt)).toEqual(paths.map((_, i) => 2000 + i));
@@ -230,7 +233,7 @@ describe('stampItemUpdatedAts', () => {
   it('keeps the last stamp for a path repeated in the batch', async () => {
     inTx((tx) => putItemsTx(tx, [toItemRecord(LINK_PATH, 1000, utf8('x'))]));
 
-    await stampItemUpdatedAts([
+    await stampItemUpdatedAts(USER, [
       { path: LINK_PATH, updatedAt: 3000 },
       { path: LINK_PATH, updatedAt: 2000 },
     ]);
@@ -243,7 +246,7 @@ describe('stampItemUpdatedAts', () => {
     inTx((tx) => putItemsTx(tx, [toItemRecord(LINK_PATH, 1000, utf8('body'))]));
     await markItemDataFile(LINK_PATH, true);
 
-    await stampItemUpdatedAts([{ path: LINK_PATH, updatedAt: 2000 }]);
+    await stampItemUpdatedAts(USER, [{ path: LINK_PATH, updatedAt: 2000 }]);
 
     const row = await getItem(LINK_PATH);
     expect(row?.data).toStrictEqual(utf8('body'));
@@ -263,7 +266,7 @@ describe('markItemDataFileIfCurrent', () => {
     inTx((tx) => putItemsTx(tx, [toItemRecord(FILE_PATH, 1000)]));
     await markItemDataFile(FILE_PATH, false);
     // The mid-fetch sync pull: the row moves to the newer server version.
-    await stampItemUpdatedAts([{ path: FILE_PATH, updatedAt: 2000 }]);
+    await stampItemUpdatedAts(USER, [{ path: FILE_PATH, updatedAt: 2000 }]);
 
     expect(await markItemDataFileIfCurrent(FILE_PATH, 1000)).toBe(false);
     expect((await getItem(FILE_PATH))?.hasDataFile).toBeFalsy();

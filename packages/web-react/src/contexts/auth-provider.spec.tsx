@@ -35,6 +35,7 @@ import { type ApiClient, sessionProbeEndpoint } from '@stxapps/shared';
 
 import type { SessionRecord } from '../data/session-store';
 import * as store from '../data/session-store';
+import * as syncStore from '../data/sync-store';
 import { AuthProvider, useAuth } from './auth-provider';
 
 // Test-only handles on the stub below.
@@ -118,6 +119,9 @@ jest.mock('../data/sync-store', () => ({
   seedNewAccount: jest.fn(() => Promise.resolve()),
   beginInitialSync: jest.fn(() => Promise.resolve()),
 }));
+
+// The target a sign-out started from signedIn() names: its generation.
+const SIGNED_IN = { generation: 'gen-1' };
 
 const YEAR = 365 * 24 * 60 * 60 * 1000;
 
@@ -268,6 +272,16 @@ describe('hydration', () => {
 
     await waitFor(() => expect(status()).toBe('unauthenticated'));
     expect(mockClearData).not.toHaveBeenCalled();
+  });
+
+  // Startup reads the session store and nothing else for a signed-in account: a
+  // wait on the DATA store here (another tab's long transaction, a newer build's
+  // upgrade) would hold the app — and the lifecycle lock — for as long as it lasts.
+  it('never touches the data store to adopt a persisted session', async () => {
+    await signedIn();
+
+    expect(syncStore.beginInitialSync).not.toHaveBeenCalled();
+    expect(syncStore.seedNewAccount).not.toHaveBeenCalled();
   });
 });
 
@@ -426,6 +440,42 @@ describe('setSession', () => {
     expect(stub.__persisted()).toMatchObject({ username: 'bob' });
   });
 
+  // Create-account used to seed its first-sync flag BEFORE setSession — whose
+  // account-switch teardown then wiped it. The seed has to land after the old
+  // library is gone and before the session that exposes it.
+  it('seeds a new account after the previous library is wiped, before persisting it', async () => {
+    await signedIn();
+
+    await act(async () => {
+      await auth.setSession(session({ username: 'bob' }), { newAccount: true });
+    });
+
+    const wiped = Math.max(...mockClearData.mock.invocationCallOrder);
+    const seed = syncStore.seedNewAccount as jest.Mock;
+    expect(seed).toHaveBeenCalledWith('bob');
+    const [seeded] = seed.mock.invocationCallOrder;
+    const saved = Math.max(...(store.saveSession as jest.Mock).mock.invocationCallOrder);
+    expect(wiped).toBeLessThan(seeded);
+    expect(seeded).toBeLessThan(saved);
+    expect(syncStore.beginInitialSync).not.toHaveBeenCalledWith('bob');
+  });
+
+  // Every local write is fenced on the account's ownership row, and a sync cycle
+  // may never create it. A session persisted without it could write nothing.
+  it('adopts nothing when claiming the account ownership fails', async () => {
+    renderProvider();
+    await waitFor(() => expect(status()).toBe('unauthenticated'));
+    const failure = new Error('the data store is unavailable');
+    (syncStore.beginInitialSync as jest.Mock).mockRejectedValueOnce(failure);
+
+    await act(async () => {
+      await expect(auth.setSession(session({ username: 'bob' }))).rejects.toThrow(failure);
+    });
+
+    expect(stub.__persisted()).toBeNull();
+    expect(status()).toBe('unauthenticated');
+  });
+
   it('persists a fresh active generation and flips to authenticated', async () => {
     renderProvider();
     await waitFor(() => expect(status()).toBe('unauthenticated'));
@@ -489,7 +539,7 @@ describe('endSession', () => {
     releaseWipe = () => undefined; // hold the wipe open
     let ended: Promise<void>;
     act(() => {
-      ended = auth.endSession();
+      ended = auth.endSession(SIGNED_IN);
     });
 
     await waitFor(() => expect(status()).toBe('ending'));
@@ -507,7 +557,7 @@ describe('endSession', () => {
   // The record goes before the data: if the wipe is interrupted, the next load finds
   // no session and finishes it.
   it('drops the session record before the data, and announces it', async () => {
-    await act(async () => void (await auth.endSession()));
+    await act(async () => void (await auth.endSession(SIGNED_IN)));
 
     expect(text('username')).toBe('-');
     expect(stub.__persisted()).toBeNull();
@@ -517,16 +567,38 @@ describe('endSession', () => {
     });
   });
 
-  it('does not let an older sign-out continuation wipe a replacement session', async () => {
-    // useSignOut captures this callback before awaiting its network request.
-    const finishOldSignOut = auth.endSession;
-    await act(async () => {
-      await auth.setSession(session({ username: 'bob' }));
-    });
+  // A sign-out names the generation whose token it sent. A resume while its
+  // request was in flight replaced that generation, and the replacement survives.
+  it('does not let a sign-out of a replaced generation wipe its replacement', async () => {
+    await act(async () => void (await auth.setSession(session())));
     mockClearData.mockClear();
-    await act(async () => {
-      await finishOldSignOut();
-    });
+
+    await act(async () => void (await auth.endSession(SIGNED_IN)));
+
+    expect(stub.__persisted()).toMatchObject({ username: 'alice', state: 'active' });
+    expect(stub.__persisted()?.generation).not.toBe('gen-1');
+    expect(status()).toBe('authenticated');
+    expect(mockClearData).not.toHaveBeenCalled();
+  });
+
+  // Delete-account names the account: a resume that raced the deletion was
+  // revoked with every other session, so its library goes too.
+  it('ends every generation of a deleted account', async () => {
+    await act(async () => void (await auth.setSession(session())));
+    mockClearData.mockClear();
+
+    await act(async () => void (await auth.endSession({ username: 'alice' })));
+
+    expect(stub.__persisted()).toBeNull();
+    expect(mockClearData).toHaveBeenCalledTimes(1);
+    expect(status()).toBe('unauthenticated');
+  });
+
+  it('never ends another account adopted since', async () => {
+    await act(async () => void (await auth.setSession(session({ username: 'bob' }))));
+    mockClearData.mockClear();
+
+    await act(async () => void (await auth.endSession({ username: 'alice' })));
 
     expect(stub.__persisted()).toMatchObject({ username: 'bob' });
     expect(status()).toBe('authenticated');
@@ -537,7 +609,7 @@ describe('endSession', () => {
     const failure = new Error('session deletion failed');
     (store.clearSession as jest.Mock).mockRejectedValueOnce(failure);
     await act(async () => {
-      await expect(auth.endSession()).rejects.toThrow(failure);
+      await expect(auth.endSession(SIGNED_IN)).rejects.toThrow(failure);
     });
     expect(mockClearData).not.toHaveBeenCalled();
     expect(stub.__persisted()).toMatchObject({ username: 'alice' });
@@ -545,7 +617,7 @@ describe('endSession', () => {
   });
 
   it('records a deliberate sign-out by default', async () => {
-    await act(async () => void (await auth.endSession()));
+    await act(async () => void (await auth.endSession(SIGNED_IN)));
 
     expect(text('reason')).toBe('signed-out');
   });
@@ -554,7 +626,7 @@ describe('endSession', () => {
   it('clears the query cache, which the device wipe cannot reach', async () => {
     const cleared = jest.spyOn(queryClient, 'clear');
 
-    await act(async () => void (await auth.endSession()));
+    await act(async () => void (await auth.endSession(SIGNED_IN)));
 
     expect(cleared).toHaveBeenCalled();
   });
@@ -562,7 +634,7 @@ describe('endSession', () => {
   it('still reaches signed-out when the wipe fails', async () => {
     mockClearData.mockRejectedValueOnce(new Error('IndexedDB is gone'));
 
-    await act(async () => void (await auth.endSession()));
+    await act(async () => void (await auth.endSession(SIGNED_IN)));
 
     expect(status()).toBe('unauthenticated');
     expect(stub.__persisted()).toBeNull();

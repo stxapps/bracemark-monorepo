@@ -24,12 +24,14 @@ import { MIRRORED_SYNC_STATE_KEY, type MirroredSyncState } from './mirrored-sync
 // The engine and the api client are mocked: this file's job is the ordering and
 // the state it publishes, and a real cycle would only re-test web-react here.
 
+const mockClaim = jest.fn<Promise<void>, [string]>();
 const mockGetSession = jest.fn<{ username: string; encryptionKey: unknown } | null, []>();
 const mockIsFirstSyncDone = jest.fn<Promise<boolean>, [string]>();
 const mockRunInitialSync = jest.fn<Promise<void>, [SyncDeps]>();
 const mockRunIncrementalSync = jest.fn<Promise<SyncOutcome>, [SyncDeps]>();
 
 jest.mock('@stxapps/web-react', () => ({
+  claimIfStillSignedIn: mockClaim,
   getSession: mockGetSession,
   isFirstSyncDone: mockIsFirstSyncDone,
   runInitialSync: mockRunInitialSync,
@@ -87,6 +89,7 @@ beforeEach(() => {
   mockIsFirstSyncDone.mockResolvedValue(true);
   mockRunIncrementalSync.mockResolvedValue(CLEAN);
   mockRunInitialSync.mockResolvedValue(undefined);
+  mockClaim.mockResolvedValue(undefined);
 });
 
 describe('runSync — what it mirrors', () => {
@@ -112,6 +115,24 @@ describe('runSync — what it mirrors', () => {
     // library as if it were the whole library.
     expect(seen.map((s) => s.storeStatus)).toEqual(['checking', 'syncing-initial', 'ready']);
     expect(mirror().bgSyncStatus).toBe('idle');
+  });
+
+  // The pull's writes are fenced on the account's ownership row, which the engine
+  // never claims. With no popup open, this worker can be the first to pull for a
+  // session an older build adopted without one — and every write would be refused.
+  it('claims the account before the initial pull, and not before a later cycle', async () => {
+    mockIsFirstSyncDone.mockResolvedValue(false);
+    await freshRunner().runSync();
+
+    expect(mockClaim).toHaveBeenCalledWith('alice');
+    const [claimed] = mockClaim.mock.invocationCallOrder;
+    const [pulled] = mockRunInitialSync.mock.invocationCallOrder;
+    expect(claimed).toBeLessThan(pulled);
+
+    mockClaim.mockClear();
+    mockIsFirstSyncDone.mockResolvedValue(true);
+    await freshRunner().runSync();
+    expect(mockClaim).not.toHaveBeenCalled();
   });
 
   it('runs an INCREMENTAL cycle once the first sync is done', async () => {

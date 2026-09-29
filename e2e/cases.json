@@ -80,6 +80,16 @@
     "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
   },
   {
+    "id": "WEB-ACCOUNT-004",
+    "title": "A second account on the same profile starts empty and writable, and the first returns to only its own library",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online", "destructive"],
+    "fixture": "empty",
+    "path": "web/account.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
     "id": "VERSION-SKEW-WEB-001",
     "title": "A newer build upgrading the data database closes the old tab's connection at once, keeps an unsaved editor on screen, and offers the reload",
     "surface": "web",

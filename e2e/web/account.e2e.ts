@@ -1,7 +1,7 @@
 import { type Page } from '@playwright/test';
 
 import { profileDir } from '../paths';
-import { type Credentials, newCredentials } from './fixtures/account';
+import { createAccount, type Credentials, newCredentials, signIn } from './fixtures/account';
 import { expect, test } from './fixtures/app';
 import { unique, unresolvableUrl } from './fixtures/data';
 import { SITE_URL } from './fixtures/env';
@@ -401,6 +401,50 @@ test.describe('account', () => {
     },
   );
 
+  // Two accounts, one browser profile, in turn. The local store is OWNED: the
+  // sign-out wipe drops the account's ownership row with its data in one
+  // transaction, and every local write checks that row inside its own
+  // (docs/sessions.md, the account fence). So the next account must be handed a
+  // store that is empty AND already claimed for it before its first write — a
+  // sync cycle may never claim it — and the first account, back again, must find
+  // its library on the server and nothing of the second one's here. Getting the
+  // order wrong fails as a first write that throws, or a library that leaks;
+  // neither is reachable with one account per profile.
+  test(
+    'a second account on the same profile starts empty and writable, and the first returns to only its own library',
+    { tag: ['@WEB-ACCOUNT-004', '@full', '@online', '@destructive'] },
+    async ({ isolatedApp: app }) => {
+      const { page, credentials } = app;
+      const site = await stubMarketingSite(page);
+      const first = unresolvableUrl(unique('switch-first'));
+      const second = unresolvableUrl(unique('switch-second'));
+      const back = unresolvableUrl(unique('switch-back'));
+
+      await page.goto('/links');
+      await addLink(page, first);
+      await syncAndWait(page);
+      await signOutToSite(page, site);
+
+      await createAccount(page, newCredentials());
+      await expect(addLinkButton(page)).toBeVisible();
+      await expect(linkRow(page, first)).toHaveCount(0);
+      await addLink(page, second);
+      await syncAndWait(page);
+      await page.reload();
+      await expect(linkRow(page, second)).toBeVisible();
+      await expect(linkRow(page, first)).toHaveCount(0);
+      await signOutToSite(page, site);
+
+      // A sign-in, not a creation: its first pull fills the store it claimed.
+      await signIn(page, credentials);
+      await expect(linkRow(page, first)).toBeVisible({ timeout: 60_000 });
+      await expect(linkRow(page, second)).toHaveCount(0);
+      await addLink(page, back);
+      await syncAndWait(page);
+      await expect(linkRow(page, back)).toBeVisible();
+    },
+  );
+
   // THE SPECIMEN (docs/sessions.md): the client this replaced wiped itself once the
   // device clock passed the `expiresAt` it was handed at sign-in — a timed delete of
   // every library that would fire even with the server gone. There is no clock in
@@ -455,6 +499,15 @@ async function countSyncedItems(page: Page): Promise<number> {
 
 // The expired session's notice (apps/bracemark-web/src/components/sync-paused-notice.tsx),
 // by the status its words carry.
+// A deliberate sign-out from the menu, which leaves for the (stubbed) marketing site.
+async function signOutToSite(page: Page, site: URL): Promise<void> {
+  await page.goto('/links');
+  // The label gains a suffix in the sync-failed / storage-full states.
+  await page.getByRole('button', { name: /^More options/ }).click();
+  await page.getByRole('menuitem', { name: 'Sign out' }).click();
+  await page.waitForURL((url) => url.origin === site.origin, { timeout: 30_000 });
+}
+
 function pausedNotice(page: Page) {
   return page.getByRole('status').filter({ hasText: 'Sync is paused' });
 }

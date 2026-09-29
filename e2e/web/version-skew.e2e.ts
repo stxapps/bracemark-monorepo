@@ -68,6 +68,15 @@ test.describe('version skew', () => {
       // The draft is still there to copy — nothing reloaded, nothing closed.
       await expect(dialog.getByRole('textbox', { name: 'Title' })).toHaveValue(draft);
       await expect(page.getByRole('button', { name: 'Reload' })).toBeVisible();
+
+      // A tab of this build whose FIRST open comes after the upgrade never hears
+      // `versionchange`. It is still signed in — a data-database failure is not a
+      // session-store failure, so it gets the banner, not /sign-in.
+      await newer.close();
+      const late = await context.newPage();
+      await late.goto('/links');
+      await expect(banner(late)).toBeVisible({ timeout: 10_000 });
+      await expect(late).toHaveURL(/\/links$/);
     },
   );
 

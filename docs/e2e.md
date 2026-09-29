@@ -1229,13 +1229,22 @@ them differently:
   and a link queued after resume must survive that response and a reload.
   `WEB-ACCOUNT-003` reloads with the device clock two years ahead: still signed
   in, library intact.
+- **Two accounts take turns on one profile.** `WEB-ACCOUNT-004` signs out, creates
+  a second account on the same profile, writes and syncs as it, signs out, and
+  signs the first back in. The second account starts empty and its first write
+  lands; the first finds its own library and nothing of the second's. It pins
+  `setSession`'s order — wipe, then claim or seed the store's ownership, then
+  persist — which a single-account case never exercises: a seed that lands
+  before the wipe fails the second account's first write, and a sign-in that
+  leaves the claim to a sync cycle fails the first account's pull.
 - **A newer build takes the database.** `VERSION-SKEW-WEB-001`/`002` open each
   local database one version up from a second tab, under an open editor with a
   typed title: the upgrade must not block, the old tab shows the update-required
   banner, and the draft is still on screen ([offline-mode.md](./offline-mode.md),
-  _version skew_). The session-schema case also attempts Save: the obsolete
-  tab must refuse the write and keep the draft available to copy. Isolated
-  profiles: the upgrade is permanent for the profile.
+  _version skew_). The data case then opens a fresh tab, which must show the
+  banner while still signed in, not `/sign-in`. The session-schema case also
+  attempts Save: the obsolete tab must refuse the write and keep the draft
+  available to copy. Isolated profiles: the upgrade is permanent for the profile.
 
 ⚠ **An offline DEV-SERVER tab cannot reach Settings.** Found writing
 `OFFLINE-EXPORT-WEB-001`: offline, the menu's Settings link took the open page to

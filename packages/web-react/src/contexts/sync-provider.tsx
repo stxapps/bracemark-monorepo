@@ -21,7 +21,7 @@ import {
 } from '@stxapps/shared';
 
 import { getSession } from '../data/session-store';
-import { isFirstSyncDone } from '../data/sync-store';
+import { claimIfStillSignedIn, isFirstSyncDone } from '../data/sync-store';
 import { isUpdateRequired, onUpdateRequired } from '../data/update-required';
 import { runIncrementalSync, runInitialSync, type SyncDeps } from '../sync/engine';
 import { useAuth } from './auth-provider';
@@ -269,8 +269,11 @@ export function SyncProvider({ children }: { children: ReactNode }) {
         }
         if (!active) return;
 
-        // First sign-in on this device: block on the full pull.
+        // First sign-in on this device: block on the full pull. Its writes are
+        // fenced on the account's ownership row; a session adopted by an older
+        // build may not have one yet.
         setStoreStatus('syncing-initial');
+        await claimIfStillSignedIn(username);
         await runInitialSync(deps, reportProgress);
         if (!active) return;
 

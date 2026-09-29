@@ -6,6 +6,7 @@ import { useApiClient } from '@stxapps/react';
 import { signOutEndpoint } from '@stxapps/shared';
 
 import { useAuth } from '../contexts/auth-provider';
+import { getSession } from '../data/session-store';
 
 // Web-only: it reaches for the web auth context + the configured api client, so it
 // can't live in the platform-agnostic @stxapps/react (same reasoning as
@@ -20,6 +21,11 @@ export function useSignOut() {
 
   return useMutation({
     mutationFn: async () => {
+      // The session this sign-out ends: the one whose token the request below
+      // carries. A resume while it is in flight — here or in another context —
+      // mints a replacement, and that one must survive the late step 2.
+      const generation = getSession()?.generation ?? null;
+
       // Step 1: ask the server to revoke this session, while the bearer token is
       // still held (authFetch attaches it — once endSession clears the local
       // session, the token is gone). Best-effort: a network/server failure here
@@ -41,7 +47,7 @@ export function useSignOut() {
       // site's landing page — see AuthGuard. endSession also runs clearData, which wipes every
       // device-local per-account cache — including the last-known subscription copy
       // — so the next account here doesn't inherit this one's state (clear-data.ts).
-      await endSession();
+      await endSession({ generation });
     },
   });
 }

@@ -8,6 +8,7 @@
 import { eq } from 'drizzle-orm';
 
 import { type DbTx, getDb, syncMeta } from './db';
+import { loadSession, withSessionLock } from './session-store';
 
 // Same shape as web-react's SyncMetaRecord (every column NOT NULL, so the
 // drizzle-inferred row already matches it exactly).
@@ -72,9 +73,10 @@ export function assertAccountOwnsStoreTx(tx: DbTx, username: string): void {
   if (!meta) throw new AccountFencedError(username);
 }
 
-// Auth-only: claim the bookkeeping row under the lifecycle lock, before
-// exposing the adopted session or starting a first pull. A sync cycle must
-// never call this to recreate ownership after teardown. The row begins
+// Claim the bookkeeping row — only ever under the lifecycle lock: from setSession,
+// before it exposes the adopted session, and from claimIfStillSignedIn below. A
+// sync cycle must never call this directly to recreate ownership after teardown.
+// The row begins
 // with `firstSyncDoneAt: 0` — "not done", so the gate still blocks and an
 // interrupted pull re-runs — so every write of that pull has a row to be fenced
 // on. An existing row is left as it is.
@@ -85,6 +87,19 @@ export async function beginInitialSync(username: string): Promise<void> {
     tx.insert(syncMeta)
       .values({ username, syncCursorUpdatedAt: 0, syncCursorPath: '', firstSyncDoneAt: 0 })
       .run();
+  });
+}
+
+// The claim for a session adopted by a build that made none at adoption (it
+// claimed only as its first pull began): SyncProvider calls this before a first
+// sync — never hydration, which must not wait on the data store (the web
+// sibling's rule; one shape for the ported pair). Under the lifecycle lock, and
+// only while `username` is still the persisted account, so it can never recreate
+// the ownership a teardown has just dropped.
+export async function claimIfStillSignedIn(username: string): Promise<void> {
+  await withSessionLock(async () => {
+    const persisted = await loadSession();
+    if (persisted?.username === username) await beginInitialSync(username);
   });
 }
 

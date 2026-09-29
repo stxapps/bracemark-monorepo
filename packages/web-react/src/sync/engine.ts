@@ -152,9 +152,9 @@ export async function runInitialSync(
   onProgress?: InitialSyncProgressFn,
 ): Promise<void> {
   deps = withRetryDeps(deps);
-  // Auth claims the bookkeeping row under the lifecycle lock. A stale cycle
-  // must never recreate that row after teardown (sync-store.ts).
-
+  // The bookkeeping row is claimed before this runs, under the lifecycle lock
+  // (sync-store.ts, claimIfStillSignedIn). The engine never claims it: a stale
+  // cycle must not recreate the row a teardown dropped.
   const files = await listAllFiles(deps.api);
   await storeDownloads(deps, files, onProgress);
   // Cursor is the newest compound `(updatedAt, path)` among ALL listed files

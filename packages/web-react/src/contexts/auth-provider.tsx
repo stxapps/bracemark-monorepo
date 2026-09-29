@@ -62,6 +62,12 @@ type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated' | 'ending';
 // goes to /sign-in, which says why. An EXPIRED session never leaves the app at
 // all: it stays 'authenticated' with sessionState 'expired'.
 type EndReason = 'signed-out' | 'revoked';
+// WHICH session an endSession call means, named by the caller when its action
+// began — it often lands after a slow request, and the persisted record may have
+// moved on since. A sign-out ends one generation: the one whose token it sent, so
+// a resume that replaced it meanwhile survives. Deleting an account ends every
+// generation of that account — but never another account's library.
+export type EndTarget = { generation: string | null } | { username: string };
 
 interface AuthContextValue {
   status: AuthStatus;
@@ -82,11 +88,19 @@ interface AuthContextValue {
   ) => Promise<void>;
   // The full local teardown — the sign-out PRIMITIVE. Server-side revocation lives
   // in the user-driven useSignOut hook (which POSTs sign-out, then calls this).
-  // Defaults to a deliberate 'signed-out' (→ the marketing site's landing page).
-  endSession: (reason?: EndReason) => Promise<void>;
+  // A `target` that no longer matches the persisted record changes nothing but
+  // this context's view of it. Defaults to a deliberate 'signed-out' (→ the
+  // marketing site's landing page).
+  endSession: (target: EndTarget, reason?: EndReason) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+
+function isEndTarget(record: SessionRecord, target: EndTarget): boolean {
+  return 'username' in target
+    ? record.username === target.username
+    : record.generation === target.generation;
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   // 'loading' until hydration resolves, so the UI can hold off on auth-gated
@@ -96,7 +110,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [username, setUsername] = useState<string | null>(null);
   const [sessionState, setSessionState] = useState<SessionState | null>(null);
   const [reason, setReason] = useState<EndReason | null>(null);
-  const [generation, setGeneration] = useState<string | null>(null);
   // For the teardown below: the react-query cache is the one per-account store
   // clearData can't reach (it's in-memory React state, not a device store).
   const queryClient = useQueryClient();
@@ -118,7 +131,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (statusRef.current === 'authenticated' || statusRef.current === 'ending') {
           // Torn down elsewhere — that context already wiped. Close this one's UI.
           queryClient.clear();
-          setGeneration(null);
           setUsername(null);
           setSessionState(null);
           setReason(left ?? 'signed-out');
@@ -131,7 +143,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (usernameRef.current !== null && usernameRef.current !== record.username) {
         queryClient.clear();
       }
-      setGeneration(record.generation);
       setUsername(record.username);
       setSessionState(record.state);
       setReason(null);
@@ -162,14 +173,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // sign-in in another tab can't be mistaken for an absence, and a FAILED read
       // throws past it (below) rather than clearing anything.
       if (!record) await clearData().catch(() => undefined);
-      else await beginInitialSync(record.username);
+      // A session never waits here on the DATA store: its ownership row is claimed
+      // before a first sync (sync-store.ts, claimIfStillSignedIn), not at startup,
+      // which another tab's long transaction could hold for as long as it runs.
       return record;
     }).then(
       (record) => {
         if (!active) return;
         if (record) adopt(record);
         else {
-          setGeneration(null);
           setUsername(null);
           setStatus('unauthenticated');
         }
@@ -200,9 +212,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   //      not be 'unauthenticated' yet either: that starts the exit navigation, and a
   //      cross-origin location.replace mid-wipe could tear the document down with
   //      decrypted bookmarks still in IndexedDB.
-  //   2. the announcement — so every other context stops
-  //      treating this account as current before its data goes. A stale sync cycle
-  //      elsewhere is fenced by the wipe itself (sync-store.ts, AccountFencedError).
+  //   2. the announcement — so every other context stops treating this account as
+  //      current before its data goes. A stale sync cycle elsewhere is fenced by the
+  //      wipe itself (sync-store.ts, AccountFencedError).
   //   3. the data. If this is interrupted, the record is already gone, so the next
   //      load finishes the wipe (hydration's no-session branch).
   //   4. react-query's in-memory cache: clearData can't reach it, and the
@@ -222,7 +234,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         cleanupError = error;
       });
       queryClient.clear();
-      setGeneration(null);
       setUsername(null);
       setSessionState(null);
       setReason(why);
@@ -258,19 +269,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [adopt, teardown],
   );
 
+  // Decided under the lock against the PERSISTED record, like a verdict: the
+  // caller named its target before its request, and a resume (here or in another
+  // tab) may have replaced it since. The target is an argument, not something read
+  // from this render — a mutation's onSuccess runs the LATEST render's callbacks.
   const endSession = useCallback(
-    (why: EndReason = 'signed-out') =>
+    (target: EndTarget, why: EndReason = 'signed-out') =>
       withSessionLock(async () => {
         const persisted = await loadSession();
-        // The caller can be returning from a slow sign-out/delete-account request.
-        // Its callback belongs to the generation visible when that action began.
-        if (!persisted || persisted.generation !== generation) {
+        if (!persisted || !isEndTarget(persisted, target)) {
           adopt(persisted);
           return;
         }
         await teardown(why);
       }),
-    [adopt, generation, teardown],
+    [adopt, teardown],
   );
 
   // A server verdict on the token of one generation (auth-api-client.ts). Decided

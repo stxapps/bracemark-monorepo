@@ -26,6 +26,7 @@
 // rows first, files after, the same crash-safe order clear-data uses — and a
 // restored blob's bytes land on disk with the row's `hasDataFile` flag marked
 // LAST (the engine's materialize ordering).
+
 import { eq } from 'drizzle-orm';
 import type { File } from 'expo-file-system';
 
@@ -498,9 +499,11 @@ export async function deleteExtraction(username: string, linkId: string): Promis
 // live in the Dexie row), here the payload is a source `File` COPIED
 // path-to-path onto the store's location (file bytes never enter the JS heap —
 // file-store.ts's doctrine; the picker/resizer hand us a file uri, not bytes).
-// Ordering is bulkWriteEntities' content branch, verbatim: plaintext file
-// first, then the row+pending-op transaction (row carries no bytes), then the
-// `hasDataFile` flag LAST — a crash at any point reads as "not materialized".
+// Ordering is bulkWriteEntities' content branch: plaintext file first, then the
+// row + pending op (row carries no bytes), then the `hasDataFile` flag LAST — a
+// crash at any point reads as "not materialized". The copy runs INSIDE the
+// transaction, after its ownership check: a file copied first would land for an
+// account already signed out, where clearData's wipe can no longer reach it.
 // The sync engine's uploadBlobs already handles the queued put (native encrypt
 // to a temp .enc, stream upload) with no further wiring.
 export async function writeFile(username: string, fileId: string, source: File): Promise<void> {

@@ -617,7 +617,7 @@ describe('loadEntityContent', () => {
       deps({
         // A pull lands the newer version while this fetch is being signed.
         filesSign: async () => {
-          await stampItemUpdatedAts([{ path: FILE_PATH, updatedAt: 2000 }]);
+          await stampItemUpdatedAts(USER, [{ path: FILE_PATH, updatedAt: 2000 }]);
         },
       }),
       FILE_PATH,
@@ -675,7 +675,7 @@ describe('loadEntityContents', () => {
     const { missingPaths } = await loadEntityContents(
       deps({
         filesSign: async () => {
-          await stampItemUpdatedAts([{ path: FILE_PATH, updatedAt: 2000 }]);
+          await stampItemUpdatedAts(USER, [{ path: FILE_PATH, updatedAt: 2000 }]);
         },
       }),
       [FILE_PATH],

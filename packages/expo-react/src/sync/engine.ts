@@ -192,9 +192,9 @@ export async function runInitialSync(
   onProgress?: InitialSyncProgressFn,
 ): Promise<void> {
   deps = withRetryDeps(deps);
-  // Auth claims the bookkeeping row under the lifecycle lock. A stale cycle
-  // must never recreate that row after teardown (sync-store.ts).
-
+  // The bookkeeping row is claimed before this runs, under the lifecycle lock
+  // (sync-store.ts, claimIfStillSignedIn). The engine never claims it: a stale
+  // cycle must not recreate the row a teardown dropped.
   const files = await listAllFiles(deps.api);
   await withBulkHold(files.length, () => storeDownloads(deps, files, onProgress));
   // Cursor is the newest compound `(updatedAt, path)` among ALL listed files
@@ -821,7 +821,7 @@ async function commitBatched(deps: SyncDeps, ops: PendingOpRecord[]): Promise<Co
     committed.push(...results);
     // All of a batch's restamps ride one transaction (stampItemUpdatedAts) rather
     // than a statement-per-result round trip; each row-gone stamp is still a no-op.
-    await stampItemUpdatedAts(results, deps.username);
+    await stampItemUpdatedAts(deps.username, results);
     const accepted = new Set(results.map((r) => r.path));
     await clearDrainedOps(batch.filter((o) => accepted.has(o.path)));
   }

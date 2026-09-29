@@ -6,6 +6,7 @@
 // has one owner. Deliberately tiny and side-effect-light — no network, no React.
 
 import { db, type SyncMetaRecord } from './db';
+import { peekSession, withSessionLock } from './session-store';
 
 // The bookkeeping row for an account, or undefined if this device has never
 // synced (nor created) it.
@@ -60,9 +61,10 @@ export async function assertAccountStillOwnsStore(username: string): Promise<voi
   if (!(await db.syncMeta.get(username))) throw new AccountFencedError(username);
 }
 
-// Auth-only: claim the bookkeeping row under the lifecycle lock, before
-// exposing the adopted session or starting a first pull. A sync cycle must
-// never call this to recreate ownership after teardown. The row begins
+// Claim the bookkeeping row — only ever under the lifecycle lock: from setSession,
+// before it exposes the adopted session, and from claimIfStillSignedIn below. A
+// sync cycle must never call this directly to recreate ownership after teardown.
+// The row begins
 // with `firstSyncDoneAt: 0` — "not done", so the gate still blocks and an
 // interrupted pull re-runs. It exists so every write of that pull has a row to be
 // fenced on (AccountFencedError). An existing row is left as it is.
@@ -75,6 +77,19 @@ export async function beginInitialSync(username: string): Promise<void> {
       syncCursorPath: '',
       firstSyncDoneAt: 0,
     });
+  });
+}
+
+// The claim for a session adopted by a build that made none at adoption (it
+// claimed only as its first pull began): SyncProvider calls this before a first
+// sync — never hydration, because startup must not wait on this database, which a
+// long transaction in another tab can hold for as long as it runs. Under the
+// lifecycle lock, and only while `username` is still the persisted account, so it
+// can never recreate the ownership a teardown has just dropped.
+export async function claimIfStillSignedIn(username: string): Promise<void> {
+  await withSessionLock(async () => {
+    const persisted = await peekSession();
+    if (persisted?.username === username) await beginInitialSync(username);
   });
 }
 
