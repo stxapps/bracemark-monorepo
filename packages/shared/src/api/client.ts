@@ -1,5 +1,6 @@
 import type { z } from 'zod';
 
+import { withDeadline } from '../async/with-deadline';
 import type { ApiEndpoint, HttpMethod } from './endpoint';
 
 // Platform-agnostic typed fetch driven by the shared endpoint contracts. Lives
@@ -40,6 +41,31 @@ export function apiErrorCode(e: unknown): string | null {
   }
 }
 
+// Every call has a deadline. `fetch` has none of its own, so a server that
+// accepts the connection and never answers — or a network that silently drops
+// the packets — leaves a call pending forever, and a pending call in the sync
+// engine's single-flight cycle takes all of sync down with it, not one screen.
+// A default rather than per-call-site wiring, so an endpoint added later is
+// bounded without anyone remembering to: the wrong guess is then a loud
+// ApiTimeoutError, never a silent hang. 60 s is generous for a JSON API whose
+// bodies are small; an endpoint that legitimately works longer before answering
+// declares its own `timeoutMs` in its contract (delete-all pages the whole R2
+// prefix server-side). docs/api-contracts.md, _deadlines_. The delete-all
+// flow's sync-wait watchdog is derived from it (data/delete-all-data.ts on both
+// platforms), so moving this moves that.
+export const DEFAULT_CALL_TIMEOUT_MS = 60_000;
+
+// A call that outlived its deadline. Its own class (not an
+// ApiError — there is no status, the server never answered — and not the
+// fetch's TypeError) so the retry policy can tell it apart from a network blip:
+// see `isRetryableTransportError` in retry.ts for why a timeout is not retried.
+export class ApiTimeoutError extends Error {
+  constructor(public readonly timeoutMs: number) {
+    super(`Request timed out after ${timeoutMs} ms`);
+    this.name = 'ApiTimeoutError';
+  }
+}
+
 // `Retry-After` from an error response, in seconds. Handles both header forms
 // (delta-seconds and HTTP-date); undefined when absent or unparseable.
 export function parseRetryAfterSeconds(res: Response): number | undefined {
@@ -65,6 +91,11 @@ export interface CallOptions {
   /** Abort the request — TanStack Query passes its query `signal` here so a
    *  superseded request (e.g. a stale debounced username) is cancelled. */
   signal?: AbortSignal;
+  /** Override this call's deadline in ms (else the endpoint's `timeoutMs`, else
+   *  `DEFAULT_CALL_TIMEOUT_MS`). When it passes, the call rejects with
+   *  ApiTimeoutError and the fetch is aborted. Covers the whole call, the
+   *  response body included. */
+  timeoutMs?: number;
 }
 
 // GET/DELETE carry their input as query params; everything else as a JSON body.
@@ -83,6 +114,21 @@ export async function callEndpoint<
   input: z.input<TRequest>,
   callOptions: CallOptions = {},
 ): Promise<z.infer<TResponse>> {
+  const timeoutMs = callOptions.timeoutMs ?? endpoint.timeoutMs ?? DEFAULT_CALL_TIMEOUT_MS;
+  return withDeadline(
+    (signal) => send(options, endpoint, input, signal),
+    timeoutMs,
+    (ms) => new ApiTimeoutError(ms),
+    callOptions.signal,
+  );
+}
+
+async function send<TRequest extends z.ZodType, TResponse extends z.ZodType>(
+  options: ApiClientOptions,
+  endpoint: ApiEndpoint<HttpMethod, string, TRequest, TResponse>,
+  input: z.input<TRequest>,
+  signal: AbortSignal | undefined,
+): Promise<z.infer<TResponse>> {
   const { baseUrl, fetch: fetchImpl = fetch } = options;
 
   // Validate against the contract before hitting the network — the client fails
@@ -90,7 +136,7 @@ export async function callEndpoint<
   const data = endpoint.request.parse(input) as Record<string, unknown>;
 
   const url = new URL(endpoint.path, baseUrl);
-  const init: RequestInit = { method: endpoint.method, signal: callOptions.signal };
+  const init: RequestInit = { method: endpoint.method, signal };
 
   if (isQueryMethod(endpoint.method)) {
     for (const [key, value] of Object.entries(data)) {

@@ -1272,14 +1272,15 @@ shape: a server that has gone does not speak the contract. Its cold start under
 Two things the export flow waits on deliberately (`subflows/export-plain-text.yaml`):
 
 - **The share sheet, not the receipt.** A finished export presents the sheet
-  over its own receipt, and the receipt paints a beat FIRST — so the measurement
-  leg's shape, "poll for the receipt, dismiss a sheet if one is up", ends on the
-  bare receipt and the sheet lands on it afterwards (both orders measured on the
-  Pixel 8 AVD). The flow waits for the sheet, which the run always presents, and
-  puts it away before reading the receipt.
-- **⚠ Android 16's chooser is titled "Sharing 1 file"**, not "Share": the
-  measurement leg's `dismiss-share-sheet.yaml` matches `'Share'` and so does not
-  find it on that image.
+  over its own receipt, and the receipt paints a beat FIRST — so the shape
+  "poll for the receipt, dismiss a sheet if one is up" ends on the bare receipt
+  and the sheet lands on it afterwards (both orders measured on the Pixel 8
+  AVD). The flow waits for the sheet, which the run always presents, and puts
+  it away before reading the receipt. The measurement leg
+  (`measure/flows/dismiss-share-sheet.yaml`) does the same.
+- **⚠ Android 16's chooser is titled "Sharing 1 file"**, not "Share": a match on
+  `'Share'` does not find it on that image, so both flows match
+  `'Sharing \d+ files?'`.
 
 ⚠ **`OFFLINE-EXPORT-IOS-001` is red, and the product is why.** With the api
 frozen — connections accepted, never answered — the export sat on "Refreshing
@@ -2303,12 +2304,15 @@ npm run measure:native -- --platform android --device <serial> --links 1000,1000
 - **iOS Files hides a known extension.** A staged `measure-bookmarks-300.html`
   is listed as `measure-bookmarks-300`, so the import flow matches the file's
   stem (`IMPORT_FILE_STEM`), not its name.
-- **The iOS share sheet has no Close control.** Export presents it the moment a
-  run finishes, and it covers the receipt the flow waits for. It is a popover,
-  and iOS exposes the dimmed area as `PopoverDismissRegion` ("dismiss popup")
-  over the whole screen, so `dismiss-share-sheet.yaml` taps near the top, and
-  only when that region is present. The export flow polls: until the receipt is
-  visible, dismiss a sheet if one is up.
+- **The export flow waits for the share sheet, not the receipt.** Export
+  presents the sheet once a run finishes, a beat after the receipt paints, so a
+  poll for the receipt ends before the sheet lands on it (_scale, loading and
+  offline_). `dismiss-share-sheet.yaml` waits for the sheet under the run's
+  budget, then puts it away. The iOS sheet has no Close control: it is a
+  popover, and iOS exposes the dimmed area as `PopoverDismissRegion` ("dismiss
+  popup") over the whole screen, so the flow taps near the top. Android's
+  chooser is titled "Sharing 1 file" on Android 16, not "Share", and a back
+  press closes it.
 - **The Data sub-views repeat their title in their back link**, so the flows
   bind to `settings-back`, not the text.
 

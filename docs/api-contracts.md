@@ -168,6 +168,84 @@ codebase differ on purpose:
 Don't stack the two: a client wrapped in `withRetry` **and** driven by a re-waking
 loop nests two backoffs against the same bucket. One retry layer per path.
 
+### deadlines
+
+`fetch` has no deadline of its own. A server that accepts the connection and
+never answers, or a network that silently drops the packets (a captive portal, a
+Wi-Fi→cellular switch that leaves a dead socket), leaves a call pending forever.
+So **every** contract call has one, applied in `callEndpoint`. It is resolved in
+this order: the call site's `CallOptions.timeoutMs`, then the endpoint's own
+`timeoutMs`, then `DEFAULT_CALL_TIMEOUT_MS` (60 s). When the deadline passes, the
+call rejects with `ApiTimeoutError` and the fetch is aborted.
+
+- **A default, not per-call-site wiring.** An endpoint added later is bounded
+  without anyone remembering to bound it. If the guess is too short, the result is
+  a loud timeout error rather than a silent hang.
+- **The deadline covers the whole call, response body included**, not just the
+  wait for the response headers. Our JSON bodies are small, so the difference is
+  negligible, and the whole-call deadline also catches a body that stalls after
+  its headers.
+- **A slow endpoint declares its own deadline in its contract**, next to the
+  schemas, so every platform's call gets it. What decides this is server _work_
+  before the first byte, not transfer size. A first-byte deadline wouldn't spare
+  these endpoints either, because they send nothing until they finish.
+  `data/delete-all` and `auth/delete-account` page the whole R2 prefix
+  server-side (`DELETE_ALL_TIMEOUT_MS`, 5 min). `/v1/extract` can spend up to 6
+  hops × 8 s on the page and then again on its inline image (`EXTRACT_TIMEOUT_MS`,
+  2 min, sized from the extractor's `safe-fetch.ts` caps; `safe-fetch.spec.ts`
+  holds the two together).
+- **The deadline rejects; the abort only tidies up.** The call settles through its
+  own timer, not through the fetch honoring its signal, because the point is a
+  promise that always settles. A consequence: the fetch receives the client's own
+  signal, linked to the caller's, never the caller's signal object itself. The
+  mechanism is shared's `withDeadline` (`async/with-deadline.ts`), which the R2
+  transfers use too.
+- **A timeout is not retried** (`isRetryableTransportError`). The attempt has
+  already spent the whole deadline against a server that isn't answering, and
+  retrying would multiply that by `withRetry`'s `tries`. The caller's next attempt
+  is the retry. Each retried attempt of any _other_ failure gets a fresh deadline,
+  since each is its own `callEndpoint`.
+
+The sync engine is the caller that needed this most. Its single-flight cycle is
+shared by every later sync, so one hung call used to take all of sync down
+([local-first-sync.md](./local-first-sync.md), under the single-flight bullet).
+
+**Outside this client.** The R2 presigned transfers (`sync/r2.ts`) bypass it, so
+they bound themselves with the same `withDeadline`. A body can be KB or MB, and
+which kind of deadline it gets depends on whether the transfer can see its own
+progress (`sync/blob-transfer.ts` in `shared`):
+
+- **Idle, where it can.** A web GET reads its body as a stream and restarts the
+  clock on every chunk: 60 s for R2 to answer, then 60 s of silence
+  (`BLOB_IDLE_TIMEOUT_MS`). It fails only a body that stops arriving, never a slow
+  one, however large.
+- **Total, scaled by size, where it can't.** A browser's `fetch` reports no upload
+  progress, and React Native's resolves only after the whole body. So a PUT, and
+  the expo GET, get a 60 s allowance plus the body at an 8 KB/s floor
+  (`blobTransferTimeoutMs`). The cost when that floor is wrong is a transfer that
+  fails on every cycle, not once. It can bite only the web PUT of a `files/`
+  blob, on a link below the floor for the whole body; expo's JS transfers carry
+  entity blobs alone. The floor is per transfer and the web engine uploads 8 at
+  once, so it covers a ~512 kbps uplink carrying 8 MB-sized blobs. It is set low
+  on purpose: too high means a blob that never syncs, too low only means a
+  truly stalled PUT holds the cycle longer (5 MB ≈ 12 min) before the next cycle
+  retries it. A flat total would be worse at both ends — minutes of stall behind
+  a few-KB entity blob, and still too short for the largest `files/` blob.
+- **None of ours** for expo's native file transfers (`File.downloadFileAsync`, the
+  legacy `uploadAsync`). URLSession's and OkHttp's timeouts are idle deadlines
+  already.
+
+The extractor's image proxy (`ExtractClient.fetchImage`) streams a binary body,
+so it can't ride `callEndpoint` either. It applies the contract's deadline
+itself: `IMAGE_PROXY_TIMEOUT_MS`, 2 min, declared on `imageProxyEndpoint` and
+failing with the same `ApiTimeoutError`. That is a total covering the whole
+call, the body included: the extractor's 6 × 8 s redirect walk with over a
+minute to spare for an image capped at 10 MB and usually far smaller, pinned by
+`safe-fetch.spec.ts`. The caller reads a timeout as transient (`loadImage` leaves
+the facet for a retry; a favicon records `none` and ages out). The third-party
+fetches (favicons, on-device extraction, the extractor's own upstream fetches)
+carry their own timeouts.
+
 ### adding an endpoint
 
 1. **Contract** — in `packages/shared/src/<area>/endpoints.ts`, define the

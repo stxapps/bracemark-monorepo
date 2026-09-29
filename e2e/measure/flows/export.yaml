@@ -18,33 +18,18 @@ appId: com.bracemark.app
 - tapOn: '${FORMAT_LABEL}.*'
 - tapOn:
     id: 'export-data-submit'
-# The run's end and the share sheet race: the view presents the sheet the
-# moment the run is done, and on iOS it covers the receipt this waits for. So
-# it is a poll, like the AutoFill sheet in sign-in.yaml: until the receipt is
-# visible, dismiss a sheet if one is up (dismiss-share-sheet.yaml). The optional lookup paces each pass; 360
-# passes of a few seconds each cover the longest run this measures.
-- repeat:
-    times: 360
-    while:
-      notVisible:
-        id: 'export-data-complete'
-    commands:
-      - runFlow:
-          file: dismiss-share-sheet.yaml
-      - runFlow:
-          when:
-            platform: Android
-            visible: 'Share'
-          commands:
-            - back
-      - assertVisible:
-          id: 'export-data-complete'
-          optional: true
-- assertVisible:
-    id: 'export-data-complete'
-# A sheet that arrived after the receipt did.
+# The view presents the sheet once per finished run, and the receipt paints a
+# beat BEFORE it — so polling for the receipt and dismissing "a sheet if one is
+# up" ends on the bare receipt, and the sheet lands on top afterwards
+# (docs/e2e.md, _scale, loading and offline_). So wait for the sheet itself,
+# which every run presents, then put it away (dismiss-share-sheet.yaml, which
+# carries the run's budget) and read the receipt under it.
 - runFlow:
     file: dismiss-share-sheet.yaml
+- extendedWaitUntil:
+    visible:
+      id: 'export-data-complete'
+    timeout: 10000
 
 - scrollUntilVisible:
     element:

@@ -1,6 +1,6 @@
-import { ApiError } from '../api/client';
+import { ApiError, ApiTimeoutError } from '../api/client';
 import { createExtractClient } from './client';
-import { MAX_EXTRACT_URLS } from './endpoints';
+import { IMAGE_PROXY_TIMEOUT_MS, MAX_EXTRACT_URLS } from './endpoints';
 
 // The client binding to bracemark-extractor. `callEndpoint` already has its own spec
 // (api/client.spec.ts) — what this file pins is the part that is this client's own
@@ -16,8 +16,8 @@ import { MAX_EXTRACT_URLS } from './endpoints';
 //     _server extraction_).
 //   - THE HAND-BUILT PROXY REQUEST. `fetchImage` can't ride `callEndpoint` (the
 //     success body is a binary stream, not JSON), so it re-implements the URL build,
-//     the front SSRF gate and the ApiError throw. Each is a place the two paths can
-//     silently drift apart.
+//     the front SSRF gate, the ApiError throw and the deadline. Each is a place the
+//     two paths can silently drift apart.
 //
 // The extract CONTRACT's own schemas (endpoints.ts) are exercised here rather than in
 // a spec of their own: this is where they run on a client, and the extractor's route
@@ -131,10 +131,13 @@ describe('extract — the interactive single save', () => {
   it('forwards an AbortSignal so an abandoned save can be cancelled', async () => {
     const f = recordingFetch(results([{ url: URL_A, ok: true }]));
     const controller = new AbortController();
+    // Aborted up front: the fetch gets callEndpoint's own linked signal (its
+    // deadline aborts it too), so the caller's abort REACHING it is the property.
+    controller.abort();
 
     await clientWith(f).extract(URL_A, controller.signal);
 
-    expect(f.init().signal).toBe(controller.signal);
+    expect(f.init().signal?.aborted).toBe(true);
   });
 });
 
@@ -205,10 +208,13 @@ describe('extractMany — the batch drain', () => {
   it('forwards an AbortSignal so a superseded drain is cancelled', async () => {
     const f = recordingFetch(results([]));
     const controller = new AbortController();
+    // Aborted up front: the fetch gets callEndpoint's own linked signal (its
+    // deadline aborts it too), so the caller's abort REACHING it is the property.
+    controller.abort();
 
     await clientWith(f).extractMany([URL_A], controller.signal);
 
-    expect(f.init().signal).toBe(controller.signal);
+    expect(f.init().signal?.aborted).toBe(true);
   });
 });
 
@@ -332,10 +338,100 @@ describe('fetchImage — the streaming proxy', () => {
   it('forwards an AbortSignal', async () => {
     const f = recordingFetch(response({ bytes: PNG }));
     const controller = new AbortController();
+    // Aborted up front: the fetch gets the deadline's own linked signal, so the
+    // caller's abort REACHING it is the property.
+    controller.abort();
 
     await clientWith(f).fetchImage(URL_A, controller.signal);
 
-    expect(f.init().signal).toBe(controller.signal);
+    expect(f.init().signal?.aborted).toBe(true);
+  });
+});
+
+// The proxy call can't ride `callEndpoint`, so it doesn't get that deadline for
+// free — and without one a proxy that accepts the connection and never answers
+// leaves the image load pending forever (a server-extraction drain slot, a favicon
+// request). ApiTimeoutError, not ApiError, is also what the caller's verdict turns
+// on: web-react's `loadImage` reads it as transient and leaves the facet for a retry.
+describe('fetchImage — deadline', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  const pending = async (outcome: Promise<unknown>) =>
+    Promise.race([outcome, Promise.resolve('pending')]);
+
+  // A fetch whose promise is `settle`'s to decide, and — the hard case — which
+  // never looks at its signal.
+  function fetchOnce(settle: () => Promise<Response>) {
+    let signal: AbortSignal | undefined;
+    const impl = ((_url: string, init: RequestInit) => {
+      signal = init.signal ?? undefined;
+      return settle();
+    }) as unknown as typeof fetch;
+    return { fetch: impl, signal: () => signal };
+  }
+
+  it('rejects with ApiTimeoutError at the contract’s deadline when the proxy never answers', async () => {
+    const f = fetchOnce(() => new Promise<Response>(() => undefined));
+    const outcome = createExtractClient({ baseUrl: BASE, fetch: f.fetch })
+      .fetchImage(URL_A)
+      .catch((err: unknown) => err);
+
+    await jest.advanceTimersByTimeAsync(IMAGE_PROXY_TIMEOUT_MS - 1);
+    await expect(pending(outcome)).resolves.toBe('pending');
+    expect(f.signal()?.aborted).toBe(false);
+
+    await jest.advanceTimersByTimeAsync(1);
+    expect(await outcome).toMatchObject({
+      name: 'ApiTimeoutError',
+      timeoutMs: IMAGE_PROXY_TIMEOUT_MS,
+    });
+    expect(f.signal()?.aborted).toBe(true);
+    expect(jest.getTimerCount()).toBe(0);
+  });
+
+  it('covers the body too: headers that arrive, then a stream that stalls, still time out', async () => {
+    // The proxy's success is a STREAM, so the headers are no evidence the bytes will
+    // follow — a deadline that stopped at the headers would leave this one hanging.
+    const f = fetchOnce(() =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        headers: { get: () => null },
+        arrayBuffer: () => new Promise<ArrayBuffer>(() => undefined),
+      } as unknown as Response),
+    );
+    const outcome = createExtractClient({ baseUrl: BASE, fetch: f.fetch })
+      .fetchImage(URL_A)
+      .catch((err: unknown) => err);
+
+    await jest.advanceTimersByTimeAsync(IMAGE_PROXY_TIMEOUT_MS);
+
+    expect(await outcome).toBeInstanceOf(ApiTimeoutError);
+  });
+
+  it('passes an in-time image through and leaves no timer armed', async () => {
+    const f = recordingFetch(response({ bytes: new Uint8Array([1, 2, 3]) }));
+
+    const bytes = await clientWith(f).fetchImage(URL_A);
+
+    expect(Array.from(bytes)).toEqual([1, 2, 3]);
+    expect(jest.getTimerCount()).toBe(0);
+  });
+
+  it('passes the proxy’s own failure through, not a timeout', async () => {
+    // `loadImage` settles a non-429 4xx as permanent; masking it behind a timeout
+    // would retry a dead image forever.
+    const f = recordingFetch(response({ ok: false, status: 404 }));
+
+    await expect(clientWith(f).fetchImage(URL_A)).rejects.toMatchObject({
+      name: 'ApiError',
+      status: 404,
+    });
   });
 });
 

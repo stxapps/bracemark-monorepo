@@ -690,7 +690,7 @@ session-store **mirrors** the serialized session into that group on every
 mirror is a Keychain ghost too). The mirror is a copy, never the source of
 truth: only the extension reads it, via `loadSharedSession()`, which also
 hydrates the in-memory session mirror so the api client's synchronous
-`getToken()` works in a process that runs no AuthProvider. Every mirror
+`getSession()` works in a process that runs no AuthProvider. Every mirror
 write/delete is best-effort — a Keychain hiccup must not fail sign-in/out; a
 missing mirror just means no fast-path upload (the drain still delivers). The
 mirror carries the session's STATE, and the share extension reads it instead of

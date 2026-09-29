@@ -11,6 +11,8 @@
 // puts it after the snapshot and before the apply, deterministically, with no timers.
 import {
   ApiError,
+  ApiTimeoutError,
+  createApiClient,
   DEFAULT_LIST_ID,
   filesListEndpoint,
   filesSignEndpoint,
@@ -253,6 +255,59 @@ describe('waiting for an in-flight cycle', () => {
       hasMore: false,
     });
     await Promise.all([cycle, waiting]);
+  });
+});
+
+// The single-flight slot is freed only when the cycle's promise settles, and every
+// later caller — background sync, a refresh, export's and import's pre-sync,
+// delete-all's wait — joins the one in flight. So a cycle that never settles is not
+// one stuck export: it is sync gone for the rest of the page. A server that accepts
+// the connection and never answers did exactly that, because `fetch` has no deadline
+// of its own. Driven through the REAL contract client over a fetch that never
+// answers (and ignores its abort), since the deadline lives in the client, not in
+// the stub the rest of this file uses.
+describe('a server that accepts the connection and never answers', () => {
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  // Its own account, so a regression fails HERE: a cycle that never settles holds
+  // its user's slot for the rest of the file, and under USER every later case would
+  // join it and time out one by one — the bug reproducing itself, far from its cause.
+  const HUNG_USER = 'never-answered';
+
+  it('fails the cycle at the call deadline, unretried, and frees the slot', async () => {
+    // Only the timers the deadline and the retry backoff use; fake-indexeddb
+    // schedules its own work on setImmediate and must keep running.
+    jest.useFakeTimers({ doNotFake: ['setImmediate', 'nextTick', 'queueMicrotask'] });
+    let reached!: () => void;
+    const fetchReached = new Promise<void>((resolve) => {
+      reached = resolve;
+    });
+    const hangingFetch = jest.fn(() => {
+      reached();
+      return new Promise<Response>(() => undefined);
+    });
+    const api = createApiClient({
+      baseUrl: 'https://api.test',
+      fetch: hangingFetch as unknown as typeof fetch,
+    });
+
+    const outcome = runIncrementalSync({
+      username: HUNG_USER,
+      encryptionKey: {} as CryptoKey,
+      api,
+    }).catch((err: unknown) => err);
+    await fetchReached;
+    // Any deadline worth having is well inside five minutes.
+    await jest.advanceTimersByTimeAsync(5 * 60_000);
+
+    expect(await outcome).toBeInstanceOf(ApiTimeoutError);
+    expect(hangingFetch).toHaveBeenCalledTimes(1);
+    // The slot is free: the next cycle runs against a healthy server rather than
+    // joining the dead one.
+    jest.useRealTimers();
+    await expect(runIncrementalSync({ ...deps(), username: HUNG_USER })).resolves.toBeDefined();
   });
 });
 

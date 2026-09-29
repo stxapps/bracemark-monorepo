@@ -82,15 +82,18 @@ const COMMIT_BATCH = MAX_COMMIT_OPS;
 const OPS_PAGE = MAX_LIST_LIMIT;
 const FILES_PAGE = MAX_LIST_LIMIT;
 
-// Blob fan-out, split by direction because the two workloads bind on opposite
-// resources (a bounded cap also keeps a first sync of thousands of files from
-// opening thousands of sockets at once). Downloads are small index blobs (KB) over
-// HTTP/2 and RTT-bound, so a wide fan-out cuts first-sync time and drains the
-// presigned GET URLs sooner. Uploads can be MB-sized `files/` content, bound by
-// uplink bandwidth + memory (peak ≈ concurrency × blob size), so they stay modest.
-// Starting points — tune against a measured large first sync.
-const DOWNLOAD_CONCURRENCY = 24;
-const UPLOAD_CONCURRENCY = 8;
+// Blob fan-out, split by what moves rather than which way, because the two kinds
+// bind on opposite resources (a bounded cap also keeps a first sync of thousands
+// of blobs from opening thousands of sockets at once). Index blobs (links/tags/
+// lists/settings) are KB-sized over HTTP/2 and RTT-bound in either direction, so a
+// wide fan-out cuts first-sync time, drains the presigned GET URLs sooner, and
+// pushes a large import's index faster. `files/` content can be MB-sized, bound by
+// bandwidth + memory (each transfer holds its blob in the JS heap, so peak ≈
+// concurrency × blob size), so it stays modest whether it is uploaded
+// (uploadBlobs) or fetched (loadEntityContents). Starting points — tune against a
+// measured large first sync.
+const INDEX_CONCURRENCY = 24;
+const FILE_CONCURRENCY = 8;
 
 // One put-pipeline pass (pushPuts) signs, uploads, and commits a single chunk, so
 // the chunk must fit BOTH the sign cap and the commit cap in one call each. Both are
@@ -288,6 +291,13 @@ export async function loadEntityContent(
   // the engine's staleness skip only re-downloads when the server stamp moves
   // again. Losing the race just skips the cache: the caller still gets the bytes
   // it asked for, and the next call fetches the newer version.
+  //
+  // expo's loadEntityContent answers the same race with `undefined` instead, and
+  // that difference is the storage talking, not a policy split: expo decrypts
+  // straight into the path's one canonical file, so a lost race leaves a file the
+  // row doesn't claim and a concurrent pull may tear down — it deletes it rather
+  // than hand it out. Bytes in hand have no such owner. A caller written against
+  // both must read `undefined` as "not now", not "gone".
   await db.transaction('rw', db.items, db.syncMeta, async () => {
     await assertAccountStillOwnsStore(deps.username);
     const current = await db.items.get(path);
@@ -300,11 +310,13 @@ export async function loadEntityContent(
 // blobs resident at once (the export flow's download phase). Same semantics per
 // path — fetch, decrypt, persist into the local store so re-runs are resumable
 // and offline reads work — but signed in SIGN_BATCH pages (one `files/sign` call
-// per ~1000 paths instead of one per file) and fetched at the engine's download
-// fan-out. Already-resident bytes are skipped (and don't count toward progress);
-// a path that's unknown locally or 404s on GET (deleted on another device, the
-// delete op not yet pulled) lands in `missingPaths` for the caller to report —
-// never a thrown error, mirroring loadEntityContent. Any other failure rejects.
+// per ~1000 paths instead of one per file) and fetched at FILE_CONCURRENCY, not
+// the index fan-out: each in-flight fetch holds an MB-sized ciphertext and then
+// its plaintext in the JS heap. Already-resident bytes are skipped (and don't count
+// toward progress); a path that's unknown locally or 404s on GET (deleted on
+// another device, the delete op not yet pulled) lands in `missingPaths` for the
+// caller to report — never a thrown error, mirroring loadEntityContent. Any other
+// failure rejects.
 export async function loadEntityContents(
   deps: SyncDeps,
   paths: string[],
@@ -337,13 +349,13 @@ export async function loadEntityContents(
   onProgress?.(done, total);
   for (const batch of chunk(wanted, SIGN_BATCH)) {
     const urls = await signPaths(deps.api, 'get', batch);
-    await mapLimit(batch, DOWNLOAD_CONCURRENCY, async (path) => {
+    await mapLimit(batch, FILE_CONCURRENCY, async (path) => {
       const url = urls.get(path);
       const blob = url
         ? await getBlob(url).catch((err: unknown) => {
-            if (err instanceof BlobRequestError && err.status === 404) return undefined;
-            throw err;
-          })
+          if (err instanceof BlobRequestError && err.status === 404) return undefined;
+          throw err;
+        })
         : undefined;
       if (blob) {
         const data = await decryptEntity(deps.encryptionKey, blob);
@@ -376,7 +388,7 @@ async function incrementalCycle(
   let cursorUpdatedAt = since;
   let cursorPath = sincePath;
   let page = first;
-  for (;;) {
+  for (; ;) {
     for (const op of page.ops) {
       serverOps.set(op.path, op);
       cursorUpdatedAt = op.updatedAt;
@@ -569,11 +581,13 @@ async function pushPending(
   );
 
   // Phase 3 then 4: drain ALL content puts (every chunk) before ANY metadata put, so
-  // the content-before-metadata invariant holds across chunk boundaries too.
+  // the content-before-metadata invariant holds across chunk boundaries too. Each
+  // phase uploads at its own blob kind's fan-out.
   committed.push(
     ...(await pushPuts(
       deps,
       puts.filter((o) => isContentPath(o.path)),
+      FILE_CONCURRENCY,
       outcome,
       orphanedPaths,
       failures,
@@ -589,6 +603,7 @@ async function pushPending(
       ...(await pushPuts(
         deps,
         puts.filter((o) => !isContentPath(o.path)),
+        INDEX_CONCURRENCY,
         outcome,
         orphanedPaths,
         failures,
@@ -604,10 +619,11 @@ async function pushPending(
 // orders them) through the sign → PUT → commit pipeline one chunk at a time, so each
 // chunk's PUT URLs are minted immediately before that chunk's upload and the chunk
 // commits before the next is signed. PUT_BATCH fits one sign and one commit call, so
-// each stays a single round trip.
+// each stays a single round trip. `concurrency` is the set's kind's fan-out.
 async function pushPuts(
   deps: SyncDeps,
   puts: PendingOpRecord[],
+  concurrency: number,
   outcome: SyncOutcome,
   orphanedPaths: string[],
   failures: UploadFailures,
@@ -616,7 +632,13 @@ async function pushPuts(
   for (const batch of chunk(puts, PUT_BATCH)) {
     const signed = await signPushable(deps, batch, outcome);
     if (signed === null) continue;
-    const { orphaned, failed } = await uploadBlobs(deps, signed.ops, signed.urls, failures);
+    const { orphaned, failed } = await uploadBlobs(
+      deps,
+      signed.ops,
+      signed.urls,
+      concurrency,
+      failures,
+    );
     // A put with no local bytes left (see uploadBlobs) can never be satisfied, so it is
     // dropped from the queue rather than committed into a guaranteed `no_object` that
     // requeues it forever. Dropped BEFORE the commit, so the op log never records an op
@@ -753,11 +775,12 @@ async function uploadBlobs(
   deps: SyncDeps,
   ops: PendingOpRecord[],
   urls: Map<string, string>,
+  concurrency: number,
   failures: UploadFailures,
 ): Promise<{ orphaned: PendingOpRecord[]; failed: PendingOpRecord[] }> {
   const orphaned: PendingOpRecord[] = [];
   const failed: PendingOpRecord[] = [];
-  await mapLimit(ops, UPLOAD_CONCURRENCY, async (op) => {
+  await mapLimit(ops, concurrency, async (op) => {
     const rec = await db.items.get(op.path);
     if (!rec?.data) {
       orphaned.push(op);
@@ -855,7 +878,7 @@ async function storeDownloads(
       'get',
       batch.map((e) => e.path),
     );
-    await mapLimit(batch, DOWNLOAD_CONCURRENCY, async (e) => {
+    await mapLimit(batch, INDEX_CONCURRENCY, async (e) => {
       // `finally`, so the two skips below tick the counter too: an entry dropped
       // for a missing URL or a mid-pull 404 still leaves the pull with one fewer
       // thing to do, and a counter that ignored them would stop short of its

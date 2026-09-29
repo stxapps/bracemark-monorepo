@@ -1,4 +1,5 @@
 import { API_V1, defineEndpoint } from '../api/endpoint';
+import { DELETE_ALL_TIMEOUT_MS } from '../data/endpoints';
 import { z } from '../zod';
 import { usernameSchema } from './credentials';
 
@@ -316,11 +317,15 @@ export type DeleteAccountResponse = z.infer<typeof deleteAccountResponseSchema>;
 // already ended billing, and holding their deletion hostage until the period
 // runs out would be hostile (the remaining paid time is forfeited — the client
 // says so in its copy).
+//
+// Delete-all's deadline, because it runs delete-all's wipe (the whole R2 prefix,
+// paged) before it answers — see data/endpoints.ts.
 export const deleteAccountEndpoint = defineEndpoint({
   method: 'POST',
   path: `${API_V1}/auth/delete-account`,
   request: deleteAccountRequestSchema,
   response: deleteAccountResponseSchema,
+  timeoutMs: DELETE_ALL_TIMEOUT_MS,
 });
 
 // --- door management (authed) -------------------------------------------------

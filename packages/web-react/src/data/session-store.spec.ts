@@ -25,7 +25,6 @@
 import {
   clearSession,
   getSession,
-  getToken,
   notifySessionVerdict,
   onSessionVerdict,
   peekSession,
@@ -86,7 +85,7 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
-describe('getSession / getToken', () => {
+describe('getSession', () => {
   it('keeps the prior mirror when a replacement cannot be persisted', async () => {
     const previous = await record();
     await saveSession(previous);
@@ -115,7 +114,6 @@ describe('getSession / getToken', () => {
 
   it('are null with no session', () => {
     expect(getSession()).toBeNull();
-    expect(getToken()).toBeNull();
   });
 
   it('serve a live session synchronously, with no await', async () => {
@@ -123,7 +121,6 @@ describe('getSession / getToken', () => {
     await saveSession(session);
 
     expect(getSession()).toEqual(session);
-    expect(getToken()).toBe('tok_live');
   });
 
   // THE RULE. No local clock decides anything: a device a year past its sign-in still
@@ -132,7 +129,7 @@ describe('getSession / getToken', () => {
     await saveSession(await record());
     jest.spyOn(Date, 'now').mockReturnValue(Date.now() + 2 * YEAR);
 
-    expect(getToken()).toBe('tok_live');
+    expect(getSession()?.token).toBe('tok_live');
     expect(getSession()?.state).toBe('active');
   });
 
@@ -141,7 +138,7 @@ describe('getSession / getToken', () => {
     const session = await record({ state: 'expired' });
     await saveSession(session);
 
-    expect(getToken()).toBe('tok_live');
+    expect(getSession()?.token).toBe('tok_live');
     expect(getSession()?.encryptionKey).toBe(session.encryptionKey);
   });
 });
@@ -180,7 +177,7 @@ describe('persistence', () => {
     expect(store.getSession()).toBeNull();
     await store.loadSession();
 
-    expect(store.getToken()).toBe('tok_live');
+    expect(store.getSession()?.token).toBe('tok_live');
   });
 
   // peek is for comparing against the truth without adopting it.

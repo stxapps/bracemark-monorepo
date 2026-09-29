@@ -18,7 +18,7 @@
 // Requests are MICRO-BATCHED: ids queue for FLUSH_DELAY_MS, then one
 // loadEntityContents call fetches the batch — one `files/sign` round trip per
 // flush (~a page of images) instead of one per image, with the engine's own
-// download fan-out and retry underneath. Per-id single-flight while queued or in
+// content fan-out and retry underneath. Per-id single-flight while queued or in
 // flight; ids that come back MISSING (no local record, or deleted server-side —
 // a 404 on GET) are remembered for the session and never re-requested, so a
 // dangling ref can't re-buy a sign+GET on every remount. That memory is safe

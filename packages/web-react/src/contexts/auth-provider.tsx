@@ -39,7 +39,7 @@ import { beginInitialSync, seedNewAccount } from '../data/sync-store';
 // page; the extension's background worker carries the token but never acts on it.
 // Only `username`/`status`/`sessionState` enter React state — the bearer token and
 // the non-extractable encryptionKey stay in the session store (read where needed
-// via getToken/getSession), keeping key material out of the component tree.
+// via getSession), keeping key material out of the component tree.
 //
 // ⚠ WHAT MAY WIPE THIS DEVICE. Exactly two things: an explicit sign-out here
 // (endSession), or a `session_revoked` verdict from bracemark-api for the session

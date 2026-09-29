@@ -14,6 +14,16 @@
 // visible, and at worst a row is stale for the first frames of a reveal.
 //
 // Nested pauses combine: a subtree is paused if any LiveReadPause above it is.
+//
+// It is a context provider to React but not a Provider in the sense the rest of
+// this folder uses the word, which is why it is the one file here without the
+// suffix. Each *-provider.tsx beside it owns state or a service, takes only
+// children and mounts once near the root. This owns nothing, since the caller
+// decides `paused`, and it wraps whichever subtree should stop reading, at any
+// depth, the way <Suspense> or <Activity> does. Nor is it a guard or a Gate
+// (bracemark-expo's components/home-guard.tsx carries that split): it always
+// renders its children, and never navigates or swaps them. It marks a scope, so
+// it is named for what it does to that scope.
 
 import { createContext, type ReactNode, useContext } from 'react';
 

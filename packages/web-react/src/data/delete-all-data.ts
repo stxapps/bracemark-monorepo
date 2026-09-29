@@ -22,6 +22,8 @@ import {
   type ApiClient,
   clearDecodeCache,
   dataDeleteAllEndpoint,
+  DEFAULT_CALL_TIMEOUT_MS,
+  DEFAULT_RETRY_MAX_DELAY_MS,
   withTimeout,
 } from '@stxapps/shared';
 
@@ -37,17 +39,26 @@ export type DeleteAllOutcome = {
 
 export type DeleteAllStep = 'waiting-for-sync' | 'deleting';
 
-// Allows the retry client's normal one-minute Retry-After window to settle, but
-// stays finite: a fetch or retry wait that never resolves must not leave this
-// user-initiated action spinning forever. Timing out FAILS CLOSED below — no
-// queue clear, server wipe, or local wipe follows.
+// A cap on how long this user-initiated action spins, not an estimate of how
+// long a cycle takes. The per-request deadlines (shared's `withDeadline`: the
+// contract client's default call deadline, the R2 blob transfers') don't make it
+// redundant. They guarantee the cycle settles EVENTUALLY, and eventually has no
+// bound a user can sit through: a cycle is many requests in sequence, each with
+// its own deadline; a 429/5xx still retries through its Retry-After wait; a sync
+// triggered meanwhile reruns inside the same in-flight cycle; and the Dexie and
+// crypto work has no deadline at all. The cap is one stalled call's deadline
+// plus the retry client's longest single wait (two minutes today) — room for the
+// worst single hiccup, derived so that moving either one moves this. Longer only
+// lengthens the spinner, because giving up is cheap: timing out FAILS CLOSED
+// below (no queue clear, server wipe, or local wipe follows) and cancels nothing,
+// so the cycle runs on and a retry resumes the wait on it.
 //
 // The duration and the wording live HERE, not in the engine: the watchdog is a
 // property of this destructive, user-blocking action, not of waiting itself —
 // `awaitInflightSync` deliberately never rejects, and it also serves the
 // bracemark-extension's background worker, which has no UI to show a message to.
 // shared's `withTimeout` supplies the mechanism and nothing else.
-const SYNC_WAIT_TIMEOUT_MS = 120_000;
+const SYNC_WAIT_TIMEOUT_MS = DEFAULT_CALL_TIMEOUT_MS + DEFAULT_RETRY_MAX_DELAY_MS;
 const SYNC_WAIT_TIMEOUT_MESSAGE = 'Sync is taking longer than expected.';
 
 export async function deleteAllData(args: {

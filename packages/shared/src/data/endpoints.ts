@@ -37,9 +37,19 @@ export type DataDeleteAllResponse = z.infer<typeof dataDeleteAllResponseSchema>;
 // POST /v1/data/delete-all → { deletedCount }
 // Idempotent: re-running against an already-empty namespace deletes 0 and
 // succeeds, so the client's retry after a failure is just "call it again".
+//
+// Its own deadline: R2 has no delete-by-prefix, so the server pages list +
+// bulk-delete 1000 keys at a time, one after another, and answers only when the
+// last page is gone. The time grows with the account's object count, not the
+// request — a large library is hundreds of subrequests before the first
+// response byte. The default deadline would report a failure for a wipe that is
+// still running.
+export const DELETE_ALL_TIMEOUT_MS = 5 * 60_000;
+
 export const dataDeleteAllEndpoint = defineEndpoint({
   method: 'POST',
   path: `${API_V1}/data/delete-all`,
   request: dataDeleteAllRequestSchema,
   response: dataDeleteAllResponseSchema,
+  timeoutMs: DELETE_ALL_TIMEOUT_MS,
 });
