@@ -353,9 +353,9 @@ export async function loadEntityContents(
       const url = urls.get(path);
       const blob = url
         ? await getBlob(url).catch((err: unknown) => {
-          if (err instanceof BlobRequestError && err.status === 404) return undefined;
-          throw err;
-        })
+            if (err instanceof BlobRequestError && err.status === 404) return undefined;
+            throw err;
+          })
         : undefined;
       if (blob) {
         const data = await decryptEntity(deps.encryptionKey, blob);
@@ -388,7 +388,7 @@ async function incrementalCycle(
   let cursorUpdatedAt = since;
   let cursorPath = sincePath;
   let page = first;
-  for (; ;) {
+  for (;;) {
     for (const op of page.ops) {
       serverOps.set(op.path, op);
       cursorUpdatedAt = op.updatedAt;
