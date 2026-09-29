@@ -6,7 +6,9 @@
 
 import { fetch as expoFetch } from 'expo/fetch';
 
-import { putBlob } from './r2';
+import { blobTransferTimeoutMs } from '@stxapps/shared';
+
+import { BlobTimeoutError, putBlob } from './r2';
 
 jest.mock('expo-file-system', () => ({ File: class File {} }));
 jest.mock('expo-file-system/legacy', () => ({
@@ -31,6 +33,26 @@ it('PUTs in-memory ciphertext through Expo native fetch as bytes', async () => {
 
   expect(mockExpoFetch).toHaveBeenCalledWith(
     'http://localhost:8787/v1/files/blob/users/u/links/a.enc',
-    { method: 'PUT', body: bytes },
+    expect.objectContaining({ method: 'PUT', body: bytes }),
   );
+});
+
+// Neither JS transport has a deadline of its own (RN's OkHttp client sets every
+// timeout to 0 on Android; `expo/fetch` sets `timeoutInterval` to 0 on iOS), so a
+// stalled PUT would hold the sync cycle every later sync joins. Web's r2.spec.ts
+// covers how the deadline is sized; this copy is duplicated source, so one guard
+// that it is there at all.
+it('fails a PUT that never answers as a timeout instead of hanging', async () => {
+  jest.useFakeTimers();
+  try {
+    mockExpoFetch.mockImplementation(() => new Promise(() => undefined));
+    const bytes = new Uint8Array(16);
+    const outcome = putBlob('https://r2.test/a.enc', bytes).catch((err: unknown) => err);
+
+    await jest.advanceTimersByTimeAsync(blobTransferTimeoutMs(bytes.byteLength));
+
+    expect(await outcome).toBeInstanceOf(BlobTimeoutError);
+  } finally {
+    jest.useRealTimers();
+  }
 });

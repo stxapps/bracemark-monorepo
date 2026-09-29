@@ -1,4 +1,11 @@
-import { ApiError, callEndpoint, parseRetryAfterSeconds } from '../api/client';
+import {
+  ApiError,
+  ApiTimeoutError,
+  callEndpoint,
+  DEFAULT_CALL_TIMEOUT_MS,
+  parseRetryAfterSeconds,
+} from '../api/client';
+import { withDeadline } from '../async/with-deadline';
 import {
   extractEndpoint,
   type ExtractResult,
@@ -41,6 +48,9 @@ export interface ExtractClient {
   // /v1/image — for the case the extract response carried only `imageUrl` (no inline
   // bytes). The web app can't read cross-origin image bytes itself (CORS), so the
   // proxy streams them through; the bytes are encrypted into `files/{id}.enc` here.
+  // Bounded by the contract's deadline (`imageProxyEndpoint.timeoutMs`), rejecting
+  // with ApiTimeoutError — the same as a JSON call, since this one can't ride
+  // `callEndpoint`.
   fetchImage(url: string, signal?: AbortSignal): Promise<Uint8Array>;
 }
 
@@ -86,15 +96,28 @@ export function createExtractClient({
       imageProxyRequestSchema.parse({ url });
       const target = new URL(imageProxyEndpoint.path, baseUrl);
       target.searchParams.set('url', url);
-      const res = await fetchImpl(target.toString(), { method: 'GET', signal });
-      if (!res.ok) {
-        throw new ApiError(
-          res.status,
-          await res.text().catch(() => ''),
-          parseRetryAfterSeconds(res),
-        );
-      }
-      return new Uint8Array(await res.arrayBuffer());
+      // The deadline `callEndpoint` would have applied, applied here: the whole call,
+      // body included, and the fetch gets the deadline's own signal, linked to the
+      // caller's.
+      return withDeadline(
+        async (deadlineSignal) => {
+          const res = await fetchImpl(target.toString(), {
+            method: 'GET',
+            signal: deadlineSignal,
+          });
+          if (!res.ok) {
+            throw new ApiError(
+              res.status,
+              await res.text().catch(() => ''),
+              parseRetryAfterSeconds(res),
+            );
+          }
+          return new Uint8Array(await res.arrayBuffer());
+        },
+        imageProxyEndpoint.timeoutMs ?? DEFAULT_CALL_TIMEOUT_MS,
+        (ms) => new ApiTimeoutError(ms),
+        signal,
+      );
     },
   };
 }

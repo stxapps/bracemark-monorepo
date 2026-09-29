@@ -2,8 +2,10 @@ import { z } from '../zod';
 import {
   ApiError,
   apiErrorCode,
+  ApiTimeoutError,
   callEndpoint,
   createApiClient,
+  DEFAULT_CALL_TIMEOUT_MS,
   parseRetryAfterSeconds,
 } from './client';
 import { API_V1, defineEndpoint } from './endpoint';
@@ -144,8 +146,12 @@ describe('callEndpoint — request shaping', () => {
   });
 
   it('forwards an AbortSignal so a superseded request can be cancelled', async () => {
+    // The fetch gets the client's own signal (the deadline aborts it too), so what
+    // is pinned is that the CALLER's abort reaches it, not the object's identity.
+    // Mid-flight forwarding is under _deadline_ below.
     const f = recordingFetch(response({ json: { items: [] } }));
     const controller = new AbortController();
+    controller.abort();
 
     await callEndpoint(
       { baseUrl: BASE, fetch: f.fetch },
@@ -154,7 +160,7 @@ describe('callEndpoint — request shaping', () => {
       { signal: controller.signal },
     );
 
-    expect(f.init().signal).toBe(controller.signal);
+    expect(f.init().signal?.aborted).toBe(true);
   });
 
   it('lets the contract’s leading-slash path REPLACE any path on the baseUrl', async () => {
@@ -231,17 +237,140 @@ describe('callEndpoint — responses', () => {
   });
 });
 
+// `fetch` has no deadline of its own: a server that accepts the connection and
+// never answers leaves the call pending forever, and the sync engine's
+// single-flight cycle — which every later sync joins — pending with it. The
+// property that matters is that every call settles, including
+// when the fetch impl ignores its signal; the abort is only there to release the
+// connection. Fake timers, so the deadline is reached by advancing the clock and
+// the armed-timer count is readable (the leak shared's `withTimeout` guards too).
+describe('callEndpoint — deadline', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  // A fetch that never settles, and — the hard case — never looks at its signal.
+  function hangingFetch() {
+    let signal: AbortSignal | undefined;
+    const impl = ((_url: string, init: RequestInit) => {
+      signal = init.signal ?? undefined;
+      return new Promise<Response>(() => undefined);
+    }) as unknown as typeof fetch;
+    return { fetch: impl, signal: () => signal };
+  }
+
+  it('rejects with ApiTimeoutError at the deadline even if the fetch ignores its signal', async () => {
+    const f = hangingFetch();
+    const outcome = callEndpoint(
+      { baseUrl: BASE, fetch: f.fetch },
+      getThings,
+      { q: 'hello' },
+      { timeoutMs: 1000 },
+    ).catch((err: unknown) => err);
+
+    // Still pending one tick short — the positive control for the assertion
+    // below, which a call that failed on the spot would also satisfy.
+    await jest.advanceTimersByTimeAsync(999);
+    await expect(Promise.race([outcome, Promise.resolve('pending')])).resolves.toBe('pending');
+    expect(f.signal()?.aborted).toBe(false);
+
+    await jest.advanceTimersByTimeAsync(1);
+    expect(await outcome).toBeInstanceOf(ApiTimeoutError);
+    expect(f.signal()?.aborted).toBe(true);
+    expect(jest.getTimerCount()).toBe(0);
+  });
+
+  it('passes an in-time answer through and leaves no timer armed', async () => {
+    const f = recordingFetch(response({ json: { items: ['a'] } }));
+
+    await expect(
+      callEndpoint(
+        { baseUrl: BASE, fetch: f.fetch },
+        getThings,
+        { q: 'hello' },
+        { timeoutMs: 1000 },
+      ),
+    ).resolves.toEqual({ items: ['a'] });
+    expect(jest.getTimerCount()).toBe(0);
+  });
+
+  it('passes the server’s own failure through, not a timeout', async () => {
+    // A wrapper that reported its deadline in place of the real rejection would
+    // hide every 429's Retry-After — and every 5xx's retry — behind a timeout.
+    const f = recordingFetch(response({ ok: false, status: 429, retryAfter: '30' }));
+
+    await expect(
+      callEndpoint(
+        { baseUrl: BASE, fetch: f.fetch },
+        getThings,
+        { q: 'hello' },
+        { timeoutMs: 1000 },
+      ),
+    ).rejects.toMatchObject({ name: 'ApiError', status: 429, retryAfterSeconds: 30 });
+  });
+
+  it('still lets the caller cancel: its abort reaches the fetch', async () => {
+    const f = hangingFetch();
+    const caller = new AbortController();
+    const outcome = callEndpoint(
+      { baseUrl: BASE, fetch: f.fetch },
+      getThings,
+      { q: 'hello' },
+      { signal: caller.signal, timeoutMs: 1000 },
+    ).catch((err: unknown) => err);
+    await jest.advanceTimersByTimeAsync(0);
+
+    caller.abort();
+
+    expect(f.signal()?.aborted).toBe(true);
+    // The fetch here ignores the abort, so the deadline still settles the call.
+    await jest.advanceTimersByTimeAsync(1000);
+    expect(await outcome).toBeInstanceOf(ApiTimeoutError);
+  });
+
+  // Every call is bounded without a call site asking for it — the default is
+  // the point: an endpoint added later can't hang forever because nobody
+  // remembered. And the two overrides are ordered: an endpoint that works long
+  // server-side declares so in its contract, and a call site's own wins over both.
+  it('bounds every call by default; the endpoint’s deadline beats it, the call site’s beats both', async () => {
+    const slowThing = { ...getThings, timeoutMs: DEFAULT_CALL_TIMEOUT_MS * 5 };
+    const deadlineOf = async (run: (f: typeof fetch) => Promise<unknown>) => {
+      const outcome = run(hangingFetch().fetch).catch((err: unknown) => err);
+      await jest.advanceTimersByTimeAsync(DEFAULT_CALL_TIMEOUT_MS * 10);
+      const err = await outcome;
+      expect(err).toBeInstanceOf(ApiTimeoutError);
+      return (err as ApiTimeoutError).timeoutMs;
+    };
+
+    expect(
+      await deadlineOf((f) => callEndpoint({ baseUrl: BASE, fetch: f }, getThings, { q: 'a' })),
+    ).toBe(DEFAULT_CALL_TIMEOUT_MS);
+    expect(
+      await deadlineOf((f) => callEndpoint({ baseUrl: BASE, fetch: f }, slowThing, { q: 'a' })),
+    ).toBe(slowThing.timeoutMs);
+    expect(
+      await deadlineOf((f) =>
+        callEndpoint({ baseUrl: BASE, fetch: f }, slowThing, { q: 'a' }, { timeoutMs: 1000 }),
+      ),
+    ).toBe(1000);
+  });
+});
+
 describe('createApiClient', () => {
   it('binds the baseUrl and forwards the endpoint, input and call options', async () => {
     const f = recordingFetch(response({ json: { items: ['a'] } }));
     const controller = new AbortController();
+    controller.abort();
     const api = createApiClient({ baseUrl: BASE, fetch: f.fetch });
 
     const res = await api.call(getThings, { q: 'hello' }, { signal: controller.signal });
 
     expect(res).toEqual({ items: ['a'] });
     expect(f.url().origin + f.url().pathname).toBe(`${BASE}/v1/things`);
-    expect(f.init().signal).toBe(controller.signal);
+    expect(f.init().signal?.aborted).toBe(true);
   });
 });
 

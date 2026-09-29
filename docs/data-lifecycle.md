@@ -94,7 +94,10 @@ changing the output replaces the receipt and download.
 
 Export reads the **local** store (unsynced edits on this device are included)
 after a pre-export sync refresh; a failed refresh downgrades to a warning —
-"this is this device's copy" — rather than aborting. The policy that spans all
+"this is this device's copy" — rather than aborting. A server that never answers
+counts as failed: the contract client's default deadline fails the refresh after
+60 s ([local-first-sync.md](./local-first-sync.md), under the single-flight bullet), so
+the export can't hang on its sync step. The policy that spans all
 formats is decided once in the orchestrator: **locked lists are excluded**
 (the lock provider's coverage set, descendants included; excluded links drop
 with their pins/extractions/files, and the list entities drop too — a hidden
@@ -838,7 +841,12 @@ serialized SQLite); then page `list()` + `delete()` over the R2 prefix
 subrequests in one invocation). A crash between the halves leaves only
 objects-without-ops, which the fallback listing heals; the reverse order would
 leave surviving put-ops 404ing every puller. Every step is idempotent, so the
-recovery story is: the endpoint failed visibly → the user clicks again.
+recovery story is: the endpoint failed visibly → the user clicks again. The
+paging is also why the endpoint declares its own client deadline
+(`DELETE_ALL_TIMEOUT_MS`, 5 min, in its contract; delete-account shares it). The
+response comes only after the last page, so the time grows with the account's
+object count, and the 60 s default would report a failure for a wipe that is
+still running ([api-contracts.md](./api-contracts.md), _deadlines_).
 
 **Multi-device convergence is free — no epoch, no tombstones, no new sync
 machinery.** The wiped op log answers the next incremental pull with `null`
@@ -860,7 +868,18 @@ may sync back afterward").
    The delete view names this as a separate **waiting for sync** step rather than
    claiming the wipe has started. A two-minute watchdog fails closed: if the
    cycle does not settle, the attempt reports an error before the queue, server,
-   or local store is touched. It must never time out _into_ the next step. The
+   or local store is touched. It must never time out _into_ the next step.
+   The per-request deadlines ([api-contracts.md](./api-contracts.md),
+   _deadlines_) don't make it redundant. They guarantee the cycle settles
+   _eventually_, and eventually has no bound a user can sit through: a cycle is
+   many requests in sequence, each with its own deadline; a 429/5xx still retries
+   through its Retry-After wait; a sync triggered meanwhile reruns inside the
+   same in-flight cycle; and local store work has no deadline at all. The two
+   minutes is one stalled call's deadline plus the retry client's longest single
+   wait, derived from both (`DEFAULT_CALL_TIMEOUT_MS` +
+   `DEFAULT_RETRY_MAX_DELAY_MS`), so moving either moves the watchdog. Giving up
+   is cheap, so a longer cap would only lengthen the spinner: the watchdog
+   cancels nothing, the cycle runs on, and a retry resumes the wait on it. The
    watchdog is applied HERE, at the flow, with shared's `withTimeout` — the
    duration and the user-facing line are a property of this destructive,
    user-blocking action, not of waiting. `awaitInflightSync` itself never

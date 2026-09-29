@@ -988,6 +988,26 @@ and trust each is real before opening the next. The engine realizes B in
 - **single-flight per account** (`inflightSyncs`) — two concurrent drains would
   interleave phases and break the global order.
 
+**Single-flight makes a cycle that never settles an outage, not a slow sync.** The
+slot is freed only in the cycle's `finally`, and every later caller — background
+sync, a refresh, export's and import's pre-sync refresh, delete-all's wait — joins
+the cycle in flight. `fetch` has no deadline of its own, so a server that accepts
+the connection and never answers would hold the slot for the life of the page (web)
+or the process (expo): export stuck on its sync step, and every later cycle joining
+the dead one. What prevents it is the contract client's **default call deadline**
+([api-contracts.md](./api-contracts.md), _deadlines_). Every bracemark-api call the
+engine makes is bounded, a timeout fails the call unretried, and that fails the
+cycle and frees the slot. Export and import then fall back to the local copy, as
+they do for any failed refresh. The engine does no wiring of its own, so a stub
+api (the rest of `engine.spec.ts`) cannot see a regression. What guards it is one
+case that drives a cycle through the real client (_a server that accepts the
+connection and never answers_). The R2 transfers inside a cycle are bounded the
+same way (`sync/r2.ts`): a web download by an idle deadline that only a stalled
+body trips, the rest by a deadline sized to the blob (`blobTransferTimeoutMs`),
+and expo's native file transfers by their own idle timeouts. See
+[api-contracts.md](./api-contracts.md), _deadlines_, the paragraph _outside this
+client_.
+
 Neither constraint can be moved to the other side. Pushing B server-side would
 require exposing the reference graph to the server (weakening E2E opacity) and
 **still** wouldn't buy atomicity — R2 has no multi-object transaction and the

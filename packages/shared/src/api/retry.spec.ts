@@ -1,6 +1,6 @@
 import { z } from '../zod';
 import type { ApiClient, CallOptions } from './client';
-import { ApiError } from './client';
+import { ApiError, ApiTimeoutError } from './client';
 import type { ApiEndpoint } from './endpoint';
 import { defineEndpoint } from './endpoint';
 import { isRetryableTransportError, jitteredDelayMs, retryAfterMsOf, withRetry } from './retry';
@@ -217,6 +217,9 @@ describe('isRetryableTransportError', () => {
     expect(isRetryableTransportError(new TypeError('Failed to fetch'))).toBe(true);
     expect(isRetryableTransportError(new ApiError(400, ''))).toBe(false);
     expect(isRetryableTransportError(new ApiError(403, ''))).toBe(false);
+    // A deadline already spent against a server that isn't answering; retrying
+    // multiplies the stall by `tries` (retry.ts).
+    expect(isRetryableTransportError(new ApiTimeoutError(60_000))).toBe(false);
     expect(isRetryableTransportError(new ApiError(499, ''))).toBe(false); // just under the floor
     expect(isRetryableTransportError(new Error('bug'))).toBe(false);
   });

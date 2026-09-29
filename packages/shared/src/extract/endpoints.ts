@@ -138,11 +138,22 @@ export type ExtractResponse = z.infer<typeof extractResponseSchema>;
 
 // POST /v1/extract { urls, inlineImage? }
 //   → { results: [{ url, ok, title?, imageUrl?, imageBase64?, error? }] }
+//
+// Its own deadline, sized from the extractor's upstream limits
+// (bracemark-extractor lib/safe-fetch.ts): each page is up to MAX_REDIRECTS + 1
+// hops at FETCH_TIMEOUT_MS each (6 × 8 s), and a single-URL inline extract then
+// fetches the image the same way, one after the other — ~96 s before the
+// extractor can answer a slow-but-healthy request. A batch resolves its URLs
+// concurrently, so it fits the same bound. Raising either limit there means
+// raising this.
+export const EXTRACT_TIMEOUT_MS = 2 * 60_000;
+
 export const extractEndpoint = defineEndpoint({
   method: 'POST',
   path: `${API_V1}/extract`,
   request: extractRequestSchema,
   response: extractResponseSchema,
+  timeoutMs: EXTRACT_TIMEOUT_MS,
 });
 
 // --- GET /v1/image — stateless image proxy ----------------------------------
@@ -172,9 +183,20 @@ export type ImageProxyRequest = z.infer<typeof imageProxyRequestSchema>;
 // and clients share; `response` is `z.unknown()` precisely because there is no
 // JSON success body to parse (an error still returns the uniform `{ error }`
 // JSON, handled out-of-band by the client's non-2xx branch).
+//
+// Its own deadline, covering the whole call, body included. The extractor answers
+// only once its redirect walk has landed (MAX_REDIRECTS + 1 hops at
+// FETCH_TIMEOUT_MS each, 6 × 8 s — /extract's page bound, with no second fetch
+// after it), which leaves over a minute for the body. A total rather than the
+// idle deadline web-react's R2 getBlob keeps: the body is at most MAX_IMAGE_BYTES
+// (10 MB), and an og:image or a favicon is far under that, so this is a stall
+// detector, not a speed expectation. Raising a cap there means revisiting this.
+export const IMAGE_PROXY_TIMEOUT_MS = 2 * 60_000;
+
 export const imageProxyEndpoint = defineEndpoint({
   method: 'GET',
   path: `${API_V1}/image`,
   request: imageProxyRequestSchema,
   response: z.unknown(),
+  timeoutMs: IMAGE_PROXY_TIMEOUT_MS,
 });

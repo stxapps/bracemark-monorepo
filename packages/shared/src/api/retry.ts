@@ -15,6 +15,13 @@ import { type ApiClient, ApiError, type CallOptions } from './client';
 // retryable: a non-429 4xx (the server rejected the request on its merits — it
 // won't change on retry) or any non-transport throw (a bug should surface, not
 // spin). An abort surfaces as a DOMException, so a cancelled call is never retried.
+//
+// Nor is an ApiTimeoutError, deliberately: the attempt has already spent its
+// whole deadline against a server that accepted the connection and didn't
+// answer, and retrying would multiply that wait by `tries` — minutes of an
+// export or import stuck on its sync step before it could fall back to the local
+// copy. The failed call fails its cycle instead, and the next cycle (the next
+// edit, refresh or export) is the retry.
 export function isRetryableTransportError(err: unknown): boolean {
   if (err instanceof ApiError) return err.status === 429 || err.status >= 500;
   return err instanceof TypeError;
@@ -38,12 +45,18 @@ export function jitteredDelayMs(baseMs: number): number {
   return Math.round(baseMs * (1 + Math.random() * 0.25));
 }
 
+// The ceiling on any single retry wait, hinted or not. Exported because the
+// delete-all flow's sync-wait watchdog is derived from it (data/delete-all-data.ts
+// on both platforms): moving this moves that.
+export const DEFAULT_RETRY_MAX_DELAY_MS = 60_000;
+
 export interface RetryOptions {
   /** Total attempts including the first (default 4). */
   tries?: number;
   /** First backoff delay when the server sent no Retry-After (default 1s). */
   baseDelayMs?: number;
-  /** Ceiling on any single wait, hinted or not (default 60s). */
+  /** Ceiling on any single wait, hinted or not (default
+   *  `DEFAULT_RETRY_MAX_DELAY_MS`). */
   maxDelayMs?: number;
   /** Test seam. */
   sleep?: (ms: number) => Promise<void>;
@@ -57,7 +70,12 @@ const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(r
 // errors and the final attempt's failure propagate unchanged, so callers'
 // error handling sees the same ApiError they always did.
 export function withRetry(api: ApiClient, options: RetryOptions = {}): ApiClient {
-  const { tries = 4, baseDelayMs = 1_000, maxDelayMs = 60_000, sleep = defaultSleep } = options;
+  const {
+    tries = 4,
+    baseDelayMs = 1_000,
+    maxDelayMs = DEFAULT_RETRY_MAX_DELAY_MS,
+    sleep = defaultSleep,
+  } = options;
 
   return {
     call: async (endpoint, input, callOptions?: CallOptions) => {

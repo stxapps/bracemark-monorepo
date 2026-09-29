@@ -32,6 +32,11 @@ export interface ApiEndpoint<
   request: TRequest;
   /** Validates (and types) the JSON response body. */
   response: TResponse;
+  /** This endpoint's client deadline in ms, when the default
+   *  (`DEFAULT_CALL_TIMEOUT_MS`, api/client.ts) is too short for what the server
+   *  legitimately does before it answers. Declared here, beside the contract, so
+   *  every platform's call gets it without a call site having to remember. */
+  timeoutMs?: number;
 }
 
 // The uniform JSON error envelope every endpoint returns on a non-2xx response.

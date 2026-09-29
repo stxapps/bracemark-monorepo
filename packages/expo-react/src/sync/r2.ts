@@ -20,6 +20,8 @@ import { fetch as expoFetch } from 'expo/fetch';
 import { File } from 'expo-file-system';
 import { FileSystemUploadType, uploadAsync } from 'expo-file-system/legacy';
 
+import { blobTransferTimeoutMs, withDeadline } from '@stxapps/shared';
+
 // Carries the HTTP status so callers can branch on it — the one the sync engine
 // cares about is a GET 404 (the object was deleted between the op pull / listing
 // and the fetch), which it skips rather than failing the whole cycle.
@@ -33,15 +35,48 @@ export class BlobRequestError extends Error {
   }
 }
 
-export async function putBlob(url: string, body: Uint8Array<ArrayBuffer>): Promise<void> {
-  const res = await expoFetch(url, { method: 'PUT', body });
-  if (!res.ok) throw new BlobRequestError('PUT', res.status);
+// A transfer that outlived its deadline — see web-react's sync/r2.ts.
+export class BlobTimeoutError extends Error {
+  constructor(
+    readonly method: 'PUT' | 'GET',
+    readonly timeoutMs: number,
+  ) {
+    super(`R2 ${method} timed out after ${timeoutMs} ms`);
+    this.name = 'BlobTimeoutError';
+  }
 }
 
+// The two JS-fetch transfers carry a deadline (`blobTransferTimeoutMs`,
+// @stxapps/shared sync/blob-transfer.ts); neither transport has one of its own —
+// React Native's OkHttp client sets every timeout to 0 (none) on Android, and
+// `expo/fetch` sets the request's `timeoutInterval` to 0 on iOS. The two native
+// file transfers below don't need one: their own URLSession/OkHttp idle timeouts
+// fail a stalled connection.
+export async function putBlob(url: string, body: Uint8Array<ArrayBuffer>): Promise<void> {
+  await withDeadline(
+    async (signal) => {
+      const res = await expoFetch(url, { method: 'PUT', body, signal });
+      if (!res.ok) throw new BlobRequestError('PUT', res.status);
+    },
+    blobTransferTimeoutMs(body.byteLength),
+    (ms) => new BlobTimeoutError('PUT', ms),
+  );
+}
+
+// Entity blobs only (a few KB) — `files/` content downloads through
+// getBlobToFile. A total deadline, not web's idle one: React Native's fetch
+// resolves only after the whole body has arrived, so there is no progress to
+// restart the clock on, and the base allowance covers an entity body anyway.
 export async function getBlob(url: string): Promise<Uint8Array> {
-  const res = await fetch(url, { method: 'GET' });
-  if (!res.ok) throw new BlobRequestError('GET', res.status);
-  return new Uint8Array(await res.arrayBuffer());
+  return withDeadline(
+    async (signal) => {
+      const res = await fetch(url, { method: 'GET', signal });
+      if (!res.ok) throw new BlobRequestError('GET', res.status);
+      return new Uint8Array(await res.arrayBuffer());
+    },
+    blobTransferTimeoutMs(0),
+    (ms) => new BlobTimeoutError('GET', ms),
+  );
 }
 
 // PUT a whole file's bytes from disk — native streaming upload
