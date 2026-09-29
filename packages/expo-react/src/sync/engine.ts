@@ -101,16 +101,18 @@ const COMMIT_BATCH = MAX_COMMIT_OPS;
 const OPS_PAGE = MAX_LIST_LIMIT;
 const FILES_PAGE = MAX_LIST_LIMIT;
 
-// Blob fan-out, split by direction because the two workloads bind on opposite
-// resources (a bounded cap also keeps a first sync of thousands of files from
-// opening thousands of sockets at once). Downloads are small index blobs (KB)
-// over HTTP/2 and RTT-bound, so a wide fan-out cuts first-sync time and drains
-// the presigned GET URLs sooner. Uploads can be MB-sized `files/` content, bound
-// by uplink bandwidth (the native path-to-path pipeline keeps memory flat, but a
-// phone's uplink saturates early), so they stay modest. Starting points — tune
-// against a measured large first sync on device.
-const DOWNLOAD_CONCURRENCY = 24;
-const UPLOAD_CONCURRENCY = 8;
+// Blob fan-out, split by what moves rather than which way, because the two kinds
+// bind on opposite resources (a bounded cap also keeps a first sync of thousands
+// of blobs from opening thousands of sockets at once). Index blobs (links/tags/
+// lists/settings) are KB-sized over HTTP/2 and RTT-bound in either direction, so
+// a wide fan-out cuts first-sync time, drains the presigned GET URLs sooner, and
+// pushes a large import's index faster. `files/` content can be MB-sized, bound
+// by bandwidth (the native path-to-path pipeline keeps memory flat, but a phone's
+// radio saturates early), so it stays modest whether it is uploaded (uploadBlobs)
+// or fetched (loadEntityContents). Starting points — tune against a measured
+// large first sync on device.
+const INDEX_CONCURRENCY = 24;
+const FILE_CONCURRENCY = 8;
 
 // One put-pipeline pass (pushPuts) signs, uploads, and commits a single chunk, so
 // the chunk must fit BOTH the sign cap and the commit cap in one call each. Both
@@ -163,7 +165,7 @@ function withRetryDeps(deps: SyncDeps): SyncDeps {
 // kicks a cycle, so an edit made during an ordinary one would stay unrendered
 // until the cycle ended or the next flush, up to HELD_FLUSH_MS. A cycle of a few paths costs a re-run or two, and
 // holding it would buy nothing. 100 paths is around four rounds of
-// DOWNLOAD_CONCURRENCY, where a pull starts to outlast a re-run or two. It is a
+// INDEX_CONCURRENCY, where a pull starts to outlast a re-run or two. It is a
 // starting point, not a measured cut.
 const BULK_CYCLE_PATHS = 100;
 
@@ -354,6 +356,14 @@ export async function loadEntityContent(deps: SyncDeps, path: string): Promise<F
   // plaintext under the newer stamp, served as current until the server moves
   // again. Losing the race discards the stale file and reports "not available";
   // the next call fetches the new version.
+  //
+  // Web returns its fetched bytes on the same race and only skips the cache. That
+  // isn't open here: the plaintext was decrypted into the path's one canonical
+  // file, which the row no longer claims and a concurrent pull's deleteDataFiles
+  // may remove under the caller. Serving it would need a second, caller-owned copy
+  // for one render of a version that is already superseded. So `undefined` here
+  // means "not now", as well as "gone" — the caller's next request gets the new
+  // version.
   if (!(await markItemDataFileIfCurrent(path, rec.updatedAt))) {
     deleteDataFile(path);
     return undefined;
@@ -365,13 +375,12 @@ export async function loadEntityContent(deps: SyncDeps, path: string): Promise<F
 // many blobs resident at once (the export flow's download phase). Same
 // semantics per path as loadEntityContent — fetch, native-decrypt to disk, mark
 // the row, so re-runs are resumable — but signed in SIGN_BATCH pages (one
-// `files/sign` call per ~1000 paths instead of one per file) and fetched at the
-// upload fan-out (these are MB-sized media, not KB index blobs — web fans wider
-// because its downloads are small). Already-materialized files are skipped (and
-// don't count toward progress); a path that's unknown locally or 404s on GET
-// (deleted on another device, the delete op not yet pulled) lands in
-// `missingPaths` for the caller to report — never a thrown error. Any other
-// failure rejects.
+// `files/sign` call per ~1000 paths instead of one per file) and fetched at
+// FILE_CONCURRENCY, as web's is: these are MB-sized media, not index blobs.
+// Already-materialized files are skipped (and don't count toward progress); a path that's unknown
+// locally or 404s on GET (deleted on another device, the delete op not yet
+// pulled) lands in `missingPaths` for the caller to report — never a thrown
+// error. Any other failure rejects.
 export async function loadEntityContents(
   deps: SyncDeps,
   paths: string[],
@@ -404,7 +413,7 @@ export async function loadEntityContents(
   onProgress?.(done, total);
   for (const batch of chunk(wanted, SIGN_BATCH)) {
     const urls = await signPaths(deps.api, 'get', batch);
-    await mapLimit(batch, UPLOAD_CONCURRENCY, async (path) => {
+    await mapLimit(batch, FILE_CONCURRENCY, async (path) => {
       const url = urls.get(path);
       let fetched = false;
       if (url) {
@@ -658,11 +667,12 @@ async function pushPending(
 
   // Phase 3 then 4: drain ALL content puts (every chunk) before ANY metadata
   // put, so the content-before-metadata invariant holds across chunk boundaries
-  // too.
+  // too. Each phase uploads at its own blob kind's fan-out.
   committed.push(
     ...(await pushPuts(
       deps,
       puts.filter((o) => isContentPath(o.path)),
+      FILE_CONCURRENCY,
       outcome,
       orphanedPaths,
       failures,
@@ -679,6 +689,7 @@ async function pushPending(
       ...(await pushPuts(
         deps,
         puts.filter((o) => !isContentPath(o.path)),
+        INDEX_CONCURRENCY,
         outcome,
         orphanedPaths,
         failures,
@@ -694,10 +705,12 @@ async function pushPending(
 // and orders them) through the sign → PUT → commit pipeline one chunk at a time,
 // so each chunk's PUT URLs are minted immediately before that chunk's upload and
 // the chunk commits before the next is signed. PUT_BATCH fits one sign and one
-// commit call, so each stays a single round trip.
+// commit call, so each stays a single round trip. `concurrency` is the set's
+// kind's fan-out.
 async function pushPuts(
   deps: SyncDeps,
   puts: PendingOpRecord[],
+  concurrency: number,
   outcome: SyncOutcome,
   orphanedPaths: string[],
   failures: UploadFailures,
@@ -706,7 +719,13 @@ async function pushPuts(
   for (const batch of chunk(puts, PUT_BATCH)) {
     const signed = await signPushable(deps, batch, outcome);
     if (signed === null) continue;
-    const { orphaned, failed } = await uploadBlobs(deps, signed.ops, signed.urls, failures);
+    const { orphaned, failed } = await uploadBlobs(
+      deps,
+      signed.ops,
+      signed.urls,
+      concurrency,
+      failures,
+    );
     // A put with nothing local left to send (see uploadBlobs) can never be
     // satisfied, so it is dropped from the queue rather than committed into a
     // guaranteed `no_object` that requeues it forever. Dropped BEFORE the commit, so
@@ -845,6 +864,7 @@ async function uploadBlobs(
   deps: SyncDeps,
   ops: PendingOpRecord[],
   urls: Map<string, string>,
+  concurrency: number,
   failures: UploadFailures,
 ): Promise<{ orphaned: PendingOpRecord[]; failed: PendingOpRecord[] }> {
   const orphaned: PendingOpRecord[] = [];
@@ -854,7 +874,7 @@ async function uploadBlobs(
     failures.count += 1;
     failures.firstError ??= err;
   };
-  await mapLimit(ops, UPLOAD_CONCURRENCY, async (op) => {
+  await mapLimit(ops, concurrency, async (op) => {
     const rec = await getItem(op.path);
     if (!rec) {
       orphaned.push(op);
@@ -974,7 +994,7 @@ async function storeDownloads(
       'get',
       batch.map((e) => e.path),
     );
-    await mapLimit(batch, DOWNLOAD_CONCURRENCY, async (e) => {
+    await mapLimit(batch, INDEX_CONCURRENCY, async (e) => {
       // `finally`, so the two skips below tick the counter too: an entry dropped
       // for a missing URL or a mid-pull 404 still leaves the pull with one fewer
       // thing to do, and a counter that ignored them would stop short of its
