@@ -398,8 +398,11 @@ describe('the probe', () => {
     await signedIn({ state: 'expired' });
     apiCall.mockClear();
 
-    act(() => {
+    // Async: the same event re-reads the session record, and that read lands after
+    // a synchronous act() has already returned.
+    await act(async () => {
       document.dispatchEvent(new Event('visibilitychange'));
+      await new Promise((r) => setTimeout(r, 0));
     });
 
     expect(apiCall).toHaveBeenCalledTimes(1);

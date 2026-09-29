@@ -7,7 +7,7 @@
 
 import type { ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, renderHook } from '@testing-library/react-native';
+import { act, renderHook, waitFor } from '@testing-library/react-native';
 
 import { ApiError, deleteAccountEndpoint, passwordDoorEndpoint } from '@stxapps/shared';
 
@@ -70,6 +70,9 @@ it('ends the deleted account, even after this context moved to another one', asy
     releaseDelete?.();
     await deleted;
   });
+  // TanStack hands the hook its settled state on a timer, which can land after
+  // act() has returned — React then warns of an update outside act.
+  await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
   expect(mockEndSession).toHaveBeenCalledTimes(1);
   expect(mockEndSession).toHaveBeenCalledWith({ username: 'alice' });
@@ -84,6 +87,7 @@ it('ends nothing when the server refuses the deletion', async () => {
       SubscriptionActiveError,
     );
   });
+  await waitFor(() => expect(result.current.isError).toBe(true));
 
   expect(mockEndSession).not.toHaveBeenCalled();
 });

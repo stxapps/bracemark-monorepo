@@ -7,7 +7,7 @@
 
 import type { ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, renderHook } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 
 import { useSignOut } from './use-sign-out';
 
@@ -46,6 +46,9 @@ it('ends the generation whose token it sent, not one a resume minted meanwhile',
   const { result } = renderSignOut();
 
   await act(() => result.current.mutateAsync());
+  // TanStack hands the hook its settled state on a timer, which can land after
+  // act() has returned — React then warns of an update outside act.
+  await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
   expect(mockEndSession).toHaveBeenCalledWith({ generation: 'gen-1' });
 });
@@ -57,6 +60,7 @@ it('still ends the session locally when the request fails', async () => {
   const { result } = renderSignOut();
 
   await act(() => result.current.mutateAsync());
+  await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
   expect(mockEndSession).toHaveBeenCalledWith({ generation: 'gen-1' });
 });

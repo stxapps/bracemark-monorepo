@@ -126,6 +126,53 @@ genuinely needed, expect this and read the summary list rather than the error
 lines. Baseline lint on a clean tree is green, so `git stash -u` + re-lint is what
 actually localizes it.
 
+#### tripwire: an update that lands after `act()` returns
+
+_"An update to X inside a test was not wrapped in act(...)"_ is a `console.error`,
+not a failure. The spec stays green, and because it is often a race, a rerun can
+come out clean. Two shapes have produced it here:
+
+- **A synchronous `act()` around an event that starts async work.** Web's
+  `contexts/auth-provider.spec.tsx`, _asks again on return to the foreground_,
+  dispatched `visibilitychange` inside `act(() => …)`. The provider answers that
+  event twice: it probes, and it re-reads the session record under the lifecycle
+  lock. The re-read's `adopt` lands in microtasks after the synchronous `act`
+  has returned, so it warned on every run, even though the spec only asserted
+  the probe. If the event under test starts async work, use
+  `await act(async () => …)`, even when the assertion does not care about that
+  work.
+- **A TanStack hook's own state.** `notifyManager` delivers every
+  query/mutation observer update on a `setTimeout(0)`. React 19's async `act`
+  waits only one `setImmediate` after its callback settles, and node orders those
+  two by timing. So `await act(() => result.current.mutateAsync())` can return
+  with the hook still reporting `idle`, and the `pending`/`success` renders land
+  outside `act` only some of the time. This hit the `use-sign-out` and
+  `use-delete-account` specs in both packages. Resolving the promise is not the
+  same as the hook settling, so wait for the settled state:
+  `await waitFor(() => expect(result.current.isSuccess).toBe(true))` (or
+  `isError`). RTL's and RNTL's `waitFor` switch the act environment off while
+  they poll, so the late render is expected there. Don't reach for
+  `notifyManager.setNotifyFunction(act)` as a global fix: it would call `act`
+  inside those same `waitFor`s, where the act environment is off.
+
+**The Nx cache makes a race look permanent.** A warning captured once is
+replayed on every `npm run test` until that project's inputs change. So "it
+warns every time" says nothing about whether the warning is deterministic, and
+one clean `--skip-nx-cache` run does not prove it gone. To find the leak, don't
+rely on a single run:
+
+- Pass a scratch `--setupFilesAfterEnv` file that wraps `console.error` and
+  prints `expect.getState().currentTestName` whenever the first argument contains
+  `not wrapped in act`. Match on the raw argument: React sends a format string
+  (`An update to %s …`), so the component's name is in the second argument.
+- Run the suspect specs a dozen times concurrently.
+- To force the TanStack ordering, run a scratch copy of the spec that calls
+  `notifyManager.setScheduler((cb) => setTimeout(cb, 5))`.
+- Put the scratch setup file under `node_modules/` rather than `/tmp`.
+  `jest-expo`'s babel transform rewrites a file outside the repo into requires of
+  `@babel/runtime` that it cannot resolve from there, and `node_modules/` is not
+  transformed at all.
+
 ### which runner, and why
 
 Two runners, split by **the runtime the code has to execute in** — not by
