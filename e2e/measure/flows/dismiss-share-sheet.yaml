@@ -1,15 +1,30 @@
-# Dismiss the iOS share sheet, if it is up. It has no Close control: it is a
-# popover, and iOS exposes the dimmed area around it as `PopoverDismissRegion`
-# ("dismiss popup"), whose own box is the whole screen — so the tap goes to a
-# point near the top, which is outside the sheet (it rises from the bottom). The
-# condition keeps that tap from ever landing on the app when no sheet is up.
+# Wait for the system share sheet a finished export presents, then put it away.
+# Pulled in by export.yaml; never run directly. The wait carries the export's
+# budget: the sheet opens only once the run is done.
+#
+# Android's chooser is titled by what it carries ("Sharing 1 file" on Android
+# 16 — not "Share"), and a back press closes it. iOS's has no Close control: it
+# is a popover, and iOS exposes the dimmed area around it as
+# `PopoverDismissRegion` ("dismiss popup"), whose own box is the whole screen —
+# so the tap goes to a point near the top, which is outside the sheet (it rises
+# from the bottom). The same two moves as subflows/export-plain-text.yaml.
 appId: com.bracemark.app
 ---
 - runFlow:
     when:
-      platform: iOS
-      visible:
-        id: 'PopoverDismissRegion'
+      platform: Android
     commands:
+      - extendedWaitUntil:
+          visible: 'Sharing \d+ files?'
+          timeout: 1800000
+      - back
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - extendedWaitUntil:
+          visible:
+            id: 'PopoverDismissRegion'
+          timeout: 1800000
       - tapOn:
           point: '50%, 12%'
