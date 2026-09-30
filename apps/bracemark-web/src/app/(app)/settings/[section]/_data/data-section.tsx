@@ -80,7 +80,10 @@ function SyncStatus() {
   const phase = getSyncPhase(storeStatus, bgSyncStatus);
   // Rendered inside InitialSyncGate, so storeStatus is never 'error' here —
   // 'initial-error' and its retryInitialSync belong to the gate's own screen.
-  const isError = phase === 'cycle-error';
+  // Still counted as an error so that, should the gate ever let it through, it
+  // reads as the failure it is rather than falling through to the spinner. No
+  // Retry for it: syncNow runs a background cycle, not the initial pull.
+  const isError = phase === 'cycle-error' || phase === 'initial-error';
   // The quota gate refused part of the push. Deliberately NOT styled as an
   // error: everything else synced and the local library is intact — what's
   // needed is some freed space, not a retry (which is also why it gets no Retry
@@ -111,7 +114,7 @@ function SyncStatus() {
     phase === 'idle' && lastSyncAt
       ? `Last synced ${formatSyncedAt(lastSyncAt)}`
       : SYNC_PHASE_LABELS[phase];
-  const detail = phase === 'cycle-error' ? lastError : null;
+  const detail = isError ? lastError : null;
   const action =
     phase === 'cycle-error'
       ? { label: 'Retry', onClick: syncNow }
@@ -164,8 +167,11 @@ function SyncStatus() {
           {/* Qualifies what a settled sync means: link metadata is on this
               device, while image blobs download on demand as virtualized rows
               mount (docs/local-first-sync.md — metadata vs. content). Suppressed
-              on an error, where a standing fact only competes with the failure. */}
-          {!isError && !isBlocked && (
+              on an error, where a standing fact only competes with the failure,
+              and while paused, where it stops being a fact: an expired session
+              behaves as offline (docs/sessions.md), so an image not already on
+              this device doesn't download until the user signs in again. */}
+          {!isError && !isBlocked && !isPaused && (
             <span className="mt-1 text-xs text-muted-foreground">
               Images download as links come into view.
             </span>
