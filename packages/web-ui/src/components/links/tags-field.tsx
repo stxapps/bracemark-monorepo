@@ -12,9 +12,10 @@
 // the chip a beat later. Wired to web-react like ListSelect (and the auth
 // forms) — see docs/architecture.md on the ui → react-logic layering.
 
-import { type Ref, useId, useMemo, useState } from 'react';
+import { type Ref, useMemo, useState } from 'react';
 import { ChevronsUpDownIcon, X } from 'lucide-react';
 
+import { useStableId } from '@stxapps/react';
 import { treeNameMap } from '@stxapps/shared';
 import { useTagMutations, useTags } from '@stxapps/web-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@stxapps/web-ui/components/ui/popover';
@@ -59,7 +60,7 @@ export function TagsField({
   const [focused, setFocused] = useState(false);
   // aria-controls target: names the popover's list so the combobox trigger is
   // valid even while the content is unmounted (closed).
-  const listId = useId();
+  const listId = useStableId('tags');
 
   // Chosen chips: map ids → names off the live tree. An id with no row yet (a
   // just-minted tag useTags hasn't surfaced) is skipped until it catches up.
