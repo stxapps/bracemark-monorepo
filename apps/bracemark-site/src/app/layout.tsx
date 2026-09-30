@@ -119,7 +119,9 @@ export const viewport = {
 // ⚠ THE SAME SENTENCE IS IN bracemark-web's `app/layout.tsx`, and the two must
 // move together. That app is a separate origin and cannot import this config, so
 // a comment in each naming the other is the whole of what holds them — the
-// pattern the lockup measurements already use.
+// pattern the lockup measurements already use. A third copy sits in the company
+// site's repo (stxapps/stxapps-site, `src/content/bracemark.ts`, `description`)
+// and has to move with them.
 const DESCRIPTION =
   'Bracemark is an end-to-end encrypted bookmark manager. Links are encrypted on your device before they sync: of your library we hold ciphertext we cannot open.';
 

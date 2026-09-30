@@ -13,6 +13,12 @@
 // (browsers, workerd, Hermes) — strings always are, but keep it that way: no
 // runtime, no imports beyond this package. See docs/architecture.md.
 
+// ⚠ ONE CONSUMER CAN'T IMPORT THIS. The company site at stxapps.com lives in its
+// own repo (stxapps/stxapps-site), and it copies `name`, `descriptor`, `tagline`
+// and `slogan` verbatim into its `src/content/bracemark.ts`. When one of those
+// lines changes here, change it there too. Nothing checks that the two copies
+// agree, and a stale line on the company site renders just as well as a current one.
+
 /** The three brand lines, in the order of how much room the surface has. */
 export const BRAND = {
   name: 'Bracemark',
