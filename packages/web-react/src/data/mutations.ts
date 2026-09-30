@@ -47,6 +47,26 @@ import { parseBlob, toItemRecord } from './projection';
 import { type LinkItem, toItem, type WithPath } from './queries';
 import { assertAccountStillOwnsStore } from './sync-store';
 
+// The stores every local write's rw transaction locks: the record, its pending op, and
+// `syncMeta` for assertAccountStillOwnsStore's read. ONE list, because flushLocalWrites
+// is only a barrier while its scope overlaps every write's — a write that grew a store
+// this list lacks would silently stop being waited for.
+const WRITE_EDGE_STORES = [db.items, db.pendingOps, db.syncMeta];
+
+// Resolve once every local write already started on this page has COMMITTED. A
+// read-only transaction over the write edge's stores queues behind every earlier
+// read-write transaction that touches them (IndexedDB orders overlapping scopes),
+// so it starts only after they commit — which is what makes a reload right after a
+// Save lose nothing (the "updated, reload" pill, docs/offline-mode.md). A closed
+// database (update-required) has nothing to wait for.
+export async function flushLocalWrites(): Promise<void> {
+  try {
+    await db.transaction('r', WRITE_EDGE_STORES, () => undefined);
+  } catch {
+    // Closed or unavailable: no write can still be landing.
+  }
+}
+
 // Persist one path's bytes locally and queue the upload, producing the bytes INSIDE
 // the transaction from the path's current record — the base primitive the JSON-entity
 // paths (writeEntity, and its merging sibling writeEntityWith) and the opaque-media path
@@ -72,7 +92,7 @@ async function writeBytesWith(
   path: string,
   produce: (existing: ItemRecord | undefined) => Uint8Array,
 ): Promise<void> {
-  await db.transaction('rw', db.items, db.pendingOps, db.syncMeta, async () => {
+  await db.transaction('rw', WRITE_EDGE_STORES, async () => {
     await assertAccountStillOwnsStore(username);
     const existing = await db.items.get(path);
     const baseUpdatedAt = existing?.updatedAt ?? 0;
@@ -153,7 +173,7 @@ export async function bulkWriteEntities(
 ): Promise<string[]> {
   if (entries.length === 0) return [];
   const written: string[] = [];
-  await db.transaction('rw', db.items, db.pendingOps, db.syncMeta, async () => {
+  await db.transaction('rw', WRITE_EDGE_STORES, async () => {
     await assertAccountStillOwnsStore(username);
     const existing = await db.items.bulkGet(entries.map((entry) => entry.path));
     const records: ItemRecord[] = [];
@@ -191,7 +211,7 @@ export async function bulkWriteEntities(
 // commits or none of it does.
 export async function bulkDeleteEntities(username: string, paths: string[]): Promise<void> {
   if (paths.length === 0) return;
-  await db.transaction('rw', db.items, db.pendingOps, db.syncMeta, async () => {
+  await db.transaction('rw', WRITE_EDGE_STORES, async () => {
     await assertAccountStillOwnsStore(username);
     const existing = await db.items.bulkGet(paths);
     // Through the shared factory, never an inline row literal — see
@@ -215,7 +235,7 @@ export async function bulkDeleteEntities(username: string, paths: string[]): Pro
 // every namespace deletes by one definition; the named per-namespace deletes
 // below are the public surface, and callers gate the higher-level rules.
 async function deleteEntity(username: string, path: string): Promise<void> {
-  await db.transaction('rw', db.items, db.pendingOps, db.syncMeta, async () => {
+  await db.transaction('rw', WRITE_EDGE_STORES, async () => {
     await assertAccountStillOwnsStore(username);
     const existing = await db.items.get(path);
     const baseUpdatedAt = existing?.updatedAt ?? 0;
@@ -294,7 +314,7 @@ export async function writeLink(
 export async function bulkWriteLinks(username: string, edits: LinkEdit[]): Promise<void> {
   if (edits.length === 0) return;
   const now = Date.now();
-  await db.transaction('rw', db.items, db.pendingOps, db.syncMeta, async () => {
+  await db.transaction('rw', WRITE_EDGE_STORES, async () => {
     await assertAccountStillOwnsStore(username);
     const existing = await db.items.bulkGet(edits.map((edit) => edit.link.path));
     const records: ItemRecord[] = [];

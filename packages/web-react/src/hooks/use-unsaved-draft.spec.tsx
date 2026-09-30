@@ -9,8 +9,6 @@ import { renderHook } from '@testing-library/react';
 
 import { hasUnsavedDrafts, useUnsavedDraft } from './use-unsaved-draft';
 
-jest.mock('../data/db', () => ({ db: {} }));
-
 it('counts a dirty editor until it is clean or gone', () => {
   const first = renderHook(({ dirty }) => useUnsavedDraft(dirty), {
     initialProps: { dirty: false },
