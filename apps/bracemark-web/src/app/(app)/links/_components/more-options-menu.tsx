@@ -106,14 +106,19 @@ export function MoreOptionsMenu() {
                about hue, and it still holds. */
             <span
               aria-hidden="true"
-              className={`absolute top-1.25 right-1.25 size-1.5 rounded-full ${
-                syncError ? 'bg-destructive' : 'bg-foreground'
-              }`}
+              className={`absolute top-1.25 right-1.25 size-1.5 rounded-full ${syncError ? 'bg-destructive' : 'bg-foreground'
+                }`}
             />
           )}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-52">
+      {/* Sized to its longest row, over a floor, rather than a fixed width:
+          the rows are short in the common case (~90px of label at most) and
+          only "Sync failed — Retry" and the Storage-full row are long, so any
+          fixed width wide enough for those is dead space the rest of the
+          time. `w-auto` drops the kit's trigger-width default and `min-w-36`
+          lowers its `min-w-48` floor, which alone left ~70px dead. */}
+      <DropdownMenuContent align="end" className="w-auto min-w-36">
         <DropdownMenuItem
           disabled={paused}
           onSelect={(e) => {

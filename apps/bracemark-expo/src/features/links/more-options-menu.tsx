@@ -71,8 +71,11 @@ export function MoreOptionsMenu() {
   // The session expired (docs/sessions.md): no cycle runs until a sign-in, so the
   // Sync item becomes the way to that sign-in — the `/resume` modal — rather than
   // a press that could do nothing. (Web disables the item instead and leaves the
-  // resume to the notice under its topbar, which opens a dialog in place.) Dot
-  // like blocked: full-ink neutral, since changes are waiting and nothing is lost.
+  // resume to the notice under its topbar, which opens a dialog in place.) The
+  // label is web's bare "Sync paused", not "— Sign in": the links screen's own
+  // notice already says "Sign in to resume", and the longer label overran the
+  // menu. Dot like blocked: full-ink neutral, since changes are waiting and
+  // nothing is lost.
   const paused = phase === 'paused';
 
   return (
@@ -135,7 +138,13 @@ export function MoreOptionsMenu() {
           )}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48">
+      {/* Sized to its longest row, over a floor, rather than a fixed width:
+          the rows are short in the common case (~90px of label at most) and
+          only the failed / blocked states carry a long one, so any fixed width
+          wide enough for those is dead space the rest of the time. The floor
+          keeps the short rows from ending hard against the edge. Web's menu
+          takes the same shape. */}
+      <DropdownMenuContent align="end" className="min-w-36">
         {/* syncNow, not requestSync: a press is not a local edit, so what it
             pulls stages behind the refresh pill while the list is engaged. */}
         <DropdownMenuItem
@@ -145,7 +154,7 @@ export function MoreOptionsMenu() {
           {paused ? (
             <>
               <Icon as={CloudOff} className="size-4" />
-              <Text>Sync paused — Sign in</Text>
+              <Text>Sync paused</Text>
             </>
           ) : syncError ? (
             <>
@@ -169,7 +178,9 @@ export function MoreOptionsMenu() {
         {blocked && (
           <DropdownMenuItem className="items-start" onPress={() => router.push('/settings/data')}>
             <Icon as={CircleAlert} className="mt-0.5 size-4" />
-            <View className="min-w-0 flex-1">
+            {/* `shrink`, not `flex-1`: in a content-sized menu this row sets
+                the width, and a zero flex-basis would give it none to set. */}
+            <View className="min-w-0 shrink">
               <Text>Storage full</Text>
               <Text className="text-xs text-muted-foreground">Some changes aren’t syncing</Text>
             </View>
