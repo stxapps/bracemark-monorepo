@@ -100,12 +100,14 @@ describe('useMirroredSyncState', () => {
 
   it('unsubscribes when the popup closes', () => {
     const { unmount } = render(<Readout />);
-    expect(fake.storage.onChanged.addListener).toHaveBeenCalledTimes(1);
+    expect(fake.storage.onChanged.addListener).toHaveBeenCalled();
 
     unmount();
 
-    expect(fake.storage.onChanged.removeListener).toHaveBeenCalledWith(
-      fake.storage.onChanged.addListener.mock.calls[0][0],
-    );
+    // EVERY listener added is removed — StrictMode (docs/testing.md) subscribes,
+    // unsubscribes and subscribes again, so there is more than one to account for.
+    const added = fake.storage.onChanged.addListener.mock.calls.map(([listener]) => listener);
+    const removed = fake.storage.onChanged.removeListener.mock.calls.map(([listener]) => listener);
+    expect(new Set(removed)).toEqual(new Set(added));
   });
 });

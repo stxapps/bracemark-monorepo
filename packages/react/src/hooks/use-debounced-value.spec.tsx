@@ -48,7 +48,8 @@ describe('useDebouncedValue', () => {
       rerender({ value });
       act(() => void jest.advanceTimersByTime(100));
     }
-    expect(seen).toEqual(['a', 'a', 'a', 'a', 'a']);
+    // Every render so far read 'a'. Not a count of them: StrictMode renders twice.
+    expect(new Set(seen)).toEqual(new Set(['a']));
 
     act(() => void jest.advanceTimersByTime(400));
     expect(seen.at(-1)).toBe('alice');

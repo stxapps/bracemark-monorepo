@@ -22,7 +22,8 @@ test('an error notice brings itself into view when it appears', () => {
   render(<SettingsNotice tone="error">Could not save. The local store is full.</SettingsNotice>);
 
   expect(screen.getByRole('alert')).toBeTruthy();
-  expect(scrollIntoView).toHaveBeenCalledTimes(1);
+  // Not a count: StrictMode (docs/testing.md) runs the mount effect twice.
+  expect(scrollIntoView).toHaveBeenCalled();
   // `nearest`, so a notice already on screen does not move the page at all.
   expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest', behavior: 'smooth' });
 });
@@ -31,9 +32,11 @@ test('a new message on a notice already mounted brings it into view again', () =
   // The component stays mounted across errors — the section re-renders it with
   // new text — so mounting alone would only ever catch the first failure.
   const { rerender } = render(<SettingsNotice tone="error">First failure.</SettingsNotice>);
+  // Counted from the mount — StrictMode runs the mount effect twice.
+  const mounted = scrollIntoView.mock.calls.length;
   rerender(<SettingsNotice tone="error">Second, different failure.</SettingsNotice>);
 
-  expect(scrollIntoView).toHaveBeenCalledTimes(2);
+  expect(scrollIntoView).toHaveBeenCalledTimes(mounted + 1);
 });
 
 test.each(['info', 'pending'] as const)('a %s notice never moves the page', (tone) => {

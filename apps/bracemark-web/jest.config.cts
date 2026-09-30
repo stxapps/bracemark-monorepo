@@ -11,6 +11,8 @@ const config = {
     '^(?!.*\\.(js|jsx|ts|tsx|css|json)$)': '@nx/react/plugins/jest',
   },
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx'],
+  // Every render double-mounts, like the app does — see the file for why.
+  setupFilesAfterEnv: ['../../jest.react-strict-mode.cjs'],
   // `@/…` — the app's own alias, declared as tsconfig `paths` with NO `baseUrl`
   // (nothing in this workspace sets one; TS 5 resolves paths relative to the
   // tsconfig, and Next's bundler has its own resolver). next/jest derives its

@@ -12,6 +12,8 @@ module.exports = {
   // and needs no clone polyfill because it mocks the store away rather than reaching it.
   testEnvironment: 'node',
   setupFiles: ['fake-indexeddb/auto'],
+  // Every render double-mounts, like the app does — see the file for why.
+  setupFilesAfterEnv: ['../../jest.react-strict-mode.cjs'],
   transform: {
     '^(?!.*\\.(js|jsx|ts|tsx|css|json)$)': '@nx/react/plugins/jest',
     '^.+\\.[tj]sx?$': ['babel-jest', { presets: ['@nx/react/babel'] }],

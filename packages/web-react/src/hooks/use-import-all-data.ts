@@ -128,12 +128,18 @@ export function useImportAllData(): UseImportAllDataResult {
     views += 1;
     return () => {
       views -= 1;
-      if (views > 0) return;
-      // A quota decision has no owner once the last view unmounts.
-      cancelQuota();
-      // A settled run's receipt was for the view that watched it; the next view
-      // starts idle. A run still writing stays, so the next view shows it.
-      if (!inFlight) snapshot = null;
+      // Decided a microtask later, not here. StrictMode's mount → cleanup → mount
+      // runs this cleanup and re-mounts in the same synchronous commit; taken at face
+      // value, that reads as the user leaving and drops the receipt the re-mount was
+      // about to show. A real departure is still at zero by then.
+      queueMicrotask(() => {
+        if (views > 0) return;
+        // A quota decision has no owner once the last view unmounts.
+        cancelQuota();
+        // A settled run's receipt was for the view that watched it; the next view
+        // starts idle. A run still writing stays, so the next view shows it.
+        if (!inFlight) snapshot = null;
+      });
     };
   }, []);
 

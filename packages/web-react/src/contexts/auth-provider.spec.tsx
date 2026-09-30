@@ -261,17 +261,25 @@ describe('hydration', () => {
     renderProvider();
 
     await waitFor(() => expect(status()).toBe('unauthenticated'));
-    expect(mockClearData).toHaveBeenCalledTimes(1);
+    // Not a count: StrictMode (docs/testing.md) hydrates twice, serialized under the
+    // lifecycle lock, and the wipe is idempotent.
+    expect(mockClearData).toHaveBeenCalled();
   });
 
   // A storage read failure is not proof the device was signed out.
   it('resolves to signed-out WITHOUT wiping if the session store cannot be read', async () => {
-    (store.loadSession as jest.Mock).mockRejectedValueOnce(new Error('IndexedDB unavailable'));
+    // EVERY read, as a broken IndexedDB would fail: StrictMode hydrates twice, and a
+    // second read that succeeded would find no session and wipe — through a path this
+    // test isn't about. (Restored after: clearAllMocks keeps implementations.)
+    const load = store.loadSession as jest.Mock;
+    const original = load.getMockImplementation();
+    load.mockRejectedValue(new Error('IndexedDB unavailable'));
 
     renderProvider();
 
     await waitFor(() => expect(status()).toBe('unauthenticated'));
     expect(mockClearData).not.toHaveBeenCalled();
+    load.mockImplementation(original);
   });
 
   // Startup reads the session store and nothing else for a signed-in account: a

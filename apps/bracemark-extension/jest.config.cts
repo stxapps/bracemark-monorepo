@@ -21,7 +21,9 @@ module.exports = {
   // them as bare globals and WXT's vite plugin rewrites them at build time. There
   // is no such rewrite under jest, so they have to be real globals — testing/setup.ts
   // installs a fresh fake before every test.
-  setupFilesAfterEnv: ['<rootDir>/testing/setup.ts'],
+  // …and every render double-mounts, as the popup and options roots do
+  // (<React.StrictMode> in their main.tsx) — see that file for why.
+  setupFilesAfterEnv: ['<rootDir>/testing/setup.ts', '../../jest.react-strict-mode.cjs'],
   moduleNameMapper: {
     // `utils/web-app-url.ts` branches on `import.meta.env.MODE`, which cannot be
     // compiled to CommonJS at all (babel throws on `import.meta` in a CJS output).

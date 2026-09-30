@@ -210,8 +210,13 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
   const extractingAllRef = useRef(false);
   const [isExtractingAll, setIsExtractingAll] = useState(false);
 
+  // A rerun goes to `drainRef` — the CURRENT effect run's drain — never to the finishing
+  // run's own closure: a dep change mid-drain cancels that closure while it still holds
+  // `runningRef`, so it would drop the rerun its successor queued (web's provider has the
+  // full case).
   const runningRef = useRef(false);
   const rerunRef = useRef(false);
+  const drainRef = useRef<(() => Promise<void>) | null>(null);
   const [isRunning, setIsRunning] = useState(false);
 
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -465,8 +470,9 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
         // The only wholesale failure this platform has: the whole step failed at the
         // transport level, i.e. the device is offline (device-extraction records nothing in
         // that case, so no backoff was burned and the cursor/budget are untouched). Clear a
-        // queued rerun so a mid-drain trigger doesn't restart us straight back into it.
-        rerunRef.current = false;
+        // queued rerun so a mid-drain trigger doesn't restart us straight back into it —
+        // unless this run was cancelled, whose rerun belongs to its successor.
+        if (!cancelled) rerunRef.current = false;
         if (
           !cancelled &&
           isRetryableTransportError(err) &&
@@ -477,16 +483,18 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
       } finally {
         runningRef.current = false;
         setIsRunning(false);
-        if (rerunRef.current && !cancelled && (activeRef.current || extractingAllRef.current)) {
+        if (rerunRef.current && (activeRef.current || extractingAllRef.current)) {
           rerunRef.current = false;
-          void drain();
+          void drainRef.current?.();
         }
       }
     };
 
+    drainRef.current = drain;
     void drain();
     return () => {
       cancelled = true;
+      if (drainRef.current === drain) drainRef.current = null;
       if (retryTimerRef.current !== null) {
         clearTimeout(retryTimerRef.current);
         retryTimerRef.current = null;

@@ -94,10 +94,13 @@ describe('the placeholder', () => {
     mockCached = PLUS;
 
     const { rerender } = renderHook(() => useEntitlements());
+    // Counted from the mount, not from zero: StrictMode (docs/testing.md) calls a
+    // lazy initializer twice. What this pins is that re-renders add nothing.
+    const mounted = mockRead.mock.calls.length;
     rerender();
     rerender();
 
-    expect(mockRead).toHaveBeenCalledTimes(1);
+    expect(mockRead).toHaveBeenCalledTimes(mounted);
     expect(mockPlaceholderSeen.every((seen) => seen === mockPlaceholderSeen[0])).toBe(true);
   });
 

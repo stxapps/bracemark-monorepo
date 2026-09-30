@@ -264,8 +264,15 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
 
   // Single-flight the drain: a wake while one is running sets `rerun` so it loops once
   // more at the end, instead of overlapping.
+  //
+  // The rerun goes to `drainRef` — the CURRENT effect run's drain — never to the finishing
+  // run's own closure. A dep change mid-drain (extractAll() during an auto drain, a tab
+  // reveal, StrictMode's mount → cleanup → mount) cancels the running closure while it still
+  // holds `runningRef`, so the new run's drain can only queue a rerun; a cancelled closure
+  // that owned the rerun would drop it, and the drain would sit idle until some other dep moved.
   const runningRef = useRef(false);
   const rerunRef = useRef(false);
+  const drainRef = useRef<(() => Promise<void>) | null>(null);
   const [isRunning, setIsRunning] = useState(false);
 
   // Pending auto-resume retry timer + its current backoff delay (grows per consecutive
@@ -400,8 +407,9 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
         // — nothing was learned about this page's links. The unprocessed page stays pending
         // (no facet writes, cursor/budget untouched), so a later wake re-picks it. Clear any
         // queued rerun so a trigger that fired mid-drain doesn't restart us straight back into
-        // the same outage.
-        rerunRef.current = false;
+        // the same outage. Unless this run was cancelled: then the rerun was queued by the
+        // run that replaced it, which owns its own retry and must still get to start.
+        if (!cancelled) rerunRef.current = false;
         // If the failure is RETRYABLE (a 429 from the extractor's per-IP cap, a 5xx, or a
         // network blip), schedule a backed-off self-resume instead of just waiting for a
         // natural wake. This is load-bearing for extract-all: its failed batch writes no
@@ -419,16 +427,20 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
       } finally {
         runningRef.current = false;
         setIsRunning(false);
-        if (rerunRef.current && !cancelled && (visibleRef.current || extractingAllRef.current)) {
+        // `drainRef`, not `drain` and not `!cancelled` — see runningRef. Null once the
+        // effect is torn down with no successor, which drops the rerun as before.
+        if (rerunRef.current && (visibleRef.current || extractingAllRef.current)) {
           rerunRef.current = false;
-          void drain();
+          void drainRef.current?.();
         }
       }
     };
 
+    drainRef.current = drain;
     void drain();
     return () => {
       cancelled = true;
+      if (drainRef.current === drain) drainRef.current = null;
       // Drop a pending backoff retry so a dep change / teardown doesn't fire a stale drain.
       if (retryTimerRef.current !== null) {
         clearTimeout(retryTimerRef.current);

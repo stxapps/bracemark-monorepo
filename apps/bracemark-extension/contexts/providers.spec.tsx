@@ -99,9 +99,15 @@ describe('Providers', () => {
     mockUseMirroredSyncState.mockReturnValue({ ...IDLE, bgSyncStatus: 'idle' });
     rerender(<Providers>ok</Providers>);
 
-    expect(externalSyncProps).toHaveLength(3);
-    expect(externalSyncProps[1].requestSync).toBe(first);
-    expect(externalSyncProps[2].requestSync).toBe(first);
+    // Every render saw the same function — counted by the statuses they carried, not
+    // by renders, since StrictMode (docs/testing.md) renders each one twice.
+    const statuses = externalSyncProps.map((props) => props.bgSyncStatus);
+    expect(statuses.filter((status, i) => status !== statuses[i - 1])).toEqual([
+      'idle',
+      'syncing',
+      'idle',
+    ]);
+    expect(externalSyncProps.every((props) => props.requestSync === first)).toBe(true);
   });
 
   it('asks the background for a cycle rather than running one here', () => {

@@ -135,15 +135,20 @@ describe('useUsernameAvailable', () => {
       initialProps: { name: 'alice' },
       wrapper: wrap(client),
     });
-    await waitFor(() => expect(client.call).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(client.call).toHaveBeenCalled());
+    // Counted from here, not from zero: under StrictMode (docs/testing.md) the mount
+    // itself asks twice — TanStack cancels a query whose `signal` was read when its
+    // last observer unmounts, and the simulated remount asks again. Dev-only; what
+    // this pins is the typing that follows.
+    const mounted = jest.mocked(client.call).mock.calls.length;
 
     for (const name of ['alicex', 'alicexy', 'alicexyz']) {
       rerender({ name });
       await act(async () => void jest.advanceTimersByTime(100));
     }
-    expect(client.call).toHaveBeenCalledTimes(1);
+    expect(client.call).toHaveBeenCalledTimes(mounted);
 
     await act(async () => void jest.advanceTimersByTime(400));
-    await waitFor(() => expect(client.call).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(client.call).toHaveBeenCalledTimes(mounted + 1));
   });
 });

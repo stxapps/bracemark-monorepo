@@ -75,9 +75,12 @@ export function SubscriptionSection() {
     Record<AvailablePaidPlan, ProductSubscription>
   > | null>(null);
   // Store callbacks outlive a navigation away mid-purchase; never set state
-  // after unmount.
+  // after unmount. Reset in the effect body, not only initialized: StrictMode's
+  // mount → cleanup → mount reuses the ref, and a cleanup-only ref would then
+  // read "unmounted" for good and drop every result below.
   const unmounted = useRef(false);
   useEffect(() => {
+    unmounted.current = false;
     return () => {
       unmounted.current = true;
     };

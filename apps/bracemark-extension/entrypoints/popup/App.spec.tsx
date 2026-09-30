@@ -116,7 +116,9 @@ describe('the auth branch', () => {
 
     await open();
 
-    expect(requestSync).toHaveBeenCalledTimes(1);
+    // Not a count: StrictMode (docs/testing.md) runs the mount effect twice, which
+    // the popup's real root does too — the worker's single-flight coalesces kicks.
+    expect(requestSync).toHaveBeenCalled();
   });
 });
 

@@ -141,6 +141,32 @@ describe('SubscriptionSection', () => {
     expect(screen.queryByText(/still processing/)).toBeNull();
   });
 
+  // `next dev` runs under StrictMode, whose mount → cleanup → mount reuses every
+  // ref. The poll's "unmounted" ref used to be set by that first cleanup and never
+  // reset, so the poll bailed after its first refetch without clearing `busy`:
+  // the plan box flipped to Plus, "Finishing your upgrade…" stayed up forever and
+  // every button on the page stayed disabled. Every render here is under
+  // StrictMode (docs/testing.md); a production build never double-mounts.
+  it('settles the activation poll and gives the controls back', async () => {
+    render(<SubscriptionSection />);
+
+    // The webhook has already landed by the poll's first read.
+    mockRefetch.mockImplementationOnce(() => {
+      mockSubscription = PLUS;
+      return Promise.resolve({ data: PLUS });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Upgrade to Plus' }));
+    });
+
+    expect(screen.getByText(/You’re on Plus now/)).toBeTruthy();
+    expect(screen.queryByText('Finishing your upgrade…')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Refresh' }).hasAttribute('disabled')).toBe(false);
+    expect(screen.getByRole('button', { name: 'Manage billing' }).hasAttribute('disabled')).toBe(
+      false,
+    );
+  });
+
   // Paddle's overlay is a third-party iframe on their origin: no class of ours
   // reaches inside it, and it opens LIGHT unless told otherwise — so a dark-mode
   // account would get a white payment sheet thrown over a dark page. The setting

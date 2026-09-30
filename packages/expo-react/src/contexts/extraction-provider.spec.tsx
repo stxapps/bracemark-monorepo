@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
-import { Text } from 'react-native';
-import { act, render } from '@testing-library/react-native';
+import { AppState, Text } from 'react-native';
+import { act, render, waitFor } from '@testing-library/react-native';
 
 import { ExtractionProvider, useExtraction } from './extraction-provider';
 
@@ -21,9 +21,11 @@ import { ExtractionProvider, useExtraction } from './extraction-provider';
 //     offline path is the one that finds it — nothing is recorded, so no wake
 //     follows to paper over a stuck number.
 //
-// The drain itself is not exercised here: every test runs at `saves`, where
+// The drain itself is not exercised by the tally tests: they run at `saves`, where
 // `enabled` is false by construction (it needs `all`), which is also the only mode
 // the banner arms in. What is under test is the gestured path, which runs anyway.
+// The one drain case at the end is a drift guard for a rule web's
+// extraction-provider.spec.tsx pins in full (docs/testing.md, _the ported pair_).
 //
 // Everything below the provider is mocked — the store, the counts, the fetch — the
 // same seam favicon-provider.spec.tsx takes: this file is about one number.
@@ -31,8 +33,12 @@ import { ExtractionProvider, useExtraction } from './extraction-provider';
 let mockMode = 'saves';
 
 jest.mock('./auth-provider', () => ({ useAuth: () => ({ username: 'alice' }) }));
+// ONE function, not a `jest.fn()` per call: `requestSync` is a drain-effect dep, and
+// a fresh identity per render would restart the drain on every render — hiding the
+// dropped rerun the drift guard below is for.
+const mockRequestSync = jest.fn();
 jest.mock('./sync-provider', () => ({
-  useSync: () => ({ storeStatus: 'ready', requestSync: jest.fn() }),
+  useSync: () => ({ storeStatus: 'ready', requestSync: mockRequestSync }),
 }));
 jest.mock('./favicon-provider', () => ({
   useFavicon: () => ({ requestFaviconNow: jest.fn() }),
@@ -40,14 +46,21 @@ jest.mock('./favicon-provider', () => ({
 jest.mock('../hooks/use-settings', () => ({
   useSettings: () => ({ deviceExtractionMode: mockMode }),
 }));
-// The drain's two wake signals. Inert here — `enabled` is false at `saves` — but the
-// provider still calls them on every render.
-jest.mock('../hooks/use-live-read', () => ({ useLiveRead: () => [] }));
+// The drain's two wake signals, told apart by their deps: the displayed-page probe
+// keys on three, the raw pending count on two. Empty by default, which is inert
+// whatever the mode; the drain case fills them.
+let mockProbe: unknown[] = [];
+let mockRawPending = 0;
+jest.mock('../hooks/use-live-read', () => ({
+  useLiveRead: (_read: unknown, deps: unknown[]) =>
+    deps.length === 3 ? mockProbe : mockRawPending,
+}));
 
 const mockReadPendingForPaths = jest.fn();
+const mockReadPage = jest.fn();
 jest.mock('../data/queries', () => ({
   readLinksPendingTitleImageForLinkPaths: (...args: unknown[]) => mockReadPendingForPaths(...args),
-  readLinksPendingTitleImagePage: jest.fn(),
+  readLinksPendingTitleImagePage: (...args: unknown[]) => mockReadPage(...args),
   readRawPendingTitleImageCount: jest.fn(),
 }));
 
@@ -74,14 +87,18 @@ function deferred<T>() {
 const link = (path: string) => ({ path, url: `https://example.com/${path}` });
 
 let extractNow: (linkPaths: string[]) => void = () => undefined;
+let extractAll: () => void = () => undefined;
 
 // Renders the tally so a re-render is what the assertions read, and hands the
-// gestured entry point out so a test can make the save.
+// entry points out so a test can make the save or press Extract all.
 function Probe() {
   const context = useExtraction();
   useEffect(() => {
     extractNow = context.extractNow;
   }, [context.extractNow]);
+  useEffect(() => {
+    extractAll = context.extractAll;
+  }, [context.extractAll]);
   return <Text>{`in flight: ${context.gesturedInFlightCount}`}</Text>;
 }
 
@@ -97,6 +114,10 @@ const mount = () =>
 beforeEach(() => {
   mockMode = 'saves';
   extractNow = () => undefined;
+  extractAll = () => undefined;
+  mockProbe = [];
+  mockRawPending = 0;
+  mockReadPage.mockReset();
   mockReadPendingForPaths.mockReset();
   mockRunBatch.mockReset();
   mockRunBatch.mockResolvedValue(1);
@@ -160,4 +181,39 @@ test('counts nothing at `off`, where the gesture itself is declined', async () =
 
   expect(mockReadPendingForPaths).not.toHaveBeenCalled();
   expect(getByText(inFlight(0))).toBeTruthy();
+});
+
+test('starts Extract all when it is pressed while an auto step is in flight', async () => {
+  // Drift guard for web's extraction-provider.spec.tsx: the drain is duplicated
+  // source, so the rerun handoff has to be pinned on this copy too. Extract all
+  // re-runs the drain effect mid-step; the new run can only queue behind the running
+  // one, and the finishing — now cancelled — step has to hand the rerun on.
+  mockMode = 'all';
+  // The auto drain only runs in the foreground, and RN's jest mock leaves
+  // `currentState` a bare jest.fn — which reads as not-active.
+  const appState = AppState as { currentState: unknown };
+  const currentState = appState.currentState;
+  appState.currentState = 'active';
+  mockProbe = [link('links/a.enc')];
+  mockRawPending = 1;
+  mockReadPendingForPaths.mockResolvedValue([link('links/a.enc')]);
+  mockReadPage.mockResolvedValue({ links: [link('links/b.enc')], cursor: null });
+  const autoStep = deferred<number>();
+  mockRunBatch.mockReturnValueOnce(autoStep.promise);
+
+  mount();
+  await waitFor(() => expect(mockRunBatch).toHaveBeenCalledTimes(1));
+
+  await act(async () => {
+    extractAll();
+    await Promise.resolve();
+  });
+  expect(mockReadPage).not.toHaveBeenCalled();
+
+  await act(async () => {
+    autoStep.resolve(1);
+    await autoStep.promise;
+  });
+  await waitFor(() => expect(mockReadPage).toHaveBeenCalledTimes(1));
+  appState.currentState = currentState;
 });

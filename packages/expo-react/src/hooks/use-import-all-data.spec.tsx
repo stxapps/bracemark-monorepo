@@ -136,6 +136,9 @@ describe('a run that outlives its view', () => {
       outcome: { linkCount: 1000 },
     });
     second.unmount();
+    // Leaving takes effect a microtask later (the hook's cleanup says why), and a
+    // real navigation back is never that quick.
+    await act(async () => undefined);
 
     // Seen once; the view after that starts over.
     const third = renderHook(() => useImportAllData());
@@ -148,6 +151,9 @@ describe('a run that outlives its view', () => {
     await act(async () => finish());
     expect(first.result.current.state.phase).toBe('done');
     first.unmount();
+    // Leaving takes effect a microtask later (the hook's cleanup says why), and a
+    // real navigation back is never that quick.
+    await act(async () => undefined);
 
     const second = renderHook(() => useImportAllData());
     expect(second.result.current.state.phase).toBe('idle');

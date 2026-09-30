@@ -415,6 +415,43 @@ reaches the preset reads it. Adding an ESM-only dependency that any spec touches
 once — the symptom of forgetting is `Cannot use import statement outside a
 module` from inside node_modules.
 
+#### specs mount under StrictMode
+
+**Every `@testing-library/react` render in the six web projects mounts under
+`<StrictMode>`** — `react`, `web-ui`, `web-react`, `bracemark-web`,
+`bracemark-site` and `bracemark-extension` each list
+`jest.react-strict-mode.cjs` in `setupFilesAfterEnv`, which sets RTL's
+`reactStrictMode`. It is there because the surfaces themselves run that way:
+Next's app router turns StrictMode on in `next dev`, and the browser extension's
+popup and options roots wrap themselves in it. StrictMode renders twice and runs
+every effect mount → cleanup → mount **on the same refs and the same module
+state**, so a cleanup that leaves something the second mount can't start from
+breaks the page in dev while a single-mount spec stays green. Two specimens, both
+found this way:
+
+- `bracemark-web`'s subscription section kept an "unmounted" ref that only its
+  cleanup ever wrote. After StrictMode's first cleanup it read true for the
+  section's whole life, so the post-checkout poll bailed after one request
+  without clearing `busy`: the plan flipped to Plus under a "Finishing your
+  upgrade…" that never went away, with every button disabled. Four of that
+  spec's cases fail against it now; none did before the switch.
+- Both `use-import-all-data` hooks treated the last view's cleanup as the user
+  leaving, which StrictMode's simulated unmount also is — so a finished import's
+  receipt was dropped before the re-mount could show it. The decision now waits
+  a microtask, by which time a StrictMode re-mount has already counted itself.
+
+The switch costs one discipline in specs: **don't count renders, mount effects or
+mount-time calls from zero.** Each happens twice in dev by design. Pin the
+property instead — counted from after the mount (`const mounted = fn.mock.calls
+.length`), as a set rather than a sequence, or every-listener-added-was-removed —
+which is what the counts were standing in for anyway. And a mock that fails ONCE
+(`mockRejectedValueOnce`) now fails only the first of two hydrations; make it fail
+every call, as the real failure would.
+
+The expo projects render through `@testing-library/react-native`, which has no
+such switch, and `jest.preset.js` is shared with them — hence per-project
+`setupFilesAfterEnv` rather than the preset.
+
 `watchman: false` appears in two places on purpose. Watchman's watch root here
 is the whole monorepo, so every run made each project `syncToNow` over the full
 tree; once the fsevents queue overflows, that sync never lands and jest burns

@@ -114,9 +114,14 @@ export function SubscriptionSection() {
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   // The poll survives the overlay's own lifecycle, but must stop if the section
-  // unmounts mid-loop.
+  // unmounts mid-loop. Reset in the effect body, not only initialized: StrictMode
+  // (on in `next dev`) runs mount → cleanup → mount on the SAME ref, so a
+  // cleanup-only ref reads "unmounted" for the component's whole live life — and
+  // pollStatus would bail after its first refetch with `busy` stuck on
+  // 'activating', disabling every control on the page.
   const unmounted = useRef(false);
   useEffect(() => {
+    unmounted.current = false;
     return () => {
       unmounted.current = true;
     };
