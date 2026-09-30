@@ -106,8 +106,9 @@ export function MoreOptionsMenu() {
                about hue, and it still holds. */
             <span
               aria-hidden="true"
-              className={`absolute top-1.25 right-1.25 size-1.5 rounded-full ${syncError ? 'bg-destructive' : 'bg-foreground'
-                }`}
+              className={`absolute top-1.25 right-1.25 size-1.5 rounded-full ${
+                syncError ? 'bg-destructive' : 'bg-foreground'
+              }`}
             />
           )}
         </Button>

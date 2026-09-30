@@ -62,7 +62,32 @@ import { useSettingsScroll } from './scroll-host';
 // heading's own content and a heading sat no closer to its first row than two
 // rows sat to each other. Spacing is the only thing grouping these blocks — no
 // dividers, no cards — so each level has to be legibly its own size.
-export function SettingsPane({ className, children }: { className?: string; children: ReactNode }) {
+//
+// `viewKey` is for a section that drills into SUB-VIEWS (Account, Data): pass
+// the current view, and a change in it puts the page back at the top. A sub-view
+// replaces the whole pane in place (local state, not a route), so the scroller
+// keeps the offset the overview left — pick Change password from a scrolled
+// Account and the form arrives scrolled past its own header. The host only
+// resets on a SECTION change (scroll-host.tsx), and it can't see this state.
+// Guarded by a prev-ref so the first render — a fresh section, already reset by
+// the host — moves nothing. The web twin does the same against its `<main>`.
+export function SettingsPane({
+  viewKey,
+  className,
+  children,
+}: {
+  viewKey?: string;
+  className?: string;
+  children: ReactNode;
+}) {
+  const scroll = useSettingsScroll();
+  const prevViewKeyRef = useRef(viewKey);
+  useEffect(() => {
+    if (prevViewKeyRef.current === viewKey) return;
+    prevViewKeyRef.current = viewKey;
+    scroll?.scrollToTop();
+  }, [viewKey, scroll]);
+
   return (
     <View className={cn('w-full max-w-2xl gap-8 self-center px-4 py-8 md:px-6', className)}>
       {children}

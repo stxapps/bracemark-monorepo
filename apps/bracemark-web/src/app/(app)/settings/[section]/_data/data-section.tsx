@@ -718,7 +718,7 @@ export function DataSection() {
   const [view, setView] = useState<DataView>('overview');
 
   return (
-    <SettingsPane>
+    <SettingsPane viewKey={view}>
       {view === 'overview' ? (
         <>
           <SettingsHeader

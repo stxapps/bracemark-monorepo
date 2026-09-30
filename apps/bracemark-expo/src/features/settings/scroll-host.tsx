@@ -24,7 +24,9 @@
 //
 // It also owns the SECTION SWITCH, because it owns the offset: `resetKey` is the
 // section id, and a change in it puts the page back at the top (see the effect
-// below for why nothing else does that here).
+// below for why nothing else does that here). A section's SUB-VIEW switch
+// (Account → Change password) is the same event one level down, but it is local
+// state this host never sees — SettingsPane's `viewKey` calls `scrollToTop` for it.
 //
 // `useSettingsScroll()` returns null outside a host (a section rendered in a test
 // or another frame still works — it just gets no auto-scroll), so every consumer
@@ -69,6 +71,10 @@ export interface SettingsScrollHandle {
   // runs once and the movement is the point — a page that jumps has not told
   // the user anything.
   scrollIntoView: (node: View | null) => void;
+  // Jump to the top, unanimated — "this is different content now". The section
+  // switch below uses it, and so does a section's own in-place view swap
+  // (SettingsPane's `viewKey`), which this host can't see.
+  scrollToTop: () => void;
   setScrollEnabled: (enabled: boolean) => void;
 }
 
@@ -161,18 +167,23 @@ export function SettingsScrollHost({
   //
   // The JS mirrors move with it for `scrollBy`'s reason: the next drag frame or
   // `scrollIntoView` call reads them and `onScroll` can lag a frame behind.
+  const scrollToTop = useCallback(() => {
+    offsetY.current = 0;
+    scrollY.value = 0;
+    scrollRef.current?.scrollTo({ y: 0, animated: false });
+  }, [scrollY]);
+
   const prevResetKeyRef = useRef(resetKey);
   useEffect(() => {
     if (prevResetKeyRef.current === resetKey) return;
     prevResetKeyRef.current = resetKey;
-    offsetY.current = 0;
-    scrollY.value = 0;
-    scrollRef.current?.scrollTo({ y: 0, animated: false });
-  }, [resetKey, scrollY]);
+    scrollToTop();
+  }, [resetKey, scrollToTop]);
 
   const handle = useMemo<SettingsScrollHandle>(
     () => ({
       scrollY,
+      scrollToTop,
       scrollBy: (dy) => {
         // Clamp to the scrollable range so the auto-scroll loop can't push past
         // either end (and can detect that it did nothing).
@@ -235,7 +246,7 @@ export function SettingsScrollHost({
       },
       setScrollEnabled,
     }),
-    [scrollY],
+    [scrollY, scrollToTop],
   );
 
   return (

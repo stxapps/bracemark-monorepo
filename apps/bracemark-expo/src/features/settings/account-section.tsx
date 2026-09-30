@@ -561,7 +561,7 @@ export function AccountSection() {
   const hasRecovery = useHasRecoveryDoor();
 
   return (
-    <SettingsPane>
+    <SettingsPane viewKey={view}>
       {view === 'overview' ? (
         <>
           <SettingsHeader

@@ -50,15 +50,37 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 // content, and a heading sat no closer to its first row than two rows sat to each
 // other. Spacing is the only thing grouping these blocks — no dividers, no cards —
 // so each level has to be legibly its own size.
+//
+// `viewKey` is for a section that drills into SUB-VIEWS (Account, Data): pass
+// the current view, and a change in it puts the page back at the top. A sub-view
+// replaces the whole pane in place (local state, not a route), so Next's
+// scroll-on-navigation never fires and the layout's `<main>` keeps the offset the
+// overview left — pick Change password from a scrolled Account and the form
+// arrives scrolled past its own header. It scrolls `<main>` itself rather than
+// `scrollIntoView`-ing this column: `<main>` also holds the sticky topbar and the
+// sync-paused notice above the pane, and "the top" means those too. Guarded by a
+// prev-ref so the first render — a fresh section, already at the top — moves
+// nothing. The expo twin does the same through its scroll host.
 export function SettingsPane({
+  viewKey,
   className,
   children,
 }: {
+  viewKey?: string;
   className?: string;
   children: React.ReactNode;
 }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const prevViewKeyRef = useRef(viewKey);
+  useEffect(() => {
+    if (prevViewKeyRef.current === viewKey) return;
+    prevViewKeyRef.current = viewKey;
+    ref.current?.closest('main')?.scrollTo({ top: 0 });
+  }, [viewKey]);
+
   return (
     <div
+      ref={ref}
       className={cn('mx-auto flex w-full max-w-2xl flex-col gap-8 px-4 py-8 md:px-6', className)}
     >
       {children}

@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 
-import { SettingsNotice } from './settings-kit';
+import { SettingsNotice, SettingsPane } from './settings-kit';
 
 // Pins which tone is allowed to move the page. The failure is silent both ways:
 // drop the `error` branch and a failure reported from deep in a long section is
@@ -45,4 +45,35 @@ test.each(['info', 'pending'] as const)('a %s notice never moves the page', (ton
   render(<SettingsNotice tone={tone}>You haven’t set up a recovery code.</SettingsNotice>);
 
   expect(scrollIntoView).not.toHaveBeenCalled();
+});
+
+// A sub-view (Account → Change password) swaps the pane's content in place, so
+// nothing navigates and the layout's `<main>` keeps the overview's offset unless
+// the pane resets it. Silent when lost: the new view just arrives mid-page.
+describe('SettingsPane viewKey', () => {
+  function renderInMain(viewKey: string) {
+    const ui = (key: string) => (
+      <main>
+        <SettingsPane viewKey={key}>{key}</SettingsPane>
+      </main>
+    );
+    const result = render(ui(viewKey));
+    const main = result.container.querySelector('main') as HTMLElement;
+    main.scrollTo = jest.fn();
+    return { main, rerender: (key: string) => result.rerender(ui(key)) };
+  }
+
+  test('a view change scrolls the page back to the top', () => {
+    const { main, rerender } = renderInMain('overview');
+    rerender('change-password');
+
+    expect(main.scrollTo).toHaveBeenCalledWith({ top: 0 });
+  });
+
+  test('a re-render on the same view leaves the page where it is', () => {
+    const { main, rerender } = renderInMain('overview');
+    rerender('overview');
+
+    expect(main.scrollTo).not.toHaveBeenCalled();
+  });
 });
