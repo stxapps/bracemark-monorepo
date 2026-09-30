@@ -6,6 +6,8 @@ import { RefreshCw } from 'lucide-react';
 import { isUpdateRequired, onUpdateRequired } from '@stxapps/web-react';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 
+import { reloadPage } from '@/lib/reload-page';
+
 // The update-required state (docs/offline-mode.md, _version skew_). A newer build,
 // in another tab, upgraded one of this origin's databases; this tab has already
 // let go of it (data/db.ts, data/session-store.ts — without waiting for anyone,
@@ -72,6 +74,6 @@ async function reloadIntoNewBuild(): Promise<void> {
       });
     }
   } finally {
-    window.location.reload();
+    reloadPage();
   }
 }

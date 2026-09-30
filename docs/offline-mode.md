@@ -389,7 +389,9 @@ worker:
   one version up under an open, dirty editor: the upgrade isn't blocked, the old
   tab shows the update-required banner, and the draft is still on screen.
 - Unit specs: `update-pill.spec.tsx` (first install vs update, chunk failures,
-  the draft confirm, flush before reload), `chunk-error.spec.ts`,
+  the draft confirm, flush before reload), `update-required-banner.spec.tsx`
+  (no reload by itself, a waiting worker's handover before the reload, the
+  fallback when it never reports), `chunk-error.spec.ts`,
   `service-worker-cache.spec.ts`, `use-unsaved-draft.spec.tsx`, and the session
   database's `versionchange` case in `session-store.spec.ts`.
 
