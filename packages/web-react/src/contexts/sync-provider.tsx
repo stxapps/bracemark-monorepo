@@ -22,7 +22,7 @@ import {
 
 import { getSession } from '../data/session-store';
 import { claimIfStillSignedIn, isFirstSyncDone } from '../data/sync-store';
-import { isUpdateRequired, onUpdateRequired } from '../data/update-required';
+import { useUpdateRequired } from '../hooks/use-update-required';
 import { runIncrementalSync, runInitialSync, type SyncDeps } from '../sync/engine';
 import { useAuth } from './auth-provider';
 
@@ -128,8 +128,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const [localWriteNonce, setLocalWriteNonce] = useState(0);
   // A newer build took over this origin's databases (update-required.ts): this
   // tab can no longer read or write them, so it must stop scheduling cycles.
-  const [halted, setHalted] = useState(isUpdateRequired);
-  useEffect(() => onUpdateRequired(() => setHalted(true)), []);
+  const halted = useUpdateRequired();
 
   // Latest background-sync runner; requestSync goes through this ref so its
   // identity stays stable while the account/session underneath changes. Reset to

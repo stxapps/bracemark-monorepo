@@ -20,13 +20,18 @@ import { UpdateRequiredBanner } from './update-required-banner';
 let mockRequired = true;
 let mockSignal: (() => void) | undefined;
 
-jest.mock('@stxapps/web-react', () => ({
-  isUpdateRequired: () => mockRequired,
-  onUpdateRequired: (listener: () => void) => {
+// The real hook over a fake signal: subscribe captures the listener, and the
+// snapshot reads mockRequired — so a spec raises the signal by setting both.
+jest.mock('@stxapps/web-react', () => {
+  const { useSyncExternalStore } = jest.requireActual<typeof import('react')>('react');
+  const subscribe = (listener: () => void) => {
     mockSignal = listener;
     return () => undefined;
-  },
-}));
+  };
+  return {
+    useUpdateRequired: () => useSyncExternalStore(subscribe, () => mockRequired),
+  };
+});
 
 class FakeContainer extends EventTarget {
   getRegistration = jest.fn(() => Promise.resolve(registration));
@@ -56,7 +61,10 @@ it('appears when the signal arrives, and never reloads by itself', () => {
   render(<UpdateRequiredBanner />);
   expect(screen.queryByRole('alert')).toBeNull();
 
-  act(() => mockSignal?.());
+  act(() => {
+    mockRequired = true;
+    mockSignal?.();
+  });
 
   expect(screen.getByRole('alert').textContent).toContain('Bracemark was updated in another tab');
   expect(reload).not.toHaveBeenCalled();

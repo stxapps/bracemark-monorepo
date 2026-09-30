@@ -3,12 +3,7 @@
 import { useEffect, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 
-import {
-  flushLocalWrites,
-  hasUnsavedDrafts,
-  isUpdateRequired,
-  onUpdateRequired,
-} from '@stxapps/web-react';
+import { flushLocalWrites, hasUnsavedDrafts, useUpdateRequired } from '@stxapps/web-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -46,11 +41,9 @@ import { reloadPage } from '@/lib/reload-page';
 // build has taken the DATABASE, this tab can't save at all, and that banner says so.
 export function UpdatePill() {
   const [updated, setUpdated] = useState(false);
-  const [dbTaken, setDbTaken] = useState(isUpdateRequired);
+  const dbTaken = useUpdateRequired();
   const [confirming, setConfirming] = useState(false);
   const [reloading, setReloading] = useState(false);
-
-  useEffect(() => onUpdateRequired(() => setDbTaken(true)), []);
 
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return;

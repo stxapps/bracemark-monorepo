@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 
-import { isUpdateRequired, onUpdateRequired } from '@stxapps/web-react';
+import { useUpdateRequired } from '@stxapps/web-react';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 
 import { reloadPage } from '@/lib/reload-page';
@@ -29,9 +29,8 @@ import { reloadPage } from '@/lib/reload-page';
 // An alert, not a status: it arrives unasked, but every save the user makes from
 // here on fails, and they need to know before the next one.
 export function UpdateRequiredBanner() {
-  const [required, setRequired] = useState(isUpdateRequired);
+  const required = useUpdateRequired();
   const [reloading, setReloading] = useState(false);
-  useEffect(() => onUpdateRequired(() => setRequired(true)), []);
 
   if (!required) return null;
 

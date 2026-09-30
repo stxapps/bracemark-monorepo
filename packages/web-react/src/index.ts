@@ -54,6 +54,7 @@ export * from './hooks/use-sign-out';
 export * from './hooks/use-tag-mutations';
 export * from './hooks/use-tags';
 export * from './hooks/use-unsaved-draft';
+export * from './hooks/use-update-required';
 export * from './lib/auth-api-client';
 export * from './lib/resize-image';
 export * from './lib/server-extraction';

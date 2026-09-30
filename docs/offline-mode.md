@@ -244,7 +244,8 @@ different builds, and a phone and a laptop can too. Three contracts hold:
    only the session schema changed. Explicit reopens are refused while the
    signal is set, so editors and late writes cannot continue under obsolete
    session handling.
-   The sync providers stop scheduling cycles on it, and the web app shows the
+   React reads it through `useUpdateRequired()` (`web-react/src/hooks/`). The
+   sync providers stop scheduling cycles on it, and the web app shows the
    **update-required banner** (`apps/bracemark-web/src/components/update-required-banner.tsx`).
 
    It is a banner, not a modal: an unsaved draft stays on screen and selectable

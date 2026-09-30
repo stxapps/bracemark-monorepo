@@ -24,8 +24,7 @@ const mockFlush = jest.fn(() => Promise.resolve());
 jest.mock('@stxapps/web-react', () => ({
   flushLocalWrites: () => mockFlush(),
   hasUnsavedDrafts: () => mockDirty,
-  isUpdateRequired: () => mockDbTaken,
-  onUpdateRequired: () => () => undefined,
+  useUpdateRequired: () => mockDbTaken,
 }));
 
 class FakeContainer extends EventTarget {
