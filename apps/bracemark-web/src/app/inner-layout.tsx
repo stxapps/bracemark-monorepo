@@ -27,6 +27,14 @@ import { extractClient } from '../lib/extract-client';
 //
 // ⚠ This rides on the worker's cross-origin rule (sw.ts): registering after every
 // sign-in widens who runs the worker, so it must never cache account data.
+//
+// Once per document, hence module scope: `window.serwist` is one Serwist instance
+// per page load, and a second `register()` on it is refused in dev and silently
+// redone in prod. An effect-local flag would reset on every `signedIn` flip —
+// a reload that finds the registration before auth hydrates, or a sign-out then
+// sign-in in the same tab, would each register again.
+let didRegister = false;
+
 function Initializer() {
   const { status } = useAuth();
   const signedIn = status === 'authenticated';
@@ -38,11 +46,11 @@ function Initializer() {
     // tab it takes over from learns through UpdatePill, which watches
     // `controllerchange` itself.
     let cancelled = false;
-    let didRegister = false;
     const register = () => {
       if (cancelled || didRegister) return;
-      window.serwist.register();
+      // Set before the call: `register()` is async (it awaits window `load`).
       didRegister = true;
+      void window.serwist.register();
     };
 
     if (signedIn) {
