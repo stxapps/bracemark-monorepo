@@ -169,7 +169,15 @@ function isMain(): boolean {
   return Boolean(entry && import.meta.url === pathToFileURL(entry).href);
 }
 
+// The per-surface counts are printed here, not written into docs: a number
+// typed into e2e/NEXT.md went stale on the first case added after it.
 if (isMain()) {
   validateCaseRegistry();
-  console.log(`E2E case registry: ${readCaseRegistry().length} cases OK`);
+  const cases = readCaseRegistry();
+  const bySurface = new Map<E2ESurface, number>();
+  for (const testCase of cases) {
+    bySurface.set(testCase.surface, (bySurface.get(testCase.surface) ?? 0) + 1);
+  }
+  const counts = [...bySurface].map(([surface, n]) => `${surface} ${n}`).join(', ');
+  console.log(`E2E case registry: ${cases.length} cases OK (${counts})`);
 }

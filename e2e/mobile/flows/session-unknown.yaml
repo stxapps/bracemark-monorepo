@@ -1,0 +1,25 @@
+# Sign in to an account holding one link written on the web, then hand the device
+# to the runner, which deletes the account's session rows from the api's database —
+# what the daily cleanup or a restore does (docs/sessions.md, _revocation, expiry and
+# unknown tokens_). The device's token is now one the server never issued, and its
+# `session_unknown` must keep everything, exactly as an expiry does. The rest is
+# SESSION-EXPIRED-NATIVE-001's parts: parts/session-expired-paused.yaml makes the
+# request that learns it and saves a link while sync is paused; the runner counts
+# the local store (not empty — nothing was wiped); parts/session-expired-resume.yaml
+# signs back in with the SAME password; and the runner reads the queued link from a
+# fresh web profile.
+#
+#   maestro test mobile/flows/session-unknown.yaml -e USERNAME=… -e PASSWORD=… \
+#     -e KEPT_URL=https://….invalid/unknown-kept
+appId: com.bracemark.app
+tags: [SESSION-UNKNOWN-NATIVE-001, full, online, destructive, ios, android]
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+- extendedWaitUntil:
+    visible: ".*${KEPT_URL.replace('https://', '')}.*"
+    timeout: 60000
+- tapOn:
+    text: 'Dismiss'
+    optional: true
+- takeScreenshot: session-unknown-base

@@ -1190,6 +1190,16 @@
     "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
   },
   {
+    "id": "SESSION-UNKNOWN-NATIVE-001",
+    "title": "A token the server no longer knows (its session rows purged) pauses sync and keeps the device's library and a link saved while paused, and resuming with the same password pushes it",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "destructive", "ios", "android"],
+    "fixture": "small",
+    "path": "mobile/flows/session-unknown.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
     "id": "VIEWPORT-KEYBOARD-001",
     "title": "With the soft keyboard up, the add panel, the search box and the Android share tag picker keep their fields and controls above it, and each app dismissal path puts it away without closing the surface",
     "surface": "native",

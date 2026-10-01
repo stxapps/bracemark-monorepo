@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { expect } from '@playwright/test';
 
 import { profileDir } from '../paths';
+import { forgetSessions } from '../seed/sessions';
 import { importArchive, waitForSync } from '../seed/steps';
 import { type Credentials, newCredentials } from '../web/fixtures/account';
 import { unique, unresolvableUrl } from '../web/fixtures/data';
@@ -540,7 +541,8 @@ async function main(): Promise<void> {
           if (
             testCase.id.startsWith('OFFLINE-') ||
             testCase.id === 'SESSION-INVALID-NATIVE-001' ||
-            testCase.id === 'SESSION-EXPIRED-NATIVE-001'
+            testCase.id === 'SESSION-EXPIRED-NATIVE-001' ||
+            testCase.id === 'SESSION-UNKNOWN-NATIVE-001'
           ) {
             // What the device must still read once the api is gone — or, for
             // the revoked session, what the teardown must take and the return
@@ -1346,7 +1348,7 @@ async function main(): Promise<void> {
         const queuedUrl = unresolvableUrl(`${run.runId}-expired-queued`);
         env.KEPT_URL = offlineUrl;
         env.QUEUED_URL = queuedUrl;
-        env.NEW_PASSWORD = newPassword;
+        env.RESUME_PASSWORD = newPassword;
         steps = [
           testCase.path,
           async () => {
@@ -1370,6 +1372,36 @@ async function main(): Promise<void> {
               { username: credentials.username, password: newPassword },
               [{ url: queuedUrl }],
             );
+            return null;
+          },
+        ];
+      }
+      if (testCase.id === 'SESSION-UNKNOWN-NATIVE-001') {
+        // docs/sessions.md: a token the server no longer knows keeps everything,
+        // like an expiry. The rows go the way the cleanup takes them — deleted
+        // from the api's database (seed/sessions.ts) — and the flow resumes with
+        // the same password, reusing SESSION-EXPIRED-NATIVE-001's parts.
+        const queuedUrl = unresolvableUrl(`${run.runId}-unknown-queued`);
+        env.KEPT_URL = offlineUrl;
+        env.QUEUED_URL = queuedUrl;
+        env.RESUME_PASSWORD = credentials.password;
+        steps = [
+          testCase.path,
+          async () => {
+            await forgetSessions(credentials.username);
+            return null;
+          },
+          'mobile/flows/parts/session-expired-paused.yaml',
+          async (context) => {
+            const rows = await localRows(context, 'store-paused');
+            if (rows === 0) throw new Error('the unknown session emptied the local store');
+            return null;
+          },
+          'mobile/flows/parts/session-expired-resume.yaml',
+          async () => {
+            await readFromWeb(`${run.runId}-${testCase.id}-reader`, credentials, [
+              { url: queuedUrl },
+            ]);
             return null;
           },
         ];

@@ -544,7 +544,10 @@ The layers ([testing.md](./testing.md)), and where each part of the rule is pinn
   `data/session-store.spec.ts` (both); `contexts/sync-provider.spec.tsx` (web) —
   paused runs no cycle; the account fence in `sync/engine.spec.ts` and
   `data/sync-store.spec.ts` (web) and `data/sync-store.spec.ts` (expo) — a
-  teardown mid-cycle or mid-first-sync leaves nothing written.
+  teardown mid-cycle or mid-first-sync leaves nothing written;
+  `data/share-store.spec.ts` (expo) — while the session is `expired`, a share
+  saves and sends nothing: no upload from the iOS **share extension**, no sync
+  cycle from the Android share activity, each with an `active` control.
 - **e2e ([e2e.md](./e2e.md)):** `SESSION-INVALID-WEB-001` (revoked → wiped,
   sign-in says why) and `SESSION-INVALID-NATIVE-001` (revoked, on device);
   `SESSION-EXPIRED-WEB-001` — expired by a password change on another profile,
@@ -559,7 +562,13 @@ The layers ([testing.md](./testing.md)), and where each part of the rule is pinn
 - `SESSION-EXPIRED-NATIVE-001` — the same expiry on a device (the runner
   changes the password from a web profile, the flow pauses, saves a link,
   resumes through the `/resume` modal, and the runner reads the link from the
-  web). Passes on the iOS simulator; not yet run on an Android emulator.
+  web). Passes on the iOS simulator and the Android emulator.
+- `SESSION-UNKNOWN-NATIVE-001` — the unknown token on a device. The device's
+  Keychain/Keystore is out of the runner's reach, so where the web case forges
+  the stored token this one deletes the account's session rows from local D1
+  (`e2e/seed/sessions.ts`) — the purge's own write. It reuses the expired
+  case's paused and resume parts, resuming with the same password. Passes on
+  the iOS simulator and the Android emulator.
 - `SESSION-RACE-WEB-001` — a delayed sign-out and revoked response arrive
   after resume in another tab; the replacement session and its unsynced edit
   survive, including reload.
@@ -569,6 +578,11 @@ The layers ([testing.md](./testing.md)), and where each part of the rule is pinn
 - **Not covered end to end:** the sleeping-tab /
   in-flight-sync / account-switch races, which are pinned at the unit level by
   the account fence and the generation checks rather than driven in a browser.
+  Nor is **idle expiry** as such: the client can't tell it from a
+  password-change expiry (both are `session_expired`, and the client reads no
+  clock), and the server half — an unrevoked row past `expires_at` — is pinned
+  in `middleware/auth.spec.ts`. An e2e case for it would re-run
+  `SESSION-EXPIRED-*` under another name.
 - **By hand, on a real device:** revoke with _Sign out other devices_ and
   expire with _Change password_ from bracemark-web, as the e2e runner does. For
   what those can't reach (one session revoked alone, idle expiry with the

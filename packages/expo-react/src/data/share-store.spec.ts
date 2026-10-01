@@ -2,8 +2,9 @@
 // the defensive parses guarding what crosses the App Group container, and the
 // outbox drain's FILE handling — above all that a file the drain can't read is
 // quarantined rather than deleted (an outbox draft is sometimes the only copy of
-// a share). What the drain writes into sqlite, and the encrypt/upload half, stay
-// on-device (docs/share-sheet.md).
+// a share) — and the one rule the post-Add kick carries: an EXPIRED session
+// sends nothing. What the drain writes into sqlite, and the encrypt/upload
+// itself, stay on-device (docs/share-sheet.md).
 //
 // The import graph reaches the native stores (db.ts → expo-sqlite, the App Group
 // helpers → expo-file-system, session-store → expo-secure-store). The pure
@@ -14,6 +15,7 @@
 import { Platform } from 'react-native';
 
 import {
+  type ApiClient,
   ARCHIVE_ID,
   type List,
   MY_LIST_ID,
@@ -23,7 +25,10 @@ import {
   TRASH_ID,
 } from '@stxapps/shared';
 
+import { runIncrementalSync } from '../sync/engine';
+import { writeLink } from './mutations';
 import { countLinks } from './queries';
+import { getSession, loadSharedSession } from './session-store';
 import {
   buildShareLists,
   buildShareTags,
@@ -32,9 +37,11 @@ import {
   isAtLinkCap,
   parseShareDraft,
   parseShareTaxonomy,
+  saveSharedDraft,
   type ShareDraft,
   type ShareTaxonomy,
 } from './share-store';
+import { uploadShareDraft } from './share-upload';
 import { readCachedStatus } from './subscription-store';
 
 // The in-memory filesystem behind the expo-file-system stand-in: uri → contents
@@ -153,7 +160,7 @@ jest.mock('./app-group', () => ({
 
 // A signed-in session, so the drain gets past its guard.
 jest.mock('./session-store', () => ({
-  getSession: () => ({ username: 'alice', encryptionKey: new Uint8Array(32) }),
+  getSession: jest.fn(() => ({ username: 'alice', encryptionKey: new Uint8Array(32) })),
   loadSession: jest.fn(async () => undefined),
   loadSharedSession: jest.fn(async () => null),
 }));
@@ -182,6 +189,10 @@ jest.mock('./mutations', () => ({
   writeTag: jest.fn(async () => undefined),
   writeExtraction: jest.fn(async () => undefined),
 }));
+// The post-Add kicks — iOS's encrypt + PUT, Android's sync cycle — as bare
+// spies: saveSharedDraft's only job toward them is whether to call at all.
+jest.mock('./share-upload', () => ({ uploadShareDraft: jest.fn(async () => undefined) }));
+jest.mock('../sync/engine', () => ({ runIncrementalSync: jest.fn(async () => undefined) }));
 
 const trashDefault = SYSTEM_LIST_DEFAULTS.find((def) => def.id === TRASH_ID);
 if (!trashDefault) throw new Error('SYSTEM_LIST_DEFAULTS is missing Trash');
@@ -543,6 +554,112 @@ describe('isAtLinkCap', () => {
       cached.mockReturnValue(null);
       atCount(5000);
       expect(await isAtLinkCap()).toBe(false);
+    });
+  });
+});
+
+// The post-Add kick reads the session's STATE and nothing else (docs/sessions.md,
+// _the expired state on the client_; docs/share-sheet.md): while the main app
+// holds a `session_expired` / `session_unknown` verdict, a share saves and queues
+// like any offline edit and sends nothing — the request would only earn the same
+// verdict again, and the share sheet's process could not act on it anyway. Each
+// platform gets a positive control, or "never called" would pass just as well
+// for a kick that was never reachable.
+describe('saveSharedDraft — an expired session sends nothing', () => {
+  const upload = uploadShareDraft as jest.Mock;
+  const sync = runIncrementalSync as jest.Mock;
+  const sharedSession = loadSharedSession as jest.Mock;
+  const currentSession = getSession as jest.Mock;
+  const write = writeLink as jest.Mock;
+  const api = {} as ApiClient;
+  const OUTBOX_FILE = 'group/share/outbox/link-1.json';
+
+  const draft: ShareDraft = {
+    id: 'link-1',
+    url: 'https://example.com/a',
+    title: 'Example',
+    listId: MY_LIST_ID,
+    tagIds: [],
+    newTags: [],
+    newLists: [],
+    sharedAt: 1_700_000_000_000,
+  };
+
+  function session(state: 'active' | 'expired') {
+    return { username: 'alice', encryptionKey: new Uint8Array(32), state, generation: 'g1' };
+  }
+
+  // Neither kick is awaited — Add resolves on the durable write — so the spec
+  // lets the fire-and-forget chain run before it looks.
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  beforeEach(() => {
+    mockFiles.clear();
+    mockDirs.clear();
+    upload.mockClear();
+    sync.mockClear();
+    write.mockClear();
+    sharedSession.mockReset();
+  });
+
+  // jest-expo runs this suite as iOS: the share extension, a separate process
+  // reading the session from the shared-Keychain mirror.
+  describe('iOS — the share extension', () => {
+    afterEach(() => {
+      sharedSession.mockResolvedValue(null);
+    });
+
+    it('queues the draft and uploads nothing while the mirrored session is expired', async () => {
+      sharedSession.mockResolvedValue(session('expired'));
+      expect(await saveSharedDraft(draft, api)).toBe('queued');
+      await settle();
+      expect(sharedSession).toHaveBeenCalled();
+      expect(mockFiles.has(OUTBOX_FILE)).toBe(true);
+      expect(upload).not.toHaveBeenCalled();
+    });
+
+    it('uploads the draft when the mirrored session is active', async () => {
+      sharedSession.mockResolvedValue(session('active'));
+      expect(await saveSharedDraft(draft, api)).toBe('queued');
+      await settle();
+      expect(mockFiles.has(OUTBOX_FILE)).toBe(true);
+      expect(upload).toHaveBeenCalledWith(expect.objectContaining({ api }), draft);
+    });
+  });
+
+  // The share activity runs in the app's process and saves through the real
+  // write edge, then kicks a sync cycle.
+  describe('Android — the share activity', () => {
+    const platform = Platform as { OS: string };
+    let original: string;
+
+    beforeEach(() => {
+      original = platform.OS;
+      platform.OS = 'android';
+    });
+    afterEach(() => {
+      platform.OS = original;
+      currentSession.mockReset();
+      currentSession.mockImplementation(() => ({
+        username: 'alice',
+        encryptionKey: new Uint8Array(32),
+      }));
+    });
+
+    it('saves the link and runs no sync cycle while the session is expired', async () => {
+      currentSession.mockReturnValue(session('expired'));
+      expect(await saveSharedDraft(draft, api)).toBe('saved');
+      await settle();
+      expect(write).toHaveBeenCalledTimes(1);
+      expect(sync).not.toHaveBeenCalled();
+    });
+
+    it('runs a sync cycle after the save when the session is active', async () => {
+      currentSession.mockReturnValue(session('active'));
+      expect(await saveSharedDraft(draft, api)).toBe('saved');
+      await settle();
+      expect(write).toHaveBeenCalledTimes(1);
+      expect(sync).toHaveBeenCalledWith(expect.objectContaining({ username: 'alice', api }));
     });
   });
 });

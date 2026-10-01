@@ -442,7 +442,7 @@ accessible identity is untestable as well as inaccessible. Flows bind to `testID
 and accessible labels, **never to body copy** — copy in this repo changes often,
 and a flow keyed to a sentence turns every wording edit into a red run.
 
-Twenty-eight repo-specific gotchas:
+The repo-specific gotchas:
 
 - **Android's document picker keeps the current folder breadcrumb behind its
   navigation drawer.** If it reopens Downloads, an unscoped `Downloads` text
@@ -1224,6 +1224,10 @@ them differently:
   the queued edit reaches a fresh reader. `SESSION-UNKNOWN-WEB-001` replaces the
   stored token with one the server never issued — what a purged row looks like
   from the device (`session_unknown`) — and resumes the same way.
+  `SESSION-UNKNOWN-NATIVE-001` is its twin on a device, where the stored token
+  is out of reach: the runner deletes the account's session rows from local D1
+  instead (`seed/sessions.ts`, beside the plan grant in `seed/plan.ts`; both go
+  through `seed/d1.ts`).
   `SESSION-RACE-WEB-001` holds a sign-out request while another tab resumes,
   then delivers a revoked response for the old token. The replacement session
   and a link queued after resume must survive that response and a reload.
@@ -1259,7 +1263,7 @@ payload, so the in-app route works offline there: `PWA-004` proves it in a tab,
 
 **The server gone, on a device** (`OFFLINE-EXPORT-IOS-001`/`-ANDROID-001`,
 `OFFLINE-API-ERROR-ANDROID-001`, `SESSION-INVALID-NATIVE-001`,
-`SESSION-EXPIRED-NATIVE-001` — run on iOS, not yet on Android). The same three
+`SESSION-EXPIRED-NATIVE-001`, `SESSION-UNKNOWN-NATIVE-001`). The same three
 questions, each answered from outside the app. Export reaches Settings in-app —
 native navigation needs no network, so the tab's gap has no native twin — and
 the runner reads the plain-text file out of the app's cache

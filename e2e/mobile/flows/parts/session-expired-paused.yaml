@@ -1,6 +1,7 @@
-# Part two of SESSION-EXPIRED-NATIVE-001: the password changed on another device, and
-# the app still believes its session is live. A user's Sync is the request that
-# learns otherwise; its `session_expired` must PAUSE sync — the notice on the links
+# Part two of SESSION-EXPIRED-NATIVE-001 and SESSION-UNKNOWN-NATIVE-001: the password
+# changed on another device, or the session rows were purged, and the app still
+# believes its session is live. A user's Sync is the request that learns otherwise;
+# its `session_expired` / `session_unknown` must PAUSE sync — the notice on the links
 # screen — and leave everything where it was: no sign-in screen, the library on
 # screen, and a new save still working, queued for after the resume.
 appId: com.bracemark.app
@@ -24,4 +25,4 @@ appId: com.bracemark.app
       URL: ${QUEUED_URL}
 - assertVisible:
     id: 'sync-paused-notice'
-- takeScreenshot: session-expired-paused
+- takeScreenshot: session-paused
