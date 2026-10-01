@@ -24,8 +24,19 @@ export function b64urlEncodeJson(value: unknown): string {
 // its only consumer. (Built over a plain ArrayBuffer explicitly — importKey's
 // BufferSource rejects the ArrayBufferLike-typed view Uint8Array.from would
 // produce.)
+//
+// Also tolerates ESCAPED line breaks — the two characters `\` `n` where a
+// newline was. That is the one-line shape a PEM has inside a service-account
+// JSON and inside a double-quoted dotenv line, and only a parser turns it back
+// into newlines: a secret that reaches the Worker any other way (the shell, a
+// keychain item, a pasted `wrangler secret put`) arrives with the escapes
+// intact. The `n` is a base64 letter, so stripping whitespace alone leaves a
+// body the Workers `atob` rejects on the backslash — and it rejects it on the
+// first store call, after a purchase, not at startup. A backslash is never
+// part of a PEM, so dropping the pair cannot change what a well-formed key
+// decodes to.
 export function pemToPkcs8(pem: string): Uint8Array<ArrayBuffer> {
-  const body = pem.replace(/-----(BEGIN|END)[A-Z ]*KEY-----/g, '').replace(/\s+/g, '');
+  const body = pem.replace(/-----(BEGIN|END)[A-Z ]*KEY-----/g, '').replace(/\\[nr]|\s+/g, '');
   const bin = atob(body);
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);

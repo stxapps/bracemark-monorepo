@@ -82,7 +82,7 @@ function requireVar(name: string): string {
  * file in this worktree: the key is the same one production signs with, and it
  * works against the live Server API too (docs/env-files.md, _bracemark-api
  * local secrets_). Stored flattened to one line; `serverApiJwt` strips the
- * armour and all whitespace, so either shape imports.
+ * armour, all whitespace and escaped line breaks, so any of the shapes imports.
  */
 function resolvePrivateKey(): { pem: string; from: string } {
   const fromShell = process.env.APPSTORE_PRIVATE_KEY;
@@ -124,7 +124,10 @@ async function serverApiJwt(issuerId: string, keyId: string, bundleId: string, p
     encode({ iss: issuerId, iat, exp: iat + 5 * 60, aud: 'appstoreconnect-v1', bid: bundleId });
 
   const der = Buffer.from(
-    pem.replace(/-----(BEGIN|END)[A-Z ]*KEY-----/g, '').replace(/\s+/g, ''),
+    // `\\[nr]`: escaped line breaks, as lib/jwt.ts pemToPkcs8 drops them. Node's
+    // base64 decoder skips the backslash but KEEPS the `n`, so without this an
+    // escaped PEM decodes to garbage DER rather than failing to decode.
+    pem.replace(/-----(BEGIN|END)[A-Z ]*KEY-----/g, '').replace(/\\[nr]|\s+/g, ''),
     'base64',
   );
   const key = await crypto.subtle.importKey(

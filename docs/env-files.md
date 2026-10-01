@@ -630,6 +630,18 @@ Three rules here fail **silently**:
   strips the armour and all whitespace, so one line imports fine). The script
   refuses a `*_PRIVATE_KEY` item that has no `-----BEGIN`.
 
+  A PEM stored with **escaped** newlines is the neighbouring case, and it is
+  tolerated rather than refused: the two characters `\` `n` where each line
+  break was, which is how a PEM sits inside a service-account JSON and inside a
+  double-quoted `.dev.vars` line. Only a JSON or dotenv parser turns those back
+  into newlines; the keychain and the shell hand them over as written. Such an
+  item is text, so it has its `-----BEGIN` and passes the script's check — and
+  the `n` is a base64 letter, so stripping whitespace left a body the Workers
+  `atob` rejected on the backslash: `InvalidCharacterError` from `pemToPkcs8`,
+  a 502 on `iap/verify`, **after** the store had taken the purchase.
+  `pemToPkcs8` now drops the escape pair along with the whitespace (a backslash
+  is never part of a PEM), and `replay-appstore.ts` does the same.
+
 **Non-secret overrides moved to the shell as well.** Only the listed names are
 bound, so a `CORS_ORIGINS` line in a `.dev.vars.development` or an
 `.env.development.local` does nothing. Export it for the session instead —

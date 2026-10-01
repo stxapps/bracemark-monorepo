@@ -100,6 +100,9 @@ resolve_secret() {
   # A PEM stored WITH its newlines comes back from `security -w` hex-encoded,
   # which lib/jwt.ts pemToPkcs8 would then fail to decode on the first store
   # call — long after startup looked fine. Store PEMs flattened (tr -d '\n').
+  # (A PEM stored with ESCAPED newlines — a literal backslash-n, the shape it
+  # has in a service-account JSON or a dotenv line — is not that case: it comes
+  # back as text, passes this check, and pemToPkcs8 drops the escapes.)
   case "$name" in
     *_PRIVATE_KEY)
       [[ "$value" == *"-----BEGIN"* ]] \
