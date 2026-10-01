@@ -569,3 +569,9 @@ The layers ([testing.md](./testing.md)), and where each part of the rule is pinn
 - **Not covered end to end:** the sleeping-tab /
   in-flight-sync / account-switch races, which are pinned at the unit level by
   the account fence and the generation checks rather than driven in a browser.
+- **By hand, on a real device:** revoke with _Sign out other devices_ and
+  expire with _Change password_ from bracemark-web, as the e2e runner does. For
+  what those can't reach (one session revoked alone, idle expiry with the
+  password unchanged, an unknown token), `tools/scripts/dev-session.sh`
+  `expire` / `revoke` / `forget` writes the local dev sessions database the way
+  the api would; `list` finds the device's session id. Local only.
