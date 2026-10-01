@@ -231,6 +231,14 @@ const config: ExpoConfig = {
     // `finalized` mod, also position-independent. See the plugin, and
     // docs/share-sheet.md — the host view is full-screen.
     './plugins/with-share-extension-root-view',
+    // One observer in that same generated controller: it sets
+    // `isModalInPresentation` when our BracemarkShareSwipeGuard module posts,
+    // which is how the share sheet's pickers hold the system's swipe-to-dismiss
+    // off. The module cannot reach the controller itself, and a native view
+    // that could costs more memory than the share extension has. Same
+    // `finalized` mod, same reason it cannot be an edit. See the plugin, and
+    // docs/share-sheet.md — the pickers hold the system's swipe off.
+    './plugins/with-share-extension-swipe-hold',
   ],
 };
 

@@ -25,6 +25,12 @@ jest.mock('@stxapps/expo-crypto/lib/ids', () => ({
   newId: jest.fn(() => `minted-${++mockIdCounter}`),
 }));
 jest.mock('./share-host', () => ({ closeShareSheet: jest.fn() }));
+// The real guard renders nothing (it only calls an optional iOS module while
+// mounted — share-swipe-guard.spec.tsx), so a marker stands in for "mounted".
+jest.mock('./share-swipe-guard', () => {
+  const { View } = jest.requireActual<typeof import('react-native')>('react-native');
+  return { ShareSwipeGuard: () => <View testID="share-swipe-guard" /> };
+});
 // The app's api-client binding throws at import when EXPO_PUBLIC_API_URL is
 // unset (as in jest); the sheet only threads it through to saveSharedDraft.
 jest.mock('../../lib/api-client', () => ({ apiClient: { call: jest.fn() } }));
@@ -263,4 +269,27 @@ test('summarises the compose tags row past six chips, but announces them all', a
   expect(queryByText('golf')).toBeNull();
   expect(getByText('+3')).toBeTruthy();
   expect(getByLabelText(`Tags: ${names.join(', ')}`)).toBeTruthy();
+});
+
+// On iOS the host's own sheet answers a downward pull that starts on a scroller
+// at its top, and a long one dismisses the share sheet with the share unsaved
+// (docs/share-sheet.md, _the pickers hold the system's swipe off_). The guard
+// holds it off for as long as it is mounted — and it must be mounted
+// on BOTH pickers, the only screens with a scroller, and on neither side of
+// them: the compose screen keeps the system's gesture on purpose. Nothing else
+// fails if a picker drops `holdSwipe`; the sheet just leaves under the finger.
+test('holds the system swipe off on the pickers, and only on the pickers', async () => {
+  const { findByTestId, getByTestId, queryByTestId } = render(
+    <ShareScreen url="https://example.com/h" />,
+  );
+
+  fireEvent.press(await findByTestId('share-list-row'));
+  expect(getByTestId('share-swipe-guard')).toBeTruthy();
+  fireEvent.press(getByTestId('share-back'));
+  expect(queryByTestId('share-swipe-guard')).toBeNull();
+
+  fireEvent.press(getByTestId('share-tags-row'));
+  expect(getByTestId('share-swipe-guard')).toBeTruthy();
+  fireEvent.press(getByTestId('share-back'));
+  expect(queryByTestId('share-swipe-guard')).toBeNull();
 });

@@ -76,7 +76,7 @@ export function ShareTagsPicker({
   }, [trimmed, onSubmitName]);
 
   return (
-    <ShareSheet>
+    <ShareSheet holdSwipe>
       <ShareHeader back={{ title: 'Add tags', onPress: onDone }} />
 
       <Input
@@ -93,11 +93,12 @@ export function ShareTagsPicker({
       />
 
       {/* Bounded, not `flex-1`, and `min-h-0 shrink` so this is what gives up
-          height to the keyboard — see the list picker's note. */}
+          height to the keyboard — see the list picker's note, which also
+          carries why this is `interactive` rather than `on-drag`. */}
       <ScrollView
         className="max-h-72 min-h-0 shrink"
         keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
+        keyboardDismissMode="interactive"
       >
         <TagPickerRows
           rows={[

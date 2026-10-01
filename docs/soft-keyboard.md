@@ -553,15 +553,15 @@ so the rows jump under the finger. There, `interactive`, provided the surface
 has a tap-to-dismiss (above) so `interactive` is not the only way out — on
 Android it maps to `none`. The current map:
 
-| scroller                                                               | mode          | why                                                                                                                      |
-| ---------------------------------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| links `FlashList` (`main.tsx`), links drawer (`sidebar.tsx`)           | `on-drag`     | full-height, top-anchored; scrolling results is the dismissal already in hand                                            |
-| `auth-screen`, `lock-pane`, `link-edit-screen`, settings `scroll-host` | `on-drag`     | `KeyboardAwareScrollView` screens — it tracks the focused field, so no field is out of reach                             |
-| AdvancedSearch body + its checklists (`search-bar.tsx`)                | `on-drag`     | page sheet, top-anchored; the lift only pads its foot                                                                    |
-| `ListCommand`, `TagsCommand` (every host a `Dialog`)                   | `interactive` | the dialog re-centres; filtering is type-scan-type; chrome tap + `"handled"` are the tap exits                           |
-| add panel (`link-add-panel.tsx`)                                       | `interactive` | above                                                                                                                    |
-| share pickers (`share-list-picker.tsx`, `share-tags-picker.tsx`)       | `on-drag`     | lifted, so the jump applies — but the iOS tap layer is unverified (_verifying_), and `on-drag` is its only verified exit |
-| `link-destroy-confirm`, settings drawer, `contract-vectors`            | none          | no keyboard can be up: an alert drops it on open, the other two hold no field                                            |
+| scroller                                                               | mode          | why                                                                                                                     |
+| ---------------------------------------------------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| links `FlashList` (`main.tsx`), links drawer (`sidebar.tsx`)           | `on-drag`     | full-height, top-anchored; scrolling results is the dismissal already in hand                                           |
+| `auth-screen`, `lock-pane`, `link-edit-screen`, settings `scroll-host` | `on-drag`     | `KeyboardAwareScrollView` screens — it tracks the focused field, so no field is out of reach                            |
+| AdvancedSearch body + its checklists (`search-bar.tsx`)                | `on-drag`     | page sheet, top-anchored; the lift only pads its foot                                                                   |
+| `ListCommand`, `TagsCommand` (every host a `Dialog`)                   | `interactive` | the dialog re-centres; filtering is type-scan-type; chrome tap + `"handled"` are the tap exits                          |
+| add panel (`link-add-panel.tsx`)                                       | `interactive` | above                                                                                                                   |
+| share pickers (`share-list-picker.tsx`, `share-tags-picker.tsx`)       | `interactive` | bottom-parked, so the whole sheet fell a keyboard's height mid-drag; `ShareSheet`'s tap layer is the exit (_verifying_) |
+| `link-destroy-confirm`, settings drawer, `contract-vectors`            | none          | no keyboard can be up: an alert drops it on open, the other two hold no field                                           |
 
 `"handled"` sits on every row above that carries a mode — the rule in 2 has no
 exception.
@@ -680,9 +680,20 @@ measured on iOS except where noted:
   keyboard's own keys and the status bar; a `testID` that resolved a step
   earlier (`share-back`) goes not-found. Coordinate taps have nothing to confirm
   against, so a tap that does nothing and a tap that was never delivered are
-  indistinguishable. **The share sheet's dismissal path is therefore unverified**
-  — the code is right on reasoning and says so in its own comment. If you are
-  ever in that sheet by hand, try it and record the answer here.
+  indistinguishable. **The share sheet's dismissal path is therefore a manual
+  check, and no flow will ever make it.** Its tap layer has been driven by hand
+  on an iPhone — a tap on the panel's empty space drops the keyboard — and that
+  result is what the pickers' `interactive` scrollers rest on (_dismissal_, 3):
+  re-drive it by hand after touching `ShareSheet`'s wrapper. Driven the same
+  way: `interactive`'s other iOS exit, a drag down into the keys, is not one to
+  count on there. A pull down from the top of a picker's list goes to the
+  system sheet the extension sits in, not to the scroller — a short one tucks
+  the keyboard away and returns it to the still-focused field, a long one
+  dismisses the whole sheet. That holds with the keyboard down too, so it is the
+  host's gesture rather than anything `keyboardDismissMode` chose; the pickers
+  now hold it off natively, so there a pull from the top makes the sheet resist
+  and stay ([share-sheet.md](./share-sheet.md), _the pickers hold the system's
+  swipe off_).
 - **Portaled content is not in the tree either** — the links topbar's dropdown
   (`more-options-menu.tsx`) never appears, so "open the menu, tap Settings"
   cannot be driven that way. Reach settings through the drawer instead.

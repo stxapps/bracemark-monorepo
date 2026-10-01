@@ -4,6 +4,6 @@
     "modules": ["com.bracemark.share.BracemarkShareModule"]
   },
   "ios": {
-    "modules": ["BracemarkShareKeyboardModule"]
+    "modules": ["BracemarkShareKeyboardModule", "BracemarkShareSwipeGuardModule"]
   }
 }

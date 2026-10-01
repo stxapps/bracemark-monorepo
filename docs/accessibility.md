@@ -541,8 +541,9 @@ plain `6` on its `size-9` box for the topbars' reason — the lockup it trails i
 an icon and a `Text`, and `ml-auto` leaves the middle of that header empty. Being
 in another process changes nothing here: `hitSlop` is plain RN. It is the one
 place where a near-miss strands the user rather than annoying them, because on
-iOS that X is the ONLY way out of the compose screen — no swipe, and a backdrop
-that announces nothing ([share-sheet.md](./share-sheet.md)).
+iOS that X is the only VISIBLE way out of the compose screen — the system's
+swipe-down and the backdrop both work and neither announces itself
+([share-sheet.md](./share-sheet.md)).
 
 The link card/list tag chips use the same lever on one axis: their 24pt visual
 height gets 10pt of top and bottom slop, reaching 44pt vertically without

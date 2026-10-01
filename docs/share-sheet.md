@@ -446,9 +446,9 @@ carrying one. Three rules hold them together:
   on all four screens, so nothing under it ever shifts as the sheet switches. It
   carries the **brand lockup** — this is the one surface in the product that
   floats over another app and has no other carrier — plus a close control, which
-  is not decoration: iOS offers no swipe to dismiss, and the backdrop is a
-  tap target with nothing to announce it, so this is the one way out that is on
-  every screen at every height — which is also why its 36pt box carries
+  is not decoration: the system's swipe-down and the backdrop are both ways out
+  with nothing on screen to announce them, so this is the one way out that is
+  visible on every screen at every height — which is also why its 36pt box carries
   `hitSlop={6}`. It is the one control in the product where a near-miss strands
   the user inside somebody else's app rather than merely annoying them
   ([accessibility.md](./accessibility.md), _a 36dp box is not a 44pt target_). The lockup's row is
@@ -456,6 +456,53 @@ carrying one. Three rules hold them together:
   `flex-row` PARENT collapses it to its content and strands the control against
   the wordmark; both rails put the lockup in a column for the same reason
   (`features/{links,settings}/sidebar.tsx`).
+- **The pickers hold the system's swipe off; the compose screen does not.** The
+  host presents the share extension in a sheet of its own, and a downward drag
+  on it belongs to that sheet, on every screen: a short one moves the sheet and
+  lets it settle back — the keyboard, if up, leaves and returns to the
+  still-focused field — and a long one dismisses it, taking the unsaved share
+  with it. Driven by hand on an iPhone from the pickers' lists, keyboard up and
+  down; on the simulator a 13pt downward drag on a compose row is already enough
+  to start it (the host's `viewWillDisappear` appearance action arrives in the
+  extension's log, 10pt is still a press). On a picker that is an accident
+  waiting for anyone who pulls a list already at its top: "down" there means
+  "scroll", and nothing in JS sees the gesture or can veto it. So the pickers
+  pass `holdSwipe` to `ShareSheet`, which mounts `ShareSwipeGuard`
+  (`share-swipe-guard.tsx`). It renders nothing: mounted, it calls `setHeld(true)`
+  on our own module (`BracemarkShareSwipeGuard`, `modules/bracemark-share/ios`),
+  which posts a notification; `ShareExtensionViewController` observes it and sets
+  `isModalInPresentation` on itself, and unmounting gives it back. The module
+  cannot reach that controller directly — it is `expo-share-extension`'s class,
+  compiled into the extension target, and there is no `UIApplication.shared` to
+  walk down from — so the observer is patched into the controller by
+  `plugins/with-share-extension-swipe-hold.js`, beside the `close` observer the
+  library already carries, for the reason the root-view plugin exists. The
+  compose screen passes nothing, on purpose: swiping a share sheet away from its
+  first screen is the platform's own gesture. Driven by hand on an iPhone 12
+  (iOS 26.5): with a picker up, a long pull from the top of its list makes the
+  sheet resist and stay, and back on the compose screen the same pull still
+  closes it. No flow re-checks either half — the simulator honours the flag too
+  (a flick that otherwise starts the dismissal starts nothing), but a missing
+  observer or a guard that never lets go is silent everywhere, so re-drive that
+  one gesture on both screens after touching the module, the plugin or
+  `holdSwipe`.
+- ⚠ **The share extension has almost no memory to spare, and exceeding it looks
+  like nothing at all.** iOS caps an app extension's memory per process and
+  kills it at the cap — no crash report, no error in Metro or Xcode, the sheet
+  simply gone — and the simulator enforces no such cap, so everything below
+  passes there. The guard above was first written as a sizeless Expo native
+  VIEW that found the controller through its own responder chain, which needed
+  no plugin. On the simulator it worked. On an iPhone 12 (iOS 26.5, dev build)
+  the extension died the moment either picker mounted. Measured: on the
+  simulator the extension's footprint is 170MB on the compose screen, a picker
+  adds 4MB, and a picker carrying that one native view adds 18MB — the first
+  Expo native view in this process costs ~14MB. On the phone, a probe that held
+  2MB more every 200ms over an open picker was last heard from at 12MB, so a dev
+  build has roughly 16MB of headroom over the compose screen. **Nothing on this
+  path may mount a native view from an Expo module, or otherwise spend memory in
+  the tens of megabytes**; a module FUNCTION costs nothing measurable, which is
+  why the guard is one. A release build has more room than a dev build, and that
+  margin has not been measured.
 - **The two disclosure rows say what they are to a screen reader**, even though
   they carry no visible label: `ShareRow` takes a `label` + `value` and announces
   "List: Reading" / "Tags: alpha, beta". Dropping a word of type from a 520pt
@@ -871,6 +918,7 @@ can neither see the share sheet nor anything in this process. →
 | iOS extension target's build settings, and its root view's frame                                                     | `apps/bracemark-expo/plugins/with-share-extension-build-settings.js` (team, deployment target, versions, display name) + `plugins/with-share-extension-root-view.js` (root view fills its superview, not the screen) — both `finalized` mods                                                                        |
 | Android ShareActivity + close() module                                                                               | `apps/bracemark-expo/modules/bracemark-share/android/` (autolinked local module; activity + intent-filter merged from its AndroidManifest)                                                                                                                                                                          |
 | iOS keyboard frames for the extension (`BracemarkShareKeyboard`) + the lift JS reads them through                    | `apps/bracemark-expo/modules/bracemark-share/ios/` (same local module, `BracemarkShare.podspec` path-linked into BOTH targets by `use_expo_modules!`) + `features/share/share-keyboard.ts`                                                                                                                          |
+| iOS: holding the system's swipe-to-dismiss off on the pickers (`BracemarkShareSwipeGuard`)                           | the same module's `ios/BracemarkShareSwipeGuardModule.swift` (posts) + `plugins/with-share-extension-swipe-hold.js` (the controller's observer) + `features/share/share-swipe-guard.tsx`, mounted by `share-kit`'s `holdSwipe`                                                                                      |
 
 Like the other native pieces (the `BracemarkCrypto` pod's modules, the embedded
 font), none of

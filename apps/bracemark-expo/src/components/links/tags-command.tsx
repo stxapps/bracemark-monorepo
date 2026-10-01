@@ -24,8 +24,9 @@ import { TagPickerRows } from './tag-picker-rows';
 //
 //  - The input filters the rows as you type and doubles as the new tag's name
 //    field. `submitBehavior="submit"` keeps the keyboard up for the next entry,
-//    which leaves this field no return-key exit — the scroller's `on-drag` and
-//    `handled` are its dismissal paths (docs/soft-keyboard.md, _dismissal_).
+//    which leaves this field no return-key exit — the host's chrome tap and
+//    the scroller's `handled` are its dismissal paths (docs/soft-keyboard.md,
+//    _dismissal_).
 //  - The Create row is suppressed on an exact case-insensitive match, where
 //    submit just selects (findOrCreate's reuse).
 //  - A just-minted tag's row surfaces a beat later, when the live useTags

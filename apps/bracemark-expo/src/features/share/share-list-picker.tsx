@@ -110,7 +110,7 @@ export function ShareListPicker({
   }, [trimmed, onCreateName, onDone]);
 
   return (
-    <ShareSheet>
+    <ShareSheet holdSwipe>
       <ShareHeader back={{ title: 'Choose list', onPress: onDone }} />
 
       <Input
@@ -138,17 +138,30 @@ export function ShareListPicker({
           it and the panel overflows the frame instead — nothing clips, it just
           paints outside its own background.
 
-          `keyboardDismissMode="on-drag"`: the input above is
-          `submitBehavior="submit"`, so return never blurs it — scrolling the
-          results is one of this screen's two ways out of the keyboard (the
-          other is the tap layer in ShareSheet, whose header carries the whole
-          argument). `"handled"` beside it keeps a row tap a row tap: without it
+          `keyboardDismissMode="interactive"`, not the app's usual `on-drag`,
+          for list-command.tsx's reason and a bigger jump than the one there:
+          the panel is parked on the keyboard, so `on-drag` dropped the keyboard
+          at the start of a scroll and the whole sheet fell a keyboard's height
+          out from under the finger while this list regrew. A scroll now keeps
+          the keyboard (Android maps the value to `none`). The input above is
+          `submitBehavior="submit"`, so return never blurs it either: the way
+          out is the tap layer in ShareSheet, whose header carries the whole
+          argument. `"handled"` beside it keeps a row tap a row tap: without it
           the default `"never"` would swallow the first press on the very row
-          you filtered for. */}
+          you filtered for.
+
+          A PULL DOWN FROM THE TOP OF THIS LIST IS NOT OURS on iOS, in either
+          mode: the share extension sits in a system sheet, and with the list at
+          its top the pull goes to that sheet's swipe-to-dismiss. A short one
+          tucks the keyboard away and brings it back, the field never having
+          blurred — so don't count on "drag down into the keys" as a keyboard
+          exit here. A long one used to close the sheet and the unsaved share
+          with it; `holdSwipe` on ShareSheet above is what holds that off
+          (share-kit.tsx, docs/share-sheet.md). */}
       <ScrollView
         className="max-h-72 min-h-0 shrink"
         keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
+        keyboardDismissMode="interactive"
       >
         {visible.length === 0 && !canCreate && (
           <Text className="py-6 text-center text-sm text-muted-foreground">No lists found.</Text>

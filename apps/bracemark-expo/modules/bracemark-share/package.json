@@ -2,5 +2,5 @@
   "name": "bracemark-share",
   "version": "0.0.1",
   "private": true,
-  "description": "The native halves the bracemark-expo share sheet needs, one per host (docs/share-sheet.md). Android: the translucent ShareActivity hosting the RN share sheet, plus the BracemarkShare close() module. iOS: BracemarkShareKeyboard, which reports the keyboard's frame inside the share extension, where RN's own reads it through RCTKeyWindow() and gets zero. Local Expo module, autolinked from apps/bracemark-expo/modules into both the app and the extension target."
+  "description": "The native halves the bracemark-expo share sheet needs, one per host (docs/share-sheet.md). Android: the translucent ShareActivity hosting the RN share sheet, plus the BracemarkShare close() module. iOS: BracemarkShareKeyboard, which reports the keyboard's frame inside the share extension, where RN's own reads it through RCTKeyWindow() and gets zero. Also iOS: BracemarkShareSwipeGuard, which asks the share extension's view controller to hold the host sheet's swipe-to-dismiss off while the list and tag pickers are up. Local Expo module, autolinked from apps/bracemark-expo/modules into both the app and the extension target."
 }

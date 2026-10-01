@@ -38,6 +38,7 @@ import { Text } from '../../components/ui/text';
 import { cn } from '../../lib/utils';
 import { closeShareSheet } from './share-host';
 import { useShareKeyboard } from './share-keyboard';
+import { ShareSwipeGuard } from './share-swipe-guard';
 
 // The panel's own padding, in points, because the bottom edge is no longer a
 // class: it is `SHEET_PAD` plus whatever of the bottom inset the keyboard is
@@ -142,19 +143,35 @@ const INITIAL_METRICS = {
 // keyboard at all: the panel is a plain box, the host owns the space around it,
 // and either host's backdrop closes the whole sheet rather than the keyboard.
 // The keyboard then eats ~340pt of the screen and the tag list you are picking
-// from is behind it. The pickers' scrollers pair this with
-// `keyboardDismissMode="on-drag"`, so scrolling the results dismisses too.
-export function ShareSheet({ children }: { children: ReactNode }) {
+// from is behind it. The pickers' scrollers lean on it: they are
+// `keyboardDismissMode="interactive"`, so a scroll KEEPS the keyboard rather
+// than dropping the panel out from under the finger, and this layer is the
+// exit (share-list-picker.tsx).
+//
+// `holdSwipe` IS FOR THE PICKERS, and only them. On iOS the host presents the
+// share extension in a sheet of its own, and a downward drag on it belongs to
+// that sheet — a long one dismisses the whole thing, unsaved share included,
+// from a screen where "down" means "scroll the list". The prop mounts the guard
+// that asks native to hold that swipe off while the screen is up
+// (share-swipe-guard.tsx); the compose screen leaves it unset and keeps the
+// platform's gesture. A no-op on Android, which has no such gesture.
+export function ShareSheet({
+  children,
+  holdSwipe = false,
+}: {
+  children: ReactNode;
+  holdSwipe?: boolean;
+}) {
   return (
     <SafeAreaProvider initialMetrics={INITIAL_METRICS}>
-      <ShareSheetFrame>{children}</ShareSheetFrame>
+      <ShareSheetFrame holdSwipe={holdSwipe}>{children}</ShareSheetFrame>
     </SafeAreaProvider>
   );
 }
 
 const isAndroid = Platform.OS === 'android';
 
-function ShareSheetFrame({ children }: { children: ReactNode }) {
+function ShareSheetFrame({ children, holdSwipe }: { children: ReactNode; holdSwipe: boolean }) {
   // iOS: how much of the sheet the keyboard covers, from our own native module
   // (share-keyboard.ts). Zero on Android, where the KeyboardAvoidingView at the
   // bottom of this function is the mechanism instead. `cover` is that same
@@ -229,14 +246,14 @@ function ShareSheetFrame({ children }: { children: ReactNode }) {
           a press on a button or a picker row is claimed by that child, and this
           only fires on what reaches the panel's own padding and seams.
 
-          UNVERIFIED ON DEVICE, and it cannot be with the tools here: once the
-          keyboard is presented over the iOS extension, the whole panel drops
-          out of the accessibility tree, so Maestro can neither see nor address
-          it (`share-back` goes not-found mid-flow) and a coordinate tap has
-          nothing to confirm against. The structure above is the standard RN
-          pattern and is right on reasoning; the ABSENCE of a check is the risk.
-          If this surface is ever driven by hand, this tap is the thing to try
-          first. Android's half rides the main bundle and has no such problem.
+          VERIFIED BY HAND ON AN iPHONE, and only by hand: a tap on the panel's
+          empty space drops the keyboard there. No flow can re-check it — once
+          the keyboard is presented over the iOS extension, the whole panel
+          drops out of the accessibility tree, so Maestro can neither see nor
+          address it (`share-back` goes not-found mid-flow) and a coordinate tap
+          has nothing to confirm against. So re-drive it by hand after touching
+          this wrapper: the pickers' `interactive` scrollers have no other tap
+          exit. Android's half rides the main bundle and has no such problem.
 
           `accessible={false}` for the reason the Android backdrop below carries
           verbatim: as a focus stop this would announce as one enormous
@@ -270,6 +287,7 @@ function ShareSheetFrame({ children }: { children: ReactNode }) {
         onPress={closeShareSheet}
         className={cn('absolute top-0 right-0 bottom-0 left-0', isAndroid && 'bg-black/40')}
       />
+      {holdSwipe && <ShareSwipeGuard />}
       {panel}
     </>
   );
@@ -296,9 +314,9 @@ function ShareSheetFrame({ children }: { children: ReactNode }) {
 //     lockup is here for the reason components/brand-lockup.tsx exists at all:
 //     this is a surface with no other brand carrier, floating over somebody
 //     else's app, and until now it never said whose sheet it was. The close
-//     control is not decoration either — on iOS there is no backdrop to tap and
-//     no swipe to dismiss, so before this the compose screen had no way out
-//     except saving.
+//     control is not decoration either — on iOS the backdrop and the system's
+//     swipe-down are both invisible, so before this the compose screen showed
+//     no way out except saving.
 //   - a SUB-SCREEN'S header — a back control labelled with the screen you are
 //     on, since there is exactly one place back goes.
 //
@@ -364,8 +382,8 @@ export function ShareHeader({
               // sibling down the panel is a `gap-4` away.
               //
               // It matters more here than anywhere else in the app. On iOS this
-              // is the ONLY way out of the compose screen — no swipe, and a
-              // backdrop that announces nothing (docs/share-sheet.md) — so a
+              // is the only VISIBLE way out of the compose screen — the swipe
+              // and the backdrop announce nothing (docs/share-sheet.md) — so a
               // near-miss on it is a user stuck in somebody else's app.
               hitSlop={6}
               className="-mr-2"

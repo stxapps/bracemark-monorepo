@@ -473,6 +473,17 @@ failure it prevents is invisible to prebuild, the Swift compiler, lint, types
 and every test. Full derivation, and the before/after measurements, in
 [share-sheet.md](./share-sheet.md), _the host view is full-screen_.
 
+**And a sixth, which is something the file lacks rather than gets wrong.**
+`plugins/with-share-extension-swipe-hold.js` adds one notification observer to
+that same controller's `setupNotificationCenterObserver`, beside the library's
+own `close` observer: it sets `isModalInPresentation` when our
+`BracemarkShareSwipeGuard` module posts, which is how the share sheet's pickers
+hold the system's swipe-to-dismiss off. Same `finalized` mod, same reasons, and
+it throws if upstream rewords the method — unpatched, the module posts into
+nothing and the only symptom is a picker that can be swiped away on a device.
+→ [share-sheet.md](./share-sheet.md), _the pickers hold the system's swipe
+off_.
+
 #### android release minification — R8
 
 Release Android builds run **R8** (shrink + obfuscate) with resource shrinking,
