@@ -34,6 +34,7 @@
     "anthropic-skills:pdf": "off",
     "anthropic-skills:pptx": "off",
     "anthropic-skills:xlsx": "off",
+    "anthropic-skills:google-workspace": "off",
     "gplay-cli-usage": "off",
     "gplay-iap-setup": "off",
     "gplay-metadata-sync": "off",
