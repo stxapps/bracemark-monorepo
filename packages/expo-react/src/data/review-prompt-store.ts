@@ -1,6 +1,6 @@
 // Read/write helpers over the device-local review-prompt row (ReviewPromptValue
 // in db.ts). Shape only — WHEN to ask is bracemark-expo's `lib/review-prompt.ts`,
-// which owns the rules. The one other writer is share-store, whose saves count
+// which owns the rules. The one other caller is share-store, whose saves count
 // toward the next ask but never raise one (`countReviewPromptSave`). Synchronous
 // like sidebar-view-store (drizzle's expo driver is a sync driver) and
 // best-effort in the same way: this runs on the tail of a successful save, and
@@ -62,8 +62,9 @@ export function writeReviewPromptState(value: ReviewPromptValue): void {
   }
 }
 
-// One more save toward the next ask, and nothing else — for a save that must
-// never raise the sheet itself (the share sheet's, landed by share-store).
+// One more save toward the next ask, and nothing else. Every save is counted
+// through here — the add panel's, which then decides whether to ask, and the
+// share sheet's (landed by share-store), which must never raise the sheet itself.
 export function countReviewPromptSave(): void {
   const state = readReviewPromptState();
   writeReviewPromptState({ ...state, savesSinceAsk: state.savesSinceAsk + 1 });

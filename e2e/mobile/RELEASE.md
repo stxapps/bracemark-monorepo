@@ -179,7 +179,14 @@ install so the device has never been asked.
 6. **The store page retires it.** Reinstall and sign in. In Settings → About,
    press **Rate Bracemark**: the App Store opens on Bracemark's review composer.
    Come back. Save ten links: no sheet.
-7. **Android.** Upload the release build to Play's internal app sharing (or an
+7. **Leaving holds the ask, it doesn't spend it.** Reinstall and sign in. Save
+   nine links, then a tenth, and go to the Home screen as soon as the panel
+   closes — inside the second and a half. Come back: no sheet. Save one more and
+   stay: the sheet rises.
+8. **Sign-out starts it over.** Carry on from step 6 or 7, sign out, and sign in
+   again. Save ten links: the sheet rises — the bookkeeping is wiped with the
+   rest of the device store, and only the OS's own cap outlasts it.
+9. **Android.** Upload the release build to Play's internal app sharing (or an
    internal testing track), install it from that link on a device signed in to
    a Google account that has not reviewed Bracemark, and repeat steps 1, 4 and 6.
    Play shows its in-app review card; a sideloaded build calls the same code and

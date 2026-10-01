@@ -48,8 +48,8 @@ describe('readReviewPromptState', () => {
     expect(readReviewPromptState()).toEqual(value);
   });
 
-  // A row written before the lifetime cap existed.
-  it('reads a row from before the lifetime cap as not yet counted and not opened', () => {
+  // A row written before the cap on asks existed.
+  it('reads a row from before the ask cap as not yet counted and not opened', () => {
     seedRawValue({ savesSinceAsk: 4, lastAskedAt: 1_700_000_000_000 });
 
     expect(readReviewPromptState()).toEqual({
@@ -68,6 +68,9 @@ describe('readReviewPromptState', () => {
     ['an empty object', {}],
     ['a string askCount', { savesSinceAsk: 0, lastAskedAt: null, askCount: '2' }],
     ['a truthy non-boolean openedStorePage', { ...NEVER, openedStorePage: 'yes' }],
+    // The field the window is SUBTRACTED from: `now - '2026-…'` is NaN, which is
+    // neither rested nor in the future, so the window would never close.
+    ['a date-string lastAskedAt', { ...NEVER, lastAskedAt: '2026-09-24T14:38:05.000Z' }],
   ])('reads %s as the never-asked state', (_label, value) => {
     seedRawValue(value);
 

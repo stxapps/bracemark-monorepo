@@ -663,3 +663,81 @@ describe('saveSharedDraft — an expired session sends nothing', () => {
     });
   });
 });
+
+// WHERE a share is counted toward the app-store review prompt, which is a
+// process rule before it is a bookkeeping one (docs/share-sheet.md): the count
+// is a row in sqlite, and the iOS share extension must never open that database
+// (the shared-container lock is the 0xdead10cc kill). So the count rides
+// applyShareDraft — the app's own process on both platforms — and never
+// saveSharedDraft itself. Counting "at Add" instead reads as the simpler
+// spelling, lints, typechecks, and is correct on Android; the drain case above
+// would still pass. Android's Save is the positive control for the iOS
+// extension's "never".
+describe('saveSharedDraft — the review-prompt count', () => {
+  const { countReviewPromptSave } =
+    jest.requireMock<typeof import('./review-prompt-store')>('./review-prompt-store');
+  const counted = jest.mocked(countReviewPromptSave);
+  const count = countLinks as jest.Mock;
+  const cached = readCachedStatus as jest.Mock;
+  const api = {} as ApiClient;
+
+  const draft: ShareDraft = {
+    id: 'link-1',
+    url: 'https://example.com/a',
+    listId: MY_LIST_ID,
+    tagIds: [],
+    newTags: [],
+    newLists: [],
+    sharedAt: 1_700_000_000_000,
+  };
+
+  beforeEach(() => {
+    mockFiles.clear();
+    mockDirs.clear();
+    counted.mockClear();
+    count.mockReset().mockResolvedValue(0);
+    cached.mockReset().mockReturnValue(null);
+  });
+
+  // jest-expo runs this suite as iOS: the share extension's process.
+  it('counts nothing in the iOS share extension, which only queues', async () => {
+    expect(await saveSharedDraft(draft, api)).toBe('queued');
+
+    expect(counted).not.toHaveBeenCalled();
+  });
+
+  describe('Android — the share activity', () => {
+    const platform = Platform as { OS: string };
+    let original: string;
+
+    beforeEach(() => {
+      original = platform.OS;
+      platform.OS = 'android';
+    });
+    afterEach(() => {
+      platform.OS = original;
+    });
+
+    it('counts a share as it is saved', async () => {
+      expect(await saveSharedDraft(draft, api)).toBe('saved');
+
+      expect(counted).toHaveBeenCalledTimes(1);
+    });
+
+    // Never after a refusal: a share turned away at the cap is not a save.
+    it('counts nothing for a share refused at the link cap', async () => {
+      cached.mockReturnValue({
+        plan: 'free',
+        status: 'none',
+        source: null,
+        expiresAt: null,
+        willRenew: false,
+      });
+      count.mockResolvedValue(Number.MAX_SAFE_INTEGER);
+
+      expect(await saveSharedDraft(draft, api)).toBe('quota');
+
+      expect(counted).not.toHaveBeenCalled();
+    });
+  });
+});

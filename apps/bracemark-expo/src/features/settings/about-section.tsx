@@ -19,8 +19,8 @@
 // And one row web has no counterpart for: RATE BRACEMARK, under the brand card,
 // which opens this platform's store listing (the App Store's review composer on
 // iOS). It is the only way a rating starts on the user's side rather than ours,
-// and pressing it also retires the automatic review prompt on this device
-// (lib/review-prompt.ts).
+// and pressing it also retires the automatic review prompt on this device until
+// sign-out (lib/review-prompt.ts).
 //
 // The mark renders at 40px, the one departure from the 20px lockup shared by
 // every other surface (docs/brand-assets.md — _the mark_): everywhere else the brand is

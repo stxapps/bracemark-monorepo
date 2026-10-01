@@ -60,6 +60,7 @@ export async function clearData(): Promise<void> {
     // The review-prompt bookkeeping (db.ts `review_prompt`). Nothing in it is the
     // account's, but "sign-out leaves nothing behind" is simpler to hold with no
     // exceptions, and the OS caps the prompt per install whatever this says.
+    // The cost is that our own caps start over at the next sign-in.
     tx.delete(reviewPrompt).run();
   });
   // Decrypted `files/` blobs on disk — mirrors the items wipe (file-store.ts).

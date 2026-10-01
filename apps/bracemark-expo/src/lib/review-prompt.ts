@@ -26,19 +26,34 @@
 // published — spacing asks out is the only lever we have.
 //
 // And not forever. Since neither store says whether the user rated, two things
-// stand in for that answer: MAX_ASKS asks in the device's lifetime, and never
-// again once the user opened the store's review page themselves from Settings →
-// About (`openStoreReviewPage`) — the one signal we CAN see.
+// stand in for that answer: MAX_ASKS asks, and none at all once the user opened
+// the store's review page themselves from Settings → About
+// (`openStoreReviewPage`) — the one signal we CAN see. Both last UNTIL SIGN-OUT,
+// not for the life of the install: the bookkeeping is a row in the device store,
+// and sign-out wipes that store whole (expo-react `clear-data.ts`), so the next
+// sign-in starts from never-asked. The OS's own cap is per install and does not
+// start over, which is what keeps that reset cheap.
+//
+// The ask is recorded when it is MADE, not when it is decided. A save that earns
+// one sets a timer (ASK_DELAY_MS), and by the time it fires the user may have
+// left — paste, save, back to the browser. Then nothing is asked and nothing is
+// recorded: the saves stay earned, and the next save in the app asks instead.
+// Recording at the save spent one of MAX_ASKS and a whole DAYS_BETWEEN_ASKS on a
+// request the OS never saw.
 //
 // `__DEV__` builds never ask. The iOS simulator shows the sheet on EVERY call in
 // a development build, which would land in the middle of the Maestro flows that
 // save more than a handful of links. To see it, run a release build
-// (docs/expo-dependencies.md, _expo-store-review_).
+// (docs/expo-dependencies.md, _expo-store-review_). The gate is the BUNDLE's, not
+// the binary's: `measure:native` serves a `--no-dev` bundle to the development
+// client, so there the prompt is live on a simulator that shows every ask
+// (docs/e2e.md, _the native leg_).
 
-import { Linking, Platform } from 'react-native';
+import { AppState, Linking, Platform } from 'react-native';
 import * as StoreReview from 'expo-store-review';
 
 import {
+  countReviewPromptSave,
   readReviewPromptState,
   type ReviewPromptValue,
   writeReviewPromptState,
@@ -56,8 +71,13 @@ export const ASK_DELAY_MS = 1_500;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
- * The bookkeeping after one successful save in the app, and whether to ask now.
- * Pure, so the rules above are testable without a device.
+ * Whether to ask now, and the bookkeeping if we do. Pure, so the rules above are
+ * testable without a device.
+ *
+ * `state` already counts the save that brought us here — counting is the store's
+ * (`countReviewPromptSave`, the one spelling the add panel and the share sheet
+ * share), and this decides what a counted row has earned. With no ask the row
+ * comes back as it went in.
  *
  * `lastAskedAt` is reset when we ASK, not when a sheet shows — nothing reports
  * that. A `lastAskedAt` in the future means the clock moved backwards since;
@@ -67,13 +87,12 @@ export function nextReviewPromptState(
   state: ReviewPromptValue,
   now: number,
 ): { state: ReviewPromptValue; ask: boolean } {
-  const savesSinceAsk = state.savesSinceAsk + 1;
   const done = state.openedStorePage || state.askCount >= MAX_ASKS;
   const rested =
     state.lastAskedAt === null ||
     now < state.lastAskedAt ||
     now - state.lastAskedAt >= DAYS_BETWEEN_ASKS * DAY_MS;
-  const earned = savesSinceAsk >= SAVES_BEFORE_ASKING;
+  const earned = state.savesSinceAsk >= SAVES_BEFORE_ASKING;
 
   if (!done && rested && earned) {
     return {
@@ -81,7 +100,7 @@ export function nextReviewPromptState(
       ask: true,
     };
   }
-  return { state: { ...state, savesSinceAsk }, ask: false };
+  return { state, ask: false };
 }
 
 /**
@@ -89,24 +108,37 @@ export function nextReviewPromptState(
  * beat later. Fire-and-forget: it never throws and never delays the caller's
  * success path.
  *
- * `requestReview` directly, NOT gated on `isAvailableAsync`. On Android that
- * check looks the Play Store up by package name, which Android 11+ hides from
- * an app whose manifest declares no matching `<queries>` — and the module ships
- * none — so it can answer false where the review flow works. The call itself is
- * safe everywhere we run: Play's flow resolves without UI for a non-Play
- * install, and iOS ignores it on TestFlight. It rejects when there is no
- * foreground scene (backgrounded during the delay), which is swallowed.
+ * `requestReview` directly, NOT gated on `isAvailableAsync`, because that check
+ * answers nothing the request doesn't. On iOS it is "not TestFlight", where the
+ * request is ignored anyway. On Android it is "the Play Store package is visible
+ * to us" — true on a Play install (an app's installer is always visible to it,
+ * `<queries>` or not) and false on a sideload, where Play's flow resolves
+ * without UI anyway. Neither says whether a sheet will show; only the OS's quota
+ * does. It rejects on a failed Play task, or with no foreground scene on iOS in
+ * the instant after the check below — swallowed either way, and by then the ask
+ * is recorded, which is the right side to err on.
  */
 export function noteReviewMoment(): void {
   if (__DEV__) return;
 
-  const { state, ask } = nextReviewPromptState(readReviewPromptState(), Date.now());
-  writeReviewPromptState(state);
-  if (!ask) return;
+  countReviewPromptSave();
+  // Decided here only to spare every other save a timer; the decision that
+  // counts is the one below.
+  if (!nextReviewPromptState(readReviewPromptState(), Date.now()).ask) return;
 
   setTimeout(() => {
+    // Gone during the delay: hold the ask rather than spend it (see the header).
+    // 'inactive' holds too — the app switcher, a system dialog over the app.
+    if (AppState.currentState !== 'active') return;
+
+    // Decided again, against the row as it stands NOW. A second save inside the
+    // delay set a timer of its own, and whichever fires first records the ask —
+    // the other finds the row resting and stops here.
+    const { state, ask } = nextReviewPromptState(readReviewPromptState(), Date.now());
+    if (!ask) return;
+    writeReviewPromptState(state);
     StoreReview.requestReview().catch(() => {
-      // No sheet this time; the ask is spent either way (see above).
+      // No sheet this time; the ask is recorded either way (see above).
     });
   }, ASK_DELAY_MS);
 }
@@ -124,9 +156,9 @@ export function storeReviewPageUrl(): string {
 }
 
 /**
- * Open the store's review page, and stop asking on this device for good — the
- * user went there themselves, which is the nearest thing to "has rated" that
- * either store lets us see.
+ * Open the store's review page, and stop asking — the user went there
+ * themselves, which is the nearest thing to "has rated" that either store lets
+ * us see. Until sign-out, like the rest of the bookkeeping (see the header).
  */
 export function openStoreReviewPage(): void {
   writeReviewPromptState({ ...readReviewPromptState(), openedStorePage: true });

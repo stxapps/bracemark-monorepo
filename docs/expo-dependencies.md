@@ -115,18 +115,27 @@ none, so nothing goes in `app.config.ts`'s `plugins` — but it is native, so
 The rules for WHEN to ask are `apps/bracemark-expo/src/lib/review-prompt.ts`,
 and its header is the argument; in short, a successful save from the add panel,
 every tenth since the last ask, never more than once per 120 days, never more
-than three times per device, never after an error. Saves from the share sheet
+than three times, never after an error. Saves from the share sheet
 count toward the ten (share-store's `applyShareDraft`, the one place both
 platforms' shares land in the app's process) but never ask themselves. An import
 never asks: it is usually the first session, before the user has used the
 product. The bookkeeping is a device-local single-row table, `review_prompt`
 (`@stxapps/expo-react` `data/review-prompt-store.ts`), wiped on sign-out with the
-rest.
+rest — so every limit here, the three asks and the Settings row below included,
+holds **until sign-out** and starts over at the next sign-in. Only the OS's cap
+is per install.
+
+The ask is made about a second and a half after the save, once the add panel has
+closed, and it is **recorded when it is made, not when it is earned**. If the app
+is no longer active when that delay ends — paste, save, back to the browser —
+nothing is asked and nothing is recorded; the saves stay earned and the next save
+in the app asks instead. Recording at the save would spend one of the three asks,
+and 120 days, on a request iOS rejects for want of a foreground scene.
 
 Settings → About carries a **Rate Bracemark** row that opens the store listing
 (on iOS with `?action=write-review`, which opens the review composer). Pressing
-it stops the automatic prompt on that device for good — it is the only sign we
-can get that the user rated. The URLs come from `@stxapps/shared`'s
+it stops the automatic prompt on that device until sign-out — it is the only sign
+we can get that the user rated. The URLs come from `@stxapps/shared`'s
 `stores/listings.ts`, **not** `StoreReview.storeUrl()`: that reads
 `ios.appStoreUrl` / `android.playStoreUrl` from `app.config.ts`, which would be a
 second copy of the listings. Nor does `app.config.ts` import them to fill those
@@ -140,21 +149,28 @@ Four things that aren't in its README:
   unpublished quota and shows nothing for an install that didn't come from Play.
   `requestReview` resolves either way, so "I called it and nothing appeared" is
   normal and not a bug. What we store is when we **asked**. Neither store says
-  whether the user has rated either, which is why the lifetime cap and the
+  whether the user has rated either, which is why the cap on asks and the
   Settings row stand in for that answer.
-- **We don't gate on `isAvailableAsync()`.** On Android it looks up the Play
-  Store package by name, and Android 11+ hides a package from an app whose
-  manifest declares no matching `<queries>` — this module ships none — so it can
-  answer false where the review flow works. `requestReview` alone is safe on
-  both platforms; its rejection (no foreground scene on iOS, a failed Play task)
-  is swallowed.
+- **We don't gate on `isAvailableAsync()`, because it answers nothing the request
+  doesn't.** On iOS it is "not TestFlight", where the request is ignored anyway.
+  On Android it is "the Play Store package is visible to us": true on a Play
+  install — an app's installer is always visible to it, with or without a
+  `<queries>` entry — and false on a sideload, where Play's flow resolves without
+  UI anyway. Neither says whether a sheet will show. `requestReview` alone is
+  safe on both platforms; its rejection (no foreground scene on iOS, a failed
+  Play task) is swallowed.
 - **`__DEV__` builds never ask.** In a development build the iOS simulator shows
   the sheet on _every_ call, which would land in the middle of the Maestro flows
   that save more than a handful of links. To see the real sheet, run a
   **release** build on the simulator (`npx expo run:ios --configuration Release`)
   and save ten links. On Android nothing shows outside a Play
   install; Play's internal-app-sharing or an internal-testing track is the way to
-  see it there.
+  see it there. The gate is the **bundle's**, not the binary's: `measure:native`
+  serves a `--no-dev` bundle to the development client
+  ([e2e.md](./e2e.md), _the native leg_), so the prompt is live there, on a
+  simulator that shows every ask. Its flows import and export, which neither
+  count nor ask; one that saved ten links through the add panel would meet the
+  sheet.
 - **It is in the iOS share extension's `excludedPackages`.** Its Swift reaches
   the host app's window scene through `UIApplication.shared`, which an app
   extension can't use, and the extension never asks anyway. After a prebuild,

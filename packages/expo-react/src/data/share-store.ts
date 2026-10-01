@@ -502,6 +502,13 @@ async function applyShareDraft(username: string, draft: ShareDraft): Promise<voi
   // process (Android's Save, the iOS drain); the iOS share extension can't open
   // the sqlite the count lives in. It only counts: the sheet never asks, and the
   // ask comes on a later save in the app (bracemark-expo lib/review-prompt.ts).
+  //
+  // The one line here that is NOT idempotent. A draft applied twice — a drain
+  // retried after a crash, two drain passes overlapping on one file — rewrites
+  // the same entities and counts two saves. Left alone on purpose: the worst it
+  // does is bring an ask one save forward, and the guard that would prevent it
+  // ("only if the link is new") undercounts instead, since on iOS a sync pull can
+  // land the extension's own upload before the drain gets to the draft.
   reviewPrompts().countReviewPromptSave();
 }
 

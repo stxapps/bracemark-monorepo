@@ -2308,7 +2308,13 @@ npm run measure:native -- --platform android --device <serial> --links 1000,1000
   names the production api**. The origins are exported in Metro's environment
   (a shell variable outranks every env file), and the runner fetches the
   served bundle and refuses to continue unless it names the local api and no
-  deployed one. Metro must not already be on :8081.
+  deployed one. Metro must not already be on :8081. `--no-dev` also turns
+  `__DEV__` off, so everything gated on it is live in this run and in no Maestro
+  run: the app-store review prompt is the one that matters, because the simulator
+  shows its sheet on every ask. The flows here only import and export, which the
+  prompt ignores — a flow that saved ten links through the add panel would have
+  the sheet rise over it ([expo-dependencies.md](./expo-dependencies.md),
+  _expo-store-review_).
 - **The development client must be built from this checkout.** One built
   earlier loads the new JS and dies on a native module it doesn't have
   (specimen: `Cannot find native module 'ExpoStoreReview'`). The runner only

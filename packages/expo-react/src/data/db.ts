@@ -304,13 +304,14 @@ export const sidebarView = sqliteTable('sidebar_view', {
 // the Settings "Device" tab, and web has no counterpart (a browser has no store
 // sheet to raise). Never synced: the OS caps the prompt per install, so a count
 // from another device would only spend this one's budget early. Wiped on
-// sign-out with the rest (clear-data), not by delete-all-data.
+// sign-out with the rest (clear-data), not by delete-all-data — so every field
+// below reads "since the last sign-in on this device", never "ever".
 export interface ReviewPromptValue {
   savesSinceAsk: number;
-  // Epoch ms of the last `requestReview` call, or null if this device never made
-  // one. When we ASKED, not when a sheet showed — the OS never says whether it did.
+  // Epoch ms of the last `requestReview` call, or null if there has been none.
+  // When we ASKED, not when a sheet showed — the OS never says whether it did.
   lastAskedAt: number | null;
-  // `requestReview` calls this device has made, ever — the lifetime cap's count.
+  // `requestReview` calls made — what the cap on asks (MAX_ASKS) counts.
   askCount: number;
   // Did the user open the store's review page from Settings → About? The one
   // signal we can get that they rated, since neither store reports it.
