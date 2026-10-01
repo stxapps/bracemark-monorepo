@@ -86,7 +86,7 @@ export function InitialSyncGate({ children }: { children: ReactNode }) {
           <p className="text-sm font-medium">{SESSION_COPY.paused.title}</p>
           <p className="max-w-xs text-center text-xs text-muted-foreground">{lastError}</p>
         </div>
-        <SyncPausedActions />
+        <SyncPausedActions align="center" />
       </div>
     );
   }

@@ -24,6 +24,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@stxapps/web-ui/components/ui/dialog';
+import { cn } from '@stxapps/web-ui/lib/utils';
 
 // The EXPIRED state's persistent notice (docs/sessions.md, _the expired state on
 // the client_). The server answered this device's token `session_expired` or
@@ -61,7 +62,18 @@ export function SyncPausedNotice() {
 //     on the next cycle. A failure leaves everything as it was.
 //   - Use a different account: that is a SIGN-OUT, which erases this device's
 //     copy — so it warns first, with the count of edits that exist nowhere else.
-export function SyncPausedActions() {
+//
+// STACKED below `sm`, a row from it — decided by the breakpoint, not left to
+// `flex-wrap`. The two labels don't fit side by side on a phone, and a row that
+// wraps on its own gives the ghost button no way to know which line it is on. It
+// needs to know: a ghost aligns by its label, not by its box, so directly under
+// the filled button it reads as indented by its own `px-3`. Stacked, it takes the
+// `-ml-3` that cancels that padding (links/_components/link-add-surface.tsx
+// carries the rule) and lands on the text edge of the title and description above
+// it; in a row the filled button is what sits on that edge, and the margin comes
+// off. `align="center"` is the initial-sync gate, whose column is centred: there
+// the pair centres and nothing is pulled.
+export function SyncPausedActions({ align = 'start' }: { align?: 'start' | 'center' }) {
   const { username } = useAuth();
   const pending = usePendingChangesCount();
   const signOut = useSignOut();
@@ -69,11 +81,21 @@ export function SyncPausedActions() {
   const [switching, setSwitching] = useState(false);
 
   return (
-    <div className="mt-1 flex flex-wrap items-center gap-2">
+    <div
+      className={cn(
+        'mt-1 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center',
+        align === 'center' ? 'items-center sm:justify-center' : 'items-start',
+      )}
+    >
       <Button size="sm" onClick={() => setResuming(true)}>
         {SESSION_COPY.paused.resume}
       </Button>
-      <Button size="sm" variant="ghost" onClick={() => setSwitching(true)}>
+      <Button
+        size="sm"
+        variant="ghost"
+        className={cn(align === 'start' && '-ml-3 sm:ml-0')}
+        onClick={() => setSwitching(true)}
+      >
         {SESSION_COPY.paused.switchAccount}
       </Button>
 

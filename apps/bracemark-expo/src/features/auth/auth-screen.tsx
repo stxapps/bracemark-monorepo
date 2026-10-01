@@ -116,8 +116,8 @@ export function AuthScreen({
               against the card's outer edge — the argument is in bracemark-web's
               `(auth)/layout.tsx`. */}
           <Text className="px-6 text-xs leading-5 text-muted-foreground">
-            Your links are encrypted on your device before they’re stored. Bracemark’s servers never
-            see your password.
+            Your links are encrypted on your device before they sync. Bracemark’s servers never see
+            your password.
           </Text>
         </View>
       </StyledKeyboardAwareScrollView>

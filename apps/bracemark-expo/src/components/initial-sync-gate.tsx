@@ -91,7 +91,7 @@ export function InitialSyncGate({ children }: { children: ReactNode }) {
             </Text>
             <Text className="text-center text-xs text-muted-foreground">{lastError}</Text>
           </View>
-          <SyncPausedActions />
+          <SyncPausedActions align="center" />
         </View>
       </StyledSafeAreaView>
     );

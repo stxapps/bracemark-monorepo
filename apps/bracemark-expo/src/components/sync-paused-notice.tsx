@@ -24,6 +24,7 @@ import { CloudOff } from 'lucide-react-native';
 import { useAuth, usePendingChangesCount, useSignOut } from '@stxapps/expo-react';
 import { SESSION_COPY } from '@stxapps/react';
 
+import { cn } from '../lib/utils';
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -63,19 +64,33 @@ export function SyncPausedNotice() {
 //     one; success replaces the token and keeps the local store and its queue.
 //   - Use a different account: a SIGN-OUT, which erases this device's copy — so it
 //     warns first, with the count of edits that exist nowhere else.
-export function SyncPausedActions() {
+//
+// STACKED below `sm`, a row from it, with the ghost button pulled `-ml-3` onto
+// the text edge while it is stacked — web's classes, and the argument is in web's
+// file: a ghost aligns by its label, not by its box, so under the filled button it
+// read as indented by its own `px-3`. This app is portrait and phone-only, so
+// today it is ALWAYS the stack; the `sm:` half is kept so the two files stay the
+// same and a tablet layout gets the row. `align="center"` is the initial-sync
+// gate, whose column is centred: there the pair centres and nothing is pulled.
+export function SyncPausedActions({ align = 'start' }: { align?: 'start' | 'center' }) {
   const pending = usePendingChangesCount();
   const signOut = useSignOut();
   const [switching, setSwitching] = useState(false);
 
   return (
-    <View className="mt-1 flex-row flex-wrap items-center gap-2">
+    <View
+      className={cn(
+        'mt-1 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center',
+        align === 'center' ? 'items-center sm:justify-center' : 'items-start',
+      )}
+    >
       <Button size="sm" testID="sync-paused-resume" onPress={() => router.push('/resume')}>
         <Text>{SESSION_COPY.paused.resume}</Text>
       </Button>
       <Button
         size="sm"
         variant="ghost"
+        className={cn(align === 'start' && '-ml-3 sm:ml-0')}
         testID="sync-paused-switch-account"
         onPress={() => setSwitching(true)}
       >
