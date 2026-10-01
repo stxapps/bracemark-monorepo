@@ -1,0 +1,10 @@
+# SHARE-IOS-003 setup. The runner opens the source in Safari; the committed
+# parts then enter the real system share sheet and visit the compose screen and
+# both pickers, and between them the runner flicks down from bounds it reads off
+# each screen (runner/mobile.ts).
+appId: com.bracemark.app
+tags: [SHARE-IOS-003, full, online, ios]
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+- pressKey: Home

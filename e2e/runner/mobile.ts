@@ -881,6 +881,71 @@ async function main(): Promise<void> {
           },
         ];
       }
+      if (testCase.id === 'SHARE-IOS-003') {
+        // One gesture, three screens, two outcomes. The host's own sheet answers
+        // a downward drag on the share extension, and the pickers ask native to
+        // hold that off while they are up (docs/share-sheet.md, _the pickers
+        // hold the system's swipe off_); the simulator honours the flag. So the
+        // flick that must leave each picker standing is the SAME flick that then
+        // takes the compose screen away — a gesture too weak to dismiss anything
+        // would pass the first half and fail the second, and a guard that never
+        // lets go passes the first and fails the second too.
+        //
+        // The speed is the gesture, and it is set by the SHORTEST of them: the
+        // pull from inside a picker's scroller has ~175pt to travel. Measured on
+        // iOS 26.5 with the hold removed, that pull dismisses the sheet at 50ms
+        // and at 100ms only starts the dismissal and settles back — which is a
+        // step that passes with or without the guard.
+        const flick =
+          (label: string, start: (root: HierarchyNode) => { x: number; y: number }) =>
+          async (context: CaseStepContext) => {
+            const root = parseHierarchy(await context.hierarchy());
+            const from = start(root);
+            return writeDragFlow(
+              context,
+              label,
+              from,
+              { x: from.x, y: screenBox(root).bottom - 1 },
+              50,
+            );
+          };
+        // The header row's empty middle, on the row's top edge: beside the
+        // lockup or the back control, never on one.
+        const fromHeader = (control: string) => (root: HierarchyNode) => ({
+          x: centerOf(screenBox(root)).x,
+          y: boxById(root, control).top,
+        });
+        // Inside the scroller, one row under the field — the pull a thumb makes
+        // on a list already at its top, which is the accident the hold is for.
+        const fromScroller = (input: string) => (root: HierarchyNode) => {
+          const field = boxById(root, input);
+          return { x: centerOf(field).x, y: field.bottom + 40 };
+        };
+        const held = (input: string) => ({
+          flow: 'mobile/flows/parts/share-swipe-held.yaml',
+          env: { PICKER_INPUT: input },
+        });
+        steps = [
+          testCase.path,
+          async () => {
+            await openShare();
+            return null;
+          },
+          'mobile/flows/parts/share-swipe-list.yaml',
+          flick('list-pull', fromScroller('share-list-input')),
+          held('share-list-input'),
+          flick('list-flick', fromHeader('share-back')),
+          held('share-list-input'),
+          'mobile/flows/parts/share-swipe-tags.yaml',
+          flick('tags-pull', fromScroller('share-tag-input')),
+          held('share-tag-input'),
+          flick('tags-flick', fromHeader('share-back')),
+          held('share-tag-input'),
+          'mobile/flows/parts/share-swipe-compose.yaml',
+          flick('compose-flick', fromHeader('share-close')),
+          'mobile/flows/parts/share-swipe-dismissed.yaml',
+        ];
+      }
       if (testCase.id === 'SHARE-BOUNDARY-001') {
         steps = [
           testCase.path,

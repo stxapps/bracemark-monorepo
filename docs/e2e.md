@@ -402,6 +402,23 @@ release check ([iap.md](./iap.md), _exercising Paddle locally_,
 does not: it creates the real sandbox transaction, opens the real overlay, and
 closes it (_subscriptions_, below).
 
+**The iOS share extension's memory cap.** The failure is real and silent — iOS
+kills an app extension at a per-process cap and the sheet is simply gone
+([share-sheet.md](./share-sheet.md), _almost no memory to spare_) — and no case
+here can hold it, for three reasons that do not reduce to one. **The simulator
+enforces no cap**, so nothing a flow does there can be killed. **A footprint
+budget on the build these flows drive is noise**: the dev build's first picker
+adds anywhere from 3 to 10 MiB from run to run and a second lap through both adds
+another 4, against the ~14 MiB the one known regression cost (`footprint` on the
+simulator's process, iOS 26.5). **And the build whose numbers hold still is one
+this target cannot launch** — a release build repeats to within 0.2 MiB with a
+picker up, but every flow starts through the dev-client link. So it is a
+measurement and a release check, not a case: the numbers and how to take them are
+in share-sheet.md, and the cap itself is `SHARE-IOS-MEMORY-RELEASE-001`
+(`e2e/mobile/RELEASE.md`), on a phone, where it exists. A case that asserted
+"under N MiB" on the simulator would go red on a Metro change and stay green
+through the regression it was written for.
+
 **Keyboard dismissal.** The flows reach for Maestro's `hideKeyboard`
 (`subflows/sign-in.yaml`, `flows/recovery-sign-in.yaml`), which is a **native**
 command — it puts the keyboard away without touching the app's own affordances.
@@ -771,6 +788,28 @@ InputMethod` reports while the window is visible. Every "reachable" claim is a
   existing taxonomy pickers, save, outbox drain and cross-client upload; the
   shared create state machine stays at component level. Do not replace the
   missing iOS gesture with screen coordinates and call it a pass.
+- **One flick, opposite outcomes** (`SHARE-IOS-003`). The host's own sheet
+  answers a downward drag on the iOS share extension, and the two pickers ask
+  native to hold that off while they are up
+  ([share-sheet.md](./share-sheet.md), _the pickers hold the system's swipe
+  off_). Nothing in the tree says whether the hold is on, so the claim is made
+  with a gesture: a host step reads the screen and writes a 50ms flick to the
+  bottom edge (`writeDragFlow`), from inside each picker's scroller and from its
+  header, and a committed part asserts the picker is still up; then the SAME
+  header flick on the compose screen must take the sheet away. Both halves are
+  needed. A flick too weak to dismiss anything passes on the pickers alone, and
+  a guard that never lets go passes there too — it is the compose flick that
+  fails for either. ⚠ The speed is the gesture, and a slower one is not a safer
+  one: with the hold removed, the ~175pt pull from a picker's scroller dismisses
+  the sheet at 50ms and at 100ms only starts the dismissal and settles back
+  (iOS 26.5, iPhone 17 Pro) — so at 100ms those steps stayed green with no
+  guard at all, which is how the first draft of this case was written. No text
+  is entered, for
+  `SHARE-CREATE-001`'s reason. ⚠ **A swiped-away extension lands on the system
+  share sheet, not on Safari** — a swipe cancels the request where the sheet's
+  own Close completes it — so the far-side assertion is that sheet's Bracemark
+  row, and the flow then taps outside the popover to hand the next case a bare
+  Safari.
 
 #### accounts for a mobile run
 
@@ -932,6 +971,8 @@ All of them are in the app:
 | `share-tag-input`             | `src/features/share/share-tags-picker.tsx`                                                      |
 | `share-tag-create`            | ” — the new-tag action                                                                          |
 | `share-close`                 | `src/features/share/share-kit.tsx` — the process/surface exit                                   |
+| `share-back`                  | ” — a picker's header control, back to the compose screen                                       |
+| `share-backdrop`              | ” — the dismiss layer behind the panel; a flow asserts its ABSENCE, never taps it               |
 | `subscription-plan`           | `src/features/settings/subscription-section.tsx` — the current plan's name                      |
 | `subscription-refresh`        | ” — re-reads `GET /v1/iap/status`                                                               |
 | `subscription-price-<plan>`   | ” — the upgrade card's price: the store's, or the planning placeholder                          |
@@ -2619,6 +2660,18 @@ lock case, and flagged both: the locked list's one-line description reworded
 the appearance flip made a no-op (all six dark captures, luma ratio 1.00, the
 run red). No checkpoint is gated, and none has reached the catalog's
 `promotionStreak` of five: the longest same-as-baseline streak is three runs.
+
+`SHARE-IOS-003` was measured 2026-10-01 from commit `d38ace8` with its changes
+present in the working tree, on the iPhone 17 Pro simulator, iOS 26.5, app 1.0.0
+(1), Maestro 2.8.0: **passed**, twice, in about six minutes a run. It was then run
+against both things it exists to catch and failed at the step that guards each:
+with `holdSwipe` removed from the pickers, at the first held check — the pull
+from the list picker's scroller took the sheet away (`share-back` not visible);
+and with the guard's cleanup removed, so the hold is never given back, at the
+last one, after all four picker flicks had passed — the compose screen could no
+longer be swiped away (`share-add` still visible). Its first draft flicked at
+100ms and passed the first of those two with no guard at all; that is recorded
+with the case (_gestures and waits the runner performs_).
 
 ### the red full suite, and what it was
 

@@ -1,0 +1,18 @@
+# Cross into the share extension and open the list picker — the first of the two
+# screens that ask native to hold the system's swipe-to-dismiss off
+# (docs/share-sheet.md, _the pickers hold the system's swipe off_). No text is
+# entered: over the iOS extension the panel leaves the accessibility tree once
+# the keyboard is presented.
+appId: com.bracemark.app
+---
+- runFlow:
+    file: ../subflows/open-system-share.yaml
+    env:
+      SHARE_STATE_ID: share-add
+- tapOn:
+    id: 'share-list-row'
+- extendedWaitUntil:
+    visible:
+      id: 'share-list-input'
+    timeout: 10000
+- waitForAnimationToEnd

@@ -1,0 +1,13 @@
+# After a downward flick the runner generated. The same gesture dismisses the
+# sheet from the compose screen (share-swipe-dismissed.yaml), so "still here" is
+# the claim — and still on THIS picker, since a flick that landed as a row press
+# would have gone back to compose with the sheet intact.
+#
+# Parameters: PICKER_INPUT.
+appId: com.bracemark.app
+---
+- assertVisible:
+    id: 'share-back'
+- assertVisible:
+    id: ${PICKER_INPUT}
+- takeScreenshot: share-picker-held

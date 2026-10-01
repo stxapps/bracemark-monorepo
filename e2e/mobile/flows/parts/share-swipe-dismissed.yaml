@@ -1,0 +1,29 @@
+# The flick took the extension's sheet away — the half that fails if the guard
+# never lets go.
+#
+# A swipe is a CANCEL, not a completion: it lands on the system share sheet the
+# extension was launched from, not on Safari's page (measured on iOS 26.5; the
+# sheet's own Close goes all the way back, because `close()` completes the
+# request). So the positive control here is that sheet's Bracemark row — the
+# string open-system-share.yaml waits on — asserted AFTER the share tree is
+# gone, since the extension's lockup reads "Bracemark" too.
+appId: com.bracemark.app
+---
+- extendedWaitUntil:
+    notVisible:
+      id: 'share-add'
+    timeout: 10000
+- assertNotVisible:
+    id: 'share-backdrop'
+- assertVisible: 'Bracemark'
+- takeScreenshot: share-compose-dismissed
+
+# Hand the device back with nothing over Safari: the system sheet is a popover
+# whose dismiss region is the screen around it, and a later case's "More" would
+# otherwise be pressed underneath it.
+- tapOn:
+    point: '50%,20%'
+- extendedWaitUntil:
+    notVisible: 'Bracemark'
+    timeout: 10000
+- assertVisible: ${SHARE_SOURCE_TEXT}

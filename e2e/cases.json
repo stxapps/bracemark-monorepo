@@ -990,6 +990,26 @@
     "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
   },
   {
+    "id": "SHARE-IOS-003",
+    "title": "The iOS share pickers hold the system's swipe-to-dismiss off and the compose screen keeps it",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "ios"],
+    "fixture": "empty",
+    "path": "mobile/flows/share-ios-swipe.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "SHARE-IOS-MEMORY-RELEASE-001",
+    "title": "A release build's iOS share extension survives repeated laps through both pickers on a real iPhone",
+    "surface": "native",
+    "tier": "release",
+    "traits": ["online", "ios"],
+    "fixture": "small",
+    "path": "mobile/RELEASE.md",
+    "artifacts": ["manual-checklist"]
+  },
+  {
     "id": "SHARE-BOUNDARY-001",
     "title": "Native share surfaces show no-URL and at-cap states at the operating-system boundary",
     "surface": "native",

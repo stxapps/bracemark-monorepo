@@ -380,6 +380,13 @@ and calling it E2E.
       main app and prove the outbox drains.
 - [x] `SHARE-IOS-002` Share while signed out and prove the extension shows the
       signed-out state without launching the main app.
+- [x] `SHARE-IOS-003` With each picker up in the iOS share extension, flick down
+      from its list and from its header and prove the sheet stays; then prove the
+      same flick dismisses it from the compose screen.
+- [x] `SHARE-IOS-MEMORY-RELEASE-001` (manual, `mobile/RELEASE.md`) On a real
+      iPhone running a release build, lap both pickers five times and save,
+      proving the extension is never killed at its memory cap — which no
+      simulator enforces.
 - [x] `SHARE-BOUNDARY-001` On both platforms, cover no-URL and quota states at the
       system boundary. Detailed state-machine permutations remain component tests.
 - [x] `SHARE-CREATE-001` On Android, create a list and tag inside the share surface,

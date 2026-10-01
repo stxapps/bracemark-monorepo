@@ -70,6 +70,34 @@ disposable account containing the Phase 5 small archive's link and image:
 5. Confirm both files exist and are non-empty. Their contents are verified at the
    unit/native-contract layer; this check owns file creation and OS hand-off.
 
+## iOS share extension memory
+
+`SHARE-IOS-MEMORY-RELEASE-001` `release` `online` `ios`
+
+iOS kills an app extension at a per-process memory cap, and the kill looks like
+nothing: no error, no crash report, the sheet simply gone. The simulator enforces
+no cap, so `SHARE-IOS-001`/`003` pass there whatever the footprint is, and a
+dev build is not the build that ships — it carries roughly 100 MiB a release
+build does not (docs/share-sheet.md, _almost no memory to spare_). Only a release
+build on hardware answers this.
+
+On the lowest-memory iPhone available, running a release build (TestFlight, or a
+Release run from Xcode), signed into an account with a few dozen lists and tags:
+
+1. In Safari, share a page to Bracemark. The compose screen appears.
+2. Open the list picker, scroll it, type three characters to filter it, clear
+   them, and go back. Do the same in the tags picker, selecting four tags.
+3. Repeat step 2 five times without closing the sheet. The footprint grows a
+   little with every lap, so one lap is not the test.
+4. Save. Confirm "Saved to …" and that the sheet closes itself.
+5. **Pass:** the sheet never left on its own. **Fail:** it vanished at any point
+   in steps 1–4. Confirm what took it in Settings → Privacy & Security →
+   Analytics & Improvements → Analytics Data: look for a `JetsamEvent-…` entry
+   at that minute naming `BracemarkShareExtension`.
+6. If the build has a way to read it, record the headroom rather than only the
+   verdict — the bytes `os_proc_available_memory()` reports with a picker up —
+   so the next release has a number to compare with, not a second "it passed".
+
 ## Store purchases
 
 `IAP-NATIVE-001` fetches the App Store product on the iOS simulator and opens and

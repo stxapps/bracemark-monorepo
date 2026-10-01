@@ -1,0 +1,11 @@
+# Back to the compose screen, which holds nothing: the next flick is the
+# platform's own gesture and has to work again after two pickers held it off.
+appId: com.bracemark.app
+---
+- tapOn:
+    id: 'share-back'
+- extendedWaitUntil:
+    visible:
+      id: 'share-add'
+    timeout: 10000
+- waitForAnimationToEnd

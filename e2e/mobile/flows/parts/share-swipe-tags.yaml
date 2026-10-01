@@ -1,0 +1,17 @@
+# Leave the list picker and open the tags picker — the guard is given back and
+# taken again across the compose screen in between.
+appId: com.bracemark.app
+---
+- tapOn:
+    id: 'share-back'
+- extendedWaitUntil:
+    visible:
+      id: 'share-add'
+    timeout: 10000
+- tapOn:
+    id: 'share-tags-row'
+- extendedWaitUntil:
+    visible:
+      id: 'share-tag-input'
+    timeout: 10000
+- waitForAnimationToEnd

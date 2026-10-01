@@ -478,14 +478,22 @@ carrying one. Three rules hold them together:
   `plugins/with-share-extension-swipe-hold.js`, beside the `close` observer the
   library already carries, for the reason the root-view plugin exists. The
   compose screen passes nothing, on purpose: swiping a share sheet away from its
-  first screen is the platform's own gesture. Driven by hand on an iPhone 12
-  (iOS 26.5): with a picker up, a long pull from the top of its list makes the
-  sheet resist and stay, and back on the compose screen the same pull still
-  closes it. No flow re-checks either half — the simulator honours the flag too
-  (a flick that otherwise starts the dismissal starts nothing), but a missing
-  observer or a guard that never lets go is silent everywhere, so re-drive that
-  one gesture on both screens after touching the module, the plugin or
-  `holdSwipe`.
+  first screen is the platform's own gesture — and it is a CANCEL, which leaves
+  the user on the system share sheet they came through, where `share-close`
+  completes the request and returns them to the page. Driven by hand on an
+  iPhone 12 (iOS 26.5): with a picker up, a long pull from the top of its list
+  makes the sheet resist and stay, and back on the compose screen the same pull
+  still closes it. A missing observer and a guard that never lets go are both silent
+  everywhere else, so two checks stand on that chain. Its STRINGS — the module's
+  name and function, the notification, its `userInfo` key, the class autolinking
+  registers, the plugin's anchor in the installed library — are held to each
+  other by `share-swipe-hold-wiring.spec.ts` and `share-swipe-guard.spec.tsx`
+  ([testing.md](./testing.md)). Its BEHAVIOUR is `SHARE-IOS-003`
+  ([e2e.md](./e2e.md), _gestures and waits the runner performs_): the simulator
+  honours the flag too, so one scripted flick must leave each picker standing
+  and then take the compose screen away. What neither reaches is a thumb on
+  hardware — re-drive that one gesture on both screens, on a phone, after
+  touching the module, the plugin or `holdSwipe`.
 - ⚠ **The share extension has almost no memory to spare, and exceeding it looks
   like nothing at all.** iOS caps an app extension's memory per process and
   kills it at the cap — no crash report, no error in Metro or Xcode, the sheet
@@ -501,8 +509,45 @@ carrying one. Three rules hold them together:
   build has roughly 16MB of headroom over the compose screen. **Nothing on this
   path may mount a native view from an Expo module, or otherwise spend memory in
   the tens of megabytes**; a module FUNCTION costs nothing measurable, which is
-  why the guard is one. A release build has more room than a dev build, and that
-  margin has not been measured.
+  why the guard is one.
+
+  **Most of that 170MB is the dev build, not the sheet.** The same screens,
+  release build against dev build, read off the simulator's own process with
+  `footprint` (`pgrep -f BracemarkShareExtension.appex` finds it — a simulator
+  process is a host process), iOS 26.5:
+
+  |                                | dev build   | release build |
+  | ------------------------------ | ----------- | ------------- |
+  | compose                        | 166–171 MiB | 59–64 MiB     |
+  | list picker up                 | 174–176 MiB | 65.7–65.9 MiB |
+  | after two laps of both pickers | 180 MiB     | 68 MiB        |
+
+  The ~105 MiB between them is one line of the breakdown: `MALLOC_SMALL` is 105
+  MiB in the dev build and 15 in release, which is the bundle arriving from Metro
+  as source and being parsed in-process, plus the dev tooling, where a release
+  build maps Hermes bytecode from a file. What a release build still pays at
+  compose is mostly not JS either: 17 MiB of dyld private memory and 16 of
+  `__DATA`/`__DATA_CONST` — the cost of the binary the share extension target
+  links, spent before a line of the bundle runs — against 15 of malloc and 10 of
+  untagged VM (Hermes's heap, most likely). So the lever on the release
+  footprint is what that target LINKS (`excludedPackages`, `app.config.ts`),
+  more than anything in `features/share/`.
+
+  Two things those numbers do not say. They are not the phone's: the simulator
+  enforces no cap and its footprint is not a device's (the dev build that reads
+  170MB here still had its ~16MB of headroom on the iPhone 12), so **how much
+  room a release build has on hardware is still unmeasured** —
+  `os_proc_available_memory()`, read inside the extension with a picker up, is
+  the call that answers it, and `SHARE-IOS-MEMORY-RELEASE-001`
+  (`e2e/mobile/RELEASE.md`) is the check that stands in until something reads
+  it. And the dev build's figures do not repeat: its first picker costs anywhere
+  from 3 to 10 MiB, and it never gives a lap back — which is why no e2e case
+  asserts a footprint ([e2e.md](./e2e.md), _what e2e may not assert_). Two laps
+  cost the simulator's dev build ~14 MiB, which is about the headroom the phone's
+  had — so a DEV build that dies on a phone after a few laps through the pickers
+  may be this paragraph rather than a regression. Check a release build before
+  chasing it.
+
 - **The two disclosure rows say what they are to a screen reader**, even though
   they carry no visible label: `ShareRow` takes a `label` + `value` and announces
   "List: Reading" / "Tags: alpha, beta". Dropping a word of type from a 520pt
@@ -781,9 +826,10 @@ KB-sized (no Argon2, key pre-derived, far under the ~120MB cap).
 **Invariant that keeps the memory story true: no bytes-heavy work in the
 extension.** The extension handles URLs and KB-sized entity JSON only —
 image/screenshot fetch, decrypt, and encrypt stay in the main app / extractor.
-This is what keeps everything comfortably under the ~120MB
-share-extension cap; don't move image work across the process boundary to
-"save a round trip."
+This is what keeps the DATA out of the footprint; it does not make the process
+comfortable — the runtime alone leaves a dev build ~16MB short of the cap (_the
+share extension has almost no memory to spare_, above). Don't move image work
+across the process boundary to "save a round trip."
 
 **Keep `index.share.js` lean.** Everything the share entry transitively imports
 is init cost paid on every cold share (see the cold-start note in the file map
@@ -923,4 +969,5 @@ can neither see the share sheet nor anything in this process. →
 Like the other native pieces (the `BracemarkCrypto` pod's modules, the embedded
 font), none of
 this is exercisable in jest/Metro alone — it needs `npx expo prebuild` + a dev
-client on device/simulator.
+client on device/simulator. The one thing jest does hold is the swipe guard's
+wiring, as text (_the pickers hold the system's swipe off_, above).
