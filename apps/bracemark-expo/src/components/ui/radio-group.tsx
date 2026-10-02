@@ -29,7 +29,7 @@ function RadioGroupItem({
   return (
     <RadioGroupPrimitive.Item
       className={cn(
-        'aspect-square size-4 shrink-0 items-center justify-center overflow-hidden rounded-full border border-input dark:bg-input/30',
+        'aspect-square size-4 shrink-0 items-center justify-center rounded-full border border-input dark:bg-input/30',
         Platform.select({
           web: 'transition-all outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40',
         }),
@@ -45,8 +45,15 @@ function RadioGroupItem({
           context it does not export, and the item is addressed by `value`).
           What does not port is the 1px ring: web's `data-checked:border-primary`
           merges the edge into the fill, and with the fill on a CHILD the
-          `border-input` edge stays drawn around it. */}
-      <RadioGroupPrimitive.Indicator className="h-full w-full items-center justify-center bg-primary">
+          `border-input` edge stays drawn around it.
+          The fill rounds ITSELF — do not square it and lean on `overflow-hidden`
+          on the item instead. Android clips children to the padding box, but iOS
+          clips to the BORDER box (`enableIOSViewClipToPaddingBox` is off in RN
+          0.81): a square 14pt fill cut by the 16pt circle keeps four flat sides,
+          and iOS then paints the border over it. Light's opaque `--input` ring
+          hides that; dark's is white/20%, so the flat sides showed straight
+          through it — dark, selected, iOS only. */}
+      <RadioGroupPrimitive.Indicator className="h-full w-full items-center justify-center rounded-full bg-primary">
         <View className="size-2 rounded-full bg-primary-foreground" />
       </RadioGroupPrimitive.Indicator>
     </RadioGroupPrimitive.Item>
