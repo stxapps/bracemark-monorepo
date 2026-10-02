@@ -511,6 +511,16 @@ and `items-center` on the row holds only until the label wraps. Measured on the
 iOS simulator at the smallest, default and capped sizes: radio and icon share a
 centre exactly, within 0.2 of the label's cap-height centre, wrapped or not.
 
+The same strut holds a SLOT whose text changes. The password-strength meter
+(`features/auth/password-strength.tsx`) keeps its label column and its row from
+moving as the label goes from empty to "Very weak" to "Strong", which the web
+twin does with `min-h-4 w-16` — correct there, where the box and the text are
+both rem. Ported, the 64dp column fit "Very weak" (60 wide) at 1× and wrapped
+it at the first step up (67, and 78 at the cap). So the meter lays the widest
+label out invisibly, inside an `aria-hidden` View, and draws the real one over
+it: the slot is whatever that string measures on this device today. A wider
+fixed column is the tempting fix and is the same mistake with more slack.
+
 The web has no equivalent policy: browser text zoom reflows, and
 `use-root-font-scale.ts` handles the root-size case.
 

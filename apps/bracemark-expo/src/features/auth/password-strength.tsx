@@ -154,6 +154,12 @@ export const MESSAGE_TONE: Record<FieldMessage['tone'], string> = {
 // One label per band, so a full meter reads "Strong" exactly when the gate passes.
 const LABELS = ['Very weak', 'Weak', 'Fair', 'Strong'] as const;
 
+// The label the meter lays out invisibly to size its label slot (the strut note on
+// PasswordStrengthMeter). Widest by ADVANCE, not by character count, though here the
+// two agree by a wide margin — 60 at 1× against 38 for "Strong". Rewording a label
+// means re-asking which one this is; a narrower strut wraps the wider label.
+const WIDEST_LABEL: (typeof LABELS)[number] = 'Very weak';
+
 // Bar fill and label share ONE tone per band — see the web twin for why the top band
 // is green rather than `bg-primary` (`--primary` is a chroma-0 neutral, so a passing
 // meter had no success signal). Raw palette colours, not a new `--color-*` token:
@@ -175,10 +181,26 @@ const TONES = [
 // A null score (empty password, or the estimator still loading) renders the EMPTY
 // TRACK, not nothing, so the meter doesn't shove the message and helper text below it
 // down the screen on the first keystroke. The label slot holds BOTH its axes for the
-// same reason, and each needs its own class because an empty label collapses on each
-// independently: `w-16` keeps the column (so the bars don't stretch into it), and
-// `min-h-4` keeps the ROW a full text-xs line box — without it the row is only as tall
-// as the 6px bars while the label is empty, and grows the moment a word appears.
+// same reason — an empty label collapses on each, so without a hold the bars stretch
+// into the column and the row is only as tall as the 6px bars, and both jump the
+// moment a word appears.
+//
+// What holds them is a STRUT, and this is the one place the row differs from the web
+// twin's `min-h-4 w-16`. There the column, the line box and the text are all rem, so
+// they scale together and two numbers hold at every browser font size. Here a number
+// is dp and does not scale while the label does: "Very weak" is 60 wide at 1×, 67 one
+// Dynamic Type step up and 78 at the 1.3 cap, so `w-16` broke it onto two lines for
+// anyone with the OS text size raised, and `min-h-4` let the row grow from 16 to 20.8
+// on the first keystroke at the cap. No number is right at more than one text size
+// (docs/accessibility.md, _font scaling_), so nothing is a number: the widest label is
+// laid out invisibly, the slot takes whatever box this device gives it today, and the
+// real label is drawn over it, right-aligned. Same idea as `FirstLineSlot`
+// (features/settings/settings-kit.tsx), on both axes instead of one.
+//
+// The strut's wrapping View is load-bearing: `aria-hidden` on a Text does nothing
+// (initial-sync-gate.tsx carries the measurement), and without it a screen reader
+// finds "Very weak" under an empty field. `opacity-0` rather than a transparent
+// colour so it cannot pick up a tone by accident.
 //
 // The `mt-1` is the same OPTICAL correction as the web twin, and carried here for the
 // same reason it lives in the component there: both call sites (create-account and
@@ -204,9 +226,14 @@ export function PasswordStrengthMeter({ displayScore }: { displayScore: number |
           />
         ))}
       </View>
-      <Text className={cn('min-h-4 w-16 shrink-0 text-right text-xs', tone?.text)}>
-        {displayScore === null ? '' : LABELS[displayScore]}
-      </Text>
+      <View className="shrink-0">
+        <View aria-hidden>
+          <Text className="text-xs opacity-0">{WIDEST_LABEL}</Text>
+        </View>
+        <Text className={cn('absolute inset-0 text-right text-xs', tone?.text)}>
+          {displayScore === null ? '' : LABELS[displayScore]}
+        </Text>
+      </View>
     </View>
   );
 }
