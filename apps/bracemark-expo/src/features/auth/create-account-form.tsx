@@ -289,13 +289,39 @@ export function CreateAccountForm() {
           the manual `opacity-50` goes with it. `gap-2` matches the web Field this
           stack mirrors (field.tsx's vertical variant — 8px, and the note there
           carries why); an earlier `gap-1` was compensating for the Pressable's own
-          `py-2`, which the Button doesn't need. */}
+          `py-2`, which the Button doesn't need.
+
+          THE SECOND LABEL WRAPS, and its button grows with it instead of pinning
+          `h-10`. The label is 268 wide at 1× against the 276 a 390pt phone leaves
+          inside the card — it fits by 8, and stops fitting one Dynamic Type step
+          up (300 at 1.118×, 349 at the 1.3 cap, which the widest phone's 302
+          doesn't hold either). Inside a pinned height the second line was cut
+          off. Shortening it is not available — the label is the outcome, word
+          for word (docs/account.md) — and shrinking it is the fix
+          docs/accessibility.md, _font scaling_, rules out. So `min-h` rather
+          than `h`, with the `sm:` pair restated because `cn` only cancels a
+          class in its own variant scope (ui/textarea.tsx). `py-2` is not the
+          padding ui/button.tsx removed: that rule is for a pinned box, and here
+          two `text-sm` lines are exactly the 40 minimum, so without it they
+          would touch both edges; a one-line label still lands on 40. The two
+          break strategies keep a lone "code" off the second line. */}
       <View className="gap-2">
         <Button disabled={!recoverySaved || pending} onPress={() => submit(true)}>
           <Text>{pending ? 'Creating account…' : 'Create account'}</Text>
         </Button>
-        <Button variant="ghost" disabled={pending} onPress={() => submit(false)}>
-          <Text className="text-muted-foreground">Create account without a recovery code</Text>
+        <Button
+          variant="ghost"
+          className="h-auto min-h-10 py-2 sm:h-auto sm:min-h-9"
+          disabled={pending}
+          onPress={() => submit(false)}
+        >
+          <Text
+            className="shrink text-center text-muted-foreground"
+            lineBreakStrategyIOS="push-out"
+            textBreakStrategy="balanced"
+          >
+            Create account without a recovery code
+          </Text>
         </Button>
         {/* Below the pair, matching web: the message is the RESULT of pressing one
             of them, so putting it above would shift both buttons down under a
