@@ -27,11 +27,28 @@
 // a single-line input), so one measured `rowHeight` drives all the math; it's
 // measured rather than hardcoded so Dynamic Type can't break it.
 //
+// THE DROP IS HELD UNTIL THE NEW ORDER RENDERS, not for a fixed time. Two things
+// have to change for a drop to finish — the transforms go back to identity (UI
+// thread) and the rows re-lay-out in their new order (a store write, a live-read
+// re-run, a React commit) — and whichever happens alone is a visible glitch:
+// transforms cleared over the OLD layout is every row snapping back to where it
+// started until the read lands; the NEW layout under the old transforms is each
+// row shifted twice. A timer can't pair them (the store round trip is tens of ms
+// on a release build and several hundred on a dev one, so any fixed settle is
+// wrong on one of them), so nothing here clears on a timer. The lifted row flies
+// into its slot and everything then HOLDS that pose — which is pixel-for-pixel
+// the order about to arrive — until `orderKey` changes, and the reset is sent
+// from that commit's own layout effect so the two reach the UI thread together.
+// A drop that changes nothing (a no-op, the paywall, a failed write) never gets
+// that commit, so the section says so (`onDrop`'s return) and the row is sent
+// home instead; `COMMIT_TIMEOUT_MS` is the backstop for a write that resolves
+// and still moves nothing.
+//
 // Not here, deliberately: haptics. `onPickUp` and `projectOffsetX` are exactly
 // the seams a tick hangs off (pick-up, and each level change), but expo-haptics
 // is a native module and a prebuild — a dependency decision, not a code one.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Keyboard, type LayoutChangeEvent, View } from 'react-native';
 import { Gesture, GestureDetector, type PanGesture } from 'react-native-gesture-handler';
 import Animated, {
@@ -45,7 +62,8 @@ import Animated, {
 // The UI→JS hop lives here now: reanimated's `runOnJS` re-export is deprecated,
 // and so is worklets' own `runOnJS` — `scheduleOnRN` is the current spelling
 // (same thing, args passed inline instead of to a returned function).
-import { scheduleOnRN } from 'react-native-worklets';
+// `scheduleOnUI` is its mirror, for the two resets the JS side decides on.
+import { scheduleOnRN, scheduleOnUI } from 'react-native-worklets';
 import { GripVertical } from 'lucide-react-native';
 
 import { Icon } from '../../components/ui/icon';
@@ -56,9 +74,15 @@ import { useSettingsScroll } from './scroll-host';
 const FALLBACK_ROW_HEIGHT = 44;
 // Hold before the drag takes over from the page scroll.
 const LONG_PRESS_MS = 200;
-// How long the lifted row takes to settle into its slot on release. Long enough
-// to read as a landing, short enough that the store's write usually lands first.
+// How long the lifted row takes to fly into its slot on release (or back home,
+// for a drop that changed nothing). Purely the landing's own duration — nothing
+// is timed against the store; see the header.
 const SETTLE_MS = 140;
+// How long a landed drop waits for the rows to re-render before giving up and
+// sending the row home. Only ever reached by a write that resolved without
+// moving anything; generous because a dev build's read is slow and a row sent
+// home early is exactly the snap-back the hold exists to prevent.
+const COMMIT_TIMEOUT_MS = 1500;
 // The neighbours' gap-opening shift, and the lifted row's indent slide.
 const SHIFT_MS = 120;
 // Auto-scroll: the band at each end of the viewport that pulls the page, the px
@@ -72,6 +96,10 @@ export interface DragSortOptions {
   // row's subtree is dropped while it travels), which is why it's a live prop
   // and not a start-of-drag snapshot.
   count: number;
+  // The identity of the order (and, on Lists, the nesting) the rows are rendered
+  // in — it must change when a drop's write lands and at no other time that
+  // matters. A dropped row is held in its slot until this does (see the header).
+  orderKey: string;
   // Set to the table's px-per-indent to get horizontal notifications (Lists);
   // omit for a vertical-only drag (Tags), which then never re-renders mid-drag.
   indentWidth?: number;
@@ -87,12 +115,16 @@ export interface DragSortOptions {
   // a depth) keeps this hook free of any tree knowledge, and the section free of
   // shared-value plumbing.
   projectOffsetX?: (to: number, offsetX: number) => number;
-  // Released: the slot it would take and its horizontal travel. Not called when
-  // the gesture is cancelled.
-  onDrop: (from: number, to: number, offsetX: number) => void;
-  // Fires once the row has landed — after onDrop, or alone on a cancel. Only a
-  // section that keeps its own drag state (Lists, which excludes the lifted
-  // row's subtree) needs it.
+  // Released: the slot it would take and its horizontal travel. Return the
+  // write's promise when the drop changes the order — the row then stays in its
+  // slot until `orderKey` moves, and goes home if the promise rejects. Return
+  // nothing when it changes nothing (dropped where it started, refused by the
+  // paywall) and the row goes home straight away.
+  onDrop: (from: number, to: number, offsetX: number) => Promise<unknown> | void;
+  // Fires once the drag is over and the transforms are back to identity — after
+  // the new order has rendered, or after the row has gone home. Only a section
+  // that keeps its own drag state (Lists, which excludes the lifted row's
+  // subtree) needs it.
   onRelease?: () => void;
 }
 
@@ -113,7 +145,7 @@ export interface DragSort {
 }
 
 export function useDragSort(options: DragSortOptions): DragSort {
-  const { count, indentWidth } = options;
+  const { count, indentWidth, orderKey } = options;
   const scroll = useSettingsScroll();
   // Capture the shared value alone, never the handle: worklets may close over
   // shared values, not over an object carrying JS methods. The handle itself is
@@ -132,7 +164,13 @@ export function useDragSort(options: DragSortOptions): DragSort {
   const scrollAtStart = useSharedValue(0);
   const rowHeight = useSharedValue(FALLBACK_ROW_HEIGHT);
   const depthOffset = useSharedValue(0); // lifted row's projected indent slide
+  // Released: the finger is up and the row is flying to a slot, or sitting in it
+  // waiting for the rows to re-render. False again only once `active` is -1.
   const settling = useSharedValue(false);
+  // The slot the row was released over, frozen at release (-1 while the finger
+  // is down). `target` below is derived from the row's travel, and a released
+  // row's travel is an animation — without this the gap would follow the landing.
+  const dropTarget = useSharedValue(-1);
   const rowCount = useSharedValue(count);
 
   // Written in an effect, not in render — Reanimated rejects render-phase writes.
@@ -156,6 +194,7 @@ export function useDragSort(options: DragSortOptions): DragSort {
   // Which slot the row would take. Uniform rows ⇒ whole steps of rowHeight.
   const target = useDerivedValue(() => {
     if (active.value < 0) return -1;
+    if (dropTarget.value >= 0) return dropTarget.value;
     const steps = Math.round(dragY.value / rowHeight.value);
     return clamp(active.value + steps, 0, Math.max(0, rowCount.value - 1));
   });
@@ -175,7 +214,9 @@ export function useDragSort(options: DragSortOptions): DragSort {
   );
   useAnimatedReaction(
     () => {
-      if (active.value < 0) return null;
+      // Nothing to project once the finger is up: the depth was decided at the
+      // release, and a row going home must not be re-projected on the way.
+      if (active.value < 0 || settling.value) return null;
       const bucket = indentWidth ? Math.round(translationX.value / (indentWidth / 2)) : 0;
       return { to: target.value, bucket, offsetX: translationX.value };
     },
@@ -218,9 +259,22 @@ export function useDragSort(options: DragSortOptions): DragSort {
     // and it can't be a dependency (mutating it doesn't re-render).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  useEffect(() => stopAutoScroll, [stopAutoScroll]);
 
   // --- lifecycle, JS side --------------------------------------------------
+  // A row has been dropped and the drag isn't over yet: it is flying to its
+  // slot, held there, or on its way home. The one thing the layout effect below
+  // needs to know, and it has to be a ref — it's read during a commit.
+  const dropped = useRef(false);
+  // Which drop a late answer belongs to: a write that rejects after the NEXT
+  // drag has started must not send that one home.
+  const dropSeq = useRef(0);
+  const commitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearCommitTimer = useCallback(() => {
+    if (commitTimer.current === null) return;
+    clearTimeout(commitTimer.current);
+    commitTimer.current = null;
+  }, []);
+
   const handlePickUp = useCallback(
     (index: number) => {
       Keyboard.dismiss(); // a rename field mid-edit would fight the drag
@@ -232,22 +286,102 @@ export function useDragSort(options: DragSortOptions): DragSort {
     [startAutoScroll],
   );
 
-  const handleDrop = useCallback(
-    (from: number, to: number, offsetX: number) => {
-      // The page stops chasing the finger the moment it lifts; scrolling stays
-      // locked through the settle so a stray touch can't yank the viewport.
-      stopAutoScroll();
-      handlers.current.onDrop(from, to, offsetX);
-    },
-    [stopAutoScroll],
-  );
-
   const handleRelease = useCallback(() => {
     stopAutoScroll();
+    clearCommitTimer();
+    dropped.current = false;
     scrollRef.current?.setScrollEnabled(true);
     setActiveIndex(null);
     handlers.current.onRelease?.();
-  }, [stopAutoScroll]);
+  }, [stopAutoScroll, clearCommitTimer]);
+
+  // Everything back to identity, at once. Assigning over the two animated values
+  // also cancels whatever was running on them (the landing, the trip home).
+  const reset = useCallback(() => {
+    'worklet';
+    active.value = -1;
+    dropTarget.value = -1;
+    settling.value = false;
+    translationY.value = 0;
+    translationX.value = 0;
+    depthOffset.value = 0;
+    // Shared values from the enclosing hook — created once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // The drop changed nothing, so the layout the row left is the one it's still
+  // in: fly it back there and let the neighbours close the gap, THEN reset —
+  // over an unchanged layout the two poses are the same pixels.
+  const goHome = useCallback(() => {
+    'worklet';
+    if (active.value < 0) return;
+    dropTarget.value = active.value;
+    depthOffset.value = withTiming(0, { duration: SETTLE_MS });
+    translationY.value = withTiming(0, { duration: SETTLE_MS }, (finished) => {
+      // Cancelled by `reset` — the order did change after all, and that path
+      // has already released.
+      if (!finished) return;
+      reset();
+      scheduleOnRN(handleRelease);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reset, handleRelease]);
+
+  const sendHome = useCallback(
+    (drop: number) => {
+      if (!dropped.current || drop !== dropSeq.current) return;
+      clearCommitTimer();
+      scheduleOnUI(goHome);
+    },
+    [clearCommitTimer, goHome],
+  );
+
+  const handleDrop = useCallback(
+    (from: number, to: number, offsetX: number) => {
+      // The page stops chasing the finger the moment it lifts; scrolling stays
+      // locked until the release so a stray touch can't yank the viewport.
+      stopAutoScroll();
+      // Before `onDrop`, not after: its write is what the commit below answers.
+      dropped.current = true;
+      const drop = ++dropSeq.current;
+      const op = handlers.current.onDrop(from, to, offsetX);
+      if (!op) {
+        sendHome(drop);
+        return;
+      }
+      // The section reports the failure (useOpRunner); this only un-drops the row.
+      op.then(undefined, () => sendHome(drop));
+      commitTimer.current = setTimeout(() => sendHome(drop), COMMIT_TIMEOUT_MS);
+    },
+    [stopAutoScroll, sendHome],
+  );
+
+  // THE OTHER HALF OF THE DROP: the rows have re-rendered in a new order, so the
+  // transforms that were standing in for it have to go in the same breath. A
+  // layout effect because that is the closest JS gets — the write to the UI
+  // thread is queued inside the commit's own task, instead of a render or a
+  // timer later. Whether the two then share a FRAME is the UI thread's call and
+  // only a device shows it (docs/editors.md). It also covers a commit
+  // that arrives mid-landing (a fast store) or mid-trip-home (a slow one that
+  // outran the timeout): either way the new layout is the truth now.
+  useLayoutEffect(() => {
+    if (!dropped.current) return;
+    scheduleOnUI(reset);
+    handleRelease();
+    // `orderKey` is the whole trigger; the two callbacks are stable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderKey]);
+
+  useEffect(
+    () => () => {
+      stopAutoScroll();
+      clearCommitTimer();
+      // Unmounted mid-hold (the user left the section): the commit that would
+      // have unlocked the page is never coming.
+      if (dropped.current) scrollRef.current?.setScrollEnabled(true);
+    },
+    [stopAutoScroll, clearCommitTimer],
+  );
 
   // --- per-row wiring ------------------------------------------------------
   const useRow = (index: number): DragSortRow => {
@@ -256,7 +390,13 @@ export function useDragSort(options: DragSortOptions): DragSort {
         Gesture.Pan()
           .activateAfterLongPress(LONG_PRESS_MS)
           .onStart(() => {
+            // The previous drop is still landing or held — its rows haven't
+            // re-rendered, so every index here is about to change. This press is
+            // dropped whole: the three callbacks below all test for a drag this
+            // row owns, and this one never becomes one.
+            if (active.value >= 0) return;
             active.value = index;
+            dropTarget.value = -1;
             settling.value = false;
             translationY.value = 0;
             translationX.value = 0;
@@ -265,36 +405,39 @@ export function useDragSort(options: DragSortOptions): DragSort {
             scheduleOnRN(handlePickUp, index);
           })
           .onUpdate((e) => {
+            if (active.value !== index || settling.value) return;
             translationY.value = e.translationY;
             translationX.value = e.translationX;
             absoluteY.value = e.absoluteY;
           })
           .onEnd(() => {
+            if (active.value !== index || settling.value) return;
             scheduleOnRN(handleDrop, active.value, target.value, translationX.value);
           })
           .onFinalize(() => {
-            // Nothing was ever lifted (the long press didn't land) — the pan
-            // never activated, so there's no state to unwind.
-            if (active.value < 0) return;
-            // Let the lifted row land in its slot before the state unwinds:
-            // clearing `active` immediately would snap every row back to identity
-            // a frame or two before the store's write repaints them in the new
-            // order. The gap stays open while the row flies into it.
+            // Nothing was ever lifted (the long press didn't land, or it landed
+            // on top of a drop still in flight) — there's no state to unwind.
+            if (active.value !== index || settling.value) return;
+            // Fly the row into its slot and STOP there: nothing unwinds here.
+            // The gap stays open and the row stays put until the JS side has an
+            // answer — `reset` when the new order renders, `goHome` when there
+            // won't be one (see the header for why this can't be a timer).
+            const to = target.value;
+            dropTarget.value = to;
             settling.value = true;
-            const landed = (target.value - active.value) * rowHeight.value;
-            translationY.value = withTiming(landed, { duration: SETTLE_MS }, () => {
-              active.value = -1;
-              settling.value = false;
-              translationY.value = 0;
-              translationX.value = 0;
-              depthOffset.value = 0;
-              scheduleOnRN(handleRelease);
+            // From where the row IS, which is `dragY`: the style below stops
+            // adding the page's scroll delta once it's settling, so a landing
+            // that started from the raw translation would jump by however far
+            // the page auto-scrolled during the drag.
+            translationY.value = dragY.value;
+            translationY.value = withTiming((to - index) * rowHeight.value, {
+              duration: SETTLE_MS,
             });
           }),
       // The row's own index is the only thing here that can change: the shared
-      // values are created once, the three handlers are stable (they reach the
-      // scroll host through a ref), and the section's own callbacks are read
-      // fresh off `handlers.current` at call time.
+      // values are created once, the handlers are stable (they reach the scroll
+      // host through a ref), and the section's own callbacks are read fresh off
+      // `handlers.current` at call time.
       [index],
     );
 
@@ -315,9 +458,10 @@ export function useDragSort(options: DragSortOptions): DragSort {
             { scale: settling.value ? 1 : 1.02 },
           ],
           // Both axes of "on top": zIndex orders siblings on iOS, elevation on
-          // Android (where it also casts the lift shadow).
+          // Android (where it also casts the lift shadow — put down with the
+          // row, since a held row can sit in its slot for a while).
           zIndex: 2,
-          elevation: 4,
+          elevation: settling.value ? 0 : 4,
         };
       }
 

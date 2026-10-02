@@ -186,11 +186,20 @@ export function TagsSection() {
   // Drag by the grip — the whole flat group, reordered. `reorder` writes only the
   // tags whose rank actually changes, so this is cheap and a no-op drop is free.
   // No indentWidth: tags don't nest, so the horizontal axis means nothing here.
+  //
+  // `orderKey` and the returned promise are the drop's two halves (drag-sort.tsx,
+  // _the drop is held_): the dropped row stays in its slot until the ids below
+  // come back in a new order, and goes home if the write is refused. Returning
+  // nothing is the no-op drop — there is no new order to wait for.
+  const orderKey = useMemo(() => tags.map((t) => t.id).join(' '), [tags]);
   const drag = useDragSort({
     count: tags.length,
+    orderKey,
     onDrop: (from, to) => {
       if (from === to || from < 0 || to < 0) return;
-      run(reorder(arrayMove(tags, from, to)));
+      const op = reorder(arrayMove(tags, from, to));
+      run(op);
+      return op;
     },
   });
 

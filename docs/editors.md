@@ -290,6 +290,39 @@ draft; each keystroke commits or reverts in place):
   complete non-drag fallback, and both route a nesting drop through the
   `nestedLists` paywall rather than clamping the projection.
 
+  **A native drop is held until the new order renders — never for a fixed
+  time.** Finishing a drop takes two changes on two threads: the drag transforms
+  go back to identity (UI thread), and the rows re-lay-out in their new order (the
+  write, the live-read re-run, a React commit). Either one alone is a glitch —
+  identity over the old layout is every row back where it started until the read
+  lands; the new layout under the old transforms is each row shifted twice — and
+  the round trip is tens of ms on a release build and several hundred on a dev
+  one, so a settle timer is wrong on one of them whatever its value (it was
+  140ms, and a dev build on a phone showed the old order after every drop). So
+  `drag-sort.tsx` flies the row into its slot and then holds that pose, which is
+  the order about to arrive, until the section's `orderKey` changes; the reset is
+  queued from that commit's own layout effect so both reach the UI thread
+  together. The contract this puts on a section is two lines: pass an `orderKey`
+  that changes when a drop lands (the ids in order; Lists adds each row's depth,
+  since a drop can re-nest a row without moving it), and have `onDrop` **return
+  the write's promise**, or nothing for a drop that changes nothing — the no-op,
+  the paywall. Nothing returned, a rejected write, or 1.5s with no new order
+  sends the row back home instead, and a pick-up is ignored while a drop is
+  still held, since every index is about to change under it. The lifecycle is
+  spec'd with the gesture's callbacks driven by hand (`drag-sort.spec.tsx`);
+  that the two halves land in the same FRAME is not something jest can see — it
+  is judged on a device.
+
+  **Web has the same gap, and nothing handles it yet.** dnd-kit drops its
+  transforms in the render `onDragEnd` runs in, while the order comes back
+  through a Dexie write and `useLiveQuery`. What hides it is that the dropped
+  row eases back toward its origin instead of snapping, and Dexie answers first:
+  sampled per frame in headless Chrome against the dev server, no frame painted
+  the old order at 1× or 4× CPU throttle, one frame was out of order at 6×, and
+  the old order was painted outright at 20×. If it ever shows on a real device,
+  the fix there is an optimistic order kept from `onDragEnd` until the live read
+  matches it — dnd-kit has no pose to hold.
+
   **What the two tables share is factored, once per platform.** The projection
   math is shared across platforms (above), but the _chrome_ can't be — a `<div>`
   and a `<View>` have no common ancestor — so each platform keeps one

@@ -496,8 +496,18 @@ export function ListsSection() {
   // drag-sort.tsx; what lands here is only the discrete half — "which slot, and
   // how far right?" — answered by the SAME shared projection web's dnd-kit layer
   // calls, so nesting behaves identically on both platforms.
+  //
+  // `orderKey` is what a landed drop waits on (drag-sort.tsx, _the drop is
+  // held_). Depth is in it because a drop can re-nest a row without moving it —
+  // same ids, same sequence, one level over — and the flat sequence plus each
+  // row's depth is the whole tree as rendered, so any move that lands changes it.
+  const orderKey = useMemo(
+    () => displayRows.map((r) => `${r.item.id}:${r.depth}`).join(' '),
+    [displayRows],
+  );
   const drag = useDragSort({
     count: displayRows.length,
+    orderKey,
     indentWidth: INDENT_WIDTH,
     onPickUp: (index) => setDraggingId(displayRows[index]?.item.id ?? null),
     onRelease: () => setDraggingId(null),
@@ -520,6 +530,8 @@ export function ListsSection() {
       return (depth - active.depth) * INDENT_WIDTH;
     },
     onDrop: (from, to, offsetX) => {
+      // Every bare `return` below is a drop that changes nothing — the hook
+      // sends the row home. Only the write at the end holds it in its slot.
       const active = displayRows[from];
       const over = displayRows[to];
       if (!active || !over) return;
@@ -547,7 +559,9 @@ export function ListsSection() {
         return;
       }
 
-      run(move(plan.item, plan.parentId, plan.siblings, plan.index));
+      const op = move(plan.item, plan.parentId, plan.siblings, plan.index);
+      run(op);
+      return op;
     },
   });
 
