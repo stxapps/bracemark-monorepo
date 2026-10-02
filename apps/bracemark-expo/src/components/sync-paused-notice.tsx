@@ -37,6 +37,7 @@ import {
 import { Button } from './ui/button';
 import { Icon } from './ui/icon';
 import { Text } from './ui/text';
+import { FirstLineSlot } from './first-line-slot';
 
 export function SyncPausedNotice() {
   const { sessionState } = useAuth();
@@ -47,7 +48,9 @@ export function SyncPausedNotice() {
       testID="sync-paused-notice"
       className="mx-4 mt-3 flex-row items-start gap-3 rounded-lg border border-border bg-muted/40 p-3"
     >
-      <Icon as={CloudOff} className="mt-0.5 size-4 text-muted-foreground" />
+      <FirstLineSlot textClassName="text-sm">
+        <Icon as={CloudOff} className="size-4 text-muted-foreground" />
+      </FirstLineSlot>
       <View className="min-w-0 flex-1 gap-2">
         <Text role="status" className="text-sm font-medium">
           {SESSION_COPY.paused.title}

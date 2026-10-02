@@ -195,7 +195,7 @@ const TONES = [
 // (docs/accessibility.md, _font scaling_), so nothing is a number: the widest label is
 // laid out invisibly, the slot takes whatever box this device gives it today, and the
 // real label is drawn over it, right-aligned. Same idea as `FirstLineSlot`
-// (features/settings/settings-kit.tsx), on both axes instead of one.
+// (components/first-line-slot.tsx), on both axes instead of one.
 //
 // The strut's wrapping View is load-bearing: `aria-hidden` on a Text does nothing
 // (initial-sync-gate.tsx carries the measurement), and without it a screen reader

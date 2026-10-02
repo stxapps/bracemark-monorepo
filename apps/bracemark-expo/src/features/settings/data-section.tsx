@@ -55,6 +55,7 @@ import {
 } from '@stxapps/shared';
 
 import { ErrorText } from '../../components/error-text';
+import { FirstLineSlot } from '../../components/first-line-slot';
 import { SyncPausedActions } from '../../components/sync-paused-notice';
 import { Button } from '../../components/ui/button';
 import { Checkbox } from '../../components/ui/checkbox';
@@ -62,7 +63,7 @@ import { Icon } from '../../components/ui/icon';
 import { RadioGroup, RadioGroupItem } from '../../components/ui/radio-group';
 import { Text } from '../../components/ui/text';
 import { cn } from '../../lib/utils';
-import { FirstLineSlot, SettingsHeader, SettingsPane, SettingsRow } from './settings-kit';
+import { SettingsHeader, SettingsPane, SettingsRow } from './settings-kit';
 
 type DataView = 'overview' | 'import' | 'export' | 'delete';
 
@@ -124,7 +125,7 @@ function SyncStatus() {
   return (
     <View className="flex-row items-start justify-between gap-4 rounded-lg border border-border p-4">
       <View className="min-w-0 flex-1 flex-row items-start gap-2.5">
-        <View className="mt-0.5 shrink-0">{icon}</View>
+        <FirstLineSlot>{icon}</FirstLineSlot>
         <View className="min-w-0 flex-1 gap-0.5">
           {/* The kit's row title, spelled out because this card is hand-rolled
               rather than a SettingsRow (the status column below is several lines,
@@ -228,7 +229,9 @@ function ImportStatus({ state }: { state: ImportState }) {
   if (nothingFound) {
     return (
       <View className="mt-3 flex-row items-start gap-2">
-        <Icon as={CircleAlert} className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+        <FirstLineSlot textClassName="text-sm">
+          <Icon as={CircleAlert} className="size-4 text-muted-foreground" />
+        </FirstLineSlot>
         <Text className="min-w-0 flex-1 text-sm text-muted-foreground">
           No links were found in that file.
         </Text>
@@ -275,10 +278,12 @@ function ImportStatus({ state }: { state: ImportState }) {
   }
   return (
     <View testID="import-data-complete" className="mt-3 flex-row items-start gap-2">
-      <Icon
-        as={truncated ? CircleAlert : CircleCheck}
-        className="mt-0.5 size-4 shrink-0 text-muted-foreground"
-      />
+      <FirstLineSlot textClassName="text-sm">
+        <Icon
+          as={truncated ? CircleAlert : CircleCheck}
+          className="size-4 text-muted-foreground"
+        />
+      </FirstLineSlot>
       <Text className="min-w-0 flex-1 text-sm text-muted-foreground">
         Imported {outcome.linkCount} {outcome.linkCount === 1 ? 'link' : 'links'}
         {outcome.fileCount > 0
@@ -515,10 +520,12 @@ function ExportStatus({ state, excludedCount }: { state: ExportState; excludedCo
   return (
     <View testID="export-data-complete" className="mt-3">
       <View className="flex-row items-start gap-2">
-        <Icon
-          as={nothingExported ? CircleAlert : CircleCheck}
-          className="mt-0.5 size-4 shrink-0 text-muted-foreground"
-        />
+        <FirstLineSlot textClassName="text-sm">
+          <Icon
+            as={nothingExported ? CircleAlert : CircleCheck}
+            className="size-4 text-muted-foreground"
+          />
+        </FirstLineSlot>
         <Text className="min-w-0 flex-1 text-sm text-muted-foreground">
           {lead}
           {warnings.map((warning) => ` ${warning}`).join('')}
@@ -604,7 +611,9 @@ function ExportView({ onBack }: { onBack: () => void }) {
 
       {lockedCount > 0 && (
         <View className="mt-4 flex-row items-start gap-2 rounded-lg border border-border p-3">
-          <Icon as={Lock} className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+          <FirstLineSlot textClassName="text-sm">
+            <Icon as={Lock} className="size-4 text-muted-foreground" />
+          </FirstLineSlot>
           <Text className="min-w-0 flex-1 text-sm text-muted-foreground">
             {lockedCount} locked {lockedCount === 1 ? 'list' : 'lists'} — and the links inside{' '}
             {lockedCount === 1 ? 'it' : 'them'} — won’t be included. Unlock{' '}
@@ -662,7 +671,9 @@ function DeleteStatus({ state }: { state: DeleteAllState }) {
   const { deletedCount } = state.outcome;
   return (
     <View testID="delete-all-complete" className="mt-3 flex-row items-start gap-2">
-      <Icon as={CircleCheck} className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+      <FirstLineSlot textClassName="text-sm">
+        <Icon as={CircleCheck} className="size-4 text-muted-foreground" />
+      </FirstLineSlot>
       <Text className="min-w-0 flex-1 text-sm text-muted-foreground">
         {deletedCount === 0
           ? 'There was no data to delete.'
@@ -729,15 +740,16 @@ function DeleteView({ onBack }: { onBack: () => void }) {
           setNudge(false);
         }}
       >
-        <Checkbox
-          checked={confirmed}
-          disabled={running || done}
-          onCheckedChange={(v) => {
-            setConfirmed(v === true);
-            setNudge(false);
-          }}
-          className="mt-0.5"
-        />
+        <FirstLineSlot textClassName="text-sm">
+          <Checkbox
+            checked={confirmed}
+            disabled={running || done}
+            onCheckedChange={(v) => {
+              setConfirmed(v === true);
+              setNudge(false);
+            }}
+          />
+        </FirstLineSlot>
         <Text className="min-w-0 flex-1 text-sm">
           Yes, I’m absolutely sure I want to delete all my data.
         </Text>

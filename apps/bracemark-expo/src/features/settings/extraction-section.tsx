@@ -45,12 +45,13 @@ import {
 } from '@stxapps/expo-react';
 import { DEVICE_EXTRACTION_MODES, type DeviceExtractionMode } from '@stxapps/shared';
 
+import { FirstLineSlot } from '../../components/first-line-slot';
 import { Button } from '../../components/ui/button';
 import { Icon } from '../../components/ui/icon';
 import { RadioGroup, RadioGroupItem } from '../../components/ui/radio-group';
 import { Text } from '../../components/ui/text';
 import { cn } from '../../lib/utils';
-import { FirstLineSlot, SettingsHeader, SettingsNotice, SettingsPane } from './settings-kit';
+import { SettingsHeader, SettingsNotice, SettingsPane } from './settings-kit';
 
 // The ladder, as copy. Ordered by DEVICE_EXTRACTION_MODES (increasing disclosure),
 // which the radio list maps over — so a mode added to that tuple shows up here as a

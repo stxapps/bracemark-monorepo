@@ -7,6 +7,7 @@ import Lock from 'lucide-react-native/icons/lock';
 
 import { PLAN_LABELS } from '@stxapps/shared';
 
+import { FirstLineSlot } from '../first-line-slot';
 import { Icon } from '../ui/icon';
 import { Text } from '../ui/text';
 
@@ -32,7 +33,9 @@ export function LinkQuotaBanner({
   return (
     <View className="gap-3">
       <View className="flex-row items-start gap-2 rounded-md bg-muted px-3 py-2">
-        <Icon as={Lock} className="mt-0.5 size-4 text-muted-foreground" />
+        <FirstLineSlot textClassName="text-sm">
+          <Icon as={Lock} className="size-4 text-muted-foreground" />
+        </FirstLineSlot>
         <Text className="min-w-0 flex-1 text-sm text-muted-foreground">
           You’ve saved{' '}
           <Text className="text-sm font-medium text-foreground">

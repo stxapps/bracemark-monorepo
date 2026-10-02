@@ -3,6 +3,7 @@ import { Pressable, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { Check, Copy } from 'lucide-react-native';
 
+import { FirstLineSlot } from '../../components/first-line-slot';
 import { Button } from '../../components/ui/button';
 import { Checkbox } from '../../components/ui/checkbox';
 import { Icon } from '../../components/ui/icon';
@@ -16,8 +17,10 @@ import { cn } from '../../lib/utils';
 // saved this" checkbox that gates whatever comes next. There is no server-side
 // recovery, so this ceremony is the only moment the secret exists in a form the
 // user can save. RN differences: expo-clipboard instead of navigator.clipboard,
-// `selectable` on the secret Text instead of select-all, and the whole
-// confirm row is a Pressable (no htmlFor label association on native).
+// `selectable` on the secret Text instead of select-all, the whole confirm row
+// is a Pressable (no htmlFor label association on native), and the checkbox sits
+// in a FirstLineSlot where web has `mt-0.5` — that margin is rem there and scales
+// with the label; here it is dp beside text that scales, right at 1× only.
 //
 // The row order, the full-width Copy and the `actions` slot above it all carry
 // the web file's argument — read the secret → settle on it → copy it → confirm →
@@ -99,11 +102,9 @@ export function ShowOnceSecret({
         onPress={() => onSavedChange(!saved)}
         className="flex-row items-start gap-3 rounded-lg border border-border p-3"
       >
-        <Checkbox
-          checked={saved}
-          onCheckedChange={(v) => onSavedChange(v === true)}
-          className="mt-0.5"
-        />
+        <FirstLineSlot textClassName="text-sm">
+          <Checkbox checked={saved} onCheckedChange={(v) => onSavedChange(v === true)} />
+        </FirstLineSlot>
         <Text className="flex-1 text-sm">{confirmLabel}</Text>
       </Pressable>
     </View>

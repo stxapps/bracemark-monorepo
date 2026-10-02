@@ -2,6 +2,7 @@ import { type ReactNode, useEffect, useRef } from 'react';
 import { Pressable, View } from 'react-native';
 import { ArrowUpRight, ChevronLeft, ChevronRight } from 'lucide-react-native';
 
+import { FirstLineSlot } from '../../components/first-line-slot';
 import { Icon } from '../../components/ui/icon';
 import { Text } from '../../components/ui/text';
 import { cn } from '../../lib/utils';
@@ -283,42 +284,6 @@ export function SettingsRow({
   );
 }
 
-// Sits a fixed-size glyph — a radio mark, a leading icon — on the FIRST line of
-// the `text-base` Text beside it, in a row that is `items-start`. The radio rows
-// (misc-, extraction- and data-section) use it twice each: once around the radio,
-// once around the icon, so the two share a line with the label however far the
-// label wraps.
-//
-// The glyph is 16 and does not scale; the line beside it is 24 at 1× and moves
-// with the OS text size. So every way of writing the offset as a NUMBER is right
-// at one size only. A margin was the first attempt — `mt-0.5`, carried over from
-// web, where it is exact: the title there is `text-sm`, a 20 line, and all of it
-// rem. Here the line is 24, so the radio rode 2 above its own label and further
-// at every step up. `24 × useCappedFontScale()` is the second, and it is wrong
-// twice: that hook floors at 1 where the text does not, and it is linear where
-// Android is not (PixelUtil.toPixelFromSP goes through
-// `TypedValue.applyDimension`, which from Android 14 scales a large sp by less
-// than the font scale). And `items-center` on the row needs no number but holds
-// only until the label wraps, when it centres on the whole block.
-//
-// So nothing is computed. The zero-width Text is a STRUT: it lays out one empty
-// line at whatever height this device gives `text-base` today, the slot takes
-// that height, and `items-center` centres the glyph in it. A neighbour that
-// stops being `text-base` needs the strut resized with it.
-//
-// `aria-hidden` rides a View because RN's Text ignores the prop
-// (initial-sync-gate.tsx carries the measurement).
-export function FirstLineSlot({ children }: { children: ReactNode }) {
-  return (
-    <View className="shrink-0 flex-row items-center">
-      {children}
-      <View aria-hidden className="w-0">
-        <Text>{'​'}</Text>
-      </View>
-    </View>
-  );
-}
-
 // A strip of text that isn't a control: a warning above a form, a failed write, a
 // transient "Finishing your upgrade…". These were several different treatments —
 // `bg-destructive/10` here, a bordered box with an icon there, bare red text
@@ -399,7 +364,7 @@ export function SettingsNotice({
         className,
       )}
     >
-      {icon ? <View className="mt-0.5 shrink-0">{icon}</View> : null}
+      {icon ? <FirstLineSlot textClassName="text-sm">{icon}</FirstLineSlot> : null}
       <View className="min-w-0 flex-1">
         {typeof children === 'string' ? (
           <Text

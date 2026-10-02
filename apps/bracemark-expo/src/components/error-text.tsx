@@ -26,6 +26,7 @@ import type { LucideIcon } from 'lucide-react-native';
 import { cn } from '../lib/utils';
 import { Icon } from './ui/icon';
 import { Text } from './ui/text';
+import { FirstLineSlot } from './first-line-slot';
 
 // `warning` is amber, not red: it's the tone for something the user can proceed
 // through (a malformed URL they may still want to save), where `error` is a
@@ -44,8 +45,8 @@ export function ErrorText({
   ...props
 }: Omit<React.ComponentProps<typeof Text>, 'role' | 'children'> & {
   tone?: keyof typeof TONE;
-  // A leading Lucide glyph, tinted to match `tone` and offset to sit on the first
-  // line. Decorative — the message itself is what carries the alert role.
+  // A leading Lucide glyph, tinted to match `tone` and held on the first line
+  // (FirstLineSlot). Decorative — the message itself is what carries the alert role.
   icon?: LucideIcon;
   children: React.ReactNode;
 }) {
@@ -65,7 +66,9 @@ export function ErrorText({
 
   return (
     <View className={cn('flex-row items-start gap-2', className)}>
-      <Icon as={icon} className={cn('mt-0.5 size-4 shrink-0', TONE[tone])} />
+      <FirstLineSlot textClassName="text-sm">
+        <Icon as={icon} className={cn('size-4', TONE[tone])} />
+      </FirstLineSlot>
       <Text role="alert" className={cn('min-w-0 flex-1 text-sm', TONE[tone])} {...props}>
         {children}
       </Text>

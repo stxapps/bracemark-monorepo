@@ -62,6 +62,7 @@ import {
   useSettings,
 } from '@stxapps/expo-react';
 
+import { FirstLineSlot } from '../../components/first-line-slot';
 import { Button } from '../../components/ui/button';
 import { Icon } from '../../components/ui/icon';
 import { Text } from '../../components/ui/text';
@@ -118,7 +119,9 @@ export function PreviewsPrompt() {
 
   return (
     <View className="mx-4 mt-3 flex-row items-start gap-3 rounded-lg border border-border bg-muted/40 p-3">
-      <Icon as={ImageDown} className="mt-0.5 size-4 text-muted-foreground" />
+      <FirstLineSlot textClassName="text-sm">
+        <Icon as={ImageDown} className="size-4 text-muted-foreground" />
+      </FirstLineSlot>
       <View className="min-w-0 flex-1 gap-2">
         <Text className="text-sm font-medium">
           {residual} link{residual === 1 ? '' : 's'} without a preview
@@ -137,14 +140,19 @@ export function PreviewsPrompt() {
           </Button>
         </View>
       </View>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Dismiss"
-        hitSlop={8}
-        onPress={() => void dismissPreviewsPrompt().catch(() => undefined)}
-      >
-        <Icon as={X} className="size-4 text-muted-foreground" />
-      </Pressable>
+      {/* The same slot as the ImageDown opposite, so the two glyphs share the
+          headline's line. Bare, the X sat at the row's top edge — 2 above the
+          headline at 1×, where the leading icon's margin had put that one on it. */}
+      <FirstLineSlot textClassName="text-sm">
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Dismiss"
+          hitSlop={8}
+          onPress={() => void dismissPreviewsPrompt().catch(() => undefined)}
+        >
+          <Icon as={X} className="size-4 text-muted-foreground" />
+        </Pressable>
+      </FirstLineSlot>
     </View>
   );
 }

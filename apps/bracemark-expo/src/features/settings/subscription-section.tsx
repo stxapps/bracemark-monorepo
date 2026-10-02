@@ -31,6 +31,7 @@ import {
   PLAN_USD_PER_YEAR,
 } from '@stxapps/shared';
 
+import { FirstLineSlot } from '../../components/first-line-slot';
 import { LegalConsent } from '../../components/legal-consent';
 import { Button } from '../../components/ui/button';
 import { Icon } from '../../components/ui/icon';
@@ -352,7 +353,9 @@ export function SubscriptionSection() {
             <View className="mt-2 gap-1.5">
               {includedFeatures.map((feature) => (
                 <View key={feature} className="flex-row items-start gap-2">
-                  <Icon as={Check} className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                  <FirstLineSlot textClassName="text-sm">
+                    <Icon as={Check} className="size-4 text-muted-foreground" />
+                  </FirstLineSlot>
                   <Text className="flex-1 text-sm text-muted-foreground">{feature}</Text>
                 </View>
               ))}
@@ -409,7 +412,9 @@ export function SubscriptionSection() {
                   <View className="mt-3 gap-1.5">
                     {features.map((feature) => (
                       <View key={feature} className="flex-row items-start gap-2">
-                        <Icon as={Check} className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                        <FirstLineSlot textClassName="text-sm">
+                          <Icon as={Check} className="size-4 text-muted-foreground" />
+                        </FirstLineSlot>
                         <Text className="flex-1 text-sm">{feature}</Text>
                       </View>
                     ))}

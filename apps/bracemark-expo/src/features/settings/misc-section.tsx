@@ -51,6 +51,7 @@ import {
   type ThemeState,
 } from '@stxapps/shared';
 
+import { FirstLineSlot } from '../../components/first-line-slot';
 import { LockPasswordDialog } from '../../components/lock-password-dialog';
 import { Button } from '../../components/ui/button';
 import { Icon } from '../../components/ui/icon';
@@ -60,13 +61,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/ta
 import { Text } from '../../components/ui/text';
 import { usePaywall } from '../../contexts/paywall-provider';
 import { cn } from '../../lib/utils';
-import {
-  FirstLineSlot,
-  SettingsGroup,
-  SettingsHeader,
-  SettingsNotice,
-  SettingsPane,
-} from './settings-kit';
+import { SettingsGroup, SettingsHeader, SettingsNotice, SettingsPane } from './settings-kit';
 import { TimeField } from './time-field';
 
 const LAYOUT_OPTIONS: Record<LinksLayout, { label: string; hint: string; icon: LucideIcon }> = {

@@ -503,13 +503,32 @@ height budget is gone).
 
 The inverse case — a FIXED glyph that has to sit on the first line of scaling
 text — takes no arithmetic either. The settings radio rows put their radio mark
-and their icon in `FirstLineSlot` (`features/settings/settings-kit.tsx`), whose
+and their icon in `FirstLineSlot` (`components/first-line-slot.tsx`), whose
 zero-width `Text` lays out one empty line at the device's real line height and
 centres the glyph in it. A margin is right at one text size only (the ported
 `mt-0.5` left the radio 2 above its label at 1× and further at each step up),
 and `items-center` on the row holds only until the label wraps. Measured on the
 iOS simulator at the smallest, default and capped sizes: radio and icon share a
 centre exactly, within 0.2 of the label's cap-height centre, wrapped or not.
+
+Every other glyph beside wrapping text uses the same slot — the confirm-checkbox
+rows (the show-once secret panel, the two delete confirmations) and every
+notice, banner and receipt line that leads with an icon, most of them through
+`ErrorText` and `SettingsNotice` — and those are the case where the ported
+margin hides. Their text kept web's `text-sm`, so `mt-0.5` beside a 20 line IS
+right at 1×, and the row passes every look at the default size; at the cap the
+line is 26 and the glyph sits 3 above it. The slot takes the neighbour's size as
+`textClassName`, because the strut cannot see the label beside it: a size that
+disagrees centres the glyph exactly, on the wrong line. So on this side a fixed
+margin on a glyph beside text is a port that has not been finished, and nothing
+flags one — it is a valid class that looks right on the device most likely to
+be in hand.
+
+What the slot centres on is the line box, which for Inter is the cap-height
+centre. Sentence-case text carries its weight lower — the x-height centre is
+0.09em under it, 1.3 at `text-sm` — so a hard-edged checkbox can read a hair
+high beside lowercase. Web puts the box in the same place at 1×; neither side
+corrects for it.
 
 The same strut holds a SLOT whose text changes. The password-strength meter
 (`features/auth/password-strength.tsx`) keeps its label column and its row from

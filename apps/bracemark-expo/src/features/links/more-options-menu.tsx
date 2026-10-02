@@ -43,6 +43,7 @@ import {
 import { useLocks, useSignOut, useSync } from '@stxapps/expo-react';
 import { getSyncPhase } from '@stxapps/shared';
 
+import { FirstLineSlot } from '../../components/first-line-slot';
 import { Button } from '../../components/ui/button';
 import {
   DropdownMenu,
@@ -177,7 +178,9 @@ export function MoreOptionsMenu() {
             count and the fix are spelled out. */}
         {blocked && (
           <DropdownMenuItem className="items-start" onPress={() => router.push('/settings/data')}>
-            <Icon as={CircleAlert} className="mt-0.5 size-4" />
+            <FirstLineSlot textClassName="text-sm">
+              <Icon as={CircleAlert} className="size-4" />
+            </FirstLineSlot>
             {/* `shrink`, not `flex-1`: in a content-sized menu this row sets
                 the width, and a zero flex-basis would give it none to set. */}
             <View className="min-w-0 shrink">

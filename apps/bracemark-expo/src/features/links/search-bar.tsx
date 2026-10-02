@@ -36,6 +36,7 @@ import { withUniwind } from 'uniwind';
 import { useEntitlements, useLists, useTags } from '@stxapps/expo-react';
 import { emptyQuery, flattenTree, type LinkQuery } from '@stxapps/shared';
 
+import { FirstLineSlot } from '../../components/first-line-slot';
 import { StickyFooter } from '../../components/sticky-footer';
 import { Button } from '../../components/ui/button';
 import { Icon } from '../../components/ui/icon';
@@ -339,7 +340,9 @@ function TriCheckList({
 function LockedBanner({ onSeePlans }: { onSeePlans: () => void }) {
   return (
     <View className="flex-row items-start gap-2 rounded-md bg-muted px-3 py-2">
-      <Icon as={Lock} className="mt-0.5 size-3.5 text-muted-foreground" />
+      <FirstLineSlot textClassName="text-xs">
+        <Icon as={Lock} className="size-3.5 text-muted-foreground" />
+      </FirstLineSlot>
       <Text className="min-w-0 flex-1 text-xs text-muted-foreground">
         A <Text className="text-xs font-medium text-foreground">Plus</Text> feature. Build your
         query, then upgrade to run it.{' '}

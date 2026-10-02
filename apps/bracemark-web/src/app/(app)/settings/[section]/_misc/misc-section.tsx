@@ -109,7 +109,7 @@ const THEME_MODE_OPTIONS: Record<
 // was `items-center` with nothing holding its width — fine on one line, but a
 // wrapped label squeezed it to 7px and floated it to the middle of the block.
 // Everything in that sum is rem, so it holds at any root font size; expo's twin
-// can't say the same and uses a strut instead (its settings-kit, FirstLineSlot).
+// can't say the same and uses a strut instead (its components/first-line-slot.tsx).
 function OptionRow({
   id,
   value,

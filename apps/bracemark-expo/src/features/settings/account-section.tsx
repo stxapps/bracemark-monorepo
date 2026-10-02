@@ -37,6 +37,7 @@ import {
 } from '@stxapps/react';
 
 import { ErrorText } from '../../components/error-text';
+import { FirstLineSlot } from '../../components/first-line-slot';
 import { Button } from '../../components/ui/button';
 import { Checkbox } from '../../components/ui/checkbox';
 import { Icon } from '../../components/ui/icon';
@@ -173,15 +174,16 @@ function DeleteAccountView({ onBack }: { onBack: () => void }) {
           setNudge(false);
         }}
       >
-        <Checkbox
-          checked={confirmed}
-          disabled={isPending}
-          onCheckedChange={(v) => {
-            setConfirmed(v === true);
-            setNudge(false);
-          }}
-          className="mt-0.5"
-        />
+        <FirstLineSlot textClassName="text-sm">
+          <Checkbox
+            checked={confirmed}
+            disabled={isPending}
+            onCheckedChange={(v) => {
+              setConfirmed(v === true);
+              setNudge(false);
+            }}
+          />
+        </FirstLineSlot>
         <Text className="min-w-0 flex-1 text-sm">
           Yes, I understand my account and all my data will be permanently deleted, with no way
           back.
@@ -270,7 +272,9 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
       <View>
         <SettingsHeader title="Change password" back={{ label: 'Account', onPress: onBack }} />
         <View className="mt-3 flex-row items-start gap-2">
-          <Icon as={ShieldCheck} className="mt-0.5 size-4 shrink-0 text-primary" />
+          <FirstLineSlot textClassName="text-sm">
+            <Icon as={ShieldCheck} className="size-4 text-primary" />
+          </FirstLineSlot>
           <Text className="min-w-0 flex-1 text-sm">{SESSION_COPY.passwordChanged}</Text>
         </View>
         <Text className="mt-4 text-xs text-muted-foreground">
@@ -531,7 +535,9 @@ function SignOutOtherDevicesView({ onBack }: { onBack: () => void }) {
       />
       {done ? (
         <View className="mt-3 flex-row items-start gap-2">
-          <Icon as={ShieldCheck} className="mt-0.5 size-4 shrink-0 text-primary" />
+          <FirstLineSlot textClassName="text-sm">
+            <Icon as={ShieldCheck} className="size-4 text-primary" />
+          </FirstLineSlot>
           <Text className="min-w-0 flex-1 text-sm">
             Your other devices have been signed out. They’ll need to sign in again. This device
             stays signed in.
