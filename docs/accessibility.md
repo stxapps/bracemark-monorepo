@@ -501,6 +501,16 @@ sizes a fixed box around scaling text any more: both link items are
 intrinsic-height and simply grow (`link-card.tsx` was the last one, and its
 height budget is gone).
 
+The inverse case — a FIXED glyph that has to sit on the first line of scaling
+text — takes no arithmetic either. The settings radio rows put their radio mark
+and their icon in `FirstLineSlot` (`features/settings/settings-kit.tsx`), whose
+zero-width `Text` lays out one empty line at the device's real line height and
+centres the glyph in it. A margin is right at one text size only (the ported
+`mt-0.5` left the radio 2 above its label at 1× and further at each step up),
+and `items-center` on the row holds only until the label wraps. Measured on the
+iOS simulator at the smallest, default and capped sizes: radio and icon share a
+centre exactly, within 0.2 of the label's cap-height centre, wrapped or not.
+
 The web has no equivalent policy: browser text zoom reflows, and
 `use-root-font-scale.ts` handles the root-size case.
 

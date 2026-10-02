@@ -102,6 +102,14 @@ const THEME_MODE_OPTIONS: Record<
 
 // A reusable radio-row Label, shared by the layout and theme option lists so both
 // read identically. `has-data-checked` styles the row when its radio is selected.
+//
+// The radio and the icon both sit on the label's FIRST line, however far it wraps:
+// each is a 16px glyph beside a 20px line (`text-sm`), so `mt-0.5` under
+// `items-start` centres it there, and `shrink-0` keeps the icon 16 wide. The icon
+// was `items-center` with nothing holding its width — fine on one line, but a
+// wrapped label squeezed it to 7px and floated it to the middle of the block.
+// Everything in that sum is rem, so it holds at any root font size; expo's twin
+// can't say the same and uses a strut instead (its settings-kit, FirstLineSlot).
 function OptionRow({
   id,
   value,
@@ -122,8 +130,8 @@ function OptionRow({
     >
       <RadioGroupItem id={id} value={value} className="mt-0.5" />
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="flex items-center gap-2 font-medium">
-          {icon}
+        <span className="flex items-start gap-2 font-medium">
+          <span className="mt-0.5 shrink-0">{icon}</span>
           {label}
         </span>
         <span className="text-sm text-muted-foreground">{hint}</span>

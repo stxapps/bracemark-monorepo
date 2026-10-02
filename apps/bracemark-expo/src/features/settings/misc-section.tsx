@@ -60,7 +60,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/ta
 import { Text } from '../../components/ui/text';
 import { usePaywall } from '../../contexts/paywall-provider';
 import { cn } from '../../lib/utils';
-import { SettingsGroup, SettingsHeader, SettingsNotice, SettingsPane } from './settings-kit';
+import {
+  FirstLineSlot,
+  SettingsGroup,
+  SettingsHeader,
+  SettingsNotice,
+  SettingsPane,
+} from './settings-kit';
 import { TimeField } from './time-field';
 
 const LAYOUT_OPTIONS: Record<LinksLayout, { label: string; hint: string; icon: LucideIcon }> = {
@@ -114,11 +120,15 @@ function OptionRow({
         selected && 'border-primary bg-muted/40',
       )}
     >
-      <RadioGroupItem value={value} className="mt-0.5" />
+      <FirstLineSlot>
+        <RadioGroupItem value={value} />
+      </FirstLineSlot>
       <View className="min-w-0 flex-1 gap-0.5">
-        <View className="flex-row items-center gap-2">
-          <Icon as={icon} className="size-4 text-foreground" />
-          <Text className="font-medium">{label}</Text>
+        <View className="flex-row items-start gap-2">
+          <FirstLineSlot>
+            <Icon as={icon} className="size-4 text-foreground" />
+          </FirstLineSlot>
+          <Text className="min-w-0 flex-1 font-medium">{label}</Text>
         </View>
         <Text className="text-sm text-muted-foreground">{hint}</Text>
       </View>

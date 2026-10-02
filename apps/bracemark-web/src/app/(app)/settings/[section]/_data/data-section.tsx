@@ -534,8 +534,8 @@ function ExportView({ onBack }: { onBack: () => void }) {
           >
             <RadioGroupItem id={`export-${option.value}`} value={option.value} className="mt-0.5" />
             <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-              <span className="flex items-center gap-2 font-medium">
-                {option.icon}
+              <span className="flex items-start gap-2 font-medium">
+                <span className="mt-0.5 shrink-0">{option.icon}</span>
                 {option.label}
               </span>
               <span className="text-sm text-muted-foreground">{option.hint}</span>

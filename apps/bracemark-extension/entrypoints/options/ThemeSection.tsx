@@ -76,8 +76,8 @@ function OptionRow({
     >
       <RadioGroupItem id={id} value={value} className={cn('mt-0.5')} />
       <span className={cn('flex min-w-0 flex-1 flex-col gap-0.5')}>
-        <span className={cn('flex items-center gap-2 font-medium')}>
-          {icon}
+        <span className={cn('flex items-start gap-2 font-medium')}>
+          <span className={cn('mt-0.5 shrink-0')}>{icon}</span>
           {label}
         </span>
         <span className={cn('text-sm text-muted-foreground')}>{hint}</span>

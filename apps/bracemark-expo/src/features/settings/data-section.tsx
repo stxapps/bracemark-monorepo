@@ -62,7 +62,7 @@ import { Icon } from '../../components/ui/icon';
 import { RadioGroup, RadioGroupItem } from '../../components/ui/radio-group';
 import { Text } from '../../components/ui/text';
 import { cn } from '../../lib/utils';
-import { SettingsHeader, SettingsPane, SettingsRow } from './settings-kit';
+import { FirstLineSlot, SettingsHeader, SettingsPane, SettingsRow } from './settings-kit';
 
 type DataView = 'overview' | 'import' | 'export' | 'delete';
 
@@ -586,11 +586,15 @@ function ExportView({ onBack }: { onBack: () => void }) {
               format === option.value && 'border-primary bg-muted/40',
             )}
           >
-            <RadioGroupItem value={option.value} className="mt-0.5" />
+            <FirstLineSlot>
+              <RadioGroupItem value={option.value} />
+            </FirstLineSlot>
             <View className="min-w-0 flex-1 gap-0.5">
-              <View className="flex-row items-center gap-2">
-                <Icon as={option.icon} className="size-4 text-foreground" />
-                <Text className="font-medium">{option.label}</Text>
+              <View className="flex-row items-start gap-2">
+                <FirstLineSlot>
+                  <Icon as={option.icon} className="size-4 text-foreground" />
+                </FirstLineSlot>
+                <Text className="min-w-0 flex-1 font-medium">{option.label}</Text>
               </View>
               <Text className="text-sm text-muted-foreground">{option.hint}</Text>
             </View>
