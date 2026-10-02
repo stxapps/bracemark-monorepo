@@ -301,8 +301,9 @@ draft; each keystroke commits or reverts in place):
   140ms, and a dev build on a phone showed the old order after every drop). So
   `drag-sort.tsx` flies the row into its slot and then holds that pose, which is
   the order about to arrive, until the section's `orderKey` changes; the reset is
-  queued from that commit's own layout effect so both reach the UI thread
-  together. The contract this puts on a section is two lines: pass an `orderKey`
+  queued from that commit's own layout effect, which is the closest JS gets to
+  sending the two together — and is not close enough, see the next paragraph.
+  The contract this puts on a section is two lines: pass an `orderKey`
   that changes when a drop lands (the ids in order; Lists adds each row's depth,
   since a drop can re-nest a row without moving it), and have `onDrop` **return
   the write's promise**, or nothing for a drop that changes nothing — the no-op,
@@ -312,6 +313,60 @@ draft; each keystroke commits or reverts in place):
   spec'd with the gesture's callbacks driven by hand (`drag-sort.spec.tsx`);
   that the two halves land in the same FRAME is not something jest can see — it
   is judged on a device.
+
+  **Judged on a device, they don't: a drop that lands still paints the
+  double-shifted pose for a frame, and that is Reanimated's doing, not a missing
+  case in the hold.** What shows is the rows between the old slot and the new one
+  flashing each other's names — the dropped row a second travel's distance past
+  its slot, its neighbours one row off — and then the right order. An earlier
+  version of this section said the layout effect makes the reset and the new
+  layout "reach the UI thread together". They do arrive together; the reset is
+  then refused. Read from the installed source (reanimated 4.1.7, worklets 0.5.1,
+  RN 0.81.5), the sequence is:
+  1. React commits the rows in their new order. Inside that commit Reanimated's
+     commit hook re-stamps every animated view with the props it last applied —
+     here the hold pose — so a React commit can't wipe a running animation, and
+     **pauses its own commits** until that tree has mounted
+     (`ReanimatedCommitHook`).
+  2. The layout effect runs after that stamp, so it is already too late to change
+     what the tree carries. `scheduleOnUI` is batched on a microtask, RN's event
+     loop runs microtasks before it hands the mount over, and so the reset reaches
+     the UI thread just AHEAD of the mount — where it is recorded and not
+     committed, because commits are paused (`performOperations`).
+  3. The mount paints the new layout under the stamped pose: each row shifted
+     twice.
+  4. The mount hook lifts the pause and asks for a flush on the NEXT frame
+     (`ReanimatedMountHook`); identity lands there.
+
+  So it is one frame at the least, more when the UI thread is busy, and on every
+  drop that lands — "sometimes" is how often a single frame is noticed, and a
+  long move shows more than a short one. The frame count is read from the source,
+  not sampled. It is the price of the hold rather than a regression beside it:
+  the 140ms timer never showed it, because its reset had long since landed by
+  the time the order rendered — it showed the old order instead, for far longer.
+
+  It stays, because nothing that removes it is worth a one-frame flash in two
+  settings tables whose buttons reorder without it:
+  - **`DISABLE_COMMIT_PAUSING_MECHANISM`** (a reanimated static flag, set under
+    `reanimated.staticFeatureFlags` in the app's `package.json`) is the real fix —
+    without the pause the reset commits over React's newest tree and the two mount
+    as one transaction. But it is app-wide, it is a native rebuild, and
+    reanimated's docs call it safe only with RN's
+    `preventShadowTreeCommitExhaustion` on, which in 0.81 defaults off and is
+    turned on by patching a header in `node_modules`; without it the flag can
+    starve React's commits and hang the app. **Revisit when an SDK bump brings an
+    RN where that flag is the default** (`dependency-upgrades.md`).
+  - **A synchronous reset** (`runOnUISync` from the layout effect, so the
+    re-render `onRelease` causes is stamped with identity) does not work: a style
+    update only enters the registry the commit hook reads on Reanimated's next
+    UI-thread flush, which a call made from the JS thread never runs.
+  - **Remounting the rows in the commit that lands the drop** — a fresh view has
+    no entry to stamp — is the one route that needs no flag. Untried: every row
+    remounts on every drop, and a fresh row's first style is computed from shared
+    values that still describe the held drag, so it needs its own guard.
+  - **Rendering the rows in a fixed order and positioning them from the UI
+    thread** removes the pairing altogether, and with it the order a screen
+    reader walks the table in.
 
   **Web has the same gap and closes it from the other side: the new order is in
   the drop's own render, ahead of the write.** dnd-kit drops its transforms in
@@ -364,6 +419,19 @@ draft; each keystroke commits or reverts in place):
   the FIRST change of `orderKey`, which is only the final order if the drop was a
   single write. A bulk sort is still several writes and still repaints per write
   on both platforms; nothing holds that, and nothing has needed to.
+
+  The exception is a tag drag across **three or more tied ranks**. A tie can only
+  anchor one of its rows, so the rest are re-ranked — several writes for a one-row
+  move — and not every one of them leaves the order alone on the way: with three
+  tied tags `x y z`, dragging `x` to the bottom writes `y` and then `z`, and the
+  table reads `y x z` between the two. Expo's hold lets go on that first change,
+  so the wrong order stays up for a whole write and read, not a frame; web is
+  unaffected, since `useDropHold` waits for the order to MATCH. Simulated
+  against `rerankToOrder` rather than spec'd, and left alone — a tie takes two
+  devices or an import to make. The fix when it's wanted is web's: hold until
+  `orderKey` equals the order the drop predicted. A Lists drop goes through
+  `move`, whose write order (next paragraph) keeps the first change the final
+  one.
 
   **A `move` is one write too — except into a slot between two tied ranks.**
   The up/down buttons, "Move to", a Lists drop and a pin's up/down all go through

@@ -38,8 +38,11 @@
 // wrong on one of them), so nothing here clears on a timer. The lifted row flies
 // into its slot and everything then HOLDS that pose — which is pixel-for-pixel
 // the order about to arrive — until `orderKey` changes, and the reset is sent
-// from that commit's own layout effect so the two reach the UI thread together.
-// A drop that changes nothing (a no-op, the paywall, a failed write) never gets
+// from that commit's own layout effect, the closest JS gets to pairing them.
+// It is NOT a pairing: the new layout still paints under the old transforms for
+// a frame, because Reanimated won't commit the reset until the frame after
+// React's mount (the layout effect below, and docs/editors.md, say why and why
+// it stays). A drop that changes nothing (a no-op, the paywall, a failed write) never gets
 // that commit, so the section says so (`onDrop`'s return) and the row is sent
 // home instead; `COMMIT_TIMEOUT_MS` is the backstop for a write that resolves
 // and still moves nothing.
@@ -360,10 +363,17 @@ export function useDragSort(options: DragSortOptions): DragSort {
   // transforms that were standing in for it have to go in the same breath. A
   // layout effect because that is the closest JS gets — the write to the UI
   // thread is queued inside the commit's own task, instead of a render or a
-  // timer later. Whether the two then share a FRAME is the UI thread's call and
-  // only a device shows it (docs/editors.md). It also covers a commit
-  // that arrives mid-landing (a fast store) or mid-trip-home (a slow one that
-  // outran the timeout): either way the new layout is the truth now.
+  // timer later. They still don't share a FRAME, and nothing here can make them:
+  // Reanimated's commit hook has already stamped the hold pose onto the tree
+  // this commit made, and it pauses its own commits until that tree mounts, so
+  // the reset arrives, is recorded, and lands the frame AFTER the mount — one
+  // frame of each row shifted twice, on every drop that lands. Not a missing
+  // case to chase in this hook; the ways out and why none is taken are in
+  // docs/editors.md.
+  //
+  // The effect also covers a commit that arrives mid-landing (a fast store) or
+  // mid-trip-home (a slow one that outran the timeout): either way the new
+  // layout is the truth now.
   useLayoutEffect(() => {
     if (!dropped.current) return;
     scheduleOnUI(reset);
