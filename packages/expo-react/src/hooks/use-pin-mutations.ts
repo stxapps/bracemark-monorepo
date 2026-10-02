@@ -7,7 +7,7 @@
 
 import { useCallback, useMemo } from 'react';
 
-import { compareRank, pathFromId, PINS_PREFIX, rankForIndex } from '@stxapps/shared';
+import { compareRank, pathFromId, PINS_PREFIX, placeAtIndex, rankForIndex } from '@stxapps/shared';
 
 import { useAuth } from '../contexts/auth-provider';
 import { useSync } from '../contexts/sync-provider';
@@ -75,7 +75,7 @@ export function usePinMutations(): PinMutations {
   // changes nothing on screen. The view's order is a subsequence of the global
   // one, so landing beside the neighbour always swaps the two there. The
   // destination is computed against the pins MINUS the moved one, exactly like
-  // useListMutations.move, so rankForIndex inserts between the right pair.
+  // useListMutations.move, so placeAtIndex inserts between the right pair.
   const moveBeside = useCallback(
     async (link: LinkItem, neighbour: LinkItem, side: -1 | 1) => {
       if (!username) throw new Error('usePinMutations: no active account');
@@ -89,7 +89,13 @@ export function usePinMutations(): PinMutations {
       const j = siblings.findIndex((p) => p.id === linkIdOf(neighbour));
       if (j < 0) return; // the neighbour was unpinned since render
 
-      await writePin(username, moved, { rank: rankForIndex(siblings, side < 0 ? j : j + 1) });
+      // Two pins made on two devices can tie (both mint the head key), and a
+      // slot between a tied pair needs the pair split first (placeAtIndex).
+      const { rank, shifted } = placeAtIndex(siblings, side < 0 ? j : j + 1);
+      for (const sibling of shifted) {
+        await writePin(username, sibling.item, { rank: sibling.rank });
+      }
+      await writePin(username, moved, { rank });
       requestSync();
     },
     [username, requestSync],

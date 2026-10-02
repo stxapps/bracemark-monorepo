@@ -1840,6 +1840,17 @@ extracted title, notes, pins spread through the library rather than sitting on
 top, and a generated preview image on every third link so the `files/` half of the
 backup format is exercised at all.
 
+The root lists rank **ahead of My List**, where the app's own create would have
+put them (`editors.md`, _every create lands in the same place_). The root group
+is shared with the three system lists, which are code defaults holding the first
+keys of the keyspace and are in no backup; a fixture that ranks its roots from an
+open start mints those same keys and ties with all three. That is a state the
+product reaches only across devices or an import, and the seed used to hand it to
+every account by accident — it is how the settings table's "Move up" was found
+throwing on a tied pair. An account seeded before that change keeps its tied
+ranks (the first surprise above); the app now moves through them, so it only
+matters if you want the order to match.
+
 ### the published screenshots
 
 `e2e/shot/` is the seed's odd cousin, and sits beside it rather than inside it: a

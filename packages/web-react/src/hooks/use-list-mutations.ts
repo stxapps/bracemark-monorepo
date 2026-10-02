@@ -8,10 +8,13 @@
 //
 // Reorder and move are the same write (a new `rank`, optionally a new `parentId`);
 // "reorder" is just "move within the same parent". The caller supplies the
-// destination sibling group and target index; rankForIndex turns that into the
-// key to persist. Trash can't be a parent and a list can't be its own parent —
-// both rejected here, and buildTree is the read-time safety net for any
-// cross-device cycle that slips through.
+// destination sibling group and target index; placeAtIndex turns that into the
+// key to persist. The one exception to ONE file is a slot between two siblings
+// whose ranks TIE (two devices created at the same slot): no key fits between
+// equal keys, so the tied siblings on one side are re-keyed too (sync/rank.ts).
+// Trash can't be a parent and a list can't be its own parent — both rejected
+// here, and buildTree is the read-time safety net for any cross-device cycle
+// that slips through.
 
 import { useCallback, useMemo } from 'react';
 
@@ -19,6 +22,7 @@ import {
   isSystemListId,
   LISTS_PREFIX,
   pathFromId,
+  placeAtIndex,
   rankForIndex,
   rerankToOrder,
   TRASH_ID,
@@ -125,7 +129,13 @@ export function useListMutations(): ListMutations {
       if (parentId === TRASH_ID) throw new Error('Trash cannot contain lists');
       if (parentId === list.id) throw new Error('A list cannot be its own parent');
 
-      await writeList(username, list, { parentId, rank: rankForIndex(siblings, index) });
+      // One write, unless the slot falls between two tied ranks — then the tied
+      // siblings on one side are re-keyed first to open it (placeAtIndex).
+      const { rank, shifted } = placeAtIndex(siblings, index);
+      for (const sibling of shifted) {
+        await writeList(username, sibling.item, { rank: sibling.rank });
+      }
+      await writeList(username, list, { parentId, rank });
       requestSync();
     },
     [username, requestSync],

@@ -92,6 +92,21 @@ it('keeps the rest of the visible section in order', async () => {
   expect(mockWritePin).toHaveBeenCalledTimes(1);
 });
 
+it('moves into the slot between two pins whose ranks tie', async () => {
+  // Pinning mints the head key, so two devices pinning offline mint the SAME
+  // one and the pair syncs down tied (the sort breaks it by id). No key fits
+  // between equal keys — the move has to re-key one of the pair as well, where
+  // a single-key mint threw fractional-indexing's bare " >= " at the user.
+  seed(['a', 'b', 'c']);
+  mockPins = mockPins.map((p) => (p.id === 'b' ? { ...p, rank: 'a0' } : p));
+  const { result } = renderHook(() => usePinMutations());
+
+  await act(() => result.current.moveUp(link('c'), link('b')));
+
+  expect(viewOrder(['a', 'b', 'c'])).toEqual(['a', 'c', 'b']);
+  expect(mockWritePin).toHaveBeenCalledTimes(2);
+});
+
 it('writes nothing when the neighbour has since been unpinned', async () => {
   seed(['a', 'b']);
   const { result } = renderHook(() => usePinMutations());

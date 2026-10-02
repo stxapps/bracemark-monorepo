@@ -380,7 +380,10 @@ tag/list names.
   own file means pinning/unpinning/reordering writes only the pin and never
   clobbers a concurrent edit to the link's `links/{id}.enc` blob (and vice-versa) —
   a `pinned` field _inside_ metadata could not. `rank` is a fractional index (the
-  same scheme as tag/list order) so reordering a pin rewrites only that one pin.
+  same scheme as tag/list order) so reordering a pin rewrites only that one pin
+  (the one exception, for lists and tags as well, is a slot between two **tied**
+  ranks, which re-keys the tied neighbour too — `editors.md`, _a `move` is one
+  write too_).
   Pin = `put`; unpin = `delete`. No `listId` in the pin: the link already records
   its list, so a pin floats the link to the top of every view it appears in, and a
   pin whose link is gone is just another dangling id the read layer skips.

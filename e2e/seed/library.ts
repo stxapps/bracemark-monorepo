@@ -14,6 +14,7 @@ import {
   ranksBetween,
   SETTINGS_GENERAL_PATH,
   type SettingsGeneral,
+  SYSTEM_LIST_DEFAULTS,
   type Tag,
   TAGS_PREFIX,
   TRASH_ID,
@@ -356,14 +357,25 @@ export function buildLibrary(user: SeedUser, options: BuildOptions): SeedLibrary
 // list" — if the two schemas ever diverge, this alias is where it breaks.
 type TreeNode = List & Tag;
 
+// The root lists rank AHEAD OF My List, because the root group is not ours alone:
+// the three system lists are in it too, as code defaults that no backup carries
+// (sync/system-lists.ts), holding the first three keys of the keyspace. Ranked
+// from an open start like every other group, the roots minted those same three
+// keys and each system list TIED with one of ours — a state the product can
+// reach, but not by one person creating lists on one device, which is what a
+// seeded library is meant to look like. Ahead of My List is where the app would
+// have put them: every create lands at the head of the root group
+// (docs/editors.md).
 function buildLists(user: SeedUser, now: number): List[] {
-  return buildTree(LIST_TREE, 'seed-list', user.lists, user.nested, now);
+  const firstSystemRank = SYSTEM_LIST_DEFAULTS.map((list) => list.rank).sort()[0];
+  return buildTree(LIST_TREE, 'seed-list', user.lists, user.nested, now, firstSystemRank);
 }
 
-// `nested: false` whatever the account — see TAG_NAMES.
+// `nested: false` whatever the account — see TAG_NAMES. No system tags, so the
+// root group opens at both ends.
 function buildTags(user: SeedUser, now: number): Tag[] {
   const spec = TAG_NAMES.map((name) => ({ name }));
-  return buildTree(spec, 'seed-tag', user.tags, false, now);
+  return buildTree(spec, 'seed-tag', user.tags, false, now, null);
 }
 
 // Walk a TreeSpec breadth-first, take the first `count`, and stamp ids, parents
@@ -377,13 +389,16 @@ function buildTags(user: SeedUser, now: number): Tag[] {
 //
 // Ranks come from `ranksBetween` per SIBLING GROUP: the same fractional keyspace
 // (sync/rank.ts) the app mints into, so the first drag in the UI computes a key
-// between two of these rather than tripping over an invented format.
+// between two of these rather than tripping over an invented format. The ROOT
+// group's keys stay below `rootCeiling` when the caller has entities of its own
+// in that group; null opens it.
 function buildTree(
   spec: TreeSpec[],
   idPrefix: string,
   count: number,
   nested: boolean,
   now: number,
+  rootCeiling: string | null,
 ): TreeNode[] {
   if (count === 0) return [];
 
@@ -420,8 +435,8 @@ function buildTree(
     if (group) group.push(entity);
     else groups.set(key, [entity]);
   }
-  for (const siblings of groups.values()) {
-    const ranks = ranksBetween(null, null, siblings.length);
+  for (const [key, siblings] of groups) {
+    const ranks = ranksBetween(null, key === '' ? rootCeiling : null, siblings.length);
     siblings.forEach((entity, i) => {
       entity.rank = ranks[i];
     });

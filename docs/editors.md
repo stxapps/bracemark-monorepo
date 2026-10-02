@@ -365,6 +365,30 @@ draft; each keystroke commits or reverts in place):
   single write. A bulk sort is still several writes and still repaints per write
   on both platforms; nothing holds that, and nothing has needed to.
 
+  **A `move` is one write too — except into a slot between two tied ranks.**
+  The up/down buttons, "Move to", a Lists drop and a pin's up/down all go through
+  `move` (`moveBeside` for pins), which mints one key between the slot's two
+  neighbours and writes only the moved entity. Two neighbours can carry the
+  **same** key, though, and that is an ordinary state rather than a corruption:
+  every create mints the head key of the root group (below), so two devices
+  creating offline mint the same one, and a backup's lists arrive with keys minted
+  in some other library. The sort breaks the tie by id, so the rows sit in a
+  stable order with a visible slot between them — and no key is strictly between
+  two equal keys. The single-key mint (`rankForIndex`) throws there, and what
+  reached the user was fractional-indexing's bare `" >= "` in the section's
+  notice: "Move up" on the row under a tied pair, on a seeded account whose root
+  lists had been ranked from the same starting point as the My List / Archive /
+  Trash defaults. So `move` asks `placeAtIndex` (`sync/rank.ts`) instead, which
+  returns the moved entity's key plus the tied siblings that must be re-keyed to
+  open the slot — the shorter side of the tied run, never a row that was not
+  tied — and the hook writes those first and the moved entity last. In that
+  order no write reorders the siblings among themselves, so the only change the
+  live read paints is the move, and the first change of `orderKey` is still the
+  final order whenever the tie is a pair. `rankForIndex` stays for what can never
+  tie: a prepend or an append, which is every create and the import's resolvers.
+  Nothing catches a regression here but `rank.spec.ts` and the pin specs — a tie
+  takes two devices or an import to make, so no hand-built library has one.
+
   **What the two tables share is factored, once per platform.** The projection
   math is shared across platforms (above), but the _chrome_ can't be — a `<div>`
   and a `<View>` have no common ancestor — so each platform keeps one

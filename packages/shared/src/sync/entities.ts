@@ -109,7 +109,9 @@ export type Link = z.infer<typeof linkSchema>;
 // its siblings. It's a STRING, not an index, on purpose: under file-level LWW
 // moving one entity must write only that one file — `rank = keyBetween(a, b)`
 // inserts between two neighbours without touching them, so concurrent reorders of
-// different entities never collide. Required (no legacy entities to back-fill);
+// different entities never collide. (Two neighbours CAN hold equal keys — two
+// devices inserting at one slot — and a move between them re-keys one of the
+// pair as well: `placeAtIndex`, rank.ts.) Required (no legacy entities to back-fill);
 // the system-list defaults seed real keys (system-lists.ts) so user entities can
 // rank against them.
 export const listSchema = z.looseObject({

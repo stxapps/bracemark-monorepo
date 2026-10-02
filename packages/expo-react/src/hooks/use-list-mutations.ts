@@ -11,6 +11,7 @@ import {
   isSystemListId,
   LISTS_PREFIX,
   pathFromId,
+  placeAtIndex,
   rankForIndex,
   rerankToOrder,
   TRASH_ID,
@@ -116,7 +117,13 @@ export function useListMutations(): ListMutations {
       if (parentId === TRASH_ID) throw new Error('Trash cannot contain lists');
       if (parentId === list.id) throw new Error('A list cannot be its own parent');
 
-      await writeList(username, list, { parentId, rank: rankForIndex(siblings, index) });
+      // One write, unless the slot falls between two tied ranks — then the tied
+      // siblings on one side are re-keyed first to open it (placeAtIndex).
+      const { rank, shifted } = placeAtIndex(siblings, index);
+      for (const sibling of shifted) {
+        await writeList(username, sibling.item, { rank: sibling.rank });
+      }
+      await writeList(username, list, { parentId, rank });
       requestSync();
     },
     [username, requestSync],

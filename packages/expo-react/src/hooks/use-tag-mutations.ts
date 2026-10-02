@@ -7,7 +7,14 @@
 import { useCallback, useMemo } from 'react';
 
 import { newId } from '@stxapps/expo-crypto';
-import { compareRank, pathFromId, rankForIndex, rerankToOrder, TAGS_PREFIX } from '@stxapps/shared';
+import {
+  compareRank,
+  pathFromId,
+  placeAtIndex,
+  rankForIndex,
+  rerankToOrder,
+  TAGS_PREFIX,
+} from '@stxapps/shared';
 
 import { useAuth } from '../contexts/auth-provider';
 import { useSync } from '../contexts/sync-provider';
@@ -125,7 +132,13 @@ export function useTagMutations(): TagMutations {
       if (!username) throw new Error('useTagMutations: no active account');
       if (parentId === tag.id) throw new Error('A tag cannot be its own parent');
 
-      await writeTag(username, tag, { parentId, rank: rankForIndex(siblings, index) });
+      // One write, unless the slot falls between two tied ranks — then the tied
+      // siblings on one side are re-keyed first to open it (placeAtIndex).
+      const { rank, shifted } = placeAtIndex(siblings, index);
+      for (const sibling of shifted) {
+        await writeTag(username, sibling.item, { rank: sibling.rank });
+      }
+      await writeTag(username, tag, { parentId, rank });
       requestSync();
     },
     [username, requestSync],
