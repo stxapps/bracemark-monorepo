@@ -32,6 +32,8 @@ import {
   useSensors,
 } from '@dnd-kit/core';
 import {
+  type AnimateLayoutChanges,
+  defaultAnimateLayoutChanges,
   SortableContext,
   sortableKeyboardCoordinates,
   useSortable,
@@ -60,13 +62,16 @@ import {
 
 import {
   ARCHIVE_ID,
+  flattenTree,
   isSystemListId,
   MY_LIST_ID,
   type SortDir,
   sortedByName,
   TRASH_ID,
+  type TreeNode,
 } from '@stxapps/shared';
 import {
+  type ListItem,
   type ListLockInfo,
   useEntitlements,
   useListMutations,
@@ -97,11 +102,13 @@ import {
   RenameField,
   SortMenu,
   useDestroyRequest,
+  useDropHold,
   useOpRunner,
   useRenameFocus,
   useRowMenuFocus,
 } from '../../_components/table-kit';
 import {
+  applyMovePlan,
   excludeActiveDescendants,
   getMovePlan,
   getProjection,
@@ -115,6 +122,15 @@ import { LockPasswordDialog } from '@/components/lock-password-dialog';
 import { usePaywall } from '@/contexts/paywall-provider';
 
 const NO_COLLAPSED_IDS: ReadonlySet<string> = new Set();
+
+// What a dropped order is held against (table-kit's useDropHold). Depth is in it
+// because a drop can re-nest a row without moving it — same ids, same sequence,
+// one level over — and the depth-first sequence plus each node's depth is the
+// whole forest, collapsed branches included. The expo twin's `orderKey` is this.
+const treeOrder = (nodes: TreeNode<ListItem>[]) =>
+  flattenTree(nodes)
+    .map((node) => `${node.item.id}:${node.depth}`)
+    .join(' ');
 
 function listIcon(id: string): React.ReactNode {
   if (id === MY_LIST_ID) return <Inbox className="size-4" />;
@@ -300,6 +316,16 @@ function RowActions({
   );
 }
 
+// dnd-kit's layout animation, minus the one case it gets wrong here. A dragged
+// row's subtree is dropped from the table while it travels and comes back in the
+// drop's render, so every row below the new slot is suddenly further down by the
+// subtree's height. Left alone, dnd-kit eases those rows there over 200ms while
+// the returning children mount in place at once — two rows drawn over each other
+// for the length of the slide. A row count that changed is that case exactly, so
+// those rows move with the children: at once, as they do under a collapse toggle.
+const animateLayoutChanges: AnimateLayoutChanges = (args) =>
+  args.items.length === args.previousItems.length && defaultAnimateLayoutChanges(args);
+
 // One sortable row. The drag handle is the grip on the left (after the indent);
 // listeners live only on it, so the rename input and kebab stay clickable. While
 // this row is the one being dragged, `renderDepth` is the projected depth, so the
@@ -344,6 +370,7 @@ function SortableRow({
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: row.item.id,
+    animateLayoutChanges,
   });
 
   const { nameRef, focusName } = useRenameFocus();
@@ -435,7 +462,9 @@ function SortableRow({
 }
 
 export function ListsSection() {
-  const lists = useLists();
+  // The live tree, with a just-dropped move standing in for it until the live
+  // read agrees (table-kit's useDropHold says why a drop can't wait for the read).
+  const { shown: lists, hold } = useDropHold(useLists(), treeOrder);
   const { entitlements } = useEntitlements();
   const paywall = usePaywall();
   const { create, rename, move, destroy, destroyBlocker, reorder } = useListMutations();
@@ -557,7 +586,11 @@ export function ListsSection() {
       return;
     }
 
-    run(move(plan.item, plan.parentId, plan.siblings, plan.index));
+    // Every `return` above is a drop that changes nothing: the tree stays as it
+    // is and dnd-kit eases the row home. Only a write is held.
+    const op = move(plan.item, plan.parentId, plan.siblings, plan.index);
+    run(op);
+    hold(applyMovePlan(lists, plan), op);
   };
 
   const toggle = (id: string) => {

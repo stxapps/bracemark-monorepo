@@ -12,6 +12,7 @@
 import { LIST_NO_CHILDREN_IDS, type ProjectionOptions } from '@stxapps/shared';
 
 export {
+  applyMovePlan,
   excludeActiveDescendants,
   getMovePlan,
   getProjection,

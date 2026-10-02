@@ -21,7 +21,7 @@
 // Pure ordering (`sortedByName`, `SortDir`) is neither platform's business and
 // lives in `@stxapps/shared` (sync/sort.ts), one copy for all four tables.
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ArrowDownAZ, ArrowDownZA, ArrowUpDown, Check, GripVertical, Plus, X } from 'lucide-react';
 
 import type { SortDir } from '@stxapps/shared';
@@ -77,6 +77,67 @@ export function useOpRunner() {
 }
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
+// How long a dropped order may stand in for a live read that never comes to
+// agree with it. Only ever reached by a write that resolved and still left the
+// store in some other order (a sync landing a sibling in the same instant); a
+// drop's own read is back in tens of ms. The value is the expo drag layer's, for
+// the backstop it shares.
+const DROP_HOLD_TIMEOUT_MS = 1500;
+
+// A DROP'S NEW ORDER, SHOWN FROM THE RENDER THE DROP LANDS IN — ahead of the
+// write, and of the live read that will confirm it.
+//
+// dnd-kit clears every drag transform in the render `onDragEnd` runs in. Its
+// rows are only still in that render if the list it is sorting has ALREADY been
+// reordered, which is why its own examples `setItems` synchronously in the
+// handler. These tables can't: their order comes back through a Dexie write and
+// `useLiveQuery`, a render or two later. In that gap dnd-kit sees a drag that
+// ended and moved nothing, so it starts easing every row home — and when the
+// order then does change, it reads the change as a layout animation and replays
+// each row from where it sat BEFORE the drag. Measured per frame in headless
+// Chrome with no throttling: the rows that had made room jumped back a full row
+// and slid into place again over ~150ms, on every drop.
+//
+// So the section hands over the order it is about to write (`hold`), and that
+// is what renders until the live read's `orderKey` equals it — at which point
+// the two are the same rows in the same places and the swap is invisible. Held
+// by KEY, not until the first read that differs from the old order: a reorder
+// can be more than one write, and each write is its own read.
+//
+// A rejected write lets go at once (the section's notice says why, the rows go
+// back), and `DROP_HOLD_TIMEOUT_MS` is the backstop for a read that never
+// agrees. The expo twin solves the same gap from the other side — its drag layer
+// has a pose to hold, so it holds that (drag-sort.tsx) — and docs/editors.md
+// carries both.
+export function useDropHold<T>(live: T, orderKey: (value: T) => string) {
+  const [held, setHeld] = useState<{ value: T; key: string } | null>(null);
+
+  // Let go in the render that sees the read arrive, not an effect after it: an
+  // effect would commit one more frame of the held copy, which is the stale one
+  // from here on.
+  const landed = held !== null && orderKey(live) === held.key;
+  if (landed) setHeld(null);
+
+  useEffect(() => {
+    if (held === null) return;
+    const timer = setTimeout(
+      () => setHeld((current) => (current === held ? null : current)),
+      DROP_HOLD_TIMEOUT_MS,
+    );
+    return () => clearTimeout(timer);
+  }, [held]);
+
+  const hold = (value: T, op: Promise<unknown>) => {
+    const next = { value, key: orderKey(value) };
+    setHeld(next);
+    // The section reports the failure (useOpRunner); this only un-drops the row.
+    // Compared by identity so a late rejection can't release a newer drop.
+    void op.catch(() => setHeld((current) => (current === next ? null : current)));
+  };
+
+  return { shown: held !== null && !landed ? held.value : live, hold };
+}
 
 // DELETE DOES NOT GO THROUGH THE RUNNER ABOVE, and this pair is why. The runner's
 // notice sits at the top of the section, and Delete is the one op that fails from

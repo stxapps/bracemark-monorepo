@@ -8,7 +8,13 @@ import {
   DropdownMenuTrigger,
 } from '@stxapps/web-ui/components/ui/dropdown-menu';
 
-import { DestroyConfirm, RenameField, useDestroyRequest, useRowMenuFocus } from './table-kit';
+import {
+  DestroyConfirm,
+  RenameField,
+  useDestroyRequest,
+  useDropHold,
+  useRowMenuFocus,
+} from './table-kit';
 
 // Pins the delete flow the Lists and Tags tables share. Each case is a failure
 // with no other symptom: a refusal a screen away from the row that asked (the bug
@@ -266,4 +272,114 @@ test('Rename keeps the field, not the trigger — the menu closing never takes i
   await flushTimers();
   expect(onFocusName).toHaveBeenCalledTimes(1);
   expect(focus).not.toHaveBeenCalled();
+});
+
+// The drop hold both tables render through. What it prevents has no symptom a
+// DOM assertion on a section could see — the rows end up in the right order
+// either way; the bug is the frames in between, where dnd-kit has let go of its
+// transforms and the live read hasn't answered. So this pins the one thing those
+// frames depend on: WHICH order is rendered at each point between a drop and its
+// read. That the frames then come out still was measured in a browser
+// (docs/editors.md).
+
+const idOrder = (ids: string[]) => ids.join(' ');
+
+function HoldHarness({ live, next, op }: { live: string[]; next: string[]; op: Promise<unknown> }) {
+  const { shown, hold } = useDropHold(live, idOrder);
+  return (
+    <>
+      <output>{shown.join(' ')}</output>
+      <button type="button" onClick={() => hold(next, op)}>
+        Drop
+      </button>
+    </>
+  );
+}
+
+const shownOrder = () => screen.getByRole('status').textContent;
+const pending = () => new Promise<void>(() => undefined);
+
+test('a dropped order renders from the drop itself, and until the live read agrees with it', () => {
+  const op = pending();
+  const { rerender } = render(
+    <HoldHarness live={['a', 'b', 'c']} next={['c', 'a', 'b']} op={op} />,
+  );
+  expect(shownOrder()).toBe('a b c');
+
+  // The drop's own render — the one dnd-kit clears its transforms in.
+  fireEvent.click(screen.getByText('Drop'));
+  expect(shownOrder()).toBe('c a b');
+
+  // A read that has moved on from the old order but is not the dropped one yet:
+  // a reorder can be several writes, and each is its own read. Letting go here
+  // paints an order nobody asked for.
+  rerender(<HoldHarness live={['b', 'c', 'a']} next={['c', 'a', 'b']} op={op} />);
+  expect(shownOrder()).toBe('c a b');
+
+  rerender(<HoldHarness live={['c', 'a', 'b']} next={['c', 'a', 'b']} op={op} />);
+  expect(shownOrder()).toBe('c a b');
+
+  // The positive control for "it let go": the held copy must not outlive the
+  // read that confirmed it, or every later change is invisible.
+  rerender(<HoldHarness live={['b', 'a', 'c']} next={['c', 'a', 'b']} op={op} />);
+  expect(shownOrder()).toBe('b a c');
+});
+
+test('a write the store rejects puts the rows back', async () => {
+  let reject: (e: Error) => void = () => undefined;
+  const op = new Promise<void>((_resolve, rej) => {
+    reject = rej;
+  });
+  render(<HoldHarness live={['a', 'b', 'c']} next={['c', 'a', 'b']} op={op} />);
+
+  fireEvent.click(screen.getByText('Drop'));
+  expect(shownOrder()).toBe('c a b');
+
+  await act(async () => reject(new Error('store failed')));
+  expect(shownOrder()).toBe('a b c');
+});
+
+test('a late rejection does not release the drop that came after it', async () => {
+  let rejectFirst: (e: Error) => void = () => undefined;
+  const first = new Promise<void>((_resolve, rej) => {
+    rejectFirst = rej;
+  });
+  const { rerender } = render(
+    <HoldHarness live={['a', 'b', 'c']} next={['c', 'a', 'b']} op={first} />,
+  );
+  fireEvent.click(screen.getByText('Drop'));
+
+  rerender(<HoldHarness live={['a', 'b', 'c']} next={['b', 'a', 'c']} op={pending()} />);
+  fireEvent.click(screen.getByText('Drop'));
+  expect(shownOrder()).toBe('b a c');
+
+  await act(async () => rejectFirst(new Error('store failed')));
+  expect(shownOrder()).toBe('b a c');
+});
+
+test('a read that never agrees is given up on, not held forever', () => {
+  jest.useFakeTimers();
+  try {
+    // The write landed and the store still reads some other order — another
+    // device's change arrived in the same instant. The table has to go back to
+    // showing what the store holds.
+    const op = Promise.resolve();
+    const { rerender } = render(
+      <HoldHarness live={['a', 'b', 'c']} next={['c', 'a', 'b']} op={op} />,
+    );
+    fireEvent.click(screen.getByText('Drop'));
+    rerender(<HoldHarness live={['c', 'b', 'a']} next={['c', 'a', 'b']} op={op} />);
+
+    act(() => {
+      jest.advanceTimersByTime(1000);
+    });
+    expect(shownOrder()).toBe('c a b');
+
+    act(() => {
+      jest.advanceTimersByTime(1000);
+    });
+    expect(shownOrder()).toBe('c b a');
+  } finally {
+    jest.useRealTimers();
+  }
 });

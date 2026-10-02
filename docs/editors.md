@@ -313,15 +313,57 @@ draft; each keystroke commits or reverts in place):
   that the two halves land in the same FRAME is not something jest can see — it
   is judged on a device.
 
-  **Web has the same gap, and nothing handles it yet.** dnd-kit drops its
-  transforms in the render `onDragEnd` runs in, while the order comes back
-  through a Dexie write and `useLiveQuery`. What hides it is that the dropped
-  row eases back toward its origin instead of snapping, and Dexie answers first:
-  sampled per frame in headless Chrome against the dev server, no frame painted
-  the old order at 1× or 4× CPU throttle, one frame was out of order at 6×, and
-  the old order was painted outright at 20×. If it ever shows on a real device,
-  the fix there is an optimistic order kept from `onDragEnd` until the live read
-  matches it — dnd-kit has no pose to hold.
+  **Web has the same gap and closes it from the other side: the new order is in
+  the drop's own render, ahead of the write.** dnd-kit drops its transforms in
+  the render `onDragEnd` runs in and has no pose to hold — its rows stay put
+  through that render only if the list it sorts has already been reordered,
+  which is why its own examples `setItems` in the handler. Here the order comes
+  back through a Dexie write and `useLiveQuery`, a render or two later. An
+  earlier pass at this measured whether the OLD ORDER was ever painted, found it
+  wasn't below 6× CPU throttle, and called the gap hidden. That was the wrong
+  question. The old order is not painted; what happens is that dnd-kit sees a
+  drag end with nothing moved, starts easing every row home, and then reads the
+  late reorder as a layout change and replays each moved row from where it sat
+  BEFORE the drag. Sampled per frame in headless Chrome against the dev server
+  with no throttling at all, the rows that had made room jumped back a full row
+  and slid into place again over ~150ms — on every drop, on any machine.
+
+  So `useDropHold` (web `table-kit.tsx`) takes the order the section is about to
+  write and renders THAT from the drop's render on, until the live read's order
+  key equals it; the swap back is then the same rows in the same places. The key
+  is expo's `orderKey` — the ids in order, plus each node's depth on Lists, where
+  `applyMovePlan` (`sync/tree-dnd.ts`) predicts the forest the plan will produce.
+  A rejected write lets go at once, and 1.5s without agreement is the backstop,
+  as on expo. It holds until the read MATCHES rather than until it changes,
+  because a reorder can be several writes and each is its own read. Measured the
+  same way after: no row but the dragged one moves a pixel across the drop, at
+  1×, 6× and 20×, in both directions, for a reorder and for a re-nest. The
+  lifecycle is spec'd in `table-kit.spec.tsx`; the frames are a browser's to
+  judge, and the dragged row itself still snaps the last few px from the pointer
+  into its slot, which is dnd-kit without a drag overlay.
+
+  Lists opts out of dnd-kit's layout animation in one case, because the hold
+  exposes it: a dragged row's subtree leaves the table while it travels and comes
+  back in the drop's render, so the rows below the new slot are suddenly lower by
+  the subtree's height. Animated, they slide there for 200ms underneath children
+  that mounted in place at once. `animateLayoutChanges` in `lists-section.tsx`
+  turns the animation off when the row count changed, so they move with the
+  children, as they do under a collapse toggle.
+
+  **A one-row drag is one write, whichever way the row went.** Tags hand
+  `reorder` the whole group in its new order (so does expo), and
+  `rerankToOrder` (`sync/rank.ts`) keeps the rows already in order and re-ranks
+  the rest. It used to pick those anchors greedily from the head, which is
+  minimal only for a row dragged DOWN. A row dragged up became the leading
+  anchor, out-ranked everything below it, and every other row was re-ranked: n −
+  1 encrypted files for a one-row move, written one transaction at a time, with
+  a live read and a repaint after each. A six-tag table painted seven orders over
+  ~300ms after one upward drop. The anchors are now the longest ascending
+  subsequence, so it is one write in either direction (`rank.spec.ts` walks every
+  from/to pair). This is what expo's hold was already relying on: it lets go on
+  the FIRST change of `orderKey`, which is only the final order if the drop was a
+  single write. A bulk sort is still several writes and still repaints per write
+  on both platforms; nothing holds that, and nothing has needed to.
 
   **What the two tables share is factored, once per platform.** The projection
   math is shared across platforms (above), but the _chrome_ can't be — a `<div>`

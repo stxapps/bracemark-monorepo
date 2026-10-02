@@ -67,20 +67,20 @@ export function rankForIndex(siblings: { rank: string }[], index: number): strin
 // each run of out-of-order items between two anchors gets evenly-spaced keys
 // minted strictly between them (open-ended at the head/tail), so the whole group
 // ends strictly ascending while the fewest files change.
+//
+// "Fewest" is the LONGEST ascending subsequence, not the first one found. The
+// anchors used to be picked greedily from the head — keep each item that
+// out-ranks the last kept — and that is minimal only when the stray sits BELOW
+// where it belongs: one row dragged from the bottom of a group to the top became
+// the leading anchor, out-ranked everything after it, and so re-ranked every
+// other row in the group. That is n − 1 file writes for a one-row move — the
+// exact renumbering the header says a fractional key exists to avoid — and since
+// the callers write them one transaction at a time, the live read repainted the
+// table once per write, through n − 2 orders nobody asked for.
 export function rerankToOrder(ordered: { rank: string }[]): (string | null)[] {
   const result: (string | null)[] = new Array<string | null>(ordered.length).fill(null);
 
-  // Anchors: the greedy run of items already in ascending-rank order. Each kept
-  // item must out-rank the previous kept one; the rest fall between anchors.
-  const kept: boolean[] = ordered.map(() => false);
-
-  let lastKept: string | null = null;
-  for (let i = 0; i < ordered.length; i++) {
-    if (lastKept === null || ordered[i].rank > lastKept) {
-      kept[i] = true;
-      lastKept = ordered[i].rank;
-    }
-  }
+  const kept = longestAscending(ordered.map((item) => item.rank));
 
   // Fill each maximal run of non-anchors with keys between its bounding anchors.
   let i = 0;
@@ -101,4 +101,33 @@ export function rerankToOrder(ordered: { rank: string }[]): (string | null)[] {
   }
 
   return result;
+}
+
+// Which entries belong to one longest STRICTLY ascending subsequence — strict
+// because two equal keys are a tie the sort breaks by id, not an order, so only
+// one of a tied pair can anchor. Patience sorting: `tails[n]` is the index of the
+// smallest rank that ends an ascending run of length n + 1, and `previous` links
+// each entry to the one before it in its run, so the longest is read back from
+// the last tail.
+function longestAscending(ranks: string[]): boolean[] {
+  const tails: number[] = [];
+  const previous: number[] = [];
+
+  for (let i = 0; i < ranks.length; i++) {
+    let low = 0;
+    let high = tails.length;
+    while (low < high) {
+      const mid = (low + high) >> 1;
+      if (ranks[tails[mid]] < ranks[i]) low = mid + 1;
+      else high = mid;
+    }
+    previous[i] = low > 0 ? tails[low - 1] : -1;
+    tails[low] = i;
+  }
+
+  const kept = ranks.map(() => false);
+  for (let i = tails.length > 0 ? tails[tails.length - 1] : -1; i !== -1; i = previous[i]) {
+    kept[i] = true;
+  }
+  return kept;
 }

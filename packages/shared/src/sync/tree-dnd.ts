@@ -180,3 +180,53 @@ export function getMovePlan<T extends TreeItem>(
 
   return { item, parentId, siblings, index, depth };
 }
+
+// The forest as it will read once `plan` has been written: the node lifted out
+// of wherever it sits and set down under `plan.parentId` at `plan.index` (counted
+// among the destination's OTHER children, as the plan counts it), its subtree's
+// depths rewritten to match. This is the half of a drop a surface needs when it
+// has no pose to hold — web's dnd-kit drops its transforms in the render the drop
+// lands in, so the new order has to be in that render too, ahead of the write and
+// the live read that will confirm it (docs/editors.md). Returns `nodes` itself
+// when the plan no longer fits the forest — the node or its destination is gone —
+// so a caller comparing the two sees "nothing to show".
+export function applyMovePlan<T extends TreeItem>(
+  nodes: TreeNode<T>[],
+  plan: Pick<MovePlan<T>, 'item' | 'parentId' | 'index'>,
+): TreeNode<T>[] {
+  const id = plan.item.id;
+
+  const lifted: TreeNode<T>[] = [];
+  const without = (group: TreeNode<T>[]): TreeNode<T>[] =>
+    group.flatMap((node) => {
+      if (node.item.id === id) {
+        lifted.push(node);
+        return [];
+      }
+      return [{ ...node, children: without(node.children) }];
+    });
+  const rest = without(nodes);
+  if (lifted.length === 0) return nodes;
+
+  const atDepth = (node: TreeNode<T>, depth: number): TreeNode<T> => ({
+    ...node,
+    depth,
+    children: node.children.map((child) => atDepth(child, depth + 1)),
+  });
+  const setDown = (group: TreeNode<T>[], depth: number): TreeNode<T>[] => {
+    const next = group.slice();
+    next.splice(plan.index, 0, atDepth(lifted[0], depth));
+    return next;
+  };
+  if (plan.parentId === null) return setDown(rest, 0);
+
+  let placed = false;
+  const into = (group: TreeNode<T>[]): TreeNode<T>[] =>
+    group.map((node) => {
+      if (node.item.id !== plan.parentId) return { ...node, children: into(node.children) };
+      placed = true;
+      return { ...node, children: setDown(node.children, node.depth + 1) };
+    });
+  const next = into(rest);
+  return placed ? next : nodes;
+}

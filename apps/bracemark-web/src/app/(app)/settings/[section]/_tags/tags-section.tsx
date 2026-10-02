@@ -56,10 +56,15 @@ import {
   RenameField,
   SortMenu,
   useDestroyRequest,
+  useDropHold,
   useOpRunner,
   useRenameFocus,
   useRowMenuFocus,
 } from '../../_components/table-kit';
+
+// What a dropped order is held against (table-kit's useDropHold): flat, so the
+// ids in sequence are the whole of it.
+const tagOrder = (tags: TagItem[]) => tags.map((t) => t.id).join(' ');
 
 // The per-row overflow menu: rename, reorder within the group, delete. Rename
 // just refocuses the inline RenameField (the name is edited in place, not in the
@@ -203,7 +208,10 @@ export function TagsSection() {
 
   // The flat, ordered tag list. `useTags` nests by `parentId`, but nothing nests
   // tags, so the top level is the whole set — take its items in rank order.
-  const tags = useMemo(() => tree.map((node) => node.item), [tree]);
+  const liveTags = useMemo(() => tree.map((node) => node.item), [tree]);
+  // …with a just-dropped order standing in for it until the live read agrees
+  // (table-kit's useDropHold says why a drop can't wait for the read).
+  const { shown: tags, hold } = useDropHold(liveTags, tagOrder);
   // Resolved against the live list, so a tag deleted elsewhere closes its dialog.
   const destroyingTag = destroyRequest ? tags.find((t) => t.id === destroyRequest.id) : undefined;
 
@@ -214,8 +222,12 @@ export function TagsSection() {
     const newIndex = tags.findIndex((t) => t.id === over.id);
     if (oldIndex === -1 || newIndex === -1) return;
 
-    // reorder writes only the tags whose rank actually changes, so this is cheap.
-    run(reorder(arrayMove(tags, oldIndex, newIndex)));
+    // reorder writes only the tags whose rank actually changes — one, for a
+    // one-row move — and the table shows `next` from this render on.
+    const next = arrayMove(tags, oldIndex, newIndex);
+    const op = reorder(next);
+    run(op);
+    hold(next, op);
   };
 
   // Move `tag` from `index` to `index + delta` (±1). `siblings` is the group

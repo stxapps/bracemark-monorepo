@@ -1,6 +1,7 @@
 import { LIST_NO_CHILDREN_IDS, TRASH_ID } from './system-lists';
 import { buildTree, flattenToRows, type TreeItem, type TreeNode, type TreeRow } from './tree';
 import {
+  applyMovePlan,
   arrayMove,
   excludeActiveDescendants,
   getMovePlan,
@@ -146,5 +147,72 @@ describe('getMovePlan', () => {
     const { lists, rows } = fixture();
     expect(getMovePlan(lists, rows, 'nope', 'C', 0, OPTS)).toBeNull();
     expect(getMovePlan(lists, rows, 'A', 'nope', 0, OPTS)).toBeNull();
+  });
+});
+
+describe('applyMovePlan', () => {
+  // The forest as rendered: every row in order with its depth, which is the whole
+  // shape (depth-first order plus depth determines the tree).
+  const shape = (nodes: TreeNode<Node>[]) =>
+    flattenToRows(nodes, NONE).map((row) => `${row.item.id}:${row.depth}`);
+
+  // What the STORE would read back: write the plan the way `move` does — one
+  // `{ parentId, rank }` on the moved item — and rebuild. `rank` here is a bare
+  // letter between its new neighbours, which is all buildTree compares.
+  const written = (items: Node[], id: string, parentId: string | null, rank: string) =>
+    buildTree(
+      items.map((i) => (i.id === id ? { ...i, parentId, rank } : i)),
+      { noChildrenIds: LIST_NO_CHILDREN_IDS },
+    );
+
+  const items = [
+    item('A', null, 'a'),
+    item('B', null, 'c'),
+    item('B1', 'B', 'a'),
+    item('B2', 'B', 'c'),
+    item('C', null, 'e'),
+  ];
+  const lists = buildTree(items, { noChildrenIds: LIST_NO_CHILDREN_IDS });
+  const rows = flattenToRows(lists, NONE);
+
+  it('predicts the forest the write will produce, for a reorder, a nest and an un-nest', () => {
+    // The held order is only invisible when it is the order about to arrive: a
+    // prediction that is off by a slot is a row that lands, then moves again.
+    const drops: [activeId: string, overId: string, offsetX: number, rank: string][] = [
+      ['A', 'C', 0, 'f'], // root reorder, to the end
+      ['C', 'A', 0, '0'], // root reorder, to the head
+      ['A', 'B1', INDENT, 'b'], // nest between B1 and B2
+      ['B1', 'C', -INDENT, 'f'], // un-nest to the end of the root
+    ];
+    for (const [activeId, overId, offsetX, rank] of drops) {
+      const dragRows = excludeActiveDescendants(rows, activeId);
+      const plan = getMovePlan(lists, dragRows, activeId, overId, offsetX, OPTS);
+      if (!plan) throw new Error(`no plan for ${activeId} over ${overId}`);
+
+      const store = written(items, activeId, plan.parentId, rank);
+      expect(shape(applyMovePlan(lists, plan))).toEqual(shape(store));
+      expect(shape(store)).not.toEqual(shape(lists)); // each of these really moves
+    }
+  });
+
+  it('carries the subtree along and re-depths it', () => {
+    // B (with B1, B2) nested under A: the children were depth 1 and are now 2.
+    const plan = { item: items[1], parentId: 'A', index: 0 };
+    expect(shape(applyMovePlan(lists, plan))).toEqual(['A:0', 'B:1', 'B1:2', 'B2:2', 'C:0']);
+  });
+
+  it('hands back the same forest when the plan no longer fits it', () => {
+    // Deleted on another device between the drop and the render: there is no
+    // order to show, and identity is how the caller tells.
+    expect(applyMovePlan(lists, { item: item('gone', null, 'z'), parentId: null, index: 0 })).toBe(
+      lists,
+    );
+    expect(applyMovePlan(lists, { item: items[0], parentId: 'gone', index: 0 })).toBe(lists);
+  });
+
+  it('does not mutate the forest it was given', () => {
+    const before = shape(lists);
+    applyMovePlan(lists, { item: items[0], parentId: 'B', index: 1 });
+    expect(shape(lists)).toEqual(before);
   });
 });
