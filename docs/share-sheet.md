@@ -646,9 +646,9 @@ carrying one. Three rules hold them together:
   the first one, and the drain + refresh on next foreground re-syncs it.
 
 - **No session** (cold share before first sign-in): the sheet shows "Sign in to
-  save links", and says why — everything is encrypted with the password, so
-  there is nothing the sheet could do without it — instead of hanging or
-  crashing. Snapshot absent / `sessionPresent: false` on iOS,
+  save links", and says why — each link is encrypted with a key the password
+  unlocks, so there is nothing the sheet could do without it — instead of
+  hanging or crashing. Snapshot absent / `sessionPresent: false` on iOS,
   `getSession() === null` on Android. It and the no-link state are shaped like
   the links pane's `EmptyState` (a mark, a title, a sentence that says what to do
   next), because they are the same kind of moment.

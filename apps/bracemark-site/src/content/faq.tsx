@@ -447,7 +447,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
         // can disprove by thinking about how rate limiting works. If the limiter's
         // key ever changes, all four surfaces move together.
         id: 'previews',
-        q: 'If everything is encrypted, how do link previews work?',
+        q: 'If my links are encrypted, how do link previews work?',
         a: (
           <>
             The browser extension reads the live tab and tries to fill in its title and preview

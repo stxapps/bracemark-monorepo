@@ -108,7 +108,7 @@ export default function Page() {
           any other personal identifier, and there is no account-verification step.
         </p>
         <p>
-          <strong>Your password unlocks the key that encrypts your data.</strong> That unlocking
+          <strong>Your password unlocks the key that encrypts your library.</strong> That unlocking
           happens on your device. Neither your password nor the key it opens is ever sent to us, and
           we have no copy of either. This has consequences you must accept before you use the
           Service:

@@ -318,7 +318,7 @@ export function ShareScreen({ url, title }: SharePayload) {
   if (!taxonomy.sessionPresent) {
     return (
       <ShareNotice testID="share-signed-out" icon={LogIn} title="Sign in to save links">
-        Open Bracemark on this device and sign in. Everything is encrypted with a key your password
+        Open Bracemark on this device and sign in. Each link is encrypted with a key your password
         unlocks, so the sheet can’t save until you have.
       </ShareNotice>
     );
