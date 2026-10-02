@@ -265,10 +265,14 @@ function TriCheckList({
 // the paywall, which stays the primary, peak-intent path. (Contrast the link cap,
 // which replaces its form with LinkQuotaBanner and skips the paywall entirely:
 // there the action is impossible, whereas this one is a click away.)
+//
+// The lock's `mt-0.25` is (16 − 14) / 2 — a 14px glyph on the first `text-xs`
+// line. The usual `mt-0.5` is the sum for a 16px glyph in a 20px line and sat this
+// one a pixel low.
 function LockedBanner() {
   return (
     <div className="flex items-start gap-2 rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
-      <Lock className="mt-0.5 size-3.5 shrink-0" />
+      <Lock className="mt-0.25 size-3.5 shrink-0" />
       <span>
         A <span className="font-medium text-foreground">Plus</span> feature. Build your query, then
         upgrade to run it.{' '}

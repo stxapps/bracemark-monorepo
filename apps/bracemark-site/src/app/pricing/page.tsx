@@ -411,8 +411,13 @@ export default function Page() {
                       'flex items-start gap-2.5 text-sm leading-6 text-muted-foreground',
                     )}
                   >
+                    {/* `mt-1.25` is (24 − 14) / 2: the glyph centred on the FIRST
+                        line of a feature that wraps. It was `mt-1`, a pixel high. */}
                     <CheckGlyph
-                      className={cn('mt-1 size-3.5 shrink-0', card.featured ? 'text-signal' : '')}
+                      className={cn(
+                        'mt-1.25 size-3.5 shrink-0',
+                        card.featured ? 'text-signal' : '',
+                      )}
                     />
                     {feature}
                   </li>

@@ -188,8 +188,10 @@ export function BookmarkConverter({ appImportUrl }: { appImportUrl: string }) {
                       setOutput(item.id);
                       if (file) void convert(file, item.id);
                     }}
+                    // `mt-0.5` is (20 − 16) / 2 — centred on the label's line, not on
+                    // the block. It was `mt-1`, which sat the radio 2px low.
                     className={cn(
-                      'mt-1 size-4 shrink-0 accent-signal focus-visible:ring-3 focus-visible:ring-ring/50',
+                      'mt-0.5 size-4 shrink-0 accent-signal focus-visible:ring-3 focus-visible:ring-ring/50',
                     )}
                   />
                   <span>

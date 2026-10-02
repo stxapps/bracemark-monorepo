@@ -145,7 +145,9 @@ export function Editor({
             'flex items-start gap-2 rounded-md bg-amber-500/10 px-3 py-2 text-xs leading-5 text-amber-700 dark:text-amber-400',
           )}
         >
-          <TriangleAlert className={cn('mt-0.5 size-3.5 shrink-0')} aria-hidden="true" />
+          {/* `mt-0.75` is (20 − 14) / 2, the glyph centred on the first `leading-5`
+              line. The usual `mt-0.5` is the sum for a 16px glyph, a pixel high here. */}
+          <TriangleAlert className={cn('mt-0.75 size-3.5 shrink-0')} aria-hidden="true" />
           <span>
             This page is in your Trash. Restoring puts it back in the list you pick below.
           </span>
