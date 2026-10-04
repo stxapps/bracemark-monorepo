@@ -426,7 +426,7 @@ export function ListsSection() {
   const lists = useLists();
   const { entitlements } = useEntitlements();
   const paywall = usePaywall();
-  const { create, rename, move, destroy, destroyBlocker, reorder } = useListMutations();
+  const { createTopLevel, rename, move, destroy, destroyBlocker, reorder } = useListMutations();
   const { listLocks, unlockList, biometricAvailable, biometricLabel } = useLocks();
   const { addListLock, removeListLock, setListBiometric } = useLockMutations();
 
@@ -604,10 +604,7 @@ export function ListsSection() {
       <View className="rounded-lg border border-border">
         {/* runAwait, not run: CreateRow awaits this to clear its field only on
             success, so the error has to surface AND re-throw. */}
-        <CreateRow
-          noun="list"
-          onCreate={(name) => runAwait(() => create(name, null, childrenOf(lists, null), 0))}
-        />
+        <CreateRow noun="list" onCreate={(name) => runAwait(() => createTopLevel(name))} />
 
         {displayRows.map((row, index) => (
           <Row

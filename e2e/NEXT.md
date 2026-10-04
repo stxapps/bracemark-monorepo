@@ -241,6 +241,10 @@ below E2E.
       then permanently delete one deterministic link.
 - [x] `LINK-LIFECYCLE-002` Native: exercise the same state boundaries through
       native menus and confirmation surfaces on iOS and Android.
+- [x] `LINK-MOVE-001` Web and native: file one link and a bulk selection into a
+      list created from the Move to picker, through every box it sits in — web's
+      row submenu, bulk dialog and narrow sheet; native's one dialog from the row
+      menu and the bulk bar. The create-then-move pairing stays at component level.
 
 ### Lists, tags, filters, and search
 

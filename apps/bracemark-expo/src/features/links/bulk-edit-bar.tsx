@@ -26,8 +26,9 @@
 //    platform (features/auth/show-once-secret.tsx), and the same button
 //    shouldn't confirm two ways in one app.
 //  - Move to opens a Dialog listing the list tree (the anchored ListCommand
-//    popover doesn't fit a phone; no search box — the tree is small, and the
-//    picker excludes Trash like web: trashing is Remove, never a "move").
+//    popover doesn't fit a phone; the picker excludes Trash like web — trashing
+//    is Remove, never a "move" — and carries the same Create row, so the
+//    selection can be filed into a list made on the spot: move-to-dialog.tsx).
 //  - Android back exits the mode before it navigates (the same platform
 //    cascade as the search bar's close-before-navigate).
 //

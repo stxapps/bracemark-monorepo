@@ -160,6 +160,16 @@
     "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
   },
   {
+    "id": "LINK-MOVE-001",
+    "title": "A link and a bulk selection are filed into a list created from the Move to picker, in the submenu, the dialog and the narrow sheet",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online"],
+    "fixture": "empty",
+    "path": "web/link-move.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
     "id": "WEB-TAXONOMY-001",
     "title": "A list created in Settings appears in the links sidebar",
     "surface": "web",
@@ -767,6 +777,16 @@
     "traits": ["online", "destructive", "ios", "android"],
     "fixture": "empty",
     "path": "mobile/flows/link-lifecycle.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "LINK-MOVE-001",
+    "title": "Native Move to files a link and a bulk selection into a list created from the dialog",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "ios", "android"],
+    "fixture": "empty",
+    "path": "mobile/flows/link-move.yaml",
     "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
   },
   {

@@ -587,6 +587,14 @@ async function main(): Promise<void> {
         env.LINK_URL = unresolvableUrl(`${run.runId}-lifecycle`);
         env.ANCHOR_URL = unresolvableUrl(`${run.runId}-trash-anchor`);
       }
+      if (testCase.id === 'LINK-MOVE-001') {
+        env.ROW_URL = unresolvableUrl(`${run.runId}-move-row`);
+        env.BULK_ONE_URL = unresolvableUrl(`${run.runId}-move-bulk-one`);
+        env.BULK_TWO_URL = unresolvableUrl(`${run.runId}-move-bulk-two`);
+        env.KEEP_URL = unresolvableUrl(`${run.runId}-move-keep`);
+        env.ROW_LIST = unique('E2E move row');
+        env.BULK_LIST = unique('E2E move bulk');
+      }
       if (testCase.id === 'TAXONOMY-EDITOR-002') {
         env.LINK_URL = unresolvableUrl(`${run.runId}-taxonomy`);
         env.LIST_NAME = unique('E2E list');

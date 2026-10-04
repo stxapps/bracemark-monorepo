@@ -21,11 +21,13 @@
 //    fixed-height rows can only badge it), and a native focus would summon the
 //    keyboard over it; 'tags' goes to the tag field.
 //  - Move to opens the shared MoveToDialog (a dropdown-anchored ListCommand
-//    submenu doesn't fit a phone — the bulk bar's rationale). Mounted only
-//    while open: the dialog holds a live list read, and this component renders
-//    per virtualized item. The item press closes the menu (closeOnPress) and
-//    opens the dialog in the same event, so the two engagement reports land in
-//    one batch and `engaged` never observably drops between them.
+//    submenu doesn't fit a phone — the bulk bar's rationale), Create row
+//    included: a typed name that no list has becomes the destination. Mounted
+//    only while open: the dialog holds a live list read, and this component
+//    renders per virtualized item. The item press closes the menu
+//    (closeOnPress) and opens the dialog in the same event, so the two
+//    engagement reports land in one batch and `engaged` never observably drops
+//    between them.
 //  - The menu root is uncontrolled on native (@rn-primitives' Root takes no
 //    `open` prop) — useEngagedOpen just observes onOpenChange, so the
 //    engagement count still holds while it's open (web's controlled-menu

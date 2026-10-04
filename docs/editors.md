@@ -627,8 +627,9 @@ point of the pairing — one picker over one live tree, no drift.
 **A third shell sits beside the two above: `move-to-surface.tsx`
 (`MoveToSurface`) — `ListCommand` in a container that stands on its own**, for
 the callers and the widths where an anchored menu can't hold it. It takes
-`ListCommand`'s props straight through (`value` / `excludeIds` / `disabledIds` /
-`root`, and deliberately **not** `onCreate`), plus a `title`, a `busy` line, and
+`ListCommand`'s props straight through (`value` / `excludeIds` / `disabledIds`,
+and both opt-ins, `root` and `onCreate`, with no opinion on either — its two
+callers pass opposite ones), plus a `title`, a `busy` line, and
 a `wide` boolean that picks the container: a **centred dialog** at `md` and up, a
 **bottom sheet** below it — the same fork, at the same breakpoint, that quick-add
 makes between its popover and its sheet.
@@ -638,8 +639,9 @@ parent menu's `min-w-48` (192) plus two 8px collision gutters — **464px agains
 375px phone**. Radix doesn't clip that; the submenu flips, then the shift
 middleware clamps it to the gutter, so it lands _on top of_ the parent menu,
 covering the row it grew out of. Two more things the arithmetic misses: a
-hover-intent submenu is a mouse gesture, and past `SEARCH_THRESHOLD` the filter
-input summons a keyboard the floating layer cannot see (Floating UI measures the
+hover-intent submenu is a mouse gesture, and the filter input — there past
+`SEARCH_THRESHOLD`, and at any count where the caller can create — summons a
+keyboard the floating layer cannot see (Floating UI measures the
 _layout_ viewport, which the keyboard doesn't shrink — `docs/safe-area.md`,
 _popups & dialogs_). Hence also `onOpenAutoFocus` prevented on the sheet: the
 picker is a list first, a search box second.
@@ -671,11 +673,20 @@ and `w-auto` aren't a conflict pair; it only drops a `w-*` that a _later_
 `size-*` overrides), so the override rides on Tailwind emitting `size-*` ahead of
 `w-*` — the same thing the `h-auto` in those class lists already depends on.
 
-**Both pickers can CREATE, and both creates are opt-in on the shell.**
+**Both pickers can CREATE, and the list create is opt-in.**
 `TagsField` always mints (a tag editor with no way to make a tag is barely an
 editor); `ListSelect` mints only under **`allowCreate`**, which the three link
-editors pass and the move-to menus below must not. The rows themselves are
-`TagsCommand`'s always-on Create and `ListCommand`'s **`onCreate`**-gated one.
+editors pass. The rows themselves are `TagsCommand`'s always-on Create and
+`ListCommand`'s **`onCreate`**-gated one — and `onCreate` is passed by **every
+surface that files a link**: the editors through `ListSelect`, and the link
+"Move to" surfaces directly (below). The one `ListCommand` host that must not is
+the Lists settings reparent menu. All of them mint through one method,
+`useListMutations().createTopLevel(name)` — in `web-react` and `expo-react`
+beside the other list writes, not beside `ListCommand`: it is a write policy,
+and the picker file is a component. It takes only a name and reads the root
+group from the store when called, the way `findOrCreate` does, so a host that
+binds it holds **no live list read** — the only one on these surfaces is
+`ListCommand`'s own.
 
 - **Why inline, rather than a "Manage lists" link out to Settings → Lists** (the
   shape the sidebar's `FooterLink` uses): the sidebar holds no draft, and every
@@ -684,16 +695,48 @@ editors pass and the move-to menus below must not. The rows themselves are
   extension popup would be killed outright by `tabs.create`, since a popup
   dismisses on focus loss uninterceptably. "Add a list" is a **sub-task of the
   save**; anything that ends the save to do it isn't an answer.
+- **"Move to" creates inline for the same reason, with a selection standing in
+  for the draft.** Navigating to another view exits bulk-edit mode (§_bulk
+  edit_), so making the destination in Settings → Lists drops the selection the
+  user came to file — and a bulk move has no other route to a new list. The
+  single-link move always had one (Edit → the list picker → Create → Save), which
+  is the argument for the Create row there too: withholding it prevented nothing
+  and only lengthened the path. This reverses an earlier rule — "a Create row
+  inside a _destination_ picker is a different intent wearing the same clothes" —
+  that named no failure it prevented; filing a link into a list that doesn't
+  exist yet is one intent, whether the link is new or not. **Confirming the name
+  is the whole move**: the list is created and the links land in it in one
+  gesture, and a row pressed while the create is landing can't start a second
+  move. That refusal lives in `ListCommand`, on both platforms, because it is the
+  only layer that can see the create in flight and every creating host follows
+  the create with a write of its own — without it the row menu's submenu moved
+  the link to the picked list and then again into the new one, and the native
+  dialog reported two destinations, the second of which the bulk bar drops while
+  the first move is running, leaving the new list empty. `LinkMoveSurface` holds
+  its own `busy` span on top, which also covers the move. Two things differ from
+  an editor, in opposite directions. There is **no Save in between**, so a
+  mistyped name is a list created _and_ links filed in it — both recoverable
+  (move again; the list deletes once it's empty), neither undoable in place. And
+  nothing is **left behind empty**: an editor that creates and is then cancelled
+  orphans a list (below), while here the create only ever happens as part of a
+  move.
 - **Every create lands in the same place: top-level, index 0.** `parentId: null`
   and the head of the root group — for **both** entities, on **every** surface: the
-  settings `CreateRow`s, `ListSelect`'s Create row, `useTagMutations.findOrCreate`,
-  and the share sheet's two pickers. One action, one landing spot, wherever it's
-  invoked; there is no per-entity or per-surface variation to remember. Two halves
-  to the rule, each load-bearing for a different reason:
+  settings `CreateRow`s, `ListSelect`'s Create row, the link "Move to" surfaces'
+  Create row, `useTagMutations.findOrCreate`, and the share sheet's two pickers.
+  For lists the in-app surfaces don't each restate it: the Lists settings
+  `CreateRow`, `ListSelect` and the "Move to" surfaces all call
+  `useListMutations().createTopLevel`, which owns the position. One action, one
+  landing spot, wherever it's invoked; there is no per-entity or per-surface
+  variation to remember. Two halves to the rule, each load-bearing for a
+  different reason:
   - **Top-level is what keeps the create cheap despite the lists/tags asymmetry.**
     `findOrCreate(name)` takes only a name because a tag **is** its name;
     `useListMutations.create(name, parentId, siblings, index)` needs a **position in
-    a tree**. The editors decline to ask: nesting is non-destructive to defer
+    a tree**. The editors decline to ask — `createTopLevel(name)` fills the
+    position in, from the store's root group as `buildTree` renders it (a list
+    whose parent is gone sits at the root too, and can be the head to land
+    before): nesting is non-destructive to defer
     (`move` is a one-field `{ parentId, rank }` write), and rebuilding the settings
     tree editor — drag, depth projection — inside a 320px popover would be absurd.
     Create now, reparent later, lose nothing.
@@ -726,6 +769,14 @@ editors pass and the move-to menus below must not. The rows themselves are
   name and then cancelling the editor leaves the list/tag behind, since the write
   already happened. `findOrCreate` reuses it on a retype, and Settings →
   Lists/Tags is one delete away.
+- **The name field keeps ArrowLeft from a dropdown submenu.** Radix closes a
+  submenu on ArrowLeft from anywhere inside it, the filter box included, so
+  stepping back through a half-typed name closed the row menu's wide "Move to"
+  and discarded the name. That was reachable before — the box appears past
+  `SEARCH_THRESHOLD` on any host — but a field whose job is typing a new name
+  makes it the ordinary case. `ListCommand` stops the key at the input while
+  there is a caret to move, and lets it through at position 0, where it is still
+  the keyboard's way back to the parent menu.
 - **Two smaller consequences, both in `list-command`.** (1) The filter input is
   normally count-gated at `SEARCH_THRESHOLD` (scrolling beats a box), but
   `onCreate` **forces it on at any count** — it doubles as the Create row's name
@@ -735,6 +786,13 @@ editors pass and the move-to menus below must not. The rows themselves are
   so a second "Recipes" under a different parent is legitimate — but a Create row
   competing with an identical row right above it reads as a mistake far more often
   than as intent, and the deliberate-duplicate case still has Settings → Lists.
+  The match is against **every** list, not the rows the picker shows: all the
+  creating pickers hide Trash, and checked against the visible rows a typed
+  "Trash" was offered as a new list — on a "Move to" surface, a second Trash with
+  the link already filed in it. Read off the unfiltered tree, the rule follows a
+  renamed Trash and whatever a later picker excludes. The cost is "No lists
+  found." under a name that does exist, which is accepted: nothing there can be
+  picked, and trashing is Remove.
 
 **Locked and hidden lists stay pickable — the pickers filter only `TRASH_ID`.**
 They deliberately do **not** prune the lock model's `hiddenListIds` (the whole
@@ -764,14 +822,21 @@ editors:
   `excludeIds`/`disabledIds` handling) hits the move-to menu too, not just the
   editors. It passes `excludeIds={[TRASH_ID]}` and `disabledIds={[link.listId]}` —
   trashing is the menu's Remove, never a "move", and the current list stays
-  visible-but-disabled to keep the tree's shape intact. It does **not** pass
-  `onCreate`: this menu re-files an existing link, and a Create row inside a
-  _destination_ picker is a different intent wearing the same clothes.
+  visible-but-disabled to keep the tree's shape intact. It **does** pass
+  `onCreate` (§"the shared pickers", _"Move to" creates inline_), which also
+  means the filter field is there at any list count. The create is wired inline
+  in the menu: `LinkRowMenu` renders once per virtualized row, but
+  `createTopLevel` holds no live read, so binding it per row costs what the link
+  and pin mutations beside it already do. The read that matters is
+  `ListCommand`'s live one, and it stays inside the submenu's content, which
+  exists only while it is open — read the lists anywhere outside it and every
+  row on screen holds a live query.
   **It has two shapes, split at `md`** (`view-state-provider`'s `wide`): the
   submenu above, and below it a plain item that hands the link to the page-level
   `LinkMoveSurface` — because the submenu doesn't fit a phone (see §"the shared
-  pickers"). Same picker, same exclusions, different box; the ellipsis on the
-  narrow item ("Move to…") is the convention that it opens something further.
+  pickers"). Same picker, same exclusions, same Create row, different box; the
+  ellipsis on the narrow item ("Move to…") is the convention that it opens
+  something further.
 - **The Lists settings "Move to"** (`_lists/lists-section.tsx`, `RowActions`)
   also embeds `ListCommand` — but it **reparents a list**, not a link, so it uses
   two things a link-move never does. It opts into `ListCommand`'s **`root`** prop
@@ -791,15 +856,15 @@ editors:
   under a collapsed ancestor, which would otherwise close the picker mid-pick.
   Drag-and-drop with depth projection is still the _primary_ reparent gesture
   there; this menu is the keyboard/mouse fallback. It must never pass `onCreate`
-  either — this picker chooses a **parent**, so "create a new list" inside it is
-  incoherent twice over.
+  — this picker chooses a **parent** for a list, and minting another list from
+  inside it is incoherent. The section's own `CreateRow` is a row away.
 - **The rule the two menus above share**: `list-command`'s optional props split
-  its audiences, and the split runs in both directions. `root` is for
-  **reparenting** only (leave it out on link surfaces); `onCreate` is for
-  **editors** only (leave it out on both move-to menus). Adding a consumer means
-  deciding both, not copying the nearest call site — the bulk "Move to" (see
-  below) is a _menu_, not an editor, and `MoveToSurface` passes both through
-  without opinions precisely so each caller keeps making that call.
+  its audiences, and no surface takes both. `root` is for **reparenting a list**
+  (leave it out on link surfaces — a link always lands in some list); `onCreate`
+  is for **filing a link** (leave it out on the reparent menu). Adding a consumer
+  means deciding both, not copying the nearest call site — the two "Move to"
+  menus look alike and pass opposite ones, and `MoveToSurface` passes both
+  through without opinions precisely so each caller keeps making that call.
 - **The row menu's "Edit note"** is the reason the edit dialog takes a
   `focus?: 'tags' | 'note'` (`LinkEditRequest` in `view-state-provider`) rather
   than the boolean it started as. **The note has no read-only surface** — reading
@@ -1131,8 +1196,9 @@ in `view-state-provider`, items grow a `LinkRowSelect` checkbox
   not just the label, because the icon-only tier renders no label). In Trash: **Restore** (→ My List — the schema records no previous
   list, same as the row menu) and **Delete permanently** (irreversible →
   `requestDestroy` → `LinkDestroyConfirm`). Elsewhere: **Move to**
-  (`requestMove` → `LinkMoveSurface` — no Trash target, no `onCreate`/`root`, per
-  §"shared pickers"; the selection's single shared list, when there is one, shows
+  (`requestMove` → `LinkMoveSurface` — no Trash target, no `root`, and the Create
+  row that files the selection into a list made on the spot, per §"shared
+  pickers"; the selection's single shared list, when there is one, shows
   checked-but-disabled), **Edit tags** (below),
   **Pin**/**Unpin** (Pin pins only the not-yet-pinned so existing manual pin
   ranks aren't churned; Unpin the inverse), **Archive** (flipping to
@@ -1192,8 +1258,18 @@ semantics (no mode exit, a check + "Copied" flash) but flips its glyph for its
 own reason — the bar always renders the label, so the flip is there to match the
 confirmation native's `ShowOnceSecret` already uses, Move to is a dialog embedding the native `ListCommand` cousin instead of
 the anchored submenu (`features/links/move-to-dialog.tsx`, shared with the row
-menu — same `excludeIds`/`disabledIds` wiring, no `onCreate`/`root`; the Lists
-settings reparent dialog embeds the same body with `root`, like web). **Web
+menu — same `excludeIds`/`disabledIds` wiring, the same Create row and no
+`root`; the dialog reports a created list through the one `onSelect` a picked
+row uses, so both hosts move into it with the code they already had. The create
+is wired on the dialog's HOST side, not in its content, and has to be: the
+content portals into the root `PortalHost`, above the `(app)` layout's
+`SyncProvider`, and `useListMutations` reads `useSync` — from inside the content
+it throws the moment the dialog opens, with every jest spec green because the
+package is mocked at the barrel. The host side holds no live read for it
+(`createTopLevel` reads the store when called), and the row menu mounts the
+dialog only while open besides. The Lists settings
+reparent dialog embeds the same body with `root` and no `onCreate`, like web).
+**Web
 converged on the same shape below `md`** (`MoveToSurface`) once its submenu was
 measured against a phone — but it converged on the _picker_, not the container:
 expo keeps a dialog at every width (a phone is the only width it has, and Dialog

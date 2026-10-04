@@ -21,9 +21,11 @@
 // selectable (the current list/parent, so the tree's shape — and the user's
 // bearings — stays intact while ruling out a no-op move). `root` is the
 // opt-in "no parent" entry for the settings reparent dialog ("Top level");
-// `onCreate` is the editors' opt-in Create row — the two "Move to" hosts must
-// pass NEITHER (creating a list is incoherent as a move destination). All
-// per web ListCommand.
+// `onCreate` is the opt-in Create row for every surface that FILES A LINK — the
+// editors' ListSelect and the links MoveToDialog. The two never meet: the
+// reparent dialog picks a PARENT, where minting a list is incoherent, and a
+// link always lands in some list, so it has no "no parent". All per web
+// ListCommand.
 //
 // Every row here is `min-h-11` — 44pt, its own touch target — as
 // tag-picker-rows.tsx's have been all along (docs/accessibility.md, _a 36dp box
@@ -90,12 +92,21 @@ export function ListCommand({
   // how `value` / `disabledIds` treat the current-parent list row. Omitted by
   // link surfaces.
   root?: { label: string; selected: boolean; onSelect: () => void };
-  // Mint a list named by the typed query and select it (the editors' ListSelect
-  // passes this; the move-to hosts don't — see the header). Awaited, so the row
-  // can disable itself while the write lands.
+  // Mint a list named by the typed query and select it — or, in the Move to
+  // dialog, move into it (the link surfaces pass this; the settings reparent
+  // dialog doesn't — see the header). Awaited, so the row can disable itself
+  // while the write lands.
   onCreate?: (name: string) => void | Promise<void>;
 }) {
-  const rows = useListRows(excludeIds);
+  // One live read feeds both the rows shown and the names every list has — they
+  // differ by `excludeIds`, and the Create row needs the second (web
+  // ListCommand's rule, below).
+  const lists = useLists();
+  const rows = useMemo(() => flattenToPathRows(lists, excludeIds), [lists, excludeIds]);
+  const takenNames = useMemo(
+    () => new Set(flattenToPathRows(lists).map(({ item }) => item.name.toLowerCase())),
+    [lists],
+  );
   const [query, setQuery] = useState('');
   const [creating, setCreating] = useState(false);
 
@@ -110,11 +121,10 @@ export function ListCommand({
   // Offer Create unless the name is empty or already names a list exactly
   // (case-insensitive) — a Create row competing with an identical row right
   // above it reads as a mistake; Settings → Lists still covers the deliberate
-  // duplicate (web ListCommand's rule, verbatim).
-  const canCreate =
-    onCreate !== undefined &&
-    trimmed !== '' &&
-    !rows.some(({ item }) => item.name.toLowerCase() === q);
+  // duplicate. ANY list counts, shown here or not: every creating picker hides
+  // Trash, and a check against the visible rows offered to create a second one
+  // (web ListCommand's rule, verbatim).
+  const canCreate = onCreate !== undefined && trimmed !== '' && !takenNames.has(q);
 
   const create = async () => {
     if (!onCreate || creating || trimmed === '') return;
@@ -125,6 +135,15 @@ export function ListCommand({
     } finally {
       setCreating(false);
     }
+  };
+
+  // A row pressed while a create is still landing is refused — web ListCommand's
+  // rule, verbatim: every creating host goes on to select or move into the new
+  // list, so a pick let through here would run first and be followed by the
+  // create's own. In the Move to dialog that is `onSelect` twice — a second move
+  // the bulk bar drops while the first is in flight, leaving the new list empty.
+  const pick = (listId: string) => {
+    if (!creating) onSelect(listId);
   };
 
   return (
@@ -195,7 +214,7 @@ export function ListCommand({
             <Pressable
               key={item.id}
               disabled={disabled}
-              onPress={() => onSelect(item.id)}
+              onPress={() => pick(item.id)}
               accessibilityRole="menuitem"
               className={cn(
                 'min-h-11 flex-row items-center justify-between gap-2 rounded-xl px-3 py-2.5 active:bg-muted',

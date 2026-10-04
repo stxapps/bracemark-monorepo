@@ -75,6 +75,35 @@ describe.each([
     expect(onSelect).toHaveBeenCalledWith('2');
   });
 
+  // The two opt-ins pass straight through, and the surface holds no opinion on
+  // either: a link move passes `onCreate`, the Lists settings reparent passes
+  // `root`, and each must be able to leave the other out. Swallow `onCreate` here
+  // and the link move loses its Create row at every width this surface serves —
+  // which is every width for a bulk move — while the row menu's wide submenu,
+  // which embeds ListCommand itself, keeps it.
+  it('hands a typed name to the caller’s create', async () => {
+    const onCreate = jest.fn();
+    renderSurface({ wide, onCreate });
+
+    fireEvent.change(screen.getByPlaceholderText('Search or create lists…'), {
+      target: { value: 'Groceries' },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('option', { name: /Create/ }));
+    });
+
+    expect(onCreate).toHaveBeenCalledWith('Groceries');
+  });
+
+  // The reparent picker chooses a PARENT, so a Create row inside it is incoherent
+  // — and with two lists there is no filter box to type a name into at all.
+  it('offers no create to a caller that passes none', () => {
+    renderSurface({ wide });
+
+    expect(screen.queryByRole('combobox')).toBeNull();
+    expect(screen.queryByRole('option', { name: /Create/ })).toBeNull();
+  });
+
   it('closes on Escape when nothing is in flight', () => {
     const { onOpenChange } = renderSurface({ wide });
 

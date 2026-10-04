@@ -467,7 +467,7 @@ export function ListsSection() {
   const { shown: lists, hold } = useDropHold(useLists(), treeOrder);
   const { entitlements } = useEntitlements();
   const paywall = usePaywall();
-  const { create, rename, move, destroy, destroyBlocker, reorder } = useListMutations();
+  const { createTopLevel, rename, move, destroy, destroyBlocker, reorder } = useListMutations();
   const { listLocks, unlockList } = useLocks();
   const { addListLock, removeListLock } = useLockMutations();
 
@@ -669,10 +669,7 @@ export function ListsSection() {
         <div className="rounded-lg border border-border">
           {/* runAwait, not run: CreateRow awaits this to clear its field only on
               success, so the error has to surface AND re-throw. */}
-          <CreateRow
-            noun="list"
-            onCreate={(name) => runAwait(() => create(name, null, childrenOf(lists, null), 0))}
-          />
+          <CreateRow noun="list" onCreate={(name) => runAwait(() => createTopLevel(name))} />
 
           <DndContext
             sensors={sensors}

@@ -16,12 +16,16 @@
 // here, so a host that unmounts its content on close (popover, submenu) resets
 // the search for free.
 //
-// The editors additionally opt into `onCreate` — a Create row that mints a list
-// named by the typed query, the list analogue of TagsCommand's. Like `root`, it's
-// opt-in precisely because the two "Move to" menus must NOT offer it: creating a
-// list is incoherent as a *move destination*, and doubly so in the Lists settings
-// menu, which picks a PARENT. See list-select.tsx for why the create is
-// top-level-only and why the editors need it inline at all.
+// Every surface that FILES A LINK additionally opts into `onCreate` — a Create row
+// that mints a list named by the typed query, the list analogue of TagsCommand's:
+// the editors through ListSelect's `allowCreate`, and the link "Move to" surfaces
+// (the row menu's submenu, LinkMoveSurface) by passing it themselves. It's opt-in,
+// like `root`, because the Lists settings reparent menu must NOT offer it: that
+// picker chooses a PARENT for a list, and minting a sibling list from inside it
+// is incoherent. So the two opt-ins split the audiences cleanly — `onCreate` on
+// link surfaces, `root` on the reparent one, never both. The hosts mint through
+// useListMutations' `createTopLevel`; see list-select.tsx for why the create is
+// top-level-only and why it has to be inline at all.
 
 import { useMemo, useState } from 'react';
 import { PlusIcon } from 'lucide-react';
@@ -85,13 +89,23 @@ export function ListCommand({
   // it (already at the root, so moving there is a no-op), mirroring how `value` /
   // `disabledIds` treat the current-parent list row. Omitted by link surfaces.
   root?: { label: string; selected: boolean; onSelect: () => void };
-  // Mint a list named by the typed query and select it (the editors' ListSelect
-  // passes this; the move-to menus don't — see the header). Awaited, so the row
-  // can disable itself while the write lands.
+  // Mint a list named by the typed query and select it — or, on a "Move to"
+  // surface, move into it (the link surfaces pass this; the Lists settings
+  // reparent menu doesn't — see the header). Awaited, so the row can disable
+  // itself while the write lands.
   onCreate?: (name: string) => void | Promise<void>;
   className?: string;
 }) {
-  const rows = useListRows(excludeIds);
+  // One live read feeds both: the rows this picker shows, and the names EVERY
+  // list has. They differ by `excludeIds`, and the Create row needs the second
+  // (below) — so the tree is read here once rather than through useListRows plus
+  // a second useLists, which would be two liveQueries per open picker.
+  const lists = useLists();
+  const rows = useMemo(() => flattenToPathRows(lists, excludeIds), [lists, excludeIds]);
+  const takenNames = useMemo(
+    () => new Set(flattenToPathRows(lists).map(({ item }) => item.name.toLowerCase())),
+    [lists],
+  );
   const [query, setQuery] = useState('');
   const [creating, setCreating] = useState(false);
 
@@ -113,10 +127,16 @@ export function ListCommand({
   // different parent is legitimate. But a Create row competing with an identical
   // row sitting right above it reads as a mistake far more often than as intent,
   // and the deliberate-duplicate case still has Settings → Lists. Suppress it.
-  const canCreate =
-    onCreate !== undefined &&
-    trimmed !== '' &&
-    !rows.some(({ item }) => item.name.toLowerCase() === q);
+  //
+  // "A list" means ANY list, not just the rows shown here. Every creating picker
+  // hides Trash (`excludeIds`), so a check against `rows` offered Create “Trash”
+  // to someone who typed it looking for the real one — and on a Move to surface,
+  // where confirming the name is the whole move, that is a second Trash with the
+  // link filed in it. Reading the names off the unfiltered tree follows a renamed
+  // Trash for free, and covers whatever a future picker hides. What it leaves is
+  // "No lists found." for a name that does exist; that reads as "nothing here you
+  // can pick", which is true, and trashing is Remove.
+  const canCreate = onCreate !== undefined && trimmed !== '' && !takenNames.has(q);
 
   const create = async () => {
     if (!onCreate || creating || trimmed === '') return;
@@ -127,6 +147,17 @@ export function ListCommand({
     } finally {
       setCreating(false);
     }
+  };
+
+  // A row pressed while a create is still landing is refused. Every host that
+  // creates goes on to DO something with the new list — select it, or move into
+  // it — so a pick let through here runs first and the create's own follow-up
+  // runs after it: a link moved to the picked list and then again into the new
+  // one, or an editor whose list flips after the user chose another. The guard
+  // is here, not per host, because the hosts cannot see `creating`. It lasts one
+  // local write, so the rows are not dimmed for it — only the Create row is.
+  const pick = (listId: string) => {
+    if (!creating) onSelect(listId);
   };
 
   return (
@@ -141,6 +172,20 @@ export function ListCommand({
           placeholder={onCreate ? 'Search or create lists…' : 'Search lists…'}
           value={query}
           onValueChange={setQuery}
+          // A text field owns its caret keys. Two hosts embed this in a dropdown
+          // SUBMENU (the row menu's Move to, the Lists settings reparent menu),
+          // and Radix closes a submenu on ArrowLeft from anywhere inside it —
+          // this field included — so stepping back through a half-typed name
+          // threw the name away with the menu. Keep the key here while there is
+          // a caret to move. At the very start it has nothing left to do in the
+          // field, so it goes on up and closes the submenu: still the keyboard's
+          // way back to the parent menu.
+          onKeyDown={(event) => {
+            const { selectionStart, selectionEnd } = event.currentTarget;
+            if (event.key === 'ArrowLeft' && (selectionStart !== 0 || selectionEnd !== 0)) {
+              event.stopPropagation();
+            }
+          }}
         />
       )}
       <CommandList>
@@ -169,7 +214,7 @@ export function ListCommand({
             disabled={disabledIds?.includes(item.id)}
             data-checked={item.id === value}
             // cmdk may normalize `value`, so pass the id via closure.
-            onSelect={() => onSelect(item.id)}
+            onSelect={() => pick(item.id)}
           >
             {!filtering && depth > 0 && (
               // Guide lines, one per level. `-my-2` runs them through the row

@@ -8,7 +8,9 @@ import { useCallback, useMemo } from 'react';
 
 import { newId } from '@stxapps/expo-crypto';
 import {
+  buildTree,
   isSystemListId,
+  LIST_NO_CHILDREN_IDS,
   LISTS_PREFIX,
   pathFromId,
   placeAtIndex,
@@ -34,6 +36,15 @@ export interface ListMutations {
     siblings: ListItem[],
     index: number,
   ) => Promise<ListItem | null>;
+  // `create` with the position every inline "add a list" uses: TOP-LEVEL
+  // (`parentId: null`) at the head of the root group — the Lists settings
+  // CreateRow, ListSelect's Create row and the link "Move to" surfaces all land
+  // here, so the same action puts the list in the same place wherever it's
+  // invoked (docs/editors.md). Takes only a name, like
+  // useTagMutations.findOrCreate: the root group is read from the store at call
+  // time, so a host holds no live list read for it. Resolves to the new list,
+  // for the host to select or move into; null for a blank name.
+  createTopLevel: (name: string) => Promise<ListItem | null>;
   rename: (list: ListItem, name: string) => Promise<void>;
   // Place `list` at `index` within `parentId`'s children. `siblings` is that
   // destination group as currently ordered, EXCLUDING `list` itself (so an
@@ -96,6 +107,28 @@ export function useListMutations(): ListMutations {
       return list;
     },
     [username, requestSync],
+  );
+
+  const createTopLevel = useCallback(
+    async (name: string) => {
+      if (!username) throw new Error('useListMutations: no active account');
+      if (name.trim() === '') return null;
+
+      // Re-derive the root group from the store rather than a rendered snapshot:
+      // a second create can be confirmed before the live read has caught up with
+      // the first, and against a stale head both would mint the same rank.
+      // buildTree, not a `parentId === null` filter — it is what useLists
+      // renders, and it drops a list whose parent is gone (or is Trash) back to
+      // the root, where it can be the head this has to land before.
+      const root = buildTree(await readLists(), { noChildrenIds: LIST_NO_CHILDREN_IDS });
+      return create(
+        name,
+        null,
+        root.map((node) => node.item),
+        0,
+      );
+    },
+    [username, create],
   );
 
   const rename = useCallback(
@@ -177,8 +210,8 @@ export function useListMutations(): ListMutations {
   );
 
   return useMemo<ListMutations>(
-    () => ({ create, rename, move, destroy, destroyBlocker, reorder }),
-    [create, rename, move, destroy, destroyBlocker, reorder],
+    () => ({ create, createTopLevel, rename, move, destroy, destroyBlocker, reorder }),
+    [create, createTopLevel, rename, move, destroy, destroyBlocker, reorder],
   );
 }
 

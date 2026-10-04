@@ -25,13 +25,23 @@
 // and reorder the date-modified sort) — the same rule every bulk action follows.
 // Trash is not a destination: trashing is Remove, never a "move".
 //
+// THE DESTINATION CAN BE A LIST THAT DOESN'T EXIST YET. The picker carries
+// ListCommand's Create row, and confirming a name here creates the list AND moves
+// into it — one gesture, one `busy` span. It's the editors' inline create
+// (list-select.tsx) for the editors' reason: leaving to make the list in Settings
+// ends bulk-edit mode and drops the selection, exactly as leaving an editor drops
+// its draft. Same landing spot as every other create — top-level, index 0. Unlike
+// an editor there is no Save in between, so a mistyped name is a list created and
+// links filed in it; both are a move and a delete away, and the list is never left
+// behind empty the way a cancelled editor leaves one.
+//
 // `exitBulkEdit` after a completed move matches the other two page-level
 // surfaces (it's a no-op on the row-menu path, which was never in the mode).
 
 import { useState } from 'react';
 
 import { TRASH_ID } from '@stxapps/shared';
-import { type LinkView, useLinkMutations } from '@stxapps/web-react';
+import { type LinkView, useLinkMutations, useListMutations } from '@stxapps/web-react';
 import { MoveToSurface } from '@stxapps/web-ui/components/links/move-to-surface';
 
 import { useLinksViewState } from '../_contexts/view-state-provider';
@@ -51,6 +61,7 @@ export function LinkMoveSurface() {
 function LinkMove({ links, onClose }: { links: LinkView[]; onClose: () => void }) {
   const { wide, exitBulkEdit } = useLinksViewState();
   const { updateMany } = useLinkMutations();
+  const { createTopLevel } = useListMutations();
   const [busy, setBusy] = useState(false);
 
   // If every link sits in one list (always true in a plain list view, and for
@@ -60,10 +71,17 @@ function LinkMove({ links, onClose }: { links: LinkView[]; onClose: () => void }
   const sharedListId =
     new Set(links.map((link) => link.listId)).size === 1 ? links[0].listId : undefined;
 
-  const onSelect = async (listId: string) => {
+  // `destination` resolves the list to move into: at once for a picked row, after
+  // the create for the Create row. It runs INSIDE the busy span so the two paths
+  // can't interleave — a row picked while the create is still landing is refused
+  // here, rather than moving the links once now and again when the create returns.
+  // Null (a blank name — nothing was created) leaves the picker as it was.
+  const moveTo = async (destination: () => string | null | Promise<string | null>) => {
     if (busy) return;
     setBusy(true);
     try {
+      const listId = await destination();
+      if (listId === null) return;
       // One batched write for the whole selection, not a loop of `update` —
       // a loop costs a transaction, a sync kick and a full re-read + repaint of
       // the list PER LINK (useLinkMutations). Links already in the target list are
@@ -91,7 +109,8 @@ function LinkMove({ links, onClose }: { links: LinkView[]; onClose: () => void }
       value={sharedListId}
       excludeIds={EXCLUDE_IDS}
       disabledIds={sharedListId ? [sharedListId] : undefined}
-      onSelect={(listId) => void onSelect(listId)}
+      onSelect={(listId) => void moveTo(() => listId)}
+      onCreate={(name) => moveTo(async () => (await createTopLevel(name))?.id ?? null)}
     />
   );
 }

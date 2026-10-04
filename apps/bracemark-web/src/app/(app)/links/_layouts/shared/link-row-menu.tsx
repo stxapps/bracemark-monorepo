@@ -18,7 +18,12 @@ import {
 } from 'lucide-react';
 
 import { ARCHIVE_ID, DEFAULT_LIST_ID, TRASH_ID } from '@stxapps/shared';
-import { type LinkView, useLinkMutations, usePinMutations } from '@stxapps/web-react';
+import {
+  type LinkView,
+  useLinkMutations,
+  useListMutations,
+  usePinMutations,
+} from '@stxapps/web-react';
 import { ListCommand } from '@stxapps/web-ui/components/links/list-command';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import {
@@ -34,6 +39,11 @@ import {
 
 import { useLinksViewState } from '../../_contexts/view-state-provider';
 import { useEngagedOpen } from './hooks';
+
+// Module-level so the array's identity is stable: ListCommand memoizes its
+// flattened tree on `excludeIds`, and a fresh literal per render would re-walk
+// the whole list tree on every keystroke in the filter box.
+const EXCLUDE_IDS = [TRASH_ID];
 
 // The per-row options menu — every row action lives here so each layout renders
 // one `<LinkRowMenu>` and the logic stays in one place. The shape follows the
@@ -63,7 +73,9 @@ import { useEngagedOpen } from './hooks';
 // have, and because the picker's filter box summons a keyboard the floating
 // layer can't measure (the arithmetic and the rest of the reasoning are in
 // move-to-surface.tsx). The narrow item is the ONLY one here that doesn't act
-// immediately, hence the ellipsis. `pinned` swaps the pin block between "Pin to top" and the
+// immediately, hence the ellipsis. Both shapes carry the picker's Create row:
+// typing a name that no list has creates it and moves the link there
+// (link-move-surface.tsx carries the reasoning). `pinned` swaps the pin block between "Pin to top" and the
 // pinned set (move up/down + unpin); a move goes past `pinnedAbove`/
 // `pinnedBelow`, the pinned neighbour this view renders — pins are one global
 // order filtered per view, so the neighbour, not an index, names the slot — and
@@ -86,12 +98,23 @@ export function LinkRowMenu({
 }) {
   const { pin, unpin, moveUp, moveDown } = usePinMutations();
   const { update } = useLinkMutations();
+  // Bound on the row, like the two above: `createTopLevel` reads the store when
+  // it is called and holds no live list read. The picker's own live read is
+  // ListCommand's, inside the submenu's content, which exists only while open.
+  const { createTopLevel } = useListMutations();
   const { openEditor, requestDestroy, requestMove, wide } = useLinksViewState();
   // Open state via useEngagedOpen: reports open/close into the engagement count
   // and releases it on unmount-while-open. The menu is CONTROLLED because Move
   // to selects via a CommandItem, not a DropdownMenuItem — Radix won't
   // auto-close for it, so the select handler closes explicitly.
   const [open, handleOpenChange] = useEngagedOpen();
+
+  // The wide submenu's move — a picked list, or one just created from the typed
+  // name — closing the menu itself, since a CommandItem pick closes nothing.
+  const moveTo = (listId: string) => {
+    void update(link, { listId });
+    handleOpenChange(false);
+  };
 
   const inTrash = link.listId === TRASH_ID;
   const inArchive = link.listId === ARCHIVE_ID;
@@ -167,11 +190,12 @@ export function LinkRowMenu({
                 <DropdownMenuSubContent className="w-64 p-0">
                   <ListCommand
                     value={link.listId}
-                    excludeIds={[TRASH_ID]}
+                    excludeIds={EXCLUDE_IDS}
                     disabledIds={[link.listId]}
-                    onSelect={(listId) => {
-                      void update(link, { listId });
-                      handleOpenChange(false);
+                    onSelect={moveTo}
+                    onCreate={async (name) => {
+                      const list = await createTopLevel(name);
+                      if (list) moveTo(list.id);
                     }}
                   />
                 </DropdownMenuSubContent>

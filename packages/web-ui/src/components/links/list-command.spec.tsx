@@ -81,13 +81,76 @@ describe('ListCommand — when there is a filter box', () => {
   // THE COUNT GATE IS NOT THE ONLY REASON FOR THE INPUT. Where this instance can
   // create, the input is ALSO the Create row's name field — so it has to earn its
   // keep at any count. Gate it on the count alone and a small account (which is
-  // most accounts) opens the editors' picker with nothing to type into and no way
-  // to reach the Create row at all.
+  // most accounts) opens an editor's or a Move-to picker with nothing to type into
+  // and no way to reach the Create row at all.
   it('renders one at any count when the surface can create', () => {
     setLists(NESTED());
     render(<ListCommand onSelect={jest.fn()} onCreate={jest.fn()} />);
 
     expect(filterBox()?.getAttribute('placeholder')).toBe('Search or create lists…');
+  });
+});
+
+// Two hosts put this picker in a dropdown SUBMENU, and Radix closes a submenu on
+// ArrowLeft from anywhere inside it. The filter box doubles as the Create row's
+// name field, so that key is also how a typo in a new list's name gets fixed —
+// and without the guard it closed the menu and took the name with it. The host
+// is stood in for by a parent keydown listener, which is all Radix's is.
+describe('ListCommand — the filter box keeps its caret keys', () => {
+  const renderInHost = () => {
+    const onHostKeyDown = jest.fn();
+    setLists(NESTED());
+    render(
+      <div onKeyDown={onHostKeyDown}>
+        <ListCommand onSelect={jest.fn()} onCreate={jest.fn()} />
+      </div>,
+    );
+    const input = screen.getByRole('combobox') as HTMLInputElement;
+    act(() => void type('Groceries'));
+    return { input, onHostKeyDown };
+  };
+
+  it('keeps ArrowLeft from the host while there is a caret to move', () => {
+    const { input, onHostKeyDown } = renderInHost();
+    input.setSelectionRange(9, 9);
+
+    fireEvent.keyDown(input, { key: 'ArrowLeft' });
+
+    expect(onHostKeyDown).not.toHaveBeenCalled();
+  });
+
+  // The other half, and the positive control for the case above: with nothing
+  // left to do in the field the key is the keyboard's way back to the parent
+  // menu, and swallowing it there would trap focus in the submenu.
+  it('lets ArrowLeft through once the caret is at the start', () => {
+    const { input, onHostKeyDown } = renderInHost();
+    input.setSelectionRange(0, 0);
+
+    fireEvent.keyDown(input, { key: 'ArrowLeft' });
+
+    expect(onHostKeyDown).toHaveBeenCalledTimes(1);
+  });
+
+  // Select-all, then ArrowLeft: the selection starts at 0, but the key still has
+  // work to do in the field — it collapses the selection — so it is the field's.
+  // A guard that reads only where the selection STARTS lets this one through,
+  // and the menu closes on a fully selected name.
+  it('keeps ArrowLeft from the host while a selection reaches back to the start', () => {
+    const { input, onHostKeyDown } = renderInHost();
+    input.setSelectionRange(0, 9);
+
+    fireEvent.keyDown(input, { key: 'ArrowLeft' });
+
+    expect(onHostKeyDown).not.toHaveBeenCalled();
+  });
+
+  it('leaves every other key alone', () => {
+    const { input, onHostKeyDown } = renderInHost();
+    input.setSelectionRange(9, 9);
+
+    fireEvent.keyDown(input, { key: 'ArrowRight' });
+
+    expect(onHostKeyDown).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -184,9 +247,9 @@ describe('ListCommand — the Create row', () => {
 
     act(() => void type('Groceries'));
 
-    // A destination picker must not mint a list: creating one is a different
-    // intent wearing the same clothes (docs/editors.md), and in the Lists settings
-    // menu — which picks a PARENT — it is incoherent.
+    // The Lists settings reparent menu picks a PARENT for a list, and minting a
+    // sibling from inside that picker is incoherent (docs/editors.md) — so the
+    // row is something a surface asks for, never something it gets.
     expect(screen.queryByRole('option', { name: /Create/ })).toBeNull();
     expect(screen.getByText('No lists found.')).not.toBeNull();
   });
@@ -217,6 +280,36 @@ describe('ListCommand — the Create row', () => {
 
     expect(screen.queryByRole('option', { name: /Create/ })).toBeNull();
     expect(listRows()).toEqual(['Work / Cooking / Recipes']);
+  });
+
+  // The same rule, for a list the picker does not SHOW. Every creating picker
+  // hides Trash, so a check against the visible rows offered Create “Trash” to
+  // someone who typed it looking for the real one — and on a Move to surface,
+  // where confirming the name is the whole move, that is a second Trash with the
+  // link already filed in it. The empty state is what is left, and it is
+  // accepted: nothing here can be picked.
+  it.each(['Trash', 'trash'])('suppresses the create for %s, a list this picker hides', (query) => {
+    setLists(NESTED());
+    render(<ListCommand onSelect={jest.fn()} onCreate={jest.fn()} excludeIds={['trash']} />);
+
+    act(() => void type(query));
+
+    expect(screen.queryAllByRole('option')).toEqual([]);
+    expect(screen.getByText('No lists found.')).not.toBeNull();
+  });
+
+  // The name is read off the list, never the literal: Trash can be renamed like
+  // any other list. Renamed to "Bin", it is "Bin" that is taken — and "Trash" is
+  // an ordinary free name again, which is also the control for the case above.
+  it('follows a hidden list’s current name, not the word Trash', () => {
+    setLists(NESTED().map((item) => (item.id === 'trash' ? { ...item, name: 'Bin' } : item)));
+    render(<ListCommand onSelect={jest.fn()} onCreate={jest.fn()} excludeIds={['trash']} />);
+
+    act(() => void type('bin'));
+    expect(screen.queryByRole('option', { name: /Create/ })).toBeNull();
+
+    act(() => void type('Trash'));
+    expect(screen.getByRole('option', { name: 'Create “Trash”' })).not.toBeNull();
   });
 
   it('offers nothing to create from a blank query', () => {
@@ -267,6 +360,34 @@ describe('ListCommand — the Create row', () => {
     // the Create row) would otherwise land after the test, outside act.
     release();
     await waitFor(() => expect((filterBox() as HTMLInputElement).value).toBe(''));
+  });
+
+  // Every host that creates goes on to act on the new list — select it, or move
+  // a link into it — so a pick let through meanwhile runs first and the create's
+  // own follow-up lands after it: the link moved twice, or an editor whose list
+  // flips after the user chose another. A name that is a PREFIX of an existing
+  // list's is how the two rows end up on screen together. The hosts cannot see
+  // `creating`, so the picker is the only place that can refuse.
+  it('refuses a row while a create is still landing, and takes it again after', async () => {
+    let release!: () => void;
+    const onCreate = jest.fn(() => new Promise<void>((resolve) => (release = resolve)));
+    const onSelect = jest.fn();
+    setLists(NESTED());
+    render(<ListCommand onSelect={onSelect} onCreate={onCreate} />);
+
+    act(() => void type('Person'));
+    fireEvent.click(screen.getByRole('option', { name: /Create/ }));
+    fireEvent.click(screen.getByRole('option', { name: 'Personal' }));
+
+    expect(onCreate).toHaveBeenCalledTimes(1);
+    expect(onSelect).not.toHaveBeenCalled();
+
+    release();
+    await waitFor(() => expect((filterBox() as HTMLInputElement).value).toBe(''));
+
+    // The control: the refusal ends with the create, so the row is not dead.
+    fireEvent.click(screen.getByRole('option', { name: 'Personal' }));
+    expect(onSelect).toHaveBeenCalledWith('personal');
   });
 
   // The typed name has been consumed; leaving it in the box would leave the list

@@ -1,0 +1,141 @@
+# "Move to" into a list that does not exist yet, through both hosts of the one
+# Move-to dialog: the row menu (one link) and the bulk bar (a selection). The
+# typed name becomes a list and the destination in one gesture.
+#
+# What only a device shows: the create and the move landing as two expo-sqlite
+# writes the mounted views re-read — the row gone from the list it left, the new
+# list in the drawer with the links in it — and the bulk selection still held
+# while its destination is being named, which is the reason the Create row is in
+# this dialog at all (leaving for Settings → Lists ends the mode and drops it).
+# That the create reports through the dialog's one `onSelect`, where the list
+# lands and what a blank name does are unit-tested (move-to-dialog.spec.tsx).
+#
+#   maestro test mobile/flows/link-move.yaml -e USERNAME=… -e PASSWORD=… \
+#     -e ROW_URL=… -e BULK_ONE_URL=… -e BULK_TWO_URL=… -e KEEP_URL=… \
+#     -e ROW_LIST=… -e BULK_LIST=…
+#
+# The row-menu half runs FIRST and alone: with one row on screen `link-options`
+# is not ambiguous (link-lifecycle.yaml). The menu's Move to item carries no id —
+# its label is the only "Move to" on screen while the menu is up, the bulk bar
+# being absent outside the mode.
+#
+# No flow-level `env:` defaults: on Maestro 2.8.0 they beat `-e`, so the
+# runner's values would be silently replaced (docs/e2e.md, _driving the native
+# apps_).
+appId: com.bracemark.app
+tags: [LINK-MOVE-001, full, online, ios, android]
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+
+# --- the row menu ------------------------------------------------------------------------
+- runFlow:
+    file: subflows/add-link.yaml
+    env:
+      URL: ${ROW_URL}
+- tapOn:
+    id: 'link-options'
+- tapOn: 'Move to'
+# The field is there with two lists in the account: where the dialog can create,
+# the search box is also the name field, so it is not count-gated.
+- tapOn:
+    id: 'list-picker-search'
+- inputText: ${ROW_LIST}
+- tapOn:
+    id: 'list-picker-create'
+# Creating IS the move: the dialog closes and the row leaves My List.
+- extendedWaitUntil:
+    notVisible:
+      id: 'list-picker-search'
+    timeout: 10000
+- extendedWaitUntil:
+    notVisible: ".*${ROW_URL.replace('https://', '')}.*"
+    timeout: 10000
+- tapOn:
+    id: 'links-open-navigation'
+- tapOn:
+    id: 'links-nav-list-.*'
+    text: ${ROW_LIST}
+- extendedWaitUntil:
+    visible:
+      id: 'links-title'
+      text: ${ROW_LIST}
+    timeout: 10000
+- extendedWaitUntil:
+    visible: ".*${ROW_URL.replace('https://', '')}.*"
+    timeout: 10000
+- tapOn:
+    id: 'links-open-navigation'
+- tapOn:
+    id: 'links-nav-list-my-list'
+- extendedWaitUntil:
+    notVisible: ".*${ROW_URL.replace('https://', '')}.*"
+    timeout: 10000
+
+# --- the bulk bar ------------------------------------------------------------------------
+- runFlow:
+    file: subflows/add-link.yaml
+    env:
+      URL: ${KEEP_URL}
+- runFlow:
+    file: subflows/add-link.yaml
+    env:
+      URL: ${BULK_ONE_URL}
+- runFlow:
+    file: subflows/add-link.yaml
+    env:
+      URL: ${BULK_TWO_URL}
+# The "links without a preview" prompt holds the top half of the screen over the
+# list, where a row is scrolled before it is pressed (bulk-actions.yaml).
+- tapOn:
+    text: 'Dismiss'
+    optional: true
+- tapOn:
+    id: 'links-more-options'
+- tapOn:
+    id: 'links-select-links'
+- runFlow:
+    file: subflows/select-row.yaml
+    env:
+      ROW: ".*${BULK_ONE_URL.replace('https://', '')}"
+- runFlow:
+    file: subflows/select-row.yaml
+    env:
+      ROW: ".*${BULK_TWO_URL.replace('https://', '')}"
+- assertVisible:
+    id: 'bulk-count'
+    text: '2 selected'
+- tapOn:
+    id: 'bulk-move'
+- tapOn:
+    id: 'list-picker-search'
+- inputText: ${BULK_LIST}
+- tapOn:
+    id: 'list-picker-create'
+# A completed move ends the mode, like every other bulk write: the bar goes and
+# the topbar's ⋯ comes back.
+- extendedWaitUntil:
+    visible:
+      id: 'links-more-options'
+    timeout: 10000
+- extendedWaitUntil:
+    notVisible: ".*${BULK_ONE_URL.replace('https://', '')}.*"
+    timeout: 10000
+- assertNotVisible: ".*${BULK_TWO_URL.replace('https://', '')}.*"
+- assertVisible: ".*${KEEP_URL.replace('https://', '')}.*"
+- tapOn:
+    id: 'links-open-navigation'
+- tapOn:
+    id: 'links-nav-list-.*'
+    text: ${BULK_LIST}
+- extendedWaitUntil:
+    visible:
+      id: 'links-title'
+      text: ${BULK_LIST}
+    timeout: 10000
+- extendedWaitUntil:
+    visible: ".*${BULK_ONE_URL.replace('https://', '')}.*"
+    timeout: 10000
+- assertVisible: ".*${BULK_TWO_URL.replace('https://', '')}.*"
+- assertNotVisible: ".*${KEEP_URL.replace('https://', '')}.*"
+- assertNotVisible: ".*${ROW_URL.replace('https://', '')}.*"

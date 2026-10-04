@@ -11,11 +11,12 @@
 // demand against a 375px phone. Radix doesn't clip that: the submenu flips, then
 // the shift middleware clamps it to the gutter, so it lands on top of the parent
 // menu, covering the row it grew out of. Two things the arithmetic doesn't show
-// make it worse: a hover-intent submenu is a mouse gesture, and past
-// SEARCH_THRESHOLD ListCommand renders a filter input whose soft keyboard the
-// floating layer cannot see — Floating UI measures the LAYOUT viewport, which
-// the keyboard does not shrink (link-add-surface.tsx's header is the long form
-// of this, and docs/safe-area.md, _popups & dialogs_).
+// make it worse: a hover-intent submenu is a mouse gesture, and ListCommand
+// renders a filter input (past SEARCH_THRESHOLD, or always where the caller can
+// create) whose soft keyboard the floating layer cannot see — Floating UI
+// measures the LAYOUT viewport, which the keyboard does not shrink
+// (link-add-surface.tsx's header is the long form of this, and
+// docs/safe-area.md, _popups & dialogs_).
 //
 // TWO CONTAINERS, SPLIT AT `md` — the same fork quick-add makes for the same
 // reason. Below it a bottom sheet, thumb-reachable and edge-anchored; at and
@@ -53,6 +54,7 @@ export function MoveToSurface({
   excludeIds,
   disabledIds,
   root,
+  onCreate,
   onSelect,
 }: {
   // Render as a centred dialog (true) or a bottom sheet (false). See the header
@@ -66,13 +68,15 @@ export function MoveToSurface({
   // submitting — so this is the only place progress can live.
   busy?: string;
   onOpenChange: (open: boolean) => void;
-  // Straight through to ListCommand. `onCreate` is deliberately NOT offered:
-  // this is a destination picker, and minting a list inside one is a different
-  // intent wearing the same clothes (docs/editors.md).
+  // Straight through to ListCommand, with no opinion of its own on the two
+  // opt-ins — each caller decides, and they decide opposite ways: a LINK move
+  // passes `onCreate` and never `root`, the Lists settings reparent passes `root`
+  // and never `onCreate` (docs/editors.md).
   value?: string;
   excludeIds?: readonly string[];
   disabledIds?: readonly string[];
   root?: { label: string; selected: boolean; onSelect: () => void };
+  onCreate?: (name: string) => void | Promise<void>;
   onSelect: (listId: string) => void;
 }) {
   // `bg-transparent p-0`: ListCommand's root is styled to BE a popover (its own
@@ -81,7 +85,7 @@ export function MoveToSurface({
   //
   // `-mx-1 w-auto` finishes that job horizontally. `p-0` drops `Command`'s own
   // 4px, but CommandInput's wrapper `p-1` and CommandList's `px-1` put another 4
-  // back, so the count-gated filter field's border box and every row's highlight
+  // back, so the filter field's border box and every row's highlight
   // rect sat 4px inside the surface's text column — 28 against a 24 title in the
   // dialog, 20 against a 16 title in the sheet. Both containers are symmetric, so
   // one class serves them. What lands on the column is the BOXES, not the row
@@ -112,6 +116,7 @@ export function MoveToSurface({
       excludeIds={excludeIds}
       disabledIds={disabledIds}
       root={root}
+      onCreate={onCreate}
       onSelect={onSelect}
       className="-mx-1 w-auto bg-transparent p-0"
     />
@@ -179,7 +184,8 @@ export function MoveToSurface({
             ink at that same 24px. Matching the NUMBER would put it at 32 and make
             the two bottom sheets differ on screen while agreeing in the class list
             — the reverse of the shape they're meant to share. Past
-            SEARCH_THRESHOLD the first element is the filter input instead, whose
+            SEARCH_THRESHOLD — and at any count where the caller passes
+            `onCreate` — the first element is the filter input instead, whose
             wrapper is `p-1`: 20px to a border box, which is where a field reads
             from, so that case wants the smaller value too. The wide branch is
             airier by those 8px, but DialogContent's `gap-6` is a blanket default

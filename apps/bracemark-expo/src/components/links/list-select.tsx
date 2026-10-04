@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ChevronsUpDown } from 'lucide-react-native';
 
-import { useListMutations, useLists } from '@stxapps/expo-react';
+import { useListMutations } from '@stxapps/expo-react';
 
 import { Button } from '../ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
@@ -18,11 +18,11 @@ import { ListCommand, useListRows } from './list-command';
 // and the Create row). The trigger shows the selected list's ancestor path —
 // the popup row's context shouldn't vanish once it closes.
 //
-// `allowCreate` wires ListCommand's Create row to useListMutations: creates
-// land top-level at index 0 and select immediately — this editor runs
-// in-process, so it creates the entity the moment the name is confirmed (the
-// web rule, NOT the share sheet's deferred-to-Add machinery, which exists only
-// for its process split — see docs/editors.md).
+// `allowCreate` wires ListCommand's Create row to useListMutations'
+// `createTopLevel`: creates land top-level at index 0 and select immediately —
+// this editor runs in-process, so it creates the entity the moment the name is
+// confirmed (the web rule, NOT the share sheet's deferred-to-Add machinery,
+// which exists only for its process split — see docs/editors.md).
 //
 // Query state resets on close for free: the Dialog unmounts its content.
 // Callers filter only TRASH_ID — never hidden/locked lists (docs/editors.md).
@@ -39,8 +39,7 @@ export function ListSelect({
   // List ids to leave out of the options — e.g. Trash in the editors, where
   // trashing is its own explicit action, never a "move".
   excludeIds?: readonly string[];
-  // Offer the Create row (see the header) — the editors opt in; a picker that
-  // only reassigns an existing link must not.
+  // Offer the Create row (see the header) — the editors opt in.
   allowCreate?: boolean;
   // The trigger's e2e handle. Its accessible name starts with "List", which is
   // also the text of the Field label every editor renders above it, so a flow
@@ -48,8 +47,7 @@ export function ListSelect({
   testID?: string;
 }) {
   const [open, setOpen] = useState(false);
-  const lists = useLists();
-  const { create } = useListMutations();
+  const { createTopLevel } = useListMutations();
   const selected = useListRows(excludeIds).find((row) => row.item.id === value);
 
   const select = (listId: string) => {
@@ -57,18 +55,11 @@ export function ListSelect({
     setOpen(false);
   };
 
-  // Prepend to the root group — `lists` IS that group (useLists returns the
-  // top level), and index 0 matches the settings CreateRow. Select the new
-  // list right away; its row reaches the trigger a beat later, when useLists
-  // catches up (the same catch-up gap web's trigger has). A blank name returns
-  // null — nothing to select.
+  // Select the new list right away; its row reaches the trigger a beat later,
+  // when useLists catches up (the same catch-up gap web's trigger has). A blank
+  // name returns null — nothing to select.
   const onCreate = async (name: string) => {
-    const list = await create(
-      name,
-      null,
-      lists.map((node) => node.item),
-      0,
-    );
+    const list = await createTopLevel(name);
     if (list) select(list.id);
   };
 

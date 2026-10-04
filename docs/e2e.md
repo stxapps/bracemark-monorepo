@@ -2505,6 +2505,31 @@ the link back to Trash, Pin as a no-op, and the delete confirmation skipping the
 delete. The native flows have **not** yet had that check; it is the open half of
 their definition of done.
 
+`LINK-MOVE-001` — "Move to" into a list created from the picker — was measured
+2026-10-04 from commit `eb04d46` with its changes present in the working tree:
+web 3/3 with no retry (the row submenu, the bulk dialog and the narrow sheet in
+one case), iOS 1/1 and Android 1/1 (the one dialog, from the row menu and from
+the bulk bar). The web case was run against three deliberately broken clients
+and failed at the step that guards each: the picker field's ArrowLeft guard
+removed (at the caret read, where Radix had closed the submenu instead), and the
+create landing without its move in the submenu and in the page-level surface (at
+the row that should have left the list). The native flow needed no staged
+break. Its first run opened the dialog onto a render error — the create hook
+sat inside the dialog's portaled content, above which `SyncProvider` is not
+mounted — with every jest spec green ([editors.md](./editors.md), _bulk edit_;
+[testing.md](./testing.md), _coverage today_).
+
+Two things about driving it are recorded where they bite. A submenu that opens
+to the LEFT closes under a teleported pointer: Radix reads the direction of the
+last pointermove inside the parent menu, and Playwright's one-jump `hover()`
+starts from an x of 0, so it always reads "right" (`web/link-move.e2e.ts`,
+`openMoveToField`). And an `EXPO_PUBLIC_API_URL` override in
+`apps/bracemark-expo/.env.local` naming the Mac's `.local` host — the
+real-device setup in [device-testing.md](./device-testing.md) — passes on the
+iOS simulator and fails every Android emulator flow at sign-in, with nothing
+reaching the api: the emulator does not resolve mDNS. Comment it out and restart
+Metro with `--clear`, since the value is inlined into the bundle.
+
 The Phase 4 cross-client cases were measured 2026-09-18 from commit
 `1ea5a58b130d3d8c85396fb1fd70eea4ce285431` with their changes present in the
 working tree — system Chrome 153.0.8010.48, bundled Chromium 151.0.7922.34, the

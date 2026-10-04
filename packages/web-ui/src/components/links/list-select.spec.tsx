@@ -18,11 +18,13 @@ import { ListSelect } from './list-select';
 // CreateRow puts a new list, so "add a list" lands in the same place wherever it
 // is invoked. Both are invisible from the markup: a create that quietly nested
 // the new list under whatever was selected would look identical here and put the
-// user's list somewhere they never asked for.
+// user's list somewhere they never asked for. The position itself is
+// `createTopLevel`'s, pinned in web-react's use-list-mutations.spec.tsx; what is
+// pinned here is that this picker goes through it, with the name and nothing else.
 
 jest.mock('@stxapps/web-react', () => ({
   useLists: jest.fn(() => []),
-  useListMutations: jest.fn(() => ({ create: jest.fn() })),
+  useListMutations: jest.fn(() => ({ createTopLevel: jest.fn() })),
 }));
 
 beforeAll(installJsdomStubs);
@@ -56,12 +58,12 @@ const trigger = (): HTMLElement => {
 };
 const open = () => act(() => void fireEvent.click(trigger()));
 
-let create: jest.Mock;
+let createTopLevel: jest.Mock;
 
 beforeEach(() => {
   jest.clearAllMocks();
-  create = jest.fn(async () => ({ id: 'groceries' }));
-  (useListMutations as jest.Mock).mockReturnValue({ create });
+  createTopLevel = jest.fn(async () => ({ id: 'groceries' }));
+  (useListMutations as jest.Mock).mockReturnValue({ createTopLevel });
   setLists([
     list('work', 'Work'),
     list('cooking', 'Cooking', 'work'),
@@ -110,8 +112,8 @@ describe('ListSelect — the trigger', () => {
 });
 
 describe('ListSelect — the inline create', () => {
-  // A picker that only reassigns an existing link — a future bulk "Move to" —
-  // must not offer this, which is why it is a prop and not a default.
+  // A prop and not a default: a ListSelect that must only choose among existing
+  // lists stays one line away.
   it('is absent unless the caller opts in', () => {
     render(<ListSelect id="list" value="work" onValueChange={jest.fn()} />);
     open();
@@ -120,8 +122,10 @@ describe('ListSelect — the inline create', () => {
     expect(screen.queryByRole('option', { name: /Create/ })).toBeNull();
   });
 
-  it('mints a TOP-LEVEL list at the head of the root group', async () => {
-    render(<ListSelect id="list" value="work" onValueChange={jest.fn()} allowCreate />);
+  it('mints through the shared top-level create, whatever is selected', async () => {
+    // A NESTED list is selected: the create takes the name alone, so there is no
+    // way for the selection to become the new list's parent.
+    render(<ListSelect id="list" value="cooking" onValueChange={jest.fn()} allowCreate />);
     open();
 
     act(
@@ -134,15 +138,7 @@ describe('ListSelect — the inline create', () => {
       fireEvent.click(screen.getByRole('option', { name: /Create/ }));
     });
 
-    // `parentId: null` and index 0 — no parent picker, matching where the Lists
-    // settings CreateRow puts a new list. The third argument is the root GROUP the
-    // rank is computed against, i.e. the top level, not the whole flattened tree.
-    expect(create).toHaveBeenCalledWith(
-      'Groceries',
-      null,
-      [expect.objectContaining({ id: 'work' }), expect.objectContaining({ id: 'personal' })],
-      0,
-    );
+    expect(createTopLevel).toHaveBeenCalledWith('Groceries');
   });
 
   it('selects the new list and closes', async () => {
@@ -164,12 +160,12 @@ describe('ListSelect — the inline create', () => {
     expect(trigger().getAttribute('aria-expanded')).toBe('false');
   });
 
-  // `create` returns null when there is nothing to create. Selecting anyway would
+  // `createTopLevel` returns null when there is nothing to create. Selecting anyway would
   // set the editor's list to `undefined` and close over it — the draft then saves
   // into no list at all.
   it('changes nothing when the create comes back empty', async () => {
     const onValueChange = jest.fn();
-    create.mockResolvedValue(null);
+    createTopLevel.mockResolvedValue(null);
     render(<ListSelect id="list" value="work" onValueChange={onValueChange} allowCreate />);
     open();
 

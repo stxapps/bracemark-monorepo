@@ -754,6 +754,33 @@ copy that other projects already pin. What it does cover:
   (docs/editors.md) and the shape that carries it — an async handler whose
   promise nothing awaits — is one jest-circus turns into a failed test, so
   neither platform's spec can assert it.
+- **A create that is also a move.** "Move to" can file into a list that does
+  not exist yet (docs/editors.md, _"Move to" creates inline_), and the pairing
+  lives in two places in the app that web-ui's picker specs cannot reach:
+  `links/_components/link-move-surface.spec.tsx` for the page-level dialog and
+  sheet, `links/_layouts/shared/link-row-menu.spec.tsx` for the row menu's wide
+  submenu. Both pin the same two failures — a create with no move behind it
+  closes over a new, empty list with every link where it was, and a create that
+  comes back empty must move nothing — and the second adds two only that host
+  has: the submenu must close itself (a CommandItem pick is not a menu
+  selection, so Radix closes nothing and `engaged` stays held), and it must hold
+  no live list read until it opens, since the menu renders once per virtualized
+  row. That last case carries its own control, per _a cluster of negative
+  assertions_ above. bracemark-expo's `features/links/move-to-dialog.spec.tsx`
+  is the native half: one dialog, reporting a created list through the same
+  `onSelect` a picked row uses. It also holds the one thing a barrel mock erases.
+  A native dialog's content renders in the root `PortalHost`, above the `(app)`
+  layout's `SyncProvider`, and an @rn-primitives portal carries no context — so
+  a hook that reaches `useSync` throws there on open, while a spec that mocks
+  `@stxapps/expo-react` whole stays green. The mock therefore hands out the list
+  mutations only under a stand-in provider, and the spec mounts the `PortalHost`
+  outside it, where the app has it. All were checked by mutating the source.
+  None of them pins WHERE the new list lands — the hosts hand
+  `useListMutations().createTopLevel` a name and nothing else — so that is
+  `hooks/use-list-mutations.spec.tsx`'s, in `web-react` and `expo-react`:
+  top-level, ahead of the root group's head as the tree renders it (a list whose
+  parent is gone or is Trash sits at the root and can be that head), read at
+  call time rather than captured at render.
 - **`app/robots.spec.ts` and `lib/links-return.spec.ts`**, the two small ones,
   both guards rather than getters: `ALLOW_INDEXING` required in BOTH directions
   (a truthiness check reads `"false"` as allow), and a sessionStorage value that

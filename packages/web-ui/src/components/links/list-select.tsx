@@ -12,9 +12,9 @@
 // list's ancestor path — the popup row's context shouldn't vanish once it
 // closes. Query state resets on close because the popover unmounts its content.
 //
-// `allowCreate` adds ListCommand's Create row, wired to useListMutations —
-// the list counterpart of TagsField's mint (see tags-field.tsx). Two decisions
-// worth keeping:
+// `allowCreate` adds ListCommand's Create row, wired to useListMutations'
+// `createTopLevel` — the list counterpart of TagsField's mint (see
+// tags-field.tsx). Two decisions worth keeping:
 //
 // - **The editors create INLINE rather than linking out to Settings → Lists.**
 //   A "manage lists" link like the sidebar's FooterLink works there because the
@@ -23,6 +23,8 @@
 //   `advancedDirty`, and the extension popup would be killed outright by
 //   `tabs.create` (a popup dismisses on focus loss, uninterceptably). "Add a
 //   list" is a sub-task of the save; an answer that ends the save isn't one.
+//   The link "Move to" surfaces create inline for the same reason, with a
+//   selection standing in for the draft (link-move-surface.tsx).
 // - **The create is TOP-LEVEL ONLY (`parentId: null`, index 0)** — no parent
 //   picker, matching where the Lists settings CreateRow puts a new list, so the
 //   same action lands the same place wherever it's invoked. That's what keeps
@@ -36,7 +38,7 @@
 import { useState } from 'react';
 import { ChevronsUpDownIcon } from 'lucide-react';
 
-import { useListMutations, useLists } from '@stxapps/web-react';
+import { useListMutations } from '@stxapps/web-react';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@stxapps/web-ui/components/ui/popover';
 
@@ -58,27 +60,21 @@ export function ListSelect({
   // (LIST_NO_CHILDREN_IDS), so excluding it never orphans indented children.
   excludeIds?: readonly string[];
   // Offer a Create row that mints a top-level list by the typed name and selects
-  // it. The three link editors opt in (see the header); a picker that only
-  // reassigns an existing link — a future bulk "Move to" — should not.
+  // it. The three link editors opt in (see the header); it's a prop rather than
+  // a default so that a ListSelect which must only choose among existing lists
+  // stays one line away.
   allowCreate?: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const lists = useLists();
-  const { create } = useListMutations();
+  const { createTopLevel } = useListMutations();
   const selected = useListRows(excludeIds).find((row) => row.item.id === value);
 
-  // Prepend to the root group — `lists` IS that group (useLists returns the top
-  // level), and index 0 matches the settings CreateRow. Select the new list right
-  // away; its row reaches the trigger a beat later, when useLists catches up, so
-  // until then the trigger reads "Choose a list" (the same catch-up gap TagsField's
-  // chips have). A blank name returns null — nothing to select.
+  // Select the new list right away; its row reaches the trigger a beat later,
+  // when useLists catches up, so until then the trigger reads "Choose a list"
+  // (the same catch-up gap TagsField's chips have). A blank name returns null —
+  // nothing to select.
   const onCreate = async (name: string) => {
-    const list = await create(
-      name,
-      null,
-      lists.map((node) => node.item),
-      0,
-    );
+    const list = await createTopLevel(name);
     if (list) {
       onValueChange(list.id);
       setOpen(false);
