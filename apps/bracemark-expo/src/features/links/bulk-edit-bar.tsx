@@ -223,7 +223,8 @@ export function BulkEditBar({ links }: { links: LinkView[] }) {
           </Text>
         </View>
         <Pressable
-          role="button"
+          role="checkbox"
+          aria-checked={allSelected}
           testID="bulk-select-all"
           aria-label="Select all"
           disabled={links.length === 0}
@@ -269,7 +270,7 @@ export function BulkEditBar({ links }: { links: LinkView[] }) {
               disabled={disabled}
               onPress={() => requestDestroy(selected)}
             >
-              <Icon as={Trash2} className="size-4 text-white" />
+              <Icon as={Trash2} className="size-4" />
               <Text>Delete forever</Text>
             </Button>
           </>
@@ -367,7 +368,7 @@ export function BulkEditBar({ links }: { links: LinkView[] }) {
               disabled={disabled || actionable.length === 0}
               onPress={() => void runMove('remove', actionable, TRASH_ID)}
             >
-              <Icon as={Trash2} className="size-4 text-white" />
+              <Icon as={Trash2} className="size-4" />
               <Text>{busy === 'remove' ? 'Removing…' : 'Remove'}</Text>
             </Button>
           </>
