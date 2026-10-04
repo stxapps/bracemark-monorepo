@@ -279,10 +279,7 @@ function ImportStatus({ state }: { state: ImportState }) {
   return (
     <View testID="import-data-complete" className="mt-3 flex-row items-start gap-2">
       <FirstLineSlot textClassName="text-sm">
-        <Icon
-          as={truncated ? CircleAlert : CircleCheck}
-          className="size-4 text-muted-foreground"
-        />
+        <Icon as={truncated ? CircleAlert : CircleCheck} className="size-4 text-muted-foreground" />
       </FirstLineSlot>
       <Text className="min-w-0 flex-1 text-sm text-muted-foreground">
         Imported {outcome.linkCount} {outcome.linkCount === 1 ? 'link' : 'links'}
