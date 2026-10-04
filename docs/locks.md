@@ -196,7 +196,14 @@ The provider exposes:
   engages next load). `addListLock` marks the list **locked** — "Lock" means lock
   _now_, dropping any stale unlock for that id.
 - **Remove** — `removeAppLock` / `removeListLock`: verify, then delete; `false` =
-  wrong password.
+  wrong password. Remove **leaves the session unlock in place** — the row and the
+  unlock are two stores that land at different times (the unlock is React state,
+  the row a live read that re-runs a beat after the delete), so dropping the
+  unlock there left one commit reading "lock exists, not unlocked": the app-lock
+  pane blinked up over the Settings screen that had just removed the lock, and an
+  unlocked list's links left every query and came back. The id left behind is
+  inert — every derived value consults it only for a row that exists — and a later
+  set-up overwrites it either way (`lock-provider.spec`).
 - **Unlock** — `unlockApp` / `unlockList`: verify, mark unlocked; `true` opens it.
 - **Relock** — `lockApp` / `lockList`: drop this session's unlock so the gate
   closes **without a reload/relaunch**. No password (relocking is free), no store

@@ -220,6 +220,41 @@ describe('the app lock', () => {
 
     await act(async () => expect(await mutations.removeAppLock('anything')).toBe(true));
   });
+
+  // The row and the session unlock are two stores: the delete is seen only when the live
+  // query re-runs, the unlock is React state and lands at once. Dropping the unlock on
+  // remove left one commit reading "lock exists, not unlocked" — and AppLockGate put the
+  // lock pane up over the settings screen that had just removed it (on expo, a visible
+  // blink and a keyboard bounce; on web the swap unmounts the whole app). So the window
+  // BEFORE the refresh is the assertion: the lock is still unlocked in it.
+  it('never reads as locked between the delete and the live re-read', async () => {
+    renderProvider();
+    await waitFor(() => expect(statusText()).toBe('ready'));
+    await act(async () => void (await mutations.setAppLock('hunter2')));
+    await refresh();
+
+    await act(async () => void (await mutations.removeAppLock('hunter2')));
+    expect(screen.getByTestId('app').textContent).toBe('true/true');
+
+    await refresh();
+    expect(screen.getByTestId('app').textContent).toBe('false/true');
+  });
+
+  // The other half of leaving the unlock in place: the id it leaves behind is the one
+  // `setAppLock` would add anyway, so a lock set again this session still doesn't slam.
+  it('leaves the app unlocked when a removed lock is set again', async () => {
+    renderProvider();
+    await waitFor(() => expect(statusText()).toBe('ready'));
+    await act(async () => void (await mutations.setAppLock('old')));
+    await refresh();
+    await act(async () => void (await mutations.removeAppLock('old')));
+    await refresh();
+
+    await act(async () => void (await mutations.setAppLock('new')));
+    await refresh();
+
+    expect(screen.getByTestId('app').textContent).toBe('true/true');
+  });
 });
 
 describe('list locks', () => {
@@ -383,6 +418,26 @@ describe('list locks', () => {
 
     await act(async () => expect(await mutations.removeListLock('li_other', 'pw')).toBe(true));
     expect(await db.locks.count()).toBe(0);
+  });
+
+  // The list half of the app lock's "never reads as locked" rule above. A list unlocked
+  // this session must stay open through its own removal — re-locked for the beat before
+  // the live re-read, its links leave every query and come back.
+  it('keeps an unlocked list open between the delete and the live re-read', async () => {
+    renderProvider();
+    await waitFor(() => expect(statusText()).toBe('ready'));
+    await act(
+      async () => void (await mutations.addListLock('li_other', 'pw', { hideList: false })),
+    );
+    await refresh();
+    await act(async () => void (await locks.unlockList('li_other', 'pw')));
+    await refresh();
+
+    await act(async () => void (await mutations.removeListLock('li_other', 'pw')));
+    expect(lockedText()).toBe('');
+
+    await refresh();
+    expect(lockedText()).toBe('');
   });
 
   // Row state, not coverage: `listLocks` answers "does this list have its OWN lock", which

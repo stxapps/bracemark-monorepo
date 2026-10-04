@@ -214,17 +214,20 @@ export function LockProvider({ children }: { children: ReactNode }) {
     [markUnlocked],
   );
 
-  const removeAppLock = useCallback(
-    async (password: string): Promise<boolean> => {
-      const row = (await readLocks()).find((l) => l.id === APP_LOCK_ID);
-      if (row === undefined) return true; // already gone
-      if (!(await verifyLockPassword(password, row))) return false;
-      await deleteLock(APP_LOCK_ID);
-      markLocked(APP_LOCK_ID);
-      return true;
-    },
-    [markLocked],
-  );
+  const removeAppLock = useCallback(async (password: string): Promise<boolean> => {
+    const row = (await readLocks()).find((l) => l.id === APP_LOCK_ID);
+    if (row === undefined) return true; // already gone
+    if (!(await verifyLockPassword(password, row))) return false;
+    // No markLocked here, on purpose. The row and the session unlock are two
+    // stores that land at different times — the unlock is React state, the row
+    // is a live read that re-runs a beat after the delete — so dropping the
+    // unlock now leaves one commit that says "lock exists, not unlocked", and
+    // AppLockGate puts the lock pane up over the Settings screen that just
+    // removed it. The id left behind is inert: with no row, the app lock reads
+    // unlocked whatever the set holds, and setAppLock marks it unlocked anyway.
+    await deleteLock(APP_LOCK_ID);
+    return true;
+  }, []);
 
   const addListLock = useCallback(
     async (listId: string, password: string, opts: { hideList: boolean }) => {
@@ -237,17 +240,17 @@ export function LockProvider({ children }: { children: ReactNode }) {
     [markLocked],
   );
 
-  const removeListLock = useCallback(
-    async (listId: string, password: string): Promise<boolean> => {
-      const row = (await readLocks()).find((l) => l.id === listId && l.kind === 'list');
-      if (row === undefined) return true; // already gone
-      if (!(await verifyLockPassword(password, row))) return false;
-      await deleteLock(listId);
-      markLocked(listId);
-      return true;
-    },
-    [markLocked],
-  );
+  const removeListLock = useCallback(async (listId: string, password: string): Promise<boolean> => {
+    const row = (await readLocks()).find((l) => l.id === listId && l.kind === 'list');
+    if (row === undefined) return true; // already gone
+    if (!(await verifyLockPassword(password, row))) return false;
+    // No markLocked, for removeAppLock's reason: dropped now, a list unlocked
+    // this session reads as locked until the live read catches up, and its links
+    // leave every query and come back. The stale id is inert — coverage only
+    // consults it for rows that exist — and addListLock drops it on a re-lock.
+    await deleteLock(listId);
+    return true;
+  }, []);
 
   // Re-lock without a password: just drop the session unlock (markLocked no-ops
   // when the id isn't currently unlocked, so these are safe to call any time).
