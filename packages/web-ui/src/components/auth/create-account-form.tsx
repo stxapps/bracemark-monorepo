@@ -305,7 +305,19 @@ export function CreateAccountForm() {
           later" costs nothing — that clause sold the exit, and the counter's note
           below explains why this step doesn't. Step one's "Choose my own" /
           "Generate one instead" stay text links on purpose: those are reversible
-          mode switches, not a second submit. */}
+          mode switches, not a second submit.
+
+          THE SECOND LABEL WRAPS, and its button grows with it instead of pinning
+          `h-9` — the same fix as the native twin, for the same reason. The label
+          is 268px on one line and the button's content box only reaches that once
+          the viewport passes ~392px, so on every phone narrower than that
+          ui/button.tsx's `whitespace-nowrap` ran the text through the padding and,
+          by 360, out of the button altogether. Shortening it is not available —
+          the label is the outcome, word for word. So `whitespace-normal`, and
+          `min-h` rather than `h`. `py-1.5`, not the native `py-2`: this box
+          carries a 1px border, so one `text-sm` line is 20 + 12 + 2 = 34 and still
+          lands on the 36 the primary above it has, where `py-2` would make it 38.
+          `text-balance` keeps a lone "code" off the second line. */}
       <Field>
         <Button
           type="button"
@@ -318,7 +330,7 @@ export function CreateAccountForm() {
         <Button
           type="button"
           variant="ghost"
-          className="w-full text-muted-foreground"
+          className="h-auto min-h-9 w-full py-1.5 text-balance whitespace-normal text-muted-foreground"
           disabled={pending}
           onClick={() => submit(false)}
         >
