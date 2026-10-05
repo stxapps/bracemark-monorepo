@@ -105,6 +105,7 @@ function CommandDialog({
 
 function CommandInput({
   className,
+  onKeyDown,
   ...props
 }: React.ComponentProps<typeof CommandPrimitive.Input>) {
   // The wrapper takes a full `p-1`. Its bottom inset is the gap down to the
@@ -130,6 +131,33 @@ function CommandInput({
             className,
           )}
           {...props}
+          // A text field owns its caret keys. This one gets dropped into hosts
+          // that listen for them: Radix closes a dropdown SUBMENU on ArrowLeft
+          // from anywhere inside it — this field included — so stepping back
+          // through a half-typed name threw the name away with the menu
+          // (ListCommand, in the row menu's Move to and the Lists settings
+          // reparent menu). Keep the key here while there is a caret to move. At
+          // the very start it has nothing left to do in the field, so it goes on
+          // up and closes the submenu: still the keyboard's way back to the
+          // parent menu.
+          //
+          // Here rather than in ListCommand, where it began, because it is a
+          // fact about the field and not about one picker: TagsCommand renders
+          // the same field, and the day it gains a submenu host nothing — no
+          // lint, no type, no spec of its own hosts — would say it had lost the
+          // key. Harmless everywhere else: the only other listener above this
+          // field is cmdk's own root, which does nothing with ArrowLeft.
+          //
+          // ArrowLeft ONLY. cmdk also takes Home and End from this field (first
+          // and last row), and that is left alone on purpose — it costs a caret
+          // jump, not the typed name.
+          onKeyDown={(event) => {
+            onKeyDown?.(event);
+            const { selectionStart, selectionEnd } = event.currentTarget;
+            if (event.key === 'ArrowLeft' && (selectionStart !== 0 || selectionEnd !== 0)) {
+              event.stopPropagation();
+            }
+          }}
         />
         <InputGroupAddon>
           <SearchIcon className="size-4 shrink-0 opacity-50" />

@@ -96,6 +96,10 @@ describe('ListCommand — when there is a filter box', () => {
 // name field, so that key is also how a typo in a new list's name gets fixed —
 // and without the guard it closed the menu and took the name with it. The host
 // is stood in for by a parent keydown listener, which is all Radix's is.
+//
+// The guard itself lives in CommandInput (ui/command.tsx), so TagsCommand has it
+// too; it is pinned here in full because this is the picker whose hosts need it,
+// and in tags-command.spec.tsx only as far as "the shared field still has it".
 describe('ListCommand — the filter box keeps its caret keys', () => {
   const renderInHost = () => {
     const onHostKeyDown = jest.fn();

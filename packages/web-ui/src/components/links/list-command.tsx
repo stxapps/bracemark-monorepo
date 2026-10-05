@@ -172,20 +172,6 @@ export function ListCommand({
           placeholder={onCreate ? 'Search or create lists…' : 'Search lists…'}
           value={query}
           onValueChange={setQuery}
-          // A text field owns its caret keys. Two hosts embed this in a dropdown
-          // SUBMENU (the row menu's Move to, the Lists settings reparent menu),
-          // and Radix closes a submenu on ArrowLeft from anywhere inside it —
-          // this field included — so stepping back through a half-typed name
-          // threw the name away with the menu. Keep the key here while there is
-          // a caret to move. At the very start it has nothing left to do in the
-          // field, so it goes on up and closes the submenu: still the keyboard's
-          // way back to the parent menu.
-          onKeyDown={(event) => {
-            const { selectionStart, selectionEnd } = event.currentTarget;
-            if (event.key === 'ArrowLeft' && (selectionStart !== 0 || selectionEnd !== 0)) {
-              event.stopPropagation();
-            }
-          }}
         />
       )}
       <CommandList>

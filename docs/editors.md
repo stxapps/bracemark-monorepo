@@ -774,9 +774,14 @@ binds it holds **no live list read** — the only one on these surfaces is
   stepping back through a half-typed name closed the row menu's wide "Move to"
   and discarded the name. That was reachable before — the box appears past
   `SEARCH_THRESHOLD` on any host — but a field whose job is typing a new name
-  makes it the ordinary case. `ListCommand` stops the key at the input while
+  makes it the ordinary case. `CommandInput` stops the key at the input while
   there is a caret to move, and lets it through at position 0, where it is still
-  the keyboard's way back to the parent menu.
+  the keyboard's way back to the parent menu. The guard sits in the shared field
+  (`ui/command.tsx`) rather than in `ListCommand`, so `TagsCommand` carries it
+  too: no host of the tag picker is a submenu today, and nothing would flag the
+  day one became so. It is ArrowLeft only — cmdk also takes Home and End from the
+  field (first and last row), which costs a caret jump and not the typed name, so
+  that is left as cmdk has it.
 - **Two smaller consequences, both in `list-command`.** (1) The filter input is
   normally count-gated at `SEARCH_THRESHOLD` (scrolling beats a box), but
   `onCreate` **forces it on at any count** — it doubles as the Create row's name

@@ -179,4 +179,41 @@ describe('TagsCommand', () => {
       expect(rows()).toEqual(['reading', 'recipes', 'work']);
     });
   });
+
+  // No host of this picker is a dropdown submenu today, so nothing here loses a
+  // typed name to ArrowLeft yet. The guard is CommandInput's, shared with
+  // ListCommand (whose spec pins it in full) — this pair is what says a guard
+  // moved back into ListCommand alone has left the tag picker one host away from
+  // the same bug. The second case is the positive control for the first.
+  describe('the filter box keeps its caret keys', () => {
+    const renderInHost = () => {
+      const onHostKeyDown = jest.fn();
+      render(
+        <div onKeyDown={onHostKeyDown}>
+          <TagsCommand value={[]} onToggle={jest.fn()} onCreate={jest.fn()} />
+        </div>,
+      );
+      const input = screen.getByRole('combobox') as HTMLInputElement;
+      type('photography');
+      return { input, onHostKeyDown };
+    };
+
+    it('keeps ArrowLeft from the host while there is a caret to move', () => {
+      const { input, onHostKeyDown } = renderInHost();
+      input.setSelectionRange(11, 11);
+
+      fireEvent.keyDown(input, { key: 'ArrowLeft' });
+
+      expect(onHostKeyDown).not.toHaveBeenCalled();
+    });
+
+    it('lets ArrowLeft through once the caret is at the start', () => {
+      const { input, onHostKeyDown } = renderInHost();
+      input.setSelectionRange(0, 0);
+
+      fireEvent.keyDown(input, { key: 'ArrowLeft' });
+
+      expect(onHostKeyDown).toHaveBeenCalledTimes(1);
+    });
+  });
 });
