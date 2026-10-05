@@ -7,10 +7,10 @@
 
      windowSoftInputMode="adjustResize" does NOT resize this window: edge-to-edge
      is process-global and RN core applies it to every ReactActivity (see
-     share-screen.tsx's Sheet), and a translucent window never resized for the
+     share-kit.tsx's ShareSheet), and a translucent window never resized for the
      keyboard anyway. It stays because it suppresses the default adjustPan —
      without it the system would pan the whole translucent window (backdrop and
-     all) upward. The sheet moves itself in JS (Sheet's KeyboardAvoidingView). -->
+     all) upward. The sheet moves itself in JS (share-keyboard.ts). -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
   <application>
     <activity

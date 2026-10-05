@@ -32,7 +32,7 @@ feature**:
 | regular expo-router screen                                    | keyboard-controller `KeyboardAwareScrollView` in the screen wrapper            | `auth-screen.tsx`, `settings/[section].tsx` |
 | portaled overlay content (`Dialog`)                           | keyboard-controller `KeyboardAvoidingView` in the CONTAINER                    | `ui/dialog.tsx`'s `DialogOverlay`           |
 | RN `Modal`                                                    | keyboard-controller `KeyboardAwareScrollView` — the lib handles the window     | AdvancedSearch (`links/search-bar.tsx`)     |
-| share sheet (iOS extension process / Android `ShareActivity`) | plain `KeyboardAvoidingView` — keyboard-controller cannot work here            | `share/share-screen.tsx` `Sheet`            |
+| share sheet (iOS extension process / Android `ShareActivity`) | its own bottom padding (`useShareKeyboard`) — neither library's avoider works  | `share/share-kit.tsx` `ShareSheet`          |
 | an in-tree overlay panel                                      | keyboard-controller `KeyboardAvoidingView` in the PANEL, which owns the window | the add panel (`links/link-add-panel.tsx`)  |
 
 - **The default is react-native-keyboard-controller.** Its `KeyboardProvider`
@@ -163,8 +163,11 @@ behavior="padding"` around the centring box in `DialogOverlay` — the container
   `APPLICATION_EXTENSION_API_ONLY=No` only makes such pods compile, not work.
   Even nesting a fresh `KeyboardProvider` wouldn't help. Android's
   `ShareActivity` runs in the app's own process and could technically differ,
-  but it keeps the plain KAV so the two hosts render one tree
-  (docs/share-sheet.md).
+  but the two hosts render one tree (docs/share-sheet.md) — and RN's plain KAV,
+  which that branch used to be, is the phantom-inset bug from the dialog bullet
+  above: `keyboardDidHide`'s `screenY` leaves out the system bars, so the sheet
+  stayed 74dp above the bottom of the screen after the keyboard closed. It pads
+  itself from `useShareKeyboard()` now, as iOS does (next bullet).
 - **…and on iOS no KAV can work there, because RN reports every keyboard frame
   as ZERO.** This bullet used to prescribe a `keyboardVerticalOffset` for a
   coordinate-space mismatch. That diagnosis was wrong, and the offset it
@@ -180,10 +183,10 @@ behavior="padding"` around the centring box in `DialogOverlay` — the container
   `UIKeyboardFrameEndUserInfoKey` straight off the notification — UIKit posts it
   in screen coordinates, so no window is needed — and emits the keyboard's top
   edge plus the system's animation duration. `features/share/share-keyboard.ts`
-  turns that into `useShareKeyboard().lift` and `share-kit.tsx` applies it as
-  bottom padding on the iOS branch, leaving Android's KAV alone. (The hook's
-  second number, `cover`, is read on **both** hosts and never padded by: it
-  cancels the bottom safe-area inset while the keyboard is up, since a
+  turns that into `useShareKeyboard()` and `share-kit.tsx` applies it as
+  bottom padding on the frame — on both hosts, Android's number coming from
+  RN's own `keyboardDidShow` height plus the bottom inset. (The same number
+  also cancels the bottom safe-area inset while the keyboard is up, since a
   keyboard's frame already contains the home indicator —
   [safe-area.md](./safe-area.md).) The other half
   of the fix is not JS at all: the extension's `height` is now omitted from

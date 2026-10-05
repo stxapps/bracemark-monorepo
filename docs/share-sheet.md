@@ -133,29 +133,47 @@ own module: `BracemarkShareKeyboard`
 (`modules/bracemark-share/ios/BracemarkShareKeyboardModule.swift`) observes
 `keyboardWillChangeFrame` and `keyboardWillHide` and emits the keyboard's top
 edge in screen points plus the system's animation duration.
-`features/share/share-keyboard.ts` turns that into `useShareKeyboard().lift` —
+`features/share/share-keyboard.ts` turns that into `useShareKeyboard()` —
 `max(panelBottomOnScreen - keyboardTop, 0)`, played onto the system's own curve
 with `LayoutAnimation` — and `share-kit.tsx` applies it as bottom padding on the
-iOS branch. A hide is reported as "top edge = bottom of the screen", so the lift
+frame. A hide is reported as "top edge = bottom of the screen", so the lift
 falls to zero without a special case.
 
-The same hook's `cover` is that measurement WITHOUT the layout role, and it is
-the one thing in this file Android shares: the panel subtracts it from the
-bottom safe-area inset, because a keyboard's frame reaches the bottom of the
-screen and so already covers the home indicator the inset is there to clear
-([safe-area.md](./safe-area.md)). On Android it comes from RN's own keyboard
-events — real in that process — which is why the hook is not iOS-only even
-though the lift is.
+The panel uses the same number a second time: it subtracts it from the bottom
+safe-area inset, because a keyboard's frame reaches the bottom of the screen and
+so already covers the home indicator the inset is there to clear
+([safe-area.md](./safe-area.md)).
 
-**Android goes through none of that.** Its `ShareActivity` rides the app's own
-process, where RN's keyboard frames are real, so that branch keeps a plain
-`KeyboardAvoidingView` with `behavior="padding"`. Both branches end in bottom
-padding on the same `justify-end` column, which is what keeps one tree serving
-two hosts. Plain KAV rather than react-native-keyboard-controller because this
-file also renders inside the extension — see
-[soft-keyboard.md](./soft-keyboard.md), _avoidance_.
+**Android reaches the same number from RN's own events, and no longer through
+RN's `KeyboardAvoidingView`.** Its `ShareActivity` rides the app's own process,
+where RN's keyboard frames are real, and that branch was a plain KAV with
+`behavior="padding"` for exactly that reason. It lifted correctly and then did
+not come back down. `ReactRootView` sends `keyboardDidHide` with `screenY` set
+to `getWindowVisibleDisplayFrame().height()` — a length that leaves out the
+status and navigation bars — and KAV on Android runs a hide through the same
+`frame.y + frame.height - screenY` as a show. Under edge-to-edge the frame spans
+the whole window, so the "hidden" keyboard still overlapped it by both bars:
+`screenY: 840` against a 914dp window on the Pixel 8 AVD, and the panel parked
+74dp above the bottom of the screen with the keyboard gone, until the sheet was
+reopened. Nothing catches it — the first show is right, and so is every frame
+until the first dismissal. (It is the "phantom inset once the keyboard closes"
+that [soft-keyboard.md](./soft-keyboard.md) records for the portaled dialog.)
 
-**The squeeze chain under that padding is load-bearing.** Whichever route
+So the hook listens to the same two events and trusts only what is true in
+them: `keyboardDidShow`'s `height`, and the FACT of a `keyboardDidHide`. That
+height is the IME inset minus the system bars' inset — measured from the top of
+the navigation bar, while the frame runs underneath it — so the hook adds the
+bottom safe-area inset back, which makes it the IME inset itself: the window's
+own account of how much of its bottom the keyboard covers. Driven on the AVD
+under both gesture and 3-button navigation: the panel's bottom edge lands on the
+keyboard's top edge (577.9dp) either way and returns flush to the screen bottom
+on back and on a tap in the panel. Both hosts therefore end in one `View` with
+bottom padding on the same `justify-end` column, which is what keeps one tree
+serving two hosts. Not react-native-keyboard-controller, because this file also
+renders inside the extension — see [soft-keyboard.md](./soft-keyboard.md),
+_avoidance_.
+
+**The squeeze chain under that padding is load-bearing.** Whichever host
 supplies it, the padding takes room away from the column above it, and every
 link down to the scrollable content must be able to give height up: `min-h-0
 shrink` on the panel (`share-kit.tsx`) and on each picker's `ScrollView`

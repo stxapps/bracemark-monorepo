@@ -27,15 +27,19 @@
 // window) and emits the keyboard's top edge. Everything platform-shaped about
 // that lives HERE, so share-kit.tsx stays one tree for both hosts.
 //
-// ANDROID IS IN THIS FILE TOO, and only for the second of the two numbers
-// below. Its share activity rides the app's own process, where RN's keyboard
-// events are real and share-kit.tsx's KeyboardAvoidingView already does the
-// lifting — so `lift` is zero there, as it always was. What BOTH hosts need is
-// `cover`: how much of the screen's bottom edge the keyboard hides, which is
-// what cancels the bottom safe-area inset while it is up (the hook's doc
-// comment below; docs/safe-area.md). Reading that from RN on Android keeps the
-// platform seam in this file rather than putting a `Platform.OS` back into
-// share-kit.tsx.
+// ANDROID IS IN THIS FILE TOO, and it no longer goes through RN's
+// KeyboardAvoidingView either — for a different lie. Its share activity rides
+// the app's own process, where RN's keyboard events are real, and KAV lifted
+// the panel correctly on the way UP. On the way DOWN it did not come back:
+// `ReactRootView` sends `keyboardDidHide` with `screenY` =
+// `getWindowVisibleDisplayFrame().height()`, a LENGTH that leaves out the status
+// and navigation bars, and KAV on Android feeds hide through the same
+// `frame.y + frame.height - screenY` as show. Under edge-to-edge the frame
+// spans the whole window, so the "hidden" keyboard still overlapped it by both
+// bars — 840 against a 914dp window on the Pixel 8 AVD — and the panel stayed
+// parked 74dp above the bottom edge with the keyboard gone, until the sheet was
+// reopened. So the hook below reads the same events and trusts only what is
+// true in them: the height on show, and the fact of a hide.
 
 import { useEffect, useState } from 'react';
 import { Dimensions, Keyboard, LayoutAnimation, Platform } from 'react-native';
@@ -55,9 +59,8 @@ type ShareKeyboardModule = {
 
 // OPTIONAL, not required, and that is the whole platform split: the module is
 // iOS-only, so this is null in Android's share activity — which rides the app's
-// own process, where RN's keyboard events are correct and share-kit's
-// KeyboardAvoidingView does the work — and null under jest, where the hook then
-// reports a keyboard that is never up. Resolved at module scope because
+// own process and reads RN's keyboard events instead (the hook below) — and
+// null under jest, where the hook then reports a keyboard that is never up. Resolved at module scope because
 // `requireOptionalNativeModule` is a lookup in a registry that is already
 // populated, not a require of anything heavy (the extension bundle's init
 // budget is docs/share-sheet.md's, _keep index.share.js lean_).
@@ -67,38 +70,39 @@ const shareKeyboard =
     : null;
 
 /**
- * What the share frame needs to know about the keyboard, as TWO numbers,
- * because the two hosts need different things from it:
+ * How far the share frame pads its own bottom so the panel comes to rest on the
+ * keyboard's top edge — how much of the frame the keyboard covers, zero while
+ * it is down. ONE number on both hosts, and share-kit.tsx uses it twice: as
+ * the frame's bottom padding, and to cancel the bottom safe-area inset, because
+ * a keyboard's frame runs to the BOTTOM of the screen — it CONTAINS the home
+ * indicator / gesture bar rather than stopping above it (docs/safe-area.md).
  *
- *   - `lift` is LAYOUT — the points the iOS frame pads its own bottom with, so
- *     the panel comes to rest on the keyboard's top edge. It is ZERO ON
- *     ANDROID, where share-kit.tsx's KeyboardAvoidingView applies the same
- *     quantity itself; pad by this there as well and the panel lifts twice.
- *   - `cover` is a MEASUREMENT, on BOTH hosts — how much of the screen's bottom
- *     edge the keyboard hides. It exists to cancel the bottom safe-area inset,
- *     because a keyboard's frame runs to the BOTTOM of the screen: it CONTAINS
- *     the home indicator / gesture bar rather than stopping above it, so once
- *     the panel is parked on that frame, padding for the inset as well is dead
- *     space (share-kit.tsx's panel; docs/safe-area.md). NEVER pad by it.
+ * The hosts measure it differently:
  *
- * On iOS the two are the same number by construction. On Android `cover` comes
- * from RN's own keyboard events — the same payload KAV already pads by, so if
- * this reading were wrong the Android lift would be wrong with it — and it is
- * only ever compared against a ~24-48pt navigation-bar inset, never used as a
- * length, so the precision question does not arise there.
- *
- * `panelBottom` is where the sheet's own bottom edge sits on the screen. The
- * extension's RN root is placed by expo-share-extension at
- * `screenHeight - ShareExtensionHeight`, i.e. flush with the bottom of the
- * screen, so the default is the screen's own bottom; passing it explicitly
- * keeps the arithmetic honest if that ever stops being true, rather than
- * silently lifting by a keyboard height that no longer applies.
+ *   - iOS — `panelBottom` minus the keyboard's top edge, from our own module.
+ *     `panelBottom` is where the sheet's own bottom edge sits on the screen.
+ *     The extension's RN root is placed by expo-share-extension at
+ *     `screenHeight - ShareExtensionHeight`, i.e. flush with the bottom of the
+ *     screen, so the default is the screen's own bottom; passing it explicitly
+ *     keeps the arithmetic honest if that ever stops being true, rather than
+ *     silently lifting by a keyboard height that no longer applies.
+ *   - Android — the event's `height` plus `bottomInset`. RN reports that height
+ *     as the IME inset MINUS the system bars' (`ReactRootView`), i.e. measured
+ *     from the top of the navigation bar, while the edge-to-edge frame runs
+ *     underneath that bar; adding the inset back gives the IME inset itself,
+ *     which is the window's own account of how much of its bottom the keyboard
+ *     covers. Not `screenHeight - screenY`: that holds only while the window is
+ *     the screen, and on a hide `screenY` is not a position at all (the header).
  */
-export function useShareKeyboard(panelBottom = Dimensions.get('screen').height): {
-  lift: number;
-  cover: number;
-} {
-  const [cover, setCover] = useState(0);
+export function useShareKeyboard(
+  bottomInset: number,
+  panelBottom = Dimensions.get('screen').height,
+): number {
+  // What the host last reported, in ITS terms: the lift itself on iOS; on
+  // Android the keyboard's height above the system bars, or null while it is
+  // down. Null and not zero, because the inset is added at render (so a changed
+  // inset is never stale in a listener) and a hidden keyboard must not get one.
+  const [reported, setReported] = useState<number | null>(null);
 
   useEffect(() => {
     if (shareKeyboard) {
@@ -114,7 +118,7 @@ export function useShareKeyboard(panelBottom = Dimensions.get('screen').height):
             update: { duration: event.durationMs, type: 'keyboard' },
           });
         }
-        setCover(Math.max(panelBottom - event.screenY, 0));
+        setReported(Math.max(panelBottom - event.screenY, 0));
       });
 
       return () => subscription.remove();
@@ -122,16 +126,17 @@ export function useShareKeyboard(panelBottom = Dimensions.get('screen').height):
 
     // Not Android and no module — an iOS build where it failed to resolve, or
     // jest. HOLD AT ZERO rather than falling through to RN's events below:
-    // those are the very thing that lies in this process, and a zero `cover`
+    // those are the very thing that lies in this process, and a zero lift
     // leaves the safe-area inset switched on, which is the safe way to be
     // wrong.
     if (Platform.OS !== 'android') return;
 
-    // `Did`, not `Will`: the Will events are iOS-only.
+    // `Did`, not `Will`: the Will events are iOS-only. The hide's payload is
+    // ignored on purpose (the header).
     const shown = Keyboard.addListener('keyboardDidShow', (event) =>
-      setCover(event.endCoordinates.height),
+      setReported(event.endCoordinates.height),
     );
-    const hidden = Keyboard.addListener('keyboardDidHide', () => setCover(0));
+    const hidden = Keyboard.addListener('keyboardDidHide', () => setReported(null));
 
     return () => {
       shown.remove();
@@ -139,5 +144,6 @@ export function useShareKeyboard(panelBottom = Dimensions.get('screen').height):
     };
   }, [panelBottom]);
 
-  return { lift: shareKeyboard ? cover : 0, cover };
+  if (reported === null) return 0;
+  return shareKeyboard ? reported : Math.max(reported + bottomInset, 0);
 }

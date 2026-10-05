@@ -24,7 +24,7 @@
 //     the pickers are screens within the sheet rather than overlays over it.
 
 import type { ReactNode } from 'react';
-import { Keyboard, KeyboardAvoidingView, Platform, Pressable, View } from 'react-native';
+import { Keyboard, Platform, Pressable, View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { LucideIcon } from 'lucide-react-native';
 import ChevronLeft from 'lucide-react-native/icons/chevron-left';
@@ -98,28 +98,35 @@ const INITIAL_METRICS = {
 // differing in a single prop, the scrim's tint, rather than in two return
 // statements.
 //
-// KEYBOARD AVOIDANCE IS THE ONE THING THE HOSTS CANNOT SHARE, and the reason is
-// not layout: inside the iOS extension process RN reports EVERY keyboard frame
-// as zero, because it converts them through `RCTKeyWindow()`, which is nil
-// there (share-keyboard.ts carries the full derivation, and it is the same
-// family of bug as the font-scale one in lib/font-scale.ts). So the two hosts
-// reach the same padding by different routes:
+// KEYBOARD AVOIDANCE IS OURS ON BOTH HOSTS, because RN's own answer is wrong on
+// each of them, in a different way (share-keyboard.ts carries both
+// derivations):
 //
-//   - Android's share activity rides the app's OWN process, where RN's numbers
-//     are real, and a plain KeyboardAvoidingView does the work. Plain, not
-//     react-native-keyboard-controller like the app tree: this file also renders
-//     inside the extension, and that library's iOS layer is built on
-//     `UIApplication.shared.windows`, which an extension does not have
-//     (docs/soft-keyboard.md, _avoidance_).
-//   - iOS pads the frame by `useShareKeyboard().lift` — the same quantity KAV's
-//     `behavior="padding"` would have applied, computed from our own native
-//     module's reading of the keyboard's top edge.
+//   - inside the iOS extension process RN reports EVERY keyboard frame as zero,
+//     because it converts them through `RCTKeyWindow()`, which is nil there —
+//     the same family of bug as the font-scale one in lib/font-scale.ts. A
+//     KeyboardAvoidingView there lifts by the panel's whole height.
+//   - in Android's share activity the frames are real, and a plain
+//     KeyboardAvoidingView was this file's Android branch for exactly that
+//     reason. It lifted correctly and then did not come back down: RN's
+//     `keyboardDidHide` carries a `screenY` that leaves out the status and
+//     navigation bars, KAV reads that as a keyboard still overlapping the
+//     edge-to-edge frame by both of them, and the panel stayed ~74dp above the
+//     bottom of the screen once the keyboard had gone.
 //
-// Both end in bottom padding on a `justify-end` column, so everything below —
-// the panel, the tap layer, the pickers' scrollers — squeezes identically on
-// the two hosts. That squeeze chain is `min-h-0 shrink` at each link, and it is
-// load-bearing: a panel that cannot shrink does not clip, it OVERFLOWS, and
-// what you get is a sheet whose header floats above its own background.
+// react-native-keyboard-controller, which the app tree uses, is not available
+// to either: this file also renders inside the extension, and that library's
+// iOS layer is built on `UIApplication.shared.windows`, which an extension does
+// not have (docs/soft-keyboard.md, _avoidance_).
+//
+// So the frame pads its own bottom by `useShareKeyboard()` — how much of it the
+// keyboard covers, from our native module on iOS and from the trustworthy half
+// of RN's events on Android. Bottom padding on a `justify-end` column, so
+// everything below — the panel, the tap layer, the pickers' scrollers —
+// squeezes identically on the two hosts. That squeeze chain is `min-h-0 shrink`
+// at each link, and it is load-bearing: a panel that cannot shrink does not
+// clip, it OVERFLOWS, and what you get is a sheet whose header floats above its
+// own background.
 //
 // THE BOTTOM SAFE-AREA INSET IS THE KEYBOARD'S TOO while it is up, on both
 // hosts, and that is why the panel's `paddingBottom` subtracts. A keyboard's
@@ -172,12 +179,6 @@ export function ShareSheet({
 const isAndroid = Platform.OS === 'android';
 
 function ShareSheetFrame({ children, holdSwipe }: { children: ReactNode; holdSwipe: boolean }) {
-  // iOS: how much of the sheet the keyboard covers, from our own native module
-  // (share-keyboard.ts). Zero on Android, where the KeyboardAvoidingView at the
-  // bottom of this function is the mechanism instead. `cover` is that same
-  // measurement on BOTH hosts and is NOT a lift — its only job is the inset
-  // subtraction below.
-  const { lift, cover } = useShareKeyboard();
   // Read in JS and applied as padding rather than handed to a `<SafeAreaView>`:
   // see INITIAL_METRICS above for why that view is gone. `pb` is the panel's own
   // padding PLUS the inset — the `additive` mode it replaces — so the Save
@@ -185,11 +186,15 @@ function ShareSheetFrame({ children, holdSwipe }: { children: ReactNode; holdSwi
   // MINUS however much of that inset the keyboard already covers, which while it
   // is up is all of it (see the header).
   //
-  // `Math.max` rather than a `cover > 0 ? 0 : insets.bottom` ternary, so a
+  // `Math.max` rather than a `lift > 0 ? 0 : insets.bottom` ternary, so a
   // keyboard covering LESS than the inset keeps the difference instead of losing
   // the whole thing — no host or keyboard mode has to be enumerated for that to
   // stay right.
   const insets = useSafeAreaInsets();
+  // How much of the frame the keyboard covers, on both hosts (share-keyboard.ts)
+  // — the frame's bottom padding at the foot of this function, and the inset
+  // subtraction just below.
+  const lift = useShareKeyboard(insets.bottom);
   const panel = (
     <View
       style={{
@@ -216,7 +221,7 @@ function ShareSheetFrame({ children, holdSwipe }: { children: ReactNode; holdSwi
         // padding would pull the dismiss target out from under exactly the gap
         // this creates — the one part of the sheet that most invites a tap.
         marginTop: insets.top + SHEET_GAP,
-        paddingBottom: SHEET_PAD + Math.max(insets.bottom - cover, 0),
+        paddingBottom: SHEET_PAD + Math.max(insets.bottom - lift, 0),
       }}
       // `min-h-0 shrink`: the first link of the squeeze chain (see the header).
       // Without it the panel keeps its content height when the keyboard takes
@@ -292,15 +297,7 @@ function ShareSheetFrame({ children, holdSwipe }: { children: ReactNode; holdSwi
     </>
   );
 
-  // The two routes to the same bottom padding (see the header). Android's
-  // KeyboardAvoidingView is doing what `lift` does on iOS, in a process where
-  // RN's keyboard frames are real; iOS applies ours directly, because there the
-  // same component would lift by the panel's whole height.
-  return isAndroid ? (
-    <KeyboardAvoidingView behavior="padding" className="flex-1 justify-end">
-      {sheet}
-    </KeyboardAvoidingView>
-  ) : (
+  return (
     <View style={{ paddingBottom: lift }} className="flex-1 justify-end">
       {sheet}
     </View>
