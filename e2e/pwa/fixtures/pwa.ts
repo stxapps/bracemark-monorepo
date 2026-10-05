@@ -71,8 +71,19 @@ export async function restoreNetwork(context: BrowserContext): Promise<void> {
 // the window to register — `inner-layout.tsx` registers after sign-in in any
 // display mode (PWA-004 proves that path on its own) — so the explicit
 // registration here only makes the installed cases wait for ACTIVATION
-// deterministically before they go offline. Same script URL
-// `window.serwist.register()` uses, so it is the same registration the app makes.
+// deterministically before they go offline.
+//
+// ⚠ It has to be the SAME registration the app makes, and that is three values,
+// not one: the script URL, the scope, and the TYPE. `SerwistProvider` registers
+// `/sw.js` as a `module` worker; a bare `register('/sw.js')` asks for a classic
+// one, and to the browser a different type is a different worker — it installs
+// the script a SECOND time and replaces the app's worker a moment after it
+// activated. Two things followed, and nothing failed on either:
+//   - every installed case ran a classic worker, which production never does;
+//   - a page load issued in that moment was handed to the first worker just as
+//     it was discarded, and never completed (measured: the worker reported no
+//     fetch event for it, 40 s later). The cases only escaped because each saves
+//     a link and syncs before its first page load.
 // The real standalone window is PWA-RELEASE-001's (web/RELEASE.md).
 export async function installAndRegister(page: Page): Promise<void> {
   const cdp = await page.context().newCDPSession(page);
@@ -85,7 +96,7 @@ export async function installAndRegister(page: Page): Promise<void> {
   await cdp.detach();
 
   await page.evaluate(async () => {
-    await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+    await navigator.serviceWorker.register('/sw.js', { scope: '/', type: 'module' });
     // `ready` resolves on ACTIVATION, which waits for install — the precache.
     await navigator.serviceWorker.ready;
   });

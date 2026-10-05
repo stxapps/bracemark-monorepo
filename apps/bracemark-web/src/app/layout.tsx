@@ -146,7 +146,16 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={inter.variable} suppressHydrationWarning>
+    // `data-build`: which build this document is (next.config.js). The update
+    // pill reads it once at load and compares it with the build the service worker
+    // holds (lib/build-id.ts) — so it has to be in the DOCUMENT, not only in the
+    // bundle. The attribute's name is `BUILD_ATTRIBUTE` there; keep them one.
+    <html
+      lang="en"
+      className={inter.variable}
+      suppressHydrationWarning
+      data-build={process.env.BUILD_ID}
+    >
       <body>
         {/* Set the `.dark` class before paint so there's no flash of the wrong
             theme. Runs synchronously ahead of hydration. */}

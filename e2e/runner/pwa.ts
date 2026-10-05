@@ -90,8 +90,9 @@ async function main(): Promise<void> {
     },
     browser: { executable: CHROME_PATH, version: chromeVersion.stdout.trim() || 'unknown' },
     // Chrome installs the app (CDP PWA.install) but never opens its standalone
-    // window under automation, so the app's own standalone registration trigger
-    // is not exercised here — PWA-RELEASE-001 owns it.
+    // window under automation. Registration does not need that window — the app
+    // registers at sign-in in any display mode (PWA-004) — so what is unproven
+    // here is the install surface and the window itself: PWA-RELEASE-001's.
     standaloneWindowProven: false,
     playwrightVersion: playwrightVersion.stdout.trim(),
     checkout: {

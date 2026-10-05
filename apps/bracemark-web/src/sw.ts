@@ -2,6 +2,8 @@ import { defaultCache } from '@serwist/next/worker';
 import type { PrecacheEntry, SerwistGlobalConfig } from 'serwist';
 import { NetworkOnly, Serwist } from 'serwist';
 
+import { answerNavigation } from './lib/navigation-response';
+
 // This declares the value of `injectionPoint` to TypeScript.
 // `injectionPoint` is the string that will be replaced by the
 // actual precache manifest. By default, this string is set to
@@ -26,6 +28,11 @@ const serwist = new Serwist({
   // the same reload (lib/chunk-error.ts, app/error.tsx).
   skipWaiting: true,
   clientsClaim: true,
+  // Starts a page load's network request alongside the worker itself, so the
+  // navigation listener below does not pay the worker's start-up before it can ask
+  // the network. Serwist's own use of the preload response (its precache strategy
+  // returns it ahead of the cache, with no timeout) never runs for a page load:
+  // the listener below answers every one of them first.
   navigationPreload: true,
   // Every route in the static export is ONE file whatever its query — the query
   // is client state (`?list=`, `?tag=`, the search grammar, docs/search.md) — so a
@@ -57,6 +64,38 @@ const serwist = new Serwist({
     },
     ...defaultCache,
   ],
+});
+
+// ⚠ PAGE LOADS ARE ANSWERED HERE, not by Serwist's routes — and this decides
+// which build a page load gets (docs/offline-mode.md, _what answers a
+// navigation_). The network first, for `NAVIGATION_TIMEOUT_MS`; then this worker's
+// precached copy of the page (lib/navigation-response.ts). So a reachable origin
+// hands every page load the LATEST deploy, whatever worker is installed — which
+// is what lets a deploy replace a page without the installed worker updating
+// first — and an origin that is unreachable, wedged or erroring opens the app the
+// device holds instead of a blank window.
+//
+// Registered BEFORE `serwist.addEventListeners()` and stopping propagation: two
+// listeners answering one request is an error, and Serwist's would answer this
+// one with its precache route, whose strategy waits on the preload response with
+// no timeout at all — the stall this exists to end.
+//
+// The precache lookup drops the query, as the precache route does (above): every
+// route is one file whatever its query.
+self.addEventListener('fetch', (event) => {
+  const { request } = event;
+  if (request.mode !== 'navigate' || request.method !== 'GET') return;
+  const url = new URL(request.url);
+  if (url.origin !== self.location.origin) return;
+
+  event.stopImmediatePropagation();
+  event.respondWith(
+    answerNavigation({
+      network: (async () =>
+        ((await event.preloadResponse) as Response | undefined) ?? fetch(request))(),
+      precached: () => serwist.matchPrecache(url.origin + url.pathname),
+    }),
+  );
 });
 
 serwist.addEventListeners();

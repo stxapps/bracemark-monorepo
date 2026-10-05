@@ -615,7 +615,9 @@ npm run deploy:web:staging       npm run deploy:web:production
 npm run deploy:site:staging      npm run deploy:site:production
 ```
 
-It builds for the tier, checks the artifact, syncs, then invalidates. The
+It builds for the tier, checks the artifact, syncs, then invalidates — and for
+bracemark-web, checks the service worker before the sync and again after the
+invalidation (_the worker check_, below). The
 distribution id comes from `CLOUDFRONT_DISTRIBUTION_ID_<APP>_<TIER>` (e.g.
 `CLOUDFRONT_DISTRIBUTION_ID_WEB_PRODUCTION`), read from the shell first and then
 from the gitignored root `.env.local` the script parses in its preflight
@@ -668,11 +670,11 @@ production's origin in its card metadata. That is now
 
 **Three cache classes, keyed off the path rather than a list of filenames.**
 
-| what                                              | `Cache-Control`               | `--delete` |
-| ------------------------------------------------- | ----------------------------- | ---------- |
-| `_next/**` — content-hashed, build-ID-scoped      | `max-age=31536000, immutable` | no         |
-| images and icons — stable names                   | `max-age=604800`              | yes        |
-| `.html`, `.txt`, `.xml`, `sw.js`, `manifest.json` | `max-age=0, must-revalidate`  | yes        |
+| what                                         | `Cache-Control`               | `--delete` |
+| -------------------------------------------- | ----------------------------- | ---------- |
+| `_next/**` — content-hashed, build-ID-scoped | `max-age=31536000, immutable` | no         |
+| images and icons — stable names              | `max-age=604800`              | yes        |
+| `.html`, `.txt`, `.xml`, `sw.js`, `*.json`   | `max-age=0, must-revalidate`  | yes        |
 
 Uploaded in that order, so a client loading a page mid-deploy can always resolve
 the chunks it was just handed. The `.txt` files are Next 16's RSC payloads and
@@ -692,6 +694,32 @@ builds ever need pruning, prune by **reference** — delete the `_next/` keys th
 none of the last few builds' `out/` contains — never by age. Old tabs rely on
 this rule once the service worker can hand them a new build
 ([offline-mode.md](./offline-mode.md), _version skew_).
+
+**The worker check — bracemark-web only.** A browser that has installed the
+service worker keeps it until a new one finishes installing, and that install
+is all-or-nothing: one precache URL that does not answer 200 and the new worker
+never takes over, in any browser, with no error anywhere
+([offline-mode.md](./offline-mode.md), _`/sw.js` is permanent_). Nothing local
+can rule that out, because whether a URL resolves is decided here — by the
+clean-URL function and the keys in the bucket. So `deploy-static.sh` runs
+`tools/scripts/check-service-worker.mjs` twice:
+
+- **Before the sync**, against `out/`: every URL in the worker's precache
+  manifest names a file in the export, by the function's own mapping (`/links` →
+  `links.html`, never `links/index.html`), and only `/_next/static/` entries lack
+  a revision. A failure here publishes nothing.
+- **After the invalidation completes**, against the tier's own host
+  (`NEXT_PUBLIC_APP_URL` from its env file): `/sw.js` answers 200, as
+  JavaScript, with no redirect, byte-identical to `out/sw.js`; and every
+  manifest URL answers 200. A failure here exits non-zero with the bucket
+  **already updated** — fix and redeploy; the message says what is at stake.
+
+`--no-invalidate` and `--no-wait` skip the second half, since the CDN may still
+be serving the previous build, and print the command to run it by hand:
+`node tools/scripts/check-service-worker.mjs apps/bracemark-web/out --origin <host>`.
+`npm run check:service-worker` is the first half alone. A change to
+`tools/cloudfront/rewrite-url.js` is the other moment to run the second half —
+it can turn a precached URL into a 404 without any deploy of the app.
 
 **No `--acl public-read` anywhere.** Buckets created since April 2023 have ACLs
 disabled by default (`BucketOwnerEnforced`), which makes that flag an

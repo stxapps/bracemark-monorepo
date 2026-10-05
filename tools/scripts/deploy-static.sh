@@ -57,7 +57,9 @@ Options:
                         The tier check still runs.
   --dry-run             Print what would sync; upload nothing, invalidate nothing.
   --no-invalidate       Skip the CloudFront invalidation (opt out explicitly).
+                        Also skips the check of the deployed service worker.
   --no-wait             Create the invalidation but don't wait for it to finish.
+                        Also skips the check of the deployed service worker.
   --distribution-id ID  Override the distribution id for this run.
   --yes, -y             Don't prompt before a production deploy.
   -h, --help            Show this message.
@@ -296,6 +298,45 @@ verify_tier() {
 step "Verifying the bundle is a $TIER build"
 verify_tier
 
+# --- the worker check ------------------------------------------------------
+#
+# bracemark-web only: the marketing site has no service worker.
+#
+# A browser that has installed the worker keeps it until a NEW one finishes
+# installing, and that install is all-or-nothing — one precache URL that does not
+# answer 200 throws the new worker away and leaves the previous one, with its
+# precache, in control of every installed browser, silently: online the new
+# pages still arrive from the network, so nothing looks wrong, while the build
+# a device opens offline stays the old one
+# (docs/offline-mode.md, _`/sw.js` is permanent_). So the manifest
+# is checked twice: here against `out/`, before a byte is published, and again
+# against the real host once the CDN serves the new build (`verify_service_worker_live`
+# below) — the half no local server can stand in for, because whether a URL
+# resolves there is the CloudFront function's and the bucket's doing.
+readonly CHECK_SERVICE_WORKER="$REPO_ROOT/tools/scripts/check-service-worker.mjs"
+
+# The host this tier's app answers on — the build's own NEXT_PUBLIC_APP_URL.
+app_origin() {
+  sed -n 's|^[[:space:]]*NEXT_PUBLIC_APP_URL=["'"'"']\{0,1\}\(https\{0,1\}://[^/"'"'"'[:space:]]*\).*|\1|p' "$ENV_FILE" \
+    | head -n 1
+}
+
+verify_service_worker_live() {
+  local origin
+  origin="$(app_origin)"
+  [ -n "$origin" ] || die "$ENV_FILE names no NEXT_PUBLIC_APP_URL — cannot check the deployed worker"
+  step "Checking the deployed service worker at $origin"
+  node "$CHECK_SERVICE_WORKER" "$OUT_DIR" --origin "$origin" \
+    || die "the bucket IS updated, but the worker users will fetch cannot install.
+       Fix and redeploy: until then every installed browser keeps the previous
+       worker, and opens the previous build whenever this host is unreachable."
+}
+
+if [ "$APP" = "web" ]; then
+  step "Checking the service worker's precache against out/"
+  node "$CHECK_SERVICE_WORKER" "$OUT_DIR" || die "refusing to publish a worker that cannot install"
+fi
+
 # --- sync ------------------------------------------------------------------
 #
 # Order matters: hashed assets go up BEFORE the HTML that references them, so a
@@ -375,6 +416,10 @@ fi
 if [ "$INVALIDATE" = false ]; then
   step "Skipping CloudFront invalidation (--no-invalidate)"
   note "the 1-week assets and any changed HTML will serve stale until the TTL expires"
+  if [ "$APP" = "web" ]; then
+    note "deployed service worker NOT checked — once the CDN serves this build:"
+    note "  node tools/scripts/check-service-worker.mjs $OUT_DIR --origin $(app_origin)"
+  fi
   exit 0
 fi
 
@@ -392,6 +437,11 @@ if [ "$WAIT_FOR_INVALIDATION" = true ]; then
   note "waiting for it to complete (usually under 3 minutes; --no-wait to skip)"
   aws cloudfront wait invalidation-completed \
     --distribution-id "$DISTRIBUTION_ID" --id "$INVALIDATION_ID"
+  # Only now is the CDN's `/sw.js` certain to be this build's.
+  if [ "$APP" = "web" ]; then verify_service_worker_live; fi
+elif [ "$APP" = "web" ]; then
+  note "deployed service worker NOT checked (--no-wait) — once the invalidation completes:"
+  note "  node tools/scripts/check-service-worker.mjs $OUT_DIR --origin $(app_origin)"
 fi
 
 step "Deployed bracemark-$APP to $TIER"

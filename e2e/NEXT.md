@@ -475,9 +475,10 @@ case already carries `online`) and are `full`, so they never block a smoke run;
 - [x] `PWA-001` Add a separate production-build PWA target; install/register the
       real service worker, complete one online launch, then cold-launch the app
       shell and cached library with the origin unavailable. Chrome installs
-      under automation but never opens the standalone window, so the case
-      registers the real worker itself; the app's standalone trigger is
-      `PWA-RELEASE-001`'s.
+      under automation but never opens the standalone window, so the installed
+      cases register the real worker themselves to wait for activation; the app
+      registers at sign-in in any display mode (`PWA-004`), and the install
+      surfaces are `PWA-RELEASE-001`'s.
 - [x] `PWA-002` Create an offline edit in the installed PWA, reconnect, and prove
       it syncs to an independent client.
 - [x] `OFFLINE-EXPORT-WEB-001` With the browser offline, export the local
@@ -488,6 +489,21 @@ case already carries `online`) and are `full`, so they never block a smoke run;
       open page's store and lands on sign-in; signing back in restores it.
 - [x] `PWA-003` With origin and network gone, reach Export in-app and export a
       library including an offline write.
+- [x] `PWA-008`–`PWA-011` Update the installed worker to builds that differ
+      (`pwa/fixtures/build.ts`): a changed page and a new asset replace the old
+      precache; a cold launch after a deploy takes the new worker unasked; a
+      build that cannot install leaves the old one working and the fix after it
+      takes over; a build whose page runs no script is installed and replaced on
+      the browser's own check.
+- [x] `PWA-012`/`PWA-013` Launch against an origin that accepts connections and
+      never answers, and one that answers 500: both open the installed build
+      from the precache (the first within seconds), and an unknown path still
+      gets the origin's 404.
+- [ ] `PWA-UPGRADE-001` Install from the **previously released** export, then
+      serve the candidate and prove the takeover, the new page with the origin
+      gone, and an intact library. Blocked until there is a first release to
+      keep: every case above replaces a build with one derived from it in the
+      same run (docs/offline-mode.md, _testing_).
 - [x] `OFFLINE-EXPORT-IOS-001` / `OFFLINE-EXPORT-ANDROID-001` Save a link with
       the api cut (frozen on iOS, route removed on Android), reach Export in-app,
       and read both links out of the exported file.

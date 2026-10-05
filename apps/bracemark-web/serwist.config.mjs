@@ -28,6 +28,12 @@ import { serwist } from '@serwist/next/config';
 // offline (PWA-004). 118 files, ~40 KB gzipped. `manifestTransforms` maps their
 // `out/…` paths to the URLs they are served at; serwist's own transform leaves
 // them alone.
+//
+// …and `out/build.json`, the one file that says which build all the others are
+// (app/build.json/route.ts). It is precached so that the update pill can ask the
+// WORKER which build it holds; leave it out and that question goes to the network
+// instead, which answers with the latest deploy whatever the worker holds — and
+// the pill would compare a page against the wrong thing, silently.
 export default serwist({
   swSrc: 'src/sw.ts',
   swDest: 'out/sw.js',
@@ -35,6 +41,7 @@ export default serwist({
     '.next/static/**/*.{js,css,html,ico,apng,png,avif,jpg,jpeg,jfif,pjpeg,pjp,gif,svg,webp,json,webmanifest}',
     'public/**/*',
     'out/**/*.txt',
+    'out/build.json',
   ],
   globIgnores: [
     'public/ss-*.png',

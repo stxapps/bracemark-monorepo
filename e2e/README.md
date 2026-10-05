@@ -157,13 +157,17 @@ trait for it. They need `npm run dev` for the extractor on 8788 (web's
 no third-party network dependency; `online` does not, because every stack-backed
 case carries it.
 
-The PWA target (`PWA-001`/`002`) builds bracemark-web's production export
+The PWA target (`PWA-001`–`013`) builds bracemark-web's production export
 against the local stack itself (`nx build @stxapps/bracemark-web -c
 development`), stages a copy in the run directory, and serves it on
 `localhost:3001` from inside the spec, stopping it to make the origin
-unavailable. It needs only the api up — `npm run dev` is fine — and `:3001`
-free, so stop the marketing site's dev server first. The real install surfaces
-are `PWA-RELEASE-001` in [`web/RELEASE.md`](./web/RELEASE.md).
+unavailable — or stalling it, or making it answer 500 (`PWA-012`/`013`). The
+update cases (`PWA-007`–`011`) "deploy" later builds over a
+copy of that export (`pwa/fixtures/build.ts`). It needs only the api up —
+`npm run dev` is fine — and `:3001`
+free, so stop the marketing site's dev server first. The real install surfaces,
+Safari and Firefox, and an update from the real host are `PWA-RELEASE-001` in
+[`web/RELEASE.md`](./web/RELEASE.md).
 
 Phase 8's native cases (`SCALE-*`, `SKELETON-NATIVE-001`, `VIEWPORT-*`,
 `OFFLINE-*`) run in the ordinary `e2e-mobile` target. Two of them —

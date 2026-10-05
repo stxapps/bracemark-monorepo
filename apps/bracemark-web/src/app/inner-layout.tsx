@@ -11,6 +11,7 @@ import { UpdatePill } from '../components/update-pill';
 import { UpdateRequiredBanner } from '../components/update-required-banner';
 import { apiClient } from '../lib/api-client';
 import { extractClient } from '../lib/extract-client';
+import { watchForServiceWorkerUpdates } from '../lib/service-worker-update-check';
 
 // Registers the service worker — and so makes the library reachable with the
 // origin gone (docs/offline-mode.md, _when the worker registers_). The rule is
@@ -18,8 +19,15 @@ import { extractClient } from '../lib/extract-client';
 // device worth keeping reachable, and a normal browser tab needs the worker
 // exactly as much as an installed window. A visitor who never signs in never
 // registers and never downloads the precache. A load that finds an existing
-// registration re-registers too (signed in or not), which is what lets the
-// browser check an installed worker for updates.
+// registration re-registers too (signed in or not): the same script at the same
+// scope, so the registration itself is unchanged.
+//
+// ⚠ UPDATES DO NOT RUN THROUGH THIS CALL. The browser re-fetches `/sw.js` by
+// itself on every navigation in scope, past the worker and the HTTP cache, and no
+// app code takes part — which is what lets a deploy replace a build whose pages
+// no longer run at all (PWA-011). What can strand a browser on an old build is
+// the script at that URL, never this effect (docs/offline-mode.md, _`/sw.js` is
+// permanent_).
 //
 // Registration only STARTS the offline guarantee: it holds once the worker has
 // installed (the precache downloaded), which the first online session does in
@@ -65,6 +73,10 @@ function Initializer() {
       cancelled = true;
     };
   }, [signedIn]);
+
+  // A window that is never reloaded never navigates, so it would never check for
+  // a new build; returning to it does (lib/service-worker-update-check.ts).
+  useEffect(() => watchForServiceWorkerUpdates(), []);
 
   // Ask the browser not to evict this origin's storage under pressure — the
   // library, its keys and the worker's precache (docs/offline-mode.md, _storage

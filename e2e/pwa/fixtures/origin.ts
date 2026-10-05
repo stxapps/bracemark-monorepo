@@ -32,7 +32,20 @@ const TYPES: Record<string, string> = {
 export interface StaticOrigin {
   start(): Promise<void>;
   stop(): Promise<void>;
+  // Every status this origin has answered `pathname` with, oldest first. The one
+  // view of a service worker's INSTALL a case has that is not a race: the worker
+  // fetches its precache from here, so a 404 in this list is a failed install
+  // that has happened, whichever check — the browser's own or the case's —
+  // started it.
+  answered(pathname: string): number[];
+  // How the origin behaves while it is up. `stall` accepts every connection and
+  // never answers — the network that is neither down nor working, which a refused
+  // connection (`stop`) cannot stand in for: a refusal fails at once, a stall
+  // leaves the browser waiting. A number answers every request with that status.
+  respond(mode: OriginMode): void;
 }
+
+export type OriginMode = 'serve' | 'stall' | number;
 
 async function isFile(path: string): Promise<boolean> {
   try {
@@ -57,15 +70,31 @@ async function resolve(root: string, pathname: string): Promise<string | null> {
 export function staticOrigin(root: string, origin: string): StaticOrigin {
   const port = Number(new URL(origin).port);
   let server: Server | undefined;
+  const log: Array<{ pathname: string; status: number }> = [];
+  let mode: OriginMode = 'serve';
 
   return {
+    respond: (next) => {
+      mode = next;
+    },
+    answered: (pathname) =>
+      log.filter((entry) => entry.pathname === pathname).map((entry) => entry.status),
     async start() {
       if (server) return;
       const next = createServer((request, response) => {
         void (async () => {
           const { pathname } = new URL(request.url ?? '/', origin);
+          // Held open until `stop()` closes the socket.
+          if (mode === 'stall') return;
+          if (typeof mode === 'number') {
+            log.push({ pathname, status: mode });
+            response.writeHead(mode, { 'content-type': 'text/plain', 'cache-control': 'no-cache' });
+            response.end(`origin answering ${mode}`);
+            return;
+          }
           const file = await resolve(root, pathname);
           const path = file ?? join(root, '404.html');
+          log.push({ pathname, status: file ? 200 : 404 });
           response.writeHead(file ? 200 : 404, {
             'content-type': TYPES[extname(path)] ?? 'application/octet-stream',
             // Every response revalidates, so the service worker — not an HTTP

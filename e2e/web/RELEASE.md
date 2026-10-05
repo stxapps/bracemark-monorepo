@@ -33,40 +33,91 @@ the supported production Chrome build against a disposable account. Do not stub
 - [ ] Verify the receipt says: `The file was saved, but there were no links to
 put in it.`
 
-## PWA-RELEASE-001 — a real install, in real browser chrome
+## PWA-RELEASE-001 — a real install and a real update, in real browsers
 
 `@PWA-RELEASE-001` `@release` `@online` `@pwa`
 
-`e2e-pwa` proves the production build, its manifest and its service worker
-offline, but under automation Chrome never opens the app's standalone window,
-so the app's own registration trigger (`display-mode: standalone`,
-`inner-layout.tsx`) and the install surfaces themselves are unproven there
-(docs/e2e.md, _the PWA target_). Display-mode emulation is not installation.
+`e2e-pwa` proves the production build, its manifest and its service worker —
+offline, and through an update (`PWA-007`–`011`) — but only in Chrome, only
+against its own static server, and under automation Chrome never opens the
+app's standalone window (docs/e2e.md, _the PWA target_). What is left for a
+person: the install surfaces themselves, the same journey in Safari and Firefox,
+and an update delivered by the real CDN. Display-mode emulation is not
+installation.
 
 Run against the release candidate on its real origin (staging or production —
 an `https` origin; a LAN `http` address is not a secure context and registers
-no worker, docs/device-testing.md), with a disposable account, on each of:
-desktop Chrome (macOS), Chrome on a real Android phone, and Safari's Add to
-Home Screen on a real iPhone.
+no worker, docs/device-testing.md), with a disposable account. The app registers
+its worker at sign-in in **any** display mode (docs/offline-mode.md, _when the
+worker registers_), so a browser with no install surface still runs Parts B and
+C in a tab.
 
-- [ ] Install through the browser's own surface (the address-bar install
-      button / menu **Install**; Android **Add to Home screen → Install**; iOS
-      Share → **Add to Home Screen**). Record the prompt's name and icon match
-      the manifest.
+| browser                      | A — install                        | B — offline | C — update |
+| ---------------------------- | ---------------------------------- | ----------- | ---------- |
+| Chrome, desktop (macOS)      | address-bar install button         | yes         | yes        |
+| Chrome, a real Android phone | **Add to Home screen → Install**   | yes         | yes        |
+| Safari, a real iPhone        | Share → **Add to Home Screen**     | yes         | yes        |
+| Safari, desktop (macOS)      | File → **Add to Dock**             | yes         | yes        |
+| Firefox, desktop (macOS)     | none — run B and C in a normal tab | yes         | yes        |
+
+### A — install
+
+- [ ] Install through the browser's own surface (the table above). Record the
+      prompt's name and icon match the manifest.
 - [ ] Launch from the installed icon. The window has no browser chrome and
       `/links` loads signed in after one sign-in.
-- [ ] In the installed window's devtools (desktop) or remote inspector, confirm
-      a service worker is **activated** for the origin with no prior manual
-      registration — the app's standalone branch registered it.
-- [ ] Save one link, let it sync, then close the app completely.
-- [ ] Turn the network off (Wi-Fi and cellular / airplane mode). Launch from the
-      icon: the app shell and the saved link appear, and switching to Show All
+- [ ] After every other part: uninstall through the platform's own surface and
+      record that the icon is gone.
+
+### B — the worker, offline
+
+- [ ] Sign in (in the installed window, or in a tab where there is no install).
+      In devtools → Application → Service workers (Safari: Develop → Service
+      Workers; Firefox: `about:debugging` → This Firefox; a phone: the remote
+      inspector), confirm a worker is **activated** for the origin with no manual
+      registration — the app registered it at sign-in.
+- [ ] Save one link, let it sync, then close the app or the tab completely.
+- [ ] Turn the network off (Wi-Fi and cellular / airplane mode). Open the app
+      again: the app shell and the saved link appear, and switching to Show All
       and back works without an error page.
 - [ ] Still offline, save a second link. The ⋯ menu reports the failed sync.
 - [ ] Turn the network back on and press **Sync failed — Retry**. On a second
       device or browser signed into the same account, Sync shows the second link.
-- [ ] Uninstall through the platform's own surface and record that the icon is
-      gone.
+
+### C — an update from the real host
+
+This is the one check of an update on the real CDN and in a browser that is not
+Chrome. It needs **two deploys to staging** — build 1 is what Parts A and B ran
+on; build 2 is a later commit with any change to the app. (Rebuilding the same
+commit will not do: Nx restores the cached build, which is the same build with
+the same stamp, and nothing new is deployed.) `npm run deploy:web:staging` must
+finish with its worker check green both times (docs/hosting.md, _deploying the
+static sites_).
+
+**Which build a window is on** is `document.documentElement.dataset.build` in its
+console; **which build the installed worker holds** is the `id` in `/build.json`
+fetched from that same console (`await (await fetch('/build.json')).json()`).
+Note build 1's value before deploying build 2.
+
+- [ ] On build 1, online, open `/links` and leave that window open. Open a
+      second window or tab on `/links` too.
+- [ ] Deploy build 2. In the **second** window, reload: its `dataset.build` is
+      build 2's on the first reload (the page comes from the network —
+      docs/offline-mode.md, _what answers a navigation_).
+- [ ] Within about a minute the **first** window — still build 1 — shows
+      **Bracemark was updated**. The second window does **not**: it is already
+      build 2, and the new worker only caught up with it. Before pressing
+      anything, save a link in the first window: it still works.
+- [ ] Press **Reload** in the first window: `dataset.build` is build 2's and the
+      pill is gone. The link saved a moment ago is still listed.
+- [ ] `/build.json` answers build 2 in both windows, and in the same
+      service-worker inspector as Part B exactly one worker is listed for the
+      origin, **activated**, none stuck **installing** or **waiting**.
+- [ ] Close every window of the app. Turn the network off. Open the app: it
+      opens, the library is there, and `dataset.build` is build 2's. This is the
+      step that proves the new worker's precache replaced the old one; online, a
+      page is build 2 either way.
+- [ ] Turn the network back on.
 
 ## IAP-PADDLE-RELEASE-001 — a real sandbox checkout, end to end
 

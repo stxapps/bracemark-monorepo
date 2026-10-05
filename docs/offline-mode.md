@@ -11,26 +11,33 @@ the Expo app and the browser extension.
 Neighbours: [sessions.md](./sessions.md) (the no-wipe rule this doc's promise
 depends on), [local-first-sync.md](./local-first-sync.md) (what the device holds,
 and _schema changes_, which this doc's version-skew rule feeds into),
-[hosting.md](./hosting.md) (the CSP the worker registers under, and the
-never-expire-`_next/` rule that old tabs rely on), [e2e.md](./e2e.md), _the PWA
-target_ (`PWA-001`–`007`, the only run that meets the worker),
+[hosting.md](./hosting.md) (the CSP the worker registers under, the
+never-expire-`_next/` rule that old tabs rely on, and the deploy script's worker
+check), [e2e.md](./e2e.md), _the PWA
+target_ (`PWA-001`–`013`, the only run that meets the worker),
 [data-lifecycle.md](./data-lifecycle.md) (the sign-out teardown),
 [brand-assets.md](./brand-assets.md) (the claim this doc makes true or false).
 
 > **STATUS — built, except the Safari measurement.** The worker
 > (`apps/bracemark-web/src/sw.ts`, built by `serwist build` after `next build`)
-> sends every cross-origin request to the network only, takes over at once
-> (`skipWaiting: true`) behind an "updated, reload" pill, and ignores query
-> strings on precache lookups. It registers once a user is signed in, in any
+> sends every cross-origin request to the network only, answers a page load
+> from the network for three seconds and from its precache after that, takes
+> over at once (`skipWaiting: true`) behind an "updated, reload" pill that shows
+> only for a page older than the worker, and ignores query strings on precache
+> lookups. It registers once a user is signed in, in any
 > display mode. Both local databases let go on `versionchange` and raise an
 > update-required banner. Sign-out keeps the worker, and as a safeguard drops any
 > query-keyed runtime cache entry (none is written today). The app asks for persistent storage after sign-in. The session redesign
 > ([sessions.md](./sessions.md)) has landed too, so nothing on the device wipes it
-> on a clock. `PWA-001`–`007` and `VERSION-SKEW-WEB-001`/`002` cover it
-> ([testing](#testing)). **Still open:** whether Safari's 7-day storage cap
+> on a clock. `PWA-001`–`013` and `VERSION-SKEW-WEB-001`/`002` cover it
+> ([testing](#testing)), and every deploy checks that its worker can install
+> ([`/sw.js` is permanent](#-swjs-is-permanent--three-ways-to-strand-a-device)).
+> **Still open:** whether Safari's 7-day storage cap
 > spares a site granted persistent storage, measured by hand on real Safari
 > ([storage durability](#storage-durability--verify-before-promising)); until
-> then the public claim's edge runs through that browser.
+> then the public claim's edge runs through that browser. And the **kill-switch
+> worker** is not built — the last resort for a worker no deploy can replace
+> (same section).
 
 ### the promise
 
@@ -114,8 +121,11 @@ path.
 **The worker registers once the auth provider reaches `authenticated`**: after
 sign-in, after create-account, or on a load that finds a stored session
 (`Initializer`, `apps/bracemark-web/src/app/inner-layout.tsx`). A load that
-finds an existing registration re-registers too, signed in or not, which is
-what lets the browser check an installed worker for updates. The display mode
+finds an existing registration re-registers too, signed in or not — the same
+script at the same scope, so nothing about the registration changes. **That call
+is not what checks for updates**: the browser does that by itself
+([below](#when-the-browser-checks-for-a-new-build)), which is why an update
+never depends on this code running. The display mode
 doesn't matter; it used to be standalone-only, for three reasons that still
 hold for an anonymous visitor and don't for a signed-in user:
 
@@ -178,8 +188,12 @@ open tabs keep running old code under the new worker. Two things carry it:
 **The "updated, reload" pill** (`apps/bracemark-web/src/components/update-pill.tsx`).
 A tab that was open when the new worker took over shows a quiet pill. It
 appears on `controllerchange` — completed activation, never "a deploy exists" —
-and only if the page was already controlled when it loaded, because the first
-installation fires `controllerchange` too (clientsClaim). Its Reload waits for
+and only when two things hold: the page was already controlled when it loaded,
+because the first installation fires `controllerchange` too (clientsClaim); and
+the new worker holds a **different build** from the one the page loaded as
+([which build is this page](#which-build-is-this-page--one-stamp-two-places)),
+because a worker catching up with a page the network already handed the new
+build is not an update of that page. Its Reload waits for
 local writes already started to commit (`flushLocalWrites`, a read-only Dexie
 transaction that queues behind every earlier write) and never discards an
 editor's unsaved work silently: the three web editors report their dirty flag
@@ -202,6 +216,202 @@ depends on how many deploys a tab has survived.
 
 The same reload serves a schema change only through the update-required banner
 below, because an old tab can no longer save to the upgraded database at all.
+
+#### what answers a navigation — the network for three seconds, then the precache
+
+**A page load gets the latest deploy whenever the origin answers, whatever
+worker is installed — and the page the device holds when it does not.** Page
+loads are not answered by Serwist's routes. `sw.ts` registers its own `fetch`
+listener ahead of `serwist.addEventListeners()` for every same-origin
+navigation, and stops the event there
+(`apps/bracemark-web/src/lib/navigation-response.ts` holds the decision):
+
+| the origin                                 | a page load gets                              |
+| ------------------------------------------ | --------------------------------------------- |
+| answers within 3 seconds, below 500        | that answer — the latest deploy, a 404, a 30x |
+| answers 5xx                                | the installed worker's precached page         |
+| fails (offline, refused)                   | the same, at once                             |
+| accepts the connection and never answers   | the same, after 3 seconds                     |
+| any of the last three, for an unknown path | whatever the network eventually says          |
+
+Everything that is not a page load — route payloads, icons, chunks named in the
+manifest — is answered from the installed worker's precache, as before.
+
+**Why the network first.** It is what lets a deploy replace a page without the
+installed worker having to update first, and so what keeps a worker that cannot
+update from pinning anyone to an old build while they are online. Cache-first
+would make each load one coherent build, and make the worker a single point of
+failure: a deploy would reach a user one load late, and a broken page would come
+back from the precache until its replacement had installed — which
+[a failed install](#a-failed-install-hangs-it-does-not-fail) can hold off for
+minutes. Two consequences, both measured (`PWA-009`, `PWA-011`):
+
+- **A launch after a deploy is already the new build's page.** The new worker
+  follows a few seconds later on the browser's own check, and no pill shows: the
+  page is already what that worker holds.
+- **A broken page is replaced by the next deploy on the first reload**, with the
+  broken build's worker still in control.
+
+**Why a timeout, and why three seconds.** "Reachable" is not "answering". A
+connection that is accepted and then stalls — a captive portal, a train, an
+origin that is up and wedged — neither fails nor finishes, and a strategy that
+waits on it shows a blank window while the whole app sits in the precache.
+Serwist's own precache strategy does exactly that: it awaits the navigation
+preload response with no timeout. Measured against an origin that accepts
+connections and never answers (`PWA-012`): with Serwist answering, the launch
+had not opened after **five minutes**; with the listener it opens in **3.1
+seconds** (five cold launches, 3.09–3.12 s). The number is short because falling
+back costs so little here — the library is local either way, so the worst result
+of a wrong guess is a page one deploy old, which the pill reports once the new
+worker arrives — and an origin that is answering at all answers this small page
+far sooner. Thirty seconds would be thirty seconds of blank window for a user
+who already has the app.
+
+**A 5xx falls back; a 404 stands.** A server error is the origin being broken,
+and no reason to withhold a page the device holds. A 404 is an answer — the
+worker must not turn every unknown path into the app — and so is a redirect
+(`PWA-013`).
+
+`navigationPreload: true` stays on, for a narrower reason than before: it starts
+the network request alongside the worker's own start-up, so the listener does
+not pay for one before it can ask for the other. Serwist's use of the preload
+response never runs for a page load.
+
+**Not covered:** the timeout is on the response **starting**. An origin that
+sends headers and then stalls mid-body still stalls the page. And between a new
+page's load and the new worker's activation — seconds normally, longer if the
+new worker cannot install — a new page runs over the old worker's precached
+**route payloads** (the `.txt` files an in-app move fetches). What Next does
+with a payload from the previous build is **not measured here**: the e2e builds
+share one chunk graph ([testing](#testing)).
+
+#### which build is this page — one stamp, two places
+
+The pill's question — is the page on screen older than the worker that just took
+over? — needs both to say which build they are, and nothing in a static export
+did: `package.json`'s version does not move per deploy, and Next's build id is
+not exposed to app code. So each `next build` **stamps itself once**, with the
+moment it started (`next.config.js`, `BUILD_ID`), and the stamp goes to exactly
+the two places that are compared:
+
+- **every document**, as `<html data-build="…">` (`app/layout.tsx`) — the page's
+  answer;
+- **`/build.json`** (`app/build.json/route.ts`), a static file the worker
+  precaches (`serwist.config.mjs`) — the worker's answer, read through it with a
+  plain `fetch`.
+
+On takeover the pill compares the two
+(`apps/bracemark-web/src/lib/build-id.ts`). Three choices in there are
+load-bearing, and none of them fails anything visibly if undone:
+
+- **The worker's answer is a precached FILE, not a constant in the worker
+  script.** The script is bundled by `serwist build`, a second process; a
+  constant there could disagree with the pages it serves. A file in the precache
+  cannot — it is one of them. And it has to be **in** the precache: fetched from
+  the network instead, it names the latest deploy whatever the worker holds.
+- **The page's answer is in the DOCUMENT, not the bundle**, and is read **once,
+  at load**. The document decides which chunks a page runs, so it is the page's
+  build. But the root layout is also in every route payload an in-app move
+  fetches, from whichever worker is in control — so on an old page under a new
+  worker the attribute can come to name the new build while the code is still
+  old. Asked at takeover instead of at load, the page would call itself current
+  exactly when it is not.
+- **Anything unreadable counts as another build.** A pill shown once too often
+  costs a reload; one withheld leaves a window on old code with nothing saying
+  so.
+
+No client chunk carries the stamp, and it is not shown anywhere: it answers
+"are these two the same", not "which version is this". It is also how a person
+checks an update by hand (`PWA-RELEASE-001`, `e2e/web/RELEASE.md`).
+
+#### when the browser checks for a new build
+
+**The browser re-fetches `/sw.js` by itself after every navigation in scope**,
+past the worker and (for the script itself) past the HTTP cache, and installs
+what it finds if the bytes differ. No app code takes part: `PWA-011` deploys a
+build whose page ships without a single script, and the browser installs its
+worker anyway. That is the property the update design rests on — a build can
+always be replaced without its own cooperation.
+
+Next's router changes routes with the History API, which is **not** a
+navigation. A window that is opened once and never reloaded — an installed app
+left running for weeks — therefore never checks again. So the app asks: on
+returning to the foreground, at most once an hour, counted from the load
+(`apps/bracemark-web/src/lib/service-worker-update-check.ts`, mounted by `Initializer`).
+A window that is never hidden still waits for its next load.
+
+#### ⚠ `/sw.js` is permanent — three ways to strand a device
+
+Because the browser fetches the worker script itself, **a bad worker is fixed by
+deploying a good one**, and nobody has to clear site data — as long as none of
+these three things happens. None fails a lint, a typecheck or a unit test.
+
+1. **`/sw.js` stops being a valid worker at that URL and scope.** A browser
+   keeps its installed worker until a new one from the **same URL** replaces it;
+   it never gives one up because the file went away. Renaming `swDest`
+   (`serwist.config.mjs`) or `swUrl` (`inner-layout.tsx`), changing the scope,
+   answering that path with a redirect (a browser refuses a redirected worker
+   script), or deleting the file leaves every installed browser with the old
+   worker and its old precache, indefinitely. **Never move or remove it. To
+   retire the worker, ship a kill switch at this same URL** (below).
+2. **The new worker cannot install.** The precache install is all-or-nothing:
+   one manifest URL that does not answer 200 and the new worker never takes
+   over. Online nothing looks wrong, because page loads come from the network
+   (above); what stays behind is the build the device opens **offline**, deploy
+   after deploy. The e2e origin is a node server, not CloudFront + S3, so a URL
+   can resolve there and 404 in production — the clean-URL function and the
+   bucket's keys decide ([hosting.md](./hosting.md), _clean URLs_).
+3. **The new worker installs and still holds old content.** A precache entry's
+   `revision` is what makes a new worker re-fetch a URL whose name did not
+   change. A stable-named file shipped with `revision: null` keeps the copy the
+   first worker fetched. Today only `/_next/static/` entries have no revision,
+   and those are content-addressed.
+
+**As built — `tools/scripts/check-service-worker.mjs`**, run by `deploy-static.sh`
+([hosting.md](./hosting.md), _deploying the static sites_) and by hand as
+`npm run check:service-worker`. Before upload it reads the manifest out of `out/sw.js`
+and refuses a build where a manifest URL has no file in the export (by the
+CloudFront function's mapping, not a local server's) or a stable-named entry has
+no revision. After the invalidation completes it asks the real host: `/sw.js`
+answers 200, as JavaScript, without a redirect, byte-identical to the artifact,
+and every manifest URL answers 200. That covers 2 and 3, and the redirect and
+removal halves of 1. Nothing covers a deliberate rename — that is this rule.
+
+##### a failed install hangs, it does not fail
+
+In the Serwist this repo ships (9.5.11), a precache fetch that fails does not
+reject the install: `@serwist/utils`' `parallel` wraps an `async` function in
+`new Promise(...)`, so the rejection is dropped and the install's promise never
+settles. The new worker sits in `installing` and the old one keeps running.
+Measured in Chrome 154, with a manifest entry answering 404:
+
+- the new worker stayed `installing` for **300 seconds** — Chrome's own limit on
+  an install — and only then became `redundant`;
+- a fixed build deployed 20 seconds in was **not** picked up by a check made
+  then: the check is merged into the stuck one and resolves at once, having
+  installed nothing;
+- with the window then left alone, the fixed build was still not installed ten
+  minutes in. Nothing checks again by itself; the next navigation or launch does.
+
+Closing the browser discards the stuck worker, and the next launch checks
+afresh — which is how `PWA-010` reaches the fixed build.
+
+So a build with a bad precache entry costs more than itself: in a window that
+stays open it also holds back the build that fixes it. That is the argument for
+catching it at deploy rather than in the field. If a Serwist upgrade makes the
+install reject properly, this section shrinks to "the old worker stays" and
+nothing else here changes.
+
+##### the kill switch — not built
+
+The one case no ordinary deploy fixes is a worker that has to **go away**: the
+script is being retired, or a bug in the update path itself. The standard answer
+is a few lines served at the same `/sw.js` — skip waiting, unregister, delete
+Cache Storage, reload the open windows — which every installed browser picks up
+on its next load. **It is not in the repo yet and has never been rehearsed.**
+When it is written: it must delete **Cache Storage only, never IndexedDB** (the
+library and its keys live there — [sessions.md](./sessions.md)'s no-wipe rule),
+and its forced reload discards unsaved drafts, the one place that is acceptable.
 
 ### version skew — the conditions for safe mixed versions
 
@@ -386,10 +596,43 @@ worker:
 - `PWA-006` — a never-visited query URL loads cold and offline.
 - `PWA-007` — build B (A with a changed worker script) takes over two open tabs:
   both show the pill, the untouched one keeps working, Reload lands on B.
+- `PWA-008`–`011` — builds that **differ**: `pwa/fixtures/build.ts` derives each
+  from the staged export with a changed page (a revisioned entry), a new asset
+  (an unrevisioned one), its own build stamp, and a worker script naming them. Each reads which build
+  the worker holds with the **origin stopped**, since with it up a page is the
+  latest deploy's regardless (_what answers a navigation_).
+  - `PWA-008` — the new worker replaces the changed page and adds the asset; the
+    old copy is deleted, not outranked. Keep the old revision on the changed page
+    and it fails at the reload.
+  - `PWA-009` — a cold launch after a deploy, with nothing asking: the page is
+    the new build's at once, the new worker installs by itself **and no pill
+    shows**, and the next launch with the origin gone is the new build.
+  - `PWA-010` — a build whose precache names a missing file never takes over;
+    the old build still opens with the origin gone and still takes a write; the
+    fixed build takes over on the next launch and clears what the failed install
+    left.
+  - `PWA-011` — a build whose page has no script at all is installed on the
+    browser's own check; the fix after it is the app again on one reload.
 - `VERSION-SKEW-WEB-001`/`002` (`e2e-web`) — a second tab opens each database
   one version up under an open, dirty editor: the upgrade isn't blocked, the old
   tab shows the update-required banner, and the draft is still on screen.
-- Unit specs: `update-pill.spec.tsx` (first install vs update, chunk failures,
+- `PWA-012` — an origin that accepts connections and never answers: the launch
+  opens the installed build from the precache within seconds. Only a **stall**
+  shows this; a stopped origin refuses at once, so every other offline case
+  opens instantly with or without the timeout.
+- `PWA-013` — an origin answering 500 opens the installed build; an unknown
+  path still gets the origin's 404.
+- `npm run test:check-service-worker` — the deploy check itself (`tools/scripts/`,
+  node's runner): it refuses a manifest it can only read part of, a precached
+  URL with no file, a stable name without a revision, and a host that redirects
+  the worker, serves it as a page, serves another build's, or 404s an entry.
+- Unit specs: `navigation-response.spec.ts` (the network's answer in time; the
+  whole timeout for a stall and not a millisecond less; a failure without
+  waiting it out; 5xx falls back and 404 stands; nothing precached waits for
+  the network), `service-worker-update-check.spec.ts` (the foreground check's interval,
+  counted from the load; offline skipped without spending it),
+  `update-pill.spec.tsx` (first install vs another build vs the same build, the
+  build read at load, an unreadable build, chunk failures,
   the draft confirm, flush before reload), `update-required-banner.spec.tsx`
   (no reload by itself, a waiting worker's handover before the reload, the
   fallback when it never reports), `chunk-error.spec.ts`,
@@ -405,10 +648,25 @@ leaving the app's origin (context routing does reach worker requests), "the api
 is gone" was never actually true in `PWA-002`/`003`. Keep the route in any new
 offline case.
 
-**Not covered end to end:** an old tab that meets a missing chunk offline after
-a real two-build deploy (the recovery is pinned at the unit level; building two
-genuinely different exports in one run isn't set up), and the Safari
-measurement above.
+**Not covered end to end:**
+
+- **The previous release → this one.** Every update case replaces a build with
+  one derived from it in the same run. The pair real users meet is the worker
+  that shipped last time against the one about to ship, and it cannot exist
+  before there is a first release. After it: keep the released `out/` (or
+  rebuild its tag against the local stack) and install from that.
+- **A stalled response body.** The navigation timeout is on the response
+  starting; headers followed by a stall are not exercised.
+- **Two real builds.** The derived builds share build A's chunk graph, so an old
+  tab asking the new worker for a chunk only the old build had — and a new page
+  running over the old build's route payloads — are not exercised; chunk
+  recovery is pinned at the unit level.
+- **Any browser but Chrome.** Safari and Firefox update by the same rules on
+  paper; `PWA-RELEASE-001` (`e2e/web/RELEASE.md`) checks an update by hand on
+  both, on a real deploy.
+- **The real host.** Whether each precache URL resolves on CloudFront + S3 is
+  the deploy check's, not a case's.
+- The Safari storage measurement above.
 
 ### build order
 

@@ -215,7 +215,7 @@ Nx cache reporting `13/13 hit`, not projects being skipped. To force real
 execution, `npx nx reset` or scope to one project with
 `npx nx test @stxapps/<project>`.
 
-### the one thing outside the two runners
+### the two things outside the two runners
 
 `tools/cloudfront/rewrite-url.js` is the CloudFront function that gives both static
 sites their clean URLs ([hosting.md](./hosting.md#clean-urls--the-cloudfront-function)).
@@ -233,8 +233,22 @@ for one dependency-free file would put a thing in the project graph that is not 
 package. The tradeoff is that it only runs when someone runs it, which is the same
 deal as every other test here.
 
-Node is not the runtime it will execute in, and this is the rare case where that gap
-is not fixable from inside the repo: `cloudfront-js-2.0` is ES 5.1 plus a subset of
+`tools/scripts/check-service-worker.mjs` is the second, for a different reason: it IS
+executed, by every bracemark-web deploy, but its job is to catch a failure that is
+silent everywhere else ([offline-mode.md](./offline-mode.md), _`/sw.js` is
+permanent_), so the way it fails silently — reading part of the precache manifest
+and passing — needs pinning too. `check-service-worker.test.mjs` beside it, same runner:
+
+```bash
+npm run test:check-service-worker
+```
+
+Each refusal there has a passing control built from the same fixture, and the
+deployed half runs against a node server standing in for the CDN — which is the
+one thing it cannot be, and why the real check runs against the real host.
+
+For the CloudFront function, node is not the runtime it will execute in, and this
+is the rare case where that gap is not fixable from inside the repo: `cloudfront-js-2.0` is ES 5.1 plus a subset of
 ES 6-12, and only `aws cloudfront test-function` runs the real thing. The node suite
 pins the RULES — the redirect table, the query-string handling, the 10 KB size
 ceiling — and says so at the top of the file, including what it cannot catch.

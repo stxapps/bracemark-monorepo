@@ -87,6 +87,15 @@ Current vars:
   and never in a client component — prefixing it would bake a string into every
   chunk for nothing. See [_robots.txt is per-tier_](#robotstxt-is-per-tier).
 
+**Not in any env file: `BUILD_ID`.** It is not configuration — it is the build
+naming itself. `next.config.js` stamps each `next build` with the moment it
+started and passes that through Next's `env` option, so it is inlined where it is
+read (`src/app/layout.tsx`, `src/app/build.json/route.ts`) and nowhere else; no
+client chunk carries it. A value already in the environment wins, which is what
+keeps the static-generation workers on the id the main process chose — and means
+setting `BUILD_ID` by hand pins it, which nothing here does. What it is for:
+[offline-mode.md](./offline-mode.md), _which build is this page_.
+
 Adding a new var = add the line to all **four** files (the symmetry is
 deliberate: there is no config hiding in `package.json`). `.env.test` is the
 newest of them and the easiest to forget — a var missing there doesn't fail the

@@ -11,14 +11,14 @@ survives it.
 
 ### four client surfaces, plus the stitched contracts
 
-| surface       | driver             | what only it can prove                                                          |
-| ------------- | ------------------ | ------------------------------------------------------------------------------- |
-| **web**       | `@playwright/test` | Dexie survives a reload, cross-origin sign-out, real Argon2id in a real browser |
-| **extension** | `@playwright/test` | unpacked MV3 profile/session, popup writes, worker restart, web cross-read      |
-| **pwa**       | `@playwright/test` | the production export's service worker: a cold launch offline, a queued write   |
-| **native**    | Maestro            | real expo-sqlite, secure-store, cold-start session, per-platform navigation     |
-| **contract**  | both, stitched     | one password → the same keys → the same blobs, **web ⇄ mobile**                 |
-| **vectors**   | Maestro, no stack  | the FROZEN table against real quick-crypto, on device                           |
+| surface       | driver             | what only it can prove                                                           |
+| ------------- | ------------------ | -------------------------------------------------------------------------------- |
+| **web**       | `@playwright/test` | Dexie survives a reload, cross-origin sign-out, real Argon2id in a real browser  |
+| **extension** | `@playwright/test` | unpacked MV3 profile/session, popup writes, worker restart, web cross-read       |
+| **pwa**       | `@playwright/test` | the production export's service worker: offline launches, updates between builds |
+| **native**    | Maestro            | real expo-sqlite, secure-store, cold-start session, per-platform navigation      |
+| **contract**  | both, stitched     | one password → the same keys → the same blobs, **web ⇄ mobile**                  |
+| **vectors**   | Maestro, no stack  | the FROZEN table against real quick-crypto, on device                            |
 
 The third one is the reason this layer exists at all. `web-crypto` and
 `expo-crypto` each carry a `contract-vectors.spec.ts`, and those prove both
@@ -275,11 +275,72 @@ sign-out keeps the worker; `PWA-006`, that
 a never-visited query URL loads cold and offline; `PWA-007`, that a new worker
 (the staged export with a changed `sw.js`, served from a copy) takes over two
 open tabs, both show the "updated, reload" pill, the untouched one keeps working,
-and Reload lands on the new worker. Cut the worker's caching
+and Reload lands on the new worker; `PWA-008`–`011`, the same handover between
+builds that **differ** (below); `PWA-012`, that a launch against an origin which
+accepts connections and never answers opens from the precache within seconds;
+`PWA-013`, that an origin answering 500 opens from the precache too, while an
+unknown path still gets the origin's 404. Cut the worker's caching
 (`precacheEntries` AND `runtimeCaching` emptied) and `PWA-001` fails at the
 worker assertion. Emptying the precache alone does NOT fail it — the online
 launch the case makes first leaves `defaultCache` holding the document and its
 chunks — so the claim is "the worker brings it back", not "the precache does".
+
+**The update cases deploy derived builds, and read the worker with the origin
+stopped.** The run stages one real export, so `pwa/fixtures/build.ts` makes a
+later build out of it by changing what a deploy changes: a page (`/links`,
+marked, with a new revision), a new content-addressed asset, the build stamp
+(`/build.json` and that page's `<html data-build>`, which the update pill
+compares), and the worker script naming them. Every build is derived from the pristine export, never from
+the last one deployed. `PWA-008` proves the new worker replaces the changed page
+and deletes the old copy; `PWA-009`, that a cold launch after a deploy takes the
+new worker with nothing asking; `PWA-010`, that a build whose precache names a
+missing file never takes over, leaves the old build working, and is followed by
+the fix; `PWA-011`, that a build whose page has no script at all is installed
+and then replaced on the browser's own check. Five things about writing one:
+
+- ⚠ **A document says which build the WORKER holds only when the origin is
+  stopped, and nothing fails when you forget.** The worker hands a navigation
+  the network's copy whenever the origin answers ([offline-mode.md](./offline-mode.md),
+  _what answers a navigation_), so with the origin up a marker in the page proves
+  the deploy happened and nothing about the worker. The first draft of `PWA-009`
+  asserted the launch after a deploy was still the old build and failed on
+  exactly that. Stop the origin first, or read the precache
+  (`precachedRevisions`).
+- ⚠ **Do not wait for a worker event.** Chrome checks for an update by itself
+  about a second after a navigation, and a check the case asks for is merged
+  with one already in flight — so an `updatefound` listener attached by the case
+  can miss its event and hang until the timeout. `requestUpdateCheck` returns
+  nothing on purpose; read the outcome from state: `precachedRevisions` for a
+  worker that activated, `StaticOrigin.answered(path)` — the origin's own log of
+  what it served — for an install that met a 404.
+- **A failed install is followed by a relaunch.** It hangs rather than fails
+  ([offline-mode.md](./offline-mode.md), _a failed install hangs_): the stuck
+  worker stays `installing` for five minutes, and a check made meanwhile
+  installs nothing. `PWA-010` closes the profile and reopens it to meet the
+  fixed build.
+
+- ⚠ **The explicit registration has to match the app's, type included.** The
+  installed cases register the worker themselves to wait for activation
+  (`installAndRegister`). The app registers `/sw.js` as a **module** worker; a
+  bare `register('/sw.js')` asks for a classic one, which the browser treats as
+  a different worker and installs a second time, replacing the app's a moment
+  after it activated. Every installed case ran a worker type production never
+  runs, and a page load issued in that moment never completed — handed to the
+  first worker just as it was discarded (measured: no fetch event reached either
+  worker, 40 seconds on). Nothing failed on either count; the cases escaped the
+  hang only because each saves a link and syncs before its first page load.
+- ⚠ **"The origin is unavailable" has three shapes, and `stop()` is only one.**
+  `StaticOrigin.stop()` refuses connections, which fails at once — so a case
+  built on it opens instantly whether or not the worker has a navigation
+  timeout, and cannot tell. `respond('stall')` accepts every connection and
+  never answers (`PWA-012`), which is the shape that leaves a browser waiting;
+  `respond(500)` answers every request with that status (`PWA-013`). Pick the
+  shape the claim is about.
+
+These are not two `next build`s: the chunk graph is the staged export's
+throughout. The pair that matters most — the previously **released** build
+against the candidate — cannot exist before a first release (`PWA-UPGRADE-001`,
+`e2e/NEXT.md`).
 
 #### the fixture constraint — read this before touching `web/fixtures/`
 
@@ -2708,6 +2769,32 @@ last one, after all four picker flicks had passed — the compose screen could n
 longer be swiped away (`share-add` still visible). Its first draft flicked at
 100ms and passed the first of those two with no guard at all; that is recorded
 with the case (_gestures and waits the runner performs_).
+
+The PWA update and navigation cases were measured 2026-10-05 from commit
+`c6e089e` with their changes present in the working tree — system Chrome
+154.0.8037.93, Playwright 1.62.1: **13/13 passed** (`PWA-001`–`013`) in one
+invocation, 2.0 min, no retries. Each new case was then run against what it
+exists to catch and failed:
+
+- `PWA-008` with the changed page keeping its old revision — at the reload with
+  the origin gone: the old page came back;
+- `PWA-010` with the "uninstallable" build made installable — at the first
+  check that build A was still in the precache;
+- `PWA-009` with the pill ignoring builds, as it did before — at the no-pill
+  assertion on the launch after a deploy;
+- `PWA-009` and `PWA-011` with page loads answered from the precache first — both
+  at their first assertion: the launch after a deploy was the old page;
+- `PWA-012` and `PWA-013` with the navigation listener removed, so Serwist's
+  precache strategy answered — `PWA-013` at the status (the 500 came through),
+  and `PWA-012` at the launch itself, which had **not opened after its
+  five-minute budget**. That is the measurement behind the timeout
+  ([offline-mode.md](./offline-mode.md), _what answers a navigation_).
+
+Four things the first drafts or the fixture got wrong are recorded with the
+target (_the PWA target_, above): a document read with the origin up says
+nothing about the worker, a wait on a worker event can hang, a stopped origin
+cannot show a stall, and a registration of the wrong type installs the worker
+twice.
 
 ### the red full suite, and what it was
 

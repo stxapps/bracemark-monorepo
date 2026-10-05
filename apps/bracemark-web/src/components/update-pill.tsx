@@ -16,6 +16,7 @@ import {
 } from '@stxapps/web-ui/components/ui/alert-dialog';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 
+import { pageBuildId, workerHoldsAnotherBuild } from '@/lib/build-id';
 import { isChunkLoadError } from '@/lib/chunk-error';
 import { reloadPage } from '@/lib/reload-page';
 
@@ -26,8 +27,16 @@ import { reloadPage } from '@/lib/reload-page';
 //
 // WHEN it shows: on `controllerchange` — the moment a new worker actually
 // controls this page, i.e. completed activation, never merely "a deploy exists" —
-// but only if the page was already controlled when it loaded. The first
-// installation also fires `controllerchange` (clientsClaim) and is not an update.
+// and only when that worker holds a DIFFERENT BUILD from the one this page loaded
+// as (lib/build-id.ts). Two takeovers are not updates of this page:
+//   - the first installation, which fires `controllerchange` too (clientsClaim) —
+//     so the page must already have been controlled when it loaded;
+//   - the worker CATCHING UP with the page. A launch after a deploy is handed the
+//     new build's page by the network while the old worker is still installed
+//     (sw.ts), and the new worker follows seconds later: the page is already what
+//     the worker now holds, and a pill there asks for a reload that changes
+//     nothing. That was every user's first launch after every deploy, until the
+//     comparison.
 // Also when the page fails to load one of its own chunks (lib/chunk-error.ts): the
 // old build asking the new worker for something it no longer holds, which only
 // the new build fixes.
@@ -48,13 +57,23 @@ export function UpdatePill() {
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return;
     let controlled = navigator.serviceWorker.controller !== null;
+    // Read once, now: later the attribute can name a newer build than the code
+    // running (lib/build-id.ts).
+    const loadedAs = pageBuildId();
+    let cancelled = false;
     const onControllerChange = () => {
-      if (controlled) setUpdated(true);
+      const wasControlled = controlled;
       controlled = true;
+      if (!wasControlled) return;
+      void workerHoldsAnotherBuild(loadedAs).then((another) => {
+        if (another && !cancelled) setUpdated(true);
+      });
     };
     navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
-    return () =>
+    return () => {
+      cancelled = true;
       navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
+    };
   }, []);
 
   useEffect(() => {

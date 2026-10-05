@@ -700,8 +700,68 @@
     "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report", "checkpoint"]
   },
   {
+    "id": "PWA-008",
+    "title": "A new build replaces a changed page and adds its new asset in the precache, and a reload with the origin gone gets both",
+    "surface": "pwa",
+    "tier": "full",
+    "traits": ["online", "pwa"],
+    "fixture": "small",
+    "path": "pwa/pwa.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report", "checkpoint"]
+  },
+  {
+    "id": "PWA-009",
+    "title": "A cold launch after a deploy gets the new page at once and the new worker without being asked, and the next launch with the origin gone is the new build",
+    "surface": "pwa",
+    "tier": "full",
+    "traits": ["online", "pwa"],
+    "fixture": "small",
+    "path": "pwa/pwa.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report", "checkpoint"]
+  },
+  {
+    "id": "PWA-010",
+    "title": "A build whose precache names a missing file never takes over and leaves the old build working, and the fixed build after it takes over on the next launch",
+    "surface": "pwa",
+    "tier": "full",
+    "traits": ["online", "pwa"],
+    "fixture": "small",
+    "path": "pwa/pwa.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report", "checkpoint"]
+  },
+  {
+    "id": "PWA-011",
+    "title": "A build whose page runs no script at all is installed and then replaced on the browser's own check, and one reload after the fix brings the app and its library back",
+    "surface": "pwa",
+    "tier": "full",
+    "traits": ["online", "pwa"],
+    "fixture": "small",
+    "path": "pwa/pwa.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report", "checkpoint"]
+  },
+  {
+    "id": "PWA-012",
+    "title": "With the origin accepting connections and never answering, a launch opens the installed build from the precache within seconds",
+    "surface": "pwa",
+    "tier": "full",
+    "traits": ["online", "pwa"],
+    "fixture": "small",
+    "path": "pwa/pwa.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report", "checkpoint"]
+  },
+  {
+    "id": "PWA-013",
+    "title": "An origin answering 500 opens the installed build from the precache, and an unknown path still gets the origin's 404",
+    "surface": "pwa",
+    "tier": "full",
+    "traits": ["online", "pwa"],
+    "fixture": "small",
+    "path": "pwa/pwa.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report", "checkpoint"]
+  },
+  {
     "id": "PWA-RELEASE-001",
-    "title": "Install and smoke the PWA through real browser chrome on the release device/browser matrix",
+    "title": "Install, run offline and take an update from the real host through real browser chrome on the release device/browser matrix, Safari and Firefox included",
     "surface": "pwa",
     "tier": "release",
     "traits": ["online", "pwa"],
