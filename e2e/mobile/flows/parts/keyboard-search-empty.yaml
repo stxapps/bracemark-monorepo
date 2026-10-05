@@ -1,0 +1,30 @@
+# VIEWPORT-KEYBOARD-001, the search that matches nothing. The pane swaps its
+# list for the empty state (main.tsx), and the list's drag was the box's only
+# way to put the keyboard down without submitting or leaving the search — so the
+# empty state is a scroller carrying the same pair (shared.tsx, EmptyState).
+#
+# Return commits the box and blurs it, so the keyboard is brought back with a
+# tap: the state under test is a focused box over a view with nothing in it.
+# The runner measures, then taps the empty pane.
+appId: com.bracemark.app
+---
+- tapOn:
+    id: 'links-search-clear'
+- tapOn:
+    id: 'links-search-input'
+- waitForAnimationToEnd:
+    timeout: 5000
+- inputText: ${MISS}
+- pressKey: Enter
+- extendedWaitUntil:
+    visible:
+      id: 'links-empty'
+    timeout: 10000
+- assertVisible:
+    id: 'links-title'
+    text: 'Search'
+- tapOn:
+    id: 'links-search-input'
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: keyboard-search-empty

@@ -5,7 +5,7 @@
 // link-tag-chips.tsx, link-row-menu.tsx, link-media.tsx).
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import {
   Archive,
   Folder,
@@ -200,6 +200,24 @@ function emptyCopy(selection: Selection): {
 
 // Sized against the pane, not the window, and the sentence capped at `max-w-sm`
 // so it keeps a readable measure on a tablet while still centring on a phone.
+//
+// A SCROLLER, though nothing in it scrolls — because of what it replaces. The
+// pane swaps its FlashList for this (main.tsx), and the list was the search
+// box's only way to put the keyboard down without submitting or leaving: its
+// `on-drag` and its `"handled"` went with it, so a search that matched nothing
+// left the keyboard up over a plain View with no gesture that reached it —
+// return commits the box, ✕ and the toggle abandon the search. Carrying the
+// list's keyboard pair here makes the empty pane answer the same two gestures,
+// a tap and a drag, on both platforms — by different halves of the pair. On
+// iOS a scroll view shorter than its frame still bounces, so the drag is a
+// drag and `on-drag` answers it. Android's ScrollView never starts a drag it
+// has no room to scroll, so `on-drag` cannot fire there; the gesture ends as a
+// touch nothing claimed, and `"handled"` drops the keyboard on release, as it
+// does for a tap (measured on the Pixel 8 AVD — docs/soft-keyboard.md,
+// _dismissal_, 2). Neither prop is the spare.
+//
+// `grow` on the content container is what keeps the message centred in the
+// pane, as `flex-1 justify-center` did on the View.
 export function EmptyState({
   isLoading,
   variant = 'list',
@@ -218,7 +236,13 @@ export function EmptyState({
   const { icon, title, body, cta } = emptyCopy(selection);
 
   return (
-    <View testID="links-empty" className="flex-1 items-center justify-center gap-3 px-6 py-12">
+    <ScrollView
+      testID="links-empty"
+      className="flex-1"
+      contentContainerClassName="grow items-center justify-center gap-3 px-6 py-12"
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="on-drag"
+    >
       <View className="size-11 items-center justify-center rounded-full bg-muted">
         <Icon as={icon} className="size-5 text-muted-foreground" />
       </View>
@@ -237,7 +261,7 @@ export function EmptyState({
           Tap + to add your first link.
         </Text>
       )}
-    </View>
+    </ScrollView>
   );
 }
 

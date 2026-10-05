@@ -1,0 +1,16 @@
+# VIEWPORT-KEYBOARD-001: the runner's gesture on the empty pane took the
+# keyboard and nothing else — the search is still committed (the title is the
+# route's projection, docs/search.md), the box still holds what was searched
+# for, and the pane still says nothing matched.
+appId: com.bracemark.app
+---
+- assertVisible:
+    id: 'links-search-input'
+    text: '${MISS}'
+- assertVisible:
+    id: 'links-title'
+    text: 'Search'
+- assertVisible:
+    id: 'links-empty'
+- assertVisible: 'No links match'
+- takeScreenshot: keyboard-search-empty-dismissed

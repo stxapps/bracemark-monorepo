@@ -188,6 +188,27 @@ SafariViewService going down in the same second — each time sending the app to
 the Home screen between a flow and the runner's next hierarchy read, where it
 failed as a missing `links-list` or a missing keyboard. None after a reboot.
 
+**…and both of those can read correctly on a device that still shows no keys.**
+Measured on iOS 26.5 with `ConnectHardwareKeyboard` `0`, `HardwareKeyboardLastSeen`
+`0`, Simulator restarted and the device rebooted: the keyboard appeared for the
+first focus or two after boot and then never again — a caret and no keys — so the
+runner's preflight passed and `VIEWPORT-KEYBOARD-001` failed at its first measure
+with _no soft keyboard is up_. The device's log names it
+(`xcrun simctl spawn <udid> log show --last 3m --predicate 'eventMessage CONTAINS
+"syncMinimizedStateToHardwareKeyboardAttachedState"'`): UIKit logs `Setting
+keyboard minimized = 1`, beside a `BKSHIDKeyboardDevice` connecting — the
+simulator's own virtual keyboard, attached whatever the two keys say. What attaches
+it was not established. What ended it is the device preference that makes iOS
+minimize for a hardware keyboard at all:
+
+```sh
+xcrun simctl spawn <udid> defaults write com.apple.keyboard.preferences AutomaticMinimizationEnabled -bool false
+```
+
+It takes effect at the app's next launch, no reboot, and the case went green on
+the next run. The runner does not check it: the key reads `1` on a device where
+the keyboard works, so only the symptom tells you.
+
 **A real iPhone is possible and is the highest-friction path.** It needs a dev
 build signed with a profile carrying the device UDID, and WebDriverAgent
 installed on the phone for tap and query — which needs its own signing.

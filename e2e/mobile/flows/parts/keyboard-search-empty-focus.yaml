@@ -1,0 +1,9 @@
+# VIEWPORT-KEYBOARD-001: the tap on the empty pane put the keyboard away; bring
+# it back for the pane's other gesture, the drag. A tap on the search box,
+# which holds still — it is top chrome, and nothing lifts it.
+appId: com.bracemark.app
+---
+- tapOn:
+    id: 'links-search-input'
+- waitForAnimationToEnd:
+    timeout: 5000

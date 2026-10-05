@@ -418,6 +418,9 @@ this watch 1 time, most recently because: MustScanSubDirs`. With the watch
 HardwareKeyboardLastSeen` prints `1`. Write it `false` the same way and
   reboot the device (`xcrun simctl shutdown <udid> && xcrun simctl boot
 <udid>`) — not a SpringBoard restart, after which SpringBoard kept crashing.
+  Both keys correct and STILL no keys after the first focus or two: write
+  `AutomaticMinimizationEnabled -bool false` into the same device domain and
+  relaunch the app (`docs/app-drivers.md`, _the software keyboard_).
 
 - **An empty `maestro hierarchy` is not always a bug.** Editing a file while an
   overlay or a modal is on screen can leave the accessibility tree holding the

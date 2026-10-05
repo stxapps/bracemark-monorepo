@@ -1138,8 +1138,29 @@ async function main(): Promise<void> {
         // Every paged row's address says `row-…`, so the search box's list
         // stays a full, scrollable screen under the keyboard.
         env.WORD = 'row';
+        // …and nothing says this, so the same box over the same library
+        // leaves the pane with no row in it at all.
+        env.MISS = 'zzqx';
         env.TAG_NAME = unique('e2e-keyboard-tag');
         const shareUrl = unresolvableUrl(`${run.runId}-keyboard-share`);
+        // The empty pane's visible stretch — what of `links-empty` the keyboard
+        // leaves showing — and a point a fraction of the way down it. The
+        // message is centred in the whole pane and so sits at the keyboard's
+        // edge; the upper part of the stretch is bare pane.
+        const onEmptyPane = async (context: CaseStepContext, label: string) => {
+          const { root, keyboard } = await clearOfKeyboard(
+            context,
+            label,
+            byIds('links-search-input', 'links-search-clear', 'links-search-advanced'),
+          );
+          const pane = boxById(root, 'links-empty');
+          const span = Math.min(pane.bottom, keyboard.top) - pane.top;
+          if (span <= 0) throw new Error(`${label}: none of the empty pane is above the keyboard`);
+          return (fraction: number) => ({
+            x: centerOf(pane).x,
+            y: pane.top + Math.round(span * fraction),
+          });
+        };
         steps = [
           testCase.path,
           async (context) => {
@@ -1204,6 +1225,43 @@ async function main(): Promise<void> {
           (context) =>
             keyboardGone(context, 'search, after dragging the results', 'links-search-input'),
           'mobile/flows/parts/keyboard-search-kept.yaml',
+          // The same box over a search that matched nothing: the list is gone,
+          // and the empty state in its place has to answer for it — first a
+          // tap on the bare pane…
+          'mobile/flows/parts/keyboard-search-empty.yaml',
+          async (context) => {
+            const at = await onEmptyPane(context, 'search, no match');
+            return writeTapFlow(context, 'empty-pane-tap', at(0.25));
+          },
+          (context) =>
+            keyboardGone(
+              context,
+              'search with no match, after the empty pane was tapped',
+              'links-search-input',
+            ),
+          'mobile/flows/parts/keyboard-search-empty-kept.yaml',
+          // …then, refocused, the drag a reader makes on a list out of habit.
+          // The pane has nothing to scroll, and the two platforms answer by
+          // different props: iOS bounces, so it is `on-drag`'s; Android never
+          // starts the drag, so it is `"handled"`'s, on release
+          // (docs/soft-keyboard.md, _dismissal_, 2). Explicit touch events on
+          // Android, as for the results above.
+          'mobile/flows/parts/keyboard-search-empty-focus.yaml',
+          async (context) => {
+            const at = await onEmptyPane(context, 'search, no match, refocused');
+            if (context.platform === 'android') {
+              await androidDrag(context.deviceId, at(0.6), at(0.1));
+              return null;
+            }
+            return writeDragFlow(context, 'empty-pane-drag', at(0.6), at(0.1), 250);
+          },
+          (context) =>
+            keyboardGone(
+              context,
+              'search with no match, after the empty pane was dragged',
+              'links-search-input',
+            ),
+          'mobile/flows/parts/keyboard-search-empty-kept.yaml',
         ];
         // The share sheet's text entry is only observable on Android: over the
         // iOS extension the panel leaves the accessibility tree the moment the

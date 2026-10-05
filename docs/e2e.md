@@ -828,8 +828,8 @@ InputMethod` reports while the window is visible. Every "reachable" claim is a
   control's bounds wholly above that frame's top.
 - **A tap on a region, not a control** (`VIEWPORT-KEYBOARD-001`).
   `writeTapFlow` taps a coordinate read off the controls around it — the add
-  panel's header level with its ✕, the share sheet's gap under its field —
-  because what is being tapped is the surface's own dismiss layer
+  panel's header level with its ✕, the empty links pane above the keyboard, the
+  share sheet's gap under its field — because what is being tapped is the surface's own dismiss layer
   ([soft-keyboard.md](./soft-keyboard.md), _dismissal_), which has no name.
 - **Across a real share boundary** (`SHARE-*`). A host step opens Safari with
   `simctl openurl` or launches Android's exported `ShareActivity` with a real
@@ -958,7 +958,7 @@ All of them are in the app:
 | `links-open-settings`         | ” — the Settings menu item                                                                      |
 | `links-list`                  | `src/features/links/main.tsx` — the FlashList, the viewport bounds are read against             |
 | `links-refresh-pill`          | `src/features/links/shared.tsx` — the "New updates" pill                                        |
-| `links-empty`                 | ” — the settled empty state, never the loading bones                                            |
+| `links-empty`                 | ” — the settled empty state, never the loading bones; a scroller, its bounds are the empty pane |
 | `add-link-url`                | `src/features/links/link-add-panel.tsx`                                                         |
 | `add-link-save`               | ” — the submit, whose label flips Save→Confirm                                                  |
 | `add-link-optional`           | ” — the "List, tags & note" disclosure                                                          |
@@ -1245,7 +1245,15 @@ search box, and — Android only — the share sheet's tag picker, whose field
 submits instead of blurring. Each is measured against the keyboard's real
 frame, then dismissed by the app's own path: a tap on the panel's chrome, a drag
 on the results, a tap on the sheet's gap — never `hideKeyboard`. Each dismissal
-must leave the surface and its draft in place. iOS's share sheet is left out
+must leave the surface and its draft in place. The search box is visited twice,
+because its pane is two different things: over results the exit is the drag, and
+over a search that matched nothing the list is not mounted at all — the empty
+state stands in for it, and has to be a scroller to answer anything
+([soft-keyboard.md](./soft-keyboard.md), _dismissal_, 2). There the runner taps
+the bare pane above the keyboard and then, with the box refocused, drags it;
+after each the search must still be committed, the box still holding its word.
+Both gestures are made on both platforms, and they are not one check twice: the
+drag is `on-drag`'s on iOS and `"handled"`'s on Android. iOS's share sheet is left out
 because its panel leaves the accessibility tree while the keyboard is up
 ([soft-keyboard.md](./soft-keyboard.md), _verifying any of this_); a pass there
 would be a coordinate tap with nothing to confirm against.

@@ -454,6 +454,26 @@ it, so before `ShareSheet`'s dismiss layer (`share/share-kit.tsx`) there was
 **no gesture in the process that closed the keyboard**. Note Android's
 `share-backdrop` is not that gesture — it closes the whole sheet.
 
+**A scroller that is SWAPPED OUT takes its exits with it**, which is the same
+hole arriving by a conditional. The links pane renders its `FlashList` only
+while there are rows and an `EmptyState` otherwise (`links/main.tsx`), and the
+search box above it has exactly one exit that neither submits nor leaves — the
+pane's scroller: return commits the box, ✕ and the search toggle abandon the
+search. The empty state was a plain `View`, so a search that matched nothing
+left the keyboard up over a pane with no gesture that reached it. It is a
+`ScrollView` now, carrying the list's pair (`links/shared.tsx`), and a tap or a
+drag anywhere on it drops the keyboard on both platforms — **by different halves
+of the pair, so neither is the spare.** On iOS a scroll view shorter than its
+frame still bounces, the drag is a drag, and `on-drag` answers it. Android's
+`ScrollView` never starts a drag it has no room to scroll, so `on-drag` cannot
+fire; the gesture ends as a touch nothing claimed and `"handled"` drops the
+keyboard on release, exactly as for a tap. Measured on the Pixel 8 AVD by
+removing each in turn: without `on-drag` a drag still put the keyboard away,
+and with `"always"` beside `on-drag` it did not. Any pane that trades its
+scroller for a placeholder owes the placeholder the same two props;
+`main.spec.tsx` pins them for this one, across every settled thing the pane
+shows.
+
 **A `Dialog`'s chrome is that tap target, once, in the container.** The native
 `@rn-primitives/dialog` Content claims every touch its children don't
 (`onStartShouldSetResponder` → `true`) and does nothing with it, so a tap on a
@@ -556,6 +576,7 @@ Android it maps to `none`. The current map:
 | scroller                                                               | mode          | why                                                                                                                     |
 | ---------------------------------------------------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | links `FlashList` (`main.tsx`), links drawer (`sidebar.tsx`)           | `on-drag`     | full-height, top-anchored; scrolling results is the dismissal already in hand                                           |
+| links `EmptyState` (`shared.tsx`)                                      | `on-drag`     | stands in for the list above when it has no rows, so it answers the same gestures; Android's drag is `"handled"`'s (2)  |
 | `auth-screen`, `lock-pane`, `link-edit-screen`, settings `scroll-host` | `on-drag`     | `KeyboardAwareScrollView` screens — it tracks the focused field, so no field is out of reach                            |
 | AdvancedSearch body + its checklists (`search-bar.tsx`)                | `on-drag`     | page sheet, top-anchored; the lift only pads its foot                                                                   |
 | `ListCommand`, `TagsCommand` (every host a `Dialog`)                   | `interactive` | the dialog re-centres; filtering is type-scan-type; chrome tap + `"handled"` are the tap exits                          |
@@ -667,7 +688,8 @@ entirely, and jest renders none of this. One e2e case is the exception:
 panel's URL and Note fields, the search box and its controls, and — on Android —
 the share tag picker's field, Create row and Done to sit above the keyboard's
 measured frame, then dismisses each by the app's own path (the panel's chrome,
-a drag on the results, the share sheet's gap) and requires the surface and its
+a drag on the results, a tap and then a drag on the empty pane a search with
+no match leaves, the share sheet's gap) and requires the surface and its
 draft to survive. Every other surface and path in this doc is still checked by
 hand, on a device or simulator.
 
