@@ -45,6 +45,13 @@ import { Text } from '../../components/ui/text';
 // sized by `className`, so this is load-bearing, not cosmetic.
 const Image = withUniwind(ExpoImage);
 
+// The quiet plate both fallbacks below paint — web's `PLATE_CLASS`, verbatim, and
+// web's link-media.tsx has why the alpha is per theme. An alpha toward the
+// foreground (the tag chips' mechanism, at a different tone) rather than
+// `bg-muted`: a selected item is `bg-muted` itself, so a muted plate was gone for
+// as long as the user was picking links.
+const PLATE_CLASS = 'bg-foreground/4 dark:bg-foreground/8';
+
 // A deterministic monogram for a host — the expo counterpart of web-ui's
 // HostMonogram: an icon-less site still gets a consistent mark to recognize rows
 // by (and the tile never changes under the user when the real icon later lands).
@@ -99,7 +106,7 @@ function useBrokenUri(): [(uri: string) => boolean, (uri: string) => void] {
 export function Favicon({ host, className }: { host: string; className: string }) {
   const uri = useFaviconUri(host);
   const [isBroken, markBroken] = useBrokenUri();
-  if (!uri || isBroken(uri)) return <View aria-hidden className={`bg-muted ${className}`} />;
+  if (!uri || isBroken(uri)) return <View aria-hidden className={`${PLATE_CLASS} ${className}`} />;
   // contain, not cover: a favicon is a whole mark, so it letterboxes rather
   // than crops (unlike the preview image, which is a photo filled into a box).
   //
@@ -123,12 +130,16 @@ export function Favicon({ host, className }: { host: string; className: string }
 }
 
 // The image-less ROW fallback — web's PreviewFallbackIcon, and its reasoning
-// verbatim: the favicon on a quiet muted plate, escalating to the monogram
-// FILLING the slot when there is no favicon either, because that is the state
-// where the mark is the only identity left. It is the row's ONE escalation — the
-// host chip above yields to it. It resolves the favicon itself rather than
-// delegating to `Favicon` (which renders a bare plate in this state) for the
-// reason web gives — the SLOT is what has to know whether there are bytes.
+// verbatim: the favicon on a quiet plate, escalating to the monogram FILLING the
+// slot when there is no favicon either, because that is the state where the mark
+// is the only identity left. It is the row's ONE escalation — the host chip above
+// yields to it. It resolves the favicon itself rather than delegating to
+// `Favicon` (which renders a bare plate in this state) for the reason web gives —
+// the SLOT is what has to know whether there are bytes.
+//
+// The plate is `PLATE_CLASS` rather than `bg-muted`, and this is the slot where
+// that cost most: on a selected row (`bg-muted`, link-row.tsx) a muted plate is
+// the row's own fill, which left a 16pt favicon marooned in an invisible 64x40.
 //
 // The row's slot is `overflow-hidden rounded` already (link-row.tsx), so the
 // field's square corners are clipped by the caller, as web's `rx={0}` is.
@@ -145,7 +156,7 @@ function PreviewFallbackIcon({
   const [isBroken, markBroken] = useBrokenUri();
   if (!uri || isBroken(uri)) return <HostMonogram host={host} className={className} />;
   return (
-    <View className={`items-center justify-center bg-muted ${className}`}>
+    <View className={`items-center justify-center ${PLATE_CLASS} ${className}`}>
       {/* Same slot as Favicon, same reasoning — see its cachePolicy note. */}
       <Image
         source={{ uri }}
@@ -201,7 +212,7 @@ function PreviewFallbackPanel({ host, className }: { host: string; className: st
 // and fetched on demand the moment the item mounts (FlashList items are
 // virtualized, so mounted = displayed — useImageFileUri adds the settle delay).
 // Until a uri exists — or when the link has no image at all — the slot shows a
-// fallback keyed by `fallback`: the site favicon on a muted background, escalating
+// fallback keyed by `fallback`: the site favicon on a quiet plate, escalating
 // to the full-bleed monogram when there is no favicon either (`icon`, the row's
 // compact slot), or the full-bleed hue panel (`panel`, the card's banner). Either way the placeholder still identifies the link and the
 // geometry never shifts — both call sites pass a FIXED-size `className` (the

@@ -1155,6 +1155,21 @@ in `view-state-provider`, items grow a `LinkRowSelect` checkbox
   (`theme.md`). Both chip components carry the one string and neither reads the
   selection. The label stays `text-foreground/70` on it: 6.6:1 at worst in light,
   6.8:1 in dark, where `--muted-foreground` would fail AA on the pill.
+- **The favicon plates take the same fill, for the same reason.** Both of an
+  item's quiet plates — the bare one beside the host line, and the one behind the
+  favicon in an image-less row's 64×40 slot — were `bg-muted`, so on a selected
+  item they vanished exactly as the pill had, the second leaving a 16px favicon
+  marooned in an invisible rectangle. They now carry
+  `bg-foreground/4 dark:bg-foreground/8` on both clients (`link-media.tsx`,
+  `Favicon` and `PreviewFallbackIcon`). The mechanism is the pill's; the tone
+  deliberately is not, and the alpha is per theme because one number serves
+  neither. `/4` on a plain light row is the old muted plate exactly (245), where
+  the pill's `/6` read too heavy; `/8` in dark puts the plate at 29 on a plain
+  row, where `/6` (24) read too faint against the muted plate's 38. The plate
+  therefore sits a step quieter than the chips in light and a step stronger in
+  dark, as it did while it was `bg-muted`, and steps 9/255 off a selected row in
+  light and 17 in dark. bracemark-extension's popup specimen keeps `bg-muted`
+  on its slot: it sits on the popup and is never selected.
 
 - **The whole item is the click target.** In the mode a click anywhere on a row
   or a card toggles that link's selection, and shift-click extends a range over

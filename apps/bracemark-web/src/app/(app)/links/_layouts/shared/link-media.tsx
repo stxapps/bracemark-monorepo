@@ -23,6 +23,16 @@ import { hostFromText, hueFromHost, initialFromHost } from '@stxapps/shared';
 import { type LinkView, useFaviconUrl, useImageFileUrl } from '@stxapps/web-react';
 import { HostMonogram } from '@stxapps/web-ui/components/links/host-monogram';
 
+// The quiet plate both fallbacks below paint: an alpha toward the FOREGROUND, not
+// `bg-muted`. A plate sits on an ITEM, and a selected item is `bg-muted` itself —
+// so a muted plate stepped 0 off it and was simply gone for as long as the user
+// was picking links. That is the tag chips' mechanism (link-tag-chips.tsx carries
+// the arithmetic) but not their tone, and the alpha is per theme because one
+// number serves neither: `/4` lands on the old muted plate exactly on a plain
+// light row, where the chips' `/6` read too heavy; `/8` in dark, where `/6` read
+// too faint.
+const PLATE_CLASS = 'bg-foreground/4 dark:bg-foreground/8';
+
 // The site's favicon, keyed by DISPLAY HOST (`hostFromText`, so it matches the
 // host string rendered beside it) — cached per host in Dexie and fetched at most
 // once per host per device through the extractor's image proxy (useFaviconUrl /
@@ -61,14 +71,19 @@ export function Favicon({ host, className }: { host: string; className: string }
   const url = useFaviconUrl(host);
   // `rounded-sm` here rather than at the call sites: they size the box and nothing
   // else shaped it, because the monogram used to bring its own `rx`.
-  if (!url) return <span aria-hidden className={`rounded-sm bg-muted ${className}`} />;
+  if (!url) return <span aria-hidden className={`rounded-sm ${PLATE_CLASS} ${className}`} />;
   // object-contain, not cover: a favicon is a whole mark, so it letterboxes rather
   // than crops (unlike the preview image, which is a photo being filled into a box).
   return <img src={url} alt="" className={`object-contain ${className}`} />;
 }
 
-// The image-less ROW fallback: the site favicon on a quiet muted plate, and —
-// when there is no favicon either — the monogram FILLING the slot.
+// The image-less ROW fallback: the site favicon on a quiet plate, and — when
+// there is no favicon either — the monogram FILLING the slot.
+//
+// The plate is `PLATE_CLASS` rather than `bg-muted`, and this is the slot where
+// that cost most: on a selected row a muted plate is the row's own fill, which
+// left a 16px favicon marooned in an invisible 64x40 — the picture the
+// escalation below was written to get rid of.
 //
 // That escalation is PageSpecimen's (bracemark-extension), and this is the same
 // 64x40 box, so it now follows the same rule: the plate stays quiet while there
@@ -114,7 +129,7 @@ function PreviewFallbackIcon({
   }
   // object-contain, not cover — `Favicon`'s rule above, same bitmap argument.
   return (
-    <div className={`flex items-center justify-center bg-muted ${className}`}>
+    <div className={`flex items-center justify-center ${PLATE_CLASS} ${className}`}>
       <img src={url} alt="" className={`object-contain ${iconClassName ?? ''}`} />
     </div>
   );
@@ -153,8 +168,8 @@ function PreviewFallbackPanel({ host, className }: { host: string; className: st
 // is the row's override-wins image ref (LinkView), read from Dexie and fetched
 // on demand by useImageFileUrl the moment the row mounts (rows are virtualized,
 // so mounted = displayed). Until bytes exist — or when the link has no image at
-// all — the slot shows a fallback keyed by `fallback`: the site favicon on a muted
-// background, escalating to the full-bleed monogram when there is no favicon
+// all — the slot shows a fallback keyed by `fallback`: the site favicon on a quiet
+// plate, escalating to the full-bleed monogram when there is no favicon
 // either (`icon`, the list's compact 64x40 slot), or the full-bleed hue panel
 // (`panel`, the card's 12:7 banner). Either way the placeholder still
 // identifies the link and the geometry never shifts — both call sites pass a
