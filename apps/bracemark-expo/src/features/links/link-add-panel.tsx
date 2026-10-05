@@ -113,6 +113,7 @@ import {
 } from '@stxapps/shared';
 
 import { ErrorText } from '../../components/error-text';
+import { LabeledField } from '../../components/links/labeled-field';
 import { LinkQuotaBanner } from '../../components/links/link-quota-banner';
 import { ListSelect } from '../../components/links/list-select';
 import { TagsField } from '../../components/links/tags-field';
@@ -154,17 +155,6 @@ const StyledAnimatedScrollView = withUniwind(Animated.ScrollView);
 const SHEET_CURVE = Easing.bezier(0.32, 0.72, 0, 1);
 const SHEET_MS = 300;
 const DIM_MS = 200;
-
-// A labeled field row (web's Label + control pairs; the SearchBar WordField
-// idiom).
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <View className="gap-1.5">
-      <Text className="text-xs text-muted-foreground">{label}</Text>
-      {children}
-    </View>
-  );
-}
 
 export function LinkAddPanel({ onClose }: { onClose: () => void }) {
   const router = useRouter();
@@ -593,7 +583,7 @@ export function LinkAddPanel({ onClose }: { onClose: () => void }) {
               />
             ) : (
               <>
-                <Field label="URL">
+                <LabeledField label="URL">
                   <Input
                     testID="add-link-url"
                     value={url}
@@ -625,7 +615,7 @@ export function LinkAddPanel({ onClose }: { onClose: () => void }) {
                           : 'You’ve already saved this link. Tap Confirm to save it again.'}
                     </ErrorText>
                   ) : null}
-                </Field>
+                </LabeledField>
 
                 {/* Web's disclosure, ported (link-add-surface.tsx carries the full
                 reasoning): quiet by WEIGHT rather than size or colour, so the
@@ -637,10 +627,10 @@ export function LinkAddPanel({ onClose }: { onClose: () => void }) {
                 A `Button variant="ghost" size="sm"` rather than the hand-rolled
                 Pressable this used to be, so the numbers come from the same RULE
                 as web's rather than being matched by hand: `px-3` (hence the same
-                `-ml-3` to put the label on the Field labels' text edge), the
-                trailing-icon padding trim derived from the children, and the icon
-                colour inherited through TextClassContext the way web's inherits
-                from the button. `h-9` on a phone, `h-8` from `sm:` — the size
+                `-ml-3` to put the label on the LabeledField labels' text edge),
+                the trailing-icon padding trim derived from the children, and the
+                icon colour inherited through TextClassContext the way web's
+                inherits from the button. `h-9` on a phone, `h-8` from `sm:` — the size
                 variant already draws that touch/pointer split, which is exactly
                 the h-9-vs-web's-h-8 this hand-rolled one was reproducing. The
                 press background is unchanged: ghost uses `accent`, and this theme
@@ -650,10 +640,10 @@ export function LinkAddPanel({ onClose }: { onClose: () => void }) {
                 `text-sm font-medium` — the native analogue of overriding the web
                 Button's own `font-medium`. `text-foreground/80` is web's colour
                 step (its comment carries the reasoning: between the Input's
-                foreground and the Field labels' `text-muted-foreground`, which the
-                control must not wear). It is spelled TWICE, on the Text and on the
-                Icon, because there is no currentColor here: the chevron takes its
-                colour from TextClassContext, which the Button fixes at
+                foreground and the LabeledField labels' `text-muted-foreground`,
+                which the control must not wear). It is spelled TWICE, on the Text
+                and on the Icon, because there is no currentColor here: the chevron
+                takes its colour from TextClassContext, which the Button fixes at
                 `text-foreground`, and a class on the Pressable cannot cascade into
                 either child. Web sets it once on the button and both follow. Web additionally cancels both halves
                 of its ghost variant's `aria-expanded:` lift (the fill AND the text
@@ -715,9 +705,9 @@ export function LinkAddPanel({ onClose }: { onClose: () => void }) {
                     Locked/hidden lists stay pickable — hiding only declutters the
                     drawer, it never blocks filing into a list you know exists. */}
                     {/* The three field ids exist because each control's
-                        accessible name is also its Field label's text
+                        accessible name is also its LabeledField label's text
                         (docs/e2e.md, _the testID contract_). */}
-                    <Field label="List">
+                    <LabeledField label="List">
                       <ListSelect
                         testID="add-link-list"
                         value={listId}
@@ -725,13 +715,13 @@ export function LinkAddPanel({ onClose }: { onClose: () => void }) {
                         excludeIds={[TRASH_ID]}
                         allowCreate
                       />
-                    </Field>
+                    </LabeledField>
 
-                    <Field label="Tags">
+                    <LabeledField label="Tags">
                       <TagsField testID="add-link-tags" value={tagIds} onChange={setTagIds} />
-                    </Field>
+                    </LabeledField>
 
-                    <Field label="Note">
+                    <LabeledField label="Note">
                       <Textarea
                         testID="add-link-note"
                         value={note}
@@ -747,7 +737,7 @@ export function LinkAddPanel({ onClose }: { onClose: () => void }) {
                         placeholder="Optional note"
                         aria-label="Note"
                       />
-                    </Field>
+                    </LabeledField>
                   </View>
                 )}
               </>

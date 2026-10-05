@@ -57,6 +57,7 @@ import {
 } from '@stxapps/expo-react';
 import { hostFromText, LINK_NOTE_MAX, LINK_TITLE_MAX, TRASH_ID } from '@stxapps/shared';
 
+import { LabeledField } from '../../components/links/labeled-field';
 import { ListSelect } from '../../components/links/list-select';
 import { TagsField } from '../../components/links/tags-field';
 import { StickyFooter } from '../../components/sticky-footer';
@@ -85,24 +86,6 @@ type ImageDraft =
 // any reordering means the user removed and re-added — a real edit either way.
 function sameIds(a: string[], b: string[]): boolean {
   return a.length === b.length && a.every((id, i) => id === b[i]);
-}
-
-// A labeled field row (the add screen's Field, shared shape).
-function Field({
-  label,
-  children,
-  onLayout,
-}: {
-  label: string;
-  children: React.ReactNode;
-  onLayout?: (e: LayoutChangeEvent) => void;
-}) {
-  return (
-    <View className="gap-1.5" onLayout={onLayout}>
-      <Text className="text-xs text-muted-foreground">{label}</Text>
-      {children}
-    </View>
-  );
 }
 
 export function LinkEditScreen() {
@@ -339,9 +322,9 @@ function LinkEditForm({ link, focus }: { link: LinkItem; focus?: EditFocus }) {
         keyboardDismissMode="on-drag"
         bottomOffset={16 + footerHeight}
       >
-        <Field label="Title">
+        <LabeledField label="Title">
           {/* The field ids here are the add panel's, for its reason: every
-              control's accessible name repeats its Field label
+              control's accessible name repeats its LabeledField label
               (docs/e2e.md, _the testID contract_). */}
           <Input
             testID="edit-link-title"
@@ -369,12 +352,12 @@ function LinkEditForm({ link, focus }: { link: LinkItem; focus?: EditFocus }) {
               </Pressable>
             )}
           </View>
-        </Field>
+        </LabeledField>
 
         {/* No Trash target: trashing is the menu's Remove, never a "move".
             Locked/hidden lists stay pickable — hiding only declutters the
             drawer, it never blocks filing into a list you know exists. */}
-        <Field label="List">
+        <LabeledField label="List">
           <ListSelect
             testID="edit-link-list"
             value={listId}
@@ -382,17 +365,17 @@ function LinkEditForm({ link, focus }: { link: LinkItem; focus?: EditFocus }) {
             excludeIds={[TRASH_ID]}
             allowCreate
           />
-        </Field>
+        </LabeledField>
 
-        <Field label="Tags" onLayout={focus === 'tags' ? onFocusFieldLayout : undefined}>
+        <LabeledField label="Tags" onLayout={focus === 'tags' ? onFocusFieldLayout : undefined}>
           <TagsField testID="edit-link-tags" value={tagIds} onChange={setTagIds} />
-        </Field>
+        </LabeledField>
 
         {/* The row menu's "Edit note" lands here (focus === 'note'): the note
             has no read-only surface — the layouts are fixed-height, so a row
             can only badge it — and at LINK_NOTE_MAX this input reads as well as
             any viewer would, with the edit already in hand. */}
-        <Field label="Note" onLayout={focus === 'note' ? onFocusFieldLayout : undefined}>
+        <LabeledField label="Note" onLayout={focus === 'note' ? onFocusFieldLayout : undefined}>
           <Textarea
             testID="edit-link-note"
             value={note}
@@ -401,9 +384,9 @@ function LinkEditForm({ link, focus }: { link: LinkItem; focus?: EditFocus }) {
             placeholder="Optional note"
             aria-label="Note"
           />
-        </Field>
+        </LabeledField>
 
-        <Field label="Image">
+        <LabeledField label="Image">
           {/* The card banner's shape (`aspect-12/7` — link-card.tsx), web's
               slot verbatim; the dialog carries the argument for why the preview
               owes the user the CARD's crop, why the field is LAST and full width
@@ -450,7 +433,7 @@ function LinkEditForm({ link, focus }: { link: LinkItem; focus?: EditFocus }) {
               </Button>
             )}
           </View>
-        </Field>
+        </LabeledField>
       </StyledKeyboardAwareScrollView>
       <StickyFooter onHeight={setFooterHeight}>
         <Button variant="ghost" size="sm" testID="edit-link-cancel" onPress={close}>

@@ -153,7 +153,10 @@ platform's file-store doctrine. They can't render the web pickers (`web-ui` is
 `apps/bracemark-expo/src/components/links/` (`list-select.tsx` over the shared
 `list-command.tsx` body and `tags-field.tsx` over `tags-command.tsx` — the same
 two shell/body splits as web, with dialogs standing in for anchored popovers —
-plus `link-quota-banner.tsx`) wired to `@stxapps/expo-react`'s live hooks.
+plus `link-quota-banner.tsx`) wired to `@stxapps/expo-react`'s live hooks. The
+row each control sits in is shared too: `labeled-field.tsx`, the cousin of web's
+`<Label density="dense">` over a control — not of web-ui's `ui/field.tsx`, which
+neither platform's link editors use.
 **The tag option set never renders inline in an editor.** It used to — every tag
 as a wrapped chip, unbounded — and on an account with forty tags it pushed the
 add panel's Note and Save off its keyboard-shortened height, the same defect the
