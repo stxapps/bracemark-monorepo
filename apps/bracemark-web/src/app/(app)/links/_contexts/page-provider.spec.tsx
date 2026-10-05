@@ -25,8 +25,10 @@
 //     interesting cases are the ones that must NOT highlight;
 //   - `?sort`/`?order` as a read-only override of the synced setting, which the
 //     serializer must then drop;
-//   - the stale-selection bounce and its POSITIVE-EVIDENCE guard, whose failure
-//     mode is a cold load of a shared list URL bouncing to the inbox.
+//   - the stale-selection fallback: that it is DERIVED (home in the very render
+//     that finds the id gone, not one navigation later), and its
+//     POSITIVE-EVIDENCE guard, whose failure mode is a cold load of a shared
+//     list URL bouncing to the inbox.
 
 import { act, render } from '@testing-library/react';
 
@@ -389,9 +391,45 @@ describe('LinksPageProvider', () => {
       expect(replace).toHaveBeenCalledWith('/links');
     });
 
+    // `replaceState` is a mock here, so the URL never comes back around: what
+    // the page reads below is the derivation alone. Leaving it to the navigation
+    // paints the dead view first — an empty pane under a title with no name to
+    // show — for as long as the round trip takes.
+    it('is already home in the render that finds the id gone', () => {
+      mockLists = [node('list-other')];
+      const { query, selection } = mountAt('list=list-deleted');
+      expect(selection).toEqual({ kind: 'list', id: DEFAULT_LIST_ID });
+      expect(query.lists.any).toEqual([DEFAULT_LIST_ID]);
+    });
+
+    // The fallback and the URL it then writes are the SAME view, so the catch-up
+    // must not hand useLinks a new query reference — that re-runs the read and
+    // resets the page for a navigation the user never saw.
+    it('keeps one query reference when the URL catches up with the fallback', () => {
+      // The inbox is in the tree, as it always is once the store answers (the
+      // system lists are merged in). Without it home itself reads as deleted,
+      // and the fallback answers for both renders below.
+      mockLists = [node(DEFAULT_LIST_ID), node('list-other')];
+      mockSearch = 'list=list-deleted';
+      // A fresh element per render: handed the same one back, React bails out
+      // and the provider never reads the new URL at all.
+      const tree = () => (
+        <LinksPageProvider>
+          <Probe />
+        </LinksPageProvider>
+      );
+      const { rerender } = render(tree());
+      const derived = api.query;
+
+      mockSearch = '';
+      rerender(tree());
+      expect(api.query).toBe(derived);
+    });
+
     it('finds an id nested anywhere in the tree', () => {
       mockLists = [node('parent', [node('deep')])];
-      mountAt('list=deep');
+      const { selection } = mountAt('list=deep');
+      expect(selection).toEqual({ kind: 'list', id: 'deep' });
       expect(replace).not.toHaveBeenCalled();
     });
 
@@ -402,7 +440,8 @@ describe('LinksPageProvider', () => {
     it('never convicts on an empty tree', () => {
       mockLists = [];
       mockTags = [];
-      mountAt('list=list-abc');
+      const { selection } = mountAt('list=list-abc');
+      expect(selection).toEqual({ kind: 'list', id: 'list-abc' });
       expect(replace).not.toHaveBeenCalled();
     });
 
@@ -411,7 +450,8 @@ describe('LinksPageProvider', () => {
     it('leaves a compound query alone even when it names a dead id', () => {
       mockLists = [node('list-other')];
       mockTags = [node('tag-other')];
-      mountAt('list=list-deleted&text=hello');
+      const { query } = mountAt('list=list-deleted&text=hello');
+      expect(query.lists.any).toEqual(['list-deleted']);
       expect(replace).not.toHaveBeenCalled();
     });
   });

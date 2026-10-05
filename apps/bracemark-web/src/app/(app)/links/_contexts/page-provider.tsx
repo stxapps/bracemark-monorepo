@@ -144,6 +144,15 @@ const FILTER_KEYS = [
   'note-none',
 ];
 
+// Does the URL carry a filter at all? One without is the bare `/links` — home.
+function hasFilter(searchParams: URLSearchParams): boolean {
+  return FILTER_KEYS.some((key) => searchParams.has(key));
+}
+
+// The bare `/links` as params, for parsing home out of the same grammar as
+// everything else rather than spelling its query a second time.
+const HOME_PARAMS = new URLSearchParams();
+
 // Words are matched case-insensitively and trimmed; lowercase them here so the
 // data layer can compare directly.
 function words(raw: string[]): string[] {
@@ -166,7 +175,7 @@ function sortOrderParam(searchParams: ReadonlyURLSearchParams): LinkSortOrder | 
 // `sortOn`/`sortOrder` are passed in ALREADY RESOLVED (URL override ?? setting
 // default — the provider computes them), so this just stamps them onto the query.
 function parseLinkQuery(
-  searchParams: ReadonlyURLSearchParams,
+  searchParams: URLSearchParams,
   sortOn: LinkSortOn,
   sortOrder: LinkSortOrder,
 ): LinkQuery {
@@ -212,7 +221,7 @@ function parseLinkQuery(
   // No filter params at all → the default inbox (My List). `?list=all` IS a param
   // (the show-all view), so it doesn't trigger the default — it leaves the lists
   // clause empty after the ALL_ID drop above, i.e. no filter.
-  if (!FILTER_KEYS.some((key) => searchParams.has(key))) {
+  if (!hasFilter(searchParams)) {
     query.lists.any = [DEFAULT_LIST_ID];
   }
   return query;
@@ -264,9 +273,9 @@ function treeHasId<T extends TreeItem>(tree: TreeNode<T>[], id: string): boolean
 // A selection whose entity is GONE — the list or tag was deleted while this URL
 // still names it. Reachable three ways: a bookmark or a history entry from
 // before the delete, and (the common one) closing Settings back onto the view
-// you were on when you deleted it there. Left alone the page is a dead end: the
-// topbar reads "Unknown" over an empty list, with no clue that the thing is gone
-// rather than empty.
+// you were on when you deleted it there. Left alone the page is a dead end: an
+// unnamed topbar over an empty list, with no clue that the thing is gone rather
+// than empty.
 //
 // Only a SINGLE-AXIS selection is judged. A compound query (`kind: 'none'` —
 // multi-tag, a text search, an exclusion) may name a deleted id among several
@@ -279,8 +288,8 @@ function treeHasId<T extends TreeItem>(tree: TreeNode<T>[], id: string): boolean
 // it should be in has entries. Lists always do once the read lands (the system
 // three are merged in, so `length > 0` is effectively "the store answered"), so
 // the only case this can't judge is a tag id on an account whose last tag was
-// just deleted — which falls back to the "Unknown" view it would have shown
-// anyway. The inverse mistake — treating a loading tree as proof of absence —
+// just deleted — which is left on the unnamed view it would have shown anyway.
+// The inverse mistake — treating a loading tree as proof of absence —
 // would bounce every cold load of a shared list URL back to the inbox.
 // Generic over the two item shapes so this file needs no entity types: all it
 // reads is `item.id`, which TreeItem already guarantees.
@@ -342,15 +351,38 @@ function InnerLinksPageProvider({ children }: { children: React.ReactNode }) {
   const sortOn = sortOnParam(searchParams) ?? coerceLinkSortOn(settingSortOn);
   const sortOrder = sortOrderParam(searchParams) ?? coerceLinkSortOrder(settingSortOrder);
 
-  // The main pane's full filter — same URL, the whole grammar. Memoized on the
-  // params + the resolved sort so its identity is stable across renders (it's a
-  // useLiveQuery dep in useLinks); a new object only when the URL or the applied
-  // sort actually changes. Depending on the RESOLVED sort (not the raw setting)
-  // means a setting change while a URL override is active doesn't churn the query.
-  const query = useMemo<LinkQuery>(
-    () => parseLinkQuery(searchParams, sortOn, sortOrder),
-    [searchParams, sortOn, sortOrder],
+  // Home — the bare `/links` — as ONE object per resolved sort, shared by the two
+  // ways of arriving there: the URL saying so, and the stale fallback below saying
+  // so ahead of it. That sharing is what lets the URL catch up with the fallback
+  // without `query` changing identity, which would re-run the read for a view that
+  // didn't change (it's a useLiveQuery dep in useLinks).
+  const homeQuery = useMemo<LinkQuery>(
+    () => parseLinkQuery(HOME_PARAMS, sortOn, sortOrder),
+    [sortOn, sortOrder],
   );
+
+  // What the URL asks for — the whole grammar. Memoized on the params + the
+  // resolved sort so its identity is stable across renders, for the same
+  // useLiveQuery reason; a new object only when the URL or the applied sort
+  // actually changes. Depending on the RESOLVED sort (not the raw setting) means a
+  // setting change while a URL override is active doesn't churn the query.
+  const urlQuery = useMemo<LinkQuery>(
+    () => (hasFilter(searchParams) ? parseLinkQuery(searchParams, sortOn, sortOrder) : homeQuery),
+    [searchParams, sortOn, sortOrder, homeQuery],
+  );
+
+  // The deleted-entity fallback (isStaleSelection): a URL naming a list or tag
+  // that is gone is shown as home. DERIVED, in the render that learns of it,
+  // rather than left to the navigation below. That navigation used to be the whole
+  // answer, and an effect cannot run until the render that found the id missing
+  // has committed — so the dead view was painted first, an empty pane under a
+  // topbar titled "Unknown", for as long as the URL took to come back around.
+  const lists = useLists();
+  const tags = useTags();
+  const stale = isStaleSelection(selectionFromQuery(urlQuery), lists, tags);
+
+  // The main pane's full filter: the URL's, unless what it names is gone.
+  const query = stale ? homeQuery : urlQuery;
 
   // Selection is a derived PROJECTION of the query — not a separate read of the URL
   // — so it can never disagree with what the main pane shows: a global search
@@ -365,9 +397,10 @@ function InnerLinksPageProvider({ children }: { children: React.ReactNode }) {
     recordLinksReturn(qs ? `/links?${qs}` : '/links');
   }, [searchParams]);
 
-  // The deleted-entity fallback (isStaleSelection). `replace`, not `push`: the
-  // view being left is gone, so it must not become a back-button destination —
-  // stepping back into it would only bounce forward again.
+  // …and the URL follows the fallback above, so it doesn't go on naming a view
+  // nobody is shown. `replace`, not `push`: the view being left is gone, so it
+  // must not become a back-button destination — stepping back into it would only
+  // bounce forward again.
   //
   // This is an AUTOMATIC navigation — nobody asked for it — which makes it the one
   // thing here that has to be safe during a sign-out, when every list and tag
@@ -378,9 +411,6 @@ function InnerLinksPageProvider({ children }: { children: React.ReactNode }) {
   // what used to crash sign-out from a user-list view). If you add another effect
   // that navigates on its own, it inherits that protection; if you move this one
   // above AuthGuard, it loses it.
-  const lists = useLists();
-  const tags = useTags();
-  const stale = isStaleSelection(selection, lists, tags);
   useEffect(() => {
     if (stale) replaceView('/links');
   }, [stale]);

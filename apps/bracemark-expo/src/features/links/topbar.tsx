@@ -37,24 +37,23 @@ function useSelectionLabel(): string {
   // A text search or compound/multi filter has no single-axis name — title the
   // view generically rather than borrowing a stale list/tag name.
   if (selection.kind === 'none') return 'Search';
-  // POSITIVE EVIDENCE ONLY, the same rule page-provider's isStaleSelection runs
-  // on: useLists/useTags collapse "still loading" into `[]` (docs/search.md), so
-  // an empty tree proves nothing about an id and must name nothing. Convicting
-  // one off it put the word "Unknown" in the title on EVERY cold mount — the
-  // default inbox included — for as long as the first read took, which is the
-  // dead end the stale-selection redirect exists to prevent, arriving as a
-  // flash instead. Blank until the tree can either name the id or convict it.
+  // A name the tree can't supply is BLANK, never a word. Whether the id is GONE
+  // is not this hook's call: page-provider judges that (isStaleSelection) and
+  // hands down home in its place, so what arrives here unnamed is something else
+  // — a tree not read back yet (useLists/useTags collapse "still loading" into
+  // `[]`, docs/search.md), this hook's tree a read ahead of the provider's (each
+  // call is its own live read), or the one tag view the provider can't judge.
+  // The word that used to stand here, "Unknown", was wrong in all three, and
+  // flashed over every cold mount — the default inbox included — and again
+  // after every delete.
+  //
+  // Look the name up in the merged list tree — so a renamed system list shows
+  // its override name, not the code default. Flatten since the match may be at
+  // any depth.
   if (selection.kind === 'list') {
-    // Look the name up in the merged list tree — so a renamed system list shows
-    // its override name, not the code default. Flatten since the match may be
-    // at any depth.
-    const nodes = flattenTree(lists);
-    if (nodes.length === 0) return '';
-    return nodes.find((n) => n.item.id === selection.id)?.item.name ?? 'Unknown';
+    return flattenTree(lists).find((n) => n.item.id === selection.id)?.item.name ?? '';
   }
-  const nodes = flattenTree(tags);
-  if (nodes.length === 0) return '';
-  return nodes.find((n) => n.item.id === selection.id)?.item.name ?? 'Unknown';
+  return flattenTree(tags).find((n) => n.item.id === selection.id)?.item.name ?? '';
 }
 
 export function Topbar() {

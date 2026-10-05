@@ -252,30 +252,51 @@ same open-redirect hole `guest-guard.ts` closes on its `?next=` param.
 
 **A returned-to view can be stale**, because Settings is exactly where lists and tags
 get deleted. Both providers therefore carry `isStaleSelection`: a single-axis
-`selection` whose entity is gone sends the page home (`replace`, so the vanished view
-isn't a back destination). It runs on **positive evidence only** — `useLists`/`useTags`
+`selection` whose entity is gone is shown as home, and the URL is brought into line
+behind it (`replace`, so the vanished view isn't a back destination). It runs on
+**positive evidence only** — `useLists`/`useTags`
 collapse "still loading" into `[]`, so only a _non-empty_ tree can convict an id, which
 is what keeps a cold load of a shared list URL from bouncing to the inbox. Lists always
 land non-empty (the system three are merged in); the one case it can't judge is a tag id
 on an account whose last tag was just deleted, which is left showing an unnamed view
 (the title rule below). Compound queries are never judged — one dead id among live
 clauses isn't worth discarding the whole search. The rule lives with the URL rather than
-in the close button because a stale bookmark and a back-button entry reach the same
-state, and on expo it is additionally **gated on focus**: the provider stays mounted
-under Settings, and an ungated `replace` would swap Settings out from under the user
-mid-edit.
+in the close button — or in the delete handlers — because a stale bookmark, a
+back-button entry and a deletion synced in from another device all reach the same
+state, and none of them passes through either.
 
-**The topbar title runs on the same evidence**, and for the same reason
-(`useSelectionLabel`, both platforms). An empty tree names nothing — the title is
-blank — because a tree that hasn't been read back yet cannot tell a live list from a
-deleted one, and the fallback it used to reach for was the word **"Unknown"**: with
-`useLists` resolving asynchronously on both platforms (dexie's `useLiveQuery`, expo's
-`useLiveRead`), that word flashed over EVERY cold mount of the links screen, the
-default inbox included. "Unknown" now survives only where it is true: a non-empty tree
-that doesn't contain the id — the frames between a deletion and the `replace` above.
-The unjudgeable last-tag case goes blank instead, and that is the price of the rule
-rather than a second bug: a view whose tag is gone loses its title, so that no cold
-mount gains a false one.
+**The fallback is derived; the navigation only follows it.** `query` is the URL's
+query _unless_ `isStaleSelection` convicts it, in which case it is home — decided in
+the render that learns the id is gone, with `selection` projected off the result as
+always. It used to be the navigation alone, and an effect cannot run until the render
+that found the id missing has committed: the dead view was painted first, an empty
+list under a topbar titled "Unknown", for as long as the URL took to come back
+around. On expo that was the whole of Settings sliding away, since the links
+section's reads are paused while it is covered (`LiveReadPause`) and learn of the
+deletion only as the reveal begins. Two things keep the derivation honest:
+
+- **Home is one object per resolved sort** (`homeQuery`), and a URL with no filter
+  resolves to that same object. So the fallback and the `/links` that then replaces
+  the URL are one `query` reference, not two equal ones — `query` is use-links's
+  live-read dep, and a second reference would re-run the read and reset the page for
+  a navigation nobody saw.
+- **On expo only the navigation is gated on focus.** The provider stays mounted under
+  Settings, and an ungated `replace` acts on the focused card: it would swap Settings
+  out from under the user who just pressed Delete in it. The projection is a render
+  and needs no gate.
+
+**The topbar title never convicts on its own** (`useSelectionLabel`, both platforms):
+a name the tree can't supply is **blank**, not a word. That hook calls
+`useLists`/`useTags` itself, and each call is its own live read (dexie's
+`useLiveQuery`, expo's `useLiveRead`), so its tree can be empty on a cold mount, or a
+read ahead of the provider's just after a deletion — and in neither case does it know
+the id is gone. The fallback it used to reach for was the word **"Unknown"**, which
+flashed over EVERY cold mount of the links screen, the default inbox included, and
+again in the frames after every delete. Deciding that an id is gone is the provider's
+job alone; by the time it has, the selection handed down is home. The unjudgeable
+last-tag case is blank for the same reason, and that is the price of the rule rather
+than a second bug: a view whose tag is gone loses its title, so that no other view
+gains a false one.
 
 ### the three-rung ladder (tiering)
 
@@ -419,7 +440,9 @@ comments — not re-derived here:
   swinging onto their params would parse the same My List default and throw away
   the view the user is coming back to — the round trip `closeSettings` exists to
   preserve. `features/links/page-provider.spec.tsx` pins all of it through a real
-  routed tree, the only layer that can see any of it.
+  routed tree, the only layer that can see any of it — on a stand-in drawer built
+  on the real `DrawerRouter`, because expo-router demotes the stale-selection
+  `replace` only against a navigator whose state is typed `drawer`.
 - **The basic box is a toggle-summoned full-width row at every width**, where web
   falls back to a persistent topbar box from `md` up — a phone topbar has no room
   for one, and a phone has no `md`. The mechanism is otherwise the same on both,

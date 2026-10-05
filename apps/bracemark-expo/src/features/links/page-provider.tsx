@@ -138,6 +138,15 @@ const FILTER_KEYS = [
 // identity change there re-runs the whole paginated read.
 const READ_KEYS = [...FILTER_KEYS, 'sort', 'order'];
 
+// Does the bag carry a filter at all? One without is the bare `/links` — home.
+function hasFilter(params: SearchParams): boolean {
+  return FILTER_KEYS.some((key) => params[key] !== undefined);
+}
+
+// The bare `/links` as a bag, for parsing home out of the same grammar as
+// everything else rather than spelling its query a second time.
+const HOME_PARAMS: SearchParams = {};
+
 // The params this view is filtered by, as a stable serialized bag. Two rules,
 // both load-bearing:
 //
@@ -261,7 +270,7 @@ function parseLinkQuery(
 
   // No filter params at all → the default inbox (My List). `?list=all` IS a
   // param, so it doesn't trigger the default.
-  if (!FILTER_KEYS.some((key) => params[key] !== undefined)) {
+  if (!hasFilter(params)) {
     query.lists.any = [DEFAULT_LIST_ID];
   }
   return query;
@@ -348,24 +357,45 @@ export function LinksPageProvider({ children }: { children: React.ReactNode }) {
   const sortOn = sortOnParam(params) ?? coerceLinkSortOn(settingSortOn);
   const sortOrder = sortOrderParam(params) ?? coerceLinkSortOrder(settingSortOrder);
 
-  // Identity-stable per view + resolved sort (it's a live-read dep in useLinks:
-  // a new reference re-runs the paginated read, an unchanged one holds it).
-  const query = useMemo<LinkQuery>(
-    () => parseLinkQuery(params, sortOn, sortOrder),
-    [params, sortOn, sortOrder],
+  // Home — the bare `/links` — as ONE object per resolved sort, shared by the
+  // two ways of arriving there: the URL saying so, and the stale fallback below
+  // saying so ahead of it. That sharing is what lets the URL catch up with the
+  // fallback without `query` changing identity (it's a live-read dep in
+  // useLinks: a new reference re-runs the paginated read, exits bulk edit).
+  const homeQuery = useMemo<LinkQuery>(
+    () => parseLinkQuery(HOME_PARAMS, sortOn, sortOrder),
+    [sortOn, sortOrder],
   );
+
+  // What the URL asks for. Identity-stable per view + resolved sort, for the
+  // same live-read reason.
+  const urlQuery = useMemo<LinkQuery>(
+    () => (hasFilter(params) ? parseLinkQuery(params, sortOn, sortOrder) : homeQuery),
+    [params, sortOn, sortOrder, homeQuery],
+  );
+
+  // The deleted-entity fallback (isStaleSelection): the list or tag the URL
+  // names no longer exists, so the view is home rather than a dead end — an
+  // unnamed topbar over an empty list, with nothing to say the thing is gone
+  // rather than empty. DERIVED, in the render that learns of it — web's
+  // rationale, verbatim: answering with the navigation alone left the dead view
+  // on screen until it came back around, which on this platform is the frames
+  // Settings slides away over.
+  const lists = useLists();
+  const tags = useTags();
+  const stale = isStaleSelection(selectionFromQuery(urlQuery), lists, tags);
+  const query = stale ? homeQuery : urlQuery;
 
   // Selection is a derived PROJECTION of the query — never a separate read of
   // the URL — so it can never disagree with what the main pane shows.
   const selection = useMemo<Selection>(() => selectionFromQuery(query), [query]);
 
-  // The deleted-entity fallback (isStaleSelection): the list or tag this screen
-  // is filtered by no longer exists, so send it home rather than leave it on a
-  // dead end — a topbar reading "Unknown" over an empty list, with nothing to
-  // say the thing is gone rather than empty. `replace`, not `push`: the view
-  // being left doesn't exist, so it must not become a back-gesture destination.
+  // …and the URL follows, so it doesn't go on naming a view nobody is shown.
+  // `replace`, not `push`: the view being left doesn't exist, so it must not
+  // become a back-gesture destination.
   //
-  // GATED ON FOCUS, which web needs no equivalent of. Deleting a list happens in
+  // GATED ON FOCUS, which web needs no equivalent of — the navigation only; the
+  // projection above is a render and needs no gate. Deleting a list happens in
   // SETTINGS, and this provider stays mounted under it the whole time (it wraps
   // the links navigator, a sibling card in the `(app)` stack — the same fact
   // settings/close.ts pops back onto). An ungated effect would therefore fire
@@ -373,12 +403,10 @@ export function LinksPageProvider({ children }: { children: React.ReactNode }) {
   // — it would swap SETTINGS out from under the user mid-edit. Focused, it fires
   // the moment settings is dismissed, on the screen it's actually about.
   const isFocused = useIsFocused();
-  const lists = useLists();
-  const tags = useTags();
-  const stale = isFocused && isStaleSelection(selection, lists, tags);
+  const bounce = stale && isFocused;
   useEffect(() => {
-    if (stale) router.replace('/links');
-  }, [stale, router]);
+    if (bounce) router.replace('/links');
+  }, [bounce, router]);
 
   // push (not replace) so the back gesture steps through the views you visited.
   const setSimpleQuery = useCallback(
