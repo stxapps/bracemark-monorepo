@@ -421,8 +421,10 @@ version split is gone. Wiring (already done):
   variant was ported from its NativeWind one, and stray props survive. `input`
   arrived destructuring `placeholderClassName`, which is NativeWind's name —
   Uniwind neither declares it in its type augmentation nor reads it at runtime
-  (its own is `placeholderTextColorClassName`, and the `placeholder:` class
-  variant covers the same ground). That surfaces as a TS2339 under
+  (its own is `placeholderTextColorClassName`, fed an `accent-*` utility; the
+  `placeholder:` class variant the registry also ships does **not** cover the
+  same ground on native — it compiles to an empty style, see `theme.md`,
+  _extending_). That surfaces as a TS2339 under
   `npx nx typecheck @stxapps/bracemark-expo`, **not** at lint, so it's caught but
   only if you typecheck the app after copying. Drop the dead prop and record the
   removal in the header comment like any other local change. One jest catch:

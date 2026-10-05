@@ -10,9 +10,9 @@ import { cn } from '../../lib/utils';
 // rewritten to relative; `font-sans` added to the base classes — RN has no CSS
 // cascade, so Inter must be applied where text renders (same reason as the
 // `Text` base variant); and the `placeholderClassName` destructure dropped —
-// that's NativeWind's prop name, which Uniwind neither types nor reads (its
-// equivalent is `placeholderTextColorClassName`, already covered by the
-// `placeholder:` variant in the classes below); `maxFontSizeMultiplier`
+// that's NativeWind's prop name, which Uniwind neither types nor reads — with
+// the placeholder colour moved to Uniwind's own `placeholderTextColorClassName`
+// (below); `maxFontSizeMultiplier`
 // defaulted — this is the second of the two font-scale-cap chokepoints (the
 // first is `text.tsx`; lib/font-scale.ts carries the rationale), set before the
 // `{...props}` spread so a call site can still override it; `allowFontScaling`
@@ -86,6 +86,22 @@ import { cn } from '../../lib/utils';
 // multiline field (`Textarea`) needs the leading to space its lines.
 const IOS_SINGLE_LINE_STYLE = { lineHeight: undefined };
 
+// THE PLACEHOLDER'S COLOUR IS A PROP ON NATIVE, NOT A VARIANT. The registry's
+// native branch said `placeholder:text-muted-foreground`, and on this side that
+// class is EMPTY: Tailwind emits it as a nested `&::placeholder` rule, and
+// Uniwind's processor keeps only the nested selectors it has a runtime answer
+// for (theme, `active`, `focus`, `disabled`, `data-*`) — a pseudo-element is
+// dropped with its declarations, silently (the probe in docs/theme.md,
+// _extending_, prints `[{}]` for it). So no colour was ever set and each
+// platform drew its own default hint: UIKit's `placeholderText`, a 30% alpha
+// that reads Lc 16 on the dark field and 30 on the light one, and AppCompat's
+// hint at 39 / 50 — against the Lc 62 / 70 this token gives and that web's
+// fields already wear. Uniwind's lever is `placeholderTextColorClassName`,
+// which resolves an `accent-*` utility to RN's `placeholderTextColor` and
+// re-resolves it on a theme change. The token goes on whole — no `/NN`
+// (docs/theme.md, _contrast_).
+const PLACEHOLDER_COLOR_CLASS = 'accent-muted-foreground';
+
 function Input({
   className,
   style,
@@ -114,10 +130,10 @@ function Input({
             'focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50',
             'aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40',
           ),
-          native: 'placeholder:text-muted-foreground',
         }),
         className,
       )}
+      placeholderTextColorClassName={PLACEHOLDER_COLOR_CLASS}
       style={[style, Platform.OS === 'ios' && !props.multiline && IOS_SINGLE_LINE_STYLE]}
       allowFontScaling={allowsFontScaling()}
       maxFontSizeMultiplier={MAX_FONT_SIZE_MULTIPLIER}

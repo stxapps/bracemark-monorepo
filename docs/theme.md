@@ -552,10 +552,11 @@ Three things follow.
   comfortable-looking 5.5:1. Thirteen such call sites had accumulated across
   bracemark-web, bracemark-expo and bracemark-extension (both sidebars' empty
   strings and section headers, two icons, the extension's options mark, and
-  `bracemark-expo`'s Input, whose NATIVE branch alone dimmed the placeholder to
-  `/50` while its own web branch and all three web-ui fields used the token
-  whole — the same field at Lc 63 on web and Lc 21 on a dark phone). All of them
-  now use the token as-is. **When something must sit quieter than muted, move
+  `bracemark-expo`'s Input, whose NATIVE branch alone asked for the placeholder
+  at `/50` while its own web branch and all three web-ui fields used the token
+  whole — Lc 63 on web against an intended Lc 21 on a dark phone; the class was
+  in fact never reaching the device at all, which is its own entry under
+  _extending_). All of them now use the token as-is. **When something must sit quieter than muted, move
   size or weight, not opacity** — or give dark its own token the way
   `TabsTrigger` does (`text-foreground/60` with a `dark:text-muted-foreground`
   override), which is the one instance of this shape in the workspace that is
@@ -874,6 +875,26 @@ same role the kit's menu items have).
   says `rotate-90`. For an angle with no glyph — the dog-eared card's 45° corner
   — write the RN `transform` array inline in `style`
   (`features/share/share-specimen.tsx`).
+- **`placeholder:` is another, and it took the Input's placeholder with it.**
+  Tailwind emits `placeholder:text-muted-foreground` as a nested `&::placeholder`
+  rule, and Uniwind's processor (`bundler/css-processor/processor.ts`) keeps a
+  nested selector only when it has a runtime answer for it — a theme class,
+  `:active`, `:focus`, `:disabled`, a `data-*` attribute. A pseudo-element has
+  none, so the class reaches the device as `[{}]`: present, empty, and no
+  warning. `ui/input.tsx` carried that class on its native branch from the
+  registry, so no placeholder colour was ever set and each platform drew its own
+  default hint — UIKit's `placeholderText` (a 30% alpha: Lc 16 on the dark field,
+  30 on the light one) and AppCompat's (39 / 50) — against the Lc 62 / 70 of
+  `--muted-foreground`, which is what web's fields wear. The native lever is the
+  prop `placeholderTextColorClassName="accent-muted-foreground"`: Uniwind
+  resolves an `accent-*` utility to RN's `placeholderTextColor` and re-resolves
+  it per theme. The same goes for the other colours a `TextInput` takes as props
+  rather than style (`cursorColorClassName`, `selectionColorClassName`). **Run
+  the probe through `compileTailwind`, not the Tailwind CLI, for anything with a
+  variant in it**: the CLI flattens nesting to
+  `.placeholder\:…::placeholder { color }`, which the processor then reads as a
+  plain `color` on the class — an answer that is wrong in the other direction,
+  and not what Metro sees.
 - **A `leading-*` tighter than the font is not centred on iOS**, and nothing
   about the class is broken. Uniwind resolves a unitless line-height against the
   element's own font-size at style time (`core/native/store.js`, `lineHeight < 6`
