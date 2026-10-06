@@ -144,11 +144,15 @@ export class UserDataDO extends DurableObject<Bindings> {
   //            recorded in the quota map.
   //  - delete: the worker's commit clock (no object survives to HEAD), and the
   //            path's recorded size is freed from the quota map (`size` ignored).
-  // Mixing the two clocks is safe because paths are immutable random ids — a path
-  // is only ever put…put…delete, so a put and a delete on it never have to be
-  // ordered against each other. Running the whole batch in one RPC keeps it to a
-  // single round trip to this serialized SQLite. Returns each entry's recorded
-  // `updatedAt`, in input order, for the client to store and advance its cursor to.
+  // Mixing the two clocks is safe because of THE CLAMP below, not because a deleted
+  // path is never put again: `pins/` and `extractions/` are keyed by their link's
+  // id, so unpin-then-pin and a re-extraction do put a path a delete just vacated.
+  // The clamp records every entry above everything already in the log, so a path's
+  // ops are ordered by commit, never by comparing the worker's clock against R2's
+  // (docs/local-first-sync.md — the three flows). Running the whole batch in one
+  // RPC keeps it to a single round trip to this serialized SQLite. Returns each
+  // entry's recorded `updatedAt`, in input order, for the client to store and
+  // advance its cursor to.
   //
   // THE CLAMP: an entry whose `updatedAt` is not ahead of every row already in the
   // log is recorded at `MAX(updated_at) + 1` instead. A put's timestamp is minted at
@@ -203,8 +207,9 @@ export class UserDataDO extends DurableObject<Bindings> {
   // Clearing the size map here (not after the R2 loop) accepts a transient
   // undercount if that loop dies mid-way — the visible endpoint failure has the
   // user retry, and the retry re-zeroes reality; the opposite order would leak
-  // recorded sizes for objects that no longer exist (paths are never reused, so
-  // no later commit would ever free them).
+  // recorded sizes for objects that no longer exist (a path is all but never
+  // written again — only `pins/` and `extractions/` reuse one, by link id — so no
+  // later commit would free them).
   wipeAll(): void {
     opLogsRepo(this.sql).clear();
     fileSizesRepo(this.sql).clear();
