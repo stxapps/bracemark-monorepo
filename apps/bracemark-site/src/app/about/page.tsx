@@ -250,10 +250,10 @@ export default function Page() {
               <p>
                 So Bracemark is built the other way round. Your password unlocks a key on your own
                 device; every link, list, and tag becomes its own encrypted file before it is
-                uploaded; what the server keeps of it is a path, a size, and some bytes. Around that
-                sits the account — your username, your sessions, your plan if you buy one — and
-                nothing readable from a single link. There is no “we promise not to look” in that
-                sentence, because there is no looking available to promise against.
+                uploaded; what the server keeps of it is a path, a size, a timestamp, and some
+                bytes. Around that sits the account — your username, your sessions, your plan if you
+                buy one — and nothing readable from a single link. There is no “we promise not to
+                look” in that sentence, because there is no looking available to promise against.
               </p>
             </div>
           </section>

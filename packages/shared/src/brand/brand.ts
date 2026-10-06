@@ -44,6 +44,61 @@ export const BRAND = {
   subtitle: 'Links encrypted on your device',
 } as const;
 
+// The signature panel — what you see, and what we store — as the strings its
+// drawings share. The marketing site's hero draws it in JSX
+// (apps/bracemark-site/src/app/page.tsx, `HeroPanel`, which argues every value
+// below); a picture that draws the same object is composed outside this repo and
+// reads these through `tools/scripts/check-assets.ts`. They are here for the
+// reason the three lines above are: two drawings of one object is two things to
+// keep true, and this panel has already been wrong once in a way a reader could
+// check — it showed a path and a size while /privacy inventoried a timestamp as
+// well. A second copy typed beside the art would have kept the old inventory.
+//
+// THE TWO HALVES' OWN STRINGS, AND THE ONE SENTENCE THAT SAYS THEM. `caption` is
+// the panel in words — what a surface that cannot show it has to say instead, a
+// text alternative above all. It is here because that sentence is the one a
+// second copy would get wrong: the stored record read aloud is a bare list, and a
+// bare list of what our servers hold is a closed enumeration with its scope gone.
+// The paragraph AFTER it on the site — what the shape still tells us — stays in
+// page.tsx, on the one surface with room to argue it. So does the plaintext
+// half's specimen, which the site draws and a capture photographs.
+//
+// ILLUSTRATIVE, NOT INVENTED. `links/{id}.enc` is the real path shape
+// (`sync/paths`), and a path, a size and when the file last changed are exactly
+// what /privacy inventories for one link. `ciphertext` is texture — never read as
+// prose, and not the output of anything.
+export const SIGNATURE = {
+  /** The plaintext half's eyebrow. */
+  deviceLabel: 'On your device',
+
+  /** The seam between the halves: the mechanism, named rather than described. */
+  cipher: 'AES-256-GCM',
+
+  /** The ciphertext half's eyebrow. */
+  serverLabel: 'What our servers store',
+
+  path: 'links/01JD7QK2X8N4WYB3F0.enc',
+  size: '2.1 KB',
+
+  /**
+   * Relative rather than a date: an illustration with a hard-coded year reads as
+   * abandoned two years later.
+   */
+  changed: 'last changed 2 minutes ago',
+
+  ciphertext:
+    'k7QpV0sZ4mL8xR1cGf9tYb2NwJ3hD6aE5uT0iO8pA1sD4fG7hJ2kL5nM8qR3tV6x' +
+    'Z9yB2nM5kJ8hG1fD4sA7pO0iU3tE6rW9qY2xC5vB8nM1kL4jH7gF0dS3aP6oI9uY' +
+    '2tR5eW8qA1zX4cV7bN0mK3jH6gF9dS2aP5oI8uY1tR4eW7qZ0xC3vB6nM9kJ2hG5',
+
+  /**
+   * The panel in one sentence. "no key to open", never the compressed "no key
+   * for" — page.tsx argues the verb beside the paragraph that prints this.
+   */
+  caption:
+    'A path, a size, a timestamp, and bytes we hold no key to open. Not the title, not the address, not the tags — there is nowhere for them to be.',
+} as const;
+
 // The legal entity behind Bracemark, and the postal address of record.
 //
 // It moved out of bracemark-site's `lib/site.ts` when a fifth and sixth surface

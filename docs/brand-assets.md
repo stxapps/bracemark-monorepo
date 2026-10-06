@@ -343,6 +343,35 @@ product whose whole argument is that intent is worthless — putting them next t
 "we don't promise not to look" contradicts it out loud. Prose says the mechanism
 ("a path, a size, a timestamp, and bytes we hold no key to open").
 
+**The signature panel is a fourth thing in that file, and it is not a line.**
+`SIGNATURE` holds the strings of the hero's two-halved panel — what you see, and
+what we store: both eyebrows, the chip on the seam, the stored record (a path, a
+size, when it last changed, a block of ciphertext), and the one sentence under it
+that says the panel in words. `HeroPanel` in
+`apps/bracemark-site/src/app/page.tsx` draws it and argues every value;
+`tools/scripts/check-assets.ts` prints it for any picture that draws the same
+object. It is in `brand.ts` for the three lines' reason, with a sharper failure:
+the record is an **inventory**, and the panel has already shipped a short one — a
+path and a size, over a caption that closed the list, while /privacy named the
+timestamp too. A second drawing typed from the first keeps whichever inventory
+was current the day it was copied.
+
+Two rules come with it. **A drawing takes the record whole**: the three readable
+fields are the concession as much as the ciphertext is the claim, and a version
+that shows only the bytes is the "sees nothing" error with a picture where the
+sentence was. And **the record is never read out as a bare list**. Under its
+eyebrow, with the specimen above it, the panel scopes itself to one link; lifted
+into running text — an alt text, a caption — the same four items after a colon
+are a closed enumeration of what a server holds. `SIGNATURE.caption` is the form
+that survives the move, because it also names what is _not_ held.
+
+**The inventory is the same four items in prose, on every surface that lists
+it**: a path, a size, a timestamp, and the bytes. The store descriptions, /about
+and the repository's README all carried "a path, a size, and bytes" after the
+panel had been corrected — true, scoped, and one field short, which is the
+panel's own old fault in a sentence. `listing-copy.spec.ts` pins the three store
+strings to the full list; /about and the README are held by this paragraph.
+
 ### the voice
 
 The three lines above are what we say where a surface gives us one sentence. This
@@ -942,7 +971,8 @@ and the string that constant says now.
 
 **Regenerate and re-stamp when:** the tagline, subtitle or a listing line
 changes; **a screenshot caption changes**; **the slogan changes** (the promo tile
-below is set in it); the mark changes; a `--color-*` token moves; the links list layout changes shape; the browser extension's popup changes
+below is set in it); **a `SIGNATURE` string changes** (any picture that draws the
+hero's panel); the mark changes; a `--color-*` token moves; the links list layout changes shape; the browser extension's popup changes
 shape; or a screenshot shows a screen that no longer exists. Nothing else will
 tell you — that list _is_ the tripwire, and for the store pictures further down it
 is the _only_ thing there is, since those are not stamped.

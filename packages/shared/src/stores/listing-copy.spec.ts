@@ -220,16 +220,17 @@ describe('rules that bind every exported string', () => {
     expect(offending((value) => pattern.test(value))).toEqual([]);
   });
 
-  it('keeps the holdings enumeration scoped to the library', () => {
-    // "our servers hold a path, a size, and bytes we have no key to open" is true of
-    // the LIBRARY and false as a sentence about the servers. Dropping the two
-    // scoping words is a plausible edit — it reads tighter — and it turns the
-    // sentence into a claim a reader can falsify from /privacy. Asserted on the
-    // sentence rather than the whole string so the scope cannot drift into a
-    // different paragraph.
-    const sentenceWithTheClaim = (value: string) =>
-      value.split('.').find((sentence) => /bytes we have no key to open/i.test(sentence));
+  // The one sentence the two tests below are about, found by its closing clause.
+  // Both assert on the SENTENCE rather than the whole string, so neither the
+  // scope nor the list can drift into a different paragraph and still pass.
+  const sentenceWithTheClaim = (value: string) =>
+    value.split('.').find((sentence) => /bytes we have no key to open/i.test(sentence));
 
+  it('keeps the holdings enumeration scoped to the library', () => {
+    // "our servers hold a path, a size, a timestamp, and bytes we have no key to
+    // open" is true of the LIBRARY and false as a sentence about the servers.
+    // Dropping the two scoping words is a plausible edit — it reads tighter — and
+    // it turns the sentence into a claim a reader can falsify from /privacy.
     const unscoped = offending((value) => {
       const sentence = sentenceWithTheClaim(value);
       return sentence !== undefined && !/\bof your library\b/i.test(sentence);
@@ -239,6 +240,24 @@ describe('rules that bind every exported string', () => {
     // And the enumeration is load-bearing enough that it has to still be there:
     // the strings that carry it are the product's whole argument.
     expect(EVERY_EXPORTED_STRING.filter(([, v]) => sentenceWithTheClaim(v)).length).toBe(3);
+  });
+
+  it('lists every readable field beside the bytes, not two of the three', () => {
+    // A path, a size AND when the file last changed — what /privacy inventories
+    // for each encrypted file, and what the hero panel prints (`SIGNATURE` in
+    // brand/brand.ts). All three strings read "a path, a size, and bytes", which
+    // is a list that reads as complete and is one field short: one file per link
+    // makes the timestamps an activity log, and a reader who has seen /privacy
+    // finds the omission in the copy that asks to be checked. A list cannot be
+    // found by a selector, so the sentence is pinned instead.
+    const short = offending((value) => {
+      const sentence = sentenceWithTheClaim(value);
+      return (
+        sentence !== undefined &&
+        !/a path, a size, a timestamp, and bytes we have no key to open/i.test(sentence)
+      );
+    });
+    expect(short).toEqual([]);
   });
 });
 

@@ -32,7 +32,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { BRAND, PWA_INSTALL_DESCRIPTION, SCREENSHOT_CAPTIONS } from '@stxapps/shared';
+import { BRAND, PWA_INSTALL_DESCRIPTION, SCREENSHOT_CAPTIONS, SIGNATURE } from '@stxapps/shared';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const STAMP = 'assets.stamp.json';
@@ -120,6 +120,13 @@ function collectInputs(): Record<string, string> {
         `listing.caption.${slug}`,
         caption,
       ]),
+    ),
+    // The signature panel's own strings, one key each — the two eyebrows, the
+    // chip on the seam, and the stored record. Spread for the captions' reason:
+    // a field added to the panel reaches every picture that draws it without
+    // anyone remembering this line.
+    ...Object.fromEntries(
+      Object.entries(SIGNATURE).map(([field, value]) => [`signature.${field}`, value]),
     ),
     'icon.d': iconPath(),
     'token.foreground': token(ui, ':root', '--foreground'),

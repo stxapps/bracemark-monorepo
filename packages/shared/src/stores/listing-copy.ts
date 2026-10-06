@@ -220,7 +220,7 @@ export const FULL_DESCRIPTION = `Bracemark is a bookmark manager that cannot rea
 
 Save anything worth coming back to — articles, docs, threads, products, videos — and read it later on any device.
 
-Every link you save is encrypted on your device before it syncs: the address, the title, the tags, the list you filed it in. Your key is unlocked by your password, on your device, and never leaves it. Of your library, our servers hold a path, a size, and bytes we have no key to open; the account around it — your username, your public key, your sessions, and your plan — is what we can read.
+Every link you save is encrypted on your device before it syncs: the address, the title, the tags, the list you filed it in. Your key is unlocked by your password, on your device, and never leaves it. Of your library, our servers hold a path, a size, a timestamp, and bytes we have no key to open; the account around it — your username, your public key, your sessions, and your plan — is what we can read.
 
 That is not a privacy policy. It is the architecture. We cannot look, so we cannot be asked to.
 
@@ -291,7 +291,7 @@ export const BROWSER_EXTENSION_LISTING = {
 // false AND puts Chrome's warning, quoted here, on the install dialog.
 export const BROWSER_EXTENSION_FULL_DESCRIPTION = `Bracemark is a bookmark manager that cannot read your bookmarks. This browser extension saves the tab you’re reading into it.
 
-Click the Bracemark button, choose a list, add tags or a note if you like, and click Save. The link is encrypted in your browser before it syncs: the address, the title, the tags, the note, the list you filed it in. Your key is unlocked by your password, on your device, and never leaves it. Of your library, our servers hold a path, a size, and bytes we have no key to open; the account around it — your username, your public key, your sessions, and your plan — is what we can read.
+Click the Bracemark button, choose a list, add tags or a note if you like, and click Save. The link is encrypted in your browser before it syncs: the address, the title, the tags, the note, the list you filed it in. Your key is unlocked by your password, on your device, and never leaves it. Of your library, our servers hold a path, a size, a timestamp, and bytes we have no key to open; the account around it — your username, your public key, your sessions, and your plan — is what we can read.
 
 WHAT THE BROWSER EXTENSION DOES
 • Saves the tab you’re on in two clicks
@@ -371,6 +371,32 @@ export const SCREENSHOT_CAPTIONS = {
    * uses, which is also what the picture shows: rows of links.
    */
   everyLink: 'Every link, on every device',
+  /**
+   * bracemark-web beside the mobile app, both on the same list. The picture IS
+   * the sync and shows the devices, so the line says the half of it a picture
+   * cannot: what happened first, and to what. It is FULL_DESCRIPTION's own
+   * sentence at caption length.
+   *
+   * NOT "Encrypted, then synced to every device", which is what this said
+   * first. It has no object, and a caption is also read alone — as one frame,
+   * or as its own sentence in a text alternative — where a reader supplies the
+   * widest one. That is "your data is encrypted" with even the noun gone
+   * (docs/brand-assets.md, _terminology_: name the object). "then synced" was
+   * also the only spelling of the order that is not "before it syncs".
+   *
+   * And not "Every link, encrypted, on every device": that reads as links HELD
+   * encrypted on each device, and the boundary is the upload — encrypt before
+   * PUT, decrypt after GET (docs/local-first-sync.md, _layer 2_).
+   */
+  encryptedBeforeSync: 'Every link is encrypted before it syncs',
+  /**
+   * The same pair with a search committed on both. `searchOnDevice` says WHAT is
+   * searched; this says the consequence that makes it this product's — a server
+   * that cannot read your links cannot search them either, so the search runs
+   * where the plaintext is. FULL_DESCRIPTION states the same fact as a cost
+   * ("Search runs on your device rather than ours"); here it is the feature.
+   */
+  searchNotOurs: 'Search runs on your device, not ours',
 } as const;
 
 // --- the PWA install dialog --------------------------------------------------
@@ -399,5 +425,11 @@ export const PWA_INSTALL_DESCRIPTION = PLAY.shortDescription;
  * Firefox Add-ons takes a longer summary than the Chrome Web Store, and AMO lets
  * it be set on the listing rather than in the manifest — so this is a paste field,
  * and the manifest keeps the shorter string above for both browsers.
+ *
+ * "Save a tab", where the manifest says "the tab you’re reading": the budget is
+ * 250 and the inventory at the end is not the place to find the characters. It
+ * read "a path, a size, and bytes" — two of the three readable fields — and the
+ * timestamp it was missing costs thirteen. Every other clause here is a mechanism
+ * or the number of clicks; "you’re reading" was the one that was neither.
  */
-export const FIREFOX_ADDONS_SUMMARY = `${BRAND.tagline}. Save the tab you’re reading in two clicks, encrypted in your browser with a key your password unlocks before it syncs. Of your library we hold a path, a size, and bytes we have no key to open.`;
+export const FIREFOX_ADDONS_SUMMARY = `${BRAND.tagline}. Save a tab in two clicks, encrypted in your browser with a key your password unlocks before it syncs. Of your library we hold a path, a size, a timestamp, and bytes we have no key to open.`;

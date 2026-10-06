@@ -9,6 +9,7 @@ import {
   PLAN_LABELS,
   PLAN_USD_PER_YEAR,
   PLAY_STORE_URL,
+  SIGNATURE,
   TRIAL_DAYS,
 } from '@stxapps/shared';
 import { AppStoreIcon } from '@stxapps/web-ui/components/icons/app-store-icon';
@@ -59,10 +60,12 @@ const FREE_LINKS = entitlementsOf('free').maxLinks;
 // Static, deliberately. An animated encrypt/decrypt toggle was the obvious move
 // and it is the wrong one — it turns the product's central claim into a toy, and
 // it would need a client component on an otherwise fully static export.
-const CIPHERTEXT =
-  'k7QpV0sZ4mL8xR1cGf9tYb2NwJ3hD6aE5uT0iO8pA1sD4fG7hJ2kL5nM8qR3tV6x' +
-  'Z9yB2nM5kJ8hG1fD4sA7pO0iU3tE6rW9qY2xC5vB8nM1kL4jH7gF0dS3aP6oI9uY' +
-  '2tR5eW8qA1zX4cV7bN0mK3jH6gF9dS2aP5oI8uY1tR4eW7qZ0xC3vB6nM9kJ2hG5';
+//
+// THE TWO HALVES' STRINGS ARE `SIGNATURE`, in shared `brand/brand.ts` — the
+// eyebrows, the chip on the seam, the path, the size, the timestamp, the
+// ciphertext block, and the sentence under them that says the panel in words.
+// This panel is no longer the only drawing of the object, and a value retyped
+// here is a value the other drawing does not get.
 
 // The specimen's host, and the one constant behind BOTH halves of its identity:
 // the line under the title, and the monogram's letter and hue. `hueFromHost` is
@@ -211,7 +214,7 @@ function HeroPanel() {
       {/* Plaintext half — the only place the accent carries real content. The
           extra bottom padding keeps the tag row clear of the AES chip below. */}
       <div className={cn('p-5 pb-8 sm:p-6 sm:pb-9')}>
-        <p className={cn('eyebrow text-signal')}>On your device</p>
+        <p className={cn('eyebrow text-signal')}>{SIGNATURE.deviceLabel}</p>
         <div className={cn('mt-4 flex gap-3.5')}>
           {/* The preview slot, filled the way the library will really fill it
               for a link like this one: `HostMonogram`, the deterministic
@@ -412,7 +415,7 @@ function HeroPanel() {
             'absolute -top-2.5 left-5 rounded-full border border-border bg-background px-2 py-0.5 font-mono text-[0.625rem] tracking-wider text-muted-foreground uppercase sm:left-6',
           )}
         >
-          AES-256-GCM
+          {SIGNATURE.cipher}
         </span>
       </div>
 
@@ -448,10 +451,10 @@ function HeroPanel() {
           Use this ladder for anything new here rather than picking an alpha that
           looks right in whichever theme the browser happened to open in. */}
       <div className={cn('bg-foreground px-5 pt-7 pb-6 text-background sm:px-6')}>
-        <p className={cn('eyebrow text-background/80')}>What our servers store</p>
+        <p className={cn('eyebrow text-background/80')}>{SIGNATURE.serverLabel}</p>
         <div className={cn('mt-4 flex items-baseline justify-between gap-4 font-mono text-xs')}>
-          <span className={cn('truncate')}>links/01JD7QK2X8N4WYB3F0.enc</span>
-          <span className={cn('shrink-0 text-background/75')}>2.1 KB</span>
+          <span className={cn('truncate')}>{SIGNATURE.path}</span>
+          <span className={cn('shrink-0 text-background/75')}>{SIGNATURE.size}</span>
         </div>
         {/* The third field, and the reason this panel is now truthful. /privacy
             has always said we hold the path, the size AND when the file last
@@ -462,15 +465,13 @@ function HeroPanel() {
             an overclaim in the one place we ask to be checked costs more than
             the fact does. Relative rather than a date: an illustration with a
             hard-coded 2026 stamp reads as abandoned by 2028. */}
-        <p className={cn('mt-1 font-mono text-xs text-background/75')}>
-          last changed 2 minutes ago
-        </p>
+        <p className={cn('mt-1 font-mono text-xs text-background/75')}>{SIGNATURE.changed}</p>
         <p
           className={cn(
             'mt-3 font-mono text-[0.6875rem] leading-5 break-all text-background/55 select-all',
           )}
         >
-          {CIPHERTEXT}
+          {SIGNATURE.ciphertext}
         </p>
         {/* "no key to open", not the compressed "no key for". The clause is
             the panel's whole payoff — the hero paragraph beside it has just
@@ -485,10 +486,7 @@ function HeroPanel() {
             and quietly drop the only sentence on the page that R2's
             ciphertext-only guarantee actually earns us
             (docs/brand-assets.md, _the voice_ — mechanical). */}
-        <p className={cn('mt-5 text-sm leading-6 text-background/80')}>
-          A path, a size, a timestamp, and bytes we hold no key to open. Not the title, not the
-          address, not the tags — there is nowhere for them to be.
-        </p>
+        <p className={cn('mt-5 text-sm leading-6 text-background/80')}>{SIGNATURE.caption}</p>
         {/* Named by us, in one clause, rather than left for a reader to derive
             and then distrust us for omitting. It is the cheapest credibility on
             the page: the truthful version is more impressive than the
