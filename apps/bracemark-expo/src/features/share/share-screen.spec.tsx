@@ -146,6 +146,27 @@ test('defaults to the inbox list and reuses an existing tag by name', async () =
   expect(draft.tagIds).toEqual(['tag-a', 'minted-2']);
 });
 
+// The picker draws pending tags where their ranks will land them — above the
+// snapshot's, newest first — so the sheet and the app agree on the order.
+test('lists new tags above the existing ones, newest first', async () => {
+  const { findByTestId, getByTestId, getAllByRole } = render(
+    <ShareScreen url="https://example.com/b" />,
+  );
+
+  fireEvent.press(await findByTestId('share-tags-row'));
+  const input = getByTestId('share-tag-input');
+  fireEvent.changeText(input, 'fresh');
+  fireEvent(input, 'submitEditing');
+  fireEvent.changeText(input, 'newer');
+  fireEvent(input, 'submitEditing');
+
+  expect(getAllByRole('checkbox').map((row) => row.props.accessibilityLabel)).toEqual([
+    'newer',
+    'fresh',
+    'alpha',
+  ]);
+});
+
 test('creates a new list — minted, selected, ranked before the first root list', async () => {
   const { findByTestId, getByTestId } = render(<ShareScreen url="https://example.com/c" />);
 
@@ -162,6 +183,27 @@ test('creates a new list — minted, selected, ranked before the first root list
     { id: 'minted-2', name: 'Cooking', rank: rankBetween(null, 'a0') },
   ]);
   expect(draft.listId).toBe('minted-2');
+});
+
+// The pending list is a row like any other: the top one, and still there once
+// the field filters — typing its name again must find it, not read "No lists
+// found." or offer to create a second one.
+test('keeps the pending new list at the top, and in the filtered rows', async () => {
+  const { findByTestId, getByTestId, getAllByRole, queryByTestId, queryByText } = render(
+    <ShareScreen url="https://example.com/c3" />,
+  );
+
+  fireEvent.press(await findByTestId('share-list-row'));
+  fireEvent.changeText(getByTestId('share-list-input'), 'Cooking');
+  fireEvent(getByTestId('share-list-input'), 'submitEditing');
+  fireEvent.press(getByTestId('share-list-row'));
+
+  expect(getAllByRole('menuitem')[0].props.testID).toBe('share-new-list');
+
+  fireEvent.changeText(getByTestId('share-list-input'), 'cooking');
+  expect(getByTestId('share-new-list')).toBeTruthy();
+  expect(queryByText('No lists found.')).toBeNull();
+  expect(queryByTestId('share-list-create')).toBeNull();
 });
 
 // The Create row is the same affordance as submitting the field — and it is

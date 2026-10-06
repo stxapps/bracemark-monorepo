@@ -68,7 +68,8 @@ export function ShareListPicker({
 }: {
   lists: ShareTaxonomyList[];
   // The one pending sheet-minted list (created = selected; the screen discards
-  // it when another row is picked), rendered as the top row.
+  // it when another row is picked), rendered as the top row and filtered like
+  // any other.
   newList: ShareNewEntity | null;
   selectedId: string;
   onSelect: (listId: string) => void;
@@ -78,19 +79,24 @@ export function ShareListPicker({
   onDone: () => void;
 }) {
   const [query, setQuery] = useState('');
-  const rows = useMemo(() => withAncestors(lists), [lists]);
+  // The pending new list joins the rows as the head of the root group — where
+  // its rank will put it (share-screen's submitListName prepends), and where
+  // every create lands (docs/editors.md, _every create lands in the same
+  // place_). As a ROW rather than a block drawn beside them, so it is a real
+  // destination on this screen in every respect: the filter finds it, and
+  // typing its name again neither reads "No lists found." nor offers to create
+  // a second one.
+  const rows = useMemo(
+    () => withAncestors(newList ? [{ ...newList, depth: 0 }, ...lists] : lists),
+    [lists, newList],
+  );
 
   const trimmed = query.trim();
   const q = trimmed.toLowerCase();
   const filtering = q.length > 0;
   const visible = filtering ? rows.filter(({ list }) => list.name.toLowerCase().includes(q)) : rows;
 
-  // The pending new list is matched too — it is a real destination on this
-  // screen, so typing its name again must not offer to create a second one.
-  const canCreate =
-    trimmed !== '' &&
-    !rows.some(({ list }) => list.name.toLowerCase() === q) &&
-    newList?.name.toLowerCase() !== q;
+  const canCreate = trimmed !== '' && !rows.some(({ list }) => list.name.toLowerCase() === q);
 
   // Picking is the whole job of this screen, so it closes on the pick — one tap
   // out, no Done to hunt for. (Done is still there for the trip that changes
@@ -167,19 +173,10 @@ export function ShareListPicker({
           <Text className="py-6 text-center text-sm text-muted-foreground">No lists found.</Text>
         )}
 
-        {newList && !filtering && (
-          <ListRow
-            testID="share-new-list"
-            name={newList.name}
-            selected={newList.id === selectedId}
-            onPress={() => select(newList.id)}
-          />
-        )}
-
         {visible.map(({ list, ancestors }) => (
           <ListRow
             key={list.id}
-            testID={`share-list-${list.id}`}
+            testID={list.id === newList?.id ? 'share-new-list' : `share-list-${list.id}`}
             name={list.name}
             path={filtering && ancestors.length > 0 ? `${ancestors.join(' / ')} / ` : undefined}
             indent={filtering ? 0 : list.depth}

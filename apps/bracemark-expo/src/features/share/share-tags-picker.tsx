@@ -42,7 +42,8 @@ export function ShareTagsPicker({
 }: {
   tags: ShareTaxonomyTag[];
   selectedTagIds: string[];
-  // Pending sheet-minted tags — always selected; tapping a chip removes it.
+  // Pending sheet-minted tags, in typed order — always selected, rendered as
+  // the top rows; tapping one removes it.
   newTags: ShareNewEntity[];
   onToggle: (tagId: string) => void;
   onRemoveNew: (tagId: string) => void;
@@ -57,9 +58,14 @@ export function ShareTagsPicker({
   const q = trimmed.toLowerCase();
   const filtering = q.length > 0;
   const visibleTags = filtering ? tags.filter((tag) => tag.name.toLowerCase().includes(q)) : tags;
-  const visibleNew = filtering
-    ? newTags.filter((tag) => tag.name.toLowerCase().includes(q))
-    : newTags;
+  // Newest first, and rendered ABOVE the existing tags below: that is where
+  // their ranks put them (share-screen's submitTagName prepends each mint), so
+  // the picker shows the order the app will after Save — and the row lands
+  // beside the field that minted it, as tags-command.tsx's does
+  // (docs/editors.md, _every create lands in the same place_).
+  const visibleNew = newTags
+    .filter((tag) => !filtering || tag.name.toLowerCase().includes(q))
+    .reverse();
 
   const canCreate =
     trimmed !== '' &&
@@ -102,11 +108,11 @@ export function ShareTagsPicker({
       >
         <TagPickerRows
           rows={[
+            ...visibleNew.map((tag) => ({ ...tag, selected: true })),
             ...visibleTags.map((tag) => ({
               ...tag,
               selected: selectedTagIds.includes(tag.id),
             })),
-            ...visibleNew.map((tag) => ({ ...tag, selected: true })),
           ]}
           onToggle={(id) => (newTags.some((tag) => tag.id === id) ? onRemoveNew(id) : onToggle(id))}
           emptyText={

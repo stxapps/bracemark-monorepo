@@ -616,10 +616,13 @@ carrying one. Three rules hold them together:
   only** (`parentId` pinned null at apply — create now, reparent later in
   Settings → Lists). Both ride the draft as `{ id, name, rank }` — id and rank
   minted in the sheet (rank from the taxonomy's neighbour ranks: prepend before
-  the first root list for a list, matching web's create-at-index-0; append
-  after the last tag for tags), so the upload can push complete entities and
+  the first root list for a list and before the first tag for a tag, matching
+  web's create-at-index-0; several new tags chain off each other, so they
+  stack newest-first), so the upload can push complete entities and
   the drain re-writes the identical ones (see _the draft is idempotent_,
-  above). A new list exists only as the share's destination: creating selects
+  above). Both pickers draw a pending entity where that rank will put it — the
+  top rows, above the snapshot's — so the sheet shows the order the app will
+  after Save. A new list exists only as the share's destination: creating selects
   it, and selecting another list discards the pending create.
 - **Duplicates**: not detected in the sheet (iOS can't see the DB; a stale
   snapshot would lie). Save anyway; dedup is the apply-side's concern.
