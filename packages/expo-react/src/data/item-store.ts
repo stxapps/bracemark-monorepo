@@ -31,7 +31,7 @@ import {
 // The queue's owner answers "is this path queued?" — this store composes that read
 // into its own guarded writes (putItemsUnqueued / deleteItemsUnqueued) rather than
 // querying `pending_ops` itself. One direction only; pending-store never imports back.
-import { queuedPathsTx } from './pending-store';
+import { type PendingOpRecord, queuedPathsTx, queuedWriteIdTx } from './pending-store';
 import type { ItemRecord } from './projection';
 import { assertAccountOwnsStoreTx } from './sync-store';
 
@@ -64,6 +64,25 @@ function toRow(r: ItemRecord): ItemRow {
 
 export async function getItem(path: string): Promise<ItemRow | undefined> {
   return getDb().select().from(items).where(eq(items.path, path)).get();
+}
+
+// The row an op's upload is about to send, read TOGETHER WITH whether the queue
+// still holds that very op — one transaction, so no local write can land between
+// the two. An op carries no bytes, and the engine reads each record only when its
+// own upload starts; without this pairing an op read at the top of a cycle uploads
+// whatever the row holds by then, which can be a later write naming a `files/`
+// blob the cycle holds no op for (sync/engine.ts uploadBlobs, and web's twin).
+// `stillQueued` is false when a later write replaced the op, or it is gone.
+//
+// For a content path this pins the ROW and its `hasDataFile` claim; the plaintext
+// itself is read off disk by the native encrypt afterwards, as it always was.
+export async function getItemForOp(
+  op: PendingOpRecord,
+): Promise<{ row: ItemRow | undefined; stillQueued: boolean }> {
+  return getDb().transaction((tx) => ({
+    stillQueued: queuedWriteIdTx(tx, op.username, op.path) === op.writeId,
+    row: tx.select().from(items).where(eq(items.path, op.path)).get(),
+  }));
 }
 
 // Order-aligned with the input like Dexie's bulkGet: result[i] is paths[i]'s

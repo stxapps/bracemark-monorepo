@@ -67,9 +67,11 @@ export const MAX_LIST_LIMIT = 1000;
 // seq (see docs/local-first-sync.md "the ops/list endpoint"). Both halves go over
 // the wire as query params: a single millisecond can hold more ops than `limit`,
 // so the `path` tiebreak is what lets the client page past it. `sincePath` is
-// absent only while the cursor is the seeded-new-account `(0, '')`; the server
-// treats a missing `sincePath` as the low sentinel. `z.coerce` because query
-// params arrive as strings on the server.
+// absent while the cursor has no path half: the seeded-new-account `(0, '')`, and
+// the listing-built `(newestUpdatedAt, '')` a first sync or a fallback ends on.
+// The server treats a missing `sincePath` as the low sentinel, so that pull
+// includes every op at the `since` millisecond. `z.coerce` because query params
+// arrive as strings on the server.
 export const opsListRequestSchema = z.object({
   since: z.coerce.number().int().optional(),
   sincePath: syncPathSchema.optional(),
@@ -90,9 +92,11 @@ export type OpEntry = z.infer<typeof opEntrySchema>;
 
 // `oldestUpdatedAt` / `newestUpdatedAt` are the retained-range bounds the client
 // routes on (incremental vs. fallback — see the routing table in the doc); both
-// are `null` on a never-written/wiped log. `hasMore` drives keyset pagination:
-// the client advances (since, sincePath) to the last op and pulls again while it's
-// true.
+// are `null` on a never-written/wiped log. `newestUpdatedAt` is also the cursor a
+// client ends a LISTING-built flow on, read before it lists R2 — sound because the
+// commit clamp stamps every later op strictly above it (docs "the cursor is a
+// claim"). `hasMore` drives keyset pagination: the client advances
+// (since, sincePath) to the last op and pulls again while it's true.
 export const opsListResponseSchema = z.object({
   ops: z.array(opEntrySchema),
   oldestUpdatedAt: z.number().nullable(),
@@ -130,9 +134,12 @@ export type OpsCommitRequest = z.infer<typeof opsCommitRequestSchema>;
 
 // One COMMITTED op: the path and the `updatedAt` the server stamped — R2's
 // `LastModified` for a put (read via the commit HEAD), the deletion commit time
-// for a delete. The client stores this as the path's `updatedAt`, advances its
-// sync cursor to it (never the local clock), and clears the path from its
-// pending-ops queue.
+// for a delete, either one lifted by the commit clamp when it would not otherwise
+// sort above the log. The client stores this as the path's `updatedAt` (never the
+// local clock) and clears the op from its pending-ops queue. It does NOT move its
+// sync cursor to it: the stamp places this op in the log, and the cursor claims
+// everything below a point has been read — which a client's own commit never
+// shows (docs "the cursor is a claim").
 export const commitResultSchema = z.object({
   path: z.string(),
   updatedAt: z.number(),
@@ -195,12 +202,13 @@ export const fileEntrySchema = z.object({
 export type FileEntry = z.infer<typeof fileEntrySchema>;
 
 // One page of the download-authoritative listing. `nextPageToken` is R2's cursor
-// when the listing is truncated, else null. The client pages until it's null and
-// sets the cursor to the newest `(updatedAt, path)` across ALL pages — R2 lists in key
-// order, not time order, so the newest timestamp can sit on any page. The listing
-// is NOT a snapshot (pages span concurrent writes), which is safe here because
-// fallback is download-authoritative and `updatedAt`-compared — anything that
-// changes mid-listing carries a fresh `LastModified` and is caught next sync.
+// when the listing is truncated, else null. The client pages until it's null. The
+// listing is NOT a snapshot (pages span concurrent writes, and an object written
+// into a key range already listed is simply absent), which is safe for what gets
+// downloaded — fallback is download-authoritative and `updatedAt`-compared — and
+// is why the sync CURSOR is never taken from these stamps: the client ends on the
+// op log's `newestUpdatedAt`, read before the first page, and whatever changed
+// mid-listing is above that and comes back on the next pull.
 export const filesListResponseSchema = z.object({
   files: z.array(fileEntrySchema),
   nextPageToken: z.string().nullable(),

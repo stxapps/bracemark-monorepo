@@ -392,6 +392,15 @@ argument to `endSession`, never read from the render that finishes the request:
 a mutation's `onSuccess` runs the latest render's callbacks, not the ones that
 were current when it started.
 
+The lifecycle lock is not the only Web Lock on the origin. A sync cycle runs
+under a second one, named per account (`bracemark-sync-cycle:<username>`,
+[local-first-sync.md](./local-first-sync.md), _two tabs, one queue_), and the
+two are kept apart on purpose: hydration takes the lifecycle lock on every
+startup, so a cycle that held it across its round trips would hold the app blank
+behind another tab's sync. A cycle never takes the lifecycle lock, and nothing
+under the lifecycle lock waits for a cycle; a teardown stops a cycle through the
+fence below, not by waiting for it.
+
 In-flight completions are fenced **in the database**, not by
 aborting fetches: every pulled write re-checks, inside its own transaction, that
 the account's sync bookkeeping row still exists (`AccountFencedError`,

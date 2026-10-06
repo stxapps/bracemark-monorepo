@@ -66,6 +66,11 @@ export interface LaunchOptions {
   // (measure/data.ts) passes one: it serves a production export it built itself,
   // and WEB_URL is fixed when env.ts loads, before a script could point it there.
   baseURL?: string;
+  // Runs on the fresh context BEFORE the account ceremony. For a case that has to
+  // see, or hold, the very first requests a sign-in makes: a device's first sync
+  // starts the moment its sign-in lands, inside this function, so a route added
+  // after `launchApp` returns is already too late for it (SYNC-LISTING-001).
+  prepare?: (context: BrowserContext) => Promise<void>;
 }
 
 export async function launchApp(
@@ -86,6 +91,8 @@ export async function launchApp(
     deviceScaleFactor: options.deviceScaleFactor ?? 2,
     viewport: { width: 1280, height: 900 },
   });
+
+  await options.prepare?.(context);
 
   const credentials = options.existing ?? options.create ?? newCredentials();
   const page = context.pages()[0] ?? (await context.newPage());

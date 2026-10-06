@@ -98,9 +98,11 @@ export async function claimIfStillSignedIn(username: string): Promise<void> {
 // the snapshot is complete, so an interrupted first sync stays "not done" and
 // re-blocks on the next load rather than leaving a partial store looking
 // finished (the re-run resumes rather than restarts: the engine skips records
-// already stored at the listed `updatedAt`). The first cursor is the newest
-// compound `(updatedAt, path)` among the listed files — the same reconstruction
-// the fallback cycle does from a full listing.
+// already stored at the listed `updatedAt`). The first cursor is the op log's
+// high-water mark as it stood BEFORE the pull's listing, with an empty path —
+// never the newest stamp the listing showed, which says nothing about what a
+// non-snapshot listing missed (sync/engine.ts logWatermark). The fallback cycle
+// ends on the same value, for the same reason.
 //
 // Fenced like the pull's writes: the row beginInitialSync claimed must still be
 // there, or the account was torn down mid-pull and this must not resurrect it.
@@ -121,12 +123,16 @@ export async function markFirstSyncDone(
 }
 
 // Advance the compound `(updatedAt, path)` cursor after an incremental cycle —
-// to the newest op's `(updatedAt, path)` seen. Both halves move together: a later
-// millisecond resets the path tiebreak. FORWARD-ONLY, read-and-compare in one
-// transaction: IndexedDB is shared across tabs, so a slower tab's cycle finishing
-// late must not drag the cursor back below what a faster one already consumed
-// (regression is harmless — just a redundant re-pull — but free to prevent).
-// Leaves firstSyncDoneAt untouched.
+// to the last op that cycle LISTED, and only that: a caller must never pass a
+// stamp it merely holds (its own commit's), since the cursor is the claim that
+// everything at or below it has been applied (sync/engine.ts). Both halves move
+// together: a later millisecond resets the path tiebreak. FORWARD-ONLY,
+// read-and-compare in one transaction. The cycle lock keeps two tabs' cycles from
+// overlapping where Web Locks exist; this guard is what still holds where they
+// don't, so a slower context's cycle finishing late can't drag the cursor back
+// below what a faster one already consumed (a regression would be harmless — just
+// a redundant re-pull — but it is free to prevent). Leaves firstSyncDoneAt
+// untouched.
 export async function advanceCursor(
   username: string,
   syncCursorUpdatedAt: number,
@@ -143,10 +149,11 @@ export async function advanceCursor(
   });
 }
 
-// Set the cursor to a value reconstructed straight from an R2 listing — the
-// download-authoritative fallback. UNCONDITIONAL, unlike advanceCursor: the
-// cursor-ahead fallback case exists precisely to LOWER a stale cursor back to
-// what R2 actually holds.
+// Set the cursor after a download-authoritative fallback — to the log's high-water
+// mark as it stood before that cycle's listing (sync/engine.ts logWatermark).
+// UNCONDITIONAL, unlike advanceCursor: the cursor-ahead fallback case exists
+// precisely to LOWER a stale cursor back to what the log actually holds, and a
+// wiped log puts it back at `(0, '')`.
 export async function resetCursor(
   username: string,
   syncCursorUpdatedAt: number,

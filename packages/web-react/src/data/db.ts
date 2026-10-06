@@ -31,23 +31,30 @@ import { isUpdateRequired, markUpdateRequired, onUpdateRequired } from './update
 // The cursor is a TIMESTAMP, not a seq. Per docs/local-first-sync.md the wire
 // cursor is the compound key `(updatedAt, path)` — R2's `LastModified` (epoch ms)
 // plus a path tiebreak — never the op log's `seq`. `seq` stays internal to the DO:
-// it can't be reconstructed from an R2 listing, so a DO rebuild or fallback would
-// have no seq to resume from, whereas the newest `LastModified` in a listing
-// always IS the cursor. The two halves map directly to the `ops/list` query
-// params `since` + `sincePath` (see @stxapps/shared sync/endpoints.ts).
+// it means nothing outside one DO's lifetime and can't be reconstructed from an R2
+// listing, so a rebuilt log would strand every cursor ever issued, whereas a log
+// rebuilt from R2 stamps its rows with the same `LastModified` values and every
+// cursor still means what it meant. The two halves map directly to the `ops/list`
+// query params `since` + `sincePath` (see @stxapps/shared sync/endpoints.ts).
 export interface SyncMetaRecord {
   // Scope key — one row per signed-in account on this device.
   username: string;
-  // High-water mark: the newest R2 `LastModified` (epoch ms) reconciled into the
-  // local store. The incremental pull asks the server for ops AFTER this; 0 until
-  // the first sync completes.
+  // High-water mark, and a CLAIM rather than a timestamp of convenience: every op
+  // at or below `(syncCursorUpdatedAt, syncCursorPath)` has been applied to the
+  // local store. So it is only ever the key of an op a cycle listed, or the log's
+  // newest stamp read before a listing that then reflects everything up to it —
+  // never a stamp this device merely holds, such as its own commit's
+  // (sync/engine.ts). The incremental pull asks the server for ops AFTER this; 0
+  // until the first sync completes.
   syncCursorUpdatedAt: number;
   // Path tiebreak for the compound `(updatedAt, path)` cursor — the path of the
   // last op consumed at `syncCursorUpdatedAt`. Several files can share a
   // millisecond, so without it a single ms holding more ops than one page could
-  // never be paged past. Empty only for a seeded new account (nothing pulled
-  // yet); the server treats a missing `sincePath` as the low sentinel (so the
-  // next pull includes every op at that ms).
+  // never be paged past. Empty for a seeded new account (nothing pulled yet) and
+  // right after a listing-built cursor (a first sync or a fallback, which know the
+  // log's newest stamp but not which op carried it); the server treats a missing
+  // `sincePath` as the low sentinel, so the next pull includes every op at that
+  // ms.
   syncCursorPath: string;
   // Epoch ms the first full sync COMPLETED, or 0 while it hasn't. The invariant:
   // > 0 means "the local store is a complete, consistent snapshot up to the

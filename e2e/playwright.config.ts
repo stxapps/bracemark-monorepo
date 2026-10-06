@@ -10,6 +10,17 @@ const runId = process.env.E2E_RUN_ID ?? createRunId('web-direct');
 process.env.E2E_RUN_ID = runId;
 const runDir = process.env.E2E_RUN_DIR ?? runArtifactDir(runId);
 
+// The wrapper's case selection (runner/web.ts), applied per PROJECT instead of as
+// `--grep`. A command-line filter only reaches the projects it selects directly:
+// Playwright runs a DEPENDENCY project whole. So under `--grep`, any selection
+// that included the capacity case ran every test in `web` to satisfy `capacity`'s
+// dependency on it — `--exclude-trait internet` ran the internet cases, and
+// `--case SYNC-BLOCKED-001` ran the whole suite first — while the run's manifest
+// went on listing only what had been asked for. A project's own `grep` holds
+// however the project comes to run. Unset (a bare `playwright test`), nothing is
+// filtered.
+const selection = process.env.E2E_GREP ? new RegExp(process.env.E2E_GREP) : undefined;
+
 // Whole-flow e2e for bracemark-web. The design record — what belongs at this
 // layer, why the standard auth fixture cannot work here, and the four repo
 // constraints that shape it — is docs/e2e.md. This file is only the wiring.
@@ -35,8 +46,13 @@ export default defineConfig({
   // receipts. A dependent project starts only after `web` has finished — and is
   // skipped if `web` failed, which a red run reports as "did not run".
   projects: [
-    { name: 'web', testIgnore: '**/capacity.e2e.ts' },
-    { name: 'capacity', testMatch: '**/capacity.e2e.ts', dependencies: ['web'] },
+    { name: 'web', testIgnore: '**/capacity.e2e.ts', grep: selection },
+    {
+      name: 'capacity',
+      testMatch: '**/capacity.e2e.ts',
+      dependencies: ['web'],
+      grep: selection,
+    },
   ],
 
   // Waits for bracemark-api, which `webServer` below cannot express.

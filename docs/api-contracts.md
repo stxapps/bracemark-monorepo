@@ -209,6 +209,9 @@ call rejects with `ApiTimeoutError` and the fetch is aborted.
 The sync engine is the caller that needed this most. Its single-flight cycle is
 shared by every later sync, so one hung call used to take all of sync down
 ([local-first-sync.md](./local-first-sync.md), under the single-flight bullet).
+On web a cycle also holds a lock every tab of the origin waits on, so the same
+deadlines are what stop one tab's hung call from holding every tab's sync
+(_two tabs, one queue_, in the same doc).
 
 **Outside this client.** The R2 presigned transfers (`sync/r2.ts`) bypass it, so
 they bound themselves with the same `withDeadline`. A body can be KB or MB, and

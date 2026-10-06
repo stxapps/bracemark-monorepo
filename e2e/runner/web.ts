@@ -34,9 +34,12 @@ async function main(): Promise<void> {
   const runId = createRunId('web');
   const runDir = runArtifactDir(runId);
   await mkdir(runDir, { recursive: true });
-  const env = { ...process.env, E2E_RUN_ID: runId, E2E_RUN_DIR: runDir };
+  // The selection travels in the environment, not as `--grep`: the config applies
+  // it to each project, which is the only filter a dependency project honours
+  // (playwright.config.ts, `selection`).
   const grep = selected.map((testCase) => `@${testCase.id}`).join('|');
-  const args = ['test', '--grep', grep, ...options.playwrightArgs];
+  const env = { ...process.env, E2E_RUN_ID: runId, E2E_RUN_DIR: runDir, E2E_GREP: grep };
+  const args = ['test', ...options.playwrightArgs];
   const [playwrightVersion, chromeVersion, commit, status] = await Promise.all([
     capture('playwright', ['--version'], { cwd: E2E_ROOT, env }),
     capture(CHROME_PATH, ['--version'], { allowFailure: true }),

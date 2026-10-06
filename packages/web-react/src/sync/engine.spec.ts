@@ -30,6 +30,7 @@ import {
   deleteLink,
   deletePin,
   writeExtraction,
+  writeFile,
   writeLink,
 } from '../data/mutations';
 import { enqueuePut } from '../data/pending-store';
@@ -449,9 +450,11 @@ describe('a local write that lands mid-PUSH', () => {
     expect(await pendingPaths()).toEqual([]);
   });
 
-  it('keeps a re-create that lands while its orphaned op is being dropped', async () => {
-    // Same rule on the self-heal path: the drop is compare-and-delete too, so the
-    // op minted by the re-create outlives the one the drain gave up on.
+  it('keeps a re-create that lands under an op the drain could never have satisfied', async () => {
+    // Same rule on the self-heal path. The stale op has no bytes, and by the time
+    // its upload is read the path has been written again — so the queue row is a
+    // different write, and the drain neither drops it as an orphan nor uploads for
+    // it. The op minted by the re-create outlives the one the drain gave up on.
     await db.pendingOps.put({
       username: USER,
       path: EXTRACTION_PATH,
@@ -1127,5 +1130,815 @@ describe('a cycle that outlives its account', () => {
       AccountFencedError,
     );
     expect(await db.syncMeta.count()).toBe(0);
+  });
+});
+
+// --- a server that remembers -------------------------------------------------
+
+// The stub above answers ops/list with whatever a case hands it and stamps every
+// commit alike — all a mid-cycle write needs, and deliberately no more. The cases
+// below are about the CURSOR, and a cursor is a statement about the server's
+// ordering, so they need a server that keeps its side of it. Three properties, each
+// the real one in miniature:
+//
+//  - the pull is a keyset on `(updatedAt, path)` and reports the retained bounds
+//    (bracemark-api do/repositories/op-logs.ts) — a stub that returns the same ops
+//    whatever cursor it is asked for cannot show an op being skipped;
+//  - a commit is stamped `MAX(updated_at) + 1` when its own stamp is not already
+//    past the log (the clamp, do/user-data.ts) — which is what puts THIS client's
+//    commit above one another client made a moment earlier;
+//  - R2 lists in key order, a page per call, reading the bucket as it is at that
+//    call — so an object written into a range already listed is simply not there.
+//
+// One clock stamps both R2's `LastModified` and the Worker's commit time, as under
+// `wrangler dev`.
+class SyncServer {
+  private clock = 5_000_000;
+  readonly objects = new Map<string, { body: Uint8Array; uploaded: number }>();
+  readonly log: { op: 'put' | 'delete'; path: string; updatedAt: number }[] = [];
+
+  private tick(): number {
+    this.clock += 10;
+    return this.clock;
+  }
+
+  put(path: string, body: Uint8Array): void {
+    this.objects.set(path, { body, uploaded: this.tick() });
+  }
+
+  get(path: string): Uint8Array {
+    const object = this.objects.get(path);
+    if (!object) throw new BlobRequestError('GET', 404);
+    return object.body;
+  }
+
+  // The plaintext the server holds for a path, through the stand-in cipher.
+  body(path: string): string | undefined {
+    const object = this.objects.get(path);
+    return object ? new TextDecoder().decode(object.body.slice(1)) : undefined;
+  }
+
+  bounds(): { oldestUpdatedAt: number | null; newestUpdatedAt: number | null } {
+    if (this.log.length === 0) return { oldestUpdatedAt: null, newestUpdatedAt: null };
+    const stamps = this.log.map((row) => row.updatedAt);
+    return { oldestUpdatedAt: Math.min(...stamps), newestUpdatedAt: Math.max(...stamps) };
+  }
+
+  listOps(since: number, sincePath: string, limit: number): OpsListReply {
+    const rows = this.log
+      .filter((row) => row.updatedAt > since || (row.updatedAt === since && row.path > sincePath))
+      .sort((a, b) => a.updatedAt - b.updatedAt || (a.path < b.path ? -1 : 1));
+    return { ops: rows.slice(0, limit), ...this.bounds(), hasMore: rows.length > limit };
+  }
+
+  commit(ops: { op: 'put' | 'delete'; path: string }[]) {
+    const now = this.tick();
+    for (const o of ops) if (o.op === 'delete') this.objects.delete(o.path);
+    const failed: { path: string; reason: 'no_object' }[] = [];
+    const entries: { op: 'put' | 'delete'; path: string; updatedAt: number }[] = [];
+    for (const o of ops) {
+      const object = this.objects.get(o.path);
+      if (o.op === 'delete') entries.push({ ...o, updatedAt: now });
+      else if (!object) failed.push({ path: o.path, reason: 'no_object' });
+      else entries.push({ ...o, updatedAt: object.uploaded });
+    }
+    const { newestUpdatedAt } = this.bounds();
+    const floor = newestUpdatedAt === null ? 0 : newestUpdatedAt + 1;
+    const results = entries.map((entry) => {
+      const updatedAt = Math.max(entry.updatedAt, floor);
+      this.log.push({ op: entry.op, path: entry.path, updatedAt });
+      return { path: entry.path, updatedAt };
+    });
+    return { results, failed };
+  }
+
+  listFiles(pageToken: string | undefined, pageSize: number) {
+    const keys = [...this.objects.keys()].sort().filter((key) => !pageToken || key > pageToken);
+    const page = keys.slice(0, pageSize);
+    return {
+      files: page.map((path) => ({ path, updatedAt: this.objects.get(path)?.uploaded ?? 0 })),
+      nextPageToken: keys.length > pageSize ? page[page.length - 1] : null,
+    };
+  }
+
+  // ANOTHER client of the same account — a second device, or the browser extension
+  // beside the web app: its PUT, then its commit. Returns the stamp it was given.
+  otherClientPuts(path: string, body: string): number {
+    this.put(path, new Uint8Array([0xee, ...utf8(body)]));
+    return this.commit([{ op: 'put', path }]).results[0].updatedAt;
+  }
+
+  // …and its delete: the commit removes the object and logs the op, as the api does.
+  otherClientDeletes(path: string): number {
+    return this.commit([{ op: 'delete', path }]).results[0].updatedAt;
+  }
+}
+
+interface ServerHooks {
+  // Runs when this client asks for PUT urls: after its list, before its commit —
+  // the window another client's commit has to land in.
+  beforePush?: () => void | Promise<void>;
+  // Runs after each `files/list` page was read off the bucket.
+  afterFilesPage?: (page: number) => void | Promise<void>;
+  // The same two for the op log: the page size the server answers with (fewer
+  // than asked is a legal answer, and `hasMore` says so), and a hook that runs
+  // after each page was read off the log.
+  opsPageSize?: number;
+  afterOpsPage?: (page: number) => void | Promise<void>;
+  // The page size the server answers with, whatever the client asked for — R2 may
+  // return fewer than `limit`, and a small one makes a small library page.
+  filesPageSize?: number;
+}
+
+// A client of `server`, with a record of what it asked for. The endpoints are
+// matched by their `path` rather than by identity: a second tab (below) is a second
+// copy of every module, `@stxapps/shared` included, and its endpoint objects are
+// equal to these without being them.
+function onServer(
+  server: SyncServer,
+  hooks: ServerHooks = {},
+  username = USER,
+): { deps: SyncDeps; calls: string[] } {
+  const calls: string[] = [];
+  const is = (endpoint: unknown, known: { path: string }): boolean =>
+    (endpoint as { path?: string }).path === known.path;
+  let filesPage = 0;
+  let opsPage = 0;
+  const api = {
+    call: async (endpoint: unknown, input: Record<string, unknown>) => {
+      if (is(endpoint, opsListEndpoint)) {
+        calls.push('ops/list');
+        const reply = server.listOps(
+          (input.since as number | undefined) ?? 0,
+          (input.sincePath as string | undefined) ?? '',
+          hooks.opsPageSize ?? (input.limit as number),
+        );
+        await hooks.afterOpsPage?.(++opsPage);
+        return reply;
+      }
+      if (is(endpoint, filesListEndpoint)) {
+        calls.push('files/list');
+        const page = server.listFiles(
+          input.pageToken as string | undefined,
+          hooks.filesPageSize ?? (input.limit as number),
+        );
+        await hooks.afterFilesPage?.(++filesPage);
+        return page;
+      }
+      if (is(endpoint, filesSignEndpoint)) {
+        calls.push(`files/sign ${String(input.op)}`);
+        if (input.op === 'put') await hooks.beforePush?.();
+        return { urls: (input.paths as string[]).map((path) => ({ path, url: urlFor(path) })) };
+      }
+      if (is(endpoint, opsCommitEndpoint)) {
+        calls.push('ops/commit');
+        return server.commit(input.ops as { op: 'put' | 'delete'; path: string }[]);
+      }
+      throw new Error('unexpected endpoint');
+    },
+  } as unknown as SyncDeps['api'];
+  return { deps: { username, encryptionKey: {} as CryptoKey, api }, calls };
+}
+
+// Point this file's R2 movers at `server`, so a PUT is an object it then lists,
+// HEADs at commit and serves back.
+function r2On(server: SyncServer): void {
+  mockPutBlob.mockImplementation(async (url: string, body: Uint8Array) => {
+    server.put(pathFor(url), body);
+  });
+  mockGetBlob.mockImplementation(async (url: string) => server.get(pathFor(url)));
+}
+
+// This device, in sync with a server that already holds one committed link: the
+// record is stored at its stamp and the cursor sits on its op.
+const BASE_PATH = 'links/l_base.enc';
+async function inSyncWith(server: SyncServer, username = USER): Promise<number> {
+  const stamp = server.log.at(-1)?.updatedAt ?? server.otherClientPuts(BASE_PATH, 'base');
+  await db.items.put(toItemRecord(BASE_PATH, stamp, utf8('base')));
+  await db.syncMeta.put({
+    username,
+    syncCursorUpdatedAt: stamp,
+    syncCursorPath: BASE_PATH,
+    firstSyncDoneAt: 1,
+  });
+  return stamp;
+}
+
+async function cursor(): Promise<[number, string]> {
+  const meta = await db.syncMeta.get(USER);
+  return [meta?.syncCursorUpdatedAt ?? NaN, meta?.syncCursorPath ?? ''];
+}
+
+// --- the cursor --------------------------------------------------------------
+
+// The cursor is the claim "every op at or below this point has been applied here",
+// and it used to be written from two things that were never read: this cycle's OWN
+// commits (which the clamp stamps above an op another client committed a moment
+// before), and the newest stamp a paged R2 listing happened to show (which says
+// nothing about an object written into a range the listing had already passed).
+// Either way another client's op ended up below the cursor, where a keyset pull
+// never returns it — a link saved on the phone that never appears on the laptop,
+// with the cycle complete, the queue drained and the cursor inside the log's range,
+// so no error, no pending count and no fallback. Two devices merely in use at the
+// same time lost links to each other this way without any forced timing
+// (docs/local-first-sync.md, _the cursor is a claim_).
+describe('the cursor claims only what a cycle read', () => {
+  let server: SyncServer;
+  beforeEach(() => {
+    server = new SyncServer();
+    r2On(server);
+  });
+
+  it('pulls an op another client committed between its list and its own commit', async () => {
+    await inSyncWith(server);
+    await seedQueued(LINK_PATH, 'saved here');
+
+    await runIncrementalSync(
+      onServer(server, {
+        beforePush: () => void server.otherClientPuts(OTHER_LINK_PATH, 'saved on the phone'),
+      }).deps,
+    );
+    // Any ordinary later cycle is this device's chance to receive it.
+    await runIncrementalSync(onServer(server).deps);
+
+    expect(await bodyAt(OTHER_LINK_PATH)).toBe('saved on the phone');
+  });
+
+  it('pulls one committed between a fallback’s listing and its push', async () => {
+    // A brand-new account: `(0, '')` against an empty log, so its first push is a
+    // fallback — and that cycle folded its own commit into the cursor too.
+    await db.syncMeta.put({
+      username: USER,
+      syncCursorUpdatedAt: 0,
+      syncCursorPath: '',
+      firstSyncDoneAt: 1,
+    });
+    await seedQueued(LINK_PATH, 'saved here');
+
+    await runIncrementalSync(
+      onServer(server, {
+        beforePush: () => void server.otherClientPuts(OTHER_LINK_PATH, 'saved on the phone'),
+      }).deps,
+    );
+    await runIncrementalSync(onServer(server).deps);
+
+    expect(await bodyAt(OTHER_LINK_PATH)).toBe('saved on the phone');
+  });
+
+  it('pulls an object written into a key range a first sync’s listing had already passed', async () => {
+    for (const id of ['l_m1', 'l_m2', 'l_m3', 'l_m4']) {
+      server.otherClientPuts(`links/${id}.enc`, id);
+    }
+    await db.syncMeta.clear();
+    await beginInitialSync(USER);
+
+    await runInitialSync(
+      onServer(server, {
+        filesPageSize: 2,
+        // After page one ([l_m1, l_m2]) another device saves two links: `l_a` sorts
+        // BEFORE everything listed so far, `l_z` into a page still to come. The
+        // listing then shows `l_z`, the newer of the two, and never shows `l_a`.
+        afterFilesPage: (page) => {
+          if (page !== 1) return;
+          server.otherClientPuts(LINK_PATH, 'landed behind the listing');
+          server.otherClientPuts('links/l_z.enc', 'landed ahead of it');
+        },
+      }).deps,
+    );
+    // The provider kicks a cycle the moment a first sync is done.
+    await runIncrementalSync(onServer(server).deps);
+
+    expect(await bodyAt('links/l_z.enc')).toBe('landed ahead of it');
+    expect(await bodyAt(LINK_PATH)).toBe('landed behind the listing');
+  });
+
+  it('drops what another device deleted between an interrupted first sync and its re-run', async () => {
+    // A first sync only ever ADDED: it assumed the empty store of a fresh sign-in.
+    // But a pull that dies partway — a dropped connection, a closed tab — leaves
+    // what it had stored, and the retry lists a namespace that may have lost some of
+    // it since. That link is in the store and not in the listing, and its delete op
+    // was committed before the retry read the log's high-water mark — so it is at or
+    // below the cursor the retry ends on, and no later pull ever returns it.
+    const stored = server.otherClientPuts('links/l_m1.enc', 'l_m1');
+    server.otherClientPuts('links/l_m2.enc', 'l_m2');
+    await db.syncMeta.clear();
+    await beginInitialSync(USER);
+    // What the interrupted attempt left behind: one link stored, the flag not set.
+    await seedSynced('links/l_m1.enc', 'l_m1', stored);
+
+    // Before the retry, another device deletes that link — and then saves one, so
+    // the delete is not the newest thing in the log (an op stamped exactly on the
+    // high-water mark is replayed, and would hide this).
+    server.otherClientDeletes('links/l_m1.enc');
+    server.otherClientPuts(LINK_PATH, 'saved since');
+
+    await runInitialSync(onServer(server).deps);
+    await runIncrementalSync(onServer(server).deps);
+
+    expect(await db.items.get('links/l_m1.enc')).toBeUndefined();
+    // The control: the retry still did the rest of its job.
+    expect(await bodyAt('links/l_m2.enc')).toBe('l_m2');
+    expect(await bodyAt(LINK_PATH)).toBe('saved since');
+  });
+
+  it('keeps, on that re-run, a link saved here that the server has never seen', async () => {
+    // The control. "In the store and not in the listing" also describes a link
+    // this device saved and has not pushed — the browser extension can save one
+    // before its first sync has finished — and the re-run must tell the two apart
+    // the way every reconcile does: by the queue, re-read when the delete applies.
+    server.otherClientPuts('links/l_m1.enc', 'l_m1');
+    await db.syncMeta.clear();
+    await beginInitialSync(USER);
+    await seedQueued(LINK_PATH, 'saved here, not pushed');
+
+    await runInitialSync(onServer(server).deps);
+
+    expect(await bodyAt(LINK_PATH)).toBe('saved here, not pushed');
+    expect(await pendingPaths()).toEqual([LINK_PATH]);
+    // …and the cycle the provider kicks next pushes it.
+    await runIncrementalSync(onServer(server).deps);
+    expect(server.body(LINK_PATH)).toBe('saved here, not pushed');
+    expect(await pendingPaths()).toEqual([]);
+  });
+
+  it('pages through the op log, and lists a commit that lands between two pages', async () => {
+    // "The last op a cycle listed" is computed HERE: the pull pages by keyset,
+    // each page asked for from the last op of the one before, and the cursor ends
+    // wherever the last page did. A commit that lands mid-pull is stamped above
+    // everything the earlier pages showed, so the page still to come carries it —
+    // which is the whole of why it is safe to stop at "the newest op in the
+    // response" rather than asking the server what its newest is.
+    await inSyncWith(server);
+    for (const id of ['l_p1', 'l_p2', 'l_p3']) server.otherClientPuts(`links/${id}.enc`, id);
+
+    const client = onServer(server, {
+      opsPageSize: 2,
+      afterOpsPage: (page) => {
+        if (page === 1) server.otherClientPuts(LINK_PATH, 'landed mid-pull');
+      },
+    });
+    await runIncrementalSync(client.deps);
+
+    expect(client.calls.filter((call) => call === 'ops/list')).toHaveLength(2);
+    for (const id of ['l_p1', 'l_p2', 'l_p3']) expect(await bodyAt(`links/${id}.enc`)).toBe(id);
+    expect(await bodyAt(LINK_PATH)).toBe('landed mid-pull');
+    expect((await cursor())[1]).toBe(LINK_PATH);
+
+    // And the claim is whole: the next cycle has nothing left to fetch.
+    mockGetBlob.mockClear();
+    await runIncrementalSync(onServer(server).deps);
+    expect(mockGetBlob).not.toHaveBeenCalled();
+  });
+
+  it('moves a selective client’s cursor over ops it does not materialize', async () => {
+    // The browser extension stores only some namespaces (`pathFilter`). The filter
+    // is on DOWNLOADS: the cursor still has to pass every op listed, or each cycle
+    // would list the unwanted ones again for good — and a delete still applies.
+    const stamp = await inSyncWith(server);
+    await seedSynced(OTHER_LINK_PATH, 'deleted elsewhere', stamp);
+    server.otherClientPuts(LINK_PATH, 'a link');
+    server.otherClientDeletes(OTHER_LINK_PATH);
+    server.otherClientPuts('tags/t_a.enc', 'a tag');
+    const selective = (client: { deps: SyncDeps; calls: string[] }) => ({
+      ...client.deps,
+      pathFilter: (path: string) => path.startsWith('links/'),
+    });
+
+    await runIncrementalSync(selective(onServer(server)));
+
+    expect(await bodyAt(LINK_PATH)).toBe('a link');
+    expect(await db.items.get(OTHER_LINK_PATH)).toBeUndefined();
+    expect(await db.items.get('tags/t_a.enc')).toBeUndefined();
+    expect(mockGetBlob.mock.calls.map(([url]) => pathFor(url))).toEqual([LINK_PATH]);
+    // Past the tag it never fetched.
+    expect((await cursor())[1]).toBe('tags/t_a.enc');
+  });
+
+  // The other half of the same change: what stopping the cursor short of our own
+  // commits costs. An op row each, and nothing else.
+  it('lists its own commit back at the cost of an op row, not a download', async () => {
+    const base = await inSyncWith(server);
+    await seedQueued(LINK_PATH, 'saved here');
+
+    await runIncrementalSync(onServer(server).deps);
+    // Nothing was listed, so nothing was claimed — the push moved no cursor.
+    expect(await cursor()).toEqual([base, BASE_PATH]);
+
+    await runIncrementalSync(onServer(server).deps);
+    // Now it has been listed: the cursor is on our own op, and recognising it took
+    // no GET.
+    expect((await cursor())[1]).toBe(LINK_PATH);
+    expect(mockGetBlob).not.toHaveBeenCalled();
+    expect(await bodyAt(LINK_PATH)).toBe('saved here');
+    expect(await pendingPaths()).toEqual([]);
+  });
+
+  it('recognises the echo of a content push without reading the cached blob', async () => {
+    // A content record's `data` IS the blob. Reading a batch of them to compare
+    // stamps would pull every page copy this device just uploaded into memory at
+    // once, to learn that nothing changed.
+    await inSyncWith(server);
+    await seedQueued(FILE_PATH, 'megabytes of page copy');
+    await runIncrementalSync(onServer(server).deps);
+
+    const read = jest.spyOn(db.items, 'bulkGet');
+    try {
+      await runIncrementalSync(onServer(server).deps);
+      expect(read.mock.calls.flatMap(([paths]) => paths)).not.toContain(FILE_PATH);
+    } finally {
+      read.mockRestore();
+    }
+    // …and it was the echo that was recognised, not the cursor that skipped it.
+    expect((await cursor())[1]).toBe(FILE_PATH);
+    expect(await bodyAt(FILE_PATH)).toBe('megabytes of page copy');
+  });
+
+  it('still lowers a cursor that is ahead of a reset log', async () => {
+    // The one thing a listing-built cursor has to keep doing: a log restored from
+    // an older state sits BELOW a cursor it once issued, and the fallback has to
+    // bring the cursor back down to it rather than leave it pointing past the log.
+    const newest = server.otherClientPuts(BASE_PATH, 'base');
+    await db.syncMeta.put({
+      username: USER,
+      syncCursorUpdatedAt: newest + 1_000_000,
+      syncCursorPath: 'links/l_gone.enc',
+      firstSyncDoneAt: 1,
+    });
+
+    const { deps: client, calls } = onServer(server);
+    await runIncrementalSync(client);
+
+    expect(calls).toContain('files/list');
+    expect(await cursor()).toEqual([newest, '']);
+    expect(await bodyAt(BASE_PATH)).toBe('base');
+  });
+
+  it('takes one more listing, then pulls incrementally, once an empty log has its first commit', async () => {
+    // What ending a fallback on the log's high-water mark costs a brand-new
+    // account: with nothing in the log there is no mark to end on, so the cursor
+    // stays at the beginning and the cycle after the first commit lists once more.
+    // Pinned so that stays ONE listing — a cursor that never left `(0, '')` would
+    // re-list the whole library on every cycle for the life of the account.
+    await db.syncMeta.put({
+      username: USER,
+      syncCursorUpdatedAt: 0,
+      syncCursorPath: '',
+      firstSyncDoneAt: 1,
+    });
+
+    await seedQueued(LINK_PATH, 'first');
+    await runIncrementalSync(onServer(server).deps);
+    expect(await cursor()).toEqual([0, '']);
+
+    await seedQueued(OTHER_LINK_PATH, 'second');
+    const second = onServer(server);
+    await runIncrementalSync(second.deps);
+    expect(second.calls).toContain('files/list');
+
+    await seedQueued(SETTINGS_PATH, 'third');
+    const third = onServer(server);
+    await runIncrementalSync(third.deps);
+    expect(third.calls).not.toContain('files/list');
+    expect(await pendingPaths()).toEqual([]);
+  });
+});
+
+// --- two tabs ----------------------------------------------------------------
+
+// Single-flight is module state, and every tab of the web app loads its own copy of
+// the module over the SAME database: two tabs were two drains of one queue. With
+// tab A's upload of an edit still in flight, the link was edited again and tab B —
+// a whole cycle, start to finish — pushed the newer bytes, committed, restamped
+// and cleared. Then A's upload landed on top. The server kept the EARLIER of two
+// edits made on this device, the local store kept the later, the queue was empty
+// and the indicator read idle; a fallback compares stamps, not bytes, so nothing
+// repaired it either. The same overlap let a stale upload bring back a link the
+// other tab had deleted for good, and a pulled delete remove a link the other tab
+// had just pushed an edit to (docs/local-first-sync.md, _two tabs, one queue_).
+//
+// A second tab here is what it is in the browser where it matters: a second copy
+// of the engine (so its own single-flight slot) and of the store module (its own
+// connection to the one database). The R2 movers are not a second copy — jest
+// hands an isolated registry the SAME `./r2` mock — so both tabs' transfers reach
+// one stub and a hold placed on it holds either tab's. The tab's movers are
+// pointed at the server through its own handle anyway, so nothing here rests on
+// that.
+describe('two tabs, one queue', () => {
+  interface Tab {
+    engine: typeof import('./engine');
+    r2: jest.Mocked<typeof import('./r2')>;
+    close: () => void;
+  }
+
+  function openSecondTab(server: SyncServer): Tab {
+    let tab!: Tab;
+    jest.isolateModules(() => {
+      const engine = require('./engine') as typeof import('./engine');
+      const r2 = require('./r2') as jest.Mocked<typeof import('./r2')>;
+      const data = require('../data/db') as typeof import('../data/db');
+      tab = { engine, r2, close: () => data.db.close() };
+    });
+    tab.r2.putBlob.mockImplementation(async (url: string, body: Uint8Array) => {
+      server.put(pathFor(url), body);
+    });
+    tab.r2.getBlob.mockImplementation(async (url: string) => server.get(pathFor(url)));
+    return tab;
+  }
+
+  // "Did the other tab's cycle wait?" is asked of the lock, not of a clock. A
+  // pause long enough for a free cycle to have run is a guess about the machine:
+  // under a loaded run it is too short, and then a cycle that DID wait and one that
+  // simply had not started yet look the same. The origin keeps the queue itself.
+  //
+  // True once a cycle of `username`'s is queued behind the cycle lock; false if
+  // none is within the budget — which is the answer on an engine that takes no
+  // lock, and still returns, so the case can let tab A finish before it fails.
+  const BUDGET_MS = 3_000;
+  async function within(what: () => Promise<boolean>): Promise<boolean> {
+    const deadline = Date.now() + BUDGET_MS;
+    for (;;) {
+      if (await what()) return true;
+      if (Date.now() > deadline) return false;
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+  }
+  const queuedBehindLock = (username = USER): Promise<boolean> =>
+    within(async () => {
+      const { pending = [] } = await navigator.locks.query();
+      // By account, not by the lock's full name: the name is the engine's to pick.
+      return pending.some((lock) => lock.name?.endsWith(`:${username}`));
+    });
+
+  // Tab A's cycle, stopped with its PUT in flight: it has read and encrypted the
+  // bytes, and the object has not landed.
+  function holdTabAUpload(server: SyncServer): { uploading: Promise<void>; land: () => void } {
+    let started!: () => void;
+    let land!: () => void;
+    const uploading = new Promise<void>((resolve) => (started = resolve));
+    const held = new Promise<void>((resolve) => (land = resolve));
+    mockPutBlob.mockImplementation(async (url: string, body: Uint8Array) => {
+      started();
+      await held;
+      server.put(pathFor(url), body);
+    });
+    return { uploading, land };
+  }
+
+  let server: SyncServer;
+  let tabB: Tab;
+  beforeEach(() => {
+    // The claim below is about a lock every context of the origin shares, so it
+    // has to be the real thing that is shared here too.
+    expect(typeof navigator.locks?.request).toBe('function');
+    server = new SyncServer();
+    r2On(server);
+    tabB = openSecondTab(server);
+  });
+  afterEach(() => tabB.close());
+
+  it('makes the second tab’s cycle wait, so the later edit is the one the server keeps', async () => {
+    await inSyncWith(server);
+    await seedQueued(LINK_PATH, 'the earlier edit');
+    const upload = holdTabAUpload(server);
+    const cycleA = runIncrementalSync(onServer(server).deps);
+    await upload.uploading;
+
+    // The link is edited again, and the other tab syncs.
+    await seedQueued(LINK_PATH, 'the later edit');
+    const other = onServer(server);
+    const cycleB = tabB.engine.runIncrementalSync(other.deps);
+    const queued = await queuedBehindLock();
+    const ranMeanwhile = [...other.calls];
+    // Both cycles are let finish BEFORE anything is asserted: a failed expectation
+    // here would otherwise leave tab A's cycle holding its account's slot, and every
+    // later case in the file would time out behind it.
+    upload.land();
+    await Promise.all([cycleA, cycleB]);
+
+    // Its cycle was queued behind tab A's, and had not so much as listed.
+    expect(queued).toBe(true);
+    expect(ranMeanwhile).toEqual([]);
+    expect(server.body(LINK_PATH)).toBe('the later edit');
+    expect(await bodyAt(LINK_PATH)).toBe('the later edit');
+    expect(await pendingPaths()).toEqual([]);
+  });
+
+  it('lets a second tab’s first sync wait for the first’s, and then lists nothing', async () => {
+    // Two tabs open on the sign-in page, and one signs in: the other adopts the
+    // session and its provider starts a first sync of its own. Unlocked, both
+    // listed and downloaded the whole library side by side. Now the second waits,
+    // and finds the job done — a first sync is a fact about the DEVICE's store.
+    for (const id of ['l_m1', 'l_m2', 'l_m3']) server.otherClientPuts(`links/${id}.enc`, id);
+    await db.syncMeta.clear();
+    await beginInitialSync(USER);
+
+    // Tab A's pull, stopped after its listing.
+    let listed!: () => void;
+    let resume!: () => void;
+    const listing = new Promise<void>((resolve) => (listed = resolve));
+    const held = new Promise<void>((resolve) => (resume = resolve));
+    const first = onServer(server, {
+      afterFilesPage: async () => {
+        listed();
+        await held;
+      },
+    });
+    const pullA = runInitialSync(first.deps);
+    await listing;
+
+    const second = onServer(server);
+    const pullB = tabB.engine.runInitialSync(second.deps);
+    const queued = await queuedBehindLock();
+    const ranMeanwhile = [...second.calls];
+    resume();
+    await Promise.all([pullA, pullB]);
+
+    expect(queued).toBe(true);
+    expect(ranMeanwhile).toEqual([]);
+    // Not one call, then or after: no log read, no listing, and so no download —
+    // a pull cannot fetch a blob it never asked for a URL to.
+    expect(second.calls).toEqual([]);
+    // The control: the first tab's pull is what filled the store, and it is done.
+    expect(first.calls).toEqual(['ops/list', 'files/list', 'files/sign get']);
+    expect(await bodyAt('links/l_m3.enc')).toBe('l_m3');
+    expect((await db.syncMeta.get(USER))?.firstSyncDoneAt).toBeGreaterThan(0);
+  });
+
+  it('still syncs where Web Locks are missing', async () => {
+    // The lock WIDENS single-flight; it must never be what sync depends on. A
+    // context without the API (an old engine, a non-browser runtime) gets the
+    // in-context single-flight alone, as before — not a TypeError on every cycle,
+    // which would read as sync being down with nothing wrong on the network.
+    await inSyncWith(server);
+    await seedQueued(LINK_PATH, 'saved here');
+    // Shadowed with an own property and un-shadowed by deleting it, so the
+    // prototype's accessor is never replaced and a failure here leaves nothing
+    // behind for the cases after it.
+    Object.defineProperty(navigator, 'locks', { configurable: true, get: () => undefined });
+    try {
+      await runIncrementalSync(onServer(server).deps);
+    } finally {
+      delete (navigator as { locks?: unknown }).locks;
+    }
+
+    expect(server.body(LINK_PATH)).toBe('saved here');
+    expect(await pendingPaths()).toEqual([]);
+    // The control for this describe's first expectation: the API is back.
+    expect(typeof navigator.locks?.request).toBe('function');
+  });
+
+  it('frees the slot when the lock itself cannot be taken', async () => {
+    // The single-flight slot is set AFTER the cycle's promise is created, and
+    // cleared in that promise's `finally`. So anything that throws before the
+    // cycle's first await runs the `finally` first and the `set` second, and
+    // leaves a rejected promise in the slot for good: every later sync on the
+    // page joins it and fails with an error from long ago. Taking the lock is the
+    // first thing a cycle does, which is what put a throw within reach of that
+    // window — a `request` that throws rather than rejecting (a shim, a
+    // locked-down webview) would have ended sync until a reload.
+    const NO_LOCKS = new Error('locks unavailable');
+    await inSyncWith(server);
+    await seedQueued(LINK_PATH, 'saved here');
+    Object.defineProperty(navigator, 'locks', {
+      configurable: true,
+      get: () => ({
+        request: () => {
+          throw NO_LOCKS;
+        },
+      }),
+    });
+    let failed: unknown;
+    try {
+      failed = await runIncrementalSync(onServer(server).deps).catch((err: unknown) => err);
+    } finally {
+      delete (navigator as { locks?: unknown }).locks;
+    }
+    expect(failed).toBe(NO_LOCKS);
+
+    // The next cycle is its own cycle: it runs, and it pushes.
+    await expect(runIncrementalSync(onServer(server).deps)).resolves.toBeDefined();
+    expect(server.body(LINK_PATH)).toBe('saved here');
+    expect(await pendingPaths()).toEqual([]);
+  });
+
+  // The control, and the reason the lock is named per account: a cycle for an
+  // account that has since signed out is fenced in the database, and the next
+  // account's first sync must not sit behind its network calls timing out.
+  it('does not make another account’s cycle wait', async () => {
+    const OTHER_USER = 'bob';
+    await inSyncWith(server);
+    await inSyncWith(server, OTHER_USER);
+    await seedQueued(LINK_PATH, 'an edit');
+    const upload = holdTabAUpload(server);
+    const cycleA = runIncrementalSync(onServer(server).deps);
+    await upload.uploading;
+
+    const other = onServer(server, {}, OTHER_USER);
+    const cycleB = tabB.engine.runIncrementalSync(other.deps);
+    // Finished — not merely started — while the other account's upload is still
+    // out. Bounded like the waits above, so that a cycle that IS held up fails
+    // this case after tab A has been let go, rather than hanging it.
+    let settled = false;
+    void cycleB.then(() => (settled = true));
+    const finishedMeanwhile = await within(async () => settled);
+    upload.land();
+    await Promise.all([cycleA, cycleB]);
+
+    // The whole of an idle cycle, run while the other account's was mid-upload.
+    expect(finishedMeanwhile).toBe(true);
+    expect(other.calls).toEqual(['ops/list']);
+  });
+});
+
+// --- an op rewritten after the queue was read --------------------------------
+
+// A cycle reads the queue once and orders the ops it read, content before the
+// metadata that names it. But an op carries no bytes: each put reads its record
+// when its own upload starts. So a metadata op that was already queued used to
+// upload whatever its record held by THEN — and if a `files/` blob and the
+// reference to it had both been written since (server extraction's second pass: the
+// image, then the patch that names it), the cycle committed metadata naming content
+// it held no op for and had not sent. The order was kept over the ops and broken
+// over the bytes; another device pulling in that window got a preview it could not
+// load, and remembered the miss for the rest of its session.
+describe('an op whose path was rewritten after the queue was read', () => {
+  // The cycle has read its queue and is signing the metadata chunk. Now the second
+  // pass lands: content first, then the reference — the write edge's own order.
+  const secondPassLands = async (_paths: string[], op: 'put' | 'get'): Promise<void> => {
+    if (op !== 'put') return;
+    await writeFile(USER, 'f_a', utf8('image bytes'));
+    await writeExtraction(USER, 'l_a', { fields: { imageId: 'f_a' } });
+  };
+
+  beforeEach(async () => {
+    // First pass: the title. Its op is what the cycle will be holding.
+    await writeExtraction(USER, 'l_a', { fields: { title: 'A title' } });
+  });
+
+  it('uploads nothing for it — the record now names content this cycle holds no op for', async () => {
+    let fired = false;
+    await runIncrementalSync(
+      deps({
+        filesSign: async (paths, op) => {
+          if (fired) return;
+          fired = true;
+          await secondPassLands(paths, op);
+        },
+      }),
+    );
+
+    expect(mockPutBlob).not.toHaveBeenCalled();
+    expect(committedPaths()).toEqual([]);
+    // Both writes are still queued, under their own ops.
+    expect(await pendingPaths()).toEqual([EXTRACTION_PATH, FILE_PATH]);
+  });
+
+  it('pushes both on the next cycle, content first', async () => {
+    let fired = false;
+    await runIncrementalSync(
+      deps({
+        filesSign: async (paths, op) => {
+          if (fired) return;
+          fired = true;
+          await secondPassLands(paths, op);
+        },
+      }),
+    );
+
+    await runIncrementalSync(deps());
+
+    expect(commits.map((batch) => batch.map((o) => o.path))).toEqual([
+      [FILE_PATH],
+      [EXTRACTION_PATH],
+    ]);
+    expect(await pendingPaths()).toEqual([]);
+  });
+
+  it('leaves a path deleted since to its queued delete, and fetches nothing for it', async () => {
+    // A put whose record is gone used to read as an ORPHAN — a wedged op to drop,
+    // with the server's copy re-added to the downloads so the entity came back. But
+    // this record is gone because the user deleted it a moment ago: the queue row is
+    // a delete now, a newer intent, and going to fetch the server's copy of it is
+    // work towards undoing what they just did.
+    await seedQueued(LINK_PATH, 'an edit', 1500);
+    mockGetBlob.mockResolvedValue(new Uint8Array([0xee, ...utf8('the server copy')]));
+
+    await runIncrementalSync(
+      deps({
+        opsList: () => ({
+          ops: [{ op: 'put', path: LINK_PATH, updatedAt: 2000 }],
+          oldestUpdatedAt: 500,
+          newestUpdatedAt: 2000,
+          hasMore: false,
+        }),
+        filesSign: async (_paths, op) => {
+          if (op === 'put') await deleteLink(USER, { path: LINK_PATH } as never);
+        },
+      }),
+    );
+
+    expect(mockGetBlob).not.toHaveBeenCalled();
+    expect(await db.items.get(LINK_PATH)).toBeUndefined();
+    expect(await db.pendingOps.toArray()).toMatchObject([{ path: LINK_PATH, op: 'delete' }]);
   });
 });

@@ -1147,6 +1147,10 @@ names its platform from the run manifest.
 | `SYNC-REFRESH-PILL-IOS-001` / `-ANDROID-001` | web profile → an engaged native list                       |
 | `SYNC-CONFLICT-001`                          | web ⇄ Android, both offline, on one link                   |
 | `SYNC-BLOCKED-001`                           | web → the server's quota gate → an independent web profile |
+| `SYNC-CURSOR-001`                            | two web profiles saving at once, one commit held           |
+| `SYNC-LISTING-001`                           | a web profile signing in while another one saves           |
+| `SYNC-RETRY-001`                             | a first sync cut short, a delete elsewhere, then the retry |
+| `SYNC-TABS-001`                              | two tabs of one profile → an independent web profile       |
 
 **The refresh pill is reached through the ⋯ menu's Sync, and that is the
 point.** The only non-local trigger a mounted list has is a user's request — no
@@ -1163,6 +1167,44 @@ case asserts it is gone from the device after a pull. The conflict matrix itself
 (fast-forward vs conflict, apply-time re-reads) stays at unit level. The device's
 push is read off Settings → Data ("Last synced" with nothing waiting), because
 the ⋯ trigger's name reads the same during a cycle as after one.
+
+**The last four are the cases where two clients are busy at the same moment**,
+which every row above them avoids: there one client writes and another reads
+afterwards, in turn. Each used to end with the two sides disagreeing in silence
+— the cycle complete, the queue drained, the indicator idle
+([local-first-sync.md](./local-first-sync.md), _the cursor is a claim_ and _two
+tabs, one queue_). The engine's specs hold the decisions, against a server model
+and two copies of the module; what only this layer has is the real things those
+stand in for — the Durable Object's clamp and keyset pull, R2's paged listing,
+two profiles with a store each, two tabs with ONE store and a Web Lock between
+them, and the gate's own Try again.
+
+They are built on one instrument, `web/fixtures/hold.ts`: **hold one request of
+one page, and release it on command.** A uniform delay cannot produce these
+races — every client slows down together and the order of arrivals never
+changes. They need one transfer of one client to stay out while another client
+gets a whole cycle in, and holding a single request is exactly that: the held
+request is the app's own and goes on unmodified, and every other page's traffic
+is untouched, so whatever the other client then does it does unaided. Three
+things about using it:
+
+- **A device's first sync starts inside `launchApp`**, the moment its sign-in
+  lands, so a route added after `launchApp` returns is already too late for it.
+  `LaunchOptions.prepare` runs on the fresh context before the account ceremony
+  for that reason (`SYNC-LISTING-001`, `SYNC-RETRY-001`).
+- **Only two things are ever changed on the wire, and each case names its own.**
+  `SYNC-LISTING-001` rewrites the listing's `limit`, so that six links page the
+  way six thousand do — a legal answer, since the api may return fewer than it
+  was asked for. `SYNC-RETRY-001` fails blob downloads, which is the dropped
+  connection it is about. No clock is mocked and no response body is edited.
+- **The library is built through the app, never from the paged-library
+  fixture.** That fixture's ids all sort after any random id, so a link saved
+  during a listing could never land BEHIND it and the case would pass on the
+  engine that lost links.
+
+`SYNC-TABS-001` reads the server the only honest way — through a device that
+has nothing but what the server gives it — because the failure it guards left
+the local store correct and the server wrong.
 
 ⚠ **`SYNC-BLOCKED-001` fills a real account with real bytes, and nothing lowers
 the ceiling for it.** Eleven 10 MiB preview files (`web/fixtures/heavy-library.ts`,
@@ -1696,6 +1738,19 @@ npm run e2e:web -- --case WEB-LINK-001
 npm run e2e:extension -- --case EXT-AUTH-001
 npm run e2e:mobile -- --platform ios --device <udid> --exclude-trait destructive
 ```
+
+⚠ **On web the selection is applied per Playwright project, not as `--grep`**
+(`runner/web.ts` passes it as `E2E_GREP`; `playwright.config.ts` gives it to both
+projects). A command-line filter reaches only the projects it selects directly,
+and Playwright runs a DEPENDENCY project whole — and `capacity` depends on `web`
+so that it runs last and alone. Under `--grep`, any selection that included
+`SYNC-BLOCKED-001` therefore ran every test in `web`: `--exclude-trait internet`
+ran the three `internet` cases (which is how it was found, on a stack with no
+reachable extractor), and `--case SYNC-BLOCKED-001` ran the whole suite before
+its one case. Nothing said so — the run manifest listed only the cases asked
+for, and the cases that should not have run passed or failed like any other. A
+case added behind a new project dependency needs the same `grep` on its
+project.
 
 Two traits are easy to confuse. `visual` marks any case whose claim is in
 pixels or bounds — `SKELETON-*` and `VIEWPORT-*` carry it and run in their
@@ -2835,6 +2890,51 @@ Neither native leg has a clean single-invocation pass yet: iOS stopped at
 `BULK-COPY-001` and Android at `FILTER-001`, and the Android cases after it have
 not run since. Both legs need one uninterrupted re-run before this table can
 claim a repeat for every native case.
+
+### the cases where two clients are busy at once
+
+`SYNC-CURSOR-001`, `SYNC-LISTING-001`, `SYNC-RETRY-001` and `SYNC-TABS-001`
+(_cross-client sync_, above) were measured 2026-10-06 from commit `8227000` with
+their changes present in the working tree — Playwright 1.62.1, system Chrome
+154.0.8037.98, bundled Chromium for the browser extension, the iPhone 17 Pro
+simulator on iOS 26.5, app 1.0.0 (1), Maestro 2.8.0:
+
+| surface      | measured result                                                          |
+| ------------ | ------------------------------------------------------------------------ |
+| web          | **52/52 passed** in one invocation — the full suite, no retries, 4.6 min |
+| extension    | **10/10 passed** in one invocation, 1.4 min                              |
+| iOS contract | **3/3 passed** — frozen vectors, web→mobile, mobile→web                  |
+| iOS native   | **8/8 passed** — the slice that rides the sync engine, one invocation    |
+
+The native slice is not the native suite. The engine change is client-side on
+both platforms and has no native case of its own (expo has one runtime per
+store, so there is no second tab to race, and its cursor cases are drift guards
+at unit level), so what was run is what would notice the engine being wrong:
+`NATIVE-ACCOUNT-001`, `NATIVE-LINK-001`, `DATA-DELETE-ALL-NATIVE-001`,
+`SYNC-REFRESH-PILL-IOS-001`, `SYNC-LOCAL-TOP-001`, `EXTRACT-NATIVE-001`,
+`EXTRACT-NATIVE-ALL-001` and `OFFLINE-IOS-001`. Android, the PWA target and the
+rest of the native suite were not run for this change.
+
+**Each of the four was also run against the engine it guards**, which is the
+half a green run cannot show. With the source mutated in the running dev server
+and the case run alone, no retry: `SYNC-RETRY-001` without the first sync's
+local-only drop left the deleted link on the retried profile (`toHaveCount(0)`,
+received 1), and `SYNC-TABS-001` without the cycle lock found no cycle queued
+behind the other tab's (`queued`, received false). `SYNC-CURSOR-001` and
+`SYNC-LISTING-001` had been run against the engine before the cursor change,
+where each failed on the link that never arrived.
+
+Two things about the run itself, both harness:
+
+- **The first attempt at a full run failed three cases, none of them these.**
+  It was started on spare ports beside another checkout's stack, and the
+  `EXTRACT-*` cases need the extractor, whose development CORS allows the
+  default web origin only. On `npm run dev`'s own ports all three pass. Run this
+  suite on the default ports, or exclude `internet`.
+- **Excluding `internet` did not exclude them**, which is what turned a port
+  mix-up into a red run: the selection went to Playwright as `--grep`, and a
+  dependency project ignores it (_cases, suites and fixtures_, above). Fixed in
+  the same change.
 
 Nothing here runs automatically. There is still no CI ([testing.md](./testing.md)),
 and the only git hook guards `internal/`.

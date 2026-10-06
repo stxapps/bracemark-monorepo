@@ -338,6 +338,18 @@ platform whose route to the api the runner can cut and restore
       conflict result on both. Keep the conflict matrix itself at unit level.
 - [x] `SYNC-BLOCKED-001` Exercise a real capacity-blocked push and prove the
       client reports a capacity state rather than a generic network failure.
+- [x] `SYNC-CURSOR-001` Hold one profile's commit while a second profile saves and
+      pushes a link, release it, and prove the first profile still receives that
+      link.
+- [x] `SYNC-LISTING-001` Sign a profile in while another keeps saving, with its
+      first sync's listing paged and held after page one, and prove it receives a
+      link that sorted behind the listing as well as one ahead of it.
+- [x] `SYNC-RETRY-001` Cut a first sync short after one link is stored, delete
+      that link for good from another profile, press Try again, and prove the
+      link is gone from the retried profile.
+- [x] `SYNC-TABS-001` Hold one tab's upload of an edit while a second tab of the
+      same profile edits the link again, prove the second tab's sync waits, and
+      read the later edit from an independent profile.
 
 ## Phase 5 — data lifecycle
 

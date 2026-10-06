@@ -380,6 +380,46 @@
     "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
   },
   {
+    "id": "SYNC-CURSOR-001",
+    "title": "A link another device committed while this one was pushing still arrives",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online"],
+    "fixture": "small",
+    "path": "web/sync.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
+    "id": "SYNC-LISTING-001",
+    "title": "A device signing in while another saves receives a link that landed behind its listing",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online"],
+    "fixture": "small",
+    "path": "web/sync.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
+    "id": "SYNC-RETRY-001",
+    "title": "A first sync cut short and tried again drops a link another device deleted in between",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online"],
+    "fixture": "small",
+    "path": "web/sync.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
+    "id": "SYNC-TABS-001",
+    "title": "A second tab's sync waits for the first, and another device reads the later of two edits",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online"],
+    "fixture": "small",
+    "path": "web/sync.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
     "id": "SYNC-BLOCKED-001",
     "title": "A push refused by the storage ceiling is reported as storage full, not as a failed sync",
     "surface": "web",

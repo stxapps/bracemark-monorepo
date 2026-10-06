@@ -145,6 +145,24 @@ export function queuedPathsTx(tx: DbTx, username: string, paths: string[]): Set<
   return queued;
 }
 
+// The `writeId` of the op queued at one path, or undefined if none is — the
+// engine's UPLOAD-time test, where queuedPathsTx above is its apply-time one. A
+// drain holds the op rows it read at the top of its cycle and reads each record
+// only when that op's own upload starts, round trips later; a write landing in
+// between replaces the row under a fresh `writeId` in the same transaction that
+// stores its bytes. So "the row still carries the id I read" is exactly "this
+// record is still the write my op stands for" (item-store's getItemForOp, which
+// composes this; docs/local-first-sync.md, _who enforces ordering_). Tx-taking for
+// the reason queuedPathsTx is: the answer only means something beside the read it
+// guards.
+export function queuedWriteIdTx(tx: DbTx, username: string, path: string): string | undefined {
+  return tx
+    .select({ writeId: pendingOps.writeId })
+    .from(pendingOps)
+    .where(and(eq(pendingOps.username, username), eq(pendingOps.path, path)))
+    .get()?.writeId;
+}
+
 // How many ops are queued for an account — the "N changes waiting to sync"
 // status line (use-pending-changes-count). A plain SQL count, no row decode.
 export async function countPendingOps(username: string): Promise<number> {

@@ -106,9 +106,12 @@ export async function claimIfStillSignedIn(username: string): Promise<void> {
 // Sign-in path: call once the initial full pull has finished (all blobs
 // downloaded, decrypted, written) — only then does the flag flip, so an
 // interrupted first sync stays "not done" and re-blocks (resuming, not
-// restarting) on the next load. Fenced like the pull's writes: the row
-// beginInitialSync claimed must still be there, or the account was torn down
-// mid-pull and this must not resurrect it.
+// restarting) on the next load. The cursor it is handed is the op log's
+// high-water mark as it stood before the pull's listing, with an empty path —
+// never the newest stamp the listing showed (sync/engine.ts logWatermark, and
+// web's). Fenced like the pull's writes: the row beginInitialSync claimed must
+// still be there, or the account was torn down mid-pull and this must not
+// resurrect it.
 export async function markFirstSyncDone(
   username: string,
   syncCursorUpdatedAt: number,
@@ -123,12 +126,13 @@ export async function markFirstSyncDone(
   });
 }
 
-// Advance the compound `(updatedAt, path)` cursor after an incremental cycle.
-// FORWARD-ONLY, read-and-compare in one transaction — web guards against a
-// slower TAB dragging the cursor back; native has no tabs, but overlapping
-// in-process cycles can still finish out of order, and the guard costs nothing
-// (a regression would be harmless anyway: just a redundant re-pull). Leaves
-// firstSyncDoneAt untouched.
+// Advance the compound `(updatedAt, path)` cursor after an incremental cycle — to
+// the last op that cycle LISTED, never to a stamp it merely holds (its own
+// commit's): the cursor is the claim that everything at or below it has been
+// applied (sync/engine.ts). FORWARD-ONLY, read-and-compare in one transaction —
+// web guards against a slower context dragging the cursor back; native has one
+// runtime per store, but the guard costs nothing (a regression would be harmless
+// anyway: just a redundant re-pull). Leaves firstSyncDoneAt untouched.
 export async function advanceCursor(
   username: string,
   syncCursorUpdatedAt: number,
@@ -148,10 +152,11 @@ export async function advanceCursor(
   });
 }
 
-// Set the cursor to a value reconstructed straight from an R2 listing — the
-// download-authoritative fallback. UNCONDITIONAL, unlike advanceCursor: the
-// cursor-ahead fallback case exists precisely to LOWER a stale cursor back to
-// what R2 actually holds.
+// Set the cursor after a download-authoritative fallback — to the log's
+// high-water mark as it stood before that cycle's listing (sync/engine.ts
+// logWatermark). UNCONDITIONAL, unlike advanceCursor: the cursor-ahead fallback
+// case exists precisely to LOWER a stale cursor back to what the log actually
+// holds, and a wiped log puts it back at `(0, '')`.
 export async function resetCursor(
   username: string,
   syncCursorUpdatedAt: number,

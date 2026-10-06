@@ -151,8 +151,10 @@ export class UserDataDO extends DurableObject<Bindings> {
   // ops are ordered by commit, never by comparing the worker's clock against R2's
   // (docs/local-first-sync.md — the three flows). Running the whole batch in one
   // RPC keeps it to a single round trip to this serialized SQLite. Returns each
-  // entry's recorded `updatedAt`, in input order, for the client to store and
-  // advance its cursor to.
+  // entry's recorded `updatedAt`, in input order, for the client to store on the
+  // record it names — and NOT to move its cursor to: a commit's stamp says where
+  // that op sits in the log, not that the committer has read everything below it
+  // (docs/local-first-sync.md — the cursor is a claim).
   //
   // THE CLAMP: an entry whose `updatedAt` is not ahead of every row already in the
   // log is recorded at `MAX(updated_at) + 1` instead. A put's timestamp is minted at
@@ -167,10 +169,21 @@ export class UserDataDO extends DurableObject<Bindings> {
   // actually requires (docs/local-first-sync.md — the three flows). Within one batch
   // the shared floor is fine: the batch commits atomically under this serialized DO,
   // so a puller sees all of it or none, and the path tiebreak orders its ties.
+  //
+  // STRICTLY newer is load-bearing twice over, which is why the floor is `+ 1` and
+  // an entry arriving at exactly the newest stamp is lifted too. A client that
+  // lists R2 (first sync, fallback) reads `newestUpdatedAt` BEFORE the listing and
+  // ends on it as its cursor: everything at or below it was committed before that
+  // read and is in the listing, and nothing appended afterwards can tie with it or
+  // sit under it (listOps' bounds; the clients' logWatermark).
+  //
   // Consequences are benign by construction: per-path order is preserved (the prior
   // op for a path is already in the log, so the clamp only ever lifts the new one
-  // above it), and a stamp nudged past R2's real `LastModified` at most costs a
-  // fallback-listing comparison one redundant, idempotent re-download.
+  // above it), and a stamp nudged past R2's real `LastModified` costs a client that
+  // stored the object from a LISTING, at R2's stamp, one redundant, idempotent
+  // re-download when it later meets the lifted op. The committer itself stores the
+  // lifted stamp, so a fallback listing — which downloads only what is stamped
+  // newer than the local copy — just passes over the path.
   commitOps(entries: CommitEntry[]): { results: CommitResult[] } {
     const sizes = fileSizesRepo(this.sql);
     const ops = opLogsRepo(this.sql);

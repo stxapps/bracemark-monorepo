@@ -91,9 +91,10 @@ Dexie holds:
 
 - decrypted bookmark metadata, tags, lists, settings (the always-resident index);
 - decrypted content/page-copy blobs (fetched lazily, on demand);
-- the **sync cursor** — the compound `(updatedAt, path)` of the newest op/file
-  the client has reconciled, stored as `syncCursorUpdatedAt` + `syncCursorPath`
-  (the high-water mark for the next incremental pull — see _the sync endpoint_);
+- the **sync cursor** — a compound `(updatedAt, path)` at or below which every
+  op has been applied here, stored as `syncCursorUpdatedAt` + `syncCursorPath`
+  (the high-water mark for the next incremental pull, and a claim the engine has
+  to be able to back — see _the cursor is a claim_);
 - the **pending-ops queue** — local mutations not yet committed to the server
   (this is what makes offline writes durable and drives crash recovery); each
   entry carries the **base `updatedAt`** the edit started from (the path's stored
@@ -267,10 +268,14 @@ and the **client's sync cursor is that timestamp**, never `seq`.
 that share a millisecond and drives compaction, but it never goes over the wire.
 Keeping the cursor on R2's clock rather than on `seq` is deliberate — a sequence
 number is only meaningful inside one DO's lifetime and **cannot be reconstructed
-from an R2 listing**, so a DO rebuild or a fallback would have no valid seq to
-resume from. An R2 timestamp always can: the newest `LastModified` in a listing
-_is_ the cursor. A DO rebuild or seq reset therefore can't invalidate a client
-cursor, and a wiped log is rebuildable from R2.
+from an R2 listing**, so a rebuilt log would strand every cursor it had ever
+issued. An R2 timestamp survives that: a log rebuilt from a listing stamps its
+rows with the same `LastModified` values, so a cursor issued before the rebuild
+still divides applied from unapplied where it did. A DO rebuild or seq reset
+therefore can't invalidate a client cursor, and a wiped log is rebuildable from
+R2. (What the shared clock does NOT buy is a cursor read off a listing: the
+newest `LastModified` a client happens to list is not one, though this section
+used to say it was — _the cursor is a claim_.)
 
 ### schema changes — the client is greenfield, the server is not
 
@@ -483,9 +488,18 @@ extraction.title ?? host(url)`). Written by client extractors (the browser
 **1. First sync (after sign-in).** Pull the full set of metadata/tag/list paths,
 download + decrypt each, build the local index. Content/page copies are _not_
 downloaded here — they come on demand. For 5 000 bookmarks at ~500 bytes of
-metadata each that's ~2.5 MB — manageable. Set the cursor to the **newest
-`(updatedAt, path)` among the files listed** — the same reconstruction the
-fallback full sync does from its listing.
+metadata each that's ~2.5 MB — manageable. Set the cursor to the **op log's
+newest stamp, read before the listing** — one `ops/list` call with `limit=1`,
+ahead of the first `files/list` page — and NOT to the newest stamp among the
+files listed, which is what this flow used to do (_the cursor is a claim_). The
+fallback full sync ends on the same value.
+
+A first sync also **drops what the listing does not show**: a path in the local
+store, absent from the listing, with no op queued. On a fresh sign-in the store
+is empty and that is one read of nothing. The case is a **retry** — a pull that
+died partway left what it had stored, and the cursor above is only a true claim
+if the listing is reconciled in both directions (_the cursor is a claim_, _the
+claim covers what the listing does not show_).
 
 This is the only flow that **blocks the UI**, so it is also the only one that
 **reports progress**. `runInitialSync` takes an optional `onProgress(done, total)`
@@ -515,9 +529,9 @@ that lands mid-sync simply carries a later `updatedAt` and is caught next time;
 this is why the race in older drafts is a non-issue). That promise is not free:
 it is what the **commit clamp** under _push_ enforces, since a put's stamp is
 minted at PUT time and could otherwise land behind a cursor already issued. And
-it holds only for a cycle that pulls without pushing — a cycle's own commits
-move its cursor past ops it never listed; see _the cursor and a cycle's own
-commits_.
+it is kept only because the cursor moves to that op and no further: a cycle that
+also pushes does NOT add its own commits' stamps, which sit above ops it never
+listed — see _the cursor is a claim_.
 
 **3. Push (new / edited / deleted entity).** Write to the local store first and
 enqueue the mutation in the pending-ops queue, then drain the queue:
@@ -610,7 +624,8 @@ duplicate path.
 > `packages/web-react/src/sync/engine.spec.ts`.
 
 The store records the **R2 `LastModified` returned by commit** as the file's
-`updatedAt` and advances the sync cursor to it — never the local clock. Every `put`
+`updatedAt` — never the local clock — and that is the stamp's only use: it is
+not folded into the sync cursor (_the cursor is a claim_). Every `put`
 is therefore stamped on R2's clock — the same value the client stores locally and
 the fallback listing reads back — so there is no cross-device skew to reconcile
 for any write that has a surviving object. (A `delete` op has no surviving object
@@ -641,23 +656,40 @@ be immutable has to say what it does about those two namespaces.)
 > nothing to retry — and it is exactly the hole under flow 2's promise that
 > "anything that lands mid-sync simply carries a later `updatedAt`". `commitOps`
 > closes it by recording any such entry at **`MAX(updated_at) + 1`** instead, and
-> **returning the lifted stamp** — it is what the committing client stores locally
-> and advances its own cursor to, so client and log never disagree.
+> **returning the lifted stamp** — it is what the committing client stores on the
+> record, so client and log never disagree about it.
 >
 > The consequences are benign by construction. Per-path order is preserved: the
 > prior op for a path is already in the log, so the clamp only ever lifts the new
 > one **above** it. Within one batch the shared floor is fine: the batch commits
 > atomically under the serialized DO, so a puller sees all of it or none, and the
-> `(updatedAt, path)` tiebreak orders its ties. And a stamp nudged past R2's real
-> `LastModified` costs at most **one redundant, idempotent re-download** the next
-> time a fallback listing compares the two. An in-order commit is untouched — the
-> clamp only engages on the race. Coverage:
+> `(updatedAt, path)` tiebreak orders its ties. A stamp nudged past R2's real
+> `LastModified` costs **one redundant, idempotent re-download** on a client that
+> stored the object from a LISTING, at R2's own stamp, and then meets the lifted
+> op. The committer stores the lifted stamp itself, so a later fallback — which
+> downloads only what is listed NEWER than the local copy — passes over the path.
+> That is also the one place a lift could hide something, and only from a
+> fallback: an object rewritten so soon after a lifted commit that its
+> `LastModified` is still not past the lifted stamp, which needs the log's stamps
+> to be running ahead of R2's clock — by the skew between the Worker's clock and
+> R2's, or a run of `+ 1`s, so milliseconds. An incremental pull is driven by the
+> rewrite's op, which the clamp puts above the lifted stamp whatever R2 says; a
+> fallback has only the listing to compare, and a rewrite with NO op (a commit
+> that died) has only the fallback to find it. The next commit to the path
+> clears it. An in-order commit is untouched — the clamp only engages on the
+> race.
+>
+> **Strictly above, and the `+ 1` is load-bearing.** An entry that arrives
+> stamped exactly at the log's newest is lifted too, so nothing appended later
+> ever TIES with a stamp already in the log. That is what lets a client take
+> `newestUpdatedAt` as its cursor before it lists R2 (a first sync, a fallback):
+> everything at or below it is already committed, and nothing that comes later
+> can sit at it or under it. Coverage for both halves:
 > `apps/bracemark-api/src/do/user-data.spec.ts`.
 >
 > The clamp orders what is **appended**; it cannot make a client list a range
-> it skipped. An op appended between a client's last list page and that
-> client's own commit is still passed over — _the cursor and a cycle's own
-> commits_.
+> it skipped. That half is the client's, and it is why a cursor only ever moves
+> over ops a cycle listed — _the cursor is a claim_.
 
 ### the ops/list endpoint
 
@@ -731,9 +763,10 @@ holding more than `limit` ops could never be paged past, and the
 `since == newestUpdatedAt` boundary couldn't distinguish "consumed every op at
 that ms" from "more remain with a higher path." A long-offline client pages
 forward by advancing **both** params to the last op's `(updatedAt, path)` while
-`hasMore` is true. (`sincePath` is omitted only while the cursor is still the
-seeded-new-account `(0, '')`; the server treats a missing `sincePath` as the low
-sentinel, so the scan includes every op at that millisecond.) This keyset query and the `oldestUpdatedAt` / `newestUpdatedAt`
+`hasMore` is true. (`sincePath` is omitted while the cursor has no path half —
+the seeded-new-account `(0, '')`, and the `(newestUpdatedAt, '')` a first sync or
+a fallback ends on; the server treats a missing `sincePath` as the low sentinel,
+so the scan includes every op at that millisecond.) This keyset query and the `oldestUpdatedAt` / `newestUpdatedAt`
 bounds live in `op-logs.ts` (`listSince` keysets on `(updated_at, path)`;
 `bounds()` returns `MIN`/`MAX(updated_at)`), surfaced to the route by the DO's
 `listOps` RPC in `user-data.ts`. `seq` stays internal — it orders ties and drives
@@ -774,10 +807,12 @@ saw.
 3. **Push** the upload set (flow 3 — meta-last; commit returns each new server
    `updatedAt`).
 4. **Pull** the download set's blobs (decrypt, store; content stays lazy).
-5. Advance the cursor to the newest `(updatedAt, path)` seen across the whole cycle —
-   **including your own just-committed uploads**, so the next cycle doesn't
-   re-fetch them. (This is the step that can skip another client's op — see
-   _the cursor and a cycle's own commits_.)
+5. Advance the cursor to the last op **listed in step 1**, and no further. Your
+   own just-committed uploads are NOT folded in — the step used to add them, "so
+   the next cycle doesn't re-fetch them", and that moved the cursor past ops
+   another client had committed in the meantime. The next cycle lists them back
+   instead, at the cost of an op row each and no transfer (_the cursor is a
+   claim_).
 
 Because step 2 resolves each conflicting path to exactly one side, the upload and
 download sets never overlap — so steps 3 and 4 are order-independent and may run
@@ -808,9 +843,9 @@ conditional writes close it.
 > overlapping `rw` transactions, so a concurrent local write either commits first
 > (its op is visible → the path is spared) or after (its put re-creates the
 > record) — both orders end with the local write intact. (That argument takes the
-> op to stay queued until this cycle is over, which holds only while this cycle
-> is the one drain — another tab can push and clear it first; see _two tabs, one
-> queue_.) The re-read is per
+> op to stay queued until this cycle is over, which holds because this cycle is
+> the one drain running — in another tab too, by the cycle lock; see _two tabs,
+> one queue_.) The re-read is per
 > record for downloads, since each arrives after its own GET; batching them would
 > hold a chunk's decrypted blobs in memory and cost the resume-where-interrupted
 > property. As a backstop for a queue **already** wedged, a pending `put` whose
@@ -846,7 +881,15 @@ conditional writes close it.
 > and collide far more rarely, which is exactly why the bug read as
 > "settings don't sync" rather than as a general one.
 >
-> **Both engines carry all three guards**, and they land differently per platform.
+> **And it governs what step 3 UPLOADS: a drain sends the write its op stands
+> for, not whatever is at the path by then.** An op carries no bytes; the record
+> is read when its own upload starts, round trips after the queue was. So that
+> read is paired with the queue row's `writeId`, in one transaction, and an op
+> whose row has been replaced since is **superseded** — skipped, kept out of the
+> commit, and left to the cycle that reads the newer op. What that closes, and
+> what it costs, is under _who enforces ordering_.
+>
+> **Both engines carry all four guards**, and they land differently per platform.
 > web-react re-reads the queue inside a Dexie multi-store transaction
 > (`applyDeletes` / `putPulled`); expo-react composes the read into the write's own
 > synchronous sqlite transaction (`item-store`'s `putItemsUnqueued` /
@@ -855,24 +898,33 @@ conditional writes close it.
 > — so it needs no read-then-filter step at all. It is one DELETE per batch of
 > ops, not one per op, because a statement per op cost ~0.6 s of JS thread per
 > 1,000-path commit together with the restamp beside it
-> ([data-lifecycle.md](./data-lifecycle.md), _readings — expo_). expo's `write_id` is `NOT NULL` where web's is a
+> ([data-lifecycle.md](./data-lifecycle.md), _readings — expo_). The upload-side
+> pairing is one read transaction over `items` and `pendingOps` on web, and
+> `item-store`'s `getItemForOp` over `pending-store`'s `queuedWriteIdTx` on expo.
+> expo's `write_id` is `NOT NULL` where web's is a
 > plain required field: neither store validates, so in both cases it is the type
 > system that has to stop a future writer enqueueing an untagged row.
 >
 > Regression coverage for all of the above:
 > `packages/web-react/src/sync/engine.spec.ts`.
 
-### the cursor and a cycle's own commits
+### the cursor is a claim
 
-> **A known gap, open.** Traced through `incrementalCycle`, `commitOps` and
-> `listSince`; not reproduced, and no spec covers it. It is a **cross-device**
-> gap and needs no second tab — only two clients of one account syncing at the
-> same moment.
+A cursor is only worth what it promises: _this client has applied every op at or
+below this point_. Everything a keyset pull does afterwards takes that on trust —
+it asks for what is ABOVE the cursor and never looks below it again. So the rule
+for writing one is narrow, and both engines hold every write of it to it:
 
-A cursor is only worth what it promises: _this client has seen every op at or
-below this point_. Step 5 above breaks that promise, because the cursor it
-writes is not the end of what the cycle **listed** — it is the newer of that and
-the cycle's **own commits**, and other clients' ops can sit between the two.
+- an **incremental cycle** advances the cursor to the last op it **listed**, and
+  no further;
+- a **listing-built flow** — the first sync, the fallback — ends on the **op
+  log's newest stamp, read before the listing**, with an empty path.
+
+Never on a stamp the client merely holds. There were two of those, and each put
+another client's op below the cursor, silently and for good.
+
+**Its own commits.** A cycle used to end on the newer of what it had listed and
+what it had just committed, "so the next cycle doesn't re-fetch them":
 
 1. Client A lists the op log; its last page ends at `w`.
 2. Client B — another device, or the browser extension beside the web app —
@@ -880,48 +932,120 @@ the cycle's **own commits**, and other clients' ops can sit between the two.
    `x > w`.
 3. A commits its push. The clamp stamps that above everything too, X included:
    `a > x`.
-4. A advances its cursor to `a`.
+4. A advanced its cursor to `a`.
 5. A's next pull is the keyset `(updated_at, path) > (a, …)`. X is below it and
-   is never returned. The cursor is inside the log's range, so nothing routes A
+   is never returned. The cursor is inside the log's range, so nothing routed A
    to a fallback either.
 
-A now lacks whatever X was — a link saved on the phone that never appears, an
-edit that never lands, a delete that never applies (and a link A still shows is
-a link A can edit, which re-creates it everywhere). The cycle completed and the
-queue drained, so the indicator reads idle. Only a fallback listing finds it.
+A lacked whatever X was — a link saved on the phone that never appeared, an edit
+that never landed, a delete that never applied (and a link A still shows is a
+link A can edit, which re-creates it everywhere). The cycle completed and the
+queue drained, so the indicator read idle. The window ran from A's last
+`ops/list` page to its last commit: a sign, an upload and a commit for one edit,
+the **whole push** for an import — and a `429` on `files/sign` or `ops/commit`,
+which share a ten-calls-per-ten-seconds limit per ACCOUNT across all its devices
+and tabs, parked the cycle inside that window for the length of its
+`Retry-After`.
 
-**The window** runs from A's last `ops/list` page to its last commit: a sign, an
-upload and a commit for one edit, and the **whole push** for a large one — every
-chunk an import commits moves the cursor further past whatever another client
-committed in the meantime. A cycle that pushes nothing has no window at all.
+It was not a corner. Reproduced on the local stack with two browser profiles of
+one account (2026-10-06). With A's commit held for one round trip while B saved
+a link, A never received it: three syncs and a reload later, queue empty, cursor
+in range. And with **nothing held** — both profiles simply saving links at the
+same time, one every 1.5 s and the other every 4 s — A ended up missing 3 of B's
+8 links and B 6 of A's 20 at 100 ms of added latency per request, 4 of 8 with no
+added latency, and 2 of 12 at a slower pace that tripped no rate limit.
 
-**What the clamp does and does not cover.** The clamp guarantees that an op
-appended _after_ a cursor was issued sorts above it — the slow-committer race in
-_the three flows_. X was appended _before_ `a` was issued and sorts below it.
-The log is perfectly ordered; A simply adopted a cursor for a range it never
-read. So flow 2's "anything that lands mid-sync simply carries a later
-`updatedAt` and is caught next time" is true of a cycle that only pulls, and
-false of one that also pushes.
+**The newest stamp of a listing.** The first sync and the fallback used to end on
+the newest `(updatedAt, path)` among the files they had listed, and the fallback
+folded its own commits in as well. But the listing is paged and is **not a
+snapshot**: an object another client writes into a key range the listing has
+already passed is absent from it. If anything listed afterwards carries a newer
+stamp, the cursor lands past an op the client was never shown. A device signing
+in while another was saving came up short by exactly those links. Measured the
+same day, with the page size cut to four so that a forty-link library paged the
+way a large one does: 3 of 12, 2 of 11 and 3 of 10 links saved during the
+listing never arrived — each time precisely the ones that were not in the
+listing and were stamped at or below its newest.
 
-**Wherever a cursor is built from more than what was listed, the same reasoning
-applies.** The fallback writes the newest of its R2 listing and its own commits
-(`newestCursor(files, committed)`); the first sync writes the newest of its
-listing. That listing is not a snapshot: an object another client commits into
-a key range the listing has already passed is absent from it, and is skipped
-until the next fallback if anything listed or committed later carries a newer
-stamp. expo's
-engine is the same code shape on both paths.
+**Why the log's newest stamp can be claimed, where a listing's cannot.** Three
+things that already hold:
 
-**What closing it has to reckon with.** Own commits are folded into the cursor
-so the next cycle does not re-fetch them — but the engine already makes that
-echo free: the commit restamped the local record to the very stamp the op
-carries, so `storeDownloads`' staleness skip downloads nothing, and an echoed
-delete finds no record. Advancing only over what was listed would therefore
-cost one op-list row per own commit and no transfer. The alternative is to
-re-list after the push and advance only once a pull comes back empty. Either
-way the listing-built cursors need their own answer, since a listing has no
-"last page I read" to stop at; and whatever is chosen must keep the fallback's
-ability to **lower** a cursor that is ahead of the log.
+- every op at or below it was committed before it was read, and a commit is
+  R2-first, log-last (_source of truth_) — so a listing that starts afterwards
+  reflects it: the object is there, or a later state of that path is;
+- the commit clamp stamps every later op **strictly** above it (_the three
+  flows_) — so the next incremental pull lists it, whatever R2 time it carries;
+- R2 lists consistently after a write.
+
+Nothing in that compares R2's clock with the log's, which the old reconstruction
+had to. The fallback already has the value in hand — its routing peek is
+answered before `listAllFiles` starts — and the first sync makes the same read
+for itself (`logWatermark`, in both engines).
+
+**The claim covers what the listing does not show.** "Everything at or below the
+watermark is in the listing" has two halves: the ops that put a path, and the
+ops that deleted one. A flow that ends on the watermark has to honour both. The
+fallback always has — it downloads what is new or newer and drops what is
+local-only and unqueued. The first sync honoured only the first, on the
+assumption that a first sync starts from an empty store, and it does not always.
+A pull that dies partway — a dropped connection, a closed tab, the app killed —
+leaves what it had stored and the flag unset, and the next load runs the pull
+again, minutes or days later. A link deleted on another device in between is in
+the store and not in the retry's listing, and its delete op was committed before
+the retry read the watermark: at or below the cursor the retry ends on, where no
+later pull returns it. Nothing ever removed it. The link stayed on that one
+device, and a link a device still shows is a link it can edit — which puts it
+back everywhere.
+
+That hole is older than the watermark. A cursor taken from the listing's newest
+stamp sat past the delete as soon as anything had been saved after it, which
+over days is always. The watermark only made it unconditional, bar a delete that
+is the very newest op in the log and comes back as a tie. So `runInitialSync`
+applies the fallback's local-only row after its downloads (`localOnlyPaths`, then
+`applyDeletes`) in both engines. `applyDeletes` re-reads the queue as it always
+does, because "in the store and not in the listing" also describes a link this
+device saved and has not pushed — the browser extension can save one before its
+first sync has finished — and that one is kept.
+
+**What it costs.**
+
+- _The echo._ A cycle's own commits are no longer behind its cursor, so the next
+  cycle lists them back. That is one op row each and no transfer: the commit
+  restamped each record to the very stamp its op carries, so `storeDownloads`'
+  staleness skip passes over it, and an echoed delete finds no record. On web the
+  skip settles `files/` paths off the `updatedAt` index's key cursor first —
+  a content record's `data` IS the cached blob, and comparing stamps must not
+  read megabytes to learn that nothing changed; expo keeps content on disk and
+  needs no such step. (The path was always live: a cycle that failed after its
+  push left its commits un-folded. It is just the ordinary one now.)
+- _Ties at the watermark._ `(newestUpdatedAt, '')` has no path half, because the
+  wire carries no path with the bounds. The pull after a listing therefore
+  re-lists the ops stamped at exactly that millisecond; replaying them is
+  idempotent and the same skip absorbs it.
+- _An empty log has no watermark._ A brand-new account, or one wiped under a
+  returning client, reads as `(0, '')`. That claims nothing and routes the next
+  cycle to the fallback again; once the log has its first commit, ONE more
+  fallback reads a real watermark and the account settles into incremental
+  pulls. For a new account that is one extra `files/list` of a near-empty
+  namespace, on its second push. A cursor that never left `(0, '')` would
+  re-list the whole library on every cycle instead, which is what the spec pins
+  against.
+
+**What it does not change.** An `object-without-op` is still invisible to
+incremental pull and healed only by a fallback (_source of truth_). And the
+conflict policy is untouched: this is about a client READING every op, not about
+which of two writes to one file wins.
+
+Coverage: `packages/web-react/src/sync/engine.spec.ts`, _the cursor claims only
+what a cycle read_ — against a server model that keeps the keyset, the clamp and
+a non-snapshot listing, because a stub that answers every pull alike cannot show
+an op being skipped; it carries the first sync's retry too, with the control that
+a link saved here and not yet pushed survives it. The drift guards are in
+`packages/expo-react/src/sync/engine.spec.ts` (there the retry's leftover is a
+`files/` row, since dropping one is a row and a file on disk); the strict clamp
+in `apps/bracemark-api/src/do/user-data.spec.ts`; and `SYNC-CURSOR-001` /
+`SYNC-LISTING-001` / `SYNC-RETRY-001` on the real stack ([e2e.md](./e2e.md),
+_cross-client sync_).
 
 ### fallback full sync (download-authoritative)
 
@@ -947,12 +1071,14 @@ subrequest capped at 1000 keys, so the listing is paged: the client passes
 a path or a keyset on `(updatedAt, path)` like `ops/list` (that endpoint queries
 the DO's SQLite, where we own the ordering; this one rides R2's native cursor over
 a listing we don't control — R2 lists in key order, not time order). Two
-consequences: the client **can't stop early** (the newest `updatedAt` can sit on
-any page, since key order ≠ time order — see the cursor note below), and the
-listing is **not a snapshot** (pages span concurrent writes). The non-snapshot is
-safe here precisely because fallback is download-authoritative and
-`updatedAt`-compared: anything that changes mid-listing carries a fresh
-`LastModified` and is simply caught on the next sync.
+consequences: the client **can't stop early** (R2 lists in key order, not time
+order, so every page has to be read), and the listing is **not a snapshot**
+(pages span concurrent writes, and an object written into a key range already
+passed is simply absent). That is safe for what gets DOWNLOADED — fallback is
+download-authoritative and `updatedAt`-compared — and whatever changed
+mid-listing is caught on the next sync **only because the cursor the fallback
+ends on predates the listing**. A cursor taken from the listing's own stamps sits
+past what it missed (_the cursor is a claim_).
 
 Using R2's own clock — not a separately-minted timestamp — is what lets fallback
 recover a _commit-died edit_ (`object-without-op`, case B): the new bytes carry a
@@ -992,18 +1118,18 @@ unrecorded path frees 0), so pushing unconditionally is always safe — dropping
 the op instead would leak the `file_sizes` entry forever (paths are never
 reused, so no later commit would ever touch it).
 
-After reconciling, set the cursor to the **newest `(updatedAt, path)` among the
-listed files — taken across _all_ pages**, not just the last one (R2 returns key order,
-not time order, so the newest timestamp can land on any page) — reconstructed
-straight from R2, with no dependence on the op log, so the next visit resumes
-normal incremental sync. In the `since > newestUpdatedAt`
-case this lowers the cursor _below_ the stale value it had: R2 is the source of
-truth, the old cursor pointed past what exists, so it's reset down to reality.
-This is the resume a `seq` cursor couldn't give you: there is no sequence number
-to recover from an R2 listing, but the newest `LastModified` always is one. (A delete that happened _after_ that
-newest surviving timestamp leaves no object to carry it, but it was already
-reconciled by the download-authoritative pass above, so the cursor needn't
-account for it.)
+After reconciling, set the cursor to the **op log's newest stamp as the routing
+peek saw it** — read before the listing started — with an empty path (_the cursor
+is a claim_). Not to the newest `(updatedAt, path)` among the listed files, and
+not to this cycle's own commits: the listing is not a snapshot, and a commit is
+stamped past whatever another client committed while this one pushed, so neither
+says what was missed. Everything at or below the peeked stamp is in the listing
+just reconciled; everything committed since — by another client mid-listing, or
+by this cycle's own push — is above it and comes back on the next pull. In the
+`since > newestUpdatedAt` case this lowers the cursor _below_ the stale value it
+had: the old cursor pointed past the log, so it is reset down to it. An
+**empty** log has no stamp to end on and leaves `(0, '')`, which routes the next
+cycle here again until the log has a commit to stand on.
 
 ### multi-file consistency & orphans
 
@@ -1067,11 +1193,12 @@ and trust each is real before opening the next. The engine realizes B in
 
 - **sequential `await` between phases** — the durability-before-next-phase
   guarantee _is_ this ordering; and
-- **single-flight per account, per engine instance** (`inflightSyncs`) — two
-  concurrent drains would interleave phases and break the global order. The slot
-  map is module state, so what it serializes is the cycles of **one JS context**,
-  not of one account or one device. Two tabs of the web app are two contexts
-  sharing one queue, and nothing serializes them — see _two tabs, one queue_.
+- **one cycle at a time per account, on the whole device** — two concurrent
+  drains would interleave phases and break the global order. Inside one JS
+  context that is single-flight (`inflightSyncs`): module state, so it serializes
+  the cycles of one tab and no more. Two tabs of the web app are two contexts
+  sharing one queue, so on web each cycle also runs under a **cycle lock** that
+  spans the origin — see _two tabs, one queue_.
 
 **Single-flight makes a cycle that never settles an outage, not a slow sync.** The
 slot is freed only in the cycle's `finally`, and every later caller — background
@@ -1091,48 +1218,87 @@ same way (`sync/r2.ts`): a web download by an idle deadline that only a stalled
 body trips, the rest by a deadline sized to the blob (`blobTransferTimeoutMs`),
 and expo's native file transfers by their own idle timeouts. See
 [api-contracts.md](./api-contracts.md), _deadlines_, the paragraph _outside this
-client_.
+client_. On web the cycle lock carries the same exposure across tabs — a second
+tab's cycle waits for the first's — so those deadlines are what bound it there
+too.
 
-> **B is weaker than "never" — the queue is a snapshot, the bytes are not.** A
-> known gap, open, and it needs only **one** tab. Read from source, not
-> reproduced; the spec's content-before-metadata case writes both files before
-> the cycle starts.
+**The same outage has a second road: a slot that is filled after it was freed.**
+`runIncrementalSync` creates the cycle's promise and THEN stores it, and the
+`finally` that frees the slot belongs to that promise. Anything that throws
+before the cycle's first `await` runs the `finally` first and the store second,
+which leaves a rejected promise in the slot for good — every later sync joins it
+and fails with an error from long ago. On web, taking the cycle lock is the
+first thing a cycle does, and that put a throw within reach of the window: a
+`navigator.locks.request` that throws rather than rejects (a shim, a locked-down
+webview) would have ended sync until a reload. `incrementalSyncOnce` is an
+`async` function for that reason alone, though nothing in it awaits; an `async`
+function cannot throw synchronously. Coverage: _frees the slot when the lock
+itself cannot be taken_, with _still syncs where Web Locks are missing_ beside
+it (`engine.spec.ts`, _two tabs, one queue_).
+
+> **B holds over the bytes, not only over the ops.** A cycle reads the pending
+> queue once, at the top, and orders the ops it read. But an op carries no bytes:
+> each `put` reads its record from the store when its own upload starts
+> (`uploadBlobs`), which can be many round trips later. So the phase order used
+> to hold over the ops and break over what was actually uploaded. A metadata op
+> that was already queued uploaded whatever its record held THEN. A content file
+> and the reference to it are two local writes, content first — `writeFile`, then
+> `writeExtraction` or the link edit — and if both landed after the queue was
+> read and before the metadata phase reached that path, the cycle committed
+> metadata naming a `files/` blob it held no op for and had not sent.
 >
-> A cycle reads the pending queue once, at the top, and orders the ops it read.
-> But an op carries no bytes: each `put` reads its record from the store when its
-> own upload starts (`uploadBlobs`), on both engines. So a metadata op that was
-> already queued uploads whatever its record holds **then**. A content file and
-> the reference to it are two local writes, content first — `writeFile`, then
-> `writeExtraction` or the link edit. If both land after the queue was read and
-> before the metadata phase reaches that path, the cycle uploads and commits
-> metadata that names a `files/` blob it never held an op for. The phase order
-> was kept over the ops and broken over the bytes.
+> Two writers do this to a path that is usually already queued: **server
+> extraction** (`lib/server-extraction.ts`), which writes the title into
+> `extractions/{id}.enc` in its first pass and in its second writes the image to
+> a fresh `files/{id}.enc` and patches `imageId` into the same extraction — so
+> any cycle that starts between the passes holds the extraction's op and not the
+> image's; and **a custom image on a link that already has an edit queued**
+> (`saveCustomImage`, then `update({ customImageId })`). Nothing was lost — the
+> newer `writeId` kept the metadata op queued, and the rerun pushed content and
+> then metadata — but in between, the server held a reference to an object that
+> was not there, and another device pulling inside that window remembered the
+> miss for the rest of its session (its file-content provider does not ask
+> again). The content-failure hold above did not cover it: a content op the
+> cycle never read cannot fail in it.
 >
-> The two writers that do this to a path that is usually already queued:
+> **So an upload sends the write its op stands for, or nothing.** `uploadBlobs`
+> reads the record TOGETHER WITH the queue row at its path, in one transaction,
+> and uploads only if that row still carries the `writeId` the cycle read. A
+> write replaces the `writeId` in the same transaction that stores its bytes, so
+> a match means these are exactly the bytes the op was queued for; anything else
+> is a later write, and the op is **superseded** — skipped, kept out of the
+> commit, and not an error. The later write is queued under its own id and has
+> asked for the cycle that will carry it, with its content, in phase order.
+> Four things follow:
 >
-> - **server extraction** (`lib/server-extraction.ts`) writes the title into
->   `extractions/{id}.enc` in its first pass, then in its second writes the image
->   to a fresh `files/{id}.enc` and patches `imageId` into the same extraction —
->   so any cycle that starts between the passes holds the extraction's op and
->   not the image's;
-> - **a custom image on a link that already has an edit queued**
->   (`saveCustomImage`, then `update({ customImageId })`).
+> - A superseded op is told apart from an **orphan** before the orphan test. A
+>   path deleted since the queue was read has no record either, and it is a newer
+>   intent, not a wedged op to heal — the heal would go and fetch the server's
+>   copy of something this device had just deleted.
+> - A path rewritten faster than a cycle reaches it is not uploaded until the
+>   rewriting pauses — a theme picker clicked through, one facet completing after
+>   another. Each write still asks for a cycle, so the last one is pushed; what
+>   is given up is the redundant uploads of the ones in between.
+> - On expo the pairing pins the ROW and, for a `files/` path, its claim on the
+>   plaintext; the file itself is read off disk by the native encrypt afterwards,
+>   as it always was. Every capture mints a fresh `files/` id, so in ordinary use
+>   a content path is written once; a backup restore is the one writer that can
+>   land on a content path that already exists.
+> - The test is per op, and a superseded CONTENT op holds nothing back — unlike
+>   a failed one, which holds the whole metadata phase. Metadata the cycle still
+>   holds unchanged goes up in the same cycle. So the window is not shut for a
+>   `files/` path rewritten or deleted while its op is in a cycle's hands and
+>   its metadata's is not. One writer does that in ordinary use: destroying a
+>   link deletes its `files/` a transaction ahead of its extraction (`destroy`,
+>   `hooks/use-link-mutations.ts`), and a cycle whose metadata phase reads the
+>   extraction in between uploads it naming an image whose put it has just
+>   skipped — until the next cycle, which deletes it. Left as it is: the
+>   extraction belongs to a link on its way out, and a wholesale hold would make
+>   every unrelated edit in the cycle wait for it.
 >
-> Nothing is lost: the newer `writeId` keeps the metadata op queued, the content
-> op is queued beside it, and the trailing rerun those writes request pushes
-> content and then metadata in order. What exists in between is a committed
-> reference to an object that is not there, for as long as that rerun takes — or
-> until the next cycle that succeeds, if it fails (offline, or a content upload
-> that keeps failing). Another device that pulls inside the window gets the dangling
-> id the read layer is built to skip, with one cost that outlasts the window: its
-> file-content provider remembers a 404 for the rest of the session and does not
-> ask again. And the content-failure hold above does not cover it — a content op
-> the cycle never read cannot fail in it.
->
-> Closing it means making the bytes part of the snapshot (uploading the write the
-> op stands for, not the record's current contents), or holding a metadata `put`
-> whose path was rewritten since the queue was read. Until then, read the claim
-> above as: **a cycle never commits metadata before the content ops it read.**
+> Coverage: `packages/web-react/src/sync/engine.spec.ts` (_an op whose path was
+> rewritten after the queue was read_); on expo, one drift guard in its
+> `engine.spec.ts` and the `getItemForOp` cases in `data/item-store.spec.ts`.
 
 Neither constraint can be moved to the other side. Pushing B server-side would
 require exposing the reference graph to the server (weakening E2E opacity) and
@@ -1143,12 +1309,6 @@ arrangement.
 
 ### two tabs, one queue
 
-> **A known gap, open.** Everything in this section is read from the engine's
-> source. None of it has been reproduced, and nothing tests it:
-> `engine.spec.ts` drives one engine module, and two tabs are two. It is written
-> down because three guarantees elsewhere in this document are stated without a
-> qualifier and hold only for one tab.
-
 Single-flight serializes the cycles of one JS context, and for every client but
 one that is the whole account on that device. The browser extension runs the
 engine only in its background worker. bracemark-expo has one runtime per store:
@@ -1157,27 +1317,26 @@ extension writes an outbox file and never opens the store
 ([share-sheet.md](./share-sheet.md)). **bracemark-web is the exception.** Every
 tab on the origin opens the same Dexie database and loads its own copy of the
 engine, with its own `inflightSyncs`, and every tab that reaches `ready` kicks a
-cycle. A second tab opened while the first is pushing is a second drain of the
-same pending queue. Nothing tells either tab about the other: a cycle takes no
-Web Lock, writes no in-progress row and posts no message.
+cycle. A second tab opened while the first was pushing was a second drain of the
+same pending queue.
 
-**What does hold across tabs**, because it lives in the shared store or on the
-server rather than in a module:
+**So a cycle runs under a lock the whole origin shares.** `withCycleLock`
+(`packages/web-react/src/sync/engine.ts`) takes a Web Lock named for the account
+around each cycle — from its read of the queue and the cursor to its last
+write — and around the first sync. A second tab's cycle waits, and then reads
+the queue the first one left. Nothing else in the engine changed, and nothing
+had to: every argument in this document that begins "a cycle is the only drain"
+is now true of the device rather than of the tab.
 
-- every local write and every engine write is an IndexedDB transaction, which the
-  browser orders across connections;
-- the clear is a compare-and-delete on `writeId` (see _a sync cycle_), so a tab
-  only ever removes the write it uploaded — in every order below, no op is
-  cleared by a drain that did not push it;
-- `advanceCursor` is forward-only, and the account fence stops a stale cycle
-  writing into another account's store;
-- the lazy content cache is a compare-and-set on the stamp, which another tab's
-  pull or commit moves;
-- a commit refuses a `put` whose object is missing (`no_object`), and the op
-  stays queued.
+A second tab's FIRST sync waits the same way, and then does nothing. Two tabs
+open on the sign-in page both adopt the one sign-in, and each provider starts a
+pull; unlocked, they listed and downloaded the whole library side by side. The
+flag is re-read inside the lock, and the pull the first tab just finished was
+the device's: the store is complete up to its cursor, and listing the namespace
+again would only hold the lock against the cycle that comes next.
 
-**What does not**, and why. Four things are each sound while only one cycle can
-run, and together are not:
+**What two drains did**, kept here as the reason the lock exists. Four things
+are each sound while only one cycle can run, and together were not:
 
 1. **The PUT is unconditional.** Whichever of two uploads to a path reaches R2
    last is the object, whatever order the edits were made in.
@@ -1192,91 +1351,112 @@ run, and together are not:
    local write since this cycle decided" — true when this cycle is the only thing
    that clears ops, false once another tab has pushed the write and cleared it.
 
-The orders that follow from those, with tab A holding the earlier read of the
-queue and tab B the later:
+With tab A holding the earlier read of the queue and tab B the later, that gave:
 
-- **The same write drained twice** — both tabs upload the same bytes and both
-  commits are accepted. Redundant, not wrong; the two restamps can land in either
-  order and leave the local stamp at the earlier one.
-- **An edit between the two tabs' byte reads, both holding the old op** — neither
-  clear matches the new `writeId`, the edit stays queued and the next cycle
-  uploads it. This is the case `writeId` was built for, and it holds.
 - **A stale upload over a newer one.** A has read a path's bytes and its PUT is
   still out. The path is edited; B's cycle starts after the edit, uploads the new
   bytes, commits and clears. A's PUT then lands and replaces the object, its
   commit is accepted (2), and its restamp stamps the record that holds the _new_
   bytes (3). The server has the old bytes, the local store the new, and nothing
-  is queued. One tab cannot do this to itself: it awaits the old PUT and its
-  commit before the rerun reads the new op.
+  is queued: the EARLIER of two edits made on one device is the one every other
+  device gets. A fallback compares stamps, not bytes, so it could not put this
+  right afterwards — it had to be prevented.
 - **A stale upload after a delete.** Same shape, with the edit replaced by a
   delete that B commits first: A's PUT re-creates the object. A destroyed link
-  comes back on the other devices without its extraction, pin or files; an
-  extraction comes back without its link (the dangling-extraction sweep collects
-  that one); a `files/` blob comes back with nothing referencing it.
+  comes back on the other devices without its extraction, pin or files.
 - **A stale delete after a re-put**, on the two namespaces that reuse a path
   (`pins/`, `extractions/`): A's delete commit arrives after B has pushed the
   re-put, and removes it. The local store has the record, the server does not.
 - **A pulled put over an edit.** A is mid-GET for a server copy newer than its
   local stamp. The path is edited, and B pushes the edit and clears the op. A's
-  `putPulled` finds no op (4) and stores the older copy over the edit. The server
-  has the edit; this tab's device shows the version before it — and an edit made
-  from that view is built on the older copy and overwrites the first one.
+  `putPulled` finds no op (4) and stores the older copy over the edit.
 - **A pulled delete over an edit.** A holds another device's delete for a link
   that is then edited here; B pushes the edit, which re-creates the object, and
   clears the op. A's `applyDeletes` finds no op and removes the record on the one
   device that made the edit.
 - **The orphan heal bringing back a delete.** A holds a `put` for a path that is
-  deleted locally before A reads its bytes, so A drops the op and re-adds the
-  server's copy to its downloads, guarded only by the queued delete. B commits
-  that delete and clears it; A's write then finds no op and stores the old copy.
+  deleted locally before A reads its bytes, drops the op and re-adds the server's
+  copy to its downloads, guarded only by the queued delete. B commits that delete
+  and clears it; A's write then finds no op and stores the old copy. (The upload
+  now treats that op as superseded, not orphaned, so this one is closed twice —
+  _who enforces ordering_.)
 
-**What that does to the stated guarantees.** Local last-writer-wins on a path
-(one queue row, compare-and-delete) does not survive the stale upload: the
-_earlier_ of two edits made on one device ends up on the server. The global
-phase order above is per tab, so a stale `put` can land after another tab's
-delete phases and leave metadata naming content that is gone. And the apply-time
-re-check in _a sync cycle_ leaves the local write intact only while no other
-drain can clear its op.
+Every one ended with an empty queue and a cycle that completed, so the indicator
+read idle: no error, no pending count, no retry.
 
-**Why none of it shows.** Every one of these ends with an empty queue and a
-cycle that completed, so the indicator reads idle: no error, no pending count,
-no retry. The op that would put this device right is one of its own commits, and
-a cycle advances the cursor over its own commits precisely so that it never
-re-fetches them. Only a fallback listing notices, and nothing schedules one
-while the cursor is inside the log's range. A fallback converges on the
-**server**. That repairs the three pulled-write cases, where the server holds
-what the user last did. For a stale upload after a delete and a stale delete
-after a re-put it makes this device agree with the server by undoing the user's
-last action here as well — the deleted object comes back, the re-pin goes. And
-for a stale upload over a newer
-one the server holds the wrong bytes: the fallback compares stamps, not bytes,
-so it either changes nothing or, if the local stamp was left the lower of the
-two, downloads the old copy over the edit. That case has to be prevented; it
-cannot be repaired afterwards.
+**Reproduced, and how rare it was.** On the local stack, two tabs of one profile
+(2026-10-06). With one of tab A's transfers held for the length of tab B's
+cycle, three of those orders were produced end to end: the server kept the
+earlier of two edits while the device showed the later, with the R2 stamp equal
+to the local one, so a fallback would have skipped it; a link deleted for good
+came back on the server and on a freshly signed-in profile; and a link edited
+here vanished from this device while the server kept it. Without a held transfer
+it did not happen — three runs of twenty-four alternating edits from two tabs
+converged every time — because the push-side orders need ONE transfer to outlast
+the other tab's whole cycle: a stalled connection, a retry backoff, a large
+`files/` body. Rare, then. But silent, and in the first case unrepairable, which
+is why it is closed rather than written down as accepted.
 
-**How narrow it is.** Each order needs two tabs with overlapping cycles **and** a
-second write or a delete to the same path inside a window that is usually one
-transfer long: A's single PUT (or GET) has to stay outstanding while B reads the
-queue, lists, signs and uploads. A stalled connection, a retry backoff or a large
-`files/` body stretches it; nothing here says how often that happens. The paths
-written in place are the ones exposed — `settings/general.enc`, a link on every
-edit, an extraction once per facet, a pin on reorder — and two tabs extracting
-the same links supply both the rewrites and the overlapping cycles with no one
-touching anything, though what is at stake there can be extracted again.
+**Why a lock, and why this one.**
 
-**What a fix has to reckon with.** The mechanism this document already names for
-a stale write is the conditional PUT (_conflict policy_), and it is the one that
-addresses the cause rather than the timing. Between two tabs, though, a refused
-write is not a conflict with another device: the tab holding this device's
-newest bytes may be the one refused, so "re-pull, then retry" is the wrong
-answer for it, and it is the queue row, not the server, that knows which write
-is newer. A stale **delete** has no PUT to carry a condition, and today's commit
-carries no base. A cross-tab lock around the cycle closes every order above, but
-it also extends the outage in the paragraph on single-flight across tabs — one
-frozen or throttled tab would hold sync for all of them — and it must not be the
-session lifecycle lock, which hydration takes on every startup
-([sessions.md](./sessions.md)). A tab still running an older build takes
-neither.
+- It removes the cause. Every order above needs two cycles to overlap, and once
+  they cannot, none of the four mechanisms needs rewriting.
+- The other tool this document names for a stale write, the conditional PUT
+  (_conflict policy_), is the right one for two DEVICES and the wrong one here.
+  Between two tabs a refused write is not a conflict with another device: the
+  tab holding this device's newest bytes may be the one refused, so "re-pull,
+  then retry" is the wrong answer for it, and it is the queue row, not the
+  server, that knows which write is newer. A stale **delete** has no PUT to
+  carry a condition at all.
+- **Per account**, because that is what the queue and the cursor are scoped to.
+  A cycle for an account that has since signed out is fenced in the database
+  ([sessions.md](./sessions.md)), and the next account's first sync must not sit
+  behind its network calls timing out.
+- **Not the session lifecycle lock**, which hydration takes on every startup
+  ([sessions.md](./sessions.md)): held across a cycle's round trips it would hold
+  the app blank behind another tab's sync.
+- A Web Lock is released by the browser when its holder goes away, so a closed
+  or crashed tab cannot strand it.
+
+**What it costs, and what it leaves.**
+
+- A second tab's cycle waits for the first's. That is the wait an edit made
+  mid-cycle already has inside one tab, under the same bound: every call a cycle
+  makes has a deadline (_who enforces ordering_). A cycle that never settled
+  would now hold every tab's sync rather than one's, so those deadlines carry
+  that much more.
+- Each run takes the lock for itself, so a tab running reruns back to back still
+  lets another tab's cycle in between them.
+- **A holder that is suspended rather than gone** keeps the lock, and a visible
+  tab's cycle waits for it. Chrome's background freezing exempts a page that
+  holds a Web Lock; a mobile browser suspending a background tab mid-cycle is the
+  case that has not been tested. Edits made meanwhile queue as they always do,
+  and push when the lock comes free.
+- **Where Web Locks are missing** the lock is skipped and the in-context
+  single-flight is all there is, as before.
+- **A tab running a build from before the lock** takes none. Nothing has shipped
+  without it.
+- **Delete-all still quiesces one tab, not the device.** `deleteAllData` waits
+  out THIS context's in-flight cycle before it clears the queue and wipes the
+  server ([data-lifecycle.md](./data-lifecycle.md), _delete all data_); a
+  cycle in another tab that had already read the queue is not waited for. The
+  upload-time `writeId` test narrows what that cycle can still do: an op whose
+  queue row the wipe cleared is superseded and sends nothing. What is left is a
+  transfer already in flight when the queue was cleared, whose commit can log
+  an object that landed after the server's wipe had passed it — one link back
+  on a wiped account. Read from source, not reproduced. Running the wipe under
+  the cycle lock would close it; that is a change to a destructive path with
+  its own watchdog, and has not been made.
+- The browser extension beside the web app is NOT a second tab. It is another
+  origin, with its own store, queue and cursor: another client of the account,
+  under the two-device rules (_conflict policy_, _the cursor is a claim_).
+
+Coverage: `packages/web-react/src/sync/engine.spec.ts`, _two tabs, one queue_ —
+two copies of the engine module over one database, with the real lock between
+them: the second tab's cycle waiting, its first sync waiting and then listing
+nothing, and a control that another account's cycle is not held up — and
+`SYNC-TABS-001`, which is two real tabs ([e2e.md](./e2e.md), _cross-client
+sync_).
 
 ### conflict policy
 
@@ -1292,9 +1472,9 @@ upgrade is **R2 conditional writes** (`If-Match` on the etag, or `If-None-Match:
 client re-pulls before retrying. Deferred, not designed away.
 
 That tradeoff is the **two-device** one, and it is the only loss accepted here.
-Two tabs of the web app on one device can lose the _later_ of two edits made in
-sequence, which is a different thing and not accepted — see _two tabs, one
-queue_.
+Two tabs of the web app on one device are not two devices: their cycles are
+serialized, so two edits made in sequence there are pushed in sequence — see
+_two tabs, one queue_.
 
 ### crypto boundary & what the server still learns
 
@@ -1418,19 +1598,6 @@ the one injected client.
 
 - **R2 conditional writes** for same-file concurrent-edit detection (see
   _conflict policy_) — accepted as LWW for now.
-- **Two web tabs draining one queue** (see _two tabs, one queue_) — a known gap,
-  not an accepted tradeoff: single-flight is per tab, so a stale upload or a
-  pulled write in one tab can silently undo a write another tab already pushed.
-  Open until a commit acknowledges a write rather than a path, or the tabs'
-  cycles are serialized.
-- **The cursor skipping another client's op** (see _the cursor and a cycle's own
-  commits_) — a known gap: a cycle that pushes advances its cursor over its own
-  commits, past any op another client committed since its last list page, and
-  only a fallback recovers it. Makes the manual repair control below more than a
-  support tool until it is closed.
-- **Metadata committed ahead of content written mid-cycle** (see _who enforces
-  ordering_) — a known gap: a queued metadata op uploads the record's current
-  bytes, which can name a `files/` blob the cycle read no op for.
 - **True-conflict winner: local-wins vs server-wins** (see _a sync cycle_) — when
   reconcile finds both sides changed a path since the base, local-wins (upload)
   clobbers the other device's committed edit; server-wins (download) discards the

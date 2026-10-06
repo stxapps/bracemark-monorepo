@@ -69,7 +69,7 @@ describe('UserDataDO op log', () => {
   // older than ops already in the log — behind cursors other clients have already
   // advanced past, where a keyset pull would never see it. commitOps must lift such
   // an entry above everything recorded, and return the lifted stamp (it is what the
-  // committing client stores locally and advances its own cursor to).
+  // committing client stores on the record, so client and log never disagree).
   it('clamps a commit that arrives with a stamp behind the log', async () => {
     const stub = userDataStub(env, 'user-clamp');
     await stub.commitOps([{ op: 'put', path: 'links/fast.enc', updatedAt: 5000, size: 1 }]);
@@ -90,6 +90,41 @@ describe('UserDataDO op log', () => {
       { op: 'put', path: 'links/next.enc', updatedAt: 9000, size: 1 },
     ]);
     expect(inOrder.results[0].updatedAt).toBe(9000);
+  });
+
+  // What a LISTING-built cursor rests on. A client about to list R2 (a first sync,
+  // a fallback) reads `newestUpdatedAt` first and ends on it as its cursor, with no
+  // path. That is only a true claim if nothing committed afterwards can sit at or
+  // below that stamp — including a commit that arrives carrying EXACTLY it, which
+  // is why the clamp's floor is newest + 1 and not newest. Loosen it to `>=` and a
+  // same-millisecond commit ties with a cursor already handed out; whether a pull
+  // then returns it depends on a path comparison nobody chose.
+  it('stamps everything committed after a pull strictly above that pull’s newest bound', async () => {
+    const stub = userDataStub(env, 'user-watermark');
+    await stub.commitOps([{ op: 'put', path: 'links/before.enc', updatedAt: 5000, size: 1 }]);
+    const { newestUpdatedAt: watermark } = await stub.listOps(0, null, 1);
+    expect(watermark).toBe(5000);
+
+    // Three later commits. The first is the one that matters — stamped exactly on
+    // the watermark, with nothing between it and the read — then one PUT long
+    // before the watermark, then an ordinary one.
+    await stub.commitOps([{ op: 'put', path: 'links/tied.enc', updatedAt: 5000, size: 1 }]);
+    await stub.commitOps([{ op: 'put', path: 'links/slow.enc', updatedAt: 1000, size: 1 }]);
+    await stub.commitOps([{ op: 'delete', path: 'links/before.enc', updatedAt: 9000, size: 0 }]);
+
+    // The pull that cursor makes: `since` the watermark, no `sincePath`.
+    const { ops } = await stub.listOps(watermark, null, 500);
+    const later = ops.filter((o) => o.updatedAt > (watermark ?? 0));
+    expect(later.map((o) => [o.op, o.path])).toEqual([
+      ['put', 'links/tied.enc'],
+      ['put', 'links/slow.enc'],
+      ['delete', 'links/before.enc'],
+    ]);
+    // And the only thing AT the watermark is what was already there when it was
+    // read — the replay a pathless cursor accepts, and the client absorbs.
+    expect(ops.filter((o) => o.updatedAt === watermark)).toEqual([
+      { op: 'put', path: 'links/before.enc', updatedAt: 5000 },
+    ]);
   });
 
   it('reports null bounds for a never-written log', async () => {

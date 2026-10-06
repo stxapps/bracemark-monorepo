@@ -57,7 +57,7 @@ import { liveReadsHeld } from '../data/live-read-invalidation';
 import { writeExtraction, writeFile } from '../data/mutations';
 import { enqueueDeleteTx, enqueuePutTx, listPendingOps } from '../data/pending-store';
 import { toItemRecord } from '../data/projection';
-import { beginInitialSync, markFirstSyncDone } from '../data/sync-store';
+import { beginInitialSync, getSyncMeta, markFirstSyncDone } from '../data/sync-store';
 import {
   File as MemFile,
   listFileUris,
@@ -167,7 +167,8 @@ interface OpsListReply {
 }
 
 interface Handlers {
-  opsList?: () => Promise<OpsListReply> | OpsListReply;
+  // Handed the cursor it was asked from, for the one case that is about paging.
+  opsList?: (asked: { since?: number; sincePath?: string }) => Promise<OpsListReply> | OpsListReply;
   filesList?: () =>
     Promise<{ path: string; updatedAt: number }[]> | { path: string; updatedAt: number }[];
   // The hook a test uses to land a write mid-cycle — it runs after the pending
@@ -205,7 +206,13 @@ function makeApi(handlers: Handlers = {}): SyncDeps['api'] {
   };
   return {
     call: async (endpoint: unknown, input: Record<string, unknown>) => {
-      if (endpoint === opsListEndpoint) return (await handlers.opsList?.()) ?? empty;
+      if (endpoint === opsListEndpoint) {
+        const asked = { since: input.since, sincePath: input.sincePath } as {
+          since?: number;
+          sincePath?: string;
+        };
+        return (await handlers.opsList?.(asked)) ?? empty;
+      }
       if (endpoint === filesListEndpoint) {
         return { files: (await handlers.filesList?.()) ?? [], nextPageToken: null };
       }
@@ -694,8 +701,8 @@ describe('loadEntityContents', () => {
 
 // The cases below are covered end-to-end on web. They are restated here at one
 // case each because the two engines are duplicated SOURCE: edit this copy's
-// phase order, self-heal or quota branch and nothing else in the workspace
-// fails.
+// phase order, self-heal, quota branch, cursor writes or upload-time check and
+// nothing else in the workspace fails.
 describe('the cycle, against this copy of it', () => {
   it('does not delete a create that landed mid-cycle, and syncs it next cycle', async () => {
     seedQueued(LINK_PATH, 'the link');
@@ -774,6 +781,178 @@ describe('the cycle, against this copy of it', () => {
     expect(committedPaths()).toEqual([OTHER_LINK_PATH]);
     expect(await pendingPaths()).toEqual([LINK_PATH]);
     expect(await bodyAt(LINK_PATH)).toBe('trashed locally');
+  });
+
+  it('leaves the cursor where its listing ended, not on its own commit', async () => {
+    // This copy folded its commits into the cursor too. The clamp stamps a commit
+    // above an op another client committed a moment before, so a cursor at our own
+    // stamp sits past an op nobody read — a link saved on the laptop that never
+    // reaches this phone, with nothing queued and nothing to retry.
+    seedQueued(LINK_PATH, 'the link');
+
+    await runIncrementalSync(
+      deps({
+        opsList: () => ({ ops: [], oldestUpdatedAt: 500, newestUpdatedAt: 1500, hasMore: false }),
+        commitUpdatedAt: 9000,
+      }),
+    );
+
+    // It did commit, and stamped the record — the stamp just went no further.
+    expect(committedPaths()).toEqual([LINK_PATH]);
+    expect((await getItem(LINK_PATH))?.updatedAt).toBe(9000);
+    expect(await getSyncMeta(USER)).toMatchObject({
+      syncCursorUpdatedAt: 1000,
+      syncCursorPath: 'links/l_seed.enc',
+    });
+  });
+
+  it('pages the op log by keyset, and ends its cursor on the last op of the last page', async () => {
+    // "The last op this cycle listed" is computed in this copy's own loop: each
+    // page is asked for from the last op of the one before — both halves of the
+    // key — and the cursor ends where the last page did. Get it wrong and a phone
+    // that was offline for a month skips a page of ops, or asks for the same page
+    // until the cycle dies.
+    mockGetBlob.mockImplementation(
+      async (url: string) => new Uint8Array([0xee, ...utf8(pathFor(url))]),
+    );
+    const pages: OpsListReply[] = [
+      {
+        ops: [{ op: 'put', path: LINK_PATH, updatedAt: 2000 }],
+        oldestUpdatedAt: 500,
+        newestUpdatedAt: 3000,
+        hasMore: true,
+      },
+      {
+        ops: [{ op: 'put', path: OTHER_LINK_PATH, updatedAt: 3000 }],
+        oldestUpdatedAt: 500,
+        newestUpdatedAt: 3000,
+        hasMore: false,
+      },
+    ];
+    const asked: { since?: number; sincePath?: string }[] = [];
+
+    await runIncrementalSync(
+      deps({
+        opsList: (from) => {
+          asked.push(from);
+          return pages[asked.length - 1];
+        },
+      }),
+    );
+
+    expect(asked).toEqual([
+      { since: 1000, sincePath: 'links/l_seed.enc' },
+      { since: 2000, sincePath: LINK_PATH },
+    ]);
+    expect(await bodyAt(LINK_PATH)).toBe(LINK_PATH);
+    expect(await bodyAt(OTHER_LINK_PATH)).toBe(OTHER_LINK_PATH);
+    expect(await getSyncMeta(USER)).toMatchObject({
+      syncCursorUpdatedAt: 3000,
+      syncCursorPath: OTHER_LINK_PATH,
+    });
+  });
+
+  it('ends a listing-built cursor on the log’s high-water mark, not the listing’s newest stamp', async () => {
+    // Both listing flows, since both are this copy's own code. A paged listing is
+    // not a snapshot, so the newest stamp it shows (5000 here) says nothing about
+    // an object written into a range it had already passed; the log's newest
+    // stamp, read before the listing, is the one that can be claimed.
+    mockGetBlob.mockResolvedValue(new Uint8Array([0xee, ...utf8('the server copy')]));
+    const listing = () => [{ path: LINK_PATH, updatedAt: 5000 }];
+
+    // A fallback: the log's retained range starts past this device's cursor.
+    await runIncrementalSync(
+      deps({
+        filesList: listing,
+        opsList: () => ({ ops: [], oldestUpdatedAt: 2000, newestUpdatedAt: 3000, hasMore: false }),
+      }),
+    );
+    // The listing was reconciled — the cursor just isn't taken from it.
+    expect(await bodyAt(LINK_PATH)).toBe('the server copy');
+    expect(await getSyncMeta(USER)).toMatchObject({
+      syncCursorUpdatedAt: 3000,
+      syncCursorPath: '',
+    });
+
+    // A first sync, on a device that has not finished one.
+    getDb().delete(syncMeta).run();
+    await beginInitialSync(USER);
+    await runInitialSync(
+      deps({
+        filesList: listing,
+        opsList: () => ({ ops: [], oldestUpdatedAt: 2000, newestUpdatedAt: 4000, hasMore: false }),
+      }),
+    );
+    expect(await getSyncMeta(USER)).toMatchObject({
+      syncCursorUpdatedAt: 4000,
+      syncCursorPath: '',
+    });
+  });
+
+  it('drops, on a first sync’s retry, what the attempt before it stored and the listing no longer shows', async () => {
+    // A first sync only ever added: it assumed the empty store of a fresh
+    // sign-in. A pull that died partway left what it had stored, and its retry
+    // lists a namespace another device may have deleted from since — and that
+    // delete was committed before the retry read the log's high-water mark, so it
+    // is at or below the cursor the retry ends on and no later pull brings it.
+    // One leftover is a `files/` row, because here dropping it is two writes.
+    getDb().delete(syncMeta).run();
+    await beginInitialSync(USER);
+    seedSynced(OTHER_LINK_PATH, 'deleted since', 100);
+    await seedSyncedContent(OTHER_FILE_PATH, 'its image', 100);
+    // Saved on this device before the retry got there: local only too, but queued.
+    seedQueued(EXTRACTION_PATH, 'not pushed yet');
+    mockGetBlob.mockResolvedValue(new Uint8Array([0xee, ...utf8('the server copy')]));
+
+    await runInitialSync(
+      deps({
+        filesList: () => [{ path: LINK_PATH, updatedAt: 5000 }],
+        opsList: () => ({ ops: [], oldestUpdatedAt: 2000, newestUpdatedAt: 6000, hasMore: false }),
+      }),
+    );
+
+    expect(await getItem(OTHER_LINK_PATH)).toBeUndefined();
+    expect(await getItem(OTHER_FILE_PATH)).toBeUndefined();
+    expect(plaintextAt(OTHER_FILE_PATH)).toBeUndefined();
+    // The controls: what the listing shows was stored, and what is queued here was
+    // left for the push.
+    expect(await bodyAt(LINK_PATH)).toBe('the server copy');
+    expect(await bodyAt(EXTRACTION_PATH)).toBe('not pushed yet');
+    expect(await pendingPaths()).toEqual([EXTRACTION_PATH]);
+  });
+
+  it('does not upload an entity rewritten after the queue was read', async () => {
+    // Device extraction's two passes: the title is queued, the cycle reads its
+    // queue — and then the image lands, with the patch that names it. An op carries
+    // no bytes, so this copy uploaded the row as it stood by then: metadata naming a
+    // `files/` blob the cycle held no op for and had not sent.
+    await writeExtraction(USER, 'l_a', { fields: { title: 'A title' } });
+    let landed = false;
+
+    await runIncrementalSync(
+      deps({
+        filesSign: async (_paths, op) => {
+          if (op !== 'put' || landed) return;
+          landed = true;
+          await seedQueuedContent(FILE_ID, 'image bytes');
+          await writeExtraction(USER, 'l_a', { fields: { imageId: FILE_ID } });
+        },
+      }),
+    );
+
+    expect(mockPutBlob).not.toHaveBeenCalled();
+    expect(mockPutBlobFromFile).not.toHaveBeenCalled();
+    expect(committedPaths()).toEqual([]);
+    expect(await pendingPaths()).toEqual([EXTRACTION_PATH, FILE_PATH]);
+
+    // The next cycle reads both ops and carries them in order, content first.
+    await runIncrementalSync(deps());
+    expect(commits.map((batch) => batch.map((o) => o.path))).toEqual([
+      [FILE_PATH],
+      [EXTRACTION_PATH],
+    ]);
+    expect(uploadedFiles.get(FILE_PATH)).toBe('enc:image bytes');
+    expect(await pendingPaths()).toEqual([]);
   });
 });
 

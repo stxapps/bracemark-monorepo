@@ -301,8 +301,10 @@ The split settled on is **cover the protocol once, cover the divergence
 always**, plus a thin drift guard:
 
 - **web's `engine.spec.ts` is canonical for the cycle.** The mid-cycle write
-  hazards, the commit phase order, the first-sync counter, the quota gate — all
-  of it is asserted there, in the app that has the most surfaces riding on it.
+  hazards, the commit phase order, the first-sync counter, the quota gate, what
+  the cursor may claim, the upload-time `writeId` test — all of it is asserted
+  there, in the app that has the most surfaces riding on it. So is the one thing
+  only web has: two tabs over one queue, and the lock between them.
 - **expo's `engine.spec.ts` covers the half web has no equivalent of**: `files/`
   content lives DECRYPTED ON DISK there, not as bytes in the row, so every
   content flow is a two-store write and the two stores can disagree silently.
@@ -311,11 +313,37 @@ always**, plus a thin drift guard:
   still has a queued op whose upload reads that file.
 - **the drift guards are the exception to "once".** The engines are duplicated
   _source_, so a spec that passes on web's copy proves nothing about expo's:
-  edit expo's phase order or its self-heal and nothing in the workspace fails.
-  One case each, not the full web matrix.
+  edit expo's phase order, its self-heal, where it writes its cursor, its
+  upload-time check or its first sync's retry and nothing in the workspace
+  fails. One case each, not the full web matrix.
 
 The store layer splits the same way: `expo-react`'s `data/item-store.spec.ts`
 pins the guarded writes' SQL rather than restating what they mean.
+
+**Two groups of web's cases need more than the file's stub**, and both have an
+edge worth knowing before adding to them.
+
+- **The cursor cases run against a server model** (`SyncServer`, in the spec):
+  a keyset pull with its retained bounds, the commit clamp, and a listing that
+  pages in key order and reads the bucket as it stands at each call. A cursor
+  is a statement about the SERVER's ordering, so a stub that answers every pull
+  alike cannot show an op being skipped — the engine that lost links between two
+  devices passes every such case against one. The rest of the file keeps the
+  plain stub on purpose: a mid-cycle write needs one thing injected at one
+  moment, not a second implementation of the protocol to keep honest.
+- **The two-tab cases load the engine twice** (`jest.isolateModules`) over the
+  one fake-indexeddb, with node's real `navigator.locks` between the copies.
+  The describe opens by expecting that API to exist, so a node without it fails
+  by name instead of passing unlocked. ⚠ What the second registry gives you is
+  a second copy of every REAL module — its own single-flight slot, its own
+  database connection — and the **same instance of a factory mock**:
+  `require('./r2')` inside `isolateModules` returns the very `jest.fn()`s the
+  file's top-level import holds. So "tab B's `getBlob`" is tab A's as well, and
+  `expect(tabB.r2.getBlob).not.toHaveBeenCalled()` counts both tabs' transfers —
+  it failed on a correct engine, which is how this was found; the opposite
+  assertion would have passed on a broken one. Tell the tabs apart by what each
+  one ASKED for: every tab gets its own api stub, and that stub records its
+  calls.
 
 **The export/import orchestrators are the second ported pair**, and they split by
 the same rule. `data/export-import.spec.ts` exists in both packages: web's is

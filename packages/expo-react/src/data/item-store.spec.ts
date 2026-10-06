@@ -2,7 +2,9 @@
 // that genuinely differ from web's: `queuedPathsTx` composed into the write's own
 // synchronous transaction (putItemsUnqueued / deleteItemsUnqueued), and
 // clearDrainedOps' `(username, path, write_id) IN (VALUES …)` predicate evaluated
-// inside the DELETE, and stampItemUpdatedAts' `UPDATE … FROM (VALUES …)`.
+// inside the DELETE, and stampItemUpdatedAts' `UPDATE … FROM (VALUES …)`, and
+// getItemForOp's row read paired with the queue row's `write_id` in one
+// transaction.
 // web-react's engine.spec.ts is the canonical end-to-end coverage of the cycle
 // (docs/local-first-sync.md — a sync cycle); these pin the divergent SQL, so they
 // run against a REAL in-memory SQLite over the real DDL — a stubbed row scan
@@ -25,6 +27,7 @@ import {
   bulkGetItems,
   deleteItemsUnqueued,
   getItem,
+  getItemForOp,
   markItemDataFile,
   markItemDataFileIfCurrent,
   putItemsTx,
@@ -191,6 +194,59 @@ describe('clearDrainedOps', () => {
 
     const [survivor] = await listPendingOps(USER);
     expect(survivor.op).toBe('delete');
+  });
+});
+
+// The upload side's read. A drain holds the op rows it read at the top of its
+// cycle and reads each record only when that op's upload starts; this is what
+// tells it whether the record is still the write its op stands for.
+describe('getItemForOp', () => {
+  it('returns the row with the op that is still queued for it', async () => {
+    seedQueued(LINK_PATH, 'the edit');
+    const [op] = await listPendingOps(USER);
+
+    const { row, stillQueued } = await getItemForOp(op);
+
+    expect(stillQueued).toBe(true);
+    expect(new TextDecoder().decode(row?.data ?? new Uint8Array())).toBe('the edit');
+  });
+
+  it('reports an op a later write replaced, alongside that later write’s row', async () => {
+    seedQueued(LINK_PATH, 'first edit');
+    const [op] = await listPendingOps(USER);
+    seedQueued(LINK_PATH, 'second edit');
+
+    const { row, stillQueued } = await getItemForOp(op);
+
+    // The row is the newer write's — which is exactly why the caller must not
+    // send it under this op.
+    expect(stillQueued).toBe(false);
+    expect(new TextDecoder().decode(row?.data ?? new Uint8Array())).toBe('second edit');
+  });
+
+  it('reports an op whose path was deleted since, though a row is queued there', async () => {
+    seedQueued(LINK_PATH, 'created');
+    const [op] = await listPendingOps(USER);
+    inTx((tx) => enqueueDeleteTx(tx, USER, LINK_PATH, 0));
+
+    // A queue row exists at the path — a delete — so "is anything queued here"
+    // would say yes. The test is on the write, not on the path.
+    expect((await getItemForOp(op)).stillQueued).toBe(false);
+  });
+
+  it('reports an op that is no longer queued at all', async () => {
+    seedQueued(LINK_PATH, 'pushed');
+    const [op] = await listPendingOps(USER);
+    await clearDrainedOps([op]);
+
+    expect((await getItemForOp(op)).stillQueued).toBe(false);
+  });
+
+  it('does not take another account’s op at the same path for this one', async () => {
+    seedQueued(LINK_PATH, 'the edit');
+    const [op] = await listPendingOps(USER);
+
+    expect((await getItemForOp({ ...op, username: 'bob' })).stillQueued).toBe(false);
   });
 });
 

@@ -12,12 +12,18 @@
 // central invariant). So every flow can fall back to listing R2 and lose nothing
 // but speed, and the cursor is R2's `LastModified` — the compound key
 // `(updatedAt, path)` — never the op log's internal `seq`.
+//
+// THE CURSOR IS A CLAIM, and every write of it below is held to it: "this client
+// has applied every op at or below this point." So it only ever moves over ops a
+// cycle LISTED (incrementalCycle), or to the log's high-water mark read before a
+// listing that then reflects everything up to it (logWatermark). It is never set
+// from a stamp this client merely holds — its own commits, or the newest object a
+// listing happened to show — because another client's op can sit below either.
 
 import {
   type ApiClient,
   apiErrorCode,
   chunk,
-  type CommitResult,
   emptySyncOutcome,
   FILES_PREFIX,
   filesListEndpoint,
@@ -46,6 +52,7 @@ import {
   advanceCursor,
   assertAccountStillOwnsStore,
   getSyncMeta,
+  isFirstSyncDone,
   markFirstSyncDone,
   resetCursor,
 } from '../data/sync-store';
@@ -155,21 +162,109 @@ export async function runInitialSync(
   // The bookkeeping row is claimed before this runs, under the lifecycle lock
   // (sync-store.ts, claimIfStillSignedIn). The engine never claims it: a stale
   // cycle must not recreate the row a teardown dropped.
-  const files = await listAllFiles(deps.api);
-  await storeDownloads(deps, files, onProgress);
-  // Cursor is the newest compound `(updatedAt, path)` among ALL listed files
-  // (content included, even though its blob is deferred) — the same
-  // reconstruction the fallback cycle does from its full listing.
-  const newest = newestCursor(files);
-  await markFirstSyncDone(deps.username, newest.updatedAt, newest.path);
+  //
+  // Under the cycle lock like any other cycle, and the flag is re-read inside it:
+  // a second tab adopting the same sign-in waits here while the first one pulls,
+  // and then has nothing left to do. That pull WAS this account's first sync on
+  // this device — the store is complete up to its cursor, and listing the whole
+  // namespace again would only hold the lock against the cycle that comes next.
+  await withCycleLock(deps.username, async () => {
+    if (await isFirstSyncDone(deps.username)) return;
+    // Read BEFORE the listing — it is the cursor this pull may claim once the
+    // listing is stored, where the listing's own newest stamp is not.
+    const watermark = await logWatermark(deps.api);
+    const files = await listAllFiles(deps.api);
+    await storeDownloads(deps, files, onProgress);
+    // The store is not always empty here. A pull that died partway (a dropped
+    // connection, a closed tab) left what it had stored, and this is its retry —
+    // minutes or days later, against a namespace that may have lost some of that
+    // since. Such a path is in the store and not in the listing, and its delete op
+    // was committed before the watermark above was read: at or below the cursor
+    // this pull is about to claim, where no later pull returns it. So the claim is
+    // only true if the listing is reconciled in BOTH directions, as the fallback
+    // does it. On a fresh sign-in there is nothing local and this costs one read
+    // of an empty key range.
+    await applyDeletes(deps.username, await localOnlyPaths(files));
+    await markFirstSyncDone(deps.username, watermark, '');
+  });
 }
 
-// Single-flight per account. Overlapping calls (the post-ready background pull, an
-// edit-triggered requestSync, a retry) coalesce: a caller during a run shares the
-// in-flight promise, and at most one trailing rerun picks up whatever changed
-// after that run's snapshot. Serializing cycles keeps two drains from
-// double-committing the same pending ops and keeps cursor writes ordered within
-// this tab; across tabs, advanceCursor's forward-only guard covers the rest.
+// ONE CYCLE AT A TIME PER ORIGIN, not per tab. `inflightSyncs` below is module
+// state, so what it serializes is the cycles of one JS context — and every tab of
+// the web app opens the same database, drains the same pending queue and moves the
+// same cursor. Two tabs' cycles were two drains of one queue, and four things that
+// are each sound for a single drain are not for two: the PUT is unconditional (the
+// later arrival is the object, whatever order the edits were made in), a commit
+// names a path rather than a write, the restamp is by path, and the pulled writes
+// read "no op queued" as "no local write since this cycle decided". An older
+// upload could land over a newer one and leave the SERVER holding the earlier of
+// two edits made on this device, with nothing queued and nothing to retry
+// (docs/local-first-sync.md, _two tabs, one queue_).
+//
+// A Web Lock spans every context of the origin — tabs, and the browser
+// extension's pages and worker — and is released by the browser if its holder
+// goes away, so a closed tab can't strand it. A cycle holds it from its read of
+// the queue to its last write; a second tab's cycle waits and then reads the
+// queue the first one left, which is all the single-drain reasoning ever needed.
+// The wait is no new failure mode: it is the one an edit made mid-cycle already
+// has inside a tab, and every call a cycle makes is bounded by a deadline
+// (docs/api-contracts.md, _deadlines_).
+//
+// Per ACCOUNT, because that is what the queue and the cursor are scoped to: a
+// stale cycle for an account that has since signed out is fenced in the database
+// (AccountFencedError) and must not make the next account's first sync wait for
+// its network calls to time out. And deliberately NOT the session lifecycle lock
+// (data/session-store.ts, whose shape this follows): hydration takes that one on
+// every startup, and holding it across a cycle's round trips would hold the app
+// blank behind another tab's sync.
+//
+// Where Web Locks are missing there is only the in-context single-flight, as
+// before — the lock narrows nothing there, it just isn't available to widen it.
+const CYCLE_LOCK_PREFIX = 'bracemark-sync-cycle:';
+
+function withCycleLock<T>(username: string, run: () => Promise<T>): Promise<T> {
+  const locks = typeof navigator !== 'undefined' ? navigator.locks : undefined;
+  if (!locks) return run();
+  return locks.request(`${CYCLE_LOCK_PREFIX}${username}`, run) as Promise<T>;
+}
+
+// The cursor a LISTING-built flow (first sync, fallback) may claim: the op log's
+// newest stamp, read before the listing starts.
+//
+// A paged R2 listing cannot supply its own cursor. It is not a snapshot — an
+// object another client writes into a key range the listing has already passed is
+// absent from it — so the newest stamp it shows says nothing about what it missed:
+// an op stamped below that newest is then below the cursor for good, with no error
+// and nothing to retry. That is not hypothetical bookkeeping; a new device signing
+// in while another one was saving came up short by exactly the links that had
+// landed behind the listing.
+//
+// The log's high-water mark can make the claim, by three properties that already
+// hold. Every op at or below it was committed before this read, and a commit is
+// R2-first, log-last — so a listing that starts afterwards reflects it. The commit
+// clamp stamps every later op strictly above it (bracemark-api do/user-data.ts) —
+// so the next incremental pull lists it. And R2 lists after a write consistently.
+// Nothing here compares R2's clock with the log's, which the old reconstruction
+// had to.
+//
+// `(watermark, '')` rather than the exact key of the newest op: the wire carries
+// no path with the bounds, and an empty `sincePath` re-lists the ops stamped at
+// exactly that millisecond. Replaying them is idempotent and storeDownloads'
+// staleness skip absorbs it. An empty log (a brand-new account, or one wiped under
+// us) reads as 0 — `(0, '')`, which claims nothing and routes the next cycle to
+// the fallback again until the log has something to stand on.
+async function logWatermark(api: ApiClient): Promise<number> {
+  const { newestUpdatedAt } = await api.call(opsListEndpoint, { since: 0, limit: 1 });
+  return newestUpdatedAt ?? 0;
+}
+
+// Single-flight per account, per JS context. Overlapping calls (the post-ready
+// background pull, an edit-triggered requestSync, a retry) coalesce: a caller
+// during a run shares the in-flight promise, and at most one trailing rerun picks
+// up whatever changed after that run's snapshot. That keeps THIS context to one
+// cycle and gives its callers one promise to share; what keeps two contexts' cycles
+// apart is the cycle lock above, which each run takes for itself — so a tab running
+// reruns back to back still lets another tab's cycle in between them.
 const inflightSyncs = new Map<string, Promise<SyncOutcome>>();
 const rerunRequests = new Set<string>();
 
@@ -231,7 +326,23 @@ export function runIncrementalSync(deps: SyncDeps): Promise<SyncOutcome> {
   return run;
 }
 
+// One cycle, under the cycle lock from its first read to its last write. The queue
+// snapshot and the cursor are read INSIDE the lock on purpose: a cycle that waited
+// for another tab's must see what that one left behind, not what was there when it
+// asked.
+//
+// `async` is load-bearing, though nothing here awaits. runIncrementalSync sets the
+// single-flight slot AFTER creating the promise whose `finally` clears it, so a
+// SYNCHRONOUS throw from here would run that `finally` first and the `set`
+// second — leaving a rejected promise in the slot, which every later sync on the
+// page then joins. Taking the lock is the first thing a cycle does, and an
+// `async` function turns a lock API that throws (rather than rejects) into a
+// rejection the slot survives.
 async function incrementalSyncOnce(deps: SyncDeps): Promise<SyncOutcome> {
+  return withCycleLock(deps.username, () => runCycle(deps));
+}
+
+async function runCycle(deps: SyncDeps): Promise<SyncOutcome> {
   deps = withRetryDeps(deps);
   // Collected DOWN the call chain (the cycles → pushPending → pushPuts) and
   // returned UP, so the provider can tell a clean cycle from one the quota gate
@@ -255,7 +366,10 @@ async function incrementalSyncOnce(deps: SyncDeps): Promise<SyncOutcome> {
   });
 
   if (needsFallback(since, first)) {
-    await fallbackCycle(deps, pending, outcome);
+    // `first` was answered before the listing the fallback is about to take, so
+    // its newest stamp is the high-water mark that listing will reflect — the
+    // same read logWatermark makes for a first sync, already in hand.
+    await fallbackCycle(deps, pending, outcome, first.newestUpdatedAt ?? 0);
   } else {
     await incrementalCycle(deps, since, sincePath, first, pending, outcome);
   }
@@ -420,7 +534,7 @@ async function incrementalCycle(
 
   // 3. Push, 4. Pull — disjoint sets, so order is a sensible default, not a
   // requirement (local changes durable first).
-  const { committed, orphanedPaths } = await pushPending(deps, pending, outcome);
+  const orphanedPaths = await pushPending(deps, pending, outcome);
   // Complete the self-heal: a wedged op the push dropped (uploadBlobs) had its path
   // reserved for the push by the reconcile above, keeping the server's copy OUT of
   // the download set — re-add whatever this window shows for it, so the heal
@@ -434,15 +548,19 @@ async function incrementalCycle(
   await storeDownloads(deps, downloads);
   await applyDeletes(deps.username, localDeletes);
 
-  // 5. Advance the cursor to the newest (updatedAt, path) seen across the whole
-  // cycle — including our own just-committed uploads, so the next cycle doesn't
-  // re-fetch them.
-  for (const c of committed) {
-    if (isNewer(c.updatedAt, c.path, cursorUpdatedAt, cursorPath)) {
-      cursorUpdatedAt = c.updatedAt;
-      cursorPath = c.path;
-    }
-  }
+  // 5. Advance the cursor over what this cycle LISTED — and not over its own
+  // commits, which is what this step used to fold in. The commit clamp stamps a
+  // commit above everything already in the log, INCLUDING an op another client
+  // committed after the last list page above; a cursor at our own stamp therefore
+  // claims a range nobody read, and the keyset pull never returns what is below
+  // it. That lost links between two devices that were merely in use at the same
+  // time, silently and for good: the cycle completed, the queue drained, and the
+  // cursor sat inside the log's range, so nothing routed a fallback either.
+  //
+  // The next cycle lists our commits back instead, and that echo costs an op row
+  // each and no transfer: the commit restamped every record to the very stamp its
+  // op carries, so storeDownloads' staleness skip passes over it, and an echoed
+  // delete finds no record to remove.
   await advanceCursor(deps.username, cursorUpdatedAt, cursorPath);
 }
 
@@ -456,10 +574,15 @@ async function incrementalCycle(
 // fallback (an infra event: log wiped/compacted/reset) never silently flips a
 // conflict to server-wins: a pending edit is pushed over the server copy, and a
 // pending delete is pushed rather than resurrected by the listing.
+//
+// `watermark` is the op log's newest stamp as the routing peek saw it — read
+// before the listing below, which is what makes it the cursor to end on
+// (logWatermark).
 async function fallbackCycle(
   deps: SyncDeps,
   pending: PendingOpRecord[],
   outcome: SyncOutcome,
+  watermark: number,
 ): Promise<void> {
   const files = await listAllFiles(deps.api);
   const serverFiles = new Map(files.map((f) => [f.path, f.updatedAt]));
@@ -500,7 +623,7 @@ async function fallbackCycle(
   // the deletion) and frees the path's file_sizes quota entry. Commit is idempotent
   // on both stores, so pushing unconditionally is always safe; dropping the op
   // would leak the quota entry forever.
-  const { committed, orphanedPaths } = await pushPending(deps, pending, outcome);
+  const orphanedPaths = await pushPending(deps, pending, outcome);
   // Same heal as the incremental cycle: a dropped op's path was excluded from the
   // download set above — re-add the listed server copy so it comes back.
   for (const path of orphanedPaths) {
@@ -510,12 +633,18 @@ async function fallbackCycle(
   await storeDownloads(deps, downloads);
   await applyDeletes(deps.username, localDeletes);
 
-  // Cursor = newest (updatedAt, path) across ALL pages plus our commits. This is
-  // reconstructed straight from R2 with no op-log dependence — resetCursor, not
-  // advanceCursor, because the cursor-ahead case intentionally LOWERS the cursor
-  // back to reality.
-  const newest = newestCursor(files, committed);
-  await resetCursor(deps.username, newest.updatedAt, newest.path);
+  // Cursor = the log's high-water mark as it stood BEFORE the listing — not the
+  // newest of the listing and our own commits, which this used to be and which
+  // could sit above an op nobody had read, twice over: the listing is not a
+  // snapshot, and our commits are stamped past whatever another client committed
+  // while we pushed. Everything at or below the watermark is in the listing just
+  // reconciled; everything since, our own commits included, is above it and comes
+  // back on the next pull.
+  //
+  // resetCursor, not advanceCursor, because this still has to LOWER a cursor that
+  // is ahead of a reset log — and an empty log leaves `(0, '')`, which routes the
+  // next cycle here again rather than claiming anything.
+  await resetCursor(deps.username, watermark, '');
 }
 
 // --- push (the 3-round-trip commit protocol) --------------------------------
@@ -529,12 +658,12 @@ interface UploadFailures {
   firstError: unknown;
 }
 
-// Drain a set of pending ops: sign → PUT → commit (docs flow #3). Returns the
-// committed results (R2's authoritative clock) so the caller can advance its cursor
-// over its own writes, plus the paths of ops the self-heal dropped (uploadBlobs) so
-// the caller can re-add their server copies to its download set. Removes each
-// committed path from the queue; a `no_object` failure is left queued to re-PUT
-// next drain.
+// Drain a set of pending ops: sign → PUT → commit (docs flow #3). Returns the paths
+// of ops the self-heal dropped (uploadBlobs) so the caller can re-add their server
+// copies to its download set — and nothing about what it committed: each commit's
+// stamp belongs on the record it names (commitBatched), never on the cursor, which
+// moves only over ops a cycle listed. Removes each committed op from the queue; a
+// `no_object` failure is left queued to re-PUT next drain.
 //
 // Runs in the global phase order [delete-metadata, delete-content, put-content,
 // put-metadata] — the mirror pair of the multi-file-consistency rules (docs
@@ -555,12 +684,11 @@ async function pushPending(
   deps: SyncDeps,
   ops: PendingOpRecord[],
   outcome: SyncOutcome,
-): Promise<{ committed: CommitResult[]; orphanedPaths: string[] }> {
-  if (ops.length === 0) return { committed: [], orphanedPaths: [] };
+): Promise<string[]> {
+  if (ops.length === 0) return [];
 
   const puts = ops.filter((o) => o.op === 'put');
   const deletes = ops.filter((o) => o.op === 'delete');
-  const committed: CommitResult[] = [];
   const orphanedPaths: string[] = [];
   const failures: UploadFailures = { count: 0, firstError: undefined };
 
@@ -573,25 +701,21 @@ async function pushPending(
   // commits both in a single atomic log write (the safe direction, never
   // content-before-metadata), so splitting it would only cost a redundant partial
   // commit when the metadata count isn't a multiple of COMMIT_BATCH.
-  committed.push(
-    ...(await commitBatched(deps, [
-      ...deletes.filter((o) => !isContentPath(o.path)),
-      ...deletes.filter((o) => isContentPath(o.path)),
-    ])),
-  );
+  await commitBatched(deps, [
+    ...deletes.filter((o) => !isContentPath(o.path)),
+    ...deletes.filter((o) => isContentPath(o.path)),
+  ]);
 
   // Phase 3 then 4: drain ALL content puts (every chunk) before ANY metadata put, so
   // the content-before-metadata invariant holds across chunk boundaries too. Each
   // phase uploads at its own blob kind's fan-out.
-  committed.push(
-    ...(await pushPuts(
-      deps,
-      puts.filter((o) => isContentPath(o.path)),
-      FILE_CONCURRENCY,
-      outcome,
-      orphanedPaths,
-      failures,
-    )),
+  await pushPuts(
+    deps,
+    puts.filter((o) => isContentPath(o.path)),
+    FILE_CONCURRENCY,
+    outcome,
+    orphanedPaths,
+    failures,
   );
   // A content upload that failed left its op queued — so the metadata phase (which
   // may reference that content) is HELD this cycle, or a puller could land metadata
@@ -599,20 +723,18 @@ async function pushPending(
   // wholesale because the engine is schema-blind — it can't tell which metadata is
   // safe. The held ops just stay queued; the next drain retries both halves in order.
   if (failures.count === 0) {
-    committed.push(
-      ...(await pushPuts(
-        deps,
-        puts.filter((o) => !isContentPath(o.path)),
-        INDEX_CONCURRENCY,
-        outcome,
-        orphanedPaths,
-        failures,
-      )),
+    await pushPuts(
+      deps,
+      puts.filter((o) => !isContentPath(o.path)),
+      INDEX_CONCURRENCY,
+      outcome,
+      orphanedPaths,
+      failures,
     );
   }
 
   if (failures.count > 0) throw failures.firstError;
-  return { committed, orphanedPaths };
+  return orphanedPaths;
 }
 
 // Drive a homogeneous put set (all content OR all metadata — the caller splits and
@@ -627,12 +749,11 @@ async function pushPuts(
   outcome: SyncOutcome,
   orphanedPaths: string[],
   failures: UploadFailures,
-): Promise<CommitResult[]> {
-  const committed: CommitResult[] = [];
+): Promise<void> {
   for (const batch of chunk(puts, PUT_BATCH)) {
     const signed = await signPushable(deps, batch, outcome);
     if (signed === null) continue;
-    const { orphaned, failed } = await uploadBlobs(
+    const { orphaned, failed, superseded } = await uploadBlobs(
       deps,
       signed.ops,
       signed.urls,
@@ -659,9 +780,17 @@ async function pushPuts(
       const skipped = new Set(failed.map((o) => o.path));
       uploaded = uploaded.filter((o) => !skipped.has(o.path));
     }
-    committed.push(...(await commitBatched(deps, uploaded)));
+    // A superseded op sent nothing either (uploadBlobs), and is no failure: the
+    // write that replaced it sits queued under its own `writeId` and asked for the
+    // cycle that will carry it. Kept out of the commit for the reason a failed one
+    // is — the server would HEAD an object this cycle did not send, and where an
+    // earlier version exists it would log an op for bytes that are not these.
+    if (superseded.length > 0) {
+      const skipped = new Set(superseded.map((o) => o.path));
+      uploaded = uploaded.filter((o) => !skipped.has(o.path));
+    }
+    await commitBatched(deps, uploaded);
   }
-  return committed;
 }
 
 // Sign one put chunk, surviving the server's quota gate instead of failing the
@@ -729,13 +858,11 @@ async function signPushable(
 // are not the bytes that just went up. The restamp is unconditional even then: R2 does
 // hold that path at `r.updatedAt` now, and the surviving op keeps its own older base,
 // which local-wins reconcile never reads against it.
-async function commitBatched(deps: SyncDeps, ops: PendingOpRecord[]): Promise<CommitResult[]> {
-  const committed: CommitResult[] = [];
+async function commitBatched(deps: SyncDeps, ops: PendingOpRecord[]): Promise<void> {
   for (const batch of chunk(ops, COMMIT_BATCH)) {
     const { results } = await deps.api.call(opsCommitEndpoint, {
       ops: batch.map((o) => ({ op: o.op, path: o.path })),
     });
-    committed.push(...results);
     // All of a batch's restamps share one rw transaction — update() per result
     // opened a transaction each, which made a 1000-op commit pay a thousand IDB
     // round trips for what is one logical write. update() still no-ops per row
@@ -747,22 +874,45 @@ async function commitBatched(deps: SyncDeps, ops: PendingOpRecord[]): Promise<Co
     const accepted = new Set(results.map((r) => r.path));
     await clearDrainedOps(batch.filter((o) => accepted.has(o.path)));
   }
-  return committed;
 }
 
-// Encrypt and PUT each op's local blob to its signed URL. Sorts the ops it could
-// not move into two buckets the caller treats differently, because the three
-// skip shapes look alike and are not:
+// Encrypt and PUT each op's local blob to its signed URL — THE WRITE THE OP STANDS
+// FOR, or nothing. An op carries no bytes; its record is read here, when its own
+// upload starts, which can be many round trips after the cycle read the queue. So
+// the record is read TOGETHER WITH the queue row at its path, in one transaction,
+// and uploaded only if that row is still the op this cycle holds. A write replaces
+// the row's `writeId` in the same transaction that stores its bytes
+// (data/mutations.ts writeBytesWith), so a matching id means these are exactly the
+// bytes this op was queued for.
 //
-//  - `orphaned` — no local record, or a record stripped of its bytes. TERMINAL: a
-//    write puts the record and enqueues its op in one transaction
-//    (data/mutations.ts writeBytesWith), so an op without bytes is never a write
-//    that hasn't landed yet — it is a record that went missing underneath a queued
-//    op, and nothing will ever put those bytes back. Retrying is a permanent
-//    wedge (the pending count sticks above zero forever), so the caller drops it.
-//    Since applyDeletes stopped producing that state it should be unreachable; it
-//    stays as the self-heal for queues already wedged by it, because a queue that
-//    can't drain is invisible to every other repair.
+// Without that test the phase order held over the OPS and broke over the BYTES. A
+// metadata op queued before the cycle uploaded whatever its record held by then —
+// including a reference to a `files/` blob written since, which this cycle holds no
+// op for and has not sent: server extraction's second pass, or a custom image set
+// on a link with an edit already queued. The cycle committed metadata naming
+// content the server did not have, the very state content-before-metadata exists
+// to rule out, and another device pulling in that window got a preview it could
+// not load.
+//
+// Sorts the ops it could not move into three buckets the caller treats
+// differently, because the four skip shapes look alike and are not:
+//
+//  - `superseded` — the queue row at this path is no longer this op: a later write
+//    replaced it (a re-edit, or a delete), or it is gone. NOT a failure and nothing
+//    to retry here — the later write is queued under its own `writeId`, and the
+//    cycle that reads THAT op pushes it, with the content it names, in phase order.
+//    Checked first, because a path deleted since the queue was read has no record
+//    either, and it is a newer intent, not an orphan: healing it would fetch the
+//    server's copy of something this device just deleted.
+//  - `orphaned` — the row IS still this op, and there is no local record, or one
+//    stripped of its bytes. TERMINAL: a write puts the record and enqueues its op
+//    in one transaction, so an op without bytes is never a write that hasn't
+//    landed yet — it is a record that went missing underneath a queued op, and
+//    nothing will ever put those bytes back. Retrying is a permanent wedge (the
+//    pending count sticks above zero forever), so the caller drops it. Since
+//    applyDeletes stopped producing that state it should be unreachable; it stays
+//    as the self-heal for queues already wedged by it, because a queue that can't
+//    drain is invisible to every other repair.
 //  - `failed` — the PUT itself threw (network blip, an expired presigned URL on a
 //    chunk that outlived the TTL). TRANSIENT: the op stays queued and re-signs
 //    next drain; recorded on `failures` so the cycle still rejects after the
@@ -777,11 +927,26 @@ async function uploadBlobs(
   urls: Map<string, string>,
   concurrency: number,
   failures: UploadFailures,
-): Promise<{ orphaned: PendingOpRecord[]; failed: PendingOpRecord[] }> {
+): Promise<{
+  orphaned: PendingOpRecord[];
+  failed: PendingOpRecord[];
+  superseded: PendingOpRecord[];
+}> {
   const orphaned: PendingOpRecord[] = [];
   const failed: PendingOpRecord[] = [];
+  const superseded: PendingOpRecord[] = [];
   await mapLimit(ops, concurrency, async (op) => {
-    const rec = await db.items.get(op.path);
+    // One read transaction for the pair, so no local write can land between the
+    // row and the record it describes — IndexedDB orders this against the write
+    // edge's rw transactions on the same two stores.
+    const { rec, queued } = await db.transaction('r', db.items, db.pendingOps, async () => ({
+      rec: await db.items.get(op.path),
+      queued: await db.pendingOps.get([op.username, op.path]),
+    }));
+    if (queued?.writeId !== op.writeId) {
+      superseded.push(op);
+      return;
+    }
     if (!rec?.data) {
       orphaned.push(op);
       return;
@@ -798,7 +963,7 @@ async function uploadBlobs(
       failures.firstError ??= err;
     }
   });
-  return { orphaned, failed };
+  return { orphaned, failed, superseded };
 }
 
 // --- download / store / delete ----------------------------------------------
@@ -822,11 +987,18 @@ async function storeDownloads(
 
   // Skip paths whose local record is already current (same-or-newer server stamp,
   // with the decrypted bytes present for an index path). That makes a re-run of an
-  // interrupted first sync RESUME instead of re-downloading everything, makes a
-  // re-pulled echo of our own commit free, and keeps a current content record's
-  // lazily-cached blob.
-  const locals = await db.items.bulkGet(entries.map((e) => e.path));
-  const stale = entries.filter((e, i) => {
+  // interrupted first sync RESUME instead of re-downloading everything, keeps a
+  // current content record's lazily-cached blob, and makes the echo of our own
+  // commit free — which matters on every cycle now, not only after a failed one:
+  // the cursor no longer skips our commits, so each one is listed back once.
+  //
+  // Content paths already at their entry's stamp are settled first, without being
+  // read (contentAtStamp) — the echo of a content push names exactly the records
+  // that hold their megabytes.
+  const settled = await contentAtStamp(entries.filter((e) => isContentPath(e.path)));
+  const unsettled = entries.filter((e) => !settled.has(e.path));
+  const locals = await db.items.bulkGet(unsettled.map((e) => e.path));
+  const stale = unsettled.filter((e, i) => {
     const local = locals[i];
     if (!local || local.updatedAt < e.updatedAt) return true;
     return !isContentPath(e.path) && !local.data;
@@ -906,6 +1078,29 @@ async function storeDownloads(
   }
 }
 
+// Which of these CONTENT entries the store already holds at exactly the entry's
+// stamp — answered off the `updatedAt` index's key cursor, so no record is
+// deserialized. A content record's `data` is the cached blob itself, megabytes of
+// it, and the staleness test wants one number; reading a batch of records to
+// compare stamps would pull every cached page copy in the batch into memory at
+// once, for an echo that changes nothing. (The fallback's reconcile reads its
+// stamps the same way, for the same reason.) Exact match only: a path the store
+// holds at some OTHER stamp is left to the full comparison, which is what tells
+// "newer here" from "newer there".
+async function contentAtStamp(entries: Entry[]): Promise<Set<string>> {
+  const settled = new Set<string>();
+  if (entries.length === 0) return settled;
+  const stampOf = new Map(entries.map((e) => [e.path, e.updatedAt]));
+  await db.items
+    .where('updatedAt')
+    .anyOf([...new Set(stampOf.values())])
+    .eachKey((updatedAt, cursor) => {
+      const path = cursor.primaryKey as string;
+      if (stampOf.get(path) === updatedAt) settled.add(path);
+    });
+  return settled;
+}
+
 // Store pulled records, skipping any path the local queue now holds an op for —
 // the reconcile's local-wins test (docs/local-first-sync.md — a sync cycle), re-taken
 // at write time and inside the write's own transaction, for the same reason
@@ -972,11 +1167,23 @@ async function applyDeletes(username: string, paths: string[]): Promise<void> {
   });
 }
 
+// The local paths a full listing does not show: what a first sync's retry has to
+// drop, by the fallback's "local only" row. Primary keys alone — no record is read.
+// The caller hands these to applyDeletes, which spares any path with an op queued.
+async function localOnlyPaths(files: Entry[]): Promise<string[]> {
+  const listed = new Set(files.map((f) => f.path));
+  const local = await db.items.toCollection().primaryKeys();
+  return local.filter((path) => !listed.has(path));
+}
+
 // --- control-plane helpers --------------------------------------------------
 
 // Page the full R2 listing (fallback + first sync). `pageToken` is R2's opaque
 // cursor relayed straight back; loop until it comes back null. The listing is not a
-// snapshot — safe here because every consumer compares `updatedAt`.
+// snapshot: pages span concurrent writes, and an object written into a key range
+// already passed is simply absent. That is safe for what gets DOWNLOADED (every
+// consumer compares `updatedAt`) and is exactly why the listing never supplies the
+// CURSOR — both callers end on the log's high-water mark instead (logWatermark).
 async function listAllFiles(api: ApiClient): Promise<Entry[]> {
   const out: Entry[] = [];
   let pageToken: string | undefined;
@@ -1014,27 +1221,4 @@ function needsFallback(since: number, page: OpsListResponse): boolean {
   if (since > newest) return true; // cursor ahead — log was reset/restored
   if (oldest !== null && since < oldest) return true; // ops before the cursor were compacted
   return false; // oldest ≤ since ≤ newest — run the keyset query
-}
-
-// Keyset ordering on the compound cursor (updatedAt, path).
-function isNewer(ts: number, path: string, curTs: number, curPath: string): boolean {
-  return ts > curTs || (ts === curTs && path > curPath);
-}
-
-// Newest compound (updatedAt, path) across full-listing results — the cursor a
-// download-authoritative flow (first sync, fallback) reconstructs. Taken over ALL
-// entries, never just the last page: R2 lists in key order, not time order, so
-// the newest can sit on any page. `(0, '')` for an empty account.
-function newestCursor(...lists: Entry[][]): Entry {
-  let updatedAt = 0;
-  let path = '';
-  for (const list of lists) {
-    for (const e of list) {
-      if (isNewer(e.updatedAt, e.path, updatedAt, path)) {
-        updatedAt = e.updatedAt;
-        path = e.path;
-      }
-    }
-  }
-  return { path, updatedAt };
 }
