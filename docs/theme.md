@@ -778,7 +778,9 @@ sat at the registry's defaults until this pass; they now carry web's values:
 press (`active:`), value for value; `hitSlop` does what web's `after:-inset-*`
 does; every size is one step taller than web's, because a phone target is not a
 pointer target; `Switch` is the platform control rather than the registry's
-`Pressable` (its own header argues that at length); text colour reaches children
+`Pressable` (its own header argues that at length), and its palette is mapped
+twice — web's tokens on iOS, where the thumb sits inside the track, and the
+thumb-carries-`primary` convention on Android, where it overhangs onto the page; text colour reaches children
 through `TextClassContext` rather than a cascade, which is why a call site that
 wants a non-default step restates it on its own `Text`.
 
