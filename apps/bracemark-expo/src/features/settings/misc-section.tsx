@@ -204,10 +204,11 @@ function ThemeControls({
 
       {/* `ml-10` is OptionRow's own inset — p-3 + a size-4 radio + gap-3 — so these two
           fields align under "Custom time" and read as part of that option (web's
-          rationale, verbatim). It costs a wrap the web copy never takes: SettingsPane
-          is px-4, so a 375pt screen leaves 343 for a 304pt pair, and the inset pushes
-          that to 344. Deliberate — the two fields then stack AT the inset, which still
-          reads as nested; from 393pt up they sit side by side as on web. */}
+          rationale, verbatim). The pair is 272pt at TimeField's minimum width, 312 with
+          the inset, and SettingsPane is px-4 — so it sits side by side as on web from a
+          360pt screen up. `flex-wrap` is for when it can't: the fields grow with the
+          text size and the locale's time format, and then they stack AT the inset,
+          which still reads as nested. */}
       {value.mode === 'custom' && (
         <View className="mt-4 ml-10 flex-row flex-wrap gap-4">
           <TimeField

@@ -32,6 +32,7 @@
 import { useState } from 'react';
 import { Platform, View } from 'react-native';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
+import { Clock } from 'lucide-react-native';
 
 import { useTheme } from '../../components/theme-provider';
 import { Button } from '../../components/ui/button';
@@ -42,6 +43,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../../components/ui/dialog';
+import { Icon } from '../../components/ui/icon';
 import { Text } from '../../components/ui/text';
 
 // "HH:mm" 24h ⇄ Date, the picker's currency. `value` reaches us through
@@ -99,21 +101,39 @@ export function TimeField({
     <View className="gap-1.5">
       <Text className="text-sm font-medium">{label}</Text>
 
-      {/* Mirrors the Input this replaced — same width, same left-aligned text,
-          and `leading-5` from it too — so the custom-mode block keeps the shape
-          web's two time inputs have. The leading is load-bearing: a bare
-          `text-base` label's line box is 24pt, and any box tighter than that
-          clamps the paragraph's frame and takes the difference out of the
-          descender. `09:00` has none, which is the only reason this site looked
-          fine while the link editors' two pickers did not
-          (components/links/list-select.tsx carries the derivation). */}
+      {/* Mirrors web's time input — the time at the left edge, a clock at the
+          right, and `leading-5` from the Input this replaced — so the
+          custom-mode block keeps the shape web's two time inputs have. The clock
+          is what web's box is sized for: the browser draws its picker indicator
+          there, and without one the same box is a third empty and reads as a
+          field to type in. It is also the kit's picker-trigger shape
+          (components/links/list-select.tsx: `outline`, `justify-between`, a
+          muted trailing icon).
+
+          `min-w-32` is a step under web's `w-36`, and the smallest step that
+          still holds the widest 12-hour label: "12:00 AM" is ~72pt in Inter at
+          1×, against the 74 this box leaves beside the icon. So at the default
+          text size the two fields are the same width whatever their values —
+          one step down they would each hug their own time and differ.
+
+          A minimum, not a fixed width: the label is the locale's, and it
+          scales. A fixed box has to hold the longest format at the 1.3
+          font-scale ceiling, and when it can't the Text wraps to a second line
+          inside a pinned height; a minimum grows instead.
+
+          The leading is load-bearing: a bare `text-base` label's line box is
+          24pt, and any box tighter than that clamps the paragraph's frame and
+          takes the difference out of the descender. `09:00` has none, which is
+          the only reason this site looked fine while the link editors' two
+          pickers did not (list-select.tsx carries the derivation). */}
       <Button
         variant="outline"
         onPress={open}
-        className="w-36 justify-start"
+        className="min-w-32 justify-between"
         aria-label={`${label}, ${formatForDisplay(value)}`}
       >
         <Text className="text-base leading-5">{formatForDisplay(value)}</Text>
+        <Icon as={Clock} className="size-4 shrink-0 text-muted-foreground" />
       </Button>
 
       {draft !== null && (
