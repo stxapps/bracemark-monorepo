@@ -1441,12 +1441,22 @@ is why it is closed rather than written down as accepted.
   server ([data-lifecycle.md](./data-lifecycle.md), _delete all data_); a
   cycle in another tab that had already read the queue is not waited for. The
   upload-time `writeId` test narrows what that cycle can still do: an op whose
-  queue row the wipe cleared is superseded and sends nothing. What is left is a
-  transfer already in flight when the queue was cleared, whose commit can log
-  an object that landed after the server's wipe had passed it — one link back
-  on a wiped account. Read from source, not reproduced. Running the wipe under
-  the cycle lock would close it; that is a change to a destructive path with
-  its own watchdog, and has not been made.
+  queue row the wipe cleared is superseded and sends nothing. What is left is
+  the transfers already in flight when the queue was cleared, which had passed
+  that test: at most one fan-out of them, `INDEX_CONCURRENCY` (24) metadata
+  blobs or `FILE_CONCURRENCY` (8) content blobs. Such a transfer can end two
+  ways. If it lands after the wipe's last R2 listing, the object survives and
+  its commit logs it — a link back on a wiped account, up to that fan-out of
+  them. If it lands sooner and its commit falls between the log wipe and the
+  delete of its object, the commit's `HEAD` finds the object, the op goes into
+  the emptied log, and the paging then removes the object: `op-without-object`
+  (_source of truth_), with the path's size left in the quota map until that
+  path is next committed or the account is wiped again. A puller skips the 404,
+  so nothing shows. Both are read from source, not reproduced. Running the wipe
+  under the cycle lock would close both for a second tab; that is a change to a
+  destructive path with its own watchdog, and has not been made. The second is
+  not a tab's alone — another device committing during the wipe meets the same
+  window, and no lock on this origin reaches it.
 - The browser extension beside the web app is NOT a second tab. It is another
   origin, with its own store, queue and cursor: another client of the account,
   under the two-device rules (_conflict policy_, _the cursor is a claim_).
