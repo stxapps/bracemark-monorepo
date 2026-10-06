@@ -73,6 +73,26 @@ export function rekey(path: string, from: string, to: string): string {
   return pathFromId(idFromPath(path, from), to);
 }
 
+// The `{id}` segment of an id-keyed path — the charset every namespace in
+// ID_KEYED_PREFIXES shares. ONE definition, read by the two gates that have to
+// agree on it: `syncPathSchema` (sync/endpoints.ts) builds its wire regex from the
+// pattern, and the backup reader (data/backup.ts) tests an archive's ids with the
+// predicate. They ask the same question at two edges — can this id be a path a
+// client is able to send? — so an id one admits and the other refuses is a queued
+// op that never drains. Closed and separator-free: no `/`, no `.`, nothing to
+// build a traversal or a second segment from.
+export const PATH_ID_PATTERN = '[A-Za-z0-9_-]+';
+
+const PATH_ID_RE = new RegExp(`^${PATH_ID_PATTERN}$`);
+
+// Whether a bare `{id}` can sit in an id-keyed path — i.e. whether
+// `pathFromId(id, prefix)` is a path the wire contract accepts. For an id that
+// arrives from OUTSIDE (a backup archive); one minted here by `newId` is a UUID
+// and always passes.
+export function isPathId(id: string): boolean {
+  return PATH_ID_RE.test(id);
+}
+
 // The well-known path of the general settings file (`settingsGeneralSchema`). The
 // `settings/` family is keyed by a fixed concern name, not a random id, so its
 // paths are baked into client code rather than generated — one source of truth so

@@ -422,6 +422,26 @@ The policy, decided once:
   existence inside its transaction through `bulkWriteEntities`'s
   `skipExisting` option. Sync can land a path between scan and write while the
   importer yields. The receipt counts only paths actually written.
+- **A backup line's ids are gated to the path grammar — the path's own, and the
+  file refs inside its data.** `classifyBundleLine` refuses a line whose path id
+  is not a plain token, and equally one whose `customImageId`, `imageId`,
+  `pageCopyId` or `screenshotId` is not. Those four are ids the _archive_
+  supplies: a restore turns each into a `files/{id}.enc` path and a queued put,
+  and a later delete of the link turns it into a queued delete. One the wire
+  contract can't carry is refused by the request contract before it leaves the
+  device, on every cycle, and the push it rides in holds the metadata puts and
+  the pull behind it — a library that looks restored and has stopped syncing,
+  with nothing in the app that removes a single queued op. The line is counted
+  invalid, never repaired: stripping the ref would make the restore something
+  other than verbatim, and a refused link takes its pin and extraction with it
+  (the dangling-satellite drop). Both checks read one definition — `isPathId` in
+  `sync/paths.ts`, whose pattern is also the id segment `syncPathSchema` is built
+  from — so the reader and the wire cannot disagree. The entity schemas are
+  deliberately _not_ where this lives: they also decode what is already stored,
+  and a tighter rule there would turn an existing record unreadable. No backup
+  this app writes is affected, since every id either platform mints is a UUID;
+  the converter counts such a line as an invalid record through the same
+  function.
 - **The plan's link cap is enforced up front**, _before anything is written_ —
   see _the import's quota gate_ below for the shape, which differs between an
   interop file and a backup. This is one of the places that enforce the cap at

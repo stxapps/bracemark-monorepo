@@ -38,6 +38,7 @@ import {
 import {
   ENC_SUFFIX,
   EXTRACTIONS_PREFIX,
+  isPathId,
   LINKS_PREFIX,
   LISTS_PREFIX,
   PINS_PREFIX,
@@ -202,9 +203,26 @@ export function classifyBundleLine(line: string): BundleEntry | undefined {
     // The id between prefix and `.enc` must be a plain token — a malformed path
     // would poison the store/R2 key space.
     const id = path.slice(prefix.length, path.length - ENC_SUFFIX.length);
-    if (!path.endsWith(ENC_SUFFIX) || id === '' || !/^[A-Za-z0-9_-]+$/.test(id)) return undefined;
+    if (!path.endsWith(ENC_SUFFIX) || !isPathId(id)) return undefined;
     if (!schema.safeParse(data).success) return undefined;
-    return { path, data, kind };
+    const entry: BundleEntry = { path, data, kind };
+    // The same gate for the ids INSIDE the data. A link's or an extraction's file
+    // refs become `files/{id}.enc` paths without ever passing the check above:
+    // when the restore writes their blobs, and again whenever a later edit deletes
+    // one. The entity schemas leave them free strings on purpose — those schemas
+    // also decode what is already stored, and tightening them there would turn an
+    // old record unreadable — so this edge is the one place an outside id is
+    // tested. One that can't form a sync path is an op no client can send, and the
+    // push carrying it fails on every cycle after. Asked of referencedFileIds, so
+    // the ids gated are by construction the ids a restore turns into paths. The
+    // LINE is refused, not the ref stripped: a restore is verbatim or it is not a
+    // restore, and a link refused here takes its pin and extraction with it (the
+    // importers drop a satellite whose link is in neither the archive nor the
+    // library).
+    for (const fileId of referencedFileIds([entry])) {
+      if (!isPathId(fileId)) return undefined;
+    }
+    return entry;
   }
   return undefined;
 }

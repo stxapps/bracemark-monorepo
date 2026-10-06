@@ -52,6 +52,7 @@ import {
   PINS_PREFIX,
   ranksBetween,
   SETTINGS_GENERAL_PATH,
+  syncPathSchema,
   TAGS_PREFIX,
   TRASH_ID,
   utf8,
@@ -478,6 +479,58 @@ describe('the bracemark backup round trip', () => {
       expect.arrayContaining([`${LINKS_PREFIX}l_work.enc`, 'files/img_work.enc']),
     );
     expect(queued.length).toBe(Object.keys(await storedEntities()).length);
+  });
+
+  // A file ref is an id the ARCHIVE supplies, and a restore turns it into a
+  // `files/` path and a queued put. One the wire contract cannot carry is refused
+  // by the request contract before it leaves the device, every cycle, and the
+  // push it rides in takes the metadata puts and the pull behind it down as well
+  // — with nothing in the app that removes a single queued op. The gate is
+  // classifyBundleLine's, covered field by field in shared data/backup.spec.ts.
+  // What only this file can hold is that nothing reaches the store or the queue
+  // AROUND it: the archive below really carries the blob under the bad id, so an
+  // importer that wrote blobs from refs it never classified is caught here.
+  it('refuses a line whose file ref cannot be a sync path, and queues nothing for it', async () => {
+    // A filename for an id — what an archive written by something that isn't this
+    // app would plausibly carry. No first-party writer mints one (ids are UUIDs).
+    const badId = 'cover.png';
+    const badLink = `${LINKS_PREFIX}l_bad.enc`;
+    await seed([
+      ...library(),
+      {
+        path: badLink,
+        data: {
+          url: 'https://bad.invalid/',
+          listId: 'work',
+          tagIds: [],
+          customImageId: badId,
+          createdAt: T + 4,
+          updatedAt: T + 4,
+        },
+      },
+    ]);
+    await db.items.put(toItemRecord(`files/${badId}.enc`, 5000, IMAGE_BYTES));
+    await exportAllData({ format: 'bracemark', deps: deps(), excludedListIds: new Set() });
+    expect(await zipEntryNames(savedZip())).toContain(`files/${badId}`);
+    await db.items.clear();
+    await db.pendingOps.clear();
+
+    const outcome = await importAllData({ file: savedZip(), deps: deps(), maxLinks: null });
+
+    // Reported, and not fatal: the three good links still land.
+    expect(outcome.invalidCount).toBe(1);
+    expect(outcome.linkCount).toBe(3);
+    expect(outcome.fileCount).toBe(2);
+    const stored = Object.keys(await storedEntities());
+    expect(stored).not.toContain(badLink);
+    expect(stored).not.toContain(`files/${badId}.enc`);
+
+    const queued = (await db.pendingOps.where('username').equals(USER).toArray()).map(
+      (o) => o.path,
+    );
+    for (const path of queued) expect(syncPathSchema.safeParse(path).success).toBe(true);
+    // …and the queue is not simply empty.
+    expect(queued).toContain('files/img_work.enc');
   });
 
   // Skip-existing by path. The failure it prevents is the loud one: a restore run

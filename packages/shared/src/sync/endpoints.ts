@@ -1,6 +1,6 @@
 import { API_V1, defineEndpoint } from '../api/endpoint';
 import { z } from '../zod';
-import { ENC_SUFFIX, ID_KEYED_PREFIXES, SETTINGS_PREFIX } from './paths';
+import { ENC_SUFFIX, ID_KEYED_PREFIXES, PATH_ID_PATTERN, SETTINGS_PREFIX } from './paths';
 
 // Local-first sync endpoint contracts — the four-endpoint control plane the
 // background sync engine drives (see docs/local-first-sync.md). Two endpoints per
@@ -33,8 +33,9 @@ export type OpKind = z.infer<typeof opKindSchema>;
 // The regex is BUILT from the path contract (paths.ts) rather than re-listing the
 // namespaces as literals: the id-keyed group comes straight from
 // `ID_KEYED_PREFIXES`, so a namespace added there is validated here automatically
-// and this server-side gate can't drift from storage. See paths.ts.
-const RANDOM_ID = '[A-Za-z0-9_-]+'; // links/files/tags/lists/pins/extractions id segment
+// and this server-side gate can't drift from storage. The id segment is
+// `PATH_ID_PATTERN`, defined there too, so the backup reader gates an archive's ids
+// against the very charset this regex is built from. See paths.ts.
 const CONCERN = '[a-z0-9-]+'; // settings/<concern> — fixed lowercase name
 // Escape regex metacharacters so a prefix/suffix const is matched literally.
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -47,7 +48,7 @@ export const syncPathSchema = z
   .string()
   .regex(
     new RegExp(
-      `^(?:(?:${idKeyedGroup})\\/${RANDOM_ID}|${namespace(SETTINGS_PREFIX)}\\/${CONCERN})${escapeRe(ENC_SUFFIX)}$`,
+      `^(?:(?:${idKeyedGroup})\\/${PATH_ID_PATTERN}|${namespace(SETTINGS_PREFIX)}\\/${CONCERN})${escapeRe(ENC_SUFFIX)}$`,
     ),
     'expected a sync path like links/<id>.enc',
   );

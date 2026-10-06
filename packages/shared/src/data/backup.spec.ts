@@ -1,3 +1,5 @@
+import { syncPathSchema } from '../sync/endpoints';
+import { FILES_PREFIX, pathFromId } from '../sync/paths';
 import { ranksBetween } from '../sync/rank';
 import {
   BACKUP_ITEMS_ENTRY,
@@ -202,6 +204,65 @@ describe('classifyBundleLine', () => {
     expect(classifyBundleLine(jsonlLine('links/a', link))).toBeUndefined();
     expect(classifyBundleLine(jsonlLine('links/../x.enc', link))).toBeUndefined();
   });
+
+  // The ids INSIDE the data, which the path check above never sees. Each of these
+  // four fields names a `files/{id}.enc` blob, so a restore turns it into a path
+  // and a queued put — and any later delete of the link turns it into a queued
+  // delete — with the archive's string in the middle. Listed by hand: this is
+  // where a fifth ref field has to be added, though the gate asks
+  // referencedFileIds and so cannot fall behind the importers on its own.
+  const FILE_REFS = [
+    ['link', 'customImageId'],
+    ['extraction', 'imageId'],
+    ['extraction', 'pageCopyId'],
+    ['extraction', 'screenshotId'],
+  ] as const;
+
+  const withFileRef = (kind: 'link' | 'extraction', field: string, id: string): string =>
+    jsonlLine(ENTITIES[kind].path, { ...ENTITIES[kind].data, [field]: id });
+
+  // What both platforms' `newId` mints: a UUID.
+  const MINTED_ID = '3f2b8c1e-9d4a-4e7b-a1c6-5d0f2e8b7a94';
+
+  // Ids no first-party writer produces and no client can send. The first is the
+  // likely one — a file written by something that isn't this app, keyed by
+  // filename — and needs no attacker; the rest are what a hostile archive tries.
+  const UNSENDABLE_IDS = ['cover.png', 'a/b', '../x', 'a b', 'é', ''];
+
+  // An unsendable ref does not fail loudly. The blob's put (or, with no blob in
+  // the archive, the delete a later edit queues) is rejected by the request
+  // contract before it leaves the device, on every cycle, and the push that
+  // carries it takes the metadata puts and the pull behind it down too — a
+  // library that looks restored and has silently stopped syncing.
+  it.each(FILE_REFS)('refuses the %s line whose %s cannot form a sync path', (kind, field) => {
+    for (const id of UNSENDABLE_IDS) {
+      expect(classifyBundleLine(withFileRef(kind, field, id))).toBeUndefined();
+    }
+  });
+
+  // The control for the cluster above: a gate that refused every line carrying a
+  // ref would pass it, and would empty the images out of every real backup.
+  it.each(FILE_REFS)('keeps the %s line whose %s is an id this app mints', (kind, field) => {
+    const entry = classifyBundleLine(withFileRef(kind, field, MINTED_ID));
+
+    expect(entry?.kind).toBe(kind);
+    expect(entry?.data).toEqual({ ...ENTITIES[kind].data, [field]: MINTED_ID });
+  });
+
+  // The gate and the wire contract are one question asked at two edges, and this
+  // is where they are held against each other. An id the reader admits and
+  // `syncPathSchema` refuses is the unsendable op itself; the reverse is a backup
+  // this app wrote and cannot read back.
+  it.each([...UNSENDABLE_IDS, MINTED_ID, 'aZ09_-'])(
+    'admits the ref %j exactly when the wire contract can send its path',
+    (id) => {
+      const sendable = syncPathSchema.safeParse(pathFromId(id, FILES_PREFIX)).success;
+
+      for (const [kind, field] of FILE_REFS) {
+        expect(classifyBundleLine(withFileRef(kind, field, id)) !== undefined).toBe(sendable);
+      }
+    },
+  );
 });
 
 describe('referencedFileIds', () => {

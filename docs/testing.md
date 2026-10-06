@@ -352,8 +352,9 @@ file, the locked-list exclusion in all four of its dimensions, the interop
 dedupe, the provisional title), and expo's covers only what this platform can
 lose on its own — a different zip library, `files/` content living decrypted on
 DISK rather than in the row, and the zip32 ceilings fflate range-checks neither —
-plus one drift-guard case for the two policies, because the orchestrators are
-duplicated source. Both drive a REAL archive end to end, which is the property
+plus one drift-guard case for the two policies and one for the backup reader's
+file-ref gate, because the orchestrators are duplicated source. Both drive a
+REAL archive end to end, which is the property
 neither `shared`'s serializers nor its parsers can hold: those are tested with
 hand-written strings that agree by construction.
 

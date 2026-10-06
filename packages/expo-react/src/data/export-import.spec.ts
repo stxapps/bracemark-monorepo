@@ -47,6 +47,7 @@ import {
   PINS_PREFIX,
   ranksBetween,
   SETTINGS_GENERAL_PATH,
+  syncPathSchema,
   TAGS_PREFIX,
   TRASH_ID,
   utf8,
@@ -65,6 +66,7 @@ import { dataFileFor, ensureDataFilesDir } from './file-store';
 import { importAllData } from './import-all-data';
 import { getItem, markItemDataFile, namespaceRows, putItemsTx } from './item-store';
 import { liveReadsHeld } from './live-read-invalidation';
+import { listPendingOps } from './pending-store';
 import { toItemRecord } from './projection';
 import { beginInitialSync, markFirstSyncDone } from './sync-store';
 
@@ -437,6 +439,67 @@ describe('the bracemark backup round trip, through fflate', () => {
     // whose image never renders, or one the sync engine re-downloads forever.
     expect([...readFileBytes(dataFileFor(IMAGE_PATH).uri)]).toEqual([...IMAGE_BYTES]);
     expect((await getItem(IMAGE_PATH))?.hasDataFile).toBeTruthy();
+  });
+
+  // The drift guard for the file-ref gate. The gate is classifyBundleLine's and
+  // is covered field by field in shared data/backup.spec.ts; web's copy of this
+  // case is the canonical one. But this importer is its own source, so web
+  // passing proves nothing about it — and it has a store web doesn't. A ref the
+  // wire contract cannot carry, admitted HERE, is a plaintext file on disk as
+  // well as a queued put the request contract refuses on every push, holding the
+  // metadata puts and the pull behind it.
+  it('refuses a line whose file ref cannot be a sync path — no row, no file, no op', async () => {
+    // A filename for an id, as an archive written by something that isn't this
+    // app would plausibly carry. No first-party writer mints one (ids are UUIDs).
+    const badId = 'cover.png';
+    const badLink = `${LINKS_PREFIX}l_bad.enc`;
+    const badFile = `files/${badId}.enc`;
+    seedEntities();
+    await seedContent();
+    getDb().transaction((tx) =>
+      putItemsTx(tx, [
+        toItemRecord(
+          badLink,
+          5000,
+          utf8(
+            JSON.stringify({
+              url: 'https://bad.invalid/',
+              listId: 'work',
+              tagIds: [],
+              customImageId: badId,
+              createdAt: T + 3,
+              updatedAt: T + 3,
+            }),
+          ),
+        ),
+      ]),
+    );
+    await seedContent(badFile);
+
+    const outcome = await exportBackup();
+    expect(Object.keys(unzipSaved(outcome.file.uri))).toContain(`files/${badId}`);
+    const archive = stash(outcome.file.uri);
+    await truncate();
+    resetFileSystem();
+
+    const restored = await importAllData({
+      file: repick(archive, outcome.file.name),
+      deps: deps(),
+      maxLinks: null,
+    });
+
+    // Reported, and not fatal: the two good links and their blob still land.
+    expect(restored.invalidCount).toBe(1);
+    expect(restored.linkCount).toBe(2);
+    expect(restored.fileCount).toBe(1);
+    expect(await getItem(badLink)).toBeUndefined();
+    expect(await getItem(badFile)).toBeUndefined();
+    expect(dataFileFor(badFile).exists).toBe(false);
+
+    const queued = (await listPendingOps(USER)).map((o) => o.path);
+    for (const path of queued) expect(syncPathSchema.safeParse(path).success).toBe(true);
+    // …and the queue is not simply empty.
+    expect(queued).toContain(IMAGE_PATH);
   });
 
   // The other side of the same asymmetry: the row claims materialization and the
