@@ -101,6 +101,15 @@ describe('getBiometricCapability', () => {
     expect((await getBiometricCapability()).label).toBe('Face ID');
   });
 
+  // Except on Android, where the list is the phone's HARDWARE, not the enrolment, and the
+  // OS prompt picks the sensor: a phone with both said "Face Unlock" to a user who had
+  // only ever registered a finger. Several sensors there get no specific name.
+  it('names no single sensor on an android device that reports several', async () => {
+    device({ os: 'android', types: [1, 2] });
+
+    expect((await getBiometricCapability()).label).toBe('Biometrics');
+  });
+
   // An enrolled device whose type list is empty or unrecognized is still usable — it just
   // has no specific name, so the copy stays generic rather than blank.
   it('falls back to a generic name rather than an empty one', async () => {

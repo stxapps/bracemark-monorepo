@@ -33,6 +33,12 @@ const UNAVAILABLE: BiometricCapability = { available: false, label: '' };
 function labelFor(types: LocalAuthentication.AuthenticationType[]): string {
   const { FACIAL_RECOGNITION, FINGERPRINT, IRIS } = LocalAuthentication.AuthenticationType;
   const ios = Platform.OS === 'ios';
+  // Android reports the sensors the HARDWARE has, not the one that's enrolled,
+  // and BiometricPrompt picks the modality itself — so on a phone with both a
+  // face camera and a fingerprint reader, naming either one mislabels everyone
+  // who enrolled the other. Only a lone sensor gets its name; several get the
+  // generic one (the OS's own word for it). An iOS device has exactly one.
+  if (!ios && types.length > 1) return 'Biometrics';
   if (types.includes(FACIAL_RECOGNITION)) return ios ? 'Face ID' : 'Face Unlock';
   if (types.includes(FINGERPRINT)) return ios ? 'Touch ID' : 'Fingerprint';
   if (types.includes(IRIS)) return 'Iris';

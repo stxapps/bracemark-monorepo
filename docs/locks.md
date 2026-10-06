@@ -258,6 +258,14 @@ untouched). The provider probes the device once (`getBiometricCapability` →
 confirm first, so a lock never promises biometry the device can't deliver). The
 thin `expo-local-authentication` wrapper is `expo-react` `lib/biometric.ts`.
 
+**The label names a sensor only when there is one to name.** iOS has exactly one
+biometry per device, so it reads "Face ID" or "Touch ID". Android reports the
+sensors the _hardware_ has — not which is enrolled — and `BiometricPrompt` chooses
+the modality itself, so a phone with both a face camera and a fingerprint reader
+reads "Biometrics"; a lone sensor reads "Fingerprint" or "Face Unlock". Preferring
+face there labelled the toggle "Face Unlock" for a user who had enrolled only a
+finger.
+
 **Where it surfaces.** The `LockPane` (app gate + locked-list pane)
 **auto-prompts once on mount** when the gating lock has opted in, with a "Unlock
 with {label}" button and the password field as the ever-present fallback; a
