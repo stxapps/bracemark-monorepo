@@ -501,17 +501,25 @@ Paddle and Apple keep **one identity for life**: a plan change updates the
 existing `sub_…` / `originalTransactionId`, so it updates the existing
 `purchases` row and there is nothing else to do. **Play re-keys.** An
 upgrade/downgrade, a re-signup of a canceled-but-not-yet-lapsed subscription,
-and the prepaid conversions each mint a **new purchase token** — a new identity,
+a purchase made while the old one is in account hold, and the prepaid
+conversions each mint a **new purchase token** — a new identity,
 so a new row — and the new record's `linkedPurchaseToken` points back at the one
 it replaced.
 
-The old token does **not** retire itself. It goes on resolving through
-`subscriptionsv2.get` with its original period, so a refetch cannot discover
-that it died, and the staleness refresh below never even looks at it (a row
-reading active with a future expiry is exactly the shape `needsRefresh` skips).
-Retiring it is the server's job — `supersedeLinkedPlayPurchase` in
-`services/iap.ts`, called from both `verifyStorePurchase` and
-`applyStoreNotification`. Two things break without it:
+The old token **cannot be relied on to retire itself.** Play has been seen to
+do it in one case: a purchase made over a subscription in account hold (the
+upgrade card, which a held account is shown because hold folds to free) left the
+old token `SUBSCRIPTION_STATE_EXPIRED`, with
+`canceledStateContext.replacementCancellation` and its expiry pulled back to the
+moment of replacement. That is one replacement mode out of several, observed
+once, and nothing in the API promises it for the others. Where Play does not,
+the old token goes on resolving through `subscriptionsv2.get` with its original
+period, so a refetch cannot discover that it died, and the staleness refresh
+below never even looks at it (a row reading active with a future expiry is
+exactly the shape `needsRefresh` skips). Retiring it is therefore the server's
+job either way — `supersedeLinkedPlayPurchase` in `services/iap.ts`, called from
+both `verifyStorePurchase` and `applyStoreNotification`. Two things break
+without it:
 
 - **Downgrade.** The old higher-plan row stays entitled and the fold takes the
   best plan, so a user who moves pro → plus keeps pro until the old period would
