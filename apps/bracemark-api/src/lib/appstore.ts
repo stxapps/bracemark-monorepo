@@ -255,9 +255,9 @@ export async function fetchAppstoreSubscription(
       //
       // Nothing has to un-set this: Apple mints a NEW transaction for the first
       // paid period and `lastTransactions` returns the latest, so the offer
-      // fields simply aren't there once the trial converts. Play needs a
-      // deliberate guard for the same transition (lib/playstore.ts,
-      // PLAY_FREE_TRIAL_OFFER_TAG) because it reuses one line item across it.
+      // fields simply aren't there once the trial converts. Play reuses ONE
+      // line item across the same transition and keeps the offer on it, which
+      // is why lib/playstore.ts reads the line's current phase instead.
       const effectiveStatus: PurchaseStatus =
         status === 'active' && info.data.offerDiscountType === 'FREE_TRIAL' ? 'trialing' : status;
 

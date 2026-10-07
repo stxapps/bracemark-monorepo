@@ -1,4 +1,4 @@
-import { bytesToBase64Url, PLAY_FREE_TRIAL_OFFER_TAG, z } from '@stxapps/shared';
+import { bytesToBase64Url, z } from '@stxapps/shared';
 
 import type { PurchaseStatus } from '../db/repositories/purchases';
 import type { Bindings } from './env';
@@ -201,14 +201,13 @@ const subscriptionV2Schema = z.looseObject({
       productId: z.string(),
       expiryTime: z.string().optional(), // RFC 3339
       autoRenewingPlan: z.looseObject({ autoRenewEnabled: z.boolean().optional() }).nullish(),
-      // Present while a non-base-plan OFFER applies to this line — the only
-      // place a free trial is visible on Play (see PLAY_FREE_TRIAL_OFFER_TAG).
-      offerDetails: z
-        .looseObject({
-          offerId: z.string().optional(),
-          offerTags: z.array(z.string()).optional(),
-        })
-        .nullish(),
+      // The pricing phase this line is in NOW — a one-of whose set member names
+      // it (`freeTrial`, `introductoryPrice`, `basePrice`, `prorationPeriod`),
+      // each an empty object. The only place a free trial is visible on Play
+      // (see effectiveStatus below). `unknown` because only the member's
+      // PRESENCE is read: a shape Google changes must not fail the whole parse
+      // and drop a purchase over a display distinction.
+      offerPhase: z.looseObject({ freeTrial: z.unknown().optional() }).nullish(),
     }),
   ),
 });
@@ -297,15 +296,23 @@ export async function fetchPlaystoreSubscription(
     line.autoRenewingPlan?.autoRenewEnabled === true;
 
   // 'trialing' is a display distinction only (the fold treats it as active) —
-  // the sibling of lib/appstore.ts's effectiveStatus, keyed on Play's offer tag
-  // instead of Apple's offerDiscountType. Gated on 'active' for the same reason
-  // it is there: the offer is still on the line item while a lapsed trial
-  // dunning in IN_GRACE_PERIOD, and that user is owed the past_due sentence
-  // ("your payment didn't go through"), not the trial one.
+  // the sibling of lib/appstore.ts's effectiveStatus, keyed on the line's
+  // current offer PHASE instead of Apple's offerDiscountType.
+  //
+  // The phase, NOT the offer. `offerDetails` (its `offerId`, its `offerTags`)
+  // names the offer the line was BOUGHT under and never changes afterwards:
+  // Play carries one line item across the trial→paid boundary, so a converted
+  // subscription still reads `offerTags: ['free-trial']` beside
+  // `offerPhase: { basePrice: {} }` and a processed order. Keying on the tag —
+  // which this did — told a subscriber who had been charged "Free trial — your
+  // first payment is on …", with nothing to ever clear it (docs/iap.md, the
+  // trial). A response with no `offerPhase` at all reads plain 'active'.
+  //
+  // Gated on 'active' for the same reason Apple's is: that user is owed the
+  // past_due sentence ("your payment didn't go through") while a lapsed trial
+  // is dunning in IN_GRACE_PERIOD, whatever phase Google still reports.
   const effectiveStatus: PurchaseStatus =
-    status === 'active' && line.offerDetails?.offerTags?.includes(PLAY_FREE_TRIAL_OFFER_TAG)
-      ? 'trialing'
-      : status;
+    status === 'active' && line.offerPhase?.freeTrial != null ? 'trialing' : status;
 
   return {
     // The purchase token is the stable identity of one subscription instance —

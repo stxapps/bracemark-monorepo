@@ -33,29 +33,25 @@ export function planOfStoreProduct(productId: string): Exclude<Plan, 'free'> | n
   return null;
 }
 
-// The Play Console OFFER TAG that marks our free-trial offer.
-//
-// Play has no trial STATUS: a subscription inside its trial phase reads
-// SUBSCRIPTION_STATE_ACTIVE like any other, and v1's `paymentState: 2` ("free
-// trial") did not survive into subscriptionsv2. The offer applied to the line
-// item is the only signal — and `offerId` alone won't do, since a paid
-// introductory offer carries one too (Apple's PAY_AS_YOU_GO/PAY_UP_FRONT
-// problem, same shape). A TAG rather than an id also means regional or
-// campaign-specific trial offers all share one marker, so adding an offer in
-// Play Console never needs a deploy.
+// The Play Console OFFER TAG that marks our free-trial offer — how
+// bracemark-expo's `lib/iap.ts` finds the offer to BUY. Play lists the base
+// plan and every offer the buyer is eligible for in no promised order, so
+// buying the first entry would grant or skip the trial by list order (and a
+// returning subscriber, who is listed no trial offer, falls back to the base
+// plan). A TAG rather than an offer id, since a paid introductory offer
+// carries an id too, and so regional or campaign-specific trial offers all
+// share one marker: adding an offer in Play Console never needs a deploy.
 //
 // TAG THE OFFER, NEVER THE BASE PLAN. `offerTags` includes tags INHERITED from
-// the base plan, so a base-plan tag would mark every Android subscriber
-// `trialing` forever — and nothing would ever clear it. Play is the only
-// provider where that's possible: Paddle's own status flips trialing→active,
-// and Apple mints a FRESH transaction for the first paid period (dropping
-// offerDiscountType with it), but Play carries ONE line item across the
-// trial→paid boundary. So the launch checklist item is to watch a license
-// tester — whose trial and renewal periods are compressed to minutes — cross
-// that boundary and confirm the tag is gone (docs/iap.md, the trial).
+// the base plan, so a base-plan tag would sit on the base plan's own entry as
+// well and the lookup could no longer tell the trial offer from it — back to
+// list order.
 //
-// Read by BOTH edges, like STORE_PRODUCT_IDS: bracemark-api's `lib/playstore.ts`
-// folds a tagged line item to `trialing`, and bracemark-expo's `lib/iap.ts`
-// buys the tagged offer when Play lists it (Play lists only the offers the
-// buyer is eligible for, so a returning subscriber falls back to the base plan).
+// NOT how the server recognizes a trial, though it used to be, and the reason
+// is worth keeping: the tag marks the offer a purchase was MADE under, not the
+// phase it is in. Play carries ONE line item across the trial→paid boundary
+// and leaves `offerDetails` on it for good, so a subscriber who has been
+// charged still reads `offerTags: ['free-trial']`. bracemark-api's
+// `lib/playstore.ts` keys on the line's `offerPhase` instead (docs/iap.md, the
+// trial).
 export const PLAY_FREE_TRIAL_OFFER_TAG = 'free-trial';

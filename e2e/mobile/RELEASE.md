@@ -156,7 +156,8 @@ build Play bills):
    server-side acknowledge, not only the app's `finishTransaction`.
 4. Let the compressed test trial convert (minutes for a license tester): after
    **Refresh**, the box reads "Renews on <date>", with no **free trial** tag —
-   Play's trial tag must not outlive the trial (docs/iap.md, _the trial_).
+   the offer stays on Play's line item for good, so the label must follow the
+   line's phase and not the offer (docs/iap.md, _the trial_).
 5. **Manage subscription** opens Play's subscription screen for Bracemark.
    Cancel there and confirm the section's "it won't renew" wording after
    **Refresh**.

@@ -16,8 +16,8 @@ import {
 // also acknowledges mints one token, not two"); this file pins the edges no
 // route test can reach: the expiry window, the refusal to cache a lifetime
 // Google didn't state, recovery from a token that dies before that window is up,
-// and the offer-tag rules that decide `trialing` (which have no status of their
-// own to fold, so a route test could only observe them indirectly).
+// and the offer-phase rules that decide `trialing` (which have no status of
+// their own to fold, so a route test could only observe them indirectly).
 //
 // The JWT signing is real (the test pool provides a throwaway RSA key, see
 // vitest.config.ts) — only Google's endpoints are stubbed.
@@ -32,10 +32,16 @@ let ackCalls: string[] = [];
 const realFetch = globalThis.fetch;
 
 // The subscriptionsv2 answer the stub returns. A function, not a constant: the
-// offer-tag tests below rewrite it per case (and `expiryTime` should be
-// relative to the test, not to module load).
+// offer-phase tests below rewrite it per case (and `expiryTime` should be
+// relative to the test, not to module load). `phase` is the set member of
+// Google's `offerPhase` one-of, which arrives as an empty object.
 function subscriptionBody(
-  overrides: { state?: string; offerTags?: string[]; autoRenewEnabled?: boolean } = {},
+  overrides: {
+    state?: string;
+    phase?: 'freeTrial' | 'introductoryPrice' | 'basePrice';
+    offerTags?: string[];
+    autoRenewEnabled?: boolean;
+  } = {},
 ) {
   return {
     subscriptionState: overrides.state ?? 'SUBSCRIPTION_STATE_ACTIVE',
@@ -45,6 +51,7 @@ function subscriptionBody(
         productId: 'plus',
         expiryTime: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
         autoRenewingPlan: { autoRenewEnabled: overrides.autoRenewEnabled ?? true },
+        ...(overrides.phase ? { offerPhase: { [overrides.phase]: {} } } : undefined),
         ...(overrides.offerTags ? { offerDetails: { offerTags: overrides.offerTags } } : undefined),
       },
     ],
@@ -215,9 +222,9 @@ describe('playApiFetch (via fetchPlaystoreSubscription)', () => {
 });
 
 // The free-trial normalization. Play has no trial STATE — a trialing
-// subscription reads SUBSCRIPTION_STATE_ACTIVE — so the offer tag is the whole
-// signal, and these pin both directions of it: marking a trial, and (the
-// expensive mistake) NOT marking anything else.
+// subscription reads SUBSCRIPTION_STATE_ACTIVE — so the line's current offer
+// phase is the whole signal, and these pin both directions of it: marking a
+// trial, and (the expensive mistake) NOT marking anything else.
 describe('fetchPlaystoreSubscription — trialing', () => {
   beforeAll(stubGoogle);
   afterEach(() => {
@@ -232,8 +239,8 @@ describe('fetchPlaystoreSubscription — trialing', () => {
     vi.restoreAllMocks();
   });
 
-  it('marks an active line carrying the free-trial offer tag', async () => {
-    apiBody = subscriptionBody({ offerTags: [PLAY_FREE_TRIAL_OFFER_TAG] });
+  it('marks an active line in its free-trial phase', async () => {
+    apiBody = subscriptionBody({ phase: 'freeTrial', offerTags: [PLAY_FREE_TRIAL_OFFER_TAG] });
     const snapshot = await fetchPlaystoreSubscription(env, 'play-token-1');
     expect(snapshot?.status).toBe('trialing');
     // Entitlement-bearing fields are untouched — 'trialing' is a display
@@ -246,26 +253,30 @@ describe('fetchPlaystoreSubscription — trialing', () => {
     expect((await fetchPlaystoreSubscription(env, 'play-token-1'))?.status).toBe('active');
   });
 
-  it('ignores an offer that is not the free trial', async () => {
-    // A discounted introductory offer is still a PAID period — the user has
-    // been charged, so "renews on" is the honest sentence. This is the case
-    // `offerId`-based detection would get wrong.
-    apiBody = subscriptionBody({ offerTags: ['launch-discount'] });
+  it('stops marking once the trial converts, though the offer stays on the line', async () => {
+    // What a license tester's subscription read minutes after its first charge:
+    // the phase moved on, `offerDetails` did not. Play carries one line item
+    // across the trial→paid boundary and never drops the offer it was bought
+    // under, so detection keyed on the tag left a paying subscriber on "Free
+    // trial — your first payment is on …" for the life of the purchase.
+    apiBody = subscriptionBody({ phase: 'basePrice', offerTags: [PLAY_FREE_TRIAL_OFFER_TAG] });
     expect((await fetchPlaystoreSubscription(env, 'play-token-1'))?.status).toBe('active');
   });
 
-  it('finds the tag among several', async () => {
-    apiBody = subscriptionBody({ offerTags: ['launch-discount', PLAY_FREE_TRIAL_OFFER_TAG] });
-    expect((await fetchPlaystoreSubscription(env, 'play-token-1'))?.status).toBe('trialing');
+  it('ignores a phase that is not the free trial', async () => {
+    // A discounted introductory phase is still a PAID period — the user has
+    // been charged, so "renews on" is the honest sentence.
+    apiBody = subscriptionBody({ phase: 'introductoryPrice', offerTags: ['launch-discount'] });
+    expect((await fetchPlaystoreSubscription(env, 'play-token-1'))?.status).toBe('active');
   });
 
   it('does not mark a lapsed trial in dunning — that user is owed past_due', async () => {
-    // The offer tag is still on the line item while Google retries the FIRST
-    // charge, so an ungated check would tell someone whose payment just failed
-    // that they are on a free trial.
+    // Whatever phase Google reports while it retries the FIRST charge, an
+    // ungated check would tell someone whose payment just failed that they are
+    // on a free trial.
     apiBody = subscriptionBody({
       state: 'SUBSCRIPTION_STATE_IN_GRACE_PERIOD',
-      offerTags: [PLAY_FREE_TRIAL_OFFER_TAG],
+      phase: 'freeTrial',
     });
     expect((await fetchPlaystoreSubscription(env, 'play-token-1'))?.status).toBe('past_due');
   });
@@ -276,7 +287,7 @@ describe('fetchPlaystoreSubscription — trialing', () => {
     // the two together are what pick "you won't be charged" over "your first
     // payment is on …" in the subscription sections.
     apiBody = subscriptionBody({
-      offerTags: [PLAY_FREE_TRIAL_OFFER_TAG],
+      phase: 'freeTrial',
       autoRenewEnabled: false,
     });
     const snapshot = await fetchPlaystoreSubscription(env, 'play-token-1');
