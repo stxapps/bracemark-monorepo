@@ -129,7 +129,9 @@ Developer:
    it).
 4. **Replay after a failed verify.** With a second disposable account, stop the
    api (or cut the device's network) after confirming the sheet and before the
-   app hears back. The section shows an error and stays Free. Restore the api,
+   app hears back. The section says **Your purchase went through, but we could
+   not record it. Tap Restore purchases to try again.** and stays Free — never
+   "try again" alone, which would be a second purchase. Restore the api,
    force-quit and relaunch, open Subscription and press **Refresh**: Plus, with
    no second purchase — the unfinished transaction replayed through verify.
 5. **Manage subscription** opens the App Store's subscription settings for
@@ -159,8 +161,35 @@ build Play bills):
    the offer stays on Play's line item for good, so the label must follow the
    line's phase and not the offer (docs/iap.md, _the trial_).
 5. **Manage subscription** opens Play's subscription screen for Bracemark.
-   Cancel there and confirm the section's "it won't renew" wording after
-   **Refresh**.
+   Cancel there: after **Refresh** the box reads "Ends on <date> — it won't
+   renew." Press **Resubscribe** on the same Play screen before the period
+   ends: after **Refresh** it reads "Renews on <date>" again, on the same
+   `purchases` row.
+
+The rest need a second purchase, so let the first lapse (a test subscription
+renews every 30 minutes, six times at most; cancelling it ends it at the next
+boundary). **A tester who has taken the trial is offered none again.** Play
+Billing Lab → Subscription settings → _Test free trial or introductory offer_
+makes the same account eligible once more; the setting lapses after two hours,
+so tick it right before the purchase that needs it.
+
+6. **A returning buyer gets no trial.** With that setting OFF, upgrade again:
+   Play's sheet offers no trial and the box reads "Renews on <date>" at once,
+   never **free trial**.
+7. **Cancel inside the trial.** With the setting ON, upgrade, then cancel from
+   Play's screen within the compressed trial (3 minutes). After **Refresh** the
+   box reads "Free trial ends on <date> — you won't be charged." Once the trial
+   has lapsed, **Refresh** reads Free. Play reports this cancel as a state of
+   its own and leaves the line in its trial phase even after it expires, so
+   both readings are the check (docs/iap.md, _the trial_).
+8. **A declined payment.** Upgrade and choose "always declines" in the sheet.
+   Under the card: **The Play Store could not complete this purchase. Check
+   your payment method there and try again.** No library text ("Billing API
+   version is not supported…"), and no `purchases` row.
+9. **A chargeback.** Upgrade with "approves then charges back". Minutes after
+   the first charge Play ends the purchase early: the row is `canceled` with
+   `expires_at` pulled BACK from the period the charge bought, and **Refresh**
+   reads Free.
 
 ### Restore purchases
 

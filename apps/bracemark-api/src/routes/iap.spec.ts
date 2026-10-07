@@ -921,6 +921,100 @@ describe('iap', () => {
       expect(status.willRenew).toBe(false);
     });
 
+    // Verify a Play purchase onto a fresh account, then deliver RTDNs for it.
+    // The pushed type is advisory — the route re-reads Google — so each test
+    // scripts the lookup that follows and passes the type only for the reader.
+    async function bindPlayPurchase(userId: string, token: string) {
+      const { auth } = await authFor(userId);
+      mockPlaySubscription({});
+      mockPlayAcknowledge();
+      const res = await app.request(
+        iapVerifyEndpoint.path,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', ...auth },
+          body: JSON.stringify({ source: 'playstore', productId: STORE_PRODUCT_IDS.plus, token }),
+        },
+        env,
+      );
+      expect(res.status).toBe(200);
+      return auth;
+    }
+
+    async function pushPlayNotification(purchaseToken: string, notificationType: number) {
+      const res = await app.request(
+        `${PLAYSTORE_NOTIFY_PATH}?token=${env.PLAY_NOTIFY_TOKEN}`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            message: {
+              data: btoa(
+                JSON.stringify({
+                  version: '1.0',
+                  packageName: 'com.bracemark.app',
+                  subscriptionNotification: {
+                    notificationType,
+                    purchaseToken,
+                    subscriptionId: STORE_PRODUCT_IDS.plus,
+                  },
+                }),
+              ),
+            },
+          }),
+        },
+        env,
+      );
+      expect(res.status).toBe(200);
+    }
+
+    it('playstore: a chargeback claws back entitlement at the pulled-back expiry', async () => {
+      // The appstore refund case's sibling, with Play's shape: there is no
+      // revocation date, Play just moves `expiryTime` BACK to the moment it ends
+      // the purchase — seen on a license tester's "approves then charges back"
+      // instrument, 23 minutes short of the period the charge had bought. The
+      // row must follow it backwards; an upsert that only ever extended the
+      // period would leave a charged-back account on Plus to the original end.
+      const auth = await bindPlayPurchase('iap-notify-ps-chargeback', 'play-token-chargeback');
+      expect((await getStatus(auth)).plan).toBe('plus');
+
+      mockPlaySubscription({
+        state: 'SUBSCRIPTION_STATE_EXPIRED',
+        expiryTime: Date.now() - 1000,
+        autoRenewEnabled: false,
+        acknowledgementState: 'ACKNOWLEDGEMENT_STATE_ACKNOWLEDGED',
+      });
+      await pushPlayNotification('play-token-chargeback', 12); // SUBSCRIPTION_REVOKED
+
+      expect((await getStatus(auth)).plan).toBe('free');
+    });
+
+    it('playstore: resubscribing from Play un-cancels the same row', async () => {
+      // Cancel, then "Resubscribe" on Play's own subscription screen before the
+      // period ends: Play keeps the SAME token (no linkedPurchaseToken, so
+      // nothing is superseded) and simply reports it active again. The stamped
+      // end has to come off the row with it — a canceled_at that survived the
+      // upsert would leave a renewing subscriber reading "it won't renew".
+      const auth = await bindPlayPurchase('iap-notify-ps-restart', 'play-token-restart');
+
+      mockPlaySubscription({
+        state: 'SUBSCRIPTION_STATE_CANCELED',
+        autoRenewEnabled: false,
+        acknowledgementState: 'ACKNOWLEDGEMENT_STATE_ACKNOWLEDGED',
+      });
+      await pushPlayNotification('play-token-restart', 3); // SUBSCRIPTION_CANCELED
+      // The positive control: the cancel did land, so the next read is a change.
+      expect((await getStatus(auth)).willRenew).toBe(false);
+
+      mockPlaySubscription({ acknowledgementState: 'ACKNOWLEDGEMENT_STATE_ACKNOWLEDGED' });
+      await pushPlayNotification('play-token-restart', 7); // SUBSCRIPTION_RESTARTED
+
+      const status = await getStatus(auth);
+      expect(status.plan).toBe('plus');
+      expect(status.status).toBe('active');
+      expect(status.willRenew).toBe(true);
+    });
+
     it('playstore: retires a replaced token even when the REPLACEMENT is unbound', async () => {
       // The upgrade RTDN can beat the app's `iap/verify`, so the new token has
       // no account yet and the notification drops out at the binding check.

@@ -333,6 +333,171 @@ describe('fetchPlaystoreSubscription — trialing', () => {
     };
     expect((await fetchPlaystoreSubscription(env, 'play-token-1'))?.status).toBe('active');
   });
+
+  // Whole responses, as Play sent them for a license tester's purchases — the
+  // cases above build only the fields each rule reads, and that is how this
+  // edge went wrong twice: detection keyed on a tag that never leaves the line,
+  // and a mid-trial cancel written as ACTIVE with `autoRenewEnabled: false`
+  // when Play sends its own state and DROPS the flag. Order ids, the etag, the
+  // region and the price are placeholders; every key, state and time is as
+  // received, which is the point — a field Play adds or omits next to the ones
+  // we read has to get through the parse.
+  describe('responses Play actually sent', () => {
+    const playResponse = (fields: {
+      state: string;
+      startTime: string;
+      expiryTime: string;
+      phase: 'freeTrial' | 'basePrice';
+      // Absent on a purchase of the bare base plan — Play then sends
+      // `offerDetails` with the base plan id alone.
+      offer?: boolean;
+      renewing?: boolean;
+      cancelTime?: string;
+      order: string;
+    }) => ({
+      kind: 'androidpublisher#subscriptionPurchaseV2',
+      etag: '00000000000000000000000000000000',
+      startTime: fields.startTime,
+      regionCode: 'US',
+      subscriptionState: fields.state,
+      acknowledgementState: 'ACKNOWLEDGEMENT_STATE_ACKNOWLEDGED',
+      ...(fields.cancelTime
+        ? { canceledStateContext: { userInitiatedCancellation: { cancelTime: fields.cancelTime } } }
+        : undefined),
+      testPurchase: {},
+      lineItems: [
+        {
+          productId: 'bracemark.plus.yearly',
+          expiryTime: fields.expiryTime,
+          latestSuccessfulOrderId: fields.order,
+          autoRenewingPlan: {
+            ...(fields.renewing ? { autoRenewEnabled: true } : undefined),
+            recurringPrice: { currencyCode: 'USD', units: '48' },
+          },
+          offerDetails: {
+            basePlanId: 'yearly',
+            ...(fields.offer === false
+              ? undefined
+              : { offerId: 'free-trial', offerTags: [PLAY_FREE_TRIAL_OFFER_TAG] }),
+          },
+          offerPhase: { [fields.phase]: {} },
+        },
+      ],
+    });
+
+    const ORDER = 'GPA.0000-0000-0000-00000';
+    const CASES = [
+      {
+        name: 'a trial that is running',
+        body: playResponse({
+          state: 'SUBSCRIPTION_STATE_ACTIVE',
+          startTime: '2026-10-07T11:36:09.658Z',
+          expiryTime: '2026-10-07T11:39:09.415Z',
+          phase: 'freeTrial',
+          renewing: true,
+          order: ORDER,
+        }),
+        status: 'trialing',
+        renews: true,
+      },
+      {
+        name: 'the same purchase after its first charge — the offer still on the line',
+        body: playResponse({
+          state: 'SUBSCRIPTION_STATE_ACTIVE',
+          startTime: '2026-10-07T09:15:00.153Z',
+          expiryTime: '2026-10-07T09:47:59.886Z',
+          phase: 'basePrice',
+          renewing: true,
+          order: `${ORDER}..0`,
+        }),
+        status: 'active',
+        renews: true,
+      },
+      {
+        name: 'a paid subscription the user cancelled',
+        body: playResponse({
+          state: 'SUBSCRIPTION_STATE_CANCELED',
+          startTime: '2026-10-07T09:15:00.153Z',
+          expiryTime: '2026-10-07T10:17:59.886Z',
+          phase: 'basePrice',
+          cancelTime: '2026-10-07T09:57:24.126Z',
+          order: `${ORDER}..1`,
+        }),
+        status: 'canceled',
+        renews: false,
+      },
+      {
+        name: 'a trial the user cancelled before it ended',
+        body: playResponse({
+          state: 'SUBSCRIPTION_STATE_CANCELED',
+          startTime: '2026-10-07T10:51:46.969Z',
+          expiryTime: '2026-10-07T10:54:46.654Z',
+          phase: 'freeTrial',
+          cancelTime: '2026-10-07T10:52:14.589Z',
+          order: ORDER,
+        }),
+        status: 'trialing',
+        renews: false,
+      },
+      {
+        name: 'that trial once it lapsed — the phase unchanged',
+        body: playResponse({
+          state: 'SUBSCRIPTION_STATE_EXPIRED',
+          startTime: '2026-10-07T10:51:46.969Z',
+          expiryTime: '2026-10-07T10:54:46.654Z',
+          phase: 'freeTrial',
+          cancelTime: '2026-10-07T10:52:14.589Z',
+          order: ORDER,
+        }),
+        status: 'canceled',
+        renews: false,
+      },
+      {
+        // The "approves then charges back" instrument. Play ends the purchase
+        // by pulling `expiryTime` back to the moment it acts — here 23 minutes
+        // short of the period the charge had bought — and files it under
+        // `userInitiatedCancellation`, so nothing but the time says clawback.
+        name: 'a charge that was charged back',
+        body: playResponse({
+          state: 'SUBSCRIPTION_STATE_EXPIRED',
+          startTime: '2026-10-07T11:23:44.967Z',
+          expiryTime: '2026-10-07T11:33:51.357Z',
+          phase: 'basePrice',
+          cancelTime: '2026-10-07T11:33:51.357Z',
+          order: `${ORDER}..0`,
+        }),
+        status: 'canceled',
+        renews: false,
+      },
+      {
+        name: 'a lapsed purchase of the bare base plan (a returning buyer, no trial)',
+        body: playResponse({
+          state: 'SUBSCRIPTION_STATE_EXPIRED',
+          startTime: '2026-10-07T10:19:09.316Z',
+          expiryTime: '2026-10-07T10:49:09.008Z',
+          phase: 'basePrice',
+          offer: false,
+          cancelTime: '2026-10-07T10:21:06.802Z',
+          order: ORDER,
+        }),
+        status: 'canceled',
+        renews: false,
+      },
+    ] as const;
+
+    it.each(CASES)('normalizes $name', async ({ body, status, renews }) => {
+      apiBody = body;
+      const snapshot = await fetchPlaystoreSubscription(env, 'play-token-1');
+
+      expect(snapshot?.status).toBe(status);
+      expect(snapshot?.productId).toBe('bracemark.plus.yearly');
+      expect(snapshot?.expiresAt).toBe(Date.parse(body.lineItems[0].expiryTime));
+      // The end is stamped exactly when Play will not collect again.
+      expect(snapshot?.canceledAt).toBe(renews ? null : snapshot?.expiresAt);
+      expect(snapshot?.needsAcknowledge).toBe(false);
+      expect(snapshot?.linkedExternalId).toBeNull();
+    });
+  });
 });
 
 // The acknowledge's 4xx handling. Every 4xx returns false either way — the
