@@ -22,6 +22,14 @@ One RN share screen, written once, hosted by two very different native shells:
   (`bracemarkShare`) as a bottom sheet over the caller. The intent payload is
   handed to the root as launch options in `onCreate`, so it can't get lost the
   way expo-share-intent's route-into-the-sleeping-main-activity flow lost it.
+  The activity declares its own `android:configChanges` — `MainActivity`'s list
+  plus `smallestScreenSize` — because it is not portrait-locked and floats over
+  a caller that rotates, splits and unfolds when it likes: undeclared, each of
+  those destroys the activity and remounts the root from the intent, and a
+  half-filled sheet comes back empty. `fontScale` is not in either list.
+  `SHARE-ANDROID-001` holds this with an appearance change under a half-filled
+  sheet; rotation is a hand check — [e2e.md](./e2e.md), _across a real share
+  boundary_.
 
 **Both shells are labelled "Bracemark"**, and only one of them for free.
 Android's `ShareActivity` declares no `android:label`, so it inherits the app's;

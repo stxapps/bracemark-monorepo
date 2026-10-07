@@ -18,8 +18,9 @@ import Foundation
 // Module maps them, so what JS sees is unchanged.
 //
 // CryptoKit GCM is one-shot (no streaming API): the whole file transits NATIVE
-// memory — never the JS heap, which is the requirement. Android streams instead;
-// see the Kotlin twin.
+// memory — never the JS heap, which is the requirement. Android is written
+// against streams and ends up in the same place on a device; see the Kotlin
+// twin's encryptFile.
 enum BlobFrameError: Error, Equatable {
   case invalidKey
   case unknownFormat(UInt8)

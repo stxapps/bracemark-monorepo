@@ -25,6 +25,7 @@ import { startFaultApi } from './api-fault';
 import { type ApiControl, controlApi } from './api-pause';
 import { parseNativeCli } from './cli';
 import { countAppRows, readAppCacheFile, stageDocumentPickerFile } from './device-files';
+import { cycleAppearance } from './device-look';
 import {
   type Box,
   boxById,
@@ -826,6 +827,15 @@ async function main(): Promise<void> {
             await openShare();
             return null;
           },
+          'mobile/flows/parts/share-pick.yaml',
+          // A configuration change under the half-filled sheet. ShareActivity
+          // must ride it out rather than be recreated, which would remount the
+          // share root from the intent and hand share-save.yaml the default
+          // list and no tags (docs/share-sheet.md, _the shape_).
+          async () => {
+            await cycleAppearance(run.platform, run.deviceId);
+            return null;
+          },
           'mobile/flows/parts/share-save.yaml',
           async () => {
             const pidAfter = await mainAppPid(run.platform, run.deviceId);
@@ -844,6 +854,7 @@ async function main(): Promise<void> {
             await openShare();
             return null;
           },
+          'mobile/flows/parts/share-pick.yaml',
           'mobile/flows/parts/share-save.yaml',
           'mobile/flows/parts/share-foreground-result.yaml',
         ];

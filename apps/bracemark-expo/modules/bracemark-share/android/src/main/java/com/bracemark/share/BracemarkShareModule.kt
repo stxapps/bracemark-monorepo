@@ -11,9 +11,12 @@ class BracemarkShareModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("BracemarkShare")
 
+    // A synchronous Function runs on the JS thread, and an Activity is the UI
+    // thread's to finish — hence the hop, rather than an AsyncFunction on the
+    // main queue, which would hand share-host.ts a promise nothing awaits.
     Function("close") {
       val activity = appContext.currentActivity
-      if (activity is ShareActivity) activity.finish()
+      if (activity is ShareActivity) activity.runOnUiThread { activity.finish() }
     }
   }
 }

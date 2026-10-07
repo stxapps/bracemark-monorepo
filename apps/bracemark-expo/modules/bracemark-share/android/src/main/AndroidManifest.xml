@@ -10,7 +10,19 @@
      share-kit.tsx's ShareSheet), and a translucent window never resized for the
      keyboard anyway. It stays because it suppresses the default adjustPan —
      without it the system would pan the whole translucent window (backdrop and
-     all) upward. The sheet moves itself in JS (share-keyboard.ts). -->
+     all) upward. The sheet moves itself in JS (share-keyboard.ts).
+
+     configChanges is what keeps a half-filled sheet alive. Without it every
+     change listed is answered by DESTROYING the activity and creating a new
+     one, which remounts the RN root from the intent — the picked list, the
+     tags and the typed text gone. MainActivity gets its list from the Expo
+     template and is portrait-locked besides; this activity is hand-written
+     and unlocked, floating over a caller that rotates when it likes.
+     smallestScreenSize is the one value MainActivity does not carry: it
+     changes when a split-screen divider is dragged or a foldable opens under
+     the caller. fontScale is not declared, as it is not there — a text-size
+     change still recreates either activity. e2e's SHARE-ANDROID-001 holds
+     uiMode; the rest of the list is a hand check (docs/e2e.md). -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
   <application>
     <activity
@@ -19,6 +31,7 @@
       android:theme="@style/BracemarkShareTheme"
       android:excludeFromRecents="true"
       android:taskAffinity=""
+      android:configChanges="keyboard|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout|uiMode"
       android:windowSoftInputMode="adjustResize">
       <intent-filter>
         <action android:name="android.intent.action.SEND" />

@@ -1,9 +1,9 @@
 {
-  "platforms": ["android", "ios"],
+  "platforms": ["android", "apple"],
   "android": {
     "modules": ["com.bracemark.share.BracemarkShareModule"]
   },
-  "ios": {
+  "apple": {
     "modules": ["BracemarkShareKeyboardModule", "BracemarkShareSwipeGuardModule"]
   }
 }

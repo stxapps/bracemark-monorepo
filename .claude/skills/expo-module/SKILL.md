@@ -17,10 +17,13 @@ license: MIT
 ## In this repo — read before anything below
 
 - **There is already one local module, and it is the shape to copy.**
-  `apps/bracemark-expo/modules/bracemark-share` — Android only
-  (`"platforms": ["android"]`), exposing `com.bracemark.share.BracemarkShareModule`
-  alongside a `ShareActivity.kt`, with a hand-written `expo-module.config.json`,
-  `package.json` and `android/build.gradle`. Read it before writing another
+  `apps/bracemark-expo/modules/bracemark-share` — both platforms
+  (`"platforms": ["android", "apple"]`), with a different job on each: Android
+  exposes `com.bracemark.share.BracemarkShareModule` alongside a
+  `ShareActivity.kt`; iOS exposes `BracemarkShareKeyboardModule` and
+  `BracemarkShareSwipeGuardModule` to the share extension's process. All of it
+  hand-written — `expo-module.config.json`, `package.json`,
+  `android/build.gradle`, `ios/BracemarkShare.podspec`. Read it before writing another
   one; `docs/share-sheet.md` is canonical for why it exists and what it must do.
   `modules/bracemark-input` beside it is the smallest complete specimen — one
   Kotlin module, one main-queue function, an optional lookup on the JS side

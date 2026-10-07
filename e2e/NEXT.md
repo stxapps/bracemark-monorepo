@@ -387,8 +387,9 @@ and calling it E2E.
 ## Phase 6 — native share surfaces
 
 - [x] `SHARE-ANDROID-001` Launch a real `ACTION_SEND` HTTP URL with a multi-word
-      title, choose a list/tags, save, close, and observe the link in the already-
-      running main app without relaunch.
+      title, choose a list/tags, change the system appearance and back under the
+      half-filled sheet, save, close, and observe the link in the already-running
+      main app without relaunch.
 - [x] `SHARE-ANDROID-002` Start from a killed main app, share and save, then launch
       the app and prove the pending write drains and syncs.
 - [x] `SHARE-IOS-001` From Safari's system share sheet, enter the iOS share

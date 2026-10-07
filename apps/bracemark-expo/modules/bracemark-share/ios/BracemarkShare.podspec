@@ -17,9 +17,9 @@ package = JSON.parse(File.read(File.join(__dir__, '..', 'package.json')))
 # purpose: the repo's licence is stated in exactly three places (root LICENSE,
 # root package.json, packages/shared brand.ts) and a fourth copy here would be a
 # fourth thing to keep in step — see
-# docs/brand-assets.md, _the source_. (The sibling pod,
-# packages/expo-crypto/ios/BracemarkCrypto.podspec, does carry an `UNLICENSED`
-# type; it predates that rule and is not a precedent to copy.)
+# docs/brand-assets.md, _the source_. The sibling pod,
+# packages/expo-crypto/ios/BracemarkCrypto.podspec, leaves it off for the same
+# reason.
 Pod::Spec.new do |s|
   s.name           = 'BracemarkShare'
   s.version        = package['version']

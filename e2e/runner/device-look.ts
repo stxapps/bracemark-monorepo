@@ -69,6 +69,26 @@ export async function setAppearance(
   }
 }
 
+// Across the appearance boundary and back, leaving the device as it was found.
+// Both values are written because the starting one is not known to be either —
+// Android's can be `auto` — and writing the one already in effect changes
+// nothing: dark then light is at least one real change from any start.
+//
+// For a case that needs a configuration change to HAPPEN under a surface and
+// has no interest in the look itself. On Android this is the one such change
+// that needs nothing underneath to cooperate (a rotation needs a rotatable app
+// below a translucent activity, and the launcher is not one), and an activity
+// that does not declare `uiMode` is destroyed and recreated by it.
+export async function cycleAppearance(platform: NativePlatform, deviceId: string): Promise<void> {
+  const found = await readRaw(platform, deviceId);
+  try {
+    await setAppearance(platform, deviceId, 'dark');
+    await setAppearance(platform, deviceId, 'light');
+  } finally {
+    await restoreDeviceLook(platform, deviceId, found);
+  }
+}
+
 // ⚠ NOT live on Android: `fontScale` is not in MainActivity's configChanges, so a
 // change recreates the activity under whatever the flow was doing. Set it
 // before a case's cold launch, never in the middle of one. And on Android every

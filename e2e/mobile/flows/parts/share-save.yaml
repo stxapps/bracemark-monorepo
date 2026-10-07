@@ -1,32 +1,19 @@
-# Enter the system share surface, choose existing taxonomy, and save. The
-# extension/activity-only marker is the proof that the system handoff crossed
-# into Bracemark; the title assertion catches Android shell word-splitting and
-# iOS preprocessing drift.
+# Save the sheet share-pick.yaml filled in, and wait for it to dismiss itself.
+#
+# The two row assertions are not a repeat of that part's: they are the oracle
+# for whatever the runner did in between. On Android a configuration change the
+# ShareActivity does not declare (bracemark-share's AndroidManifest,
+# `configChanges`) destroys the activity and remounts the share root from the
+# intent — the sheet is still there, still titled, and back on the default list
+# with no tags. Save would then succeed, into the wrong list, and the failure
+# would surface a part later as a link that never appears under ${LIST_NAME},
+# which names nothing. On iOS nothing happens between the parts and these
+# simply pass.
 appId: com.bracemark.app
 ---
-- runFlow:
-    file: ../subflows/open-system-share.yaml
-    env:
-      SHARE_STATE_ID: share-add
-
-- assertVisible:
-    id: 'share-title'
-    text: ${SHARE_TITLE}
-- assertVisible:
-    id: 'share-url'
-    text: ${LINK_TEXT}
-
-- tapOn:
-    id: 'share-list-row'
-- tapOn: ${LIST_NAME}
 - assertVisible:
     id: 'share-list-row'
     text: 'List: ${LIST_NAME}'
-
-- tapOn:
-    id: 'share-tags-row'
-- tapOn: ${TAG_NAME}
-- tapOn: 'Done'
 - assertVisible:
     id: 'share-tags-row'
     text: 'Tags: ${TAG_NAME}'

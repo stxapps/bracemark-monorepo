@@ -197,8 +197,8 @@ test('the module is registered for iOS and the plugin is in the app config', () 
   const className = only(module, /class (\w+): Module/, 'module class')[1];
   const registered = JSON.parse(
     fs.readFileSync(path.join(MODULE_ROOT, 'expo-module.config.json'), 'utf8'),
-  ) as { ios: { modules: string[] } };
-  expect(registered.ios.modules).toContain(className);
+  ) as { apple: { modules: string[] } };
+  expect(registered.apple.modules).toContain(className);
 
   const { default: appConfig } = jest.requireActual<{ default: { plugins: unknown[] } }>(
     '../../../app.config',

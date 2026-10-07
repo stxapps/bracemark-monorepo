@@ -1,6 +1,7 @@
 package com.bracemark.filecrypto
 
 import java.io.File
+import java.io.IOException
 import org.json.JSONObject
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -164,6 +165,20 @@ class BlobFrameTest {
 
     assertFalse("plaintext left at the output path", output.exists())
     assertFalse("temp file left behind", File(tmp.root, "out.txt.tmp").exists())
+  }
+
+  // A failure to WRITE is not a failure to decrypt. The two were one catch once,
+  // so a full disk reached JS as "tampered file or wrong key" — the message that
+  // sends a reader after a corruption bug. The output's parent here is a regular
+  // file, the cheapest write that cannot succeed.
+  @Test
+  fun `reports an unwritable output as an io error, not a decryption failure`() {
+    val input = fileOf("in.enc", hex(blob.getString("packedHex")))
+    val notADirectory = fileOf("plain-file", byteArrayOf(0))
+
+    assertThrows(IOException::class.java) {
+      BlobFrame.decryptFile(input, File(notADirectory, "out.txt"), key())
+    }
   }
 
   // expo-file-system hands out file:// URIs, expo-crypto's own callers hand out

@@ -857,7 +857,17 @@ InputMethod` reports while the window is visible. Every "reachable" claim is a
   immediately followed by a `share-*` testID that only the extension renders.
   On Android the helper quotes each `adb shell` word before passing a multi-word
   subject, and the already-running case records the app PID on both sides of the
-  share. The killed-app case removes only the API reverse while saving so the
+  share. That case also changes the system appearance and puts it back
+  (`cycleAppearance`, `runner/device-look.ts`) between choosing the list and tag
+  and pressing Save — which is why the sheet is driven by two parts,
+  `share-pick.yaml` and `share-save.yaml`, where one would read better. A
+  configuration change `ShareActivity` does not declare recreates it and the
+  sheet comes back on the default list; the second part opens by asserting the
+  two rows again. Appearance and not rotation, because the sheet is opened over
+  the launcher, which does not rotate on a phone — a rotation step there would
+  pass without the display ever turning. So `orientation` and `screenSize` in
+  that list are held by a hand check only ([share-sheet.md](./share-sheet.md),
+  _the shape_). The killed-app case removes only the API reverse while saving so the
   next launch has a real pending op to drain; cleanup restores it even after a
   failure. Cross-client proof signs a separate persistent web profile into the
   account and requires exactly one row after an explicit native sync.

@@ -1,6 +1,7 @@
 package com.bracemark.filecrypto
 
 import java.io.File
+import java.io.IOException
 import java.net.URI
 import java.security.SecureRandom
 import javax.crypto.Cipher
@@ -58,8 +59,14 @@ internal object BlobFrame {
     return SecretKeySpec(bytes, "AES")
   }
 
-  // Streams through Cipher{Input,Output}Stream in 64 KiB chunks — constant
-  // memory, and the file bytes never enter the JS heap.
+  // Written as a 64 KiB stream copy through Cipher{Input,Output}Stream, and the
+  // file bytes never enter the JS heap — but it is NOT constant-memory on a
+  // device, in either direction. Android's AES/GCM provider (Conscrypt) is an
+  // AEAD that buffers every `update()` and does all its work in `doFinal()`,
+  // so the whole file sits in the Java heap until the stream closes, exactly as
+  // it sits in native memory on iOS. The JVM this file's tests run on streams
+  // the encrypt side for real, so BlobFrameTest cannot show the difference.
+  // What bounds the cost is the size of what gets here, not this loop.
   fun encryptFile(inFile: File, outFile: File, key: SecretKeySpec) {
     val iv = ByteArray(IV_BYTES).also { SecureRandom().nextBytes(it) }
     val cipher = Cipher.getInstance("AES/GCM/NoPadding")
@@ -97,14 +104,24 @@ internal object BlobFrame {
       cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(TAG_BITS, iv))
 
       writeViaTemp(outFile) { tmp ->
-        try {
-          tmp.outputStream().use { out ->
-            // CipherInputStream surfaces a failed GCM tag as an IOException
-            // (cause: AEADBadTagException) from the final read.
-            CipherInputStream(framed, cipher).use { it.copyTo(out, COPY_BUFFER_BYTES) }
+        tmp.outputStream().use { out ->
+          CipherInputStream(framed, cipher).use { opened ->
+            val buffer = ByteArray(COPY_BUFFER_BYTES)
+            while (true) {
+              // Only the READ is the cipher's. CipherInputStream surfaces a
+              // failed GCM tag as an IOException (cause: AEADBadTagException)
+              // from the final one; a failure to open or write the output — a
+              // full disk, a missing directory — is not a decryption failure
+              // and goes out as itself rather than as "tampered or wrong key".
+              val n = try {
+                opened.read(buffer)
+              } catch (err: IOException) {
+                throw BlobFrameError.DecryptionFailed(err)
+              }
+              if (n == -1) break
+              out.write(buffer, 0, n)
+            }
           }
-        } catch (err: Exception) {
-          throw BlobFrameError.DecryptionFailed(err)
         }
       }
     }

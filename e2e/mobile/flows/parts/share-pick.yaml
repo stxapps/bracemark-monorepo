@@ -1,0 +1,37 @@
+# Enter the system share surface and choose existing taxonomy — everything up
+# to, and not including, Save. The extension/activity-only marker is the proof
+# that the system handoff crossed into Bracemark; the title assertion catches
+# Android shell word-splitting and iOS preprocessing drift.
+#
+# It stops short of Save so the runner can act on a HALF-FILLED sheet between
+# this part and share-save.yaml: SHARE-ANDROID-001 changes the system appearance
+# there and back, which is the cheapest configuration change there is, and
+# share-save.yaml opens by asserting these two rows again.
+appId: com.bracemark.app
+---
+- runFlow:
+    file: ../subflows/open-system-share.yaml
+    env:
+      SHARE_STATE_ID: share-add
+
+- assertVisible:
+    id: 'share-title'
+    text: ${SHARE_TITLE}
+- assertVisible:
+    id: 'share-url'
+    text: ${LINK_TEXT}
+
+- tapOn:
+    id: 'share-list-row'
+- tapOn: ${LIST_NAME}
+- assertVisible:
+    id: 'share-list-row'
+    text: 'List: ${LIST_NAME}'
+
+- tapOn:
+    id: 'share-tags-row'
+- tapOn: ${TAG_NAME}
+- tapOn: 'Done'
+- assertVisible:
+    id: 'share-tags-row'
+    text: 'Tags: ${TAG_NAME}'

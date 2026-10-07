@@ -10,8 +10,8 @@ import expo.modules.kotlin.modules.ModuleDefinition
 // boundary and nothing else: argument marshalling, the background dispatcher,
 // and the error mapping below.
 //
-// Unlike iOS (CryptoKit is one-shot), this side genuinely STREAMS — see
-// BlobFrame.encryptFile.
+// Written against streams, but no more constant-memory than iOS's one-shot
+// CryptoKit on a device — see BlobFrame.encryptFile.
 
 internal class InvalidKeyException :
   CodedException("key must be $KEY_BYTES bytes of hex")
