@@ -240,6 +240,35 @@ chromium` (~550 MB into `~/Library/Caches/ms-playwright/`) if it is absent.
   process while cleaning up after yourself. Pass the port to `-iTCP:` and let
   lsof do the matching.
 
+  **The third option, when the other stack has to stay up** — an A/B of two
+  builds side by side — is this clone's web leg alone, beside it:
+
+  ```sh
+  npx nx dev @stxapps/bracemark-web -- --port 3001
+  ```
+
+  nx appends the flag, so the task runs `next dev --port 3000 --port 3001` and
+  the last one wins. It works because bracemark-api's `development`
+  `CORS_ORIGINS` already lists `localhost:3001` (the marketing site's port), so
+  this app calls the OTHER clone's api on :8787 unchanged — and a second origin
+  means its own IndexedDB and session, which is what lets the two sit in adjacent
+  tabs. The limits are all silent except the last:
+  - **Client-only changes** (`apps/bracemark-web`, `packages/web-*`). The api is
+    still the other clone's code and its `.wrangler/` state, so both clones must
+    agree on everything the api serves — compare
+    `git -C ../<other clone> rev-parse HEAD` — and a change under
+    `apps/bracemark-api` needs this clone's own stack.
+  - **No server extraction.** bracemark-extractor's `development` `CORS_ORIGINS`
+    is `localhost:3000` only, so every call to :8788 from this origin is refused
+    by the browser and reads as extraction being broken.
+  - **:3001 is taken**, so no `npm run dev:site` and no `npm run e2e:pwa`
+    meanwhile — and sign-out, which leaves for `NEXT_PUBLIC_SITE_URL`, lands back
+    on this app instead of a site.
+  - **Not for `npm run e2e:web`.** `E2E_WEB_URL=http://localhost:3001` moves the
+    web origin, but the runner still resolves :8787 to its listener's cwd and
+    refuses an api from another checkout. That refusal is the design, not an
+    obstacle: drive this one by hand or with a headless script.
+
   **Devices are the same hazard with different economics.** The simulator and
   the emulator are machine-global, and `com.bracemark.app` is ONE app id, so the
   clone that last ran `expo:ios`/`expo:android` owns the installed binary.
