@@ -32,6 +32,7 @@ jest.mock('../../lib/iap', () => ({
   openStoreCheckout: jest.fn(),
   openStoreSubscriptionManagement: jest.fn(),
   restoreStorePurchases: jest.fn(),
+  storeFailureMessage: jest.fn(() => 'Could not restore your purchases. Please try again.'),
 }));
 
 jest.mock('../../components/legal-consent', () => ({
@@ -103,4 +104,23 @@ test('clears the restore notice when the status is refreshed', async () => {
 
   expect(getByText('Plus')).toBeTruthy();
   expect(queryByText(NO_PURCHASES)).toBeNull();
+});
+
+// The section used to print whatever was thrown. On this path that is the store
+// library's canned string or ApiError's status line — never a sentence written
+// for a customer (lib/iap.ts, storeFailureMessage, which owns the wording and
+// is mocked here: this pins only that the section ASKS it).
+test('shows the mapped sentence for a failed restore, never the thrown message', async () => {
+  restoreStorePurchasesMock.mockRejectedValue(new Error('Request failed with status 409'));
+  const { getByText, queryByText } = render(<SubscriptionSection />);
+  await act(async () => {
+    await Promise.resolve();
+  });
+
+  await act(async () => {
+    fireEvent.press(getByText('Restore purchases'));
+  });
+
+  expect(getByText('Could not restore your purchases. Please try again.')).toBeTruthy();
+  expect(queryByText('Request failed with status 409')).toBeNull();
 });

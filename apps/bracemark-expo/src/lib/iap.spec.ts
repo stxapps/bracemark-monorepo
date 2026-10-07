@@ -1,9 +1,12 @@
 import {
+  ApiError,
   AVAILABLE_PAID_PLANS,
   PLAY_FREE_TRIAL_OFFER_TAG,
   STORE_PRODUCT_IDS,
   type SubscriptionStatus,
 } from '@stxapps/shared';
+
+import { PurchaseNotRecordedError, storeFailureMessage } from './iap';
 
 const mockInitConnection = jest.fn<Promise<void>, []>();
 const mockFetchProducts = jest.fn();
@@ -17,7 +20,17 @@ let purchaseUpdated: ((purchase: Record<string, unknown>) => void) | undefined;
 let purchaseFailed: ((error: { code: string; message: string }) => void) | undefined;
 
 jest.mock('expo-iap', () => ({
-  ErrorCode: { UserCancelled: 'user-cancelled' },
+  ErrorCode: {
+    AlreadyOwned: 'already-owned',
+    BillingUnavailable: 'billing-unavailable',
+    ConnectionClosed: 'connection-closed',
+    DeferredPayment: 'deferred-payment',
+    NetworkError: 'network-error',
+    Pending: 'pending',
+    ServiceDisconnected: 'service-disconnected',
+    ServiceTimeout: 'service-timeout',
+    UserCancelled: 'user-cancelled',
+  },
   initConnection: () => mockInitConnection(),
   fetchProducts: (options: unknown) => mockFetchProducts(options),
   finishTransaction: (options: unknown) => mockFinishTransaction(options),
@@ -236,7 +249,9 @@ test('leaves a failed verification unfinished so the store can replay it', async
   purchaseUpdated?.(purchase('tx-2'));
   await failed;
 
-  expect(onFailed).toHaveBeenCalledWith('offline');
+  // Tagged as the one failure where the store may already have charged — the
+  // sentence it earns must not be "try again".
+  expect(onFailed).toHaveBeenCalledWith(expect.any(iap.PurchaseNotRecordedError));
   expect(onCompleted).not.toHaveBeenCalled();
   expect(mockFinishTransaction).not.toHaveBeenCalled();
 });
@@ -283,9 +298,11 @@ test('treats cancellation as a close and other store errors as failures', async 
     onFailed,
     onClosed,
   });
-  purchaseFailed?.({ code: 'store-unavailable', message: 'Store unavailable' });
+  const unavailable = { code: 'store-unavailable', message: 'Store unavailable' };
+  purchaseFailed?.(unavailable);
 
-  expect(onFailed).toHaveBeenCalledWith('Store unavailable');
+  // The error itself, for storeFailureMessage — not its message, for display.
+  expect(onFailed).toHaveBeenCalledWith(unavailable);
   expect(onClosed).toHaveBeenCalledTimes(1);
 });
 
@@ -379,7 +396,12 @@ test('restore surfaces an error only when none of our purchases can be restored'
   mockGetAvailablePurchases.mockResolvedValue([purchase('broken')]);
   mockApiCall.mockRejectedValue(new Error('purchase belongs to another account'));
 
-  await expect(iap.restoreStorePurchases()).rejects.toThrow('purchase belongs to another account');
+  // Wrapped, with the server's refusal kept as the reason — the message is for
+  // storeFailureMessage to choose, not for this to carry.
+  await expect(iap.restoreStorePurchases()).rejects.toMatchObject({
+    name: 'PurchaseNotRecordedError',
+    reason: expect.objectContaining({ message: 'purchase belongs to another account' }),
+  });
   expect(mockFinishTransaction).not.toHaveBeenCalled();
 });
 
@@ -401,5 +423,85 @@ test('opens the platform subscription manager for the selected plan', async () =
   expect(mockDeepLinkToSubscriptions).toHaveBeenCalledWith({
     skuAndroid: STORE_PRODUCT_IDS.plus,
     packageNameAndroid: 'com.bracemark.app',
+  });
+});
+
+// What the store library and ApiError attach to a failure was never written for
+// a customer. Found on a real device: Play's "always declines" test card arrived
+// as BillingUnavailable, and the section printed the library's canned string for
+// that code — "Billing API version is not supported for the type requested" —
+// under the upgrade card.
+describe('storeFailureMessage', () => {
+  const LIBRARY_STRING = 'Billing API version is not supported for the type requested';
+  const coded = (code: string) => ({ code, message: LIBRARY_STRING });
+  // The server's refusal, as the api client throws it. Read through the file's
+  // STATIC import of `./iap`, not `load()`: an isolated copy brings its own
+  // @stxapps/shared, so an ApiError built here would fail its `instanceof` and
+  // read as no verdict at all. These two exports hold no state, so nothing
+  // needs isolating — and `require`-ing the package to match registries is the
+  // dynamic import docs/testing.md's tripwire forbids.
+  const bound = new PurchaseNotRecordedError(new ApiError(409, '{"error":"purchase_bound"}'));
+
+  test('never returns the thrown message, whatever the action or the failure', () => {
+    const failures = [
+      coded('billing-unavailable'),
+      coded('already-owned'),
+      coded('network-error'),
+      coded('a-code-added-next-year'),
+      new Error(LIBRARY_STRING),
+      bound,
+      new PurchaseNotRecordedError(new Error(LIBRARY_STRING)),
+      LIBRARY_STRING,
+      null,
+    ];
+    for (const action of ['purchase', 'restore', 'manage'] as const) {
+      for (const failure of failures) {
+        const sentence = storeFailureMessage(action, failure);
+        expect(sentence).not.toContain(LIBRARY_STRING);
+        expect(sentence).not.toContain('Request failed');
+        // The fixed shape: a full sentence that ends on one.
+        expect(sentence).toMatch(/^[A-Z].*\.$/);
+      }
+    }
+  });
+
+  test('sends a declined payment to the payment method, not to a retry of nothing', () => {
+    expect(storeFailureMessage('purchase', coded('billing-unavailable'))).toMatch(
+      /Check your payment method/,
+    );
+  });
+
+  test('does not tell a charged customer to buy again when verify fails', () => {
+    const sentence = storeFailureMessage(
+      'purchase',
+      new PurchaseNotRecordedError(new Error('offline')),
+    );
+    // The transaction is unfinished and the store replays it; Restore re-drives
+    // the same verify. "Please try again" here would be a second purchase.
+    expect(sentence).toMatch(/Restore purchases/);
+    expect(sentence).not.toMatch(/Please try again/);
+  });
+
+  test('names the other account for a purchase bound elsewhere, on purchase and on restore', () => {
+    for (const action of ['purchase', 'restore'] as const) {
+      expect(storeFailureMessage(action, bound)).toMatch(/another Bracemark account/);
+    }
+  });
+
+  test('does not ask for a second purchase while one is waiting for approval', () => {
+    for (const code of ['deferred-payment', 'pending']) {
+      const sentence = storeFailureMessage('purchase', coded(code));
+      expect(sentence).toMatch(/waiting for approval/);
+      expect(sentence).not.toMatch(/try again/);
+    }
+  });
+
+  test('falls back to the action’s own verb for a code it has no sentence for', () => {
+    const unknown = coded('a-code-added-next-year');
+    const sentences = (['purchase', 'restore', 'manage'] as const).map((action) =>
+      storeFailureMessage(action, unknown),
+    );
+    expect(new Set(sentences).size).toBe(3);
+    for (const sentence of sentences) expect(sentence).toMatch(/^Could not .* Please try again\.$/);
   });
 });

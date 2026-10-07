@@ -236,6 +236,27 @@ describe('SubscriptionSection', () => {
     });
   });
 
+  // The one catch in this section that still printed `e.message` after the two
+  // above were split — the same status line, behind the other button.
+  it('says the portal could not open, never the request’s status line', async () => {
+    mockSubscription = PLUS;
+    mockApiCall.mockRejectedValueOnce(new Error('Request failed with status 502'));
+
+    render(<SubscriptionSection />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Manage billing' }));
+    });
+
+    expect(screen.getByRole('alert').textContent).toBe(
+      'Could not open the billing portal. Please try again.',
+    );
+    expect(screen.queryByText(/Request failed/)).toBeNull();
+    // Retryable in place — the busy flag is cleared and the button is back.
+    expect(screen.getByRole('button', { name: 'Manage billing' }).hasAttribute('disabled')).toBe(
+      false,
+    );
+  });
+
   // Paddle's emails link to this page as `?_ptxn=txn_…` (it is the default
   // payment link). Before this path existed the page opened nothing for a
   // subscriber: Paddle.js only loaded for a free account's price preview, so a

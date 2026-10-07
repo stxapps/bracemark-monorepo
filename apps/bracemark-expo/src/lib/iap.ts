@@ -14,6 +14,7 @@ import {
 } from 'expo-iap';
 
 import {
+  apiErrorCode,
   AVAILABLE_PAID_PLANS,
   type AvailablePaidPlan,
   iapVerifyEndpoint,
@@ -63,8 +64,86 @@ let connectPromise: Promise<void> | null = null;
 // (bound once at connection), so the per-open callbacks are held here; only one
 // store sheet can be open at a time.
 let onCompleted: ((status: SubscriptionStatus) => void) | null = null;
-let onFailed: ((message: string) => void) | null = null;
+let onFailed: ((error: unknown) => void) | null = null;
 let onClosed: (() => void) | null = null;
+
+// The store took the purchase and bracemark-api did not record it — `iap/verify`
+// threw. Its own class because this is the one failure where money may already
+// have moved: the transaction is left unfinished and the store replays it, so
+// the user is owed "it went through, restore it", never "try again" (a second
+// purchase). `reason` is what verify threw, kept for the server's verdict.
+export class PurchaseNotRecordedError extends Error {
+  constructor(public readonly reason: unknown) {
+    super('The store purchase was not recorded');
+    this.name = 'PurchaseNotRecordedError';
+  }
+}
+
+const STORE_NAME = STORE_SOURCE === 'appstore' ? 'App Store' : 'Play Store';
+
+// The store could not be reached at all — the one family where "check your
+// connection" is the act.
+const STORE_UNREACHABLE: ReadonlySet<string> = new Set([
+  ErrorCode.NetworkError,
+  ErrorCode.ServiceDisconnected,
+  ErrorCode.ServiceTimeout,
+  ErrorCode.ConnectionClosed,
+]);
+
+const FAILURE_FALLBACK = {
+  purchase: 'Could not complete the purchase. Please try again.',
+  restore: 'Could not restore your purchases. Please try again.',
+  manage: `Could not open the ${STORE_NAME}’s subscription settings. Please try again.`,
+} as const;
+
+// The sentence a failed store action puts on screen — chosen by the failure's
+// CODE, never its message. Nothing thrown on this path was written for a
+// customer: the store library attaches a canned string to each code (a declined
+// card arrives as BillingUnavailable, "Billing API version is not supported for
+// the type requested", which the section used to print under the card), and a
+// failed verify is ApiError's "Request failed with status 409". The shape is
+// docs/brand-assets.md's, _errors have a fixed shape_: name the act where there
+// is one, otherwise "Could not ⟨verb⟩. Please try again."
+export function storeFailureMessage(action: keyof typeof FAILURE_FALLBACK, e: unknown): string {
+  if (e instanceof PurchaseNotRecordedError) {
+    const verdict = apiErrorCode(e.reason);
+    // One ACCOUNT per store subscription, for life (docs/iap.md, step 2).
+    if (verdict === 'purchase_bound') {
+      return 'This purchase belongs to another Bracemark account. Sign in to that account to use it.';
+    }
+    // `invalid_receipt` is the store disowning the token, so nothing was
+    // bought; anything else (offline, a 5xx) left a real purchase unrecorded.
+    if (action === 'purchase' && verdict !== 'invalid_receipt') {
+      return 'Your purchase went through, but we could not record it. Tap Restore purchases to try again.';
+    }
+    return FAILURE_FALLBACK[action];
+  }
+
+  const code = (e as { code?: unknown } | null)?.code;
+  if (typeof code === 'string' && STORE_UNREACHABLE.has(code)) {
+    return `Could not reach the ${STORE_NAME}. Check your connection and try again.`;
+  }
+  if (action === 'purchase') {
+    switch (code) {
+      // Play's BILLING_UNAVAILABLE: a payment method it could not charge, but
+      // also an out-of-date Play Store or an unsupported country — so the
+      // sentence names the act without asserting the cause.
+      case ErrorCode.BillingUnavailable:
+        return `The ${STORE_NAME} could not complete this purchase. Check your payment method there and try again.`;
+      // The store account already holds the subscription — bought under it
+      // before, or a purchase whose verify never landed. Restore re-drives it.
+      case ErrorCode.AlreadyOwned:
+        return `This ${STORE_NAME} account already has a Bracemark subscription. Tap Restore purchases to use it here.`;
+      // Ask to Buy, or a payment the store has not settled yet. Not a failure:
+      // the purchase arrives through the replay path once it clears, so "try
+      // again" would be asking for a second one.
+      case ErrorCode.DeferredPayment:
+      case ErrorCode.Pending:
+        return 'This purchase is waiting for approval. Your plan changes here once it is approved.';
+    }
+  }
+  return FAILURE_FALLBACK[action];
+}
 
 // Read the handlers AND drop them — a checkout settles exactly once (completed,
 // failed, or canceled), so holding them past that would let a REPLAYED
@@ -95,11 +174,16 @@ async function verifyAndFinish(purchase: Purchase): Promise<SubscriptionStatus> 
       : purchase.purchaseToken;
   if (!token) throw new Error('The store returned no purchase token');
 
-  const status = await apiClient.call(iapVerifyEndpoint, {
-    source: STORE_SOURCE,
-    productId: purchase.productId,
-    token,
-  });
+  let status: SubscriptionStatus;
+  try {
+    status = await apiClient.call(iapVerifyEndpoint, {
+      source: STORE_SOURCE,
+      productId: purchase.productId,
+      token,
+    });
+  } catch (e) {
+    throw new PurchaseNotRecordedError(e);
+  }
   await finishTransaction({ purchase, isConsumable: false });
   return status;
 }
@@ -119,9 +203,7 @@ function ensureConnection(): Promise<void> {
         if (purchase.purchaseState !== 'purchased') return;
         void verifyAndFinish(purchase)
           .then((status) => takeHandlers().onCompleted?.(status))
-          .catch((e) => {
-            takeHandlers().onFailed?.(e instanceof Error ? e.message : String(e));
-          });
+          .catch((e) => takeHandlers().onFailed?.(e));
       });
 
       purchaseErrorListener((error) => {
@@ -129,7 +211,7 @@ function ensureConnection(): Promise<void> {
         // mirror Paddle's `closed` semantics.
         const handlers = takeHandlers();
         if (error.code === ErrorCode.UserCancelled) handlers.onClosed?.();
-        else handlers.onFailed?.(error.message);
+        else handlers.onFailed?.(error);
       });
     })().catch((e) => {
       connectPromise = null; // a failed connection may be retried
@@ -162,15 +244,16 @@ export async function fetchStorePlanProducts(): Promise<
 
 // Open the store's purchase sheet for a plan. `onCompleted` fires after the
 // purchase is VERIFIED AND RECORDED server-side, with the fresh fold;
-// `onFailed` on a store error or a failed verify; `onClosed` when the user
-// backs out (clear busy state, nothing happened).
+// `onFailed` on a store error or a failed verify, with the error itself — for
+// `storeFailureMessage`, never for display; `onClosed` when the user backs out
+// (clear busy state, nothing happened).
 export async function openStoreCheckout(options: {
   plan: AvailablePaidPlan;
   // The fetched product (fetchStorePlanProducts) — Android's purchase flow
   // needs the product's offer token, so the cards fetch before checkout.
   product: ProductSubscription;
   onCompleted: (status: SubscriptionStatus) => void;
-  onFailed: (message: string) => void;
+  onFailed: (error: unknown) => void;
   onClosed: () => void;
 }): Promise<void> {
   await ensureConnection();

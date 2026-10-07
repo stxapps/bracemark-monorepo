@@ -312,8 +312,11 @@ export function SubscriptionSection() {
     try {
       const { url } = await api.call(iapPortalEndpoint, {});
       window.open(url, '_blank', 'noopener');
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+    } catch {
+      // Not the thrown one, for startCheckout's reason: it reads "Request
+      // failed with status 502". Ours and worth pressing again — the portal
+      // session is minted per press.
+      setError('Could not open the billing portal. Please try again.');
     } finally {
       setBusy(null);
     }

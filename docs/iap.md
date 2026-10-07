@@ -164,6 +164,13 @@ vendor build string in front of someone trying to pay. The payment-link path has
 the same failure and a different act — its email link is a fresh page load, so
 it says to open that again.
 
+**Manage billing** is the section's other request and holds to the same rule: a
+failed `POST /v1/iap/portal` says _"Could not open the billing portal. Please
+try again."_, since a portal session is minted per press. It was the last catch
+here still printing the throw. A **declined card** is not this section's to
+word at all — Paddle reports it inside its own overlay, which is why the web had
+no sibling of the store bug below.
+
 #### the payment link — `/settings/subscription?_ptxn=txn_…`
 
 Paddle's account-level **default payment link** is required, not optional:
@@ -384,6 +391,24 @@ the server only learns about from the receipt the app submits.
    rejection that reached the section's catch used to print "User cancelled the
    purchase flow" under the card. `IAP-NATIVE-001` pins it on the iOS simulator
    ([e2e.md](./e2e.md), _subscriptions_).
+
+   **A sheet that FAILS is worded by its code, never by its message**
+   (`storeFailureMessage` in `lib/iap.ts`, for purchase, restore and manage
+   alike). Nothing thrown on this path was written for a customer: the store
+   library attaches a canned string to each code, and a failed verify is
+   `ApiError`'s status line. The specimen is Play's "always declines" test
+   instrument, which arrives as `BillingUnavailable` and printed "Billing API
+   version is not supported for the type requested" under the card — Play's one
+   code for a payment method it could not charge, an out-of-date Play Store and
+   an unsupported country, so the sentence names the act (check the payment
+   method) without asserting the cause. Two failures get a sentence that is
+   deliberately NOT "try again", because trying again is a second purchase: a
+   verify that failed after the store completed (`PurchaseNotRecordedError` —
+   the transaction is unfinished and replays, so the act is Restore purchases),
+   and a purchase waiting on approval (Ask to Buy, a pending payment). A code
+   with no sentence of its own falls back to the fixed shape for its action
+   ([brand-assets.md](./brand-assets.md), _errors have a fixed shape_).
+
 2. **Verify** — on the purchase event the app POSTs `/v1/iap/verify`
    `{ source, productId, token }` (App Store transaction id / Play purchase
    token). The token is only a **lookup key**: bracemark-api fetches the

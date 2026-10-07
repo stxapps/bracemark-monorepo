@@ -42,6 +42,7 @@ import {
   openStoreSubscriptionManagement,
   restoreStorePurchases,
   STORE_SOURCE,
+  storeFailureMessage,
 } from '../../lib/iap';
 import { SettingsHeader, SettingsNotice, SettingsPane } from './settings-kit';
 
@@ -133,10 +134,10 @@ export function SubscriptionSection() {
           setBusy(null);
           setNotice(`You’re on ${PLAN_LABELS[status.plan]} now — thank you.`);
         },
-        onFailed: (message) => {
+        onFailed: (e) => {
           if (unmounted.current) return;
           setBusy(null);
-          setError(message);
+          setError(storeFailureMessage('purchase', e));
         },
         onClosed: () => {
           if (unmounted.current) return;
@@ -145,7 +146,9 @@ export function SubscriptionSection() {
       });
     } catch (e) {
       setBusy(null);
-      setError(e instanceof Error ? e.message : String(e));
+      // Never the thrown message — the store library's string, or ApiError's
+      // status line. lib/iap.ts's storeFailureMessage carries the reasoning.
+      setError(storeFailureMessage('purchase', e));
     }
   };
 
@@ -166,7 +169,7 @@ export function SubscriptionSection() {
         setNotice('No purchases to restore on this store account.');
       }
     } catch (e) {
-      if (!unmounted.current) setError(e instanceof Error ? e.message : String(e));
+      if (!unmounted.current) setError(storeFailureMessage('restore', e));
     } finally {
       if (!unmounted.current) setBusy(null);
     }
@@ -179,7 +182,7 @@ export function SubscriptionSection() {
     try {
       await openStoreSubscriptionManagement(subscription.plan);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(storeFailureMessage('manage', e));
     } finally {
       setBusy(null);
     }
