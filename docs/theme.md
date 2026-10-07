@@ -633,6 +633,40 @@ This is why **expo needs no counterpart change**: React Native has no `ring`, so
 `apps/bracemark-expo` already draws every panel edge — its `dropdown-menu`
 popover included — with `border-border`, and inherits the fix from the token.
 
+**A bottom sheet is the case where the edge is not enough, and there the fill has
+to be the lifted one.** Quick-add below `md` on web, and always on expo
+(`features/links/link-add-panel.tsx`), is a form on a `bg-black/50` scrim over the
+links page, and it used to wear the page's own `bg-background`. In light the scrim
+does all the work — it takes the white page to `#7f7f7f`, and the panel reads
+Lc 75.3 against it. In dark it does none: there is nothing to subtract from a
+0.145 page, which lands at `#050505` under a `#0a0a0a` panel, **Lc 0.7**. A
+darker scrim changes nothing (`/80` reads 0.8). That left the `border-t`, and an
+edge-attached sheet has only the one: a single horizontal `border-border`
+hairline, drawn across a list whose rows are divided with the same token. A
+closed ring outlines a panel; one line over a list is one more row divider, which
+is how it read on the Pixel 8 AVD and in a 390px browser alike.
+
+So both ports take `bg-popover` — the recipe every other elevated surface in
+this section already is, fill and edge together. By Lc the fill is still almost
+nothing (1.7), exactly as the heading says, and the hairline it sits under moves
+only 9.5 → 13.0. What it buys is not on that scale: a region instead of a line,
+so the corners and the header's whole width differ from the page where only one
+pixel row did before. It also makes the form one colour in both its web
+containers — the `md`+ popover was `bg-popover` all along.
+
+On web the fill lives in `sheet.tsx`'s `bottom` side variant rather than at a
+call site, because there are two such sheets and they are meant to read as one
+shape: quick-add and **Move to** (`links/move-to-surface.tsx`, whose wide twin is
+a `Dialog` — `bg-popover` too). The left and right variants keep the base
+`bg-background`: those are the nav rails, the page's sidebar arriving from an
+edge, and a full-height `border-r` is not something a row divider can be
+mistaken for. Expo's Move to is a `Dialog` already.
+
+The two system-modal editors on expo (`link-edit-screen.tsx`, `search-bar.tsx`)
+also stay `bg-background`, for a different reason: full-screen on Android, and on
+iOS a page sheet that covers everything but a blank strip under the status bar,
+so there is no page left behind them to be confused with.
+
 ### the radius scale — one shape system, two kits
 
 **The round shape is not a token, and raising `--radius` will not produce it.**

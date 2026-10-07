@@ -468,6 +468,20 @@ export function LinkAddPanel({ onClose }: { onClose: () => void }) {
           surfaces; using it here made an attached sheet read like a clipped
           dialog.
 
+          `bg-popover`, not the page's `bg-background` it used to wear, and in
+          dark that is the whole of what separates this panel from the screen it
+          covers (docs/theme.md, _elevation_). The scrim cannot: `bg-black/50`
+          takes a white page to mid-grey, but has nothing to subtract from a
+          0.145 one — measured on the Pixel 8 AVD, the panel was grey 10 over a
+          page at grey 5, APCA Lc 0.7 against light's 75. Nor can the `border-t`
+          alone: it is `border-border`, the token the link rows behind are
+          divided with, so over a list the panel's one edge read as one more row
+          divider. The lifted fill makes it a region rather than a line — the
+          corners show — and it is the fill every other floating surface here
+          already has (ui/dialog.tsx, ui/dropdown-menu.tsx) and the one web
+          quick-add wears in both its containers. Light is untouched: the two
+          tokens are the same white there.
+
           The bottom padding is the share sheet's formula (share-kit.tsx,
           docs/share-sheet.md): the inset while the keyboard is down, and NOTHING
           while it is up. A keyboard's frame runs to the bottom of the screen —
@@ -488,7 +502,7 @@ export function LinkAddPanel({ onClose }: { onClose: () => void }) {
           as="Pressable"
           accessible={false}
           onPress={Keyboard.dismiss}
-          className="max-h-full rounded-t-2xl border-t border-border bg-background"
+          className="max-h-full rounded-t-2xl border-t border-border bg-popover"
           style={panelStyle}
         >
           {/* A sheet header rather than an app bar: the top padding aligns the
