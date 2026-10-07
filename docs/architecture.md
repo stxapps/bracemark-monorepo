@@ -679,8 +679,8 @@ So an Expo SDK bump edits **one** file: the root `package.json`.
 here **by design** — the Metro config `projectRoot`/`watchFolders` mismatch (Nx
 monorepo), `@expo/metro-config` installed directly (the hoisting exception
 above), and the React Native Directory check (no metadata for the local native
-modules `@stxapps/expo-crypto` / `bracemark-share`, plus "untested on New
-Architecture" for `expo-share-extension`). A failure in _Check that packages
+modules `@stxapps/expo-crypto` / `bracemark-share` / `bracemark-input`, plus
+"untested on New Architecture" for `expo-share-extension`). A failure in _Check that packages
 match versions required by installed Expo SDK_ is the real signal. Do **not** read versions off npm's
 `latest` tag: Expo adopted unified versioning at SDK 55, so every `expo-*`
 package renumbered to track the SDK major and `latest` is always the newest

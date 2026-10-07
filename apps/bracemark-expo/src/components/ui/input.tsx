@@ -1,7 +1,8 @@
-import { Platform, TextInput } from 'react-native';
+import { type LayoutChangeEvent, Platform, TextInput } from 'react-native';
 import { useUniwind } from 'uniwind';
 
 import { allowsFontScaling, MAX_FONT_SIZE_MULTIPLIER } from '../../lib/font-scale';
+import { ellipsizePlaceholder } from '../../lib/placeholder-ellipsis';
 import { cn } from '../../lib/utils';
 
 // react-native-reusables `input` (uniwind variant), copied from the registry —
@@ -102,9 +103,34 @@ const IOS_SINGLE_LINE_STYLE = { lineHeight: undefined };
 // (docs/theme.md, _contrast_).
 const PLACEHOLDER_COLOR_CLASS = 'accent-muted-foreground';
 
+// AND ITS LENGTH IS A NATIVE CALL ON ANDROID, NOT A PROP AT ALL. A placeholder
+// longer than a single-line field mounts on one line there and then WRAPS — the
+// first time it changes, or the field is typed in and cleared — onto a second
+// line the fixed-height box cuts in half, pushing the first one off-centre
+// (modules/bracemark-input's Kotlin header has the two layout paths that
+// disagree). Any field can do it; the one that did is the link editor's Title,
+// whose placeholder is the page's extracted title and arrives after mount. The
+// fix is an ellipsize mode on the native EditText, which React Native sets
+// itself from 0.88 and has no prop for on 0.81, so it goes through the local
+// module — and from HERE, so every field gets it and no call site has to know.
+// iOS needs nothing: UITextField truncates its placeholder on its own.
+//
+// Off `onLayout` because that event is the first moment the native view is
+// certain to exist (an effect can run before Fabric mounts it), and because its
+// payload already carries the view's tag — React Native's Android layout event
+// puts `target` beside `layout`, and its TypeScript type simply doesn't say so.
+// The setting sticks to the view, so the repeat on a later layout is a no-op.
+// Multiline fields are asked too and the native side declines them; a Textarea
+// wraps on purpose.
+const onAndroidLayout = (event: LayoutChangeEvent) => {
+  const { target } = event.nativeEvent as { target?: number };
+  if (typeof target === 'number') ellipsizePlaceholder(target);
+};
+
 function Input({
   className,
   style,
+  onLayout,
   ...props
 }: React.ComponentProps<typeof TextInput> & React.RefAttributes<TextInput>) {
   // iOS renders the system keyboard LIGHT regardless of the app's appearance
@@ -138,6 +164,14 @@ function Input({
       allowFontScaling={allowsFontScaling()}
       maxFontSizeMultiplier={MAX_FONT_SIZE_MULTIPLIER}
       keyboardAppearance={theme === 'dark' ? 'dark' : 'light'}
+      onLayout={
+        Platform.OS === 'android'
+          ? (event) => {
+              onAndroidLayout(event);
+              onLayout?.(event);
+            }
+          : onLayout
+      }
       {...props}
     />
   );

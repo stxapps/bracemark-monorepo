@@ -1,0 +1,6 @@
+{
+  "name": "bracemark-input",
+  "version": "0.0.1",
+  "private": true,
+  "description": "The one native lever bracemark-expo's text field needs and React Native 0.81 does not expose (src/components/ui/input.tsx). Android only: BracemarkInput.ellipsizePlaceholder(), which sets TextUtils.TruncateAt.END on a single-line EditText so a placeholder longer than the field ends in an ellipsis instead of wrapping onto a clipped second line. A backport of what React Native 0.88 does itself — delete this module when the app gets there. Local Expo module, autolinked from apps/bracemark-expo/modules."
+}

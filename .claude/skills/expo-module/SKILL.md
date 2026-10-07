@@ -20,8 +20,12 @@ license: MIT
   `apps/bracemark-expo/modules/bracemark-share` — Android only
   (`"platforms": ["android"]`), exposing `com.bracemark.share.BracemarkShareModule`
   alongside a `ShareActivity.kt`, with a hand-written `expo-module.config.json`,
-  `package.json` and `android/build.gradle`. Read it before writing a second
+  `package.json` and `android/build.gradle`. Read it before writing another
   one; `docs/share-sheet.md` is canonical for why it exists and what it must do.
+  `modules/bracemark-input` beside it is the smallest complete specimen — one
+  Kotlin module, one main-queue function, an optional lookup on the JS side
+  (`src/lib/placeholder-ellipsis.ts`) and a spec holding the two halves' names
+  to each other.
 - **Qualify the word "extension", always.** Two unrelated things carry the name:
   the **browser extension** (`bracemark-extension`, a separate app) and the iOS
   **share extension** (a native target inside `bracemark-expo`, provided by

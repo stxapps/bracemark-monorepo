@@ -207,7 +207,8 @@ silently no longer matches `app.config.ts`, until the next `--clean` destroys
 it. The bare (committed-native) workflow is for native code you author by
 hand — and every line of that here already lives in tracked directories
 prebuild never touches (`packages/expo-crypto/{ios,android}`,
-`apps/bracemark-expo/modules/bracemark-share/{ios,android}`). Nothing under
+`apps/bracemark-expo/modules/bracemark-share/{ios,android}`,
+`apps/bracemark-expo/modules/bracemark-input/android`). Nothing under
 `apps/bracemark-expo/ios|android` is authored. When you do want the diff, take it
 on demand instead of carrying it forever:
 

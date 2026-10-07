@@ -1,0 +1,22 @@
+apply plugin: 'com.android.library'
+
+group = 'com.bracemark.input'
+version = '0.0.1'
+
+def expoModulesCorePlugin = new File(project(":expo-modules-core").projectDir.absolutePath, "ExpoModulesCorePlugin.gradle")
+apply from: expoModulesCorePlugin
+applyKotlinExpoModulesCorePlugin()
+useCoreDependencies()
+useExpoPublishing()
+useDefaultAndroidSdkVersions()
+
+android {
+  namespace "com.bracemark.input"
+  defaultConfig {
+    versionCode 1
+    versionName "0.0.1"
+  }
+  lintOptions {
+    abortOnError false
+  }
+}

@@ -74,6 +74,19 @@ add that as a large-text visual checkpoint (`VISUAL-FONT-001`), which it could
 not have been before, since it would only have photographed the bug. iOS was not
 checked.
 
+**A later bump retires a native module, and it is not SDK 56's.**
+`apps/bracemark-expo/modules/bracemark-input` exists only to set an ellipsize
+mode on Android's single-line `EditText`, so a placeholder longer than its field
+truncates instead of wrapping ([theme.md](./theme.md), _extending_). React
+Native does that itself from **0.88** (`ReactEditText.updatePlaceholderEllipsize`;
+absent from every release branch through 0.87), which is past RN 0.85. On the
+first SDK that carries RN ≥ 0.88: delete the module folder,
+`src/lib/placeholder-ellipsis.ts` and its spec, and the `onLayout` wrapper in
+`ui/input.tsx` — then open a link whose extracted title is longer than the Title
+field, type a character, clear it, and see the placeholder still on one line.
+Until then the module is harmless to leave in: it sets the same value upstream
+would.
+
 **Drop the `@expo/metro` override as part of that bump.** Root `package.json`
 carries `"overrides": { "@nx/expo": { "@expo/metro": "~54.2.0" } }` only because
 `@nx/expo@23.1.1` declares an optional peer `@expo/metro: ">= 55.0.0"` that

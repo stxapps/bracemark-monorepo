@@ -897,6 +897,26 @@ same role the kit's menu items have).
   `.placeholder\:…::placeholder { color }`, which the processor then reads as a
   plain `color` on the class — an answer that is wrong in the other direction,
   and not what Metro sees.
+- **A placeholder longer than its field wraps on Android, and no class or prop
+  stops it.** A single-line field's hint mounts on one line, clipped at the
+  edge, and then wraps the first time it changes or the field is typed in and
+  cleared: the second line shows as a sliver under the first, which the
+  fixed-height box has pushed off-centre. Android lays a hint out at two
+  widths — "very wide" during a measure pass, the view's physical width when a
+  discarded layout is rebuilt at draw time — and under Fabric the second is the
+  common one, because nothing re-measures a field whose frame did not change.
+  The link editor's Title is the field that showed it: its placeholder is the
+  page's extracted title, which is long and arrives after mount. `numberOfLines`
+  does not help (it caps the typed text's layout, not the hint's), and there is
+  no JS route to a measure pass. The lever is an ellipsize mode on the native
+  `EditText`, which makes both paths truncate to one line and leaves typed text
+  alone. React Native sets it itself from **0.88**; on 0.81 it has no prop, so
+  `ui/input.tsx` reaches it through a local module
+  (`apps/bracemark-expo/modules/bracemark-input`, Android only) off the field's
+  first `onLayout`. Every field gets it from the chokepoint; a call site does
+  nothing. iOS needs none of this — `UITextField` truncates its placeholder on
+  its own, checked on the simulator. Retiring the module is a line in
+  [dependency-upgrades.md](./dependency-upgrades.md), _the target window_.
 - **A `leading-*` tighter than the font is not centred on iOS**, and nothing
   about the class is broken. Uniwind resolves a unitless line-height against the
   element's own font-size at style time (`core/native/store.js`, `lineHeight < 6`
