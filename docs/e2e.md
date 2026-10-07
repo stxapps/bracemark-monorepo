@@ -562,6 +562,24 @@ The repo-specific gotchas:
   specifically to avoid. The same reversal is what lets a PHYSICAL Android device
   run `bracemark-web` without a certificate —
   [device-testing.md](./device-testing.md).
+- **⚠ The runner refuses a bundle that names another api — and it reads the
+  value, it does not search for it.** `EXPO_PUBLIC_API_URL` is fixed when Metro
+  starts, and an active pair in the gitignored `apps/bracemark-expo/.env.local` —
+  the physical-device switch ([device-testing.md](./device-testing.md), _one
+  bundle, one set of origins_) — outranks the committed file. The app still
+  launches and Metro is still healthy; every online flow then fails at sign-in
+  with nothing in the api log, which reads as stale dev servers. So when a run
+  selects an `online` case, the native preflight fetches the bundle the device is
+  about to load and compares its api origin with the one the runner provisions
+  against. The error prints the repair that leaves the file alone: the pair in
+  Metro's own environment, which outranks every env file. What it reads is the
+  `process.env` preamble Expo's serializer writes into a development bundle,
+  which is where the app's `expo/virtual/env` gets the value. A plain search for
+  `http://localhost:8787` would always pass — a development bundle also carries
+  the committed `.env.development` as a module of its own, whatever the app is
+  using (measured on Expo SDK 54 with Metro started on another origin: both
+  strings present, once each). For the same reason an unreadable preamble fails
+  the run instead of passing it (`runner/native-run.ts`, `assertBundleNamesApi`).
 - **On Android a dev build's LogBox toast takes taps ABOVE itself.** Its container
   is a `SafeAreaView` pinned 20px off the bottom, and the inset padding leaves a
   transparent strip over the visible toast that swallows touches — measured on the
@@ -1690,8 +1708,10 @@ missing API from starting. Native resolves Metro in the Expo dev-client link,
 requires it to report a running packager from this checkout, and records the
 link and all stack origins. It also requires the selected device to be booted,
 the development build to be installed, and Android to have completed boot with
-the 8081/8787/8788 reverse mappings. A failed preflight happens before account
-provisioning.
+the 8081/8787/8788 reverse mappings. With an `online` case selected it also
+fetches the bundle Metro serves and requires its api origin to be the one the
+run provisions against (_driving the native apps_). A failed preflight happens
+before account provisioning.
 
 ```sh
 npx nx e2e-web @stxapps/e2e
@@ -2651,8 +2671,10 @@ starts from an x of 0, so it always reads "right" (`web/link-move.e2e.ts`,
 `apps/bracemark-expo/.env.local` naming the Mac's `.local` host — the
 real-device setup in [device-testing.md](./device-testing.md) — passes on the
 iOS simulator and fails every Android emulator flow at sign-in, with nothing
-reaching the api: the emulator does not resolve mDNS. Comment it out and restart
-Metro with `--clear`, since the value is inlined into the bundle.
+reaching the api: on that network the emulator did not resolve the name, which
+is conditional rather than constant (device-testing.md, _one bundle, one set of
+origins_). The native preflight now refuses such a bundle and prints the repair
+(_driving the native apps_).
 
 The Phase 4 cross-client cases were measured 2026-09-18 from commit
 `1ea5a58b130d3d8c85396fb1fd70eea4ce285431` with their changes present in the

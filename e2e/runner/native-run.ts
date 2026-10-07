@@ -2,7 +2,7 @@ import { mkdir, readdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { E2E_ROOT, runArtifactDir } from '../paths';
-import { API_URL, EXTRACTOR_URL, WEB_URL } from '../web/fixtures/env';
+import { API_URL, EXTRACTOR_URL, SITE_URL, WEB_URL } from '../web/fixtures/env';
 import { type NativeCliOptions, type NativePlatform } from './cli';
 import {
   createRunId,
@@ -143,6 +143,63 @@ async function probeMetro(origin: string): Promise<void> {
   if (!response.ok || !body.includes('packager-status:running')) {
     throw new Error(`Metro at ${origin} did not report packager-status:running`);
   }
+}
+
+// The app has to talk to the api this run provisions against, and nothing else
+// here can tell when it does not. EXPO_PUBLIC_API_URL is fixed when Metro
+// starts; on a wrong one the app still launches, Metro is still healthy, and
+// every online flow dies at sign-in with no request in the api log — which reads
+// as stale dev servers. The usual cause is the physical-device pair left
+// uncommented in apps/bracemark-expo/.env.local (docs/device-testing.md, _one
+// bundle, one set of origins_), which the iOS simulator survives and the Android
+// emulator may not.
+//
+// So read the origin out of the bundle the device is about to load, which also
+// warms Metro's cache for it. In a development bundle the app reads
+// `process.env` through `expo/virtual/env`, and Expo's serializer defines it in
+// a preamble — that definition is the value the app gets.
+//
+// ⚠ Not `bundle.includes(API_URL)`. A development bundle also carries the
+// committed `.env.development` as a module of its own, so it names
+// http://localhost:8787 whatever the app is actually using, and that test
+// passes on the exact bundle this exists to refuse. For the same reason an
+// unreadable preamble is an error, not a pass: an Expo that words it
+// differently has to be met here, loudly, rather than waved through.
+async function assertBundleNamesApi(origin: string, platform: NativePlatform): Promise<void> {
+  const manifest = (await (
+    await fetch(origin, {
+      headers: { 'expo-platform': platform, accept: 'application/expo+json,application/json' },
+    })
+  ).json()) as { launchAsset?: { url?: string } };
+  const url = manifest.launchAsset?.url;
+  if (!url) throw new Error(`Metro at ${origin} served no launch asset`);
+
+  console.log(`checking the api origin in the ${platform} bundle Metro serves…`);
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(
+      `Metro at ${origin} could not build the ${platform} bundle: HTTP ${response.status}`,
+    );
+  }
+  const bundle = await response.text();
+  const literal = /"EXPO_PUBLIC_API_URL":\s*\{[^}]*?value:\s*("(?:[^"\\]|\\.)*")/.exec(bundle)?.[1];
+  if (literal === undefined) {
+    throw new Error(
+      `Metro at ${origin} serves a ${platform} bundle with no readable EXPO_PUBLIC_API_URL in ` +
+        'its env preamble. Either the variable is unset, or Expo now writes that preamble ' +
+        'differently and assertBundleNamesApi (e2e/runner/native-run.ts) has to follow it.',
+    );
+  }
+  const named = JSON.parse(literal) as string;
+  if (named.replace(/\/+$/, '') === API_URL) return;
+
+  throw new Error(
+    `Metro at ${origin} serves a bundle whose api is ${named}, but this run provisions against ` +
+      `${API_URL}. Look for an active EXPO_PUBLIC_* pair in apps/bracemark-expo/.env.local — or ` +
+      'leave that file alone and restart Metro with both origins in its environment, which ' +
+      'outranks every env file:\n' +
+      `  EXPO_PUBLIC_API_URL=${API_URL} EXPO_PUBLIC_SITE_URL=${SITE_URL} npm run expo:start -- --clear`,
+  );
 }
 
 // With Simulator's _Connect Hardware Keyboard_ on, a focused field shows a caret
@@ -359,6 +416,7 @@ export async function prepareNativeRun(
     await waitForHttp(new URL('/create-account', WEB_URL).href, 'bracemark-web', 30_000);
   }
   await probeMetro(metro);
+  if (requiresOnlineStack) await assertBundleNamesApi(metro, options.platform);
 
   const identity =
     options.platform === 'ios'

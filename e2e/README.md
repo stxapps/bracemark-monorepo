@@ -109,8 +109,8 @@ prerequisite, not an e2e step.
 
 Platform and device are mandatory and are passed to Maestro explicitly. The
 preflight proves that exact device is booted, the dev build is installed, Metro
-belongs to this checkout, and Android has completed boot with all three reverse
-mappings. Web e2e is platform-independent — run it once.
+belongs to this checkout and serves a bundle whose api is the local one, and
+Android has completed boot with all three reverse mappings. Web e2e is platform-independent — run it once.
 
 ```sh
 npm run expo:ios                    # or: npm run expo:android

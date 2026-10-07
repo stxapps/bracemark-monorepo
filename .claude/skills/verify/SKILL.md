@@ -438,12 +438,29 @@ HardwareKeyboardLastSeen` prints `1`. Write it `false` the same way and
   stopped saying localhost — so re-running `expo:android:reverse` changes
   nothing). The app still launches and Metro is still fine, because both address
   :8081 and these vars don't touch it; only api traffic fails, which reads as the
-  api being down. It is also intermittent rather than broken — it works on a
-  network whose mDNS cooperates — so "it worked yesterday" is not evidence
-  against it. (A staging or production pair fails more quietly still: the api
-  answers, just not the local one, so the seeded dev account "does not exist".)
-  Commenting them back out needs `npm run expo:start -- --clear`; a reload
-  replays the old inlined value. → `docs/device-testing.md`
+  api being down. The tell: sign-in says "Could not sign in. Please try again.",
+  host `curl` to :8787 is 200, and the api log has nothing from the device — in
+  an e2e run, the runner's `create-account` and then no `password-door`. It is
+  also intermittent rather than broken — it works on a network whose mDNS
+  cooperates — so "it worked yesterday" is not evidence against it. (A staging
+  or production pair fails more quietly still: the api answers, just not the
+  local one, so the seeded dev account "does not exist".)
+
+  **Don't edit that file to get a run through — it is the user's device setup.**
+  A variable in Metro's own environment outranks every `.env*` file, so pin the
+  pair there and leave the file as it is:
+
+  ```sh
+  EXPO_PUBLIC_API_URL=http://localhost:8787 EXPO_PUBLIC_SITE_URL=http://localhost:3001 \
+    npm run expo:start -- --clear
+  ```
+
+  Commenting the pair back out is the user's call, and needs the same restart —
+  a reload replays the old value. The suite runs name all of this for you: the
+  `e2e:mobile` / `e2e:contract` preflight reads the api origin out of the bundle
+  Metro serves and refuses a wrong one, printing that command. A hand-driven
+  session has no such guard. → `docs/device-testing.md`
+
 - **`hideKeyboard` taps a blank area on iOS**, so on a surface with a
   tap-to-close backdrop it closes the surface. If a flow loses its buttons right
   after that step, this is why.

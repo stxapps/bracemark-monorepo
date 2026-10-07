@@ -219,11 +219,29 @@ indicts the wrong thing.)
 healthy — the dev-client deep link and `adb reverse` both address :8081, which
 these two vars do not touch — while everything that reaches the api fails as a
 network error. So it reads as the api being down, not as an env file being one
-comment character short. `npm run e2e:mobile` fails the same way, one layer
-further from the cause. And per _Metro needs `--clear`_ above, the repair is not
-instant: commenting the two lines back out does nothing until Metro restarts
-with a cleared cache, so a reload leaves you testing the old inlined value and
-looking for a second bug.
+comment character short. Sign-in says "Could not sign in. Please try again.",
+while `curl` from the Mac to `:8787` answers 200 and the api log shows no
+request from the device at all. `npm run e2e:mobile` and `e2e:contract` no
+longer fail the same way one layer further from the cause: their preflight
+reads the api origin out of the bundle Metro serves and refuses to start on any
+but the local one ([e2e.md](./e2e.md), _driving the native apps_). Driving the
+app by hand has no such guard. And per _Metro needs `--clear`_ above, the repair
+is not instant: commenting the two lines back out does nothing until Metro
+restarts with a cleared cache, so a reload leaves you testing the old inlined
+value and looking for a second bug.
+
+**There is a way back out that leaves the file alone**, for the session that
+needs loopback while the device setup stays in place. A variable already in
+Metro's environment outranks every `.env*` file — `@expo/env` skips a key that
+is set — so pin the pair on the command line:
+
+```sh
+EXPO_PUBLIC_API_URL=http://localhost:8787 EXPO_PUBLIC_SITE_URL=http://localhost:3001 \
+  npm run expo:start -- --clear
+```
+
+It lasts exactly as long as that Metro does, which is the point: nothing to
+remember to undo, and the next plain `expo:start` is back on the file.
 
 ### open decision: `bracemark-web` in `development`, on the iPhone and iPad
 
