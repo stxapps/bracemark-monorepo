@@ -40,9 +40,13 @@ function subscriptionBody(
     state?: string;
     phase?: 'freeTrial' | 'introductoryPrice' | 'basePrice';
     offerTags?: string[];
+    // Play OMITS the flag once auto-renew is off, rather than sending false.
     autoRenewEnabled?: boolean;
   } = {},
 ) {
+  const canceled =
+    overrides.state === 'SUBSCRIPTION_STATE_CANCELED' ||
+    overrides.state === 'SUBSCRIPTION_STATE_EXPIRED';
   return {
     subscriptionState: overrides.state ?? 'SUBSCRIPTION_STATE_ACTIVE',
     acknowledgementState: 'ACKNOWLEDGEMENT_STATE_ACKNOWLEDGED',
@@ -50,7 +54,7 @@ function subscriptionBody(
       {
         productId: 'plus',
         expiryTime: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-        autoRenewingPlan: { autoRenewEnabled: overrides.autoRenewEnabled ?? true },
+        autoRenewingPlan: canceled ? {} : { autoRenewEnabled: overrides.autoRenewEnabled ?? true },
         ...(overrides.phase ? { offerPhase: { [overrides.phase]: {} } } : undefined),
         ...(overrides.offerTags ? { offerDetails: { offerTags: overrides.offerTags } } : undefined),
       },
@@ -282,17 +286,29 @@ describe('fetchPlaystoreSubscription — trialing', () => {
   });
 
   it('keeps trialing when the user cancels mid-trial', async () => {
-    // Auto-renew off during the trial: still trialing (still entitled, still
-    // never charged), but canceledAt stamps the end so willRenew folds false —
-    // the two together are what pick "you won't be charged" over "your first
-    // payment is on …" in the subscription sections.
-    apiBody = subscriptionBody({
-      phase: 'freeTrial',
-      autoRenewEnabled: false,
-    });
+    // What a license tester's cancelled trial read: Play reports the cancel as
+    // a STATE of its own, not as ACTIVE with auto-renew off. Still trialing
+    // (still entitled, still never charged), but canceledAt stamps the end so
+    // willRenew folds false — the two together are what pick "you won't be
+    // charged" over "your first payment is on …" in the subscription sections.
+    apiBody = subscriptionBody({ state: 'SUBSCRIPTION_STATE_CANCELED', phase: 'freeTrial' });
     const snapshot = await fetchPlaystoreSubscription(env, 'play-token-1');
     expect(snapshot?.status).toBe('trialing');
     expect(snapshot?.canceledAt).toBe(snapshot?.expiresAt);
+  });
+
+  it('ends the trial once it expires, though the phase still reads freeTrial', async () => {
+    // EXPIRED maps to the same 'canceled' as the case above and Play leaves
+    // `offerPhase` where it was, so only the raw state tells them apart. A
+    // lapsed trial marked 'trialing' would ride the fold's expiry slack and
+    // stay entitled a day past its end.
+    apiBody = subscriptionBody({ state: 'SUBSCRIPTION_STATE_EXPIRED', phase: 'freeTrial' });
+    expect((await fetchPlaystoreSubscription(env, 'play-token-1'))?.status).toBe('canceled');
+  });
+
+  it('leaves a cancelled PAID subscription canceled', async () => {
+    apiBody = subscriptionBody({ state: 'SUBSCRIPTION_STATE_CANCELED', phase: 'basePrice' });
+    expect((await fetchPlaystoreSubscription(env, 'play-token-1'))?.status).toBe('canceled');
   });
 
   it('drops a state outside the map — including one named like a prototype member', async () => {

@@ -1141,6 +1141,14 @@ a crossgrade inside the existing subscription rather than a second purchase.
   runs, replaced by `basePrice` at the first charge. All
   three are gated on the normalized status being `active`, so a lapsed trial in
   dunning keeps the `past_due` sentence rather than being told it's still free.
+  Play's gate has a second arm, because Play alone turns a mid-trial cancel
+  into a state of its own (`SUBSCRIPTION_STATE_CANCELED`, where Paddle and Apple
+  keep the status and flag the cancellation beside it): a cancelled line still
+  in `freeTrial` is `trialing` with its end stamped, which is what earns the
+  "you won't be charged" sentence. The arm reads Play's raw state rather than
+  ours, since `EXPIRED` normalizes to the same `canceled` and a trial that
+  lapsed unconverted goes on reading `freeTrial` — marked `trialing`, it would
+  ride the fold's expiry slack a day past its end.
 
   **The Play trap: the offer outlives the trial.** Play is the only provider
   that carries one line item across the trial→paid boundary (Paddle's status

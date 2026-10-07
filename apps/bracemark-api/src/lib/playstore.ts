@@ -306,13 +306,27 @@ export async function fetchPlaystoreSubscription(
   // `offerPhase: { basePrice: {} }` and a processed order. Keying on the tag —
   // which this did — told a subscriber who had been charged "Free trial — your
   // first payment is on …", with nothing to ever clear it (docs/iap.md, the
-  // trial). A response with no `offerPhase` at all reads plain 'active'.
+  // trial). A response with no `offerPhase` at all keeps its plain status.
   //
-  // Gated on 'active' for the same reason Apple's is: that user is owed the
-  // past_due sentence ("your payment didn't go through") while a lapsed trial
-  // is dunning in IN_GRACE_PERIOD, whatever phase Google still reports.
-  const effectiveStatus: PurchaseStatus =
-    status === 'active' && line.offerPhase?.freeTrial != null ? 'trialing' : status;
+  // Gated on the STATE, because the phase alone says too much — it is still
+  // `freeTrial` on a trial that has ended without ever converting:
+  //   - ACTIVE: the trial is running.
+  //   - CANCELED: the user turned auto-renew off mid-trial. Play makes that a
+  //     state of its own where Apple and Paddle keep the status and flag the
+  //     cancellation beside it, so without this arm the row reads plain
+  //     'canceled' and the sections say "it won't renew" to someone who
+  //     cancelled to find out whether they'd be charged. `canceledAt` below is
+  //     already the period end (willRenew is false), which is what folds this
+  //     to "Free trial ends on … — you won't be charged".
+  //   - NOT EXPIRED, though it maps to the same 'canceled' and still reads
+  //     `freeTrial`: 'trialing' carries the fold's expiry slack, so a lapsed
+  //     trial marked that way would stay entitled a day past its end.
+  //   - NOT IN_GRACE_PERIOD: a lapsed trial in dunning is owed the past_due
+  //     sentence ("your payment didn't go through"), same as Apple's gate.
+  const inFreeTrial =
+    line.offerPhase?.freeTrial != null &&
+    (state === 'SUBSCRIPTION_STATE_ACTIVE' || state === 'SUBSCRIPTION_STATE_CANCELED');
+  const effectiveStatus: PurchaseStatus = inFreeTrial ? 'trialing' : status;
 
   return {
     // The purchase token is the stable identity of one subscription instance —
