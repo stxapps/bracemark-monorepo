@@ -25,6 +25,7 @@ import {
   Lock,
   type LucideIcon,
   Package,
+  Share2,
   Sheet,
   Trash2,
   Upload,
@@ -537,7 +538,7 @@ function ExportStatus({ state, excludedCount }: { state: ExportState; excludedCo
           testID="export-data-share"
           onPress={() => void shareExportedFile(outcome.file)}
         >
-          <Icon as={Download} className="size-4" />
+          <Icon as={Share2} className="size-4" />
           <Text>Save file…</Text>
         </Button>
       </View>
