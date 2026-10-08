@@ -60,6 +60,13 @@ export function pendingDeleteRecord(
   return { username, path, op: 'delete', baseUpdatedAt, writeId: newId() };
 }
 
+// How many edits this account has queued and not yet pushed. A one-shot read for a
+// caller that needs the number at a moment (the sign-out flow asks at the press);
+// use-pending-changes-count.ts is the live version of the same query.
+export function countPendingOps(username: string): Promise<number> {
+  return db.pendingOps.where('username').equals(username).count();
+}
+
 // The full queue for an account, in no particular order — the engine imposes its
 // own meta-last ordering at push time, so insertion order doesn't matter here.
 export function listPendingOps(username: string): Promise<PendingOpRecord[]> {

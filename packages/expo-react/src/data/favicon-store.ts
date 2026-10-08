@@ -29,11 +29,22 @@
 // whose file is missing as unresolved — so a half-written pair reads as "never
 // fetched" (→ re-fetch), never as a broken icon. Locations are DERIVED from
 // the host, never persisted (file-store.ts: iOS moves the app container).
+//
+// BOTH WRITES ARE FENCED ON THE ACCOUNT (sync-store.ts, AccountFencedError),
+// though the table has no owner column and an icon is public. What a row says is
+// that somebody on this device saved a link to that host, and both fillers write
+// after a network round trip — long enough for a sign-out to have wiped the
+// store underneath them. Unfenced, a fetch that was in flight then wrote the
+// signed-out account's host back into the empty store, file and all, where
+// clearData had already been and would not come again. The check sits inside
+// the write's own transaction, ahead of the file, as data/mutations.ts's
+// writeFile has it.
 
 import { eq } from 'drizzle-orm';
 import { Directory, File, Paths } from 'expo-file-system';
 
 import { favicons, getDb } from './db';
+import { assertAccountOwnsStoreTx } from './sync-store';
 
 export type FaviconRecord = typeof favicons.$inferSelect;
 
@@ -81,16 +92,15 @@ export function isFaviconStale(record: FaviconRecord | undefined, now = Date.now
 }
 
 // File first, row last — see the header's crash-consistency note.
-export async function putFavicon(host: string, bytes: Uint8Array): Promise<void> {
-  const dir = faviconFilesDir();
-  if (!dir.exists) dir.create({ intermediates: true, idempotent: true });
-  faviconFileFor(host).write(bytes);
+export async function putFavicon(username: string, host: string, bytes: Uint8Array): Promise<void> {
   const row = { host, status: 'ok' as const, fetchedAt: Date.now() };
-  getDb()
-    .insert(favicons)
-    .values(row)
-    .onConflictDoUpdate({ target: favicons.host, set: row })
-    .run();
+  getDb().transaction((tx) => {
+    assertAccountOwnsStoreTx(tx, username);
+    const dir = faviconFilesDir();
+    if (!dir.exists) dir.create({ intermediates: true, idempotent: true });
+    faviconFileFor(host).write(bytes);
+    tx.insert(favicons).values(row).onConflictDoUpdate({ target: favicons.host, set: row }).run();
+  });
 }
 
 // Record "this host has no reachable favicon" so a relaunch doesn't re-buy the
@@ -105,20 +115,19 @@ export async function putFavicon(host: string, bytes: Uint8Array): Promise<void>
 // unsynchronized fillers safe is: `ok` wins, `none` is only ever the floor, so
 // whichever path first lands real bytes keeps them. The read + verdict + write
 // below run with NO `await` between them, so no other filler can interleave.
-export async function putFaviconNone(host: string): Promise<void> {
-  const file = faviconFileFor(host);
-  const existing = getDb().select().from(favicons).where(eq(favicons.host, host)).get();
-  // `readFavicon`'s file check, inlined to keep the sequence synchronous: an `ok`
-  // row with bytes behind it outranks this miss.
-  if (existing?.status === 'ok' && file.exists) return;
+export async function putFaviconNone(username: string, host: string): Promise<void> {
+  getDb().transaction((tx) => {
+    assertAccountOwnsStoreTx(tx, username);
+    const file = faviconFileFor(host);
+    const existing = tx.select().from(favicons).where(eq(favicons.host, host)).get();
+    // `readFavicon`'s file check, inlined to keep the sequence synchronous: an `ok`
+    // row with bytes behind it outranks this miss.
+    if (existing?.status === 'ok' && file.exists) return;
 
-  if (file.exists) file.delete();
-  const row = { host, status: 'none' as const, fetchedAt: Date.now() };
-  getDb()
-    .insert(favicons)
-    .values(row)
-    .onConflictDoUpdate({ target: favicons.host, set: row })
-    .run();
+    if (file.exists) file.delete();
+    const row = { host, status: 'none' as const, fetchedAt: Date.now() };
+    tx.insert(favicons).values(row).onConflictDoUpdate({ target: favicons.host, set: row }).run();
+  });
 }
 
 // Remove every cached icon file — the file-system half of the `favicons` table

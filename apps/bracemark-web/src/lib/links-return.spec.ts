@@ -17,7 +17,14 @@
 // frame, so a storage hiccup (Safari private mode, a quota'd origin) that threw
 // would take down the page rather than the feature.
 
-import { readLinksReturn, recordLinksReturn } from './links-return';
+import { renderHook } from '@testing-library/react';
+
+import {
+  clearLinksReturn,
+  readLinksReturn,
+  recordLinksReturn,
+  useLinksReturnOwner,
+} from './links-return';
 
 // Replace the whole storage seam for one test. jsdom exposes `sessionStorage` as
 // a prototype getter, so it can only be shadowed by an own property — which is
@@ -102,5 +109,64 @@ describe('links-return', () => {
     withSessionStorage(throwing, () => {
       expect(() => recordLinksReturn('/links?list=list-abc')).not.toThrow();
     });
+  });
+});
+
+// The stored view can carry a SEARCH, and `/links?q=…` resolves for anyone — unlike a
+// previous account's list or tag id, which the links page sends home. So the value goes
+// with the account that browsed it. Without that, the next account signed in from this
+// tab closes Settings onto the previous one's search text; nothing errors, and the stale
+// value is in a store no sign-out wipe reaches (sessionStorage is per tab, clearData
+// runs in one).
+describe('who the stored view belongs to', () => {
+  const SEARCH = '/links?q=tax+2024';
+
+  beforeEach(() => {
+    sessionStorage.clear();
+  });
+
+  it('forgets the view on request', () => {
+    recordLinksReturn(SEARCH);
+
+    clearLinksReturn();
+
+    expect(readLinksReturn()).toBe('/links');
+  });
+
+  it('forgets it when the account signs out of this tab', () => {
+    const { rerender } = renderHook(({ username }) => useLinksReturnOwner(username), {
+      initialProps: { username: 'alice' as string | null },
+    });
+    recordLinksReturn(SEARCH);
+
+    rerender({ username: null });
+
+    expect(readLinksReturn()).toBe('/links');
+  });
+
+  // Another tab signed out and in as someone else; this tab never saw a signed-out frame.
+  it('forgets it when a different account takes the tab over', () => {
+    const { rerender } = renderHook(({ username }) => useLinksReturnOwner(username), {
+      initialProps: { username: 'alice' as string | null },
+    });
+    recordLinksReturn(SEARCH);
+
+    rerender({ username: 'bob' });
+
+    expect(readLinksReturn()).toBe('/links');
+  });
+
+  // The other direction, which is the whole point of the value: a reload hydrates from no
+  // account to the same one, and the view must still be there for the ✕ to return to.
+  it('keeps it across a reload — signed out to signed in is not a departure', () => {
+    recordLinksReturn(SEARCH);
+    const { rerender } = renderHook(({ username }) => useLinksReturnOwner(username), {
+      initialProps: { username: null as string | null },
+    });
+
+    rerender({ username: 'alice' });
+    rerender({ username: 'alice' });
+
+    expect(readLinksReturn()).toBe(SEARCH);
   });
 });

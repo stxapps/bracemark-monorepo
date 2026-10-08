@@ -5,6 +5,7 @@ import {
   LockProvider,
   SyncProvider,
 } from '@stxapps/web-react';
+import { SignOutProvider } from '@stxapps/web-ui/contexts/sign-out-provider';
 
 import { AppLockGate } from '@/components/app-lock-gate';
 import { AuthGuard } from '@/components/auth-guard';
@@ -27,6 +28,11 @@ import { PaywallProvider } from '@/contexts/paywall-provider';
 //   AuthGuard       — "do you have a session?" (client-side: the session lives
 //                     in IndexedDB, not a cookie, so the server can't gate).
 //                     Redirects.
+//   SignOutProvider — the hoisted sign-out flow (@stxapps/web-ui): the question
+//                     when a change hasn't synced, and the cover over the page
+//                     while the sign-out runs. Needs only the session, and sits
+//                     above AppLockGate because the lock pane's "forgot the
+//                     password" link is one of its callers.
 //   SyncProvider    — runs initial/incremental sync and exposes
 //                     storeStatus/requestSync. Never redirects.
 //   FileContentProvider — on-demand `files/` blobs for the link preview images.
@@ -59,35 +65,37 @@ import { PaywallProvider } from '@/contexts/paywall-provider';
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <AuthGuard>
-      <SyncProvider>
-        <DanglingExtractionSweep />
-        <FileContentProvider>
-          <FaviconProvider>
-            <ExtractionProvider>
-              <LockProvider>
-                <AppLockGate>
-                  <InitialSyncGate>
-                    <PaywallProvider>
-                      {/* NO WRAPPER ELEMENT HERE, on purpose. Every screen under
-                          this layout is already its own `h-dvh` frame carrying
-                          its own `safe-area` (links/page.tsx,
-                          settings/layout.tsx), so a box here is either dead
-                          weight or actively harmful: a height would restate what
-                          those frames set for themselves, and PADDING would ADD
-                          to their `h-dvh` — separate elements, so border-box
-                          can't absorb it — hanging their bottom edge past the
-                          fold. That is the blanket bug from inner-layout.tsx one
-                          level lower. A bare `min-h-dvh` div used to sit here; it
-                          constrained nothing. docs/safe-area.md. */}
-                      {children}
-                    </PaywallProvider>
-                  </InitialSyncGate>
-                </AppLockGate>
-              </LockProvider>
-            </ExtractionProvider>
-          </FaviconProvider>
-        </FileContentProvider>
-      </SyncProvider>
+      <SignOutProvider>
+        <SyncProvider>
+          <DanglingExtractionSweep />
+          <FileContentProvider>
+            <FaviconProvider>
+              <ExtractionProvider>
+                <LockProvider>
+                  <AppLockGate>
+                    <InitialSyncGate>
+                      <PaywallProvider>
+                        {/* NO WRAPPER ELEMENT HERE, on purpose. Every screen under
+                            this layout is already its own `h-dvh` frame carrying
+                            its own `safe-area` (links/page.tsx,
+                            settings/layout.tsx), so a box here is either dead
+                            weight or actively harmful: a height would restate what
+                            those frames set for themselves, and PADDING would ADD
+                            to their `h-dvh` — separate elements, so border-box
+                            can't absorb it — hanging their bottom edge past the
+                            fold. That is the blanket bug from inner-layout.tsx one
+                            level lower. A bare `min-h-dvh` div used to sit here; it
+                            constrained nothing. docs/safe-area.md. */}
+                        {children}
+                      </PaywallProvider>
+                    </InitialSyncGate>
+                  </AppLockGate>
+                </LockProvider>
+              </ExtractionProvider>
+            </FaviconProvider>
+          </FileContentProvider>
+        </SyncProvider>
+      </SignOutProvider>
     </AuthGuard>
   );
 }

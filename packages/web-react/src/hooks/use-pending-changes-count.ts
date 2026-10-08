@@ -9,15 +9,9 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 
 import { useAuth } from '../contexts/auth-provider';
-import { db } from '../data/db';
+import { countPendingOps } from '../data/pending-store';
 
 export function usePendingChangesCount(): number {
   const { username } = useAuth();
-  return (
-    useLiveQuery(
-      () => (username ? db.pendingOps.where('username').equals(username).count() : 0),
-      [username],
-      0,
-    ) ?? 0
-  );
+  return useLiveQuery(() => (username ? countPendingOps(username) : 0), [username], 0) ?? 0;
 }

@@ -18,7 +18,15 @@ import {
 } from '@stxapps/shared';
 
 import { awaitInflightSync } from '../sync/engine';
-import { favicons, getDb, itemFacetStatuses, items, itemTagIds, locks } from './db';
+import {
+  favicons,
+  getDb,
+  itemFacetStatuses,
+  items,
+  itemTagIds,
+  locks,
+  scrubFreedPages,
+} from './db';
 import { clearFaviconFiles } from './favicon-store';
 import { clearDataFiles } from './file-store';
 import { invalidateLiveReads } from './live-read-invalidation';
@@ -89,9 +97,17 @@ export async function deleteAllData(args: {
     tx.delete(locks).run();
     tx.delete(favicons).run();
   });
+  // "Delete all data" has to mean the file too, not just the tables (db.ts).
+  scrubFreedPages();
   clearDataFiles();
   clearFaviconFiles();
   clearDecodeCache();
+  // NOT clearCacheFiles, the one member of clearData's set this deliberately
+  // leaves: the export in the cache dir may be the backup the user took a
+  // minute ago BECAUSE they were about to do this, and the app they sent it to
+  // can still be reading it. After a sign-out the server has the library; after
+  // this, that file may be the only copy. It goes with the next export or the
+  // sign-out (cache-files.ts).
   // Bare whole-table deletes take SQLite's truncate optimization, which does
   // not invoke the sqlite3_update_hook behind expo-sqlite's change listener.
   // Newly mounted readers would see the empty tables while already-mounted

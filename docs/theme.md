@@ -322,7 +322,11 @@ dark` token sets (the native mirror of web-ui's `:root`/`.dark`).
   App Group's `share/` subtree, which `clearShareData()` removes wholesale; on
   Android, sign-out drops the `localSettings` row, `useSettings` re-emits
   `DEFAULT_THEME`, and the provider rewrites the file with it. It holds no
-  account data either way — a mode and two clock times.
+  account data either way — a mode and two clock times. That re-emit is also
+  what returns the landing to the OS theme, and it is not free: the provider
+  outlives the sign-out and the wipe fires no change event, so `clearData`
+  invalidates the live reads itself ([data-lifecycle.md](./data-lifecycle.md),
+  _the sign-out teardown_).
 
 - **bracemark-site** — the marketing site is **light-only, deliberately**, and it is
   the one property with no theme code at all: no `ThemeProvider`, no

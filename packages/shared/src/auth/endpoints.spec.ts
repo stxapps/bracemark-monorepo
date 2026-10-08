@@ -1,3 +1,4 @@
+import { DEFAULT_CALL_TIMEOUT_MS } from '../api/client';
 import type { z } from '../zod';
 import {
   changePasswordPayloadSchema,
@@ -5,6 +6,7 @@ import {
   deleteAccountPayloadSchema,
   putRecoveryDoorPayloadSchema,
   signInPayloadSchema,
+  signOutEndpoint,
   wireDoorSchema,
 } from './endpoints';
 
@@ -108,5 +110,17 @@ describe('the hex wire fields', () => {
     expect(
       signInPayloadSchema.safeParse({ ...base, action: 'sign-in', timestamp: 1.5 }).success,
     ).toBe(false);
+  });
+});
+
+// Every client holds its local sign-out until this request settles, behind a dialog with
+// no way out, and the request is best-effort — so its deadline is the longest anyone can
+// be made to watch "Signing out…" for nothing. Dropping the field is silent: the call
+// falls back to the client default and the wait goes back to a minute, on exactly the
+// connection (accepts the request, never answers) where the request cannot succeed.
+describe('the sign-out deadline', () => {
+  it('is declared in the contract, well under the client default', () => {
+    expect(signOutEndpoint.timeoutMs).toBeDefined();
+    expect(signOutEndpoint.timeoutMs).toBeLessThanOrEqual(DEFAULT_CALL_TIMEOUT_MS / 4);
   });
 });

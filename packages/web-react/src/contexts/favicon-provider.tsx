@@ -122,11 +122,56 @@ export function FaviconProvider({ children }: { children: ReactNode }) {
     handledRef.current.clear();
   }, [username]);
 
+  // The account the drain writes for, read as each entry reaches the front (the
+  // pump below is identity-stable, so it can't close over a render's value).
+  const usernameRef = useRef(username);
+  usernameRef.current = username;
+
+  // THE DRAIN ENDS WITH THE PROVIDER. Nothing above stops it: the queue is a ref
+  // and each fetch re-arms the next from its own `finally`, and the provider sits
+  // under the auth gate, so a sign-out is an UNMOUNT — no render ever hands it a
+  // null username or a closed opt-in to notice. A browser tab never showed this,
+  // because sign-out navigates off the origin and the document goes with the
+  // queue. The installed app stays, and there the loop ran on by itself: one
+  // request per queued host through the extractor for the signed-out account's
+  // saved sites, each answer then written into the table clearData had just
+  // emptied. So unmounting empties the queue and marks the drain dead; a fetch
+  // already out finishes and then finds the mark (or, in the commit between the
+  // wipe and this cleanup, the store's own fence — data/favicon-store.ts).
+  //
+  // A flag that only ever goes one way — never "alive", set by the mount effect: a
+  // row's effect runs BEFORE this provider's (children first), so a request made
+  // in the provider's own first commit would find it not yet alive and be dropped.
+  const stoppedRef = useRef(false);
+  const mountedRef = useRef(false);
+  useEffect(() => {
+    // The Set is never replaced, only cleared, so this is the one the cleanup wants.
+    const handled = handledRef.current;
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      // Decided a microtask later, not here. StrictMode's mount → cleanup → mount
+      // runs this cleanup and re-mounts in the same synchronous commit; taken at
+      // face value that reads as the provider going away, and it would drop every
+      // host the rows asked for in that first commit — for good, since they stay
+      // marked handled. A real unmount is still unmounted by then.
+      queueMicrotask(() => {
+        if (mountedRef.current) return;
+        stoppedRef.current = true;
+        queueRef.current = [];
+        handled.clear();
+      });
+    };
+  }, []);
+
   const pump = useCallback(() => {
     while (inFlightRef.current < MAX_IN_FLIGHT && queueRef.current.length > 0) {
       const host = queueRef.current.shift();
       if (host === undefined) return;
       inFlightRef.current += 1;
+      // Captured before the request, so the write is fenced on the account this
+      // entry was fetched for, not on whoever is signed in when the answer lands.
+      const owner = usernameRef.current;
       void (async () => {
         try {
           const client = clientRef.current;
@@ -137,33 +182,39 @@ export function FaviconProvider({ children }: { children: ReactNode }) {
             handledRef.current.delete(host);
             return;
           }
+          if (stoppedRef.current || !owner) return;
           // Re-check under the single-flight guard: another tab or an earlier
           // request may have resolved this host since it was queued.
           const existing = await readFavicon(host);
           if (!isFaviconStale(existing)) return;
 
-          const bytes = await client.fetchImage(`https://${host}/favicon.ico`);
-          // The proxy got us bytes; whether they're an ICON is our call — see the
-          // header. Anything else records `none`, so the row doesn't cache an
-          // unrenderable (or oversized) blob under an `ok` that never expires.
-          if (!isRenderableIconBytes(bytes)) await putFaviconNone(host);
-          else await putFavicon(host, bytes);
-        } catch {
-          // Every failure mode lands here alike — 404 (no such icon),
-          // unsupported_type (an HTML error page), blocked, or a transport error.
-          // All record `none`: the icon is decoration, so there's no case where
-          // retrying it on the next render is worth a request, and the row ages
-          // out via FAVICON_RETRY_MS. Distinguishing them would buy a nicer retry
-          // policy for a monogram nobody is waiting on.
+          let icon: Uint8Array | undefined;
           try {
-            await putFaviconNone(host);
+            const bytes = await client.fetchImage(`https://${host}/favicon.ico`);
+            // The proxy got us bytes; whether they're an ICON is our call — see the
+            // header. Anything else records `none`, so the row doesn't cache an
+            // unrenderable (or oversized) blob under an `ok` that never expires.
+            icon = isRenderableIconBytes(bytes) ? bytes : undefined;
           } catch {
-            // The write itself failed (quota, private mode). Nothing to do — the
-            // row stays absent, the row stays a monogram, and a later mount re-asks.
+            // Every failure mode lands here alike — 404 (no such icon),
+            // unsupported_type (an HTML error page), blocked, or a transport error.
+            // All record `none`: the icon is decoration, so there's no case where
+            // retrying it on the next render is worth a request, and the row ages
+            // out via FAVICON_RETRY_MS. Distinguishing them would buy a nicer retry
+            // policy for a monogram nobody is waiting on.
+            icon = undefined;
           }
+          // Unmounted while the request was out: the answer belongs to nobody.
+          if (stoppedRef.current) return;
+          if (icon === undefined) await putFaviconNone(owner, host);
+          else await putFavicon(owner, host, icon);
+        } catch {
+          // The write itself failed (quota, private mode), or the store fenced it
+          // (the account signed out under the fetch). Nothing to do — the row stays
+          // absent, the icon stays a monogram, and a later mount re-asks.
         } finally {
           inFlightRef.current -= 1;
-          if (queueRef.current.length > 0) setTimeout(pump, STAGGER_MS);
+          if (!stoppedRef.current && queueRef.current.length > 0) setTimeout(pump, STAGGER_MS);
         }
       })();
     }

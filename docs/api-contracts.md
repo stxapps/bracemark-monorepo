@@ -194,6 +194,15 @@ call rejects with `ApiTimeoutError` and the fetch is aborted.
   hops × 8 s on the page and then again on its inline image (`EXTRACT_TIMEOUT_MS`,
   2 min, sized from the extractor's `safe-fetch.ts` caps; `safe-fetch.spec.ts`
   holds the two together).
+- **One endpoint declares a SHORTER deadline, for the opposite reason.**
+  `auth/sign-out` is best-effort, and every client holds its local sign-out
+  until the request settles — behind a dialog with no way out, because what is
+  typed during that wait is erased with the rest
+  ([data-lifecycle.md](./data-lifecycle.md), _the press, and the wait_). On the
+  default that is a minute of "Signing out…" on exactly the connection where
+  the request cannot succeed. `SIGN_OUT_TIMEOUT_MS` is 10 s; when it fires the
+  cost is the one a failed request already had — the session row is not
+  revoked, idles out and is purged.
 - **The deadline rejects; the abort only tidies up.** The call settles through its
   own timer, not through the fetch honoring its signal, because the point is a
   promise that always settles. A consequence: the fetch receives the client's own

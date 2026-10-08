@@ -216,11 +216,25 @@ export type SignOutResponse = z.infer<typeof signOutResponseSchema>;
 // Protected: requires the session's bearer token. The client also drops its local
 // session regardless, so a network failure here still signs the user out locally
 // — the row then idles out and is purged like any other.
+//
+// Its own deadline, and the one endpoint whose deadline is SHORTER than the
+// default. The others that declare one do it because the server legitimately
+// works for minutes; this one because the CLIENT is waiting on it for nothing.
+// The request is best-effort and the local sign-out is held until it settles
+// (use-sign-out.ts, on every platform) — behind a dialog with no way out, since
+// what is typed during that wait is erased with the rest. Left on the default,
+// that is a full minute on exactly the connection where the request cannot
+// succeed: one that accepts it and never answers. Ten seconds is long enough
+// for a slow radio and short enough to sit through, and when it fires the cost
+// is the one a failed request already had — the row is not revoked.
+export const SIGN_OUT_TIMEOUT_MS = 10_000;
+
 export const signOutEndpoint = defineEndpoint({
   method: 'POST',
   path: `${API_V1}/auth/sign-out`,
   request: signOutRequestSchema,
   response: signOutResponseSchema,
+  timeoutMs: SIGN_OUT_TIMEOUT_MS,
 });
 
 // Like sign-out, but revokes every OTHER session for the account and KEEPS the

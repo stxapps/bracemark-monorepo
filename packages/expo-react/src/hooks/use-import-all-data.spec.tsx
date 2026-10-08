@@ -19,6 +19,10 @@ jest.mock('./use-entitlements', () => ({
 jest.mock('../data/import-all-data', () => ({
   importAllData: (options: unknown) => mockImport(options),
 }));
+const mockDeletePickedCopy = jest.fn();
+jest.mock('../data/cache-files', () => ({
+  deletePickedCopy: (uri: string) => mockDeletePickedCopy(uri),
+}));
 
 const file = { uri: 'file:///bookmarks.txt', name: 'bookmarks.txt' };
 const prompt = { newCount: 300, existingCount: 0, maxLinks: 200, room: 200 };
@@ -31,6 +35,7 @@ beforeEach(() => {
   settled = false;
   mockRequestSync.mockClear();
   mockImport.mockClear();
+  mockDeletePickedCopy.mockClear();
   mockImport.mockImplementation(
     async ({ onQuotaPrompt }: { onQuotaPrompt: ImportQuotaResolver }) => {
       ask = async () => {
@@ -43,6 +48,25 @@ beforeEach(() => {
     },
   );
 });
+
+// The picker COPIES the chosen file into the cache dir, and that copy is the user's
+// bookmarks in plaintext. The run reads it whole, so once the run settles — either way —
+// nothing needs it again, and nothing else would ever remove it short of a sign-out.
+it.each(['import-what-fits', 'cancel'] as const)(
+  'removes the picked copy once the run settles (%s)',
+  async (quotaAnswer) => {
+    const { result } = renderHook(() => useImportAllData());
+    act(() => result.current.run(file));
+    // Still running: the orchestrator may not have read it yet.
+    expect(mockDeletePickedCopy).not.toHaveBeenCalled();
+
+    await act(async () => result.current.answerQuota(quotaAnswer));
+    await act(async () => undefined);
+
+    expect(settled).toBe(true);
+    expect(mockDeletePickedCopy).toHaveBeenCalledWith(file.uri);
+  },
+);
 
 it('settles an unanswered quota prompt when its screen unmounts', async () => {
   const { result, unmount } = renderHook(() => useImportAllData());

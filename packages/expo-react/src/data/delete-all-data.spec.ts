@@ -101,7 +101,7 @@ async function seedSignedInAccountWithData(): Promise<void> {
   await beginInitialSync(USER);
   await markFirstSyncDone(USER, 500, LINK_PATH);
   await putLock({ id: 'app', kind: 'app', salt: 'aa', hash: 'bb' });
-  await putFavicon('example.com', new Uint8Array([1, 2, 3]));
+  await putFavicon(USER, 'example.com', new Uint8Array([1, 2, 3]));
   await setLocalSettings({ linksLayoutSource: 'local', linksLayout: 'card' });
   writeSidebarCollapsedIds(['lists']);
   writeReviewPromptState({

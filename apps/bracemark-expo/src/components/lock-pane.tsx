@@ -12,9 +12,9 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { Lock, ScanFace } from 'lucide-react-native';
 import { withUniwind } from 'uniwind';
 
-import { useSignOut } from '@stxapps/expo-react';
 import { LOCK_COPY } from '@stxapps/react';
 
+import { useSignOutFlow } from '../contexts/sign-out-provider';
 import { PasswordInput } from '../features/auth/password-input';
 import { Button } from './ui/button';
 import { Icon } from './ui/icon';
@@ -53,7 +53,7 @@ export function LockPane({
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const signOut = useSignOut();
+  const { requestSignOut } = useSignOutFlow();
 
   const submit = async () => {
     if (busy) return;
@@ -175,10 +175,7 @@ export function LockPane({
       <View className="max-w-xs">
         <Text className="text-center text-xs text-muted-foreground">
           {LOCK_COPY.forgot.before}{' '}
-          <Text
-            className="text-xs text-muted-foreground underline"
-            onPress={() => !signOut.isPending && signOut.mutate()}
-          >
+          <Text className="text-xs text-muted-foreground underline" onPress={requestSignOut}>
             {LOCK_COPY.forgot.action}
           </Text>{' '}
           {LOCK_COPY.forgot.after}

@@ -65,6 +65,17 @@ function wrapStatement(stmt: StatementSync) {
   };
 }
 
+// Where the next database opens. In memory unless a spec asks for a file — which
+// only one kind of spec has reason to: one whose claim is about the BYTES ON DISK
+// rather than about what a query returns (data/clear-data.residue.spec.ts — a
+// deleted row is gone from every SELECT and still in the file). Set before the
+// first `getDb()`, since db.ts opens once per module registry.
+let databaseFile: string | null = null;
+
+export function setDatabaseFile(path: string | null): void {
+  databaseFile = path;
+}
+
 // `name` and the options are accepted and ignored: every call gets its own
 // private in-memory database, which is what a spec wants.
 export function openDatabaseSync(
@@ -75,7 +86,7 @@ export function openDatabaseSync(
   prepareSync: (sql: string) => ReturnType<typeof wrapStatement>;
   closeSync: () => void;
 } {
-  const db = new DatabaseSync(':memory:');
+  const db = new DatabaseSync(databaseFile ?? ':memory:');
   return {
     execSync: (sql: string) => db.exec(sql),
     prepareSync: (sql: string) => wrapStatement(db.prepare(sql)),

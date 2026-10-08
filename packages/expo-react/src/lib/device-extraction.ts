@@ -237,7 +237,7 @@ async function extractOne(
   });
 
   // The carve-out (header): capture the icon this page DECLARED, since we're already here.
-  await captureDeclaredFavicon(collected, page.finalUrl, opts);
+  await captureDeclaredFavicon(username, collected, page.finalUrl, opts);
   return true;
 }
 
@@ -378,6 +378,7 @@ async function loadImage(imageUrl: string | undefined): Promise<ImageOutcome> {
 // for a row labelled `t.co`. Re-keying this to the saved host would paint the first
 // destination's icon on every other link saved through the same shortener.
 async function captureDeclaredFavicon(
+  username: string,
   collected: ReturnType<typeof parseHtmlHead>,
   finalUrl: URL,
   { optedIn }: DeviceExtractionOptions,
@@ -408,7 +409,7 @@ async function captureDeclaredFavicon(
       if (!res.ok) return;
       const bytes = new Uint8Array(await res.arrayBuffer());
       if (!isRenderableIconBytes(bytes)) return;
-      await putFavicon(host, bytes);
+      await putFavicon(username, host, bytes);
     } finally {
       clearTimeout(timer);
     }

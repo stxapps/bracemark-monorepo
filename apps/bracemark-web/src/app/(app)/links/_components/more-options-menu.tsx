@@ -2,9 +2,9 @@
 
 // The overflow menu behind the topbar's "More options" button: account- and
 // session-level actions that don't warrant their own toolbar slot. Sign out goes
-// through the useSignOut mutation (server revocation, then local wipe) rather
-// than the bare auth-provider endSession primitive, which only drops the local
-// session.
+// through the hoisted sign-out flow (@stxapps/web-ui's sign-out-provider), which
+// wraps the useSignOut mutation (server revocation, then local wipe) — never the
+// bare auth-provider endSession primitive, which only drops the local session.
 //
 // The Sync item adapts to the sync phase, and a failed cycle also surfaces as a
 // dot on the trigger — the topbar is the links page's only always-visible sync
@@ -40,7 +40,7 @@ import {
 import Link from 'next/link';
 
 import { getSyncPhase } from '@stxapps/shared';
-import { useLocks, useSignOut, useSync } from '@stxapps/web-react';
+import { useLocks, useSync } from '@stxapps/web-react';
 import { Button } from '@stxapps/web-ui/components/ui/button';
 import {
   DropdownMenu,
@@ -49,6 +49,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@stxapps/web-ui/components/ui/dropdown-menu';
+import { useSignOutFlow } from '@stxapps/web-ui/contexts/sign-out-provider';
 
 import { SUPPORT_URL } from '../../../../lib/site';
 import { DEFAULT_SECTION_ID } from '../../settings/sections';
@@ -56,7 +57,7 @@ import { DEFAULT_SECTION_ID } from '../../settings/sections';
 export function MoreOptionsMenu() {
   const { storeStatus, bgSyncStatus, syncNow } = useSync();
   const { appLock, lockApp } = useLocks();
-  const signOut = useSignOut();
+  const { requestSignOut, signingOut } = useSignOutFlow();
   const phase = getSyncPhase(storeStatus, bgSyncStatus);
   // Rendered inside InitialSyncGate, so storeStatus is never 'error' here —
   // 'initial-error' and its retryInitialSync belong to the gate's own screen.
@@ -207,10 +208,14 @@ export function MoreOptionsMenu() {
           </DropdownMenuItem>
         )}
         <DropdownMenuSeparator />
+        {/* The hoisted flow (@stxapps/web-ui's sign-out-provider), not the bare
+            useSignOut mutation: it asks first when a change hasn't synced, and
+            covers the page while the revocation request is out — this item is
+            gone the moment it is chosen, so neither could live here. */}
         <DropdownMenuItem
           variant="destructive"
-          disabled={signOut.isPending}
-          onSelect={() => signOut.mutate()}
+          disabled={signingOut}
+          onSelect={() => requestSignOut()}
         >
           <LogOut className="size-4" />
           Sign out

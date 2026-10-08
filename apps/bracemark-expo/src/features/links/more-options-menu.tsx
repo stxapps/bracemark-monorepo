@@ -40,7 +40,7 @@ import {
   SquareCheckBig,
 } from 'lucide-react-native';
 
-import { useLocks, useSignOut, useSync } from '@stxapps/expo-react';
+import { useLocks, useSync } from '@stxapps/expo-react';
 import { getSyncPhase } from '@stxapps/shared';
 
 import { FirstLineSlot } from '../../components/first-line-slot';
@@ -54,6 +54,7 @@ import {
 } from '../../components/ui/dropdown-menu';
 import { Icon } from '../../components/ui/icon';
 import { Text } from '../../components/ui/text';
+import { useSignOutFlow } from '../../contexts/sign-out-provider';
 import { SUPPORT_URL } from '../../lib/site';
 import { cn } from '../../lib/utils';
 import { useLinksViewActions } from './view-state-provider';
@@ -62,7 +63,7 @@ export function MoreOptionsMenu() {
   const { storeStatus, bgSyncStatus, syncNow } = useSync();
   const { appLock, lockApp } = useLocks();
   const { enterBulkEdit } = useLinksViewActions();
-  const signOut = useSignOut();
+  const { requestSignOut, signingOut } = useSignOutFlow();
   const router = useRouter();
   const phase = getSyncPhase(storeStatus, bgSyncStatus);
   // Rendered inside InitialSyncGate, so storeStatus is never 'error' here —
@@ -213,12 +214,15 @@ export function MoreOptionsMenu() {
           </DropdownMenuItem>
         )}
         <DropdownMenuSeparator />
-        {/* useSignOut: server revocation (best-effort), then the local wipe —
-            never the bare endSession primitive, which only drops the session. */}
+        {/* The hoisted flow (contexts/sign-out-provider.tsx), not the bare
+            useSignOut mutation: it asks first when a change hasn't synced, and
+            covers the app while the revocation request is out — this item is
+            gone the moment it is pressed, so neither could live here. */}
         <DropdownMenuItem
           variant="destructive"
-          disabled={signOut.isPending}
-          onPress={() => signOut.mutate()}
+          testID="links-sign-out"
+          disabled={signingOut}
+          onPress={requestSignOut}
         >
           <Icon as={LogOut} className="size-4" />
           <Text>Sign out</Text>

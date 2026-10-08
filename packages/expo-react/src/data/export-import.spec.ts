@@ -59,7 +59,14 @@ import {
 } from '@stxapps/shared/testing';
 
 import type { SyncDeps } from '../sync/engine';
-import { readFileBytes, resetFileSystem, writeFileBytes } from '../testing/memory-file-system';
+import {
+  File,
+  listFileUris,
+  readFileBytes,
+  resetFileSystem,
+  writeFileBytes,
+} from '../testing/memory-file-system';
+import { clearCacheFiles } from './cache-files';
 import { getDb } from './db';
 import { assertZipWritable, exportAllData, ExportTooLargeError } from './export-all-data';
 import { dataFileFor, ensureDataFilesDir } from './file-store';
@@ -68,7 +75,7 @@ import { getItem, markItemDataFile, namespaceRows, putItemsTx } from './item-sto
 import { liveReadsHeld } from './live-read-invalidation';
 import { listPendingOps } from './pending-store';
 import { toItemRecord } from './projection';
-import { beginInitialSync, markFirstSyncDone } from './sync-store';
+import { AccountFencedError, beginInitialSync, markFirstSyncDone } from './sync-store';
 
 // The two native seams, and nothing else (../sync/engine.spec.ts, same shims).
 jest.mock('expo-sqlite', () => require('../testing/node-sqlite'));
@@ -693,6 +700,42 @@ describe('the output the share sheet is presented over', () => {
     expect(outcome.file.mimeType).toBe('application/zip');
     expect(outcome.file.uri.startsWith('file:///cache/')).toBe(true);
     expect(readFileBytes(outcome.file.uri).length).toBeGreaterThan(0);
+  });
+
+  // That file is the whole library in plaintext, and it has to outlive the run for the
+  // share sheet to read it — so it lands where the sign-out wipe looks for it
+  // (cache-files.ts), not loose in the cache dir under a name only this run knows.
+  it('writes it where the sign-out wipe will find it', async () => {
+    seedEntities();
+    const outcome = await exportBackup();
+
+    clearCacheFiles();
+
+    expect(new File(outcome.file.uri).exists).toBe(false);
+  });
+
+  // A run takes minutes and holds the gathered library in memory, so a sign-out midway
+  // used to end with the signed-out account's backup written AFTER the wipe had swept the
+  // cache dir. The write is fenced on the account like a store write.
+  it('writes nothing for an account that signed out while it ran', async () => {
+    seedEntities();
+    const running = exportAllData({
+      format: 'netscape',
+      deps: {
+        ...deps(),
+        api: {
+          call: async () => {
+            // The sign-out lands during the run's refresh, before anything is written.
+            getDb().run(sql`DELETE FROM sync_meta`);
+            throw new Error('offline');
+          },
+        } as unknown as SyncDeps['api'],
+      },
+      excludedListIds: new Set<string>(),
+    });
+
+    await expect(running).rejects.toBeInstanceOf(AccountFencedError);
+    expect(listFileUris().filter((uri) => uri.startsWith('file:///cache/'))).toEqual([]);
   });
 });
 

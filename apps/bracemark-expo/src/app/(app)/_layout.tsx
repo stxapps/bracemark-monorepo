@@ -13,6 +13,7 @@ import { AuthGuard } from '../../components/auth-guard';
 import { InitialSyncGate } from '../../components/initial-sync-gate';
 import { ShareBridge } from '../../components/share-bridge';
 import { PaywallProvider } from '../../contexts/paywall-provider';
+import { SignOutProvider } from '../../contexts/sign-out-provider';
 
 // The signed-in app group — `/links`, `/settings`. Mirrors bracemark-web's
 // `src/app/(app)`. A plain Stack for now; this is where a Tabs/Drawer navigator
@@ -36,6 +37,11 @@ import { PaywallProvider } from '../../contexts/paywall-provider';
 //                  client-side, since the local-first session lives on-device
 //                  (secure-store), so there's no server to gate. Reads the
 //                  AuthProvider mounted in the root `_layout`.
+//   SignOutProvider — the hoisted sign-out flow: the question when a change
+//                  hasn't synced, and the cover over the app while the sign-out
+//                  runs. Needs only the session, and must sit ABOVE AppLockGate —
+//                  the lock pane's "forgot the password" link opens it, and a
+//                  dialog under the gate unmounts while the app is covered.
 //   SyncProvider — "is the local store ready?" It runs initial/incremental sync
 //                  and exposes storeStatus/requestSync to the app. Never
 //                  redirects.
@@ -80,44 +86,46 @@ import { PaywallProvider } from '../../contexts/paywall-provider';
 export default function AppLayout() {
   return (
     <AuthGuard>
-      <SyncProvider>
-        <FileContentProvider>
-          <FaviconProvider>
-            <ExtractionProvider>
-              <ShareBridge />
-              <LockProvider>
-                <AppLockGate>
-                  <InitialSyncGate>
-                    <PaywallProvider>
-                      <Stack screenOptions={{ headerShown: false }}>
-                        {/* The link EDITOR presents modally (iOS pageSheet; Android
-                          slides up) — a router screen, not an RN Modal, so
-                          keyboard-controller and portals work inside it
-                          (link-edit-screen.tsx). Add has no entry here: it is a
-                          layer the links screen draws over itself, because every
-                          presentation that could have sized it to its contents
-                          fails on one platform or the other
-                          (features/links/link-add-panel.tsx). */}
-                        <Stack.Screen
-                          name="edit-link"
-                          options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
-                        />
-                        {/* "Sign in to resume" for an expired session
-                            (docs/sessions.md) — modal for the same reason: a form
-                            with a keyboard, over a library that stays open. */}
-                        <Stack.Screen
-                          name="resume"
-                          options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
-                        />
-                      </Stack>
-                    </PaywallProvider>
-                  </InitialSyncGate>
-                </AppLockGate>
-              </LockProvider>
-            </ExtractionProvider>
-          </FaviconProvider>
-        </FileContentProvider>
-      </SyncProvider>
+      <SignOutProvider>
+        <SyncProvider>
+          <FileContentProvider>
+            <FaviconProvider>
+              <ExtractionProvider>
+                <ShareBridge />
+                <LockProvider>
+                  <AppLockGate>
+                    <InitialSyncGate>
+                      <PaywallProvider>
+                        <Stack screenOptions={{ headerShown: false }}>
+                          {/* The link EDITOR presents modally (iOS pageSheet; Android
+                            slides up) — a router screen, not an RN Modal, so
+                            keyboard-controller and portals work inside it
+                            (link-edit-screen.tsx). Add has no entry here: it is a
+                            layer the links screen draws over itself, because every
+                            presentation that could have sized it to its contents
+                            fails on one platform or the other
+                            (features/links/link-add-panel.tsx). */}
+                          <Stack.Screen
+                            name="edit-link"
+                            options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
+                          />
+                          {/* "Sign in to resume" for an expired session
+                              (docs/sessions.md) — modal for the same reason: a form
+                              with a keyboard, over a library that stays open. */}
+                          <Stack.Screen
+                            name="resume"
+                            options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
+                          />
+                        </Stack>
+                      </PaywallProvider>
+                    </InitialSyncGate>
+                  </AppLockGate>
+                </LockProvider>
+              </ExtractionProvider>
+            </FaviconProvider>
+          </FileContentProvider>
+        </SyncProvider>
+      </SignOutProvider>
     </AuthGuard>
   );
 }

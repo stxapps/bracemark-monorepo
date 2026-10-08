@@ -49,7 +49,7 @@ async function seedEverything(): Promise<void> {
   await enqueuePut(USER, LINK_PATH, 0);
   await setLocalSettings({ themeSource: 'local', theme: DEFAULT_THEME });
   await putLock({ id: APP_LOCK_ID, kind: 'app', salt: 'aa', hash: 'bb' });
-  await putFavicon('example.com', new Uint8Array([1]));
+  await putFavicon(USER, 'example.com', new Uint8Array([1]));
   writeSidebarCollapsedIds(['lists']);
   writeCachedStatus({
     plan: 'plus',

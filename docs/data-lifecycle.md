@@ -779,6 +779,141 @@ already was, and every local write checks that row inside its own transaction �
 so a write either lands before the wipe and goes with it, or finds no owner and
 fails (the account fence, [sessions.md](./sessions.md)).
 
+"Nothing mounted" in step 2 means the signed-in subtree, and on expo it is not
+literally nothing: the root `ThemeProvider` sits above the auth gate and reads
+`items` and `local_settings` through `useSettings`, across the wipe. `clearData`
+there is bare whole-table deletes, which SQLite truncates without the
+`sqlite3_update_hook` events `useLiveRead` listens for
+([client-queries.md](./client-queries.md)), so it calls `invalidateLiveReads`
+for every table it emptied, as delete-all-data does. Without that the provider
+kept the signed-out account's theme pinned over the landing — and into the next
+account signed in from the same process — until a relaunch read the empty rows.
+Web needs no counterpart: Dexie's liveQuery observes `clear()`.
+
+#### what an empty table does not mean — expo
+
+`clearData` on expo is checked by a spec that counts every table and every file
+under the app's own directories, and a wipe can pass it while the account is
+still readable on the device four ways. None of them is visible from inside the
+store — the app looks empty, the next account inherits nothing it can query —
+which is why each one shipped.
+
+- ⚠ **Deleted rows stay in the database file.** A `DELETE` unlinks pages; SQLite
+  moves them to its freelist with their bytes intact (expo-sqlite's build sets
+  no `secure_delete`), and the WAL keeps every frame written since its last
+  reset. So `clearData` finishes with `scrubFreedPages` (`data/db.ts`):
+  `VACUUM`, then `PRAGMA wal_checkpoint(TRUNCATE)`. **Both, in that order** —
+  in WAL mode the rebuild lands in the WAL, so `VACUUM` alone leaves the old
+  file as it was, and the checkpoint alone leaves the freelist.
+  `clear-data.residue.spec.ts` reads the raw bytes of both files and fails on
+  either half by itself. It is best-effort and never throws (the rows are gone; a
+  failed scrub must not fail a finished sign-out), and the no-session branch of
+  the next launch runs `clearData` again, which retries it. Delete-all-data runs
+  the same scrub. Not a pragma at open: `secure_delete` would zero pages on
+  every ordinary delete and still leave the WAL, and what must not outlive an
+  account is the account, not each edit. Beyond any file API: a wear-levelled
+  flash block that still holds an old page.
+- ⚠ **The OS cache directory holds plaintext nothing else reaches**, because a
+  file goes there when some other reader needs it for a moment and the OS only
+  cleans up under storage pressure. `data/cache-files.ts` owns all of it: the
+  **export** (the whole library in one file — written under
+  `bracemark-exports/`, replaced by the next run, since it must outlive its own
+  run for the share sheet and the receiving app to read it), the **import's
+  picked copy** (`copyToCacheDirectory`; deleted when the run settles, as the
+  run has read it whole), and a **custom image's picked file and resized copy**
+  (kept until sign-out — the editor's draft points at the uri, and a save that
+  failed after the copy retries from it). `clearData` sweeps all three.
+  ⚠ The picker directories are named by the expo modules that write them
+  (`DocumentPicker`, `ImagePicker`, `ImageManipulator`), so **an SDK bump can
+  move one and the sweep then deletes a directory that is not there** — no
+  error, no failing test. Re-read the three names from the modules' native
+  sources when any of them is upgraded
+  ([expo-dependencies.md](./expo-dependencies.md), _expo-image-picker +
+  expo-image-manipulator_).
+- **Work in flight when the wipe lands writes after it.** The sync cycle was
+  already fenced on the account's ownership row
+  ([sessions.md](./sessions.md)); two writers were not. The **favicon cache**
+  has no owner column and both its fillers write after a network round trip, so
+  `putFavicon` / `putFaviconNone` now take the username and check the row inside
+  their own transaction, ahead of the file write — and `FaviconProvider`'s drain
+  ends when the provider unmounts, where it used to run on through the queue,
+  one request per host to the signed-out account's saved sites
+  ([link-extraction.md](./link-extraction.md), _favicons_). The **export** holds
+  the gathered library in memory for minutes, so its one write is fenced the
+  same way: a sign-out midway used to end with the backup written after the
+  sweep.
+- **Decoded previews stay in memory.** expo-image's memory cache holds what was
+  on screen, and belongs to a module `@stxapps/expo-react` does not depend on,
+  so the app layer drops it: `SignOutProvider`'s unmount cleanup calls
+  `Image.clearMemoryCache()`. An unmount cleanup rather than a step of the
+  sign-out, so a revocation and a delete-account run it too.
+
+Delete-all-data deliberately keeps **one** member of that set: the cache
+directory. The export in it may be the backup the user took a minute ago
+_because_ they were about to delete everything, and the app they sent it to can
+still be reading it. After a sign-out the server has the library; after
+delete-all that file may be the only copy.
+
+#### the press, and the wait
+
+A sign-out from a menu or a lock pane goes through a hoisted `SignOutProvider`
+(`requestSignOut`), not the bare `useSignOut` mutation — bracemark-web's links
+menu and lock pane and the browser extension's options page through
+`@stxapps/web-ui` `contexts/sign-out-provider.tsx`, bracemark-expo's through its
+own `contexts/sign-out-provider.tsx`. Two reasons, both about the stretch between
+the press and step 1:
+
+- **It asks first when a change hasn't synced.** The wipe takes the pending
+  queue, and a queued change exists nowhere else — the reason "Use a different
+  account" already warned ([sessions.md](./sessions.md)). The count is read at
+  the press. With nothing pending there is no question: the library is on the
+  server, and a dialog on the commonest path teaches people to press through
+  the one that matters.
+- **It covers the app while the sign-out runs.** The revocation request goes out
+  before anything is erased, so the app behind an already-closed menu stayed
+  usable for as long as the network took, and whatever was saved then was
+  erased a moment later. The cover has no way out while the request is in
+  flight. Because it has none, the endpoint's contract caps that request at
+  `SIGN_OUT_TIMEOUT_MS` (10 s) instead of the client's 60 s default
+  ([api-contracts.md](./api-contracts.md), _deadlines_); when the cap fires the
+  cost is the one a failed request already had — the session row is not
+  revoked, idles out and is purged.
+
+A failed sign-out — the session record could not be deleted, so nothing was
+erased — now says so in that dialog; it used to reject into nothing.
+
+On web the provider sits under `AuthGuard` and above `AppLockGate`, as on expo.
+The gate's `'ending'` unmounts it with everything else, which is what takes the
+dialog down on success.
+
+#### what the wipe cannot reach — web
+
+`clearData` on web runs in **one tab**, and two things are out of its reach for
+that reason or a near one:
+
+- **`sessionStorage` is per tab.** bracemark-web keeps one key there, the links
+  view Settings' ✕ returns to (`lib/links-return.ts`), and it can carry a
+  search — which, unlike a previous account's list or tag id, resolves for
+  anyone. So each tab drops its own when the account that browsed it stops
+  being the one signed in (`useLinksReturnOwner`, mounted in the root layout's
+  `Initializer`). ⚠ Not from `AuthGuard`, though it is the obvious place: its
+  exits `redirect()` during render, and a render that throws commits no
+  effects.
+- **The installed app does not leave.** A browser tab's sign-out navigates off
+  the origin and the document dies, taking every in-flight request with it.
+  Installed, `AuthGuard` goes to `/sign-in` in place and the document lives on —
+  so work in flight at the wipe is the same hazard there that it is on expo.
+  The favicon queue is the instance that existed: `FaviconProvider`'s drain now
+  ends when it unmounts, and `putFavicon` / `putFaviconNone` are fenced on the
+  account's ownership row ([link-extraction.md](./link-extraction.md),
+  _favicons_).
+
+What web cannot do at all is scrub: IndexedDB offers no equivalent of `VACUUM`,
+and a cleared store is compacted on the browser's schedule, not ours. The only
+lever is deleting the whole database rather than clearing its tables, which
+would mean rebuilding the teardown around other open tabs and around the
+ownership check that today runs inside the clearing transaction.
+
 Step 1's gate is the one that isn't obvious. Without it there is a live frame
 where the store is already empty but status is still `authenticated`: the
 signed-in subtree stays mounted, every liveQuery re-fires against a wiped
@@ -928,7 +1063,9 @@ may sync back afterward").
    (they guard lists that no longer exist — the same reset sign-out applies).
    On expo, the bare whole-table deletes then explicitly invalidate the affected
    `useLiveRead` tables: SQLite's truncate optimization does not emit the
-   `sqlite3_update_hook` events Expo observes. The successful hook also calls
+   `sqlite3_update_hook` events Expo observes. Expo also scrubs the database
+   file afterwards (`scrubFreedPages` — _what an empty table does not mean_,
+   above), and deliberately does **not** sweep the cache directory. The successful hook also calls
    `requestSync`, whose local-write nonce makes a links screen still mounted and
    scrolled behind Settings promote the empty result immediately.
 4. `seedNewAccount` — cursor back to `(0, '')` with `firstSyncDoneAt` now.

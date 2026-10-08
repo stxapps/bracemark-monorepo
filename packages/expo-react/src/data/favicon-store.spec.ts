@@ -33,6 +33,7 @@ import {
   putFaviconNone,
   readFavicon,
 } from './favicon-store';
+import { AccountFencedError, seedNewAccount } from './sync-store';
 
 jest.mock('expo-sqlite', () => require('../testing/node-sqlite'));
 jest.mock('expo-file-system', () => require('../testing/memory-file-system'));
@@ -42,17 +43,21 @@ const { resetFileSystem, listFileUris } = require('../testing/memory-file-system
   listFileUris: () => string[];
 };
 
+const USER = 'alice';
 const HOST = 'github.com';
 const ICON = new Uint8Array([1, 2, 3, 4]);
 
-beforeEach(() => {
+beforeEach(async () => {
   getDb().run(sql`DELETE FROM favicons`);
+  getDb().run(sql`DELETE FROM sync_meta`);
   resetFileSystem();
+  // Both writes are fenced on the account's ownership row.
+  await seedNewAccount(USER);
 });
 
 describe('putFavicon', () => {
   it('stores the verdict in the row and the bytes on disk', async () => {
-    await putFavicon(HOST, ICON);
+    await putFavicon(USER, HOST, ICON);
 
     expect((await readFavicon(HOST))?.status).toBe('ok');
     expect(faviconFileFor(HOST).exists).toBe(true);
@@ -67,7 +72,7 @@ describe('putFavicon', () => {
   });
 
   it('creates the icon directory on the first write', async () => {
-    await expect(putFavicon(HOST, ICON)).resolves.toBeUndefined();
+    await expect(putFavicon(USER, HOST, ICON)).resolves.toBeUndefined();
     expect(listFileUris()).toHaveLength(1);
   });
 });
@@ -81,7 +86,7 @@ describe('readFavicon', () => {
   // unresolved so the provider RE-FETCHES — otherwise the UI trusts a verdict with no
   // bytes, and the icon is broken forever because the cache believes it is fetched.
   it('reads an `ok` row whose file has gone as unresolved', async () => {
-    await putFavicon(HOST, ICON);
+    await putFavicon(USER, HOST, ICON);
     faviconFileFor(HOST).delete();
 
     expect(await readFavicon(HOST)).toBeUndefined();
@@ -91,7 +96,7 @@ describe('readFavicon', () => {
   // to it — treating a `none` row as unresolved would re-buy the fetch on every launch,
   // which is exactly what recording the negative was for.
   it('keeps a `none` row readable even though it has no file', async () => {
-    await putFaviconNone(HOST);
+    await putFaviconNone(USER, HOST);
 
     expect((await readFavicon(HOST))?.status).toBe('none');
   });
@@ -99,7 +104,7 @@ describe('readFavicon', () => {
 
 describe('putFaviconNone', () => {
   it('records a miss so a relaunch does not re-buy the fetch', async () => {
-    await putFaviconNone(HOST);
+    await putFaviconNone(USER, HOST);
 
     const record = await readFavicon(HOST);
     expect(record?.status).toBe('none');
@@ -113,9 +118,9 @@ describe('putFaviconNone', () => {
   // isFaviconStale then honours that for FAVICON_RETRY_MS — a host with a perfectly good
   // captured icon showing a monogram for a week.
   it('never downgrades an `ok` row that a second filler already landed', async () => {
-    await putFavicon(HOST, ICON);
+    await putFavicon(USER, HOST, ICON);
 
-    await putFaviconNone(HOST);
+    await putFaviconNone(USER, HOST);
 
     expect((await readFavicon(HOST))?.status).toBe('ok');
     expect(faviconFileFor(HOST).exists).toBe(true);
@@ -124,10 +129,10 @@ describe('putFaviconNone', () => {
   // …but a row claiming `ok` with NO bytes is not a real icon, so it must not block the
   // miss — that state has to stay recoverable rather than latching forever.
   it('does overwrite an `ok` row whose file is missing', async () => {
-    await putFavicon(HOST, ICON);
+    await putFavicon(USER, HOST, ICON);
     faviconFileFor(HOST).delete();
 
-    await putFaviconNone(HOST);
+    await putFaviconNone(USER, HOST);
 
     expect((await readFavicon(HOST))?.status).toBe('none');
   });
@@ -135,13 +140,13 @@ describe('putFaviconNone', () => {
   // A host that USED to have an icon and now serves none: the stale file goes, so the pair
   // can't disagree and no `file://` uri outlives the verdict that justified it.
   it('drops a stale icon file when a re-check finds nothing', async () => {
-    await putFavicon(HOST, ICON);
+    await putFavicon(USER, HOST, ICON);
     // Age the row out of `ok` the only way a filler could: re-check after the icon is gone
     // from the row's perspective — simulated by clearing the row but keeping the file, the
     // orphan case a crash or an interrupted wipe leaves behind.
     getDb().run(sql`DELETE FROM favicons`);
 
-    await putFaviconNone(HOST);
+    await putFaviconNone(USER, HOST);
 
     expect(faviconFileFor(HOST).exists).toBe(false);
     expect((await readFavicon(HOST))?.status).toBe('none');
@@ -169,13 +174,51 @@ describe('isFaviconStale', () => {
   });
 });
 
+// 3. THE FENCE. Both fillers write after a network round trip, so a sign-out can have
+//    wiped the store underneath them — and the table has no owner column to notice with.
+//    Unfenced, the late write put the signed-out account's host back into the empty
+//    store, icon file and all, after clearData had been and gone. What is asserted is
+//    the FILE as much as the row: the row is refused by the transaction either way, and
+//    a write ordered file-then-check would still leave the bytes on disk.
+describe('the account fence', () => {
+  const signOut = () => getDb().run(sql`DELETE FROM sync_meta`);
+
+  it('refuses an icon that lands after the account signed out, row and file', async () => {
+    signOut();
+
+    await expect(putFavicon(USER, HOST, ICON)).rejects.toBeInstanceOf(AccountFencedError);
+
+    expect(await readFavicon(HOST)).toBeUndefined();
+    expect(listFileUris()).toEqual([]);
+  });
+
+  it('refuses a `none` verdict the same way', async () => {
+    signOut();
+
+    await expect(putFaviconNone(USER, HOST)).rejects.toBeInstanceOf(AccountFencedError);
+
+    expect(await readFavicon(HOST)).toBeUndefined();
+  });
+
+  // The store may not be empty: the next account can have signed in while the fetch was
+  // out. The late answer is the PREVIOUS account's, so it is refused by name.
+  it('refuses a write for an account that is no longer the one signed in', async () => {
+    signOut();
+    await seedNewAccount('bob');
+
+    await expect(putFavicon(USER, HOST, ICON)).rejects.toBeInstanceOf(AccountFencedError);
+
+    expect(listFileUris()).toEqual([]);
+  });
+});
+
 describe('clearFaviconFiles', () => {
   // The file half of the `favicons` table wipe (clear-data, delete-all-data). It runs
   // AFTER the table delete, so it must tolerate a directory that was never created — an
   // unguarded delete throws here, exactly as it would on device.
   it('removes every cached icon', async () => {
-    await putFavicon(HOST, ICON);
-    await putFavicon('example.org', ICON);
+    await putFavicon(USER, HOST, ICON);
+    await putFavicon(USER, 'example.org', ICON);
 
     clearFaviconFiles();
 

@@ -11,6 +11,7 @@ import { UpdatePill } from '../components/update-pill';
 import { UpdateRequiredBanner } from '../components/update-required-banner';
 import { apiClient } from '../lib/api-client';
 import { extractClient } from '../lib/extract-client';
+import { useLinksReturnOwner } from '../lib/links-return';
 import { watchForServiceWorkerUpdates } from '../lib/service-worker-update-check';
 
 // Registers the service worker — and so makes the library reachable with the
@@ -44,8 +45,19 @@ import { watchForServiceWorkerUpdates } from '../lib/service-worker-update-check
 let didRegister = false;
 
 function Initializer() {
-  const { status } = useAuth();
+  const { status, username } = useAuth();
   const signedIn = status === 'authenticated';
+
+  // This tab's "where the links page was" belongs to the account that browsed it,
+  // and goes when that account leaves the tab (lib/links-return.ts). HERE, and
+  // not in the two places it looks like it belongs. clearData cannot: the value
+  // is in sessionStorage, which is per tab, and clearData runs in one. AuthGuard
+  // cannot: on its way out it `redirect()`s during RENDER for everything but a
+  // browser tab's deliberate sign-out, and a render that throws commits no
+  // effects — so an effect there is skipped for a revocation and for the
+  // installed app, which is the one place the document survives to use the stale
+  // value. This component renders null on every route and never throws.
+  useLinksReturnOwner(username);
 
   useEffect(() => {
     if (!('serviceWorker' in navigator && window.serwist !== undefined)) return;

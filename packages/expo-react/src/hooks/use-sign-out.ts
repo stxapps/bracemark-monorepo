@@ -27,7 +27,10 @@ export function useSignOut() {
       // still held (once endSession clears the local session, the token is gone).
       // Best-effort: a network/server failure — or an EXPIRED session, which just
       // answers `session_expired` — must NOT trap the user signed-in; an
-      // unrevoked row idles out and is purged like any other.
+      // unrevoked row idles out and is purged like any other. Nor may a stalled
+      // one hold the wipe for long: the endpoint's contract caps this wait
+      // (SIGN_OUT_TIMEOUT_MS, @stxapps/shared), and a timeout lands in the
+      // same catch.
       try {
         await api.call(signOutEndpoint, {});
       } catch {

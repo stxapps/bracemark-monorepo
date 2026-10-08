@@ -1,5 +1,6 @@
-import { useAuth, useSignOut } from '@stxapps/web-react';
+import { useAuth } from '@stxapps/web-react';
 import { Button } from '@stxapps/web-ui/components/ui/button';
+import { useSignOutFlow } from '@stxapps/web-ui/contexts/sign-out-provider';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { OptionsSection } from './Shell';
@@ -35,9 +36,15 @@ import { OptionsSection } from './Shell';
 // library along with the encryption key, the locks and the cached plan — that's the
 // deliberate "the next person at this device inherits nothing" teardown, and it is
 // worth a sentence before the click rather than a surprise after it.
+//
+// That sentence covers the copy that can be downloaded again. What it cannot cover
+// is a save that never reached the server — the popup queues one whenever it is
+// offline — so the click goes through the hoisted sign-out flow (@stxapps/web-ui's
+// sign-out-provider, mounted in App.tsx), which stops to ask when the queue is not
+// empty and says how many.
 export function AccountSection({ className }: { className?: string }) {
   const { username } = useAuth();
-  const signOut = useSignOut();
+  const { requestSignOut, signingOut } = useSignOutFlow();
 
   return (
     <OptionsSection className={className} title="Account">
@@ -54,10 +61,10 @@ export function AccountSection({ className }: { className?: string }) {
           variant="outline"
           size="sm"
           className={cn('shrink-0')}
-          disabled={signOut.isPending}
-          onClick={() => signOut.mutate()}
+          disabled={signingOut}
+          onClick={requestSignOut}
         >
-          {signOut.isPending ? 'Signing out…' : 'Sign out'}
+          {signingOut ? 'Signing out…' : 'Sign out'}
         </Button>
       </div>
 

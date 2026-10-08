@@ -548,14 +548,48 @@ export type DbTx = Parameters<Parameters<ExpoSQLiteDatabase<typeof schema>['tran
 // package barrel never touches the native sqlite module — jest and tooling can
 // import sibling modules without a mock for this one.
 let db: ExpoSQLiteDatabase<typeof schema> | null = null;
+// The raw handle under `db`, kept for the one statement pair drizzle has no
+// business running (scrubFreedPages below).
+let sqlite: ReturnType<typeof openDatabaseSync> | null = null;
 
 export function getDb(): ExpoSQLiteDatabase<typeof schema> {
   if (!db) {
-    const sqlite = openDatabaseSync(DB_NAME, { enableChangeListener: true });
+    sqlite = openDatabaseSync(DB_NAME, { enableChangeListener: true });
     // WAL lets the change-listener reads proceed while a write is in flight.
     sqlite.execSync('PRAGMA journal_mode = WAL;');
     sqlite.execSync(DDL);
     db = drizzle(sqlite, { schema });
   }
   return db;
+}
+
+// Make a wipe reach the FILE. A DELETE only unlinks pages: SQLite moves them to
+// its freelist with their bytes intact (this build sets no secure_delete), and
+// the WAL keeps every frame written since its last reset. So after the wipes
+// below the tables read empty while the decrypted bookmarks are still sitting in
+// `bracemark.db` and `bracemark.db-wal`, there for anything that reads the file
+// rather than the tables.
+//
+// VACUUM rebuilds the database from its live rows, which after a wipe is next to
+// nothing; in WAL mode that rebuild lands in the WAL, so the TRUNCATE checkpoint
+// is the half that actually writes it over the old file, cuts the file down to
+// the new size, and empties the WAL. Either one alone leaves a copy behind.
+//
+// For the two callers that have just emptied the store (clear-data.ts,
+// delete-all-data.ts), where it costs a few pages. Not a pragma at open:
+// secure_delete would zero pages on every ordinary delete and still leave the
+// WAL, and what must not outlive an account is the account, not each edit.
+//
+// Never throws. The rows are already gone, so a failure here (a full disk; a
+// statement another caller left open) must not turn a finished sign-out into a
+// failed one — and the no-session branch of the next launch runs clearData
+// again, which retries it.
+export function scrubFreedPages(): void {
+  getDb();
+  try {
+    sqlite?.execSync('VACUUM;');
+    sqlite?.execSync('PRAGMA wal_checkpoint(TRUNCATE);');
+  } catch {
+    // See above — retried by the next wipe.
+  }
 }

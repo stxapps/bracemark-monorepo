@@ -32,6 +32,14 @@ own image surface — the edit screen's preview — deliberately stays on **core
 arrived for the link LIST's slots only, and neither reason it was added reaches
 here.
 
+⚠ Both modules write their output under the OS cache directory, in a folder
+they name themselves (`ImagePicker`, `ImageManipulator`; expo-document-picker's
+is `DocumentPicker`), and the sign-out wipe deletes those folders **by name**
+(`@stxapps/expo-react` `data/cache-files.ts`). An upgrade that renames one
+breaks the sweep without an error anywhere — re-read the names from the native
+sources when bumping any of the three
+([data-lifecycle.md](./data-lifecycle.md), _what an empty table does not mean_).
+
 #### expo-image
 
 The renderer behind the link list's media slots — favicons and preview images

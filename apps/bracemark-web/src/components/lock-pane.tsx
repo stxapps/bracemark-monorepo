@@ -11,9 +11,9 @@ import { useState } from 'react';
 import { Lock } from 'lucide-react';
 
 import { LOCK_COPY } from '@stxapps/react';
-import { useSignOut } from '@stxapps/web-react';
 import { PasswordInput } from '@stxapps/web-ui/components/auth/password-input';
 import { Button } from '@stxapps/web-ui/components/ui/button';
+import { useSignOutFlow } from '@stxapps/web-ui/contexts/sign-out-provider';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
 interface LockPaneProps {
@@ -34,7 +34,7 @@ export function LockPane({ title, description, onUnlock, className }: LockPanePr
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const signOut = useSignOut();
+  const { requestSignOut, signingOut } = useSignOutFlow();
 
   const submit = async (e: React.SubmitEvent) => {
     e.preventDefault();
@@ -96,12 +96,7 @@ export function LockPane({ title, description, onUnlock, className }: LockPanePr
 
       <p className="max-w-xs text-center text-xs text-muted-foreground">
         {LOCK_COPY.forgot.before}{' '}
-        <button
-          type="button"
-          onClick={() => signOut.mutate()}
-          disabled={signOut.isPending}
-          className="underline"
-        >
+        <button type="button" onClick={requestSignOut} disabled={signingOut} className="underline">
           {LOCK_COPY.forgot.action}
         </button>{' '}
         {LOCK_COPY.forgot.after}

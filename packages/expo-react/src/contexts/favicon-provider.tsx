@@ -132,12 +132,57 @@ export function FaviconProvider({ children }: { children: ReactNode }) {
     handledRef.current.clear();
   }, [username]);
 
+  // The account the drain writes for, read at write time (the pump below is
+  // identity-stable, so it can't close over a render's value).
+  const usernameRef = useRef(username);
+  usernameRef.current = username;
+
+  // THE DRAIN ENDS WITH THE PROVIDER. Nothing above stops it: the queue is a ref
+  // and each fetch re-arms the next from its own `finally`, so a sign-out with
+  // hosts still queued used to leave the loop running on its own — one request
+  // per host to the signed-out account's saved sites, from a screen that no
+  // longer existed, each answer then written into the store clearData had just
+  // emptied. The effect above can't catch it: it needs a render, and the
+  // provider is under the auth gate, so sign-out is an unmount, not a new
+  // username. So unmounting empties the queue and marks the drain dead; a fetch
+  // already in flight finishes and then finds the mark (or, in the commit
+  // between the wipe and this cleanup, the store's own fence — favicon-store.ts).
+  //
+  // A flag that only ever goes one way — never "alive", set by the mount effect: a
+  // row's effect runs BEFORE this provider's (children first), so a request made
+  // in the provider's own first commit would find it not yet alive and be dropped.
+  const stoppedRef = useRef(false);
+  const mountedRef = useRef(false);
+  useEffect(() => {
+    // The Set is never replaced, only cleared, so this is the one the cleanup wants.
+    const handled = handledRef.current;
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      // Decided a microtask later, not here. StrictMode's mount → cleanup → mount
+      // runs this cleanup and re-mounts in the same synchronous commit; taken at
+      // face value that reads as the provider going away, and it would drop every
+      // host the rows asked for in that first commit — for good, since they stay
+      // marked handled. A real unmount is still unmounted by then.
+      queueMicrotask(() => {
+        if (mountedRef.current) return;
+        stoppedRef.current = true;
+        queueRef.current = [];
+        handled.clear();
+      });
+    };
+  }, []);
+
   const pump = useCallback(() => {
     while (inFlightRef.current < MAX_IN_FLIGHT && queueRef.current.length > 0) {
       const entry = queueRef.current.shift();
       if (entry === undefined) return;
       const { host, gestured } = entry;
       inFlightRef.current += 1;
+      // The account this entry is fetched for: whoever is signed in as it
+      // reaches the front. Captured before the request so the write is fenced
+      // on THAT account, not on whoever is signed in when the answer lands.
+      const owner = usernameRef.current;
       void (async () => {
         try {
           if (!gestured && !enabledRef.current) {
@@ -149,28 +194,33 @@ export function FaviconProvider({ children }: { children: ReactNode }) {
             handledRef.current.delete(host);
             return;
           }
+          if (stoppedRef.current || !owner) return;
           // Re-check under the single-flight guard: an earlier request may have
           // resolved this host since it was queued.
           const existing = await readFavicon(host);
           if (!isFaviconStale(existing)) return;
 
-          const bytes = await fetchFaviconBytes(host);
-          if (bytes === undefined) await putFaviconNone(host);
-          else await putFavicon(host, bytes);
-        } catch {
-          // Every failure mode lands here alike — DNS, timeout, TLS, transport.
-          // All record `none`: the icon is decoration, so there's no case where
-          // retrying it on the next render is worth a request, and the row ages
-          // out via FAVICON_RETRY_MS (web's rationale, verbatim).
+          let bytes: Uint8Array | undefined;
           try {
-            await putFaviconNone(host);
+            bytes = await fetchFaviconBytes(host);
           } catch {
-            // The write itself failed. Nothing to do — the row stays absent,
-            // the row stays a monogram, and a later mount re-asks.
+            // Every failure mode lands here alike — DNS, timeout, TLS, transport.
+            // All record `none`: the icon is decoration, so there's no case where
+            // retrying it on the next render is worth a request, and the row ages
+            // out via FAVICON_RETRY_MS (web's rationale, verbatim).
+            bytes = undefined;
           }
+          // Unmounted while the request was out: the answer belongs to nobody.
+          if (stoppedRef.current) return;
+          if (bytes === undefined) await putFaviconNone(owner, host);
+          else await putFavicon(owner, host, bytes);
+        } catch {
+          // The write itself failed, or the store fenced it (the account signed
+          // out under the fetch). Nothing to do — the row stays absent, the icon
+          // stays a monogram, and a later mount re-asks.
         } finally {
           inFlightRef.current -= 1;
-          if (queueRef.current.length > 0) setTimeout(pump, STAGGER_MS);
+          if (!stoppedRef.current && queueRef.current.length > 0) setTimeout(pump, STAGGER_MS);
         }
       })();
     }

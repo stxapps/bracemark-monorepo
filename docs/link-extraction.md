@@ -468,6 +468,16 @@ decisions, each deliberate:
   fresh device just re-fetches. The genuinely private thing is the **set of
   hosts** (the user's browsing shape), which is why the cache is still wiped on
   sign-out / delete-all-data even though no single icon is anyone's secret.
+  That wipe needed two more things to actually hold, because the cache is
+  filled asynchronously by work that can outlive the account: both store writes
+  are **fenced on the account** (the table has no owner column to notice with),
+  and the provider's **drain ends when it unmounts** — it used to run on through
+  its queue after a sign-out, requesting the signed-out account's hosts and
+  writing them back. On every client, though a browser tab never showed it:
+  sign-out there leaves the origin and the document goes with the queue, where
+  the installed app and expo both stay
+  ([data-lifecycle.md](./data-lifecycle.md), _what an empty table does not
+  mean_ and _what the wipe cannot reach — web_).
 - **Not synced.** This is the one enrichment where a capable client's work does
   **not** reach other devices, and the asymmetry is accepted with eyes open. A
   synced store would have to be **host-keyed** (per-link is ruled out above),

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { StrictMode, useEffect } from 'react';
 import { View } from 'react-native';
 import { act, render, type RenderResult } from '@testing-library/react-native';
 
@@ -55,13 +55,16 @@ jest.mock('../hooks/use-settings', () => ({
 }));
 
 // No cached answer for any host, so the queue is the only thing deciding what goes out.
-const mockPutFavicon = jest.fn((_host: string, _bytes: Uint8Array) => Promise.resolve());
-const mockPutFaviconNone = jest.fn((_host: string) => Promise.resolve());
+const mockPutFavicon = jest.fn((_username: string, _host: string, _bytes: Uint8Array) =>
+  Promise.resolve(),
+);
+const mockPutFaviconNone = jest.fn((_username: string, _host: string) => Promise.resolve());
 jest.mock('../data/favicon-store', () => ({
   readFavicon: () => Promise.resolve(undefined),
   isFaviconStale: () => true,
-  putFavicon: (host: string, bytes: Uint8Array) => mockPutFavicon(host, bytes),
-  putFaviconNone: (host: string) => mockPutFaviconNone(host),
+  putFavicon: (username: string, host: string, bytes: Uint8Array) =>
+    mockPutFavicon(username, host, bytes),
+  putFaviconNone: (username: string, host: string) => mockPutFaviconNone(username, host),
 }));
 
 // Both entry points, in the order the app uses them — a row asks, and a save asks. Two
@@ -258,7 +261,7 @@ describe('the favicon queue, and what the gesture exempts', () => {
     await mount(['example.com']);
     await drain();
 
-    expect(mockPutFavicon).toHaveBeenCalledWith('example.com', iconBytes);
+    expect(mockPutFavicon).toHaveBeenCalledWith('alice', 'example.com', iconBytes);
     expect(mockPutFaviconNone).not.toHaveBeenCalled();
   });
 
@@ -272,7 +275,94 @@ describe('the favicon queue, and what the gesture exempts', () => {
     await mount(['example.com']);
     await drain();
 
-    expect(mockPutFaviconNone).toHaveBeenCalledWith('example.com');
+    expect(mockPutFaviconNone).toHaveBeenCalledWith('alice', 'example.com');
     expect(mockPutFavicon).not.toHaveBeenCalled();
+  });
+
+  // A transport failure is the same claim as far as the cache goes: nothing usable came
+  // back, so the host gets its `none` and the retry window, not a request per mount.
+  it('records `none` when the fetch itself fails', async () => {
+    mockFetchFaviconBytes.mockImplementation(() => Promise.reject(new Error('timeout')));
+    await mount(['example.com']);
+    await drain();
+
+    expect(mockPutFaviconNone).toHaveBeenCalledWith('alice', 'example.com');
+  });
+});
+
+// The provider sits under the auth gate, so a sign-out is an UNMOUNT — and the drain is
+// refs and timers, which an unmount does not stop by itself. It used to run on: one
+// request per queued host to the signed-out account's saved sites, from a screen that no
+// longer existed, each answer then written into the store the sign-out had just wiped.
+// Nothing reports either half. The requests are the disclosure the mode exists to
+// control, and the rows are the browsing shape clearData exists to remove.
+describe('the drain ends with the provider', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+    mockUsername = 'alice';
+    mockMode = 'all';
+    mockFetchFaviconBytes.mockReset();
+    mockFetchFaviconBytes.mockImplementation(() => Promise.resolve(iconBytes));
+    mockPutFavicon.mockClear();
+    mockPutFaviconNone.mockClear();
+  });
+
+  afterEach(() => {
+    jest.clearAllTimers();
+    jest.useRealTimers();
+  });
+
+  it('sends nothing more once it has unmounted, however much was queued', async () => {
+    const result = await mount(HOSTS);
+    const sentBefore = fetched().length;
+    // The cap held the tail back, or this would assert nothing.
+    expect(sentBefore).toBeLessThan(HOSTS.length);
+
+    result.unmount();
+    await drain();
+
+    expect(fetched().length).toBe(sentBefore);
+  });
+
+  it('writes nothing for a fetch that was still out when it unmounted', async () => {
+    const answers: ((bytes: Uint8Array | undefined) => void)[] = [];
+    mockFetchFaviconBytes.mockImplementation(
+      () => new Promise((resolve) => void answers.push(resolve)),
+    );
+    const result = await mount(['example.com']);
+    expect(answers).toHaveLength(1);
+
+    result.unmount();
+    answers[0]?.(iconBytes);
+    await drain();
+
+    expect(mockPutFavicon).not.toHaveBeenCalled();
+    expect(mockPutFaviconNone).not.toHaveBeenCalled();
+  });
+
+  // The stop must be a REAL unmount's, and only that. Two orderings would otherwise
+  // trip it on a provider that is very much alive — a row's effect runs before its
+  // provider's (children first), and StrictMode runs mount → cleanup → mount in one
+  // commit. Either one, read naively, drops whatever the rows asked for in the first
+  // commit and never re-asks, since those hosts stay marked handled. Asked in the
+  // FIRST commit here, unlike `mount` above, because that is the ordering at stake.
+  it('keeps draining through StrictMode, for rows that asked in the first commit', async () => {
+    render(<StrictMode>{tree(HOSTS, NONE)}</StrictMode>);
+    await settle();
+    await drain();
+
+    expect(sorted(fetched())).toEqual(sorted(HOSTS));
+  });
+
+  // The store's fence (favicon-store.ts) refuses a write that outlived its account. The
+  // provider's part is to let that be the end of it — not to answer the refusal with a
+  // `none`, which would be a second write for the same signed-out account.
+  it('does not follow a refused write with a `none`', async () => {
+    mockPutFavicon.mockImplementationOnce(() => Promise.reject(new Error('fenced')));
+    await mount(['example.com']);
+    await drain();
+
+    expect(mockPutFavicon).toHaveBeenCalledTimes(1);
+    expect(mockPutFaviconNone).not.toHaveBeenCalled();
   });
 });

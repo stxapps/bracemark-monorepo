@@ -20,6 +20,7 @@ import type {
 
 import { useAuth } from '../contexts/auth-provider';
 import { useSync } from '../contexts/sync-provider';
+import { deletePickedCopy } from '../data/cache-files';
 import { importAllData, type PickedFile } from '../data/import-all-data';
 import { getSession } from '../data/session-store';
 import { beginStallWindow, endStallWindow } from '../lib/stall-probe';
@@ -215,6 +216,11 @@ export function useImportAllData(): UseImportAllDataResult {
         .finally(() => {
           endStallWindow();
           inFlight = false;
+          // The picker's copy has been read whole by now (the run holds bytes,
+          // and a quota answer resumes the same promise), and nothing offers it
+          // again — a retry is a new pick. So it goes with the run rather than
+          // waiting in the cache dir for a sign-out (data/cache-files.ts).
+          deletePickedCopy(file.uri);
           // A run that ended without the prompt being answered (any other
           // failure while it was on screen) must not leave a live resolve behind.
           resolveQuota = null;

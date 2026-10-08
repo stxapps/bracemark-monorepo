@@ -327,7 +327,11 @@ other devices, including a fallback listing if the cursor is too old.
   resume into a different account that reclaimed the handle. That change is a
   `userId` in the sign-in response and in the session record.
 - **"Use a different account" is sign-out.** It runs the full teardown and
-  warns first if pending ops exist. Their only copy is this device.
+  warns first if pending ops exist. Their only copy is this device. The
+  ordinary sign-out warns the same way on every client, and only then — a live
+  session can still sync, so its copy says "cancel and sync first" where this
+  one says "sign in to resume" ([data-lifecycle.md](./data-lifecycle.md), _the
+  press, and the wait_).
 - **Resume can fail for good.** If the account was deleted and this device's
   marker already purged, the probe answers `session_unknown`, and sign-in can
   never succeed: a deleted username answers exactly like one that never

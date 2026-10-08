@@ -1,5 +1,7 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
+
 // Where the links page was when you left it for Settings — read/write over one
 // sessionStorage key, and the sole owner of that key.
 //
@@ -15,11 +17,15 @@
 // opening the app next week would land on a stale tag instead of the inbox. The
 // value should die with the tab, which is exactly sessionStorage's lifetime.
 //
-// No sign-out teardown (unlike sidebar-view-store, which clear-data.ts wipes):
-// the value is tab-scoped, and a list/tag id belonging to a previous account
-// can't resolve for the next one — the links page's own stale-selection guard
-// (page-provider.tsx) sends an unresolvable id home. The system ids are shared
-// across accounts by design, and naming one is just a view.
+// CLEARED WHEN THE ACCOUNT IT BELONGED TO LEAVES THIS TAB (useLinksReturnOwner
+// below, mounted in the root layout) — not by clear-data.ts, which cannot reach
+// it: that runs once, in the tab that signed out, and sessionStorage is per tab,
+// so every tab has to drop its own. This used to have no teardown at all, on the argument
+// that a previous account's list/tag id can't resolve for the next one (the links
+// page's stale-selection guard sends an unresolvable id home) and that system ids
+// are shared by design. Both true, and neither covers the third thing the URL
+// carries: a SEARCH. `/links?q=…` resolves for anyone, so the next account signed
+// in from this tab closed Settings onto the previous one's search text.
 //
 // Every operation is best-effort — closing Settings must never throw over a
 // storage hiccup; a failed read just means the bare `/links` we had before.
@@ -59,4 +65,28 @@ export function readLinksReturn(): string {
   } catch {
     return LINKS_HOME;
   }
+}
+
+// Forget where the links page was.
+export function clearLinksReturn(): void {
+  try {
+    globalThis.sessionStorage?.removeItem(STORAGE_KEY);
+  } catch {
+    // Best-effort, like the rest.
+  }
+}
+
+// Tie the stored view to the account that browsed it: forget it when that
+// account stops being the one signed in to this tab — a sign-out or a revocation
+// (username → null), or another tab adopting a different account under this one.
+// Keyed on the username because it is the one fact all three share. A tab that
+// was never signed in, or whose session merely could not be read, has no
+// previous account, so its first render clears nothing — and neither does the
+// sign-in that follows, which is what lets the view survive a reload.
+export function useLinksReturnOwner(username: string | null): void {
+  const last = useRef(username);
+  useEffect(() => {
+    if (last.current !== null && last.current !== username) clearLinksReturn();
+    last.current = username;
+  }, [username]);
 }

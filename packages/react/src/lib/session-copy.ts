@@ -47,6 +47,33 @@ export const SESSION_COPY = {
   },
 
   /**
+   * The ordinary sign-out — the links menu, the lock pane's "forgot the
+   * password" way out. It asks ONLY when there is something to lose: a synced
+   * change is still on the server, so with nothing pending the erase costs a
+   * sign-in and a question would be noise on the commonest path. A pending
+   * change exists nowhere else, and that is the one case worth stopping for.
+   * The count is the argument, as it is for switchAccount above; the way to
+   * keep them differs, because this session can still sync.
+   *
+   * `progress` names the wait. The request that revokes the session goes out
+   * before anything is erased, and the app must not stay usable meanwhile —
+   * whatever is typed then is erased with the rest.
+   */
+  signOut: {
+    title: 'Sign out?',
+    description: (pending: number) =>
+      `Signing out erases this device’s copy, including ${changes(pending)} that ${
+        pending === 1 ? 'hasn’t synced and exists' : 'haven’t synced and exist'
+      } nowhere else. To keep ${pending === 1 ? 'it' : 'them'}, cancel and sync first.`,
+    confirm: 'Sign out',
+    cancel: 'Cancel',
+    progress: 'Signing out…',
+    progressDescription: 'Erasing this device’s copy.',
+    failed: 'Couldn’t sign out. Try again.',
+    retry: 'Try again',
+  },
+
+  /**
    * Settings → Account → Change password, once it succeeds. A password change
    * EXPIRES the other sessions — it doesn't revoke them — so the other devices
    * are cut off but erase nothing (docs/sessions.md). The marketing site's FAQ

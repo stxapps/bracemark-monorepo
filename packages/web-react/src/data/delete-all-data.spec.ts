@@ -75,7 +75,7 @@ async function seedSignedInAccountWithData(): Promise<void> {
   await markFirstSyncDone(USER, 500, LINK_PATH);
   await enqueuePut(USER, LINK_PATH, 0);
   await putLock({ id: APP_LOCK_ID, kind: 'app', salt: 'aa', hash: 'bb' });
-  await putFavicon('example.com', new Uint8Array([1]));
+  await putFavicon(USER, 'example.com', new Uint8Array([1]));
   await setLocalSettings({ linksLayoutSource: 'local', linksLayout: 'card' });
   writeCachedStatus({
     plan: 'plus',

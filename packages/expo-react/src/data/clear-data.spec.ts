@@ -4,16 +4,18 @@
 // device inherits it. The local store holds DECRYPTED bookmarks, so a missed member is a
 // second user reading the first's plaintext.
 //
-// This platform adds THREE members web has no equivalent of, and each is a different
+// This platform adds FOUR members web has no equivalent of, and each is a different
 // medium that the one sqlite transaction cannot reach:
 //   - the on-disk plaintext `files/` blobs (file-store),
 //   - the cached icon FILES (favicon-store's split storage — the table delete only removes
 //     the verdicts),
 //   - the share sheet's App Group artifacts, which name the account's lists and tags and
 //     may hold undrained URLs.
+//   - the plaintext parked in the OS cache dir (cache-files.ts) — an export above all,
+//     which is the whole library in one file.
 // A wipe that clears the tables and stops leaves decrypted bookmark images on disk with no
 // rows pointing at them — invisible to the app, and to any assertion written only over the
-// database.
+// database. (What it leaves in the database FILE is clear-data.residue.spec.ts.)
 //
 // So the spec seeds every store and asserts the full partition, tables AND files. Its
 // complement is delete-all-data.spec.ts, which pins the opposite treatment of the
@@ -23,11 +25,13 @@ import { sql } from 'drizzle-orm';
 
 import { EXTRACTIONS_PREFIX, LINKS_PREFIX, newFacet, pathFromId, utf8 } from '@stxapps/shared';
 
+import { newExportFile } from './cache-files';
 import { clearData } from './clear-data';
 import { getDb } from './db';
 import { putFavicon } from './favicon-store';
 import { dataFileFor, ensureDataFilesDir } from './file-store';
 import { putItemsTx } from './item-store';
+import { subscribeToLiveReadInvalidations } from './live-read-invalidation';
 import { setLocalSettings } from './local-settings-store';
 import { putLock } from './lock-store';
 import { enqueuePutTx } from './pending-store';
@@ -95,7 +99,7 @@ async function seedEverything(): Promise<void> {
   await seedNewAccount(USER);
   await setLocalSettings({ themeSource: 'local' });
   await putLock({ id: 'app', kind: 'app', salt: 'aa', hash: 'bb' });
-  await putFavicon('example.com', new Uint8Array([1, 2, 3]));
+  await putFavicon(USER, 'example.com', new Uint8Array([1, 2, 3]));
   writeSidebarCollapsedIds(['lists']);
   writeReviewPromptState({
     savesSinceAsk: 3,
@@ -113,6 +117,9 @@ async function seedEverything(): Promise<void> {
   // A decrypted `files/` blob on disk — the member no database assertion can see.
   ensureDataFilesDir();
   dataFileFor('files/f_1.enc').write('decrypted preview bytes');
+  // And the cache dir, which is not even under the app's own directories: an export of
+  // the whole library, waiting there for a share sheet that closed long ago.
+  newExportFile('Bracemark backup 2026-01-01.zip').write('the whole library');
 }
 
 // What is left on this device, table by table plus the filesystem. One snapshot, so a
@@ -182,8 +189,8 @@ describe('clearData', () => {
     expect(remaining().itemTagIds).toBe(0);
   });
 
-  // The three non-sqlite members, each a different medium the transaction cannot reach.
-  it('reaches the plaintext blobs, the icon files and the share artifacts', async () => {
+  // The non-sqlite members, each a different medium the transaction cannot reach.
+  it('reaches the plaintext blobs, the icon files, the cache dir and the share artifacts', async () => {
     await seedEverything();
 
     await clearData();
@@ -210,6 +217,28 @@ describe('clearData', () => {
   // native delete throws on a directory that was never created.
   it('is safe to run against an untouched device', async () => {
     await expect(clearData()).resolves.toBeUndefined();
+  });
+
+  // The wipe is bare whole-table deletes, which SQLite truncates without firing the update
+  // hook behind useLiveRead — so a reader that stays mounted across sign-out hears nothing
+  // unless clearData says so itself. The root ThemeProvider is that reader: without this
+  // it kept the signed-out account's theme over the landing until a relaunch. Asserted
+  // against the schema rather than a typed-out list, so a table added to the wipe (and to
+  // `remaining()` above) cannot be left out of the invalidation.
+  it('tells live reads about every table it emptied', async () => {
+    await seedEverything();
+    const invalidated: string[] = [];
+    const unsubscribe = subscribeToLiveReadInvalidations((tables) => invalidated.push(...tables));
+
+    await clearData();
+    unsubscribe();
+
+    const tables = getDb()
+      .all<{ name: string }>(
+        sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'`,
+      )
+      .map(({ name }) => name);
+    expect(invalidated.sort()).toEqual(tables.sort());
   });
 
   // The device's cached plan must not outlive the account — an unlocked paywall for

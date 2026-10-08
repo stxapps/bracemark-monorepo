@@ -22,8 +22,12 @@
 //    written to a cache file and returned in the outcome (`file`), and the UI
 //    presents the platform share sheet from it — the save happens AFTER the
 //    work, not before, so there's nothing to cancel mid-run.
+//  - That cache file is plaintext that outlives the run, so it has an owner:
+//    cache-files.ts gives the run its location and removes it at sign-out. And
+//    the write is fenced on the account like any store write — see
+//    writeExportFile.
 
-import { File, Paths } from 'expo-file-system';
+import type { File } from 'expo-file-system';
 import type { z } from 'zod';
 
 import type {
@@ -71,10 +75,13 @@ import {
 
 import { yieldToMain } from '../lib/yield-to-main';
 import { loadEntityContents, runIncrementalSync, type SyncDeps } from '../sync/engine';
+import { newExportFile } from './cache-files';
+import { getDb } from './db';
 import { dataFileFor } from './file-store';
 import { bulkGetItems, getItem, namespaceRows } from './item-store';
 import { parseBlob } from './projection';
 import { readLists, readSettingsGeneral } from './queries';
+import { assertAccountOwnsStoreTx } from './sync-store';
 
 // The written output, for the UI's share-sheet handoff. Lives in the CACHE dir
 // (transient by definition — the share sheet copies it out; an OS purge later
@@ -266,6 +273,7 @@ const ZIP_PIECE = 256 * 1024;
 // _readings — expo_). The stream is still synchronous inside each push; the
 // pieces are what bound it.
 async function assembleBracemarkZip(
+  username: string,
   outFile: File,
   links: GatheredLink[],
   lists: { path: string; entity: List }[],
@@ -349,13 +357,20 @@ async function assembleBracemarkZip(
     zipped.set(chunk, offset);
     offset += chunk.length;
   }
-  writeCacheFile(outFile, zipped);
+  writeExportFile(username, outFile, zipped);
   return { fileCount: fileEntries.length };
 }
 
 // --- save helpers ---------------------------------------------------------------
 
-function writeCacheFile(file: File, content: string | Uint8Array): void {
+// The run's one write, and the last thing it does. Fenced like a store write
+// (sync-store.ts, AccountFencedError), for the same reason and one more: a run
+// takes minutes and holds the library in memory once gathered, so a sign-out
+// midway would otherwise end with the signed-out account's whole library
+// written to the cache dir AFTER clearData swept it. The check and the write
+// are synchronous together, so no wipe can land between them.
+function writeExportFile(username: string, file: File, content: string | Uint8Array): void {
+  getDb().transaction((tx) => assertAccountOwnsStoreTx(tx, username));
   file.create({ intermediates: true, overwrite: true });
   file.write(content);
 }
@@ -373,7 +388,7 @@ export async function exportAllData(options: {
   const { format, deps, excludedListIds } = options;
   const onProgress = options.onProgress ?? (() => undefined);
   const filename = exportFileName(format);
-  const outFile = new File(Paths.cache, filename);
+  const outFile = newExportFile(filename);
   const file: ExportedFile = { uri: outFile.uri, name: filename, mimeType: EXPORT_MIME[format] };
 
   // Refresh so "all data" means the account, not just this device. Best-effort:
@@ -409,7 +424,7 @@ export async function exportAllData(options: {
         : format === 'csv'
           ? toRaindropCsv(bundle)
           : toUrlText(bundle);
-    writeCacheFile(outFile, content);
+    writeExportFile(deps.username, outFile, content);
     return {
       linkCount: interopLinks.length,
       fileCount: 0,
@@ -439,7 +454,15 @@ export async function exportAllData(options: {
   );
 
   onProgress({ step: 'assemble' });
-  const { fileCount } = await assembleBracemarkZip(outFile, links, lists, tags, pins, filePaths);
+  const { fileCount } = await assembleBracemarkZip(
+    deps.username,
+    outFile,
+    links,
+    lists,
+    tags,
+    pins,
+    filePaths,
+  );
 
   return {
     linkCount: links.length,

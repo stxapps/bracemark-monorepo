@@ -32,7 +32,10 @@ export function useSignOut() {
       // must NOT trap the user signed-in, and neither may an EXPIRED session (it
       // answers `session_expired`, which changes nothing). An unrevoked row then
       // idles out and is purged like any other, so we swallow the error and still
-      // drop the local session below.
+      // drop the local session below. Nor may a STALLED request hold the wipe for
+      // long: the endpoint's contract caps this wait (SIGN_OUT_TIMEOUT_MS,
+      // @stxapps/shared) well under the client default, and a timeout lands in
+      // the same catch.
       try {
         await api.call(signOutEndpoint, {});
       } catch {

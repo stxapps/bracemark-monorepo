@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import { type FakeBrowser, installFakeBrowser } from '../../testing/fake-browser';
 import App from './App';
@@ -16,6 +16,7 @@ import App from './App';
 
 const mockUseAuth = jest.fn();
 const mockUseSignOut = jest.fn();
+const mockCountPendingOps = jest.fn();
 const mockUseSettings = jest.fn();
 const mockUseSettingMutations = jest.fn();
 
@@ -25,6 +26,9 @@ jest.mock('@stxapps/web-react', () => ({
   },
   get useSignOut() {
     return mockUseSignOut;
+  },
+  get countPendingOps() {
+    return mockCountPendingOps;
   },
   get useSettings() {
     return mockUseSettings;
@@ -44,7 +48,13 @@ beforeEach(() => {
   jest.clearAllMocks();
   fake = installFakeBrowser();
   mockUseAuth.mockReturnValue({ status: 'authenticated', username: 'alice' });
-  mockUseSignOut.mockReturnValue({ mutate: signOutMutate, isPending: false });
+  mockUseSignOut.mockReturnValue({
+    mutate: signOutMutate,
+    reset: jest.fn(),
+    isPending: false,
+    isError: false,
+  });
+  mockCountPendingOps.mockResolvedValue(0);
   mockUseSettings.mockReturnValue({
     themeSource: 'sync',
     syncTheme: { mode: 'system', lightStart: '06:00', darkStart: '18:00' },
@@ -111,16 +121,42 @@ describe('the account row', () => {
     expect(body()).toContain('Nothing on the server changes');
   });
 
-  it('signs out when pressed', () => {
+  // The click goes through the hoisted flow (@stxapps/web-ui's sign-out-provider, which
+  // has its own spec), and the count it reads is asynchronous — hence the act.
+  it('signs out when pressed, with nothing waiting to sync', async () => {
     render(<App />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
+    await act(async () => undefined);
+
+    expect(signOutMutate).toHaveBeenCalledTimes(1);
+  });
+
+  // The sentence under the row promises the library can be downloaded again. A save the
+  // popup queued while offline cannot: it exists only in this browser, and the sign-out
+  // erases the queue. So the row's one click has to stop and say so.
+  it('asks first when a save has not synced, and signs nothing out yet', async () => {
+    mockCountPendingOps.mockResolvedValue(2);
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
+    await act(async () => undefined);
+
+    expect(signOutMutate).not.toHaveBeenCalled();
+    expect(body()).toContain('2 changes that haven’t synced and exist nowhere else');
+
+    fireEvent.click(screen.getByTestId('sign-out-confirm'));
 
     expect(signOutMutate).toHaveBeenCalledTimes(1);
   });
 
   it('reports progress and refuses a second press while signing out', () => {
-    mockUseSignOut.mockReturnValue({ mutate: signOutMutate, isPending: true });
+    mockUseSignOut.mockReturnValue({
+      mutate: signOutMutate,
+      reset: jest.fn(),
+      isPending: true,
+      isError: false,
+    });
 
     render(<App />);
 

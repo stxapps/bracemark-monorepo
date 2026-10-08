@@ -7,6 +7,7 @@
 // use-favicon-url.ts.
 
 import { db, type FaviconRecord } from './db';
+import { assertAccountStillOwnsStore } from './sync-store';
 
 // How long a `none` row (no reachable favicon) stands before another attempt is
 // allowed. Long, because the answer rarely changes and the cost of being wrong is
@@ -32,11 +33,29 @@ export function isFaviconStale(record: FaviconRecord | undefined, now = Date.now
   return now - record.fetchedAt >= FAVICON_RETRY_MS;
 }
 
-export async function putFavicon(host: string, bytes: Uint8Array): Promise<void> {
-  await db.favicons.put({ host, status: 'ok', bytes, fetchedAt: Date.now() });
+// BOTH WRITES ARE FENCED ON THE ACCOUNT (sync-store.ts, AccountFencedError),
+// though the table has no owner column and an icon is public. What a row says is
+// that somebody on this device saved a link to that host, and the provider writes
+// after a network round trip — long enough for a sign-out to have wiped the store
+// underneath it. A browser tab is saved by leaving: sign-out navigates off this
+// origin and the document dies with the fetch. The INSTALLED app stays (AuthGuard
+// goes to /sign-in in place), and there a fetch that was in flight wrote the
+// signed-out account's host back into the empty table, after clearData had been
+// and would not come again. The check shares the write's transaction, which
+// includes the ownership row, so IndexedDB orders it against the teardown's clear:
+// the write lands first and is cleared, or the clear lands first and this throws.
+export async function putFavicon(username: string, host: string, bytes: Uint8Array): Promise<void> {
+  await db.transaction('rw', db.syncMeta, db.favicons, async () => {
+    await assertAccountStillOwnsStore(username);
+    await db.favicons.put({ host, status: 'ok', bytes, fetchedAt: Date.now() });
+  });
 }
 
 // Record "this host has no reachable favicon" so a reload doesn't re-buy the fetch.
-export async function putFaviconNone(host: string): Promise<void> {
-  await db.favicons.put({ host, status: 'none', fetchedAt: Date.now() });
+// Fenced like putFavicon.
+export async function putFaviconNone(username: string, host: string): Promise<void> {
+  await db.transaction('rw', db.syncMeta, db.favicons, async () => {
+    await assertAccountStillOwnsStore(username);
+    await db.favicons.put({ host, status: 'none', fetchedAt: Date.now() });
+  });
 }
