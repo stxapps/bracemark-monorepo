@@ -22,6 +22,10 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 // the source). The two are the same product's settings reached from two places;
 // keep them equal, and change them together.
 //
+// PROPS ARE NAMED INTERFACES, never inline literals — this file carries
+// `'use client'`, and Next's editor plugin warns 71007 on every callback prop of
+// an inline one (docs/architecture.md, _client component props in bracemark-web_).
+//
 // THE INSET IS RESPONSIVE, AND IT IS THE ONLY COPY. It used to be a flat `px-6`
 // that the Lists and Tags sections overrode to `px-4` — a table row is a grip, a
 // collapse toggle, an icon, a rename field, lock chrome and a kebab plus its
@@ -37,6 +41,12 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 // override here put the two tables 8px inside the bar at every width. The bar
 // spells the same `pl-4 md:pl-6`, so the pair only stays aligned while this is
 // the single place the inset is written. Don't reintroduce a per-section one.
+
+interface SettingsPaneProps {
+  viewKey?: string;
+  className?: string;
+  children: React.ReactNode;
+}
 
 // The scrolling column every section renders into. `gap-8` is the rhythm between
 // a section's top-level blocks, so no section adds its own `mt-*` to the ones it
@@ -61,15 +71,7 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 // sync-paused notice above the pane, and "the top" means those too. Guarded by a
 // prev-ref so the first render — a fresh section, already at the top — moves
 // nothing. The expo twin does the same through its scroll host.
-export function SettingsPane({
-  viewKey,
-  className,
-  children,
-}: {
-  viewKey?: string;
-  className?: string;
-  children: React.ReactNode;
-}) {
+export function SettingsPane({ viewKey, className, children }: SettingsPaneProps) {
   const ref = useRef<HTMLDivElement>(null);
   const prevViewKeyRef = useRef(viewKey);
   useEffect(() => {
@@ -88,6 +90,14 @@ export function SettingsPane({
   );
 }
 
+interface SettingsHeaderProps {
+  title: string;
+  description?: React.ReactNode;
+  // Labelled with the section it returns to, not "Back": you got here from a row
+  // named for this view, so naming the destination closes that loop.
+  back?: { label: string; onClick: () => void };
+}
+
 // The section's title and the line under it. This is the page's `h1` — the
 // topbar's "Settings" is a surface label, not a heading (see topbar.tsx), so the
 // section you navigated to is the document's title and gets the weight. Sub-views
@@ -98,17 +108,7 @@ export function SettingsPane({
 // overview into sub-views (Change password, Import data, …), and both had their
 // own copy of the back link sitting loose above the title — so it belongs to the
 // header rather than to the pane, and the pair moves as one block.
-export function SettingsHeader({
-  title,
-  description,
-  back,
-}: {
-  title: string;
-  description?: React.ReactNode;
-  // Labelled with the section it returns to, not "Back": you got here from a row
-  // named for this view, so naming the destination closes that loop.
-  back?: { label: string; onClick: () => void };
-}) {
+export function SettingsHeader({ title, description, back }: SettingsHeaderProps) {
   // TWO nested columns, not one column plus a margin. The link is 12 from the
   // title and the title is 4 from its description, and those are different
   // relationships: the description is part of the title block, the link is a
@@ -155,23 +155,20 @@ export function SettingsHeader({
   );
 }
 
+interface SettingsGroupProps {
+  title: string;
+  description?: React.ReactNode;
+  className?: string;
+  children: React.ReactNode;
+}
+
 // One block within a section — "Link layout", "Theme", "App lock". The `h2` step
 // (`text-base font-medium`) is one below SettingsHeader and one above body text,
 // and the gap between the heading and its controls is fixed here so four blocks
 // in a row can't each pick their own. `gap-4` has to stay clear of whatever the
 // content spaces its OWN items by — a RadioGroup's rows are 12 apart, so at the
 // `gap-3` this once was, the heading read as just another row in the list.
-export function SettingsGroup({
-  title,
-  description,
-  className,
-  children,
-}: {
-  title: string;
-  description?: React.ReactNode;
-  className?: string;
-  children: React.ReactNode;
-}) {
+export function SettingsGroup({ title, description, className, children }: SettingsGroupProps) {
   return (
     <section className={cn('flex flex-col gap-4', className)}>
       <div className={cn('flex flex-col gap-1')}>
@@ -181,6 +178,22 @@ export function SettingsGroup({
       {children}
     </section>
   );
+}
+
+interface SettingsRowProps {
+  icon?: React.ReactNode;
+  title: React.ReactNode;
+  description?: React.ReactNode;
+  // Trailing control for a static row (a Refresh button, a Switch). Ignored when
+  // `onClick` or `href` is set — a button inside a button is not a thing.
+  action?: React.ReactNode;
+  onClick?: () => void;
+  // An absolute URL on another origin (the marketing site). Cross-origin by
+  // definition — an in-app destination is a route, and routes are `onClick` +
+  // router, not this.
+  href?: string;
+  destructive?: boolean;
+  className?: string;
 }
 
 // The bordered row — the workhorse of this surface. Four shapes, one component,
@@ -213,21 +226,7 @@ export function SettingsRow({
   href,
   destructive,
   className,
-}: {
-  icon?: React.ReactNode;
-  title: React.ReactNode;
-  description?: React.ReactNode;
-  // Trailing control for a static row (a Refresh button, a Switch). Ignored when
-  // `onClick` or `href` is set — a button inside a button is not a thing.
-  action?: React.ReactNode;
-  onClick?: () => void;
-  // An absolute URL on another origin (the marketing site). Cross-origin by
-  // definition — an in-app destination is a route, and routes are `onClick` +
-  // router, not this.
-  href?: string;
-  destructive?: boolean;
-  className?: string;
-}) {
+}: SettingsRowProps) {
   const body = (
     <>
       {icon ? (
@@ -291,6 +290,13 @@ export function SettingsRow({
   );
 }
 
+interface SettingsNoticeProps {
+  tone?: 'info' | 'error' | 'pending';
+  icon?: React.ReactNode;
+  className?: string;
+  children: React.ReactNode;
+}
+
 // A strip of text that isn't a control: a warning above a form, a failed write, a
 // transient "Finishing your upgrade…". These were five different treatments —
 // `bg-destructive/10` here, a bordered box with an icon there, bare red text
@@ -347,23 +353,11 @@ export function SettingsRow({
 // table carries a decision, so it gets the modal instead (table-kit.tsx's
 // useDestroyRequest, docs/editors.md).
 //
-// The hooks make THIS export client-only while the rest of the file stays dual
-// (no `'use client'` here, as in web-ui's own primitives — a module compiles into
-// whichever graph imports it). Every section that renders a notice is already
-// `'use client'`; `_about/about-section.tsx` is the one server importer of this
-// kit and uses Pane/Header/Group/Row only. If a server section ever wants a
-// notice, give the file the directive rather than dropping the effect.
-export function SettingsNotice({
-  tone = 'info',
-  icon,
-  className,
-  children,
-}: {
-  tone?: 'info' | 'error' | 'pending';
-  icon?: React.ReactNode;
-  className?: string;
-  children: React.ReactNode;
-}) {
+// The hooks are why this file carries `'use client'` (SettingsPane's are the
+// other reason). `_about/about-section.tsx` is the one server importer of this
+// kit, which makes it a real server→client boundary there: it passes strings and
+// icons only, and a function prop from it would fail the build, not just warn.
+export function SettingsNotice({ tone = 'info', icon, className, children }: SettingsNoticeProps) {
   const ref = useRef<HTMLParagraphElement>(null);
   // The message, when it is one, so a SECOND failure with different text scrolls
   // again — this component stays mounted across errors, so mounting alone would
@@ -395,17 +389,15 @@ export function SettingsNotice({
   );
 }
 
-// Back out of a sub-view to its section's overview. Usually reached through
-// SettingsHeader's `back` prop rather than rendered directly.
-export function SettingsBackLink({
-  label,
-  onClick,
-  className,
-}: {
+interface SettingsBackLinkProps {
   label: string;
   onClick: () => void;
   className?: string;
-}) {
+}
+
+// Back out of a sub-view to its section's overview. Usually reached through
+// SettingsHeader's `back` prop rather than rendered directly.
+export function SettingsBackLink({ label, onClick, className }: SettingsBackLinkProps) {
   return (
     <button
       type="button"
