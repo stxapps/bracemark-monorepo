@@ -6,6 +6,8 @@ export * from './contexts/live-read-pause';
 export * from './contexts/lock-provider';
 export * from './contexts/sync-provider';
 export * from './data/app-group';
+// The one member the app needs: it is the app that calls the pickers.
+export { warnIfNotSwept } from './data/cache-files';
 export * from './data/clear-data';
 export * from './data/db';
 export * from './data/delete-all-data';

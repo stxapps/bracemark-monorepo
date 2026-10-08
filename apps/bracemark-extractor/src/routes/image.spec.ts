@@ -31,8 +31,30 @@ describe('GET /v1/image', () => {
     const res = await getImage('https://cdn.example.com/i.png');
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toBe('image/png');
-    expect(res.headers.get('cache-control')).toContain('immutable');
     expect(new Uint8Array(await res.arrayBuffer())).toEqual(bytes);
+  });
+
+  // The proxy's URL carries the address it fetched, so a cached response is a
+  // saved link's preview — or a favicon naming a saved site's host — kept in the
+  // browser's storage under that address, past a sign-out. It used to ask for a
+  // day of exactly that. The upstream's own header must not get through either:
+  // a CDN's `immutable` is about ITS url, not about ours.
+  it('tells caches to store nothing, whatever the upstream said', async () => {
+    stubFetch(
+      () =>
+        new Response(new Uint8Array([0x89, 0x50, 0x4e, 0x47]), {
+          status: 200,
+          headers: {
+            'content-type': 'image/png',
+            'cache-control': 'public, max-age=31536000, immutable',
+          },
+        }),
+    );
+
+    const res = await getImage('https://cdn.example.com/i.png');
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control')).toBe('no-store');
   });
 
   it('rejects a non-image content-type with 415', async () => {

@@ -31,6 +31,15 @@ const REGION = 'auto'; // R2 ignores region but SigV4 requires one; 'auto' is ca
 const SERVICE = 's3';
 const UNSIGNED_PAYLOAD = 'UNSIGNED-PAYLOAD';
 
+// S3's response-header override, asked for on every GET: the object is answered
+// with `Cache-Control: no-store`. R2 sends a blob with an ETag, a Last-Modified
+// and no caching header at all, which is a response a client's HTTP cache may
+// keep — and the URL it keeps it under names the user id and the object. The api
+// cannot put a header on a response it never sees (app.ts marks its own), so the
+// instruction rides in the URL it signs. It is part of the signed query: a
+// client cannot drop it.
+const RESPONSE_CACHE_CONTROL = 'response-cache-control';
+
 // RFC 3986 encode. encodeURIComponent leaves !'()* unescaped, which AWS requires
 // escaped; `encodeKey` additionally keeps '/' literal so path separators survive.
 function rfc3986(value: string): string {
@@ -89,6 +98,7 @@ export async function presignR2Url(
   query.set('X-Amz-Date', amzDate);
   query.set('X-Amz-Expires', String(expiresIn));
   query.set('X-Amz-SignedHeaders', 'host');
+  if (method === 'GET') query.set(RESPONSE_CACHE_CONTROL, 'no-store');
   // URLSearchParams sorts and percent-encodes; sort() guarantees canonical order.
   query.sort();
 

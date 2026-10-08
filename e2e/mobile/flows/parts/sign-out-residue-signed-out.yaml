@@ -1,0 +1,32 @@
+# Part two of SIGN-OUT-RESIDUE-NATIVE-001: the ordinary sign-out, from the links
+# menu. Nothing is waiting to sync — the link and the list came from the server —
+# so the flow asks no question and shows only its wait (contexts/sign-out-provider.tsx).
+# The app is left running on the landing: the runner reads the sandbox next, and
+# what it reads has to be what a signed-out app keeps, not what a stopped one did.
+appId: com.bracemark.app
+---
+- tapOn:
+    id: 'links-more-options'
+- tapOn:
+    id: 'links-sign-out'
+- repeat:
+    times: 5
+    while:
+      notVisible: 'Sign in'
+    commands:
+      - runFlow:
+          when:
+            platform: iOS
+          commands:
+            - tapOn:
+                text: 'Not Now'
+                optional: true
+      - assertVisible:
+          text: 'Sign in'
+          optional: true
+- extendedWaitUntil:
+    visible: 'Sign in'
+    timeout: 60000
+- assertNotVisible:
+    id: 'links-screen'
+- takeScreenshot: sign-out-residue-signed-out

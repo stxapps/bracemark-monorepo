@@ -1,6 +1,8 @@
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
+import { createWriteStream } from 'node:fs';
 import { copyFile, mkdir, readdir, readFile, rm, unlink, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
+import { pipeline } from 'node:stream/promises';
 import { promisify } from 'node:util';
 
 import { type NativePlatform } from './cli';
@@ -98,33 +100,176 @@ async function androidAppFind(deviceId: string, args: string[]): Promise<string[
     .filter(Boolean);
 }
 
-// The newest file in the app's cache directory whose name starts with `prefix` —
-// where expo's export writes before presenting the share sheet
-// (expo-react data/export-all-data.ts, `Paths.cache`). Returned as text: the
-// callers read plain-text exports.
-export async function readAppCacheFile(options: {
+// The export's own directory under the app's cache (expo-react
+// data/cache-files.ts, EXPORT_FILES_DIR). A second copy of that name, and on
+// purpose: this reads what the app left on disk and asks the app nothing, so a
+// rename there fails every export case here with "no file", which is loud.
+const EXPORT_FILES_DIR = 'bracemark-exports';
+
+// The file an export run left, whose name starts with `prefix` — written before
+// the share sheet is presented (expo-react data/export-all-data.ts). Each run
+// clears the directory first, so there is one. Returned as text: the callers
+// read plain-text exports.
+export async function readExportFile(options: {
   platform: NativePlatform;
   deviceId: string;
   prefix: string;
 }): Promise<string> {
   if (options.platform === 'android') {
     const paths = await androidAppFind(options.deviceId, [
-      'cache',
+      `cache/${EXPORT_FILES_DIR}`,
       '-maxdepth',
       '1',
       '-name',
       `${options.prefix}*`,
     ]);
     const path = paths.sort().at(-1);
-    if (!path) throw new Error(`no "${options.prefix}…" file in the app’s cache`);
+    if (!path) throw new Error(`no "${options.prefix}…" file in the app’s export directory`);
     return (await androidAppBytes(options.deviceId, path)).toString('utf8');
   }
 
-  const caches = join(await iosDataContainer(options.deviceId), 'Library', 'Caches');
-  const names = (await readdir(caches)).filter((name) => name.startsWith(options.prefix)).sort();
+  const exports = join(
+    await iosDataContainer(options.deviceId),
+    'Library',
+    'Caches',
+    EXPORT_FILES_DIR,
+  );
+  const names = (await readdir(exports).catch(() => [] as string[]))
+    .filter((name) => name.startsWith(options.prefix))
+    .sort();
   const name = names.at(-1);
-  if (!name) throw new Error(`no "${options.prefix}…" file in ${caches}`);
-  return readFile(join(caches, name), 'utf8');
+  if (!name) throw new Error(`no "${options.prefix}…" file in ${exports}`);
+  return readFile(join(exports, name), 'utf8');
+}
+
+const DATABASE = 'bracemark-data.db';
+
+export interface SandboxFile {
+  // Relative to the app's data directory on Android, absolute on iOS, where the
+  // containers are read in place on this Mac.
+  path: string;
+  bytes: number;
+}
+
+export interface SandboxScan {
+  files: SandboxFile[];
+  // Every (marker, file) pair where the file's bytes hold the marker.
+  hits: Array<{ marker: string; path: string }>;
+}
+
+async function walk(root: string): Promise<string[]> {
+  const found: string[] = [];
+  const pending = [root];
+  for (let dir = pending.pop(); dir !== undefined; dir = pending.pop()) {
+    for (const entry of await readdir(dir, { withFileTypes: true })) {
+      const path = join(dir, entry.name);
+      // Symlinks are skipped, not followed: Android's `lib` points outside the
+      // sandbox, and nothing the app writes is a link.
+      if (entry.isDirectory()) pending.push(path);
+      else if (entry.isFile()) found.push(path);
+    }
+  }
+  return found.sort();
+}
+
+// The whole of Android's app data directory, copied to `target` as one tar
+// stream — `run-as` reads it on a debuggable build, and one stream is one
+// consistent pass where a `cat` per file would be hundreds of adb round trips.
+async function copyAndroidSandbox(deviceId: string, target: string): Promise<void> {
+  const archive = `${target}.tar`;
+  const child = spawn('adb', ['-s', deviceId, 'exec-out', runAs(['tar', '-cf', '-', '.'])], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let stderr = '';
+  child.stderr.on('data', (chunk: Buffer) => {
+    stderr += chunk.toString('utf8');
+  });
+  const closed = new Promise<number | null>((resolve, reject) => {
+    child.on('error', reject);
+    child.on('close', resolve);
+  });
+  await pipeline(child.stdout, createWriteStream(archive));
+  const code = await closed;
+  if (code !== 0) throw new Error(`adb could not archive the app’s sandbox: ${stderr.trim()}`);
+  await capture('tar', ['-xf', archive, '-C', target]);
+  await unlink(archive);
+}
+
+// Every place the app can leave a file: its data container, plus on iOS the App
+// Group container it shares with the share extension (the taxonomy snapshot and
+// the outbox — docs/share-sheet.md).
+async function iosSandboxRoots(deviceId: string): Promise<string[]> {
+  const groups = await capture('xcrun', [
+    'simctl',
+    'get_app_container',
+    deviceId,
+    APP_ID,
+    'groups',
+  ]);
+  const groupPaths = groups.stdout
+    .split('\n')
+    .map((line) => line.split('\t').slice(1).join('\t').trim())
+    .filter(Boolean);
+  return [await iosDataContainer(deviceId), ...groupPaths];
+}
+
+// Read every file in the app's sandbox and report which hold one of `markers` —
+// strings a case seeded and can therefore recognise as the account's plaintext.
+// It asks about the WHOLE sandbox rather than the places the app is known to
+// write, which is the point: a writer nobody listed is found the same way as
+// one somebody did. Both encodings a string is stored in are searched (a plist
+// or a native cache may hold UTF-16).
+//
+// What it cannot see is bounded and worth knowing: plaintext that is compressed
+// or rendered (a zip export, a decoded image, the OS's app-switcher snapshot),
+// and anything the OS keeps outside the sandbox.
+//
+// `workDir` holds Android's copy for the length of the scan and is removed
+// after it: the result names every file, and the copy is a whole dev build's
+// data, account included.
+export async function scanAppSandbox(options: {
+  platform: NativePlatform;
+  deviceId: string;
+  markers: string[];
+  workDir: string;
+}): Promise<SandboxScan> {
+  await rm(options.workDir, { recursive: true, force: true });
+
+  let roots: string[];
+  if (options.platform === 'android') {
+    await mkdir(options.workDir, { recursive: true });
+    await copyAndroidSandbox(options.deviceId, options.workDir);
+    roots = [options.workDir];
+  } else {
+    roots = await iosSandboxRoots(options.deviceId);
+  }
+
+  const needles = options.markers.flatMap((marker) => [
+    { marker, bytes: Buffer.from(marker, 'utf8') },
+    { marker, bytes: Buffer.from(marker, 'utf16le') },
+  ]);
+  const scan: SandboxScan = { files: [], hits: [] };
+  for (const root of roots) {
+    for (const path of await walk(root)) {
+      // A file the app removed between the listing and the read is not residue.
+      const bytes = await readFile(path).catch(() => undefined);
+      if (!bytes) continue;
+      const shown = options.platform === 'android' ? relative(options.workDir, path) : path;
+      scan.files.push({ path: shown, bytes: bytes.byteLength });
+      for (const marker of options.markers) {
+        if (needles.some((needle) => needle.marker === marker && bytes.includes(needle.bytes))) {
+          scan.hits.push({ marker, path: shown });
+        }
+      }
+    }
+  }
+  // The store survives a sign-out as an empty file, so its absence means the
+  // scan read the wrong place — and an empty scan would pass as a clean one.
+  if (!scan.files.some((file) => file.path.endsWith(`/${DATABASE}`))) {
+    throw new Error(`the sandbox scan found no ${DATABASE}: it did not read the app’s data`);
+  }
+  await rm(options.workDir, { recursive: true, force: true });
+  return scan;
 }
 
 // How many rows the app's local store holds in `tables` — expo-sqlite's
@@ -138,7 +283,7 @@ export async function countAppRows(options: {
   tables: string[];
   workDir: string;
 }): Promise<number> {
-  const database = 'bracemark-data.db';
+  const database = DATABASE;
   await rm(options.workDir, { recursive: true, force: true });
   await mkdir(options.workDir, { recursive: true });
 

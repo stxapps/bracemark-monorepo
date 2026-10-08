@@ -305,7 +305,7 @@ function plaintextAt(path: string): string | undefined {
 // In-transit ciphertext. Every transfer must clean up after itself however it
 // settled — a leak here is invisible on device until the cache fills.
 function tempFiles(): string[] {
-  return listFileUris().filter((uri) => uri.includes('bracemark-enc-'));
+  return listFileUris().filter((uri) => uri.includes('/bracemark-scratch/'));
 }
 
 const committedPaths = (): string[] => commits.flat().map((o) => o.path);

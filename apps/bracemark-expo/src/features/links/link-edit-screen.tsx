@@ -54,6 +54,7 @@ import {
   resizeImage,
   useLinkMutations,
   useLiveRead,
+  warnIfNotSwept,
 } from '@stxapps/expo-react';
 import { hostFromText, LINK_NOTE_MAX, LINK_TITLE_MAX, TRASH_ID } from '@stxapps/shared';
 
@@ -164,6 +165,7 @@ function LinkEditForm({ link, focus }: { link: LinkItem; focus?: EditFocus }) {
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'] });
     if (result.canceled) return;
     const asset = result.assets[0];
+    warnIfNotSwept(asset.uri, 'expo-image-picker');
     // Cap dimensions at pick time (the client-thumbnailing step — see
     // image.ts / docs/editors.md) so the preview shows exactly what will
     // be stored. resizeImage passes a within-cap image through and never

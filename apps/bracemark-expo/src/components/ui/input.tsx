@@ -164,6 +164,17 @@ function Input({
       allowFontScaling={allowsFontScaling()}
       maxFontSizeMultiplier={MAX_FONT_SIZE_MULTIPLIER}
       keyboardAppearance={theme === 'dark' ? 'dark' : 'light'}
+      // Off unless the field says what it is — web-ui's input.tsx has the
+      // argument, and this is its native half. There is no browser form history
+      // here; what there is, is the OS's autofill: left unset, Android offers
+      // any field to the autofill service and iOS guesses at its purpose, so a
+      // password manager can offer to SAVE a link's URL or a list-lock password
+      // as if it were this app's login. React Native turns `off` into "not
+      // important for autofill" on Android and `textContentType="none"` on iOS.
+      // The credential fields name themselves (`username`, `current-password`,
+      // `new-password`) and `{...props}` below lets them. What this does not
+      // reach is the keyboard's own learning, which belongs to the keyboard.
+      autoComplete="off"
       onLayout={
         Platform.OS === 'android'
           ? (event) => {

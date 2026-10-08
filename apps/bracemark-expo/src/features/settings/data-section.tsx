@@ -43,6 +43,7 @@ import {
   usePendingChangesCount,
   useStallProbe,
   useSync,
+  warnIfNotSwept,
 } from '@stxapps/expo-react';
 import { SESSION_COPY } from '@stxapps/react';
 import {
@@ -371,7 +372,9 @@ function ImportView({ onBack }: { onBack: () => void }) {
     });
     if (result.canceled) return;
     const asset = result.assets[0];
-    if (asset) run({ uri: asset.uri, name: asset.name });
+    if (!asset) return;
+    warnIfNotSwept(asset.uri, 'expo-document-picker');
+    run({ uri: asset.uri, name: asset.name });
   };
 
   return (

@@ -1,0 +1,11 @@
+# After subflows/export-plain-text.yaml, with the api out of reach: the receipt
+# must say the file is this device's copy. That wording is asserted, the one
+# sentence of body copy these flows bind to (docs/e2e.md, _the testID contract_):
+# it is the whole of what tells a user what they got. Pulled in with `runFlow`;
+# never run directly.
+appId: com.bracemark.app
+---
+# The receipt sits under the format list, below the fold on a phone.
+- scrollUntilVisible:
+    element: '.*Couldn’t refresh from the server first.*'
+    timeout: 10000

@@ -1,0 +1,44 @@
+# Sign in to an account holding one link and one list written on the web, see
+# both on the device, and export the library as plain text — the largest piece
+# of plaintext the app writes outside its store, and one that has to outlive the
+# run that made it. Then hand the device to the runner, which reads every file in
+# the app's sandbox (runner/device-files.ts, scanAppSandbox) and requires each of
+# the link's host, its path and the list's name to be in at least one.
+# parts/sign-out-residue-signed-out.yaml signs out, and the runner reads the
+# sandbox again: none of the three may be in any file.
+#
+#   maestro test mobile/flows/sign-out-residue.yaml -e USERNAME=… -e PASSWORD=… \
+#     -e KEPT_URL=https://….invalid/residue-kept -e LIST_NAME='E2E residue list'
+appId: com.bracemark.app
+tags: [SIGN-OUT-RESIDUE-NATIVE-001, full, online, destructive, ios, android]
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+- extendedWaitUntil:
+    visible: ".*${KEPT_URL.replace('https://', '')}.*"
+    timeout: 60000
+- tapOn:
+    text: 'Dismiss'
+    optional: true
+# The list has arrived too: its name is one of the three things looked for, and
+# a scan taken before the pull that carries it would fail for the wrong reason.
+- tapOn:
+    id: 'links-open-navigation'
+- extendedWaitUntil:
+    visible: '${LIST_NAME}'
+    timeout: 60000
+- tapOn:
+    id: 'links-nav-all'
+- runFlow:
+    file: subflows/open-settings.yaml
+    env:
+      SECTION: data
+- runFlow:
+    file: subflows/export-plain-text.yaml
+- takeScreenshot: sign-out-residue-exported
+- tapOn:
+    id: 'settings-close'
+- extendedWaitUntil:
+    visible:
+      id: 'links-screen'
+    timeout: 10000

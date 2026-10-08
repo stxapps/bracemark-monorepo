@@ -1502,7 +1502,18 @@ browser that can't fetch for itself. It is a **separate app**, not a route in
   save **inlines** the image bytes in the extraction response (one round trip); a
   bulk import gets URLs only and the client pulls each image from `GET /image?url=…`,
   which **streams the remote bytes through and buffers/persists nothing**. The
-  client encrypts the streamed bytes into `files/{id}.enc` itself. We deliberately
+  client encrypts the streamed bytes into `files/{id}.enc` itself. ⚠ "Persists
+  nothing" has to hold on the **receiving** side too, and for a while it did not:
+  the proxy answered `Cache-Control: public, max-age=86400, immutable`, on the
+  argument that the browser's cache would serve a re-view. No client re-views —
+  each reads the bytes once and stores them itself — so what that header bought
+  was a second, readable copy in the browser's HTTP cache, keyed by a URL that
+  names the image or the saved site's `favicon.ico`, and outliving a sign-out
+  (measured in Chrome: one cache entry per proxied image). Every response of this
+  Worker is `no-store` now, by one middleware in its `app.ts`, as bracemark-api's
+  is ([api-contracts.md](./api-contracts.md), _no response is cacheable_). The
+  cost is the dedupe the cache did by accident: two links sharing one preview
+  image are two proxy fetches. We deliberately
   **don't** have the extractor store the image in R2 and return a signed URL: for a
   one-shot, single-reader download that adds a plaintext-at-rest object, a
   lifecycle/cleanup burden, and _more_ hops

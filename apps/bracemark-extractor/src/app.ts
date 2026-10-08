@@ -32,6 +32,25 @@ export const app = new Hono<AppEnv>();
 // turns every error into a uniform JSON body. See lib/errors.ts.
 app.onError(errorHandler);
 
+// No response of this Worker may be kept by an HTTP cache — bracemark-api's rule
+// (its app.ts; docs/api-contracts.md, _no response is cacheable_), and it bites
+// harder here: every request this origin answers is ABOUT a saved link. The image
+// proxy is a GET whose URL carries the address it fetched, so a cached response is
+// a preview image, or a `…/favicon.ico` naming a saved site's host, sitting in the
+// browser's own storage under that address — outside the app's, and past a
+// sign-out. The proxy used to ask for exactly that (`public, max-age=86400,
+// immutable`), on the argument that the browser's cache would serve a re-view. No
+// client re-views: each reads the bytes once and stores them itself, encrypted or
+// in the favicon store, so the cache held a second, readable copy and nothing
+// read it.
+//
+// Registered FIRST so it wraps everything below it — the CORS preflight, a 429 the
+// rate limiter throws, a 404, and whatever `onError` builds.
+app.use('*', async (c, next) => {
+  await next();
+  c.header('Cache-Control', 'no-store');
+});
+
 // The web app (bracemark-web) is the browser caller, cross-origin, so allow CORS for the
 // configured origins. The extension and the future mobile app are NOT browser-CORS-
 // bound, so they aren't in the list. No `credentials` — the extractor is anonymous

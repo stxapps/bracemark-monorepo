@@ -28,6 +28,24 @@ export const app = new Hono<AppEnv>();
 // this turns every error into a uniform JSON body. See lib/errors.ts.
 app.onError(errorHandler);
 
+// No response of this api may be kept by an HTTP cache, and it says so itself:
+// a response with no `Cache-Control` is one a client's cache is free to store.
+// React Native's OkHttp cache on Android did — every GET here, request URL
+// included, so a device held `password-door?username=…` and the account's
+// object keys after the account had signed out of it, in a directory no
+// teardown reaches (docs/api-contracts.md, _no response is cacheable_). A
+// browser's cache and iOS's URL cache are the same kind of place. `no-store`
+// rather than `no-cache`: the point is that nothing is written, not that it is
+// revalidated.
+//
+// Registered FIRST so it wraps everything below it — the CORS preflight, a 429
+// the rate limiter throws, a 404, and whatever `onError` builds. A route that
+// ever wants to be cached has to be exempted here, on purpose.
+app.use('*', async (c, next) => {
+  await next();
+  c.header('Cache-Control', 'no-store');
+});
+
 // Browser clients are cross-origin (bracemark-web dev on :3000, the extension from
 // its own origin), so allow CORS. The allow-list is resolved per-request from
 // the runtime env; credentials require echoing the specific origin (not '*').

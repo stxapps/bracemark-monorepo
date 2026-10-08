@@ -14,6 +14,8 @@ import { Directory, File, Paths } from 'expo-file-system';
 
 import { newId } from '@stxapps/expo-crypto';
 
+import { newScratchFile } from './cache-files';
+
 // All plaintext blobs live under one directory in the app's document storage
 // (survives relaunches; not the cache dir, which the OS may purge — a purge
 // would silently re-break "already downloaded" bookkeeping in `items`).
@@ -51,12 +53,13 @@ export function deleteDataFiles(paths: string[]): void {
 }
 
 // A fresh scratch location for one in-transit CIPHERTEXT blob (downloaded .enc
-// before native decrypt, or native encrypt output before upload). Lives in the
-// cache dir on purpose — transient by definition, so an OS purge costs nothing —
-// and uniquely named so concurrent transfers never collide. The caller deletes
-// it when the transfer settles.
+// before native decrypt, or native encrypt output before upload). Lives under
+// the cache dir on purpose — transient by definition, so an OS purge costs
+// nothing — and uniquely named so concurrent transfers never collide. The caller
+// deletes it when the transfer settles; it sits in cache-files.ts's scratch
+// directory, so what a killed transfer left goes with the sign-out sweep.
 export function newTempEncFile(): File {
-  return new File(Paths.cache, `bracemark-enc-${newId()}`);
+  return newScratchFile(`enc-${newId()}`);
 }
 
 // Remove every decrypted blob — the file-system half of the `items` wipe, called

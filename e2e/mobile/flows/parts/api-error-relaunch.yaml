@@ -31,6 +31,8 @@ appId: com.bracemark.app
       SECTION: data
 - runFlow:
     file: ../subflows/export-plain-text.yaml
+- runFlow:
+    file: ../subflows/assert-export-local-copy.yaml
 - takeScreenshot: api-error-exported
 - tapOn:
     id: 'settings-close'

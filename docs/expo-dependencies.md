@@ -36,8 +36,9 @@ here.
 they name themselves (`ImagePicker`, `ImageManipulator`; expo-document-picker's
 is `DocumentPicker`), and the sign-out wipe deletes those folders **by name**
 (`@stxapps/expo-react` `data/cache-files.ts`). An upgrade that renames one
-breaks the sweep without an error anywhere — re-read the names from the native
-sources when bumping any of the three
+breaks the sweep without an error anywhere, bar a `console.warn` in a dev build
+the next time something is picked (`warnIfNotSwept`, same file) — re-read the
+names from the native sources when bumping any of the three
 ([data-lifecycle.md](./data-lifecycle.md), _what an empty table does not mean_).
 
 #### expo-image

@@ -820,16 +820,51 @@ which is why each one shipped.
   `bracemark-exports/`, replaced by the next run, since it must outlive its own
   run for the share sheet and the receiving app to read it), the **import's
   picked copy** (`copyToCacheDirectory`; deleted when the run settles, as the
-  run has read it whole), and a **custom image's picked file and resized copy**
+  run has read it whole), a **custom image's picked file and resized copy**
   (kept until sign-out — the editor's draft points at the uri, and a save that
-  failed after the copy retries from it). `clearData` sweeps all three.
+  failed after the copy retries from it), and an **extraction's in-transit
+  image** (`lib/device-extraction.ts` — the preview a saved page declares,
+  parked for the native decoders; the worker deletes it when the write settles,
+  but a process killed before then never runs that `finally`, so it is written
+  under `bracemark-scratch/` rather than loose in the cache dir, where the
+  leftover had a name nothing knew). `clearData` sweeps all four. The sync
+  plane's in-transit files (`newTempEncFile`) share `bracemark-scratch/` and go
+  with it: they are ciphertext, so the sweep owes them nothing, but everything
+  this app names in the cache directory is then in a directory the sweep lists.
+  There is **no launch-time sweep**, on purpose: it would buy no privacy (a
+  signed-in device holds the same previews decrypted, and a launch with no
+  session already runs `clearData`), only disk the OS reclaims from a cache
+  directory anyway — and it would have to run before the first transfer starts,
+  an ordering nothing enforces.
   ⚠ The picker directories are named by the expo modules that write them
   (`DocumentPicker`, `ImagePicker`, `ImageManipulator`), so **an SDK bump can
   move one and the sweep then deletes a directory that is not there** — no
-  error, no failing test. Re-read the three names from the modules' native
+  error, no failing test. A dev build says so at the next pick: each uri a
+  picker or the manipulator hands back goes through `warnIfNotSwept`, which
+  logs when the file is not inside a directory the sweep deletes. That covers a
+  moved directory and nothing else — a writer that never hands back a uri is
+  invisible to it — so re-read the three names from the modules' native
   sources when any of them is upgraded
   ([expo-dependencies.md](./expo-dependencies.md), _expo-image-picker +
-  expo-image-manipulator_).
+  expo-image-manipulator_). On a device the question is asked the other way
+  round, of every file rather than of the listed ones:
+  `SIGN-OUT-RESIDUE-NATIVE-001` ([e2e.md](./e2e.md), _scale, loading and
+  offline_).
+- ⚠ **The platform's HTTP cache lives in that directory too, and no sweep
+  reaches it** — React Native's OkHttp cache on Android (`cache/http-cache/`),
+  the URL cache on iOS (`Library/Caches/<bundle id>/Cache.db`). It is not ours
+  to delete: the networking stack holds it open, and it is named by the
+  platform. So what must not outlive an account is kept out of it at the
+  source — **bracemark-api marks every response `no-store`**
+  ([api-contracts.md](./api-contracts.md), _no response is cacheable_). Before
+  it did, Android's cache kept the api's GETs after a sign-out, the username in
+  a request URL among them; `SIGN-OUT-RESIDUE-NATIVE-001` found it by listing
+  what a signed-out device still held, and now carries the username as a marker
+  there. A blob is R2's response rather than the api's, so its `no-store` is
+  asked for in the presigned URL (same section). What still lands in that cache
+  is whatever a saved site's own response allows — a page, a preview image, a
+  favicon — and, on an iOS **dev** build, everything, because the dev client's
+  network inspector stores every response regardless (same section).
 - **Work in flight when the wipe lands writes after it.** The sync cycle was
   already fenced on the account's ownership row
   ([sessions.md](./sessions.md)); two writers were not. The **favicon cache**
@@ -889,7 +924,7 @@ dialog down on success.
 #### what the wipe cannot reach — web
 
 `clearData` on web runs in **one tab**, and two things are out of its reach for
-that reason or a near one:
+that reason or a near one (two more, further down, for a different one):
 
 - **`sessionStorage` is per tab.** bracemark-web keeps one key there, the links
   view Settings' ✕ returns to (`lib/links-return.ts`), and it can carry a
@@ -908,11 +943,37 @@ that reason or a near one:
   account's ownership row ([link-extraction.md](./link-extraction.md),
   _favicons_).
 
+Two more places are out of its reach for a different reason: they are **the
+browser's storage, not the app's**, so no teardown can clear them and the only
+lever is to keep things out. Both were found by reading a Chrome profile from
+disk after a sign-out, not by anything the app could observe.
+
+- ⚠ **The HTTP cache.** A response that says nothing about caching is one the
+  browser may keep, under its request URL: the api's GETs were there —
+  `password-door?username=…` among them — and so was every presigned blob read.
+  bracemark-api now marks its own responses `no-store` and asks R2 for the same
+  on a blob ([api-contracts.md](./api-contracts.md), _no response is
+  cacheable_, with the before-and-after counts). bracemark-extractor does too:
+  its image proxy used to ask the browser to keep each preview and favicon for
+  a day, under a URL naming the saved site.
+- ⚠ **The form history.** A browser keeps what is typed into a field it thinks
+  worth completing, and offers it to whoever types there next: the add-link
+  dialog's URL and the edit dialog's Title were both in the profile's autofill
+  table, beside the username. So every text field is `autocomplete="off"`
+  unless it names itself as a credential, applied by the input primitives
+  rather than at each call site
+  ([accessibility.md](./accessibility.md), _what a field tells the browser_);
+  after it, that table held the username alone. The username stays on purpose —
+  it is the sign-in form's `autocomplete="username"`, which is what a password
+  manager fills.
+
 What web cannot do at all is scrub: IndexedDB offers no equivalent of `VACUUM`,
-and a cleared store is compacted on the browser's schedule, not ours. The only
-lever is deleting the whole database rather than clearing its tables, which
-would mean rebuilding the teardown around other open tabs and around the
-ownership check that today runs inside the clearing transaction.
+and a cleared store is compacted on the browser's schedule, not ours. The same
+profile shows it: after the sign-out the origin's IndexedDB log file still held
+the username, the saved link and a list's name — records the app had already
+deleted. The only lever is deleting the whole database rather than clearing its
+tables, which would mean rebuilding the teardown around other open tabs and
+around the ownership check that today runs inside the clearing transaction.
 
 Step 1's gate is the one that isn't obvious. Without it there is a live frame
 where the store is already empty but status is still `authenticated`: the

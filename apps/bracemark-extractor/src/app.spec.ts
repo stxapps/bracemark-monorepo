@@ -26,6 +26,24 @@ describe('bracemark-extractor', () => {
     await expect(res.json()).resolves.toEqual({ status: 'ok' });
   });
 
+  // Every request this Worker answers is about a saved link, so no response may
+  // be kept by an HTTP cache (app.ts). Nothing here fails without the header — the
+  // residue is in a browser profile — and the shapes below are the ones the
+  // framework builds itself: a plain route, a path nothing answers, and a 429,
+  // which the limiter THROWS, so it is onError's response and proves the header's
+  // middleware is registered ahead of the limiter. routes/image.spec.ts pins the
+  // proxy's own.
+  it.each([
+    ['a plain route', '/health', 200, {}],
+    ['a path nothing answers', '/v1/nothing-here', 404, {}],
+    ['a rate-limited request', '/', 429, { API_RATE_LIMIT: deny }],
+  ])('tells caches to store nothing: %s', async (_name, path, status, bindings) => {
+    const res = await app.request(path, {}, { ...env, ...bindings });
+
+    expect(res.status).toBe(status);
+    expect(res.headers.get('cache-control')).toBe('no-store');
+  });
+
   // The real bindings would need a full window's worth of requests to trip, so swap
   // in a denying fake: what's under test is the 429 envelope + the Retry-After
   // header carrying each tier's window (middleware/rate-limit.ts RATE_LIMIT_PERIODS).

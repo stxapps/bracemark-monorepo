@@ -3,17 +3,21 @@
 # file the export left in the app's cache (runner/device-files.ts) — Maestro can
 # see the share sheet, not what is in the file.
 #
-# Every caller exports with the api out of reach, so the receipt must say the file
-# is this device's copy. That wording is asserted, the one sentence of body copy
-# these flows bind to (docs/e2e.md, _the testID contract_): it is the whole of
-# what tells a user what they got.
+# What the receipt SAYS is the caller's to assert: a caller that exports with the
+# api out of reach checks that it calls the file this device's copy
+# (subflows/assert-export-local-copy.yaml); one that exports online has no such
+# sentence to find.
 appId: com.bracemark.app
 ---
 - tapOn:
     id: 'export-data-open'
-# A prefix match: the radio row folds its label and hint into one accessible
-# name ("Plain text, Just the URLs…"), so the label alone is no node.
-- tapOn: 'Plain text.*'
+# A match on part of the name: the radio row folds its label and hint into one
+# accessible name ("Plain text, Just the URLs…"), so the label alone is no node.
+# Not a prefix either — on iOS the name leads with the row's two alignment
+# slots, each a zero-width space (U+200B) and a comma
+# (components/first-line-slot.tsx), and `Plain text.*` stopped finding the row
+# there.
+- tapOn: '.*Plain text.*'
 - tapOn:
     id: 'export-data-submit'
 
@@ -53,8 +57,4 @@ appId: com.bracemark.app
 - extendedWaitUntil:
     visible:
       id: 'export-data-complete'
-    timeout: 10000
-# The receipt sits under the format list, below the fold on a phone.
-- scrollUntilVisible:
-    element: '.*Couldn’t refresh from the server first.*'
     timeout: 10000

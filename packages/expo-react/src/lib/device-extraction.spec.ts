@@ -32,6 +32,7 @@ import { sql } from 'drizzle-orm';
 
 import { type LinkItem, LINKS_PREFIX, MY_LIST_ID, pathFromId } from '@stxapps/shared';
 
+import { clearCacheFiles } from '../data/cache-files';
 import { getDb } from '../data/db';
 import { readFavicon } from '../data/favicon-store';
 import { readExtraction } from '../data/queries';
@@ -56,15 +57,21 @@ jest.mock('@stxapps/expo-crypto/lib/ids', () => ({ newId: () => `id-${(mockIds +
 // The two native decoders. Standing in for "the bytes were a usable image": the resize is a
 // pass-through, so the temp file the worker wrote is the one it stores.
 jest.mock('./image', () => ({
-  probeImageSize: () => Promise.resolve(mockProbeSize),
+  probeImageSize: () => {
+    mockOnProbe?.();
+    return Promise.resolve(mockProbeSize);
+  },
   resizeImage: (source: { uri: string; width: number; height: number }) => Promise.resolve(source),
 }));
 
 let mockIds = 0;
 let mockConnected: boolean | null = false;
 let mockProbeSize: { width: number; height: number } | undefined = { width: 800, height: 600 };
+// Runs at the probe — the one moment a spec can observe the image while it is in transit.
+let mockOnProbe: (() => void) | undefined;
 
-const { resetFileSystem } = require('../testing/memory-file-system') as {
+const { listFileUris, resetFileSystem } = require('../testing/memory-file-system') as {
+  listFileUris: () => string[];
   resetFileSystem: () => void;
 };
 
@@ -105,6 +112,7 @@ const facetOf = async (id: string) => (await readExtraction(id))?.facets.titleIm
 beforeEach(async () => {
   mockIds = 0;
   mockProbeSize = { width: 800, height: 600 };
+  mockOnProbe = undefined;
   resetFileSystem();
   const tables = getDb().all<{ name: string }>(
     sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'`,
@@ -450,6 +458,38 @@ describe('runDeviceTitleImageBatch', () => {
 
       expect((await readExtraction('l_1'))?.imageId).toBeUndefined();
       expect((await facetOf('l_1'))?.status).toBe('done');
+    });
+
+    // A KILL MID-EXTRACTION. The worker deletes its in-transit image in a `finally`, which a
+    // killed process never runs — and the bytes are plaintext, a saved link's preview. Loose
+    // in the cache dir that file had a name nobody knew and outlived the sign-out; nothing
+    // looked different. So the sweep is run at the probe, standing in for the wipe that
+    // follows the kill, and has to leave nothing.
+    it('keeps the in-transit image where the sign-out sweep reaches it', async () => {
+      let inTransit: string[] = [];
+      let afterSweep: string[] | undefined;
+      mockOnProbe = () => {
+        inTransit = listFileUris();
+        clearCacheFiles();
+        afterSweep = listFileUris();
+      };
+      // The run itself ends on the refusal: its file is gone from under it.
+      mockProbeSize = undefined;
+      routes({
+        'https://example.com/a': () =>
+          html('<title>T</title><meta property="og:image" content="https://cdn.example/i.png">'),
+        'https://cdn.example/i.png': () =>
+          new Response(PNG as unknown as ResponseBody, { status: 200 }),
+      });
+
+      await runDeviceTitleImageBatch(USER, [linkItem('l_1', 'https://example.com/a')], TIER, {
+        optedIn: true,
+      });
+
+      // The control: there WAS a file at the probe, so the empty list below is the sweep's
+      // doing rather than a probe that ran before anything was written.
+      expect(inTransit).toHaveLength(1);
+      expect(afterSweep).toEqual([]);
     });
   });
 

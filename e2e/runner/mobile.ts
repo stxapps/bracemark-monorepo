@@ -24,7 +24,12 @@ import { createInSettings } from '../web/fixtures/taxonomy';
 import { startFaultApi } from './api-fault';
 import { type ApiControl, controlApi } from './api-pause';
 import { parseNativeCli } from './cli';
-import { countAppRows, readAppCacheFile, stageDocumentPickerFile } from './device-files';
+import {
+  countAppRows,
+  readExportFile,
+  scanAppSandbox,
+  stageDocumentPickerFile,
+} from './device-files';
 import { cycleAppearance } from './device-look';
 import {
   type Box,
@@ -44,7 +49,7 @@ import {
   writeTapFlow,
 } from './hierarchy';
 import { keyboardFrame } from './keyboard';
-import { provisionAccount } from './lib';
+import { provisionAccount, writeJson } from './lib';
 import { type CaseStep, type CaseStepContext, prepareNativeRun } from './native-run';
 import { inkShare, screenshot } from './pixels';
 import { adbShell, capture } from './process';
@@ -174,7 +179,7 @@ async function routeApiTo(deviceId: string, hostPort: number): Promise<void> {
 // The file an export left in the app's cache, as text, required to hold every
 // URL in `urls`. Plain text is URL-per-line, so containment is the whole check.
 async function assertExported(context: CaseStepContext, urls: string[]): Promise<void> {
-  const text = await readAppCacheFile({
+  const text = await readExportFile({
     platform: context.platform,
     deviceId: context.deviceId,
     prefix: 'Bracemark links ',
@@ -193,6 +198,21 @@ async function localRows(context: CaseStepContext, label: string): Promise<numbe
     tables: ['items', 'pending_ops'],
     workDir: join(context.caseDir, `${context.index}-${label}`),
   });
+}
+
+// Which files in the app's sandbox hold which of `markers`, with the full file
+// list written beside the case's other artifacts: the hits decide the case, and
+// the list is what a reader checks them against — everything the app had on
+// disk at that moment, including what no marker could flag.
+async function sandboxHits(context: CaseStepContext, label: string, markers: string[]) {
+  const scan = await scanAppSandbox({
+    platform: context.platform,
+    deviceId: context.deviceId,
+    markers,
+    workDir: join(context.caseDir, `${context.index}-${label}-copy`),
+  });
+  await writeJson(join(context.caseDir, `${context.index}-${label}.json`), scan);
+  return scan.hits;
 }
 
 // Revoke every OTHER session of the account — the device's — from a separate
@@ -477,6 +497,7 @@ async function main(): Promise<void> {
       const shareTagName = unique('e2e-share-tag');
       const shareCreatedListName = unique('E2E shared list');
       const shareCreatedTagName = unique('e2e-shared-tag');
+      const residueListName = unique('E2E residue list');
       const importFixture = testCase.id.startsWith('DATA-IMPORT-NATIVE-')
         ? await writeSmallDataArchive(
             join(run.runDir, 'cases', testCase.id, 'fixture', 'small-bracemark.zip'),
@@ -539,8 +560,14 @@ async function main(): Promise<void> {
             await addLink(app.page, conflictUrl);
             await syncAndWait(app.page);
           }
+          if (testCase.id === 'SIGN-OUT-RESIDUE-NATIVE-001') {
+            // A list beside the link below: its name is the taxonomy's plaintext,
+            // which on iOS is also mirrored into the App Group container.
+            await createInSettings(app.page, 'list', residueListName);
+          }
           if (
             testCase.id.startsWith('OFFLINE-') ||
+            testCase.id === 'SIGN-OUT-RESIDUE-NATIVE-001' ||
             testCase.id === 'SESSION-INVALID-NATIVE-001' ||
             testCase.id === 'SESSION-EXPIRED-NATIVE-001' ||
             testCase.id === 'SESSION-UNKNOWN-NATIVE-001'
@@ -1480,6 +1507,46 @@ async function main(): Promise<void> {
             return null;
           },
           'mobile/flows/parts/session-invalid-return.yaml',
+        ];
+      }
+      if (testCase.id === 'SIGN-OUT-RESIDUE-NATIVE-001') {
+        env.KEPT_URL = offlineUrl;
+        env.LIST_NAME = residueListName;
+        // What marks a file as holding the account's plaintext: the saved URL's
+        // host and its path, apart — a writer that escapes the slash between
+        // them still matches both — and the list's name.
+        const kept = new URL(offlineUrl);
+        const markers = [kept.host, kept.pathname.slice(1), residueListName];
+        // And the username, which is not content but is whose device this was:
+        // it rode in a request URL into Android's HTTP cache, where no teardown
+        // reaches, until the api marked its responses `no-store`
+        // (docs/api-contracts.md, _no response is cacheable_). Android only. An
+        // iOS run is a dev build, and the dev client's network inspector hands
+        // every response to the URL loading system as cacheable, so the
+        // simulator's URL cache holds every request whatever the api says — a
+        // hit there is the harness's, and would stay red on a correct app.
+        if (run.platform === 'android') markers.push(account.username);
+        steps = [
+          testCase.path,
+          async (context) => {
+            // Each marker found first, or finding none after would prove nothing.
+            const hits = await sandboxHits(context, 'sandbox-before', markers);
+            for (const marker of markers) {
+              if (!hits.some((hit) => hit.marker === marker)) {
+                throw new Error(`nothing in the sandbox holds "${marker}" before the sign-out`);
+              }
+            }
+            return null;
+          },
+          'mobile/flows/parts/sign-out-residue-signed-out.yaml',
+          async (context) => {
+            const hits = await sandboxHits(context, 'sandbox-after', markers);
+            if (hits.length > 0) {
+              const where = hits.map((hit) => `"${hit.marker}" in ${hit.path}`).join('; ');
+              throw new Error(`the sign-out left the account’s data on the device: ${where}`);
+            }
+            return null;
+          },
         ];
       }
       if (testCase.id === 'SESSION-EXPIRED-NATIVE-001') {

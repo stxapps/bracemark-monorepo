@@ -17,7 +17,13 @@ import {
   resetFileSystem,
   writeFileText,
 } from '../testing/memory-file-system';
-import { clearCacheFiles, clearExportFiles, deletePickedCopy, newExportFile } from './cache-files';
+import {
+  clearCacheFiles,
+  deletePickedCopy,
+  newExportFile,
+  newScratchFile,
+  warnIfNotSwept,
+} from './cache-files';
 
 jest.mock('expo-file-system', () => require('../testing/memory-file-system'));
 
@@ -50,6 +56,31 @@ describe('newExportFile', () => {
 
     const next = newExportFile('Bracemark backup 2026-01-02.zip');
     next.write('new');
+
+    expect(listFileUris()).toEqual([next.uri]);
+  });
+});
+
+describe('newScratchFile', () => {
+  // Loose in the cache dir, a file a killed process left has a name nobody knows and no
+  // directory that marks it as ours — the sweep could only find it by listing a directory
+  // every module in the app writes to.
+  it('hands the operation a location under a directory of ours', () => {
+    const file = newScratchFile('extract-1');
+
+    expect(file.uri).toBe('file:///cache/bracemark-scratch/extract-1');
+    file.write('a preview in transit');
+    expect(listFileUris()).toEqual([file.uri]);
+  });
+
+  // The sweep deletes the directory itself, and so can an OS purge. The next operation
+  // must not find it missing.
+  it('makes the directory again after the sweep has taken it', () => {
+    newScratchFile('extract-1').write('before');
+    clearCacheFiles();
+
+    const next = newScratchFile('extract-2');
+    next.write('after');
 
     expect(listFileUris()).toEqual([next.uri]);
   });
@@ -95,8 +126,9 @@ describe('deletePickedCopy', () => {
 });
 
 describe('clearCacheFiles', () => {
-  it('removes the export and everything the pickers left', () => {
+  it('removes the export, the scratch a killed run left, and everything the pickers left', () => {
     newExportFile('Bracemark backup 2026-01-01.zip').write('zip');
+    newScratchFile('extract-1').write('a preview in transit');
     park('DocumentPicker', 'bookmarks.html');
     park('ImagePicker', 'photo.jpg');
     park('ImageManipulator', 'resized.jpg');
@@ -109,19 +141,63 @@ describe('clearCacheFiles', () => {
   // The cache dir is shared with every module in the app. This sweeps the directories
   // named in cache-files.ts and nothing else.
   it('leaves the rest of the cache dir alone', () => {
-    const scratch = `${Paths.cache.uri}/bracemark-enc-1`;
-    writeFileText(scratch, 'ciphertext in transit');
+    const loose = `${Paths.cache.uri}/http-cache.db`;
+    writeFileText(loose, 'a library’s own');
     const theirs = park('SomeOtherModule', 'state.bin');
 
     clearCacheFiles();
 
-    expect(listFileUris()).toEqual([theirs, scratch].sort());
+    expect(listFileUris()).toEqual([theirs, loose].sort());
   });
 
   // The native delete throws on a directory that was never created, and this runs on
   // every sign-out — including the first one on a device that never exported anything.
   it('is safe when none of it exists', () => {
     expect(() => clearCacheFiles()).not.toThrow();
-    expect(() => clearExportFiles()).not.toThrow();
+  });
+});
+
+// The picker directories are named by the modules that write them, so an upgrade can move
+// one — and the sweep then deletes a directory that is not there, without an error and
+// without a failing test above (those park files under the names this repo believes in).
+// The check is the only thing that compares the list with what a module really wrote.
+describe('warnIfNotSwept', () => {
+  let warn: jest.SpyInstance;
+
+  beforeEach(() => {
+    warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    warn.mockRestore();
+  });
+
+  // The relation, not the names: it has to speak for exactly the files the sweep leaves.
+  // `ImagePickerCache` is the rename — a sibling whose name merely starts with a listed one.
+  it.each([
+    ['file:///cache/DocumentPicker/bookmarks.html', false],
+    ['file:///cache/ImagePicker/photo.jpg', false],
+    ['file:///cache/ImageManipulator/resized.jpg', false],
+    ['file:///cache/ImagePickerCache/photo.jpg', true],
+    ['file:///cache/photo.jpg', true],
+    ['file:///document/Picked/photo.jpg', true],
+  ])('speaks up exactly when the sweep would leave the file: %s', (uri, left) => {
+    new Directory(uri.slice(0, uri.lastIndexOf('/'))).create({ idempotent: true });
+    writeFileText(uri, 'plaintext');
+
+    warnIfNotSwept(uri, 'expo-image-picker');
+    const warned = warn.mock.calls.length > 0;
+    clearCacheFiles();
+
+    expect(new File(uri).exists).toBe(left);
+    expect(warned).toBe(left);
+  });
+
+  it('names the module and the file, so the log says which name to re-read', () => {
+    warnIfNotSwept('file:///cache/ImagePickerCache/photo.jpg', 'expo-image-picker');
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0][0]).toContain('expo-image-picker');
+    expect(warn.mock.calls[0][0]).toContain('file:///cache/ImagePickerCache/photo.jpg');
   });
 });

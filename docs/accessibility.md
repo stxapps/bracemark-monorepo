@@ -698,6 +698,36 @@ directly, without moving TalkBack focus, so put focus where a user's would be
 first (closing a menu with a second tap on its ⋯ does it) before pressing the
 item.
 
+### what a field tells the browser
+
+`autocomplete` is the other half of a field's identity, and it has exactly two
+right answers:
+
+- **A credential field names itself** — `username`, `current-password`,
+  `new-password` (expo: `username` / `username-new`, `current-password`,
+  `new-password`). That token is what lets a password manager fill the field and
+  what WCAG 1.3.5 (_Identify Input Purpose_) asks for; without it the manager
+  guesses, and it guesses per field.
+- **Everything else is `off`, and it is `off` by default.** The input
+  primitives apply it themselves — web-ui's `ui/input.tsx` and `ui/textarea.tsx`,
+  expo's `ui/input.tsx` (which `Textarea` and `PasswordInput` both go through) —
+  so a field that holds the user's content needs nothing, and a field that holds
+  a credential has to say which. A lock password is the case that shows why the
+  default is not "leave it to the browser": it is a secret, and it is not this
+  site's login.
+
+The reason is not tidiness. What a browser offers to complete is what it has
+**kept**, outside this app's storage and past a sign-out
+([data-lifecycle.md](./data-lifecycle.md), _what the wipe cannot reach — web_),
+and on a phone an unhinted field is one the OS's autofill may offer to save as
+a login. ⚠ Nothing shows a field that lost the default: it type-checks, it
+lints, every flow passes, and the evidence is a suggestion on one person's own
+machine. `input.spec.tsx` on each platform pins both answers.
+
+A field built on a raw `<input>` or a bare `TextInput` gets neither answer and
+has to state one. The two there are today are file pickers, which have no value
+to keep, and cmdk's filter field sets `off` itself.
+
 ### web / expo parity
 
 The two platforms do **not** share component shapes here — web composes the Field

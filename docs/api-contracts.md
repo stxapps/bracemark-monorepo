@@ -97,6 +97,71 @@ pinned to `/v1` while the web app moves to `/v2`. Bumping means adding an
 (`/`, `/health`) stay **unversioned** — `app.ts` mixes both by mounting versioned
 sub-apps alongside the bare root routes.
 
+### no response is cacheable
+
+Every response bracemark-api sends carries `Cache-Control: no-store` — one
+middleware in `app.ts`, registered first so it also covers a CORS preflight, a
+404, a 429 and anything the error handler builds. It is a rule about the whole
+api rather than a header per route, because the failure it prevents has no
+symptom on the server at all. **bracemark-extractor carries the same
+middleware**, for a sharper version of the same reason: its image proxy is a
+GET whose URL is the address of something the user saved
+([link-extraction.md](./link-extraction.md), _server extraction_).
+
+A response that says nothing about caching is one a client's HTTP cache may keep,
+and Android's did: React Native's OkHttp cache (`cache/http-cache/`) stored
+every GET, request URL included. So a device kept
+`/v1/auth/password-door?username=…` — whose account it had been, with the
+response that request got — together with its object keys, **after the account
+signed out of it**, in a directory the sign-out teardown never touches
+([data-lifecycle.md](./data-lifecycle.md), _what an empty table does not mean_).
+A browser's cache and iOS's URL cache are the same kind of place. Most
+endpoints are POSTs, which caches do not store in practice; the GETs are the
+ones that were found, and the rule covers both so that adding a GET never
+reopens it.
+
+`no-store`, not `no-cache`: the point is that nothing is written, not that it is
+revalidated. A route that should one day be cached is exempted in that
+middleware, on purpose — `app.spec.ts` pins the header on a plain route, a URL
+carrying a username, a blob, a 404 and a 429.
+
+⚠ **On iOS the header's effect cannot be seen in a dev build.** The dev client's
+network inspector (`EX_DEV_CLIENT_NETWORK_INSPECTOR`, Expo's default) routes
+every request through a `URLProtocol` that hands the response back to the URL
+loading system as cacheable (`expo-modules-core`,
+`ExpoRequestInterceptorProtocol`), so the simulator's
+`Library/Caches/<bundle id>/Cache.db` holds **every** request the app made —
+GET and POST, body included — whatever the response says. Measured with this
+header in place: the stored response's own headers read `no-store`. So a dev
+build says nothing either way about what a release build's URL cache keeps, and
+no run here has measured one.
+
+**A blob read is not this api's response, so the instruction rides in the URL
+it signs.** In staging and production a blob is read straight from
+`<account>.r2.cloudflarestorage.com`, which answers with an ETag, a
+Last-Modified and no caching header at all — a response a cache may keep, under
+a URL that names the user id and the object. So `files/sign` adds
+`response-cache-control=no-store` to every presigned GET (`r2/presign.ts`), S3's
+response-header override, and R2 answers with that header. It is part of the
+signed query, so a client cannot drop it. ⚠ Under `wrangler dev` the same read
+goes through this api's blob proxy and carries the middleware's header instead,
+so **a local run — the native residue case included — cannot tell whether the
+override is there**; only a deployed tier can.
+
+Measured in Chrome 2026-10-08, a throwaway account driven through create, write,
+sign out, sign in, sign out, then the profile directory read from disk:
+
+| what the profile's disk cache held after the sign-out | before                                                                                 | after |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------- | ----- |
+| this api's GETs (local stack, header off / on)        | 12 entries — `password-door?username=…` and `username-available?username=…` among them | none  |
+| presigned R2 reads (staging, before / after a deploy) | one per blob read, keyed by the whole presigned URL                                    | none  |
+
+R2's own documentation does not list the override among what `GetObject`
+supports; the staging run is what says it does.
+
+⚠ **What this does not reach: anything a client fetches from a saved site** — a
+page for its title, a preview image, a favicon. Those are the site's headers.
+
 ### assembling the client (the injection seam)
 
 The contract above says how to _call_ bracemark-api; this is how a running app gets a

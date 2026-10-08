@@ -14,7 +14,9 @@ in services, routes, or the DO.
 - **`presign.ts`** — SigV4 presigner for R2's S3-compatible endpoint. The native
   binding can read/write from inside the Worker but can't mint a URL the BROWSER
   can PUT/GET directly, which is the whole point of the local-first data path
-  (blob bytes never touch the API). See
+  (blob bytes never touch the API). A GET is signed with
+  `response-cache-control=no-store`: R2 sends a blob with no caching header of its
+  own, and the api cannot set one on a response it never sees. See
   [../../../../docs/local-first-sync.md](../../../../docs/local-first-sync.md).
 - **`user-files.ts`** — the bucket **gateway** (the R2 analogue of the `db`/`do`
   repositories): `list` (fallback full sync), `head` (op-commit existence check +

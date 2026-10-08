@@ -1446,10 +1446,14 @@ payload, so the in-app route works offline there: `PWA-004` proves it in a tab,
 `SESSION-EXPIRED-NATIVE-001`, `SESSION-UNKNOWN-NATIVE-001`). The same three
 questions, each answered from outside the app. Export reaches Settings in-app —
 native navigation needs no network, so the tab's gap has no native twin — and
-the runner reads the plain-text file out of the app's cache
-(`runner/device-files.ts`: the simulator's data container, or `run-as` on
-Android's debuggable build), since Maestro sees the share sheet and not the
-file. The revoked session is counted the same way: `bracemark-data.db` and its
+the runner reads the plain-text file out of the export's own directory in the
+app's cache, `bracemark-exports/` (`runner/device-files.ts`: the simulator's
+data container, or `run-as` on Android's debuggable build), since Maestro sees
+the share sheet and not the file. ⚠ That directory's name is written twice, in
+`@stxapps/expo-react`'s `data/cache-files.ts` and in the runner, because the
+runner asks the app nothing: when the export moved there from the cache root
+the reader kept looking in the root, and nothing said so until these cases were
+next run on a device. The revoked session is counted the same way: `bracemark-data.db` and its
 WAL copied off the device and read with `sqlite3`, non-empty before the revoke
 and empty after.
 
@@ -1461,6 +1465,12 @@ so its `:8787` IS the real api's listener — the only fault it can be given is
 the freeze, a hang. The stand-in's body is plain text, not the api's error
 shape: a server that has gone does not speak the contract. Its cold start under
 404 is the native reload, and must restore the session.
+
+The receipt's wording is not the subflow's to assert: the cases above export
+with the api out of reach and follow it with
+`subflows/assert-export-local-copy.yaml`, which finds the sentence that calls
+the file this device's copy; `SIGN-OUT-RESIDUE-NATIVE-001` exports online, where
+there is no such sentence.
 
 Two things the export flow waits on deliberately (`subflows/export-plain-text.yaml`):
 
@@ -1474,6 +1484,72 @@ Two things the export flow waits on deliberately (`subflows/export-plain-text.ya
 - **⚠ Android 16's chooser is titled "Sharing 1 file"**, not "Share": a match on
   `'Share'` does not find it on that image, so both flows match
   `'Sharing \d+ files?'`.
+
+**What a sign-out leaves on a device** (`SIGN-OUT-RESIDUE-NATIVE-001`). The
+unit specs under the teardown each guard a place the code knows it writes — the
+tables, the freed pages, the cache directories it names
+([data-lifecycle.md](./data-lifecycle.md), _what an empty table does not mean_).
+This case asks the device instead, and asks about all of it: the runner reads
+**every file in the app's sandbox** (`runner/device-files.ts`, `scanAppSandbox`)
+and reports which hold a string the case seeded. The account arrives with one
+link and one list written on the web; the device signs in, shows both, and
+exports the library as plain text, the largest plaintext the app writes outside
+its store. The markers are the link's host, its path and the list's name — host
+and path apart, so a writer that escapes the slash between them still matches
+both — and, on Android, the account's username. Each must be in at least one
+file **before** the sign-out, or finding none after would prove nothing; none
+may be in any file after it.
+
+Android's sandbox comes across as one `tar` stream through `run-as` and is
+scanned on this Mac; iOS is read in place, the data container plus the App
+Group container the share extension reads (`simctl get_app_container … groups`),
+since the taxonomy's mirror there is plaintext too
+([share-sheet.md](./share-sheet.md)). A scan that finds no `bracemark-data.db`
+fails rather than passes: the store outlives a sign-out as an empty file, so its
+absence means the wrong place was read.
+
+Both scans are written beside the case's artifacts (`N-sandbox-before.json`,
+`N-sandbox-after.json`) with **every file they read**, and the second list is the
+other half of the case: an inventory of what a signed-out device still holds,
+which is where a writer nobody listed shows up. Reading it is a person's job —
+no assertion can say whether a file it did not expect is harmless.
+
+Measured 2026-10-08 on the Pixel 8 AVD (Android 16) and the iPhone 17 Pro
+simulator (iOS 26.5), green on both. Before the sign-out the markers were in the
+export and in the store's WAL, and on iOS the list's name was also in the App
+Group's `share/taxonomy.json`; after it, in nothing. The sign-out removed the
+export and that mirror and emptied the store.
+
+**The username is a marker because the second list is where it was found.** On
+its first run the case was green and the inventory was not: Android's list still
+held React Native's OkHttp cache, `cache/http-cache/`, sixteen files of this
+app's own api GETs — `password-door?username=…` among the request URLs. Nothing
+in the teardown reaches that directory, so the fix went to the source:
+bracemark-api now marks every response `no-store`
+([api-contracts.md](./api-contracts.md), _no response is cacheable_), and the
+same list then held that directory's `journal` and nothing else. With the
+username a marker, the header's removal turns this case red on Android.
+
+⚠ **Not on iOS, and the reason is the harness.** These runs are dev builds, and
+the dev client's network inspector stores every response in the simulator's
+URL cache whatever the api says (same section of api-contracts.md): the
+username is in `Library/Caches/com.bracemark.app/Cache.db-wal` after a
+sign-out, with `no-store` in place, on a correct app. A marker that can never
+be absent proves nothing, so iOS keeps the three content markers, and **what a
+release build's URL cache keeps is not measured by any run here**.
+
+⚠ What it cannot see, none of which fails it:
+
+- **Plaintext that is not text.** The markers are searched as UTF-8 and UTF-16
+  bytes, so a zip export, a decoded preview image and the OS's app-switcher
+  snapshot hold them invisibly.
+- **Anything fetched from a saved site.** The link is `.invalid`, so no page,
+  preview or favicon was ever downloaded for it and there is nothing of that
+  kind on the device to leave behind (_what e2e may not assert_).
+- **A process killed mid-write.** What a kill leaves in the scratch directory is
+  pinned in `@stxapps/expo-react`'s `lib/device-extraction.spec.ts`; a flow
+  cannot time a kill.
+- **Anything it did not seed**, and on iOS the username (above).
 
 ⚠ **`OFFLINE-EXPORT-IOS-001` is red, and the product is why.** With the api
 frozen — connections accepted, never answered — the export sat on "Refreshing

@@ -36,6 +36,34 @@ describe('presignR2Url', () => {
     expect(parsed.searchParams.get('X-Amz-Signature')).toMatch(/^[0-9a-f]{64}$/);
   });
 
+  // R2 answers a blob with no caching header, so the browser's and the device's
+  // HTTP caches kept every one, under a URL naming the user id — after a
+  // sign-out, where no teardown reaches. Nothing fails without this: the read
+  // works the same, and the residue is in somebody's cache directory.
+  it('asks R2 to answer a GET with no-store, and signs the asking', async () => {
+    const opts = { key: 'users/u1/links/a.enc', method: 'GET', expiresIn: 300 } as const;
+    const url = new URL(await presignR2Url(creds, opts, now));
+
+    expect(url.searchParams.get('response-cache-control')).toBe('no-store');
+
+    // Signed, not appended: SigV4 covers the whole canonical query, so the same
+    // request without the parameter has to produce a different signature. The
+    // PUT is that request here — it carries no override, having no body to cache.
+    const put = new URL(await presignR2Url(creds, { ...opts, method: 'PUT' }, now));
+    expect(put.searchParams.has('response-cache-control')).toBe(false);
+    // The canonical order SigV4 requires is by byte value, which puts a
+    // lowercase name after every `X-Amz-*` one; the signature must still be last.
+    expect([...url.searchParams.keys()]).toEqual([
+      'X-Amz-Algorithm',
+      'X-Amz-Credential',
+      'X-Amz-Date',
+      'X-Amz-Expires',
+      'X-Amz-SignedHeaders',
+      'response-cache-control',
+      'X-Amz-Signature',
+    ]);
+  });
+
   it('is deterministic for a fixed clock and varies the signature by method', async () => {
     const opts = { key: 'users/u1/links/a.enc', expiresIn: 300 } as const;
     const put1 = await presignR2Url(creds, { ...opts, method: 'PUT' }, now);

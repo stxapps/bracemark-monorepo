@@ -30,6 +30,8 @@ import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 
 import { PREVIEW_JPEG_QUALITY, PREVIEW_MAX_DIMENSION } from '@stxapps/shared';
 
+import { warnIfNotSwept } from '../data/cache-files';
+
 // The cap + quality are `@stxapps/shared`'s (image/preview.ts), shared with the web
 // sibling so the same og:image is stored at the same size whichever platform captured it.
 // `SaveFormat.JPEG` below is that contract's format, spelled this platform's way.
@@ -78,6 +80,7 @@ export async function resizeImage(source: ResizeImageSource): Promise<ResizeImag
     context.resize({ width: targetWidth, height: targetHeight });
     const image = await context.renderAsync();
     const saved = await image.saveAsync({ compress: DEFAULT_QUALITY, format: SaveFormat.JPEG });
+    warnIfNotSwept(saved.uri, 'expo-image-manipulator');
     return { uri: saved.uri, width: saved.width, height: saved.height };
   } catch {
     return source;

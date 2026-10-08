@@ -17,4 +17,6 @@ appId: com.bracemark.app
     timeout: 20000
 - runFlow:
     file: ../subflows/export-plain-text.yaml
+- runFlow:
+    file: ../subflows/assert-export-local-copy.yaml
 - takeScreenshot: offline-export-receipt

@@ -1,0 +1,53 @@
+import { render, screen } from '@testing-library/react';
+
+import { PasswordInput } from '../auth/password-input';
+import { Input } from './input';
+import { Textarea } from './textarea';
+
+// What a field tells the browser about itself. A browser keeps what is typed into
+// a text field in its own form history, outside this app's storage and past a
+// sign-out: Chrome's profile held the add-link URL and the edit dialog's Title
+// after the account had left it. Nothing in the app looks different either way —
+// the residue is a suggestion on someone's own machine — so the default is pinned
+// here, where a control that stops applying it fails.
+describe('what a field tells the browser to keep', () => {
+  it('is nothing, for a field that does not say what it is', () => {
+    render(
+      <>
+        <Input aria-label="URL" />
+        <Textarea aria-label="Note" />
+      </>,
+    );
+
+    expect(screen.getByLabelText('URL').getAttribute('autocomplete')).toBe('off');
+    expect(screen.getByLabelText('Note').getAttribute('autocomplete')).toBe('off');
+  });
+
+  // The other direction, and the one that would hurt at once: a credential field
+  // that lost its token to the default is one a password manager no longer fills.
+  it.each(['username', 'current-password', 'new-password'])(
+    'leaves a field that names itself alone: %s',
+    (token) => {
+      render(<Input aria-label="Field" autoComplete={token} />);
+
+      expect(screen.getByLabelText('Field').getAttribute('autocomplete')).toBe(token);
+    },
+  );
+
+  // PasswordInput is the one wrapper every secret goes through, so the default
+  // has to reach its field — a list-lock password is not this site's login, and
+  // a wrapper that swallowed the attribute would offer to save it as one.
+  it('reaches a secret field through PasswordInput, and yields to its token', () => {
+    render(
+      <>
+        <PasswordInput aria-label="Lock password" />
+        <PasswordInput aria-label="Account password" autoComplete="current-password" />
+      </>,
+    );
+
+    expect(screen.getByLabelText('Lock password').getAttribute('autocomplete')).toBe('off');
+    expect(screen.getByLabelText('Account password').getAttribute('autocomplete')).toBe(
+      'current-password',
+    );
+  });
+});

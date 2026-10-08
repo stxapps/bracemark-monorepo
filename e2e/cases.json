@@ -1320,6 +1320,16 @@
     "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
   },
   {
+    "id": "SIGN-OUT-RESIDUE-NATIVE-001",
+    "title": "A sign-out leaves none of the account's saved links or list names in any file of the app's sandbox, an export it wrote included",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "destructive", "ios", "android"],
+    "fixture": "small",
+    "path": "mobile/flows/sign-out-residue.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
     "id": "SESSION-EXPIRED-NATIVE-001",
     "title": "A session expired by a password change on a web profile pauses sync and keeps the device's library and a link saved while paused, and resuming with the new password pushes it",
     "surface": "native",

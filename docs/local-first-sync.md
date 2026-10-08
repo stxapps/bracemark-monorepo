@@ -172,6 +172,9 @@ a content gateway. The signed URL is an **AWS SigV4 presign of R2's S3 endpoint*
 (`r2/presign.ts`), because the Workers R2 _binding_ can read/write objects
 from inside the Worker but can't mint a URL the browser can use directly; the S3
 access keys come from per-env secrets (`R2_*` in `wrangler.jsonc` / `lib/env.ts`).
+A GET is signed with `response-cache-control=no-store`, so R2 answers the blob
+with that header and no HTTP cache keeps it
+([api-contracts.md](./api-contracts.md), _no response is cacheable_).
 
 **Local dev is the one place the bytes do pass through the api.** miniflare's
 emulated R2 has no S3 endpoint to presign, so under `wrangler dev` `files/sign`

@@ -1,5 +1,5 @@
 import NetInfo from '@react-native-community/netinfo';
-import { File, Paths } from 'expo-file-system';
+import { File } from 'expo-file-system';
 
 import { newId } from '@stxapps/expo-crypto';
 import {
@@ -16,6 +16,7 @@ import {
   verdictForStatus,
 } from '@stxapps/shared';
 
+import { newScratchFile } from '../data/cache-files';
 import { putFavicon, readFavicon } from '../data/favicon-store';
 import {
   type ExtractionFields,
@@ -461,17 +462,19 @@ function settle(
   return writeAll(username, links, { facet: 'titleImage', state: newFacet(status, tier) });
 }
 
-// A scratch location for one in-transit image. The cache dir on purpose (transient by
+// A scratch location for one in-transit image. Under the cache dir on purpose (transient by
 // definition — an OS purge costs nothing) and uniquely named so pooled links never collide;
-// the caller deletes it when the write settles. file-store's `newTempEncFile` sibling.
+// the caller deletes it when the write settles. In cache-files.ts's scratch directory rather
+// than loose in the cache dir, because this is PLAINTEXT — a saved link's preview — and a
+// process killed mid-extraction leaves it behind: there, the sign-out sweep finds it.
 function newTempFile(): File {
-  return new File(Paths.cache, `bracemark-extract-${newId()}`);
+  return newScratchFile(`extract-${newId()}`);
 }
 
 function deleteQuietly(file: File): void {
   try {
     if (file.exists) file.delete();
   } catch {
-    // A leftover in the cache dir is the OS's problem, not a reason to fail an extraction.
+    // A leftover is the sign-out sweep's (cache-files.ts), not a reason to fail an extraction.
   }
 }

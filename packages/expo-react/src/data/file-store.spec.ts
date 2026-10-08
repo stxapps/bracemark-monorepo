@@ -18,6 +18,7 @@
 
 import { File, Paths } from 'expo-file-system';
 
+import { clearCacheFiles } from './cache-files';
 import {
   clearDataFiles,
   dataFileFor,
@@ -149,6 +150,18 @@ describe('newTempEncFile', () => {
   // against the device's storage.
   it('lands in the purgeable cache, not in document storage', () => {
     expect(newTempEncFile().uri.startsWith(Paths.cache.uri)).toBe(true);
+  });
+
+  // Ciphertext, so a leftover is unreadable — but loose in the cache dir it was the one
+  // thing this app wrote there that no sweep could name. A killed transfer's file goes at
+  // sign-out with the rest (cache-files.ts).
+  it('is taken by the sign-out sweep when a killed transfer left it', () => {
+    const temp = newTempEncFile();
+    temp.write('ciphertext');
+
+    clearCacheFiles();
+
+    expect(temp.exists).toBe(false);
   });
 
   // Uniquely named, so concurrent transfers cannot collide — two uploads sharing a scratch

@@ -78,16 +78,16 @@ export const imageRoutes = new Hono<AppEnv>().get(
     }
 
     // Stream the bytes through, hard-aborting past the ceiling. Forward ONLY safe,
-    // relevant headers — never upstream cookies/auth — and let the client cache the
-    // (immutable) image. CORS headers are added by the global cors() middleware. There's
-    // no server-side edge cache: the browser's own cache (via cache-control below) covers
-    // per-user re-views, and an anonymous proxy buffering bytes for a rarely-read shared
-    // cache would undercut the stream-don't-store property — the per-response byte ceiling
-    // + timeout in safeFetch remain the real abuse floor.
+    // relevant headers — never upstream cookies/auth, and never the upstream's
+    // caching headers: app.ts marks every response `no-store`, this one above all
+    // (its URL names what the user saved). CORS headers are added by the global
+    // cors() middleware. There's no server-side edge cache either: an anonymous
+    // proxy buffering bytes for a rarely-read shared cache would undercut the
+    // stream-don't-store property — the per-response byte ceiling + timeout in
+    // safeFetch remain the real abuse floor.
     const limited = response.body.pipeThrough(streamWithLimit(MAX_IMAGE_BYTES));
     const headers = new Headers({
       'content-type': contentType,
-      'cache-control': 'public, max-age=86400, immutable',
       'x-content-type-options': 'nosniff',
     });
     return new Response(limited, { status: 200, headers });

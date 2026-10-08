@@ -527,6 +527,10 @@ case already carries `online`) and are `full`, so they never block a smoke run;
 - [x] `SESSION-INVALID-NATIVE-001` A session revoked from a web profile wipes
       the device's SQLite store on its next request and lands on sign-in; signing
       back in on the same install restores the library.
+- [x] `SIGN-OUT-RESIDUE-NATIVE-001` Sign in to an account holding a link and a
+      list, export as plain text, sign out, and read every file in the app's
+      sandbox: the link's host and path and the list's name are each in a file
+      before the sign-out and in none after it.
 - [x] `SESSION-UNKNOWN-NATIVE-001` The account's session rows purged from local
       D1: the device pauses sync, keeps its library and a link saved while
       paused, and resumes with the same password.
