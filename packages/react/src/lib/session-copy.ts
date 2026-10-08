@@ -14,7 +14,10 @@
 // so the switch-account warning says so — with the count, because those edits
 // exist nowhere else.
 
-const changes = (n: number) => `${n} ${n === 1 ? 'change' : 'changes'}`;
+const unsyncedChanges = (n: number) =>
+  `${n} ${
+    n === 1 ? 'change that hasn’t synced and exists' : 'changes that haven’t synced and exist'
+  } nowhere else`;
 
 export const SESSION_COPY = {
   /** The persistent notice while the session is expired. A status, not an error. */
@@ -40,7 +43,7 @@ export const SESSION_COPY = {
     title: 'Use a different account?',
     description: (pending: number) =>
       pending > 0
-        ? `This signs you out and erases this device’s copy, including ${changes(pending)} that haven’t synced and exist nowhere else. To keep them, sign in to resume instead.`
+        ? `This signs you out and erases this device’s copy, including ${unsyncedChanges(pending)}. To keep ${pending === 1 ? 'it' : 'them'}, sign in to resume instead.`
         : 'This signs you out and erases this device’s copy.',
     confirm: 'Sign out',
     cancel: 'Cancel',
@@ -62,9 +65,7 @@ export const SESSION_COPY = {
   signOut: {
     title: 'Sign out?',
     description: (pending: number) =>
-      `Signing out erases this device’s copy, including ${changes(pending)} that ${
-        pending === 1 ? 'hasn’t synced and exists' : 'haven’t synced and exist'
-      } nowhere else. To keep ${pending === 1 ? 'it' : 'them'}, cancel and sync first.`,
+      `Signing out erases this device’s copy, including ${unsyncedChanges(pending)}. To keep ${pending === 1 ? 'it' : 'them'}, cancel and sync first.`,
     descriptionUnknown:
       'Signing out erases this device’s copy. We couldn’t check for changes that haven’t synced. To keep any unsynced changes, cancel and sync first.',
     confirm: 'Sign out',
