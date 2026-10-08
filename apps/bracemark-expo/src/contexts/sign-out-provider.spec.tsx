@@ -24,6 +24,7 @@ const COPY = SESSION_COPY.signOut;
 
 let mockPendingOps = 0;
 let mockIsPending = false;
+let mockIsSuccess = false;
 let mockIsError = false;
 const mockMutate = jest.fn();
 const mockReset = jest.fn();
@@ -36,6 +37,7 @@ jest.mock('@stxapps/expo-react', () => ({
     reset: mockReset,
     isPending: mockIsPending,
     isError: mockIsError,
+    isSuccess: mockIsSuccess,
   }),
   countPendingOps: (username: string) => mockCountPendingOps(username),
 }));
@@ -72,6 +74,7 @@ async function press() {
 beforeEach(() => {
   mockPendingOps = 0;
   mockIsPending = false;
+  mockIsSuccess = false;
   mockIsError = false;
   mockMutate.mockClear();
   mockReset.mockClear();
@@ -204,18 +207,20 @@ describe('a sign-out that failed', () => {
   });
 });
 
-// A count that cannot be read must not trap anyone signed in.
-it('goes ahead when the count cannot be read', async () => {
-  mockCountPendingOps.mockImplementationOnce(() => Promise.reject(new Error('sqlite')));
+// An unreadable queue is unknown, not empty: sign-out stays available, but
+// losing edits needs the user's explicit confirmation.
+it('asks before signing out when the count cannot be read', async () => {
+  mockCountPendingOps.mockImplementationOnce(() => Promise.reject(new Error('storage')));
   render(tree());
-
   await press();
-
+  expect(mockMutate).not.toHaveBeenCalled();
+  expect(screen.getByText(COPY.descriptionUnknown)).toBeTruthy();
+  fireEvent.press(screen.getByTestId('sign-out-confirm'));
   expect(mockMutate).toHaveBeenCalledTimes(1);
 });
 
-// The app layer's share of the teardown. As an UNMOUNT cleanup because a revocation and a
-// delete-account end the session without ever passing through requestSignOut.
+// The app layer's share of the teardown. An unmount cleanup also covers
+// revocation and delete-account, which never call requestSignOut.
 it('drops the decoded previews when the signed-in tree unmounts, however it ended', () => {
   const view = render(tree());
   expect(mockClearMemoryCache).not.toHaveBeenCalled();
@@ -234,4 +239,41 @@ it('refuses reads outside its provider', () => {
 
   expect(() => render(<OutsideProbe />)).toThrow(/must be used within <SignOutProvider>/);
   errorSpy.mockRestore();
+});
+
+// The count can outlive the auth-gated tree. mutate reads the CURRENT session,
+// so an old request must never reach it after a replacement tree is mounted.
+it('drops a pending count after unmount, even when a replacement is mounted', async () => {
+  let resolve!: (count: number) => void;
+  mockCountPendingOps.mockImplementationOnce(
+    () =>
+      new Promise<number>((done) => {
+        resolve = done;
+      }),
+  );
+  const old = render(tree());
+  fireEvent.press(screen.getByText('Menu item'));
+  old.unmount();
+  render(tree());
+
+  await act(async () => resolve(0));
+
+  expect(mockMutate).not.toHaveBeenCalled();
+  expect(screen.queryByTestId('sign-out-dialog')).toBeNull();
+});
+
+// endSession deliberately does nothing when another tab resumed the session.
+// That is still a successful mutation, but this provider stays mounted.
+it('releases the cover when sign-out settles without unmounting the tree', async () => {
+  const view = render(tree());
+  await press();
+  mockIsSuccess = true;
+  view.rerender(tree());
+
+  expect(screen.queryByTestId('sign-out-dialog')).toBeNull();
+  expect(mockReset).toHaveBeenCalled();
+  mockIsSuccess = false;
+  view.rerender(tree());
+  await press();
+  expect(mockMutate).toHaveBeenCalledTimes(2);
 });

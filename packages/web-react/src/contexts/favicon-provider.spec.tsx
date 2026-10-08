@@ -89,8 +89,9 @@ const mockPutFavicon = jest.fn((_username: string, _host: string, _bytes: Uint8A
   Promise.resolve(),
 );
 const mockPutFaviconNone = jest.fn((_username: string, _host: string) => Promise.resolve());
+const mockReadFavicon = jest.fn((): Promise<undefined> => Promise.resolve(undefined));
 jest.mock('../data/favicon-store', () => ({
-  readFavicon: () => Promise.resolve(undefined),
+  readFavicon: () => mockReadFavicon(),
   isFaviconStale: () => true,
   putFavicon: (username: string, host: string, bytes: Uint8Array) =>
     mockPutFavicon(username, host, bytes),
@@ -299,8 +300,30 @@ describe('the favicon queue', () => {
 // extractor for the signed-out account's saved sites, each answer then written into the
 // table the sign-out had just wiped. Nothing reports either half.
 describe('the drain ends with the provider', () => {
+  it('does not begin a fetch when the cache read finishes after unmount', async () => {
+    let resolve!: (value: undefined) => void;
+    mockReadFavicon.mockImplementationOnce(
+      () =>
+        new Promise((done) => {
+          resolve = done;
+        }),
+    );
+    const result = render(tree(['example.com']));
+    expect(mockReadFavicon).toHaveBeenCalledTimes(1);
+    result.unmount();
+    await act(async () => {
+      jest.runAllTicks();
+      resolve(undefined);
+    });
+    await drain();
+
+    expect(mockFetchImage).not.toHaveBeenCalled();
+  });
+
   beforeEach(() => {
     jest.useFakeTimers();
+    mockReadFavicon.mockReset();
+    mockReadFavicon.mockResolvedValue(undefined);
     mockUsername = 'alice';
     mockServerExtraction = true;
     mockFetchImage.mockReset();

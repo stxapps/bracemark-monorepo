@@ -560,6 +560,16 @@
     "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
   },
   {
+    "id": "EXT-SIGN-OUT-001",
+    "title": "Options sign-out ends the session in an open popup and after browser restart",
+    "surface": "extension",
+    "tier": "full",
+    "traits": ["online", "extension", "destructive"],
+    "fixture": "empty",
+    "path": "extension/extension.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
     "id": "EXT-SAVE-001",
     "title": "Extension saves list, tags, and note without a reopen",
     "surface": "extension",

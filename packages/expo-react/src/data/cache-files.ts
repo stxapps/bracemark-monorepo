@@ -29,6 +29,8 @@
 
 import { Directory, File, Paths } from 'expo-file-system';
 
+import { newId } from '@stxapps/expo-crypto/lib/ids';
+
 // Ours, so an export can be found again without knowing its name (it carries
 // the date). Still under the cache dir: expo-sharing's FileProvider grants the
 // whole of it, subdirectories included.
@@ -70,18 +72,33 @@ function isInside(uri: string, dir: Directory): boolean {
   return uri.startsWith(`${dir.uri.replace(/\/+$/, '')}/`);
 }
 
-// Where one export run writes. Clears the directory first: the previous run's
-// file has no receipt left to offer it from, and a run a day is otherwise a
-// library a day.
+// Each run gets its own directory, preserving the share sheet's readable name
+// even for two exports with the same date and format. Allocating a replacement
+// must not remove the last successful backup: this run can still fail to gather,
+// exceed zip32's ceilings, or run out of disk while writing.
 export function newExportFile(filename: string): File {
-  clearExportFiles();
-  exportFilesDir().create({ intermediates: true, idempotent: true });
-  return new File(exportFilesDir(), filename);
+  const dir = new Directory(exportFilesDir(), newId());
+  dir.create({ intermediates: true, idempotent: true });
+  return new File(dir, filename);
 }
 
-function clearExportFiles(): void {
-  const dir = exportFilesDir();
-  if (dir.exists) dir.delete();
+// Called only after the new file has been written successfully. The previous
+// run and any interrupted attempts can now go; a cleanup failure must not cost
+// the completed export. Sign-out still sweeps the entire parent directory.
+export function finishExportFile(file: File): void {
+  const keptDir = file.parentDirectory.uri;
+  try {
+    for (const entry of exportFilesDir().list()) {
+      if (entry.uri === keptDir) continue;
+      try {
+        entry.delete();
+      } catch {
+        /* Retried by the next export or sign-out. */
+      }
+    }
+  } catch {
+    // Best-effort pruning, not a reason to report a finished export as failed.
+  }
 }
 
 // Where one operation parks a file it is still working on. The caller names

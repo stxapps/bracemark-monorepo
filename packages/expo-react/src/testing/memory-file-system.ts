@@ -55,12 +55,27 @@ class FileSystemNode {
 }
 
 export class Directory extends FileSystemNode {
+  list(): (Directory | File)[] {
+    if (!this.exists) throw new Error(`No such directory: ${this.uri}`);
+    return [
+      ...[...dirs].filter((uri) => parentOf(uri) === this.uri).map((uri) => new Directory(uri)),
+      ...[...files.keys()].filter((uri) => parentOf(uri) === this.uri).map((uri) => new File(uri)),
+    ];
+  }
+
   get exists(): boolean {
     return dirs.has(this.uri);
   }
 
   create(options?: { intermediates?: boolean; idempotent?: boolean }): void {
     if (this.exists && !options?.idempotent) throw new Error(`Directory exists: ${this.uri}`);
+    if (options?.intermediates) {
+      let parent = parentOf(this.uri);
+      while (parent !== '' && !dirs.has(parent)) {
+        dirs.add(parent);
+        parent = parentOf(parent);
+      }
+    }
     dirs.add(this.uri);
   }
 
@@ -68,12 +83,18 @@ export class Directory extends FileSystemNode {
   // relies on exactly that).
   delete(): void {
     if (!this.exists) throw new Error(`No such directory: ${this.uri}`);
-    dirs.delete(this.uri);
+    for (const uri of [...dirs]) {
+      if (uri === this.uri || uri.startsWith(`${this.uri}/`)) dirs.delete(uri);
+    }
     for (const uri of [...files.keys()]) if (uri.startsWith(`${this.uri}/`)) files.delete(uri);
   }
 }
 
 export class File extends FileSystemNode {
+  get parentDirectory(): Directory {
+    return new Directory(parentOf(this.uri));
+  }
+
   get exists(): boolean {
     return files.has(this.uri);
   }

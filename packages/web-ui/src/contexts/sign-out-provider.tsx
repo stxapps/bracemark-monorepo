@@ -36,7 +36,15 @@
 // 'ending' unmounts it with everything else, which is also what takes the
 // dialog down on success).
 
-import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { LoaderCircle } from 'lucide-react';
 
 import { SESSION_COPY } from '@stxapps/react';
@@ -74,24 +82,35 @@ const COPY = SESSION_COPY.signOut;
 
 export function SignOutProvider({ children }: { children: React.ReactNode }) {
   const { username } = useAuth();
-  const { mutate, isPending, isError, reset } = useSignOut();
+  const { mutate, isPending, isError, isSuccess, reset } = useSignOut();
   // The flow, while there is one: how many changes were unsynced at the click.
   // Zero is the path that never asked.
-  const [flow, setFlow] = useState<{ pending: number } | null>(null);
+  const [flow, setFlow] = useState<{ pending: number | null } | null>(null);
   // Set at the click, ahead of the state: the count is read asynchronously, so
   // a double click on the lock pane's link would otherwise get in before `flow`
   // exists and start a second sign-out.
   const startedRef = useRef(false);
+  const mountedRef = useRef(true);
+  const usernameRef = useRef(username);
+  usernameRef.current = username;
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const requestSignOut = useCallback(() => {
     if (startedRef.current) return;
     startedRef.current = true;
     void (username ? countPendingOps(username) : Promise.resolve(0))
-      // A count that can't be read is not a reason to trap someone signed in,
-      // and not evidence that nothing is pending either — but the question
-      // needs a number to ask with, so this goes ahead as the menu always did.
-      .catch(() => 0)
+      // Unknown is not empty. Keep sign-out available, but ask before risking
+      // unsynced changes that a failed count could not rule out.
+      .catch(() => null)
       .then((pending) => {
+        // mutate reads the current session; this count belongs to the tree and
+        // account that requested it, even if another tree has mounted meanwhile.
+        if (!mountedRef.current || usernameRef.current !== username) return;
         setFlow({ pending });
         if (pending === 0) mutate();
       });
@@ -102,6 +121,12 @@ export function SignOutProvider({ children }: { children: React.ReactNode }) {
     setFlow(null);
     reset();
   }, [reset]);
+
+  // A resumed session survives the old generation's sign-out. In that case
+  // AuthGuard keeps us mounted, so success must release the cover here.
+  useEffect(() => {
+    if (isSuccess) close();
+  }, [isSuccess, close]);
 
   const api = useMemo<SignOutApi>(
     () => ({ requestSignOut, signingOut: isPending }),
@@ -123,7 +148,11 @@ export function SignOutProvider({ children }: { children: React.ReactNode }) {
             <AlertDialogHeader className="place-items-start text-left">
               <AlertDialogTitle>{waitOnly ? COPY.progress : COPY.title}</AlertDialogTitle>
               <AlertDialogDescription className="text-pretty">
-                {flow.pending > 0 ? COPY.description(flow.pending) : COPY.progressDescription}
+                {flow.pending === null
+                  ? COPY.descriptionUnknown
+                  : flow.pending > 0
+                    ? COPY.description(flow.pending)
+                    : COPY.progressDescription}
               </AlertDialogDescription>
             </AlertDialogHeader>
             {isError && (

@@ -1,7 +1,7 @@
 import { execFile, spawn } from 'node:child_process';
 import { createWriteStream } from 'node:fs';
 import { copyFile, mkdir, readdir, readFile, rm, unlink, writeFile } from 'node:fs/promises';
-import { join, relative } from 'node:path';
+import { basename, join, relative } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { promisify } from 'node:util';
 
@@ -108,7 +108,7 @@ const EXPORT_FILES_DIR = 'bracemark-exports';
 
 // The file an export run left, whose name starts with `prefix` — written before
 // the share sheet is presented (expo-react data/export-all-data.ts). Each run
-// clears the directory first, so there is one. Returned as text: the callers
+// prunes previous runs after writing successfully. Returned as text: the callers
 // read plain-text exports.
 export async function readExportFile(options: {
   platform: NativePlatform;
@@ -118,8 +118,8 @@ export async function readExportFile(options: {
   if (options.platform === 'android') {
     const paths = await androidAppFind(options.deviceId, [
       `cache/${EXPORT_FILES_DIR}`,
-      '-maxdepth',
-      '1',
+      '-type',
+      'f',
       '-name',
       `${options.prefix}*`,
     ]);
@@ -134,12 +134,12 @@ export async function readExportFile(options: {
     'Caches',
     EXPORT_FILES_DIR,
   );
-  const names = (await readdir(exports).catch(() => [] as string[]))
-    .filter((name) => name.startsWith(options.prefix))
+  const paths = (await walk(exports).catch(() => [] as string[]))
+    .filter((path) => basename(path).startsWith(options.prefix))
     .sort();
-  const name = names.at(-1);
-  if (!name) throw new Error(`no "${options.prefix}…" file in ${exports}`);
-  return readFile(join(exports, name), 'utf8');
+  const path = paths.at(-1);
+  if (!path) throw new Error(`no "${options.prefix}…" file in ${exports}`);
+  return readFile(path, 'utf8');
 }
 
 const DATABASE = 'bracemark-data.db';

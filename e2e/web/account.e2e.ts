@@ -94,6 +94,22 @@ test.describe('account', () => {
       // this spec back into the bare-/links case it replaced.
       await expect(page).toHaveURL(/[?&]list=/);
 
+      await syncAndWait(page);
+      await page.route('**/v1/ops/**', (route) => route.abort());
+      const queued = unresolvableUrl(unique('signout-queued'));
+      await addLink(page, queued);
+      expect(await countPendingOps(page)).toBeGreaterThan(0);
+      await page.getByRole('button', { name: /^More options/ }).click();
+      await page.getByRole('menuitem', { name: 'Sign out' }).click();
+      const warning = page.getByTestId('sign-out-dialog');
+      await expect(warning).toContainText('nowhere else');
+      await warning.getByRole('button', { name: 'Cancel', exact: true }).click();
+      await expect(warning).toHaveCount(0);
+      await expect(linkRow(page, queued)).toBeVisible();
+      expect(await countPendingOps(page)).toBeGreaterThan(0);
+      await page.unroute('**/v1/ops/**');
+      await syncAndWait(page);
+
       // The label gains a suffix in the sync-failed / storage-full states.
       await page.getByRole('button', { name: /^More options/ }).click();
       await page.getByRole('menuitem', { name: 'Sign out' }).click();
@@ -370,9 +386,10 @@ test.describe('account', () => {
         });
       });
       try {
-        await page.getByRole('button', { name: 'Use a different account' }).click();
-        await page.getByRole('alertdialog').getByRole('button', { name: 'Sign out' }).click();
+        await page.getByRole('button', { name: /^More options/ }).click();
+        await page.getByRole('menuitem', { name: 'Sign out' }).click();
         await requestStarted;
+        await expect(page.getByTestId('sign-out-dialog')).toBeVisible();
 
         await other.getByRole('button', { name: 'Sign in to resume' }).click();
         const resume = other.getByRole('dialog', { name: 'Sign in to resume' });
@@ -388,6 +405,8 @@ test.describe('account', () => {
         const arrived = page.waitForResponse('**/v1/auth/sign-out');
         release();
         await arrived;
+        await expect(page.getByTestId('sign-out-dialog')).toHaveCount(0);
+        await expect(addLinkButton(page)).toBeEnabled();
         // A further round-trip through persisted auth proves the old continuation
         // finished without clearing the replacement or its unsynced edit.
         await expect(linkRow(page, queued)).toBeVisible();

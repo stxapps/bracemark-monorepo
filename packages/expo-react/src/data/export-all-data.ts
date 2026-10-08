@@ -75,7 +75,7 @@ import {
 
 import { yieldToMain } from '../lib/yield-to-main';
 import { loadEntityContents, runIncrementalSync, type SyncDeps } from '../sync/engine';
-import { newExportFile } from './cache-files';
+import { finishExportFile, newExportFile } from './cache-files';
 import { getDb } from './db';
 import { dataFileFor } from './file-store';
 import { bulkGetItems, getItem, namespaceRows } from './item-store';
@@ -373,6 +373,7 @@ function writeExportFile(username: string, file: File, content: string | Uint8Ar
   getDb().transaction((tx) => assertAccountOwnsStoreTx(tx, username));
   file.create({ intermediates: true, overwrite: true });
   file.write(content);
+  finishExportFile(file);
 }
 
 // --- the flow -------------------------------------------------------------------

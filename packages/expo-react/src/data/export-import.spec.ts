@@ -689,6 +689,32 @@ describe('the zip32 ceilings fflate does not check', () => {
 });
 
 describe('the output the share sheet is presented over', () => {
+  it('removes the previous file only after the replacement export succeeds', async () => {
+    seedEntities();
+    const old = await exportBackup();
+    const next = await exportBackup();
+
+    expect(next.file.name).toBe(old.file.name);
+    expect(next.file.uri).not.toBe(old.file.uri);
+    expect(new File(old.file.uri).exists).toBe(false);
+    expect(readFileBytes(next.file.uri).length).toBeGreaterThan(0);
+  });
+
+  it('keeps a successful backup if the next export fails to write, even with the same filename', async () => {
+    seedEntities();
+    const old = await exportBackup();
+    const saved = readFileBytes(old.file.uri).slice();
+    const write = jest.spyOn(File.prototype, 'write').mockImplementationOnce(() => {
+      throw new Error('disk full');
+    });
+    try {
+      await expect(exportBackup()).rejects.toThrow('disk full');
+      expect(readFileBytes(old.file.uri)).toEqual(saved);
+    } finally {
+      write.mockRestore();
+    }
+  });
+
   // No save dialog on this platform, so the outcome has to carry where the file
   // landed — the UI has nothing else to share, and an outcome without it is a
   // successful export the user can never reach.

@@ -817,7 +817,8 @@ which is why each one shipped.
   file goes there when some other reader needs it for a moment and the OS only
   cleans up under storage pressure. `data/cache-files.ts` owns all of it: the
   **export** (the whole library in one file — written under
-  `bracemark-exports/`, replaced by the next run, since it must outlive its own
+  `bracemark-exports/<run>/`, replaced only after the next run writes successfully,
+  since it must outlive its own
   run for the share sheet and the receiving app to read it), the **import's
   picked copy** (`copyToCacheDirectory`; deleted when the run settles, as the
   run has read it whole), a **custom image's picked file and resized copy**
@@ -913,6 +914,14 @@ the press and step 1:
   ([api-contracts.md](./api-contracts.md), _deadlines_); when the cap fires the
   cost is the one a failed request already had — the session row is not
   revoked, idles out and is purged.
+
+If the pending-count read fails, the dialog warns that unsynced changes could
+not be checked and requires confirmation. An unreadable queue is not an empty one.
+
+A pending-count result is ignored after its provider unmounts or its account
+changes. A successful mutation also closes the dialog if the tree stays mounted:
+another tab may have resumed the session while the old sign-out request was out,
+so generation fencing preserves that session without unmounting this provider.
 
 A failed sign-out — the session record could not be deleted, so nothing was
 erased — now says so in that dialog; it used to reject into nothing.

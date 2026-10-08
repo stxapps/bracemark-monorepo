@@ -22,6 +22,7 @@ const COPY = SESSION_COPY.signOut;
 
 let mockPendingOps = 0;
 let mockIsPending = false;
+let mockIsSuccess = false;
 let mockIsError = false;
 const mockMutate = jest.fn();
 const mockReset = jest.fn();
@@ -34,6 +35,7 @@ jest.mock('@stxapps/web-react', () => ({
     reset: mockReset,
     isPending: mockIsPending,
     isError: mockIsError,
+    isSuccess: mockIsSuccess,
   }),
   countPendingOps: (username: string) => mockCountPendingOps(username),
 }));
@@ -62,6 +64,7 @@ async function click() {
 beforeEach(() => {
   mockPendingOps = 0;
   mockIsPending = false;
+  mockIsSuccess = false;
   mockIsError = false;
   mockMutate.mockClear();
   mockReset.mockClear();
@@ -196,13 +199,15 @@ describe('a sign-out that failed', () => {
   });
 });
 
-// A count that cannot be read must not trap anyone signed in.
-it('goes ahead when the count cannot be read', async () => {
-  mockCountPendingOps.mockImplementationOnce(() => Promise.reject(new Error('idb')));
+// An unreadable queue is unknown, not empty: sign-out stays available, but
+// losing edits needs the user's explicit confirmation.
+it('asks before signing out when the count cannot be read', async () => {
+  mockCountPendingOps.mockImplementationOnce(() => Promise.reject(new Error('storage')));
   render(tree());
-
   await click();
-
+  expect(mockMutate).not.toHaveBeenCalled();
+  expect(screen.getByText(COPY.descriptionUnknown)).toBeTruthy();
+  fireEvent.click(screen.getByTestId('sign-out-confirm'));
   expect(mockMutate).toHaveBeenCalledTimes(1);
 });
 
@@ -215,4 +220,41 @@ it('refuses reads outside its provider', () => {
 
   expect(() => render(<OutsideProbe />)).toThrow(/must be used within <SignOutProvider>/);
   errorSpy.mockRestore();
+});
+
+// The count can outlive the auth-gated tree. mutate reads the CURRENT session,
+// so an old request must never reach it after a replacement tree is mounted.
+it('drops a pending count after unmount, even when a replacement is mounted', async () => {
+  let resolve!: (count: number) => void;
+  mockCountPendingOps.mockImplementationOnce(
+    () =>
+      new Promise<number>((done) => {
+        resolve = done;
+      }),
+  );
+  const old = render(tree());
+  fireEvent.click(screen.getByText('Menu item'));
+  old.unmount();
+  render(tree());
+
+  await act(async () => resolve(0));
+
+  expect(mockMutate).not.toHaveBeenCalled();
+  expect(screen.queryByRole('alertdialog')).toBeNull();
+});
+
+// endSession deliberately does nothing when another tab resumed the session.
+// That is still a successful mutation, but this provider stays mounted.
+it('releases the cover when sign-out settles without unmounting the tree', async () => {
+  const view = render(tree());
+  await click();
+  mockIsSuccess = true;
+  view.rerender(tree());
+
+  expect(screen.queryByRole('alertdialog')).toBeNull();
+  expect(mockReset).toHaveBeenCalled();
+  mockIsSuccess = false;
+  view.rerender(tree());
+  await click();
+  expect(mockMutate).toHaveBeenCalledTimes(2);
 });

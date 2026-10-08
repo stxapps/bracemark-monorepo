@@ -148,6 +148,25 @@ async function suspendServiceWorker(context: BrowserContext): Promise<SuspendedS
 
 test.describe('browser extension', () => {
   test(
+    'signing out in options clears the session in the open popup and after restart',
+    { tag: ['@EXT-SIGN-OUT-001', '@full', '@online', '@extension', '@destructive'] },
+    async ({ extensionApp }) => {
+      const url = controlledPageUrl('signout');
+      const popup = await extensionApp.signIn(url);
+      await waitForExtensionSync(popup);
+      const options = await extensionApp.context.newPage();
+      await options.goto(`chrome-extension://${extensionApp.extensionId}/options.html`);
+      await options.getByRole('button', { name: 'Sign out', exact: true }).click();
+      await expect(options.getByText('Not signed in', { exact: true })).toBeVisible();
+      await expect(options.getByTestId('sign-out-dialog')).toHaveCount(0);
+      await expect(popup.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
+      await extensionApp.restart();
+      const reopened = await extensionApp.open(url);
+      await expect(reopened.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
+    },
+  );
+
+  test(
     'sign-in survives popup and browser-profile reopen',
     { tag: ['@EXT-AUTH-001', '@smoke', '@online', '@extension'] },
     async ({ extensionApp }) => {

@@ -20,12 +20,14 @@ import {
 import {
   clearCacheFiles,
   deletePickedCopy,
+  finishExportFile,
   newExportFile,
   newScratchFile,
   warnIfNotSwept,
 } from './cache-files';
 
 jest.mock('expo-file-system', () => require('../testing/memory-file-system'));
+jest.mock('@stxapps/expo-crypto/lib/ids', () => ({ newId: () => globalThis.crypto.randomUUID() }));
 
 // A file the way a native module leaves one: its directory made for it.
 function park(dir: string, name: string): string {
@@ -43,20 +45,25 @@ describe('newExportFile', () => {
   it('hands the run a location under the cache dir, where the share sheet can reach it', () => {
     const file = newExportFile('Bracemark backup 2026-01-01.zip');
 
-    expect(file.uri).toBe('file:///cache/bracemark-exports/Bracemark backup 2026-01-01.zip');
+    expect(file.uri).toMatch(
+      /^file:\/\/\/cache\/bracemark-exports\/[^/]+\/Bracemark backup 2026-01-01.zip$/,
+    );
     // The directory exists, so the run's write does not depend on `intermediates`.
     file.write('zip');
     expect(listFileUris()).toEqual([file.uri]);
   });
 
-  // The previous file has no receipt left to offer it from, and its name carries the
-  // date, so nothing would ever overwrite it: a run a day would be a library a day.
-  it("removes the previous run's file first", () => {
-    newExportFile('Bracemark backup 2026-01-01.zip').write('old');
+  it('keeps the previous backup until the replacement has been written', () => {
+    const old = newExportFile('backup.zip');
+    old.write('only surviving copy');
+    const next = newExportFile('backup.zip');
 
-    const next = newExportFile('Bracemark backup 2026-01-02.zip');
-    next.write('new');
+    expect(next.uri).not.toBe(old.uri);
+    expect(listFileUris()).toEqual([old.uri]);
+    next.write('replacement');
+    expect(old.exists).toBe(true);
 
+    finishExportFile(next);
     expect(listFileUris()).toEqual([next.uri]);
   });
 });

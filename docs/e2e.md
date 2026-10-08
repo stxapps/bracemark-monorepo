@@ -204,6 +204,11 @@ records both differences and records `activeTabToolbarGrantProven: false`.
 `EXT-RELEASE-001` in `e2e/extension/RELEASE.md` owns the real Chrome-toolbar
 boundary; the Firefox production-build smoke is beside it.
 
+`EXT-SIGN-OUT-001` signs out through the options page and checks both an
+already-open popup and a popup opened after a browser-profile restart. The
+options dialog must disappear and the session must remain absent across that
+restart.
+
 Popup and background remain real extension contexts. The worker-restart case
 stops the installed MV3 service-worker version through CDP, observes its stopped
 state, then uses the popup's public Sync request to wake it back to running and
@@ -1408,7 +1413,8 @@ them differently:
   is out of reach: the runner deletes the account's session rows from local D1
   instead (`seed/sessions.ts`, beside the plan grant in `seed/plan.ts`; both go
   through `seed/d1.ts`).
-  `SESSION-RACE-WEB-001` holds a sign-out request while another tab resumes,
+  `SESSION-RACE-WEB-001` holds a menu sign-out request while another tab resumes,
+  requires the sign-out dialog to close after the superseded request settles,
   then delivers a revoked response for the old token. The replacement session
   and a link queued after resume must survive that response and a reload.
   `WEB-ACCOUNT-003` reloads with the device clock two years ahead: still signed
@@ -1447,7 +1453,7 @@ payload, so the in-app route works offline there: `PWA-004` proves it in a tab,
 questions, each answered from outside the app. Export reaches Settings in-app —
 native navigation needs no network, so the tab's gap has no native twin — and
 the runner reads the plain-text file out of the export's own directory in the
-app's cache, `bracemark-exports/` (`runner/device-files.ts`: the simulator's
+app's cache, `bracemark-exports/<run>/` (`runner/device-files.ts`: the simulator's
 data container, or `run-as` on Android's debuggable build), since Maestro sees
 the share sheet and not the file. ⚠ That directory's name is written twice, in
 `@stxapps/expo-react`'s `data/cache-files.ts` and in the runner, because the

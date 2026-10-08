@@ -48,8 +48,8 @@ export const SESSION_COPY = {
 
   /**
    * The ordinary sign-out — the links menu, the lock pane's "forgot the
-   * password" way out. It asks ONLY when there is something to lose: a synced
-   * change is still on the server, so with nothing pending the erase costs a
+   * password" way out. It asks when changes are pending or the queue cannot be
+   * read: a synced change is still on the server, so with nothing pending the erase costs a
    * sign-in and a question would be noise on the commonest path. A pending
    * change exists nowhere else, and that is the one case worth stopping for.
    * The count is the argument, as it is for switchAccount above; the way to
@@ -65,6 +65,8 @@ export const SESSION_COPY = {
       `Signing out erases this device’s copy, including ${changes(pending)} that ${
         pending === 1 ? 'hasn’t synced and exists' : 'haven’t synced and exist'
       } nowhere else. To keep ${pending === 1 ? 'it' : 'them'}, cancel and sync first.`,
+    descriptionUnknown:
+      'Signing out erases this device’s copy. We couldn’t check for changes that haven’t synced. To keep any unsynced changes, cancel and sync first.',
     confirm: 'Sign out',
     cancel: 'Cancel',
     progress: 'Signing out…',

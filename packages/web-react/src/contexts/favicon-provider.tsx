@@ -186,6 +186,7 @@ export function FaviconProvider({ children }: { children: ReactNode }) {
           // Re-check under the single-flight guard: another tab or an earlier
           // request may have resolved this host since it was queued.
           const existing = await readFavicon(host);
+          if (stoppedRef.current || usernameRef.current !== owner) return;
           if (!isFaviconStale(existing)) return;
 
           let icon: Uint8Array | undefined;
