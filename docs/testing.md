@@ -828,6 +828,10 @@ copy that other projects already pin. What it does cover:
   both guards rather than getters: `ALLOW_INDEXING` required in BOTH directions
   (a truthiness check reads `"false"` as allow), and a sessionStorage value that
   goes straight into a `<Link href>` and so is validated on the way out.
+- **`app/inner-layout.spec.tsx`** holds the saved links view to its account:
+  sign-out, revocation, or account replacement clears it even after routed content
+  unmounts, while reload hydration and route changes preserve it. The spec renders
+  the layout so it reaches the cleanup in `Initializer`, where the app mounts it.
 
 `bracemark-site` is copy, and copy is not what a spec is for — most of that tree
 has none on purpose. The two that exist sit on the same rule from opposite sides:

@@ -930,8 +930,10 @@ that reason or a near one (two more, further down, for a different one):
   view Settings' ✕ returns to (`lib/links-return.ts`), and it can carry a
   search — which, unlike a previous account's list or tag id, resolves for
   anyone. So each tab drops its own when the account that browsed it stops
-  being the one signed in (`useLinksReturnOwner`, mounted in the root layout's
-  `Initializer`). ⚠ Not from `AuthGuard`, though it is the obvious place: its
+  being the one signed in (an effect in the root layout's `Initializer`, comparing
+  the previous username with the current one). Initial hydration from no username
+  to an account preserves the saved view across a reload. ⚠ Not from `AuthGuard`,
+  though it is the obvious place: its
   exits `redirect()` during render, and a render that throws commits no
   effects.
 - **The installed app does not leave.** A browser tab's sign-out navigates off

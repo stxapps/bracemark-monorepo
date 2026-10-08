@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { SerwistProvider } from '@serwist/next/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -11,7 +11,7 @@ import { UpdatePill } from '../components/update-pill';
 import { UpdateRequiredBanner } from '../components/update-required-banner';
 import { apiClient } from '../lib/api-client';
 import { extractClient } from '../lib/extract-client';
-import { useLinksReturnOwner } from '../lib/links-return';
+import { clearLinksReturn } from '../lib/links-return';
 import { watchForServiceWorkerUpdates } from '../lib/service-worker-update-check';
 
 // Registers the service worker — and so makes the library reachable with the
@@ -57,7 +57,16 @@ function Initializer() {
   // effects — so an effect there is skipped for a revocation and for the
   // installed app, which is the one place the document survives to use the stale
   // value. This component renders null on every route and never throws.
-  useLinksReturnOwner(username);
+  // Clear on account → null or account A → account B. Initial null → account
+  // is hydration or sign-in, not a departure: preserving it lets Settings return
+  // to the saved view after a reload, even when the session read initially fails.
+  const previousUsername = useRef(username);
+  useEffect(() => {
+    if (previousUsername.current !== null && previousUsername.current !== username) {
+      clearLinksReturn();
+    }
+    previousUsername.current = username;
+  }, [username]);
 
   useEffect(() => {
     if (!('serviceWorker' in navigator && window.serwist !== undefined)) return;
