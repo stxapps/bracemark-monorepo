@@ -51,3 +51,33 @@ describe('what a field tells the browser to keep', () => {
     );
   });
 });
+
+describe('typing assistance follows the field purpose', () => {
+  it('keeps exact entry separate from prose, including through Textarea', () => {
+    render(
+      <>
+        <Input aria-label="Username" autoComplete="username" />
+        <Textarea aria-label="Note" />
+        <Input aria-label="Title" autoCapitalize="sentences" autoCorrect="on" spellCheck />
+        <Textarea aria-label="Code" autoCapitalize="none" autoCorrect="off" spellCheck={false} />
+        <Input aria-label="Recovery code" autoCapitalize="characters" />
+      </>,
+    );
+
+    for (const label of ['Username', 'Code']) {
+      const field = screen.getByLabelText(label);
+      expect(field.getAttribute('autocapitalize')).toBe('none');
+      expect(field.getAttribute('autocorrect')).toBe('off');
+      expect(field.getAttribute('spellcheck')).toBe('false');
+    }
+    for (const label of ['Note', 'Title']) {
+      const field = screen.getByLabelText(label);
+      expect(field.getAttribute('autocapitalize')).toBe('sentences');
+      expect(field.getAttribute('autocorrect')).toBe('on');
+      expect(field.getAttribute('spellcheck')).toBe('true');
+    }
+    expect(screen.getByLabelText('Recovery code').getAttribute('autocapitalize')).toBe(
+      'characters',
+    );
+  });
+});

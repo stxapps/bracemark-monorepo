@@ -15,8 +15,8 @@ import { Input } from './input';
 // that story) and the single place the theme is lifted back into JS for
 // `keyboardAppearance`. A second TextInput render site would be a third thing
 // for the cap to cover and a second copy of the theme lift, both silent when
-// they drift. So everything here is an OVERRIDE of four values, and every other
-// property of a text field on this platform comes from one file.
+// they drift. The four visual overrides below and prose typing hints live here;
+// the other properties of a text field on this platform come from one file.
 //
 // The four:
 //   `rounded-xl` — docs/theme.md, _the radius scale_: the row for "any control
@@ -53,10 +53,25 @@ import { Input } from './input';
 // not in play here and the floor is web's own number: that step buys touch
 // targets, and 64 clears any of them by half again — what this value decides is
 // how many lines you see before typing, which is not a platform question.
-function Textarea({ className, style, ...props }: React.ComponentProps<typeof Input>) {
+// Restore prose assistance over Input's exact-entry defaults, like web's
+// Textarea. Keep autofill off and leave submitBehavior unset so Return inserts
+// a newline (docs/editors.md, _typing assistance_; docs/soft-keyboard.md).
+function Textarea({
+  className,
+  style,
+  autoCapitalize = 'sentences',
+  autoCorrect = true,
+  spellCheck = true,
+  smartInsertDelete = true,
+  ...props
+}: React.ComponentProps<typeof Input>) {
   return (
     <Input
       multiline
+      autoCapitalize={autoCapitalize}
+      autoCorrect={autoCorrect}
+      spellCheck={spellCheck}
+      smartInsertDelete={smartInsertDelete}
       className={cn('h-auto min-h-16 rounded-xl py-3 sm:h-auto', className)}
       style={[{ textAlignVertical: 'top' }, style]}
       {...props}

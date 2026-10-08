@@ -131,6 +131,11 @@ function Input({
   className,
   style,
   onLayout,
+  autoComplete = 'off',
+  autoCapitalize = 'none',
+  autoCorrect = false,
+  spellCheck = false,
+  smartInsertDelete = false,
   ...props
 }: React.ComponentProps<typeof TextInput> & React.RefAttributes<TextInput>) {
   // iOS renders the system keyboard LIGHT regardless of the app's appearance
@@ -172,9 +177,16 @@ function Input({
       // as if it were this app's login. React Native turns `off` into "not
       // important for autofill" on Android and `textContentType="none"` on iOS.
       // The credential fields name themselves (`username`, `current-password`,
-      // `new-password`) and `{...props}` below lets them. What this does not
+      // `new-password`) and override this default. What this does not
       // reach is the keyboard's own learning, which belongs to the keyboard.
-      autoComplete="off"
+      autoComplete={autoComplete}
+      // Exact entry, independent of autofill. iOS smartInsertDelete can adjust
+      // spaces during paste/cut/delete, so it is off here too. Textarea and the
+      // Title fields opt into prose assistance (docs/editors.md).
+      autoCapitalize={autoCapitalize}
+      autoCorrect={autoCorrect}
+      spellCheck={spellCheck}
+      smartInsertDelete={smartInsertDelete}
       onLayout={
         Platform.OS === 'android'
           ? (event) => {

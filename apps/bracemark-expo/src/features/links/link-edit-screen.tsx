@@ -330,6 +330,10 @@ function LinkEditForm({ link, focus }: { link: LinkItem; focus?: EditFocus }) {
               (docs/e2e.md, _the testID contract_). */}
           <Input
             testID="edit-link-title"
+            autoCapitalize="sentences"
+            autoCorrect
+            spellCheck
+            smartInsertDelete
             value={title}
             onChangeText={setTitle}
             maxLength={LINK_TITLE_MAX}

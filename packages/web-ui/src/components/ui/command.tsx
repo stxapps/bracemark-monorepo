@@ -106,6 +106,7 @@ function CommandDialog({
 function CommandInput({
   className,
   onKeyDown,
+  autoCapitalize = 'none',
   ...props
 }: React.ComponentProps<typeof CommandPrimitive.Input>) {
   // The wrapper takes a full `p-1`. Its bottom inset is the gap down to the
@@ -121,6 +122,9 @@ function CommandInput({
     <div data-slot="command-input-wrapper" className="p-1">
       <InputGroup className="h-9 bg-input/30">
         <CommandPrimitive.Input
+          // cmdk already disables autocomplete, autocorrect and spellcheck.
+          // Its raw input bypasses our Input, so set the remaining hint here.
+          autoCapitalize={autoCapitalize}
           data-slot="command-input"
           className={cn(
             // `text-base md:text-sm` — the control type step (input.tsx). This one

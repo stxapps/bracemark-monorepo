@@ -284,6 +284,9 @@ function LinkEditForm({
               <Input
                 ref={titleRef}
                 id="edit-title"
+                autoCapitalize="sentences"
+                autoCorrect="on"
+                spellCheck
                 maxLength={LINK_TITLE_MAX}
                 placeholder={extractedTitle ?? hostFromText(link.url)}
                 value={title}

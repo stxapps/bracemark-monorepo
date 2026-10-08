@@ -31,6 +31,11 @@ describe('PasswordInput', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Show password' }));
     expect(field().type).toBe('text');
+    // Revealing changes this into an ordinary text field; its exact-entry hints
+    // must survive that transition instead of relying on type=password.
+    expect(field().getAttribute('autocapitalize')).toBe('none');
+    expect(field().getAttribute('autocorrect')).toBe('off');
+    expect(field().getAttribute('spellcheck')).toBe('false');
 
     fireEvent.click(screen.getByRole('button', { name: 'Hide password' }));
     expect(field().type).toBe('password');

@@ -937,6 +937,53 @@ editors:
   list/tag chosen from an editor's `ListSelect` is never hidden under a collapsed
   parent.
 
+### typing assistance
+
+Autofill and keyboard assistance are separate choices. `Input` and `Textarea`
+default to `autoComplete="off"` on both platforms, as
+[accessibility.md](./accessibility.md#what-a-field-tells-the-browser) records.
+That does not disable capitalization, autocorrection or spellcheck.
+
+The primitives declare their typing defaults explicitly, so the browser or OS
+does not decide a field's purpose from an omitted hint:
+
+| hint                           | `Input`                   | `Textarea`              |
+| ------------------------------ | ------------------------- | ----------------------- |
+| `autoComplete`                 | `off`                     | `off`                   |
+| `autoCapitalize`               | `none`                    | `sentences`             |
+| `autoCorrect`                  | web: `off`; expo: `false` | web: `on`; expo: `true` |
+| `spellCheck`                   | `false`                   | `true`                  |
+| expo `smartInsertDelete` (iOS) | `false`                   | `true`                  |
+
+**Single-line fields default to exact entry.** URLs, usernames, passwords,
+searches and list/tag names keep the user's casing and spelling. This includes a
+web password after its reveal toggle changes it to `type="text"`. iOS's
+`smartInsertDelete` can adjust spaces during paste/cut/delete, so exact entry
+disables that too. Web picker filters bypass `Input`: cmdk supplies
+`autoComplete="off"`, `autoCorrect="off"` and `spellCheck={false}`, and our
+`CommandInput` supplies `autoCapitalize="none"`.
+
+**Notes and titles use prose assistance.** Notes inherit `Textarea`'s defaults;
+the web edit dialog and expo edit screen explicitly opt their Title `Input` into
+sentence capitalization, autocorrection and spellcheck (and `smartInsertDelete`
+on expo). Expo's `Textarea` still wraps `Input`, overriding its typing hints along
+with the visual defaults rather than introducing another `TextInput` render site.
+All hints remain overridable for a field that holds exact multiline text.
+Recovery codes retain their explicit `autoCapitalize="characters"` override and
+disabled correction/spellcheck; account credentials retain their autofill tokens.
+
+These are input-method hints, not validation or a guarantee about keyboard
+learning. Expo's `spellCheck` and `smartInsertDelete` props apply to iOS;
+`autoCorrect` controls correction on both native platforms. Browser and keyboard
+support and user preferences still affect the resulting assistance.
+
+`inputMode`/`keyboardType`, return-key labels, autofocus and `maxLength` belong to
+the caller's field purpose, not the shared typing default. In particular, the
+URL fields keep `inputMode="url"`, titles/notes keep their shared text caps, and
+native multiline fields leave `submitBehavior` unset so Return inserts a newline.
+Their keyboard-dismissal paths remain the container's responsibility
+([soft-keyboard.md](./soft-keyboard.md#dismissal--how-the-user-gets-it-back-off)).
+
 ### invariants every editor must uphold
 
 These are the four rules the modal editors share. They exist because an editor is

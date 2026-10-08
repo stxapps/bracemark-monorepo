@@ -22,6 +22,49 @@ test('a field that does not say what it is asks the OS to keep nothing', () => {
   expect(autoCompleteOf(<Textarea aria-label="Note" />, 'Note')).toBe('off');
 });
 
+test('Textarea restores prose assistance and both controls allow purpose-specific overrides', () => {
+  const { getByLabelText } = render(
+    <>
+      <Input aria-label="Username" autoComplete="username" />
+      <PasswordInput aria-label="Password" />
+      <Textarea aria-label="Note" />
+      <Input
+        aria-label="Title"
+        autoCapitalize="sentences"
+        autoCorrect
+        spellCheck
+        smartInsertDelete
+      />
+      <Textarea
+        aria-label="Code"
+        autoCapitalize="none"
+        autoCorrect={false}
+        spellCheck={false}
+        smartInsertDelete={false}
+      />
+      <Input aria-label="Recovery code" autoCapitalize="characters" />
+    </>,
+  );
+
+  for (const label of ['Username', 'Password', 'Code']) {
+    const { props } = getByLabelText(label);
+    expect(props.autoCapitalize).toBe('none');
+    expect(props.autoCorrect).toBe(false);
+    expect(props.spellCheck).toBe(false);
+    expect(props.smartInsertDelete).toBe(false);
+  }
+  for (const label of ['Note', 'Title']) {
+    const { props } = getByLabelText(label);
+    expect(props.autoCapitalize).toBe('sentences');
+    expect(props.autoCorrect).toBe(true);
+    expect(props.spellCheck).toBe(true);
+    expect(props.smartInsertDelete).toBe(true);
+  }
+  expect(getByLabelText('Note').props.multiline).toBe(true);
+  expect(getByLabelText('Note').props.submitBehavior).toBeUndefined();
+  expect(getByLabelText('Recovery code').props.autoCapitalize).toBe('characters');
+});
+
 // The other direction, and the one a user would meet at once: a credential field
 // that lost its hint to the default is one the password manager no longer fills.
 test.each(['username', 'current-password', 'new-password'] as const)(

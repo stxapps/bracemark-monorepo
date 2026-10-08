@@ -737,6 +737,12 @@ A field built on a raw `<input>` or a bare `TextInput` gets neither answer and
 has to state one. The two there are today are file pickers, which have no value
 to keep, and cmdk's filter field sets `off` itself.
 
+Autofill is separate from capitalization, autocorrection and spellcheck. The
+primitives also declare those defaults: exact entry for `Input`, prose assistance
+for `Textarea`, and explicit prose overrides for Title. The field-purpose table
+and exceptions live in [editors.md](./editors.md#typing-assistance). A revealed
+password keeps its exact-entry hints even after web switches to `type="text"`.
+
 ### web / expo parity
 
 The two platforms do **not** share component shapes here — web composes the Field
