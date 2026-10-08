@@ -11,13 +11,8 @@ appId: com.bracemark.app
 ---
 - tapOn:
     id: 'export-data-open'
-# A match on part of the name: the radio row folds its label and hint into one
-# accessible name ("Plain text, Just the URLs…"), so the label alone is no node.
-# Not a prefix either — on iOS the name leads with the row's two alignment
-# slots, each a zero-width space (U+200B) and a comma
-# (components/first-line-slot.tsx), and `Plain text.*` stopped finding the row
-# there.
-- tapOn: '.*Plain text.*'
+- tapOn:
+    id: 'export-data-format-text'
 - tapOn:
     id: 'export-data-submit'
 

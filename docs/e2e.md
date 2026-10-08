@@ -1039,6 +1039,7 @@ All of them are in the app:
 | `settings-nav-<section>`      | `src/features/settings/sidebar.tsx`                                                             |
 | `settings-back`               | `src/features/settings/settings-kit.tsx` — a sub-view's back link (its label repeats the title) |
 | `measure-stall-reading`       | `src/features/settings/data-section.tsx` — measurement bundles only (`measure:native`)          |
+| `export-data-format-<format>` | ” — `bracemark` `netscape` `csv` `text` export radio rows                                       |
 | `extraction-mode-<mode>`      | `src/features/settings/extraction-section.tsx` — `off` `saves` `all` radio rows                 |
 | `extraction-count-<bucket>`   | ” — the number in `done` `pending` `will-retry` `wont-retry`                                    |
 | `extraction-progress`         | ” — "N of M links previewed."                                                                   |

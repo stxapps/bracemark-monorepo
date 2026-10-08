@@ -585,7 +585,9 @@ function ExportView({ onBack }: { onBack: () => void }) {
         {EXPORT_FORMAT_OPTIONS.map((option) => (
           <Pressable
             key={option.value}
+            testID={`export-data-format-${option.value}`}
             role="radio"
+            aria-label={`${option.label}, ${option.hint}`}
             disabled={running}
             onPress={() => setFormat(option.value)}
             aria-checked={format === option.value}

@@ -511,6 +511,15 @@ and `items-center` on the row holds only until the label wraps. Measured on the
 iOS simulator at the smallest, default and capped sizes: radio and icon share a
 centre exactly, within 0.2 of the label's cap-height centre, wrapped or not.
 
+The strut's wrapping View is `aria-hidden`, so it is not a separate screen-reader
+stop. That does not keep its U+200B out of a parent's generated name on iOS:
+RN's `RCTRecursiveAccessibilityLabel` traverses descendants without checking
+`accessibilityElementsHidden`. Export format rows therefore name themselves
+explicitly with their existing label and hint (`data-section.tsx`), while their
+Maestro selector uses `export-data-format-<format>`. Keep the strut and its hidden
+wrapper; neither a text selector workaround nor a styling class cleans up the
+parent's accessible name.
+
 Every other glyph beside wrapping text uses the same slot — the confirm-checkbox
 rows (the show-once secret panel, the two delete confirmations) and every
 notice, banner and receipt line that leads with an icon, most of them through
