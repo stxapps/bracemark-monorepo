@@ -689,6 +689,12 @@ export function SidebarBody({
 // The rail itself: the body in a fixed 15rem column, from `md` up. Below that it
 // is not rendered at all (`hidden` — display:none, so its rows leave the tab
 // order and the a11y tree too) and the drawer carries the same body instead.
+//
+// `bg-background` here, `bg-popover` on the drawer (web-ui `sheet.tsx`), and the
+// two are not meant to be synced: this is a column OF the page, level with the
+// topbar its header's hairline meets, while the drawer floats over a scrim
+// (docs/theme.md, _elevation_). The fill is each host's own, which is why the
+// shared body sets none.
 export function Sidebar() {
   return (
     <aside className="hidden h-full w-60 shrink-0 flex-col border-r border-border bg-background md:flex">

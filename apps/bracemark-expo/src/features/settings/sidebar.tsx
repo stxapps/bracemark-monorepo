@@ -105,7 +105,11 @@ function NavItem({
 
 export function Sidebar({ closeDrawer }: { closeDrawer: () => void }) {
   return (
-    <StyledSafeAreaView className="flex-1 bg-background">
+    // `bg-popover` + `border-r`: the drawer's lifted fill and its one edge, the
+    // same pair the links rail wears — features/links/sidebar.tsx carries the
+    // reasoning (in dark the scrim separates nothing, and the navigator draws
+    // no edge for a `front` drawer).
+    <StyledSafeAreaView className="flex-1 border-r border-border bg-popover">
       {/* `h-14` and a hairline under it — the same height and the same rule the
           topbar beside it carries, so the two meet across the frame instead of
           the drawer's header floating a few pixels off the bar it covers. */}

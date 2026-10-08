@@ -58,24 +58,30 @@ function SheetOverlay({
 // padding for the edges it actually touches (a left sheet spans top-to-bottom,
 // so it needs all three of top/bottom/left).
 //
-// `bottom` ALSO SETS A FILL, and it is the only side that does. A left or right
-// sheet is a rail — the page's own sidebar arriving from an edge — so it wears
-// the base `bg-background` and its full-height `border-r` is unmistakable. A
-// bottom sheet is a task floating over the page (quick-add, Move to), and in
-// dark the page's colour leaves it nothing to stand on: `bg-black/50` cannot
-// darken a 0.145 page, so the panel measured APCA Lc 0.7 against its own
-// backdrop (75 in light), under a `border-t` that is the very token the rows
-// behind it are divided with — one more row divider, not an edge. `bg-popover`
-// is the fill every other floating surface has, and the one both of these forms
-// already wear in their wide container (docs/theme.md, _elevation_). It lands
-// after the base class in `cn`, so tailwind-merge keeps it.
+// NONE OF THEM SETS A FILL — that is SheetContent's base, `bg-popover`, on every
+// side. A sheet is by construction a panel over the `bg-black/50` scrim above,
+// and in dark the page's own colour leaves it nothing to stand on: the scrim
+// cannot darken a 0.145 page, so a `bg-background` panel measured APCA Lc 0.7
+// against its own backdrop (75 in light). `bg-popover` is the fill every other
+// floating surface has (docs/theme.md, _elevation_).
+//
+// The fill used to be `bottom`'s alone, with left and right left on the page's
+// colour because they are rails — the page's sidebar arriving from an edge —
+// whose full-height `border-r` cannot be mistaken for a row divider the way a
+// bottom sheet's `border-t` can. True, and still not enough: that hairline
+// (Lc 9.5) was then the ONLY thing separating the drawer from the page in dark,
+// one 1px line down the screen with the same colour on both sides of it. A rail
+// is the page's colour where it is a COLUMN of the page (bracemark-web's
+// `links/_panes/sidebar.tsx` `<aside>`, which stays `bg-background`); slid over
+// a scrim it is a floating surface like any other, and takes the fill and the
+// edge together (Lc 13.0 for the edge on the lifted fill).
 const SIDES = {
   left: 'inset-y-0 left-0 h-full w-3/4 max-w-sm border-r pt-safe pb-safe pl-safe data-open:slide-in-from-left data-closed:slide-out-to-left',
   right:
     'inset-y-0 right-0 h-full w-3/4 max-w-sm border-l pt-safe pr-safe pb-safe data-open:slide-in-from-right data-closed:slide-out-to-right',
   top: 'inset-x-0 top-0 h-auto border-b pt-safe pr-safe pl-safe data-open:slide-in-from-top data-closed:slide-out-to-top',
   bottom:
-    'inset-x-0 bottom-0 h-auto border-t bg-popover pr-safe pb-safe pl-safe data-open:slide-in-from-bottom data-closed:slide-out-to-bottom',
+    'inset-x-0 bottom-0 h-auto border-t pr-safe pb-safe pl-safe data-open:slide-in-from-bottom data-closed:slide-out-to-bottom',
 } as const;
 
 // The corner X, and `onClose` the guarded-editor escape hatch — dialog.tsx's
@@ -119,7 +125,7 @@ function SheetContent({
         data-slot="sheet-content"
         data-side={side}
         className={cn(
-          'fixed z-50 flex flex-col bg-background text-sm shadow-lg outline-none',
+          'fixed z-50 flex flex-col bg-popover text-sm shadow-lg outline-none',
           'border-border transition ease-in-out data-open:animate-in data-open:duration-300 data-closed:animate-out data-closed:duration-200',
           SIDES[side],
           className,

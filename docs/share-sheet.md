@@ -288,8 +288,10 @@ opaque slab of dead white above the header, which reads as a broken sheet rather
 than as a short one. The plugin's `backgroundColor` takes an alpha
 (`app.config.ts`, 0 there; note the Swift divides r/g/b by 255 but uses alpha
 as-is), so the root is clear and `share-kit.tsx` draws its own rounded,
-`bg-background` panel inside it — the shape the Android half always had. What
-shows above it is the host app under the system's own dimming.
+`bg-popover` panel inside it, under a `border-t` — the shape the Android half
+always had, in the fill and edge every floating surface wears
+([theme.md](./theme.md), _elevation_). What shows above it is the host app under
+the system's own dimming.
 
 That transparency has a consequence worth stating, and a full-screen root
 sharpens it: **a clear RN root view still takes touches.** The unfilled region

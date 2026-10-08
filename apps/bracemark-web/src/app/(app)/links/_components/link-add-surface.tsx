@@ -688,7 +688,7 @@ export function LinkAddSurface({
         <SheetTrigger asChild>{trigger}</SheetTrigger>
         {/* `rounded-t-2xl` to match the popover's corners — the same surface at
             a different width. Its fill matches too, and that one needs no class
-            here: a `side="bottom"` sheet is `bg-popover` in sheet.tsx (SIDES
+            here: every sheet is `bg-popover` in sheet.tsx (the note above SIDES
             carries the reason). `onClose` is SheetContent's guarded-editor escape
             hatch: the built-in X is a `SheetClose`, which routes through the
             guard above and would silently no-op on a dirty draft, so this makes

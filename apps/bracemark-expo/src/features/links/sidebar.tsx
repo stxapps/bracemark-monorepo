@@ -528,7 +528,23 @@ export function Sidebar({ closeDrawer }: { closeDrawer: () => void }) {
   };
 
   return (
-    <StyledSafeAreaView className="flex-1 bg-background">
+    // `bg-popover` and a `border-r`, not the page's `bg-background` it used to
+    // wear with no edge at all — and in dark those two are the whole of what
+    // separates this drawer from the screen it slides over (docs/theme.md,
+    // _elevation_). The navigator's scrim cannot: black at 50% takes a white
+    // page to mid-grey, but has nothing to subtract from a 0.145 one, which
+    // left the panel at APCA Lc 0.7 against its own backdrop (75 in light). And
+    // there was no edge to fall back on, which is where this differed from the
+    // web twin: web's left sheet draws `border-r` itself (web-ui `sheet.tsx`),
+    // while react-navigation only borders a `permanent` drawer — a `front` one
+    // gets a corner radius, and this square view paints over that. So the edge
+    // is drawn HERE, in the token rather than the navigator's own
+    // `colors.border`: that theme is the stock light one with `background`
+    // alone replaced (src/app/_layout.tsx), so its border is a fixed light grey
+    // in both modes. The edge is the lever (Lc 13.0); the fill is what makes it
+    // a region rather than a line. Light is untouched by the fill: the two
+    // tokens are the same white there.
+    <StyledSafeAreaView className="flex-1 border-r border-border bg-popover">
       {/* The brand lockup, pinned above the scrolling trees at the topbar's own
           `h-14` with the same hairline under it, so the drawer's header and the
           bar it covers meet across the frame. It was a bare mark with no

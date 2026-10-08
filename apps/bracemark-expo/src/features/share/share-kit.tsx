@@ -228,7 +228,18 @@ function ShareSheetFrame({ children, holdSwipe }: { children: ReactNode; holdSwi
       // the room out from under it and overflows the frame instead of passing
       // the squeeze down to the pickers' scrollers — which does not clip, it
       // paints outside the box.
-      className="min-h-0 shrink rounded-t-2xl bg-background px-4 pt-4"
+      //
+      // `border-t` + `bg-popover` — the add panel's pair
+      // (features/links/link-add-panel.tsx, docs/theme.md _elevation_), and the
+      // case for it is stronger here: this panel wore the page's
+      // `bg-background` with NO edge, over a backdrop that is not ours. In dark
+      // that backdrop is usually dark too — the host app, under the system's
+      // dimming or the Android scrim below — and a 0.145 panel on a dimmed dark
+      // app has nothing to separate it but its own content. Light is untouched
+      // by the fill (the two tokens are the same white). The saved specimen's
+      // corner cut is painted in this fill and has to move with it
+      // (share-specimen.tsx, OVERLAY).
+      className="min-h-0 shrink rounded-t-2xl border-t border-border bg-popover px-4 pt-4"
     >
       {/* Tap-anywhere-dead to drop the keyboard, and it WRAPS the children
           rather than sitting behind them as an absolute layer. The absolute

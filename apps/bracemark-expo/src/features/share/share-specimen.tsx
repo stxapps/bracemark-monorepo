@@ -64,7 +64,10 @@ const CUT = 12; // 0.75rem — the extension specimen's cut, verbatim
 // 3.3px from the corner, the chamfer 8.5px, so nothing of it survives). It
 // erases the plate's border along the diagonal too, which is not a defect: web's
 // `clip-path` erases its ring there for the same reason, so the two match.
-// Painted in `--background` because that is what the specimen always sits on; it
+// Painted in `--popover` because that is what the specimen always sits on — the
+// share panel's fill (share-kit.tsx), and the two must move together: nothing
+// catches a mismatch, which in dark shows as a darker diamond over the corner
+// and in light not at all, the two tokens being the same white there. It
 // spills past the slot by half its width onto the same colour, so no clipping is
 // needed and none is applied — `overflow-hidden` plus a transform is the one
 // combination that renders differently across the two platforms.
@@ -113,7 +116,7 @@ export function ShareSpecimen({
         <Text className="text-xl font-semibold text-white">{initialFromHost(host)}</Text>
         {saved && (
           <View
-            className="absolute bg-background"
+            className="absolute bg-popover"
             style={{
               width: OVERLAY,
               height: OVERLAY,

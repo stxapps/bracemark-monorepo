@@ -460,7 +460,12 @@ different builds, and a phone and a laptop can too. Three contracts hold:
 
    It is a banner, not a modal: an unsaved draft stays on screen and selectable
    to copy, and Save now fails against the closed database with the editor's
-   own error, which the banner has already explained. The tab never reloads by
+   own error, which the banner has already explained. That holds only because
+   the banner sits **above the modal layer** (`z-60 pointer-events-auto`): at the
+   dialogs' own `z-50` the order was whichever mounted last, so an editor opened
+   after the banner buried it under the overlay, and in either order the modal's
+   `pointer-events: none` on `body` left Reload dead. The component's header
+   carries both halves and what they cost. The tab never reloads by
    itself; Reload is the explicit discard. If the new build's worker is still
    waiting when Reload is pressed, the reload first asks it to take over
    (`SKIP_WAITING`), so the old shell can't be served again and meet the

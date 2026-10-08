@@ -654,18 +654,69 @@ so the corners and the header's whole width differ from the page where only one
 pixel row did before. It also makes the form one colour in both its web
 containers — the `md`+ popover was `bg-popover` all along.
 
-On web the fill lives in `sheet.tsx`'s `bottom` side variant rather than at a
-call site, because there are two such sheets and they are meant to read as one
-shape: quick-add and **Move to** (`links/move-to-surface.tsx`, whose wide twin is
-a `Dialog` — `bg-popover` too). The left and right variants keep the base
-`bg-background`: those are the nav rails, the page's sidebar arriving from an
-edge, and a full-height `border-r` is not something a row divider can be
-mistaken for. Expo's Move to is a `Dialog` already.
+On web the fill lives in `sheet.tsx`'s base rather than at a call site, so every
+sheet has it: quick-add and **Move to** (`links/move-to-surface.tsx`, whose wide
+twin is a `Dialog` — `bg-popover` too) from the bottom, and the links drawer from
+the left. Expo's Move to is a `Dialog` already.
+
+**A nav drawer is the same case, and it was first ruled out of it.** The left and
+right sheets used to keep `bg-background`, on the reading that they are the nav
+rails — the page's sidebar arriving from an edge — and that a full-height
+`border-r` is not something a row divider can be mistaken for. That is true of
+the line and beside the point: it is the same `bg-black/50` scrim over the same
+page, so the drawer's fill reads the same Lc 0.7 against its backdrop, and the
+hairline (Lc 9.5) was the only thing left — one line down a screen with the same
+colour on both sides of it. On expo there was not even that. Both drawers
+(`features/links/sidebar.tsx`, `features/settings/sidebar.tsx`) are
+react-navigation's, which draws a border only for a `permanent` drawer; a `front`
+one gets a corner radius that the sidebar's square view paints over, and a panel
+fill of `colors.card` that the sidebar covers. So the two sidebars now draw
+`border-r border-border bg-popover` themselves — in the token rather than the
+navigator's `colors.border`, which is the stock light grey in both modes (only
+`background` is overridden; see _per-app wiring_ above) — and the edge reads
+Lc 13.0 on the lifted fill.
+
+**What decides it is whether the surface floats, not what it contains.** The same
+`SidebarBody` is `bg-background` in bracemark-web's `md`+ `<aside>`: there it is a
+column of the page, level with the topbar its header's hairline meets, with no
+scrim and nothing under it. A lifted fill would be an Lc 1.6 tint that splits the
+frame into two colours. The fill belongs to the host, which is why the shared
+body sets none.
+
+The cost is the active row. `bg-muted` reads Lc 3.9 on the page and Lc 3.0 on a
+popover — the ceiling _contrast — dark mode, where the ratio lies_ already
+records for every menu row, and the wash cannot be raised to buy it back. The active row carries
+`font-medium text-foreground` as well, so it is not the fill alone that marks it.
+
+The iOS/Android **share sheet** (`features/share/share-kit.tsx`) takes the pair
+too, and needed it most: it wore `bg-background` with no edge at all, over a
+backdrop that is not ours — the host app, dimmed by the system on iOS and by a
+`bg-black/40` scrim on Android — which in dark is usually dark as well. Its saved
+specimen paints its corner cut in the panel's fill (`share-specimen.tsx`), so the
+two classes move together; nothing catches a mismatch.
 
 The two system-modal editors on expo (`link-edit-screen.tsx`, `search-bar.tsx`)
-also stay `bg-background`, for a different reason: full-screen on Android, and on
+stay `bg-background`, for a different reason: full-screen on Android, and on
 iOS a page sheet that covers everything but a blank strip under the status bar,
 so there is no page left behind them to be confused with.
+
+The two fixed notices on web take the fill as well, and neither takes
+`bg-primary`. `update-pill.tsx` floats over the page with no scrim, and
+`update-required-banner.tsx` is `fixed` over the topbar rather than being one,
+and above the modal layer besides ([offline-mode.md](./offline-mode.md));
+both wore `bg-background` under a `shadow-*` that measures nothing in dark, so
+the pill was an outline and the banner had the topbar's own fill and hairline. Each
+keeps its own edge — the pill's closed border, the banner's `border-b` (Lc 12.7
+on the lifted fill, against 9.4). **Primary is the fill of a surface that _is_
+the button** — the FAB, the links pane's "New updates" pill — and these two
+_contain_ one: on primary their Reload would vanish into the surface, the
+banner's `text-muted-foreground` line would read Lc 26–29, and the pill
+[offline-mode.md](./offline-mode.md) calls quiet would be the loudest thing on the
+page for as long as the tab stays open.
+
+What stays `bg-background` is what is level with the page: the sticky topbars and
+expo's sticky footer are bars of the frame, closed by a hairline, with nothing
+under them but the content they scroll.
 
 ### the radius scale — one shape system, two kits
 

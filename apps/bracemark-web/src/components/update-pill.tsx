@@ -107,7 +107,15 @@ export function UpdatePill() {
   return (
     <>
       <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
-        <div className="pointer-events-auto flex items-center gap-3 rounded-full border border-border bg-background py-1.5 pr-1.5 pl-4 shadow-md">
+        {/* `bg-popover` under a closed border — the floating-surface pair
+            (docs/theme.md, _elevation_), not the page's `bg-background` and not
+            `bg-primary`. The page's colour left the pill nothing but its outline
+            in dark, where `shadow-md` measures nothing; primary is the fill of a
+            surface that IS the button (the links pane's "New updates" pill),
+            and this one CONTAINS its button — on primary, Reload would vanish
+            into it, and a pill the doc calls quiet would be the loudest thing
+            on the page for as long as the tab stays open. */}
+        <div className="pointer-events-auto flex items-center gap-3 rounded-full border border-border bg-popover py-1.5 pr-1.5 pl-4 shadow-md">
           <RefreshCw className="size-4 shrink-0 text-muted-foreground" />
           {/* A status, not an alert: nothing is wrong, and it waits for the user. */}
           <p role="status" className="text-sm">
