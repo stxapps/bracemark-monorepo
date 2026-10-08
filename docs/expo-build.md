@@ -250,6 +250,48 @@ Two gotchas if you touch this:
 - **A config change needs `npx expo prebuild`** to reach the native projects,
   like any config-plugin change.
 
+#### android manifest policy ⚠
+
+**OS backup and device transfer are disabled.** `android.allowBackup: false`
+in `app.config.ts` opts out of cloud backup. The local SQLite store holds
+decrypted entities and document storage holds decrypted files; Android's default
+backup would copy that local data outside Bracemark's encrypted sync path.
+On some Android 12+ devices, `allowBackup: false` still permits device transfer,
+so `plugins/with-android-manifest-policy.js` also sets `fullBackupContent: false`
+and supplies `@xml/bracemark_data_extraction_rules`. Both `cloud-backup` and
+`device-transfer` exclude every backup domain, including device-protected
+storage, covering session/key storage and native preferences too. An empty or
+omitted transfer section would allow transfer; exclusions must stay explicit.
+See [Android Auto Backup](https://developer.android.com/identity/data/autobackup).
+
+Recovery on a new installation uses sign-in and encrypted sync, or an explicit
+Bracemark export/import. Unsynced local changes are not recovered by OS backup.
+These settings govern future backups/transfers; they do not erase older copies
+already held by an OS backup provider.
+
+**Layouts stay LTR for now.** The same plugin sets `supportsRtl: false`. The UI
+has English copy and direction-sensitive gestures without RTL qualification;
+the template's `true` would let React Native mirror it automatically for an RTL
+device locale. Re-enable only with RTL layout/gesture verification. This setting
+controls layout direction, not whether saved text may contain Arabic or Hebrew.
+
+**Unused permissions are blocked at prebuild.** `android.blockedPermissions`
+removes `READ_EXTERNAL_STORAGE`, `WRITE_EXTERNAL_STORAGE`, and `VIBRATE`, using
+manifest-merger removal markers. The Android floor is 13: photo/document pickers,
+app-private files, and sharing exports need no legacy storage permission, and
+the app deliberately has no vibration feedback. `SYSTEM_ALERT_WINDOW` is
+removed only in the release manifest emitted by
+`plugins/with-android-release-no-mlkit.js`; debug keeps it for Expo's performance
+monitor. That plugin owns the release overlay so another writer cannot silently
+erase either the permission removal or the ML Kit metadata removal.
+
+After changing this policy, prebuild Android and inspect **both merged variant
+manifests**: all three blocked permissions must be absent, backup/RTL attributes
+must be false, and the extraction-rule resource must be present. The overlay
+permission must be absent from release and retained in debug. Verify photo
+picking and file import/export/share in the rebuilt app; the generated main
+manifest alone does not prove the permissions shipped after library merging.
+
 #### versions — one key, three consumers ⚠
 
 `app.config.ts` carries **one** version string, the top-level `version`, and the

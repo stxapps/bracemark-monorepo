@@ -58,6 +58,16 @@ const config: ExpoConfig = {
     edgeToEdgeEnabled: true,
     package: 'com.bracemark.app',
     versionCode: 1,
+    // The local store holds decrypted data. The manifest-policy plugin also
+    // excludes device transfer, which allowBackup alone does not always stop.
+    allowBackup: false,
+    // Android 13+ system pickers and app-private files need no legacy storage
+    // access, and the app deliberately has no vibration/haptic feedback.
+    blockedPermissions: [
+      'android.permission.READ_EXTERNAL_STORAGE',
+      'android.permission.WRITE_EXTERNAL_STORAGE',
+      'android.permission.VIBRATE',
+    ],
   },
   web: {
     bundler: 'metro',
@@ -207,11 +217,16 @@ const config: ExpoConfig = {
     // outside the repo, and Gradle falls back to debug signing when they are
     // absent. See docs/expo-build.md — android release signing.
     './plugins/with-android-signing',
+    // Disable unqualified RTL layouts and exclude all local data from Android
+    // cloud backup/device transfer. See docs/expo-build.md — android manifest policy.
+    './plugins/with-android-manifest-policy',
     // expo-dev-launcher's ML Kit barcode scanner (the dev launcher's QR button)
     // is debug-only code, but on Android its libraries were linked into release
     // too: ~5 MB of native lib per ABI, a ContentProvider that runs at every
     // launch, and a Play Services module download. This strips them from
-    // release only. See the plugin, and docs/expo-build.md.
+    // release only. Its release manifest also removes SYSTEM_ALERT_WINDOW;
+    // debug retains that permission for the dev performance monitor.
+    // See the plugin, and docs/expo-build.md.
     './plugins/with-android-release-no-mlkit',
     // DEVELOPMENT_TEAM and IPHONEOS_DEPLOYMENT_TARGET for the iOS SHARE
     // EXTENSION target, neither of which reaches it: withDevelopmentTeam runs
