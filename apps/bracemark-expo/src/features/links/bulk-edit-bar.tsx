@@ -15,16 +15,24 @@
 //    at EVERY width — web collapses them below a measured 900px, and a phone is
 //    always below it, so the split is fixed rather than measured. Copy, Move to,
 //    and the destructive Remove stay inline, exactly web's collapsed set.
+//  - Those inline actions are GLYPHS with no label — web's second tier, the
+//    icon-only one below its measured 560px, fixed here for the same reason.
+//    They carried labels once, and the row was wider than a narrow Android
+//    phone: Button is `shrink-0`, so the surplus pushed Remove past the right
+//    edge, further while Copy read "Copied" or the font scale was raised. Each
+//    name lives in `aria-label` instead, busy and "Copied" wording included.
+//    Unlike web's squares the buttons share the row (`flex-1`): this bar gives
+//    the actions a row of their own, and a 36dp square is a small target for a
+//    thumb to tell Remove from the ⋯ beside it.
 //  - Select all is a plain boolean checkbox — the reusables Checkbox has no
 //    indeterminate (same note as the search editor's tri-state rows), so a
 //    partial selection just shows unchecked; pressing it then selects all.
 //  - Copy links writes through expo-clipboard (web's navigator.clipboard), with
-//    the same transient flip to a check + "Copied" as the only feedback. Web
-//    flips the GLYPH as well as the label because its icon-only tier renders no
-//    label; this bar always renders both, so the glyph flip here is for its own
-//    reason — it's the confirmation ShowOnceSecret already uses on this
-//    platform (features/auth/show-once-secret.tsx), and the same button
-//    shouldn't confirm two ways in one app.
+//    the same transient flip to a check as the only feedback — the GLYPH, for
+//    web's reason: no label is rendered to flip (the accessible name flips to
+//    "Copied" with it). It is also the confirmation ShowOnceSecret already uses
+//    on this platform (features/auth/show-once-secret.tsx), so the app confirms
+//    a copy one way.
 //  - Move to opens a Dialog listing the list tree (the anchored ListCommand
 //    popover doesn't fit a phone; the picker excludes Trash like web — trashing
 //    is Remove, never a "move" — and carries the same Create row, so the
@@ -241,38 +249,41 @@ export function BulkEditBar({ links }: { links: LinkView[] }) {
           />
         </Pressable>
       </View>
-      <View className="flex-row items-center justify-between gap-2 py-2">
+      <View className="flex-row items-center gap-2 py-2">
         <Button
           variant="outline"
           size="sm"
+          className="flex-1"
           testID="bulk-copy"
+          aria-label={copied ? 'Copied' : 'Copy'}
           disabled={disabled}
           onPress={() => void onCopy()}
         >
-          <Icon as={copied ? Check : Copy} className={cn('size-4', copied && 'text-primary')} />
-          <Text>{copied ? 'Copied' : 'Copy'}</Text>
+          <Icon as={copied ? Check : Copy} className={cn('size-5', copied && 'text-primary')} />
         </Button>
         {inTrash ? (
           <>
             <Button
               variant="outline"
               size="sm"
+              className="flex-1"
               testID="bulk-restore"
+              aria-label={busy === 'restore' ? 'Restoring…' : 'Restore'}
               disabled={disabled}
               onPress={() => void runMove('restore', selected, DEFAULT_LIST_ID)}
             >
-              <Icon as={Undo2} className="size-4" />
-              <Text>{busy === 'restore' ? 'Restoring…' : 'Restore'}</Text>
+              <Icon as={Undo2} className="size-5" />
             </Button>
             <Button
               variant="destructive"
               size="sm"
+              className="flex-1"
               testID="bulk-delete"
+              aria-label="Delete forever"
               disabled={disabled}
               onPress={() => requestDestroy(selected)}
             >
-              <Icon as={Trash2} className="size-4" />
-              <Text>Delete forever</Text>
+              <Icon as={Trash2} className="size-5" />
             </Button>
           </>
         ) : (
@@ -280,14 +291,19 @@ export function BulkEditBar({ links }: { links: LinkView[] }) {
             <Button
               variant="outline"
               size="sm"
+              className="flex-1"
               testID="bulk-move"
+              aria-label={busy === 'move' ? 'Moving…' : 'Move to'}
               disabled={disabled || actionable.length === 0}
               onPress={() => setMoveOpen(true)}
             >
-              <Icon as={FolderInput} className="size-4" />
-              <Text>{busy === 'move' ? 'Moving…' : 'Move to'}</Text>
+              <Icon as={FolderInput} className="size-5" />
             </Button>
-            <DropdownMenu>
+            {/* The share of the row goes on the menu ROOT, not the trigger: on
+                native the root is a View of its own, so that — not the Button
+                inside it — is the row's flex child, and the Button stretches
+                across it. */}
+            <DropdownMenu className="flex-1">
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="outline"
@@ -296,13 +312,6 @@ export function BulkEditBar({ links }: { links: LinkView[] }) {
                   aria-label="More actions"
                   disabled={disabled || actionable.length === 0}
                 >
-                  {/* 20, the one glyph in this bar that isn't 16. Three dots at
-                      the vertical centre carry a fraction of the ink of the
-                      Copy and Move-to glyphs beside them, so at a matching 16
-                      this — the only icon here with no word to lean on — reads
-                      lighter than they do. Optical, not a new size step; the
-                      topbar's ⋯ (more-options-menu.tsx) is at 20 for the same
-                      reason, as is web's. */}
                   <Icon as={MoreHorizontal} className="size-5" />
                 </Button>
               </DropdownMenuTrigger>
@@ -365,12 +374,13 @@ export function BulkEditBar({ links }: { links: LinkView[] }) {
             <Button
               variant="destructive"
               size="sm"
+              className="flex-1"
               testID="bulk-remove"
+              aria-label={busy === 'remove' ? 'Removing…' : 'Remove'}
               disabled={disabled || actionable.length === 0}
               onPress={() => void runMove('remove', actionable, TRASH_ID)}
             >
-              <Icon as={Trash2} className="size-4" />
-              <Text>{busy === 'remove' ? 'Removing…' : 'Remove'}</Text>
+              <Icon as={Trash2} className="size-5" />
             </Button>
           </>
         )}

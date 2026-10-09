@@ -1374,10 +1374,15 @@ in `view-state-provider`, items grow a `LinkRowSelect` checkbox
 `BulkEditBar` rendered by Main (✕ / count / Select all in its top row, actions
 below; Android back exits the mode), the secondary actions sit behind a ⋯ menu
 at every width (web's `COLLAPSE_WIDTH` split, fixed — a phone is always below
-it, as it is below web's icon-only `ICON_WIDTH` tier), Copy keeps both its web
-semantics (no mode exit, a check + "Copied" flash) but flips its glyph for its
-own reason — the bar always renders the label, so the flip is there to match the
-confirmation native's `ShowOnceSecret` already uses, Move to is a dialog embedding the native `ListCommand` cousin instead of
+it), the three that stay inline are glyphs with their names in `aria-label`
+(web's icon-only `ICON_WIDTH` tier, fixed for the same reason: labelled, the row
+was wider than a narrow Android phone and pushed Remove off the right edge, more
+so at a raised font scale) and share the row's width rather than sitting as
+squares — a wider thumb target between Remove and the ⋯ beside it, Copy keeps
+both its web semantics (no mode exit, a check flash) and web's reason for
+flipping the glyph — no label is rendered to flip, so the accessible name flips
+to "Copied" with it; it is also the confirmation native's `ShowOnceSecret`
+already uses, Move to is a dialog embedding the native `ListCommand` cousin instead of
 the anchored submenu (`features/links/move-to-dialog.tsx`, shared with the row
 menu — same `excludeIds`/`disabledIds` wiring, the same Create row and no
 `root`; the dialog reports a created list through the one `onSelect` a picked
