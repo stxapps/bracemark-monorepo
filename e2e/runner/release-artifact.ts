@@ -30,6 +30,15 @@ export function assertStagingBundle(bundle: Uint8Array): void {
   }
 }
 
+export async function assertIosSimulatorSigning(artifact: string): Promise<void> {
+  // An unsigned simulator app can launch but SecureStore fails with -34018.
+  // Verify the app and nested extension/frameworks before issuing a receipt or
+  // admitting a run. Xcode supplies the simulator entitlements when signing.
+  await capture('codesign', ['--verify', '--deep', '--strict', artifact], {
+    timeoutMs: 30_000,
+  });
+}
+
 // Hash the entire app, including embedded frameworks and share extension, with
 // sorted relative names and symlink targets. Installation paths do not affect it.
 export async function artifactHash(path: string): Promise<string> {
@@ -114,25 +123,25 @@ export async function assertInstalledRelease(options: {
   let installed = options.installPath;
   if (options.platform === 'android') {
     const dump = (
-      await capture('adb', [
-        '-s',
-        options.deviceId,
-        'shell',
-        'dumpsys',
-        'package',
-        'com.bracemark.app',
-      ])
+      await capture(
+        'adb',
+        ['-s', options.deviceId, 'shell', 'dumpsys', 'package', 'com.bracemark.app'],
+        { timeoutMs: 15_000 },
+      )
     ).stdout;
     if (/\bDEBUGGABLE\b/.test(dump))
       throw new Error('installed Android app is debuggable, not Release');
     // APKs are publicly readable; run-as (which release refuses) is unnecessary.
     installed = join(options.workDir, 'installed.apk');
-    await capture('adb', ['-s', options.deviceId, 'pull', options.installPath, installed]);
+    await capture('adb', ['-s', options.deviceId, 'pull', options.installPath, installed], {
+      timeoutMs: 90_000,
+    });
   }
   if ((await artifactHash(installed)) !== receipt.sha256) {
     throw new Error(
       'installed app differs from the staging Release artifact; install that artifact first',
     );
   }
+  if (options.platform === 'ios') await assertIosSimulatorSigning(installed);
   return receipt;
 }

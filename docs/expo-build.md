@@ -22,13 +22,17 @@ and how to diff a prebuild on demand when you do want the native delta.
 `npm run e2e:build:staging -- --platform android|ios` is a finite Nx build task
 owned by `@stxapps/e2e`. It regenerates the selected native directory, pins the
 staging API/site above dotenv precedence, and runs Gradle `assembleRelease` with
-R8/resource shrinking or Xcode Release for `iphonesimulator`. It starts no Metro.
+R8/resource shrinking or Xcode Release for `iphonesimulator`, with ad hoc
+simulator signing enabled. Disabling signing removes the simulator Keychain
+entitlements and makes SecureStore fail with `-34018` during sign-in. It starts
+no Metro.
 Existing Android signing prerequisites apply. Outputs include the artifact,
 source/build receipt and Android mapping file under `e2e/.artifacts/releases/`.
 Install the printed artifact explicitly, then pass its receipt to the staging
 mobile/contract target. Hash comparison refuses an older installed binary;
 Android also refuses `DEBUGGABLE`. iOS hashes the whole simulator app, including
-the share extension. This is a simulator build, not an App Store IPA.
+the share extension, and verifies the app's nested code signatures during build
+and installed-app preflight. This is a simulator build, not an App Store IPA.
 
 The embedded bundle must name staging and contain no local/production API URL.
 The receipt proves build configuration and identity; passing flows provide

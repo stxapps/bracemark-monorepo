@@ -11,10 +11,10 @@ receives its per-environment values), [architecture.md](./architecture.md) for
 what each app is, and [account.md](./account.md) for the threat model the CSP
 below serves.
 
-> **Status: nothing is deployed yet.** Both domains are registered and every host
-> named here is a real name rather than a placeholder, but no bucket,
-> distribution or Worker has been provisioned. Treat this page as the contract
-> the code is already written against.
+> **Staging is deployed.** The staging E2E run on 2026-10-09 verified the app,
+> marketing site, both Workers and encrypted R2 file transfers. The app still
+> serves report-only CSP, so its enforcement checks fail. Production deployment
+> status is not established by that run. See [e2e/STAGING.md](../e2e/STAGING.md).
 
 ### the hosts
 

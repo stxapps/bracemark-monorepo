@@ -13,13 +13,20 @@ export interface CommandResult {
 export async function capture(
   command: string,
   args: string[] = [],
-  options: { cwd?: string; env?: NodeJS.ProcessEnv; allowFailure?: boolean } = {},
+  options: {
+    cwd?: string;
+    env?: NodeJS.ProcessEnv;
+    allowFailure?: boolean;
+    timeoutMs?: number;
+  } = {},
 ): Promise<CommandResult> {
   try {
     const result = await execFileAsync(command, args, {
       cwd: options.cwd,
       env: options.env,
       maxBuffer: 10 * 1024 * 1024,
+      timeout: options.timeoutMs,
+      killSignal: 'SIGKILL',
     });
     return { stdout: result.stdout, stderr: result.stderr };
   } catch (error) {

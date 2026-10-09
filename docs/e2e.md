@@ -1816,9 +1816,12 @@ refusal or a complete security audit.
 
 `build-release:staging` regenerates native output, pins staging API/site values
 above dotenv precedence, and builds an Android release APK or iOS Release
-simulator app. It records source revision, SHA-256 and Android's R8 mapping.
+simulator app with ad hoc signing enabled for Keychain access. It records source
+revision, SHA-256 and Android's R8 mapping.
 Before testing, native preflight verifies the installed binary against that
-receipt and refuses debuggable Android apps. The cold-launch subflow selects
+receipt, refuses debuggable Android apps, and verifies iOS nested code signatures.
+Android's ADB queries and installed APK copy have finite time limits so a stalled
+transport fails preflight. The cold-launch subflow selects
 plain `launchApp: clearState: true` for Release and the dev-client link for local
 debug. Release needs no Metro or reverse mappings. iOS simulator Release is not
 a store IPA or real-iPhone qualification. Frozen vectors stay local because the

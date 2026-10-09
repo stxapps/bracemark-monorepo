@@ -26,14 +26,24 @@ from historical local measurements below. CSP report-only rollout does not pass
 the enforcing browser checks. Plus/server-extraction staging journeys still
 need a supported disposable entitlement fixture before admission.
 
-Validation checkpoint (2026-10-08): runner checks, browser CSP detector checks,
-registry, lint and typecheck passed. Four selected deployed web journeys passed;
-the broader run completed nine cases successfully before the user requested a
-pause. Hosting and CORS checks passed. Both enforcing CSP checks failed because
-the deployed app serves report-only CSP. The Android Release build was stopped
-before completion; Android/iOS Release and contract runtime verification remain
-pending. Resume with the commands in [STAGING.md](./STAGING.md); interrupted
-builds and runs are not release qualification evidence.
+Validation checkpoint (2026-10-09): all 26 admitted web cases finished without
+retries: 24 passed, including hosting, CORS and all 22 product journeys. Both
+enforcing CSP cases failed because the deployed app serves report-only CSP.
+Android R8 Release and ad hoc signed iOS simulator Release builds completed;
+each platform passed a selected six mobile cases plus both encrypted
+cross-client contracts. The first iOS attempt exposed missing Keychain
+entitlements from disabled simulator signing; the builder now signs and
+verifies nested signatures, and preflight refuses the unsigned installation.
+Android preflight probes now have finite limits after a stalled ADB transport.
+Runner checks (6), browser CSP detector checks (2), registry (156 cases), lint
+and typecheck passed. Exact run IDs, receipts, device versions and retained
+failed attempts are in [STAGING.md](./STAGING.md#measured-staging-verification--2026-10-09).
+
+The staging CSP enforcement gate remains red until CloudFront sends an
+enforcing policy; no deployment configuration was changed in this verification.
+Rerun the staging security cases after that rollout. The selected native slice
+does not qualify every admitted native case, physical devices or store builds;
+their existing release checklists and local-only legs remain separate.
 
 ## Outcome
 

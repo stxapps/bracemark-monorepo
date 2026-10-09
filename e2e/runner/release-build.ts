@@ -7,7 +7,12 @@ import { E2E_ROOT } from '../paths';
 import { STAGING_ORIGINS } from './environment';
 import { createRunId, writeJson } from './lib';
 import { capture, inherit } from './process';
-import { artifactHash, assertStagingBundle, type ReleaseReceipt } from './release-artifact';
+import {
+  artifactHash,
+  assertIosSimulatorSigning,
+  assertStagingBundle,
+  type ReleaseReceipt,
+} from './release-artifact';
 
 const argv = process.argv.slice(2);
 if (argv.length !== 2 || argv[0] !== '--platform' || !['ios', 'android'].includes(argv[1])) {
@@ -95,13 +100,17 @@ if (platform === 'android') {
       'generic/platform=iOS Simulator',
       '-derivedDataPath',
       derivedData,
-      'CODE_SIGNING_ALLOWED=NO',
+      // Simulator ad hoc signing still supplies the Keychain entitlements that
+      // SecureStore needs. Disabling it produces an app that cannot sign in.
+      'CODE_SIGNING_ALLOWED=YES',
+      'CODE_SIGN_IDENTITY=-',
       'build',
     ],
     { cwd: appRoot, env },
   );
   artifact = join(derivedData, 'Build/Products/Release-iphonesimulator/Bracemark.app');
   assertStagingBundle(await readFile(join(artifact, 'main.jsbundle')));
+  await assertIosSimulatorSigning(artifact);
 }
 const receipt: ReleaseReceipt = {
   schemaVersion: 1,

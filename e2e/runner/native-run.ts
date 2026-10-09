@@ -307,14 +307,14 @@ async function iosDevice(deviceId: string): Promise<{ device: DeviceIdentity; ap
 }
 
 async function androidValue(deviceId: string, args: string[]): Promise<string> {
-  return (await capture('adb', ['-s', deviceId, ...args])).stdout.trim();
+  return (await capture('adb', ['-s', deviceId, ...args], { timeoutMs: 15_000 })).stdout.trim();
 }
 
 async function androidDevice(
   deviceId: string,
   requiredReversePorts: number[],
 ): Promise<{ device: DeviceIdentity; app: AppIdentity }> {
-  const devices = await capture('adb', ['devices', '-l']);
+  const devices = await capture('adb', ['devices', '-l'], { timeoutMs: 15_000 });
   const line = devices.stdout
     .split('\n')
     .find((candidate) => candidate.trim().split(/\s+/)[0] === deviceId);

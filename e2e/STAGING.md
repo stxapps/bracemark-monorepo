@@ -51,7 +51,7 @@ it. Running a subset never counts as the full staging security gate.
 
 Maestro drives installed Release apps without app-side test instrumentation.
 Android uses a release APK with R8 and resource shrinking. iOS uses a
-Release-configured **simulator `.app`**, not a TestFlight/App Store IPA. Official
+Release-configured, ad hoc signed **simulator `.app`**, not a TestFlight/App Store IPA. Official
 Maestro physical-iOS support remains outside this workflow; real-device store,
 biometric, and share checks remain in [mobile/RELEASE.md](./mobile/RELEASE.md).
 
@@ -85,6 +85,12 @@ adb -s <serial> install -r <artifact.apk>
 xcrun simctl install <udid> <artifact.app>
 ```
 
+If Android refuses `install -r` with `INSTALL_FAILED_UPDATE_INCOMPATIBLE`, the
+existing app uses a different signing key (for example, a development build).
+Uninstall that test-device app before installing Release; this clears its data.
+Use the printed absolute receipt path below: Nx runs the native runner from
+`e2e/`, so a relative path is resolved there.
+
 Then run, using the matching receipt:
 
 ```sh
@@ -97,10 +103,21 @@ npm run e2e:contract:staging -- --platform ios --device <udid> --release-receipt
 No Metro or `adb reverse` is needed. Cold launch uses `launchApp` with cleared
 state, rather than an Expo development-client link. Native preflight hashes the
 installed app and compares it to the receipt before creating accounts. Android
-also refuses a debuggable app. iOS hashes the whole bundle, including its share
-extension and frameworks. Reinstall a matching artifact if preflight refuses an
+also refuses a debuggable app. Its ADB preflight queries have a 15-second limit,
+and copying the installed APK has a 90-second limit, so a stalled transport fails
+instead of holding the runner indefinitely. iOS hashes the whole bundle, including
+its share extension and frameworks, and verifies nested code signatures. Simulator
+signing must remain enabled: an unsigned app can launch but its Keychain operations
+fail with `-34018`, preventing sign-in. Reinstall a matching artifact if preflight refuses an
 old build. Run manifests distinguish the build's source revision from the
 runner's revision; rebuilding after source changes is the operator's job.
+
+Finish native builds before driving the device, and run one device platform at
+a time. If ADB lists the emulator but bounded shell probes stop answering, check
+the transport and emulator before changing the app. `adb -s <serial> reconnect`
+resets that transport; restarting the ADB server also affects any other attached
+devices. A System UI ANR dialog can hide the app from Maestro. Keep those failed
+attempts and rerun after the device responds normally; recovery is not a pass.
 
 Use `--suite full` (the default) for all admitted journeys, or select `--case`
 IDs as in local runs. The contract target runs both web-to-mobile and
@@ -129,8 +146,8 @@ controlled two-build update/offline tests; CDN updates and real installation rem
 [web/RELEASE.md](./web/RELEASE.md). Browser extension and visual-baseline targets
 remain local.
 
-Every test run writes `.artifacts/runs/<run-id>/run.json`, reports and failure
-artifacts. Security tests attach deployment headers/build identity. Release
+After preflight passes, each test run writes `.artifacts/runs/<run-id>/run.json`,
+reports and failure artifacts. Security tests attach deployment headers/build identity. Release
 receipts are evidence of build configuration and artifact identity; passing flows
 are the runtime evidence. Neither proves store distribution, every native
 architecture, or all provider configurations. Disposable accounts are isolated
@@ -147,10 +164,78 @@ npx nx lint @stxapps/e2e
 npx nx typecheck @stxapps/e2e
 ```
 
-`check:runner` uses Node's test runner, including origin/selection refusal and
-artifact/mapping tamper checks. It adds no Jest config and remains outside
-`npm run test`.
+`check:runner` uses Node's test runner, including bounded subprocess termination,
+origin/selection refusal and artifact/mapping tamper checks. It adds no Jest
+config and remains outside `npm run test`.
 
 `check:browser` uses system Chrome with synthetic CSP documents to verify that
 the probe passes an enforcing refusal and rejects report-only/allowed policies.
 It changes no deployed headers and does not count as staging qualification.
+
+## Measured staging verification — 2026-10-09
+
+Runner/native source baseline: `02d6f8a`, with the runner fixes described below.
+The deployed web build identity is recorded separately by the hosting case.
+Runs below use fresh disposable accounts and no automatic retries. Artifacts
+remain local under `.artifacts/`; run IDs identify
+the manifests and reports without publishing credentials.
+
+| Surface                                                | Result                                                    | Evidence                                                         |
+| ------------------------------------------------------ | --------------------------------------------------------- | ---------------------------------------------------------------- |
+| Deployed web, all 26 admitted cases                    | 24 passed; `STAGING-CSP-001` and `STAGING-CSP-002` failed | `staging-web-2026-10-09T03-01-25-037Z-44101-968860`              |
+| Android Release smoke                                  | 2 passed                                                  | `staging-mobile-android-2026-10-09T03-30-47-377Z-15356-e55933`   |
+| Android Release data/extraction slice                  | 4 passed                                                  | `staging-mobile-android-2026-10-09T03-39-41-788Z-29142-b984ac`   |
+| Android Release encrypted cross-client contracts       | 2 passed                                                  | `staging-contract-android-2026-10-09T03-35-42-192Z-22838-fb7d4b` |
+| iOS simulator Release smoke                            | 2 passed                                                  | `staging-mobile-ios-2026-10-09T04-12-12-393Z-90419-9db1a2`       |
+| iOS simulator Release data/extraction slice            | 4 passed                                                  | `staging-mobile-ios-2026-10-09T04-19-20-735Z-3463-47a4d2`        |
+| iOS simulator Release encrypted cross-client contracts | 2 passed                                                  | `staging-contract-ios-2026-10-09T04-15-48-370Z-97396-e0bde1`     |
+
+Web hosting/build identity, both Workers' CORS, and all 22 admitted product
+journeys passed, including encrypted R2 image import and a separate browser
+reader. The app still sends only `Content-Security-Policy-Report-Only`; the
+enforcement gate correctly remains failed. This session changed no CloudFront
+policy or deployed service.
+
+The native slice includes session persistence after cold start, two mounted
+link writes, mounted delete-all, the operating-system document-picker import,
+on-device extraction on save, Generate all, and both encryption/sync directions.
+It is selected runtime verification, not the entire admitted native suite or
+physical-device/store qualification. Android ran on `bracemark-pixel8`, Android
+16, with Maestro 2.8.0. Web used Chrome 154.0.8037.98 and Playwright 1.62.1.
+
+Android's receipt is
+`.artifacts/releases/staging-android-2026-10-09T03-01-00-716Z-40132-59b0d7/release.json`:
+the APK SHA-256 is
+`81a67a126b386e36363fb1e9b38e5e1f08f1c0219dc69f11739b52598a0eecfa`, with
+the R8 mapping hashed separately in the receipt. It records a clean `02d6f8a`
+build. The embedded staging URLs, R8 output, installed APK hash and refusal of a
+debuggable installation were checked before the passing flows.
+
+iOS's corrected signed receipt is
+`.artifacts/releases/staging-ios-2026-10-09T04-02-00-569Z-73118-29530f/release.json`:
+the whole-bundle SHA-256 is
+`2098092105133266911ee55b3e538c7deabe94ce4434af13aa0f35d60a9bc875`. It records
+`02d6f8a` with a dirty checkout containing these runner/documentation changes;
+application source was unchanged. The app and share extension embedded staging
+API URLs, their generated simulator application identifiers/App Group
+entitlements, the nested signatures, and installed bundle identity were checked.
+The runtime device is an iPhone 17 Pro simulator on iOS 26.5, with Maestro 2.8.0.
+
+Earlier Android attempts remain failed: an unresponsive ADB/emulator transport
+and a System UI ANR covered the app. They are retained in the runs ending
+`80864-6cc142` and `7681-f06486`; neither is qualification evidence. Recovery
+preceded the separate passing invocations above. The first iOS attempt, run
+`staging-mobile-ios-2026-10-09T03-50-34-622Z-44953-0de7d6`, exposed the unsigned
+simulator build's missing Keychain entitlements (`-34018`). Its failed run and
+original receipt remain preserved; the builder now enables simulator signing
+and checks signatures before issuing a receipt or admitting an installed app.
+The corrected runner refused that same unsigned installation during preflight,
+before account provisioning. The failed case's `keychain-diagnosis.log` retains
+the credential-free simulator error evidence.
+
+Runner checks passed 6/6, synthetic browser CSP detectors passed 2/2, registry
+validation passed for 156 cases, and scoped lint/typecheck passed. Disabling the
+subprocess timeout made its regression test fail; restoring it passed. The
+signature checks rejected the original unsigned app and accepted the corrected
+signed build/installation. These harness checks supplement the runtime results
+above; they do not turn the failed deployed CSP checks green.
