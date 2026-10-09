@@ -111,6 +111,15 @@ interface SyncContextValue {
   // grace window, so the refresh pill never lit for another device's rows
   // (e2e SYNC-REFRESH-PILL-*, docs/client-queries.md).
   syncNow: () => void;
+  // The same cycle again, for the one caller that WAITS on it: the sign-out
+  // flow, which pushes the pending queue before it asks about erasing it
+  // (docs/data-lifecycle.md, _the press, and the wait_). Settles when the cycle
+  // has, and never rejects — how it went is on `bgSyncStatus` as for any other
+  // cycle, and the caller re-reads the queue rather than trusting a verdict.
+  // Resolves at once where no cycle can run (an expired session, no session).
+  // Separate from syncNow so that one stays a `() => void` a press handler can
+  // take as it is.
+  syncAndWait: () => Promise<void>;
 }
 
 const SyncContext = createContext<SyncContextValue | null>(null);
@@ -132,14 +141,15 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   // Latest background-sync runner; requestSync goes through this ref so its
   // identity stays stable while the account/session underneath changes. Reset to
   // a no-op on cleanup so a late caller can't sync a signed-out account.
-  const backgroundSyncRef = useRef<() => void>(() => undefined);
+  const backgroundSyncRef = useRef<() => Promise<void>>(() => Promise.resolve());
   const requestSync = useCallback(() => {
     // Mark a local edit before kicking the cycle, so the read edge applies this
     // device's own change without waiting on (or staging behind) the sync.
     setLocalWriteNonce((n) => n + 1);
-    backgroundSyncRef.current();
+    void backgroundSyncRef.current();
   }, []);
-  const syncNow = useCallback(() => backgroundSyncRef.current(), []);
+  const syncNow = useCallback(() => void backgroundSyncRef.current(), []);
+  const syncAndWait = useCallback(() => backgroundSyncRef.current(), []);
 
   const retryInitialSync = useCallback(() => {
     setStoreStatus('checking');
@@ -165,7 +175,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     // that never finished: that store isn't complete, so the gate says why.
     // Same branch as web-react's SyncProvider.
     if (sessionState === 'expired') {
-      backgroundSyncRef.current = () => undefined;
+      backgroundSyncRef.current = () => Promise.resolve();
       setBgSyncStatus('paused');
       setBlockedCount(0);
       setInitialSyncProgress(null);
@@ -230,7 +240,9 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     // background cycle coexists with a usable store, so storeStatus stays put.
     const backgroundSync = () => {
       setBgSyncStatus('syncing');
-      void runIncrementalSync(deps).then(
+      // Returned for syncAndWait. Both branches below are handled, so it settles
+      // with the cycle and never rejects.
+      return runIncrementalSync(deps).then(
         (outcome) => {
           if (!active) return;
           // A completed cycle is 'idle' UNLESS the plan/quota gate refused part
@@ -261,7 +273,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
         if (await isFirstSyncDone(username)) {
           if (!active) return;
           setStoreStatus('ready');
-          backgroundSync();
+          void backgroundSync();
           return;
         }
         if (!active) return;
@@ -282,7 +294,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
         // pending ops — the initial sync never pushes — and nothing else would
         // sync until the next local edit. Invariant: reaching 'ready' always
         // kicks a cycle, on both branches.
-        backgroundSync();
+        void backgroundSync();
       } catch (err) {
         if (!active) return;
         settleProgress(false);
@@ -294,7 +306,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
 
     return () => {
       active = false;
-      backgroundSyncRef.current = () => undefined;
+      backgroundSyncRef.current = () => Promise.resolve();
       if (progressTimer !== null) clearTimeout(progressTimer);
     };
   }, [username, authStatus, sessionState, attempt, api]);
@@ -311,6 +323,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       retryInitialSync,
       requestSync,
       syncNow,
+      syncAndWait,
     }),
     [
       storeStatus,
@@ -323,6 +336,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       retryInitialSync,
       requestSync,
       syncNow,
+      syncAndWait,
     ],
   );
 

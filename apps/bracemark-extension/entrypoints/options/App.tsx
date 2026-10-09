@@ -37,10 +37,12 @@ function App() {
       ) : status !== 'authenticated' ? (
         <SignedOut />
       ) : (
-        // SignOutProvider is the hoisted sign-out flow AccountSection calls: the
-        // question when a save hasn't synced, and the cover while the sign-out
-        // runs. Inside the authenticated branch, so the 'ending' status unmounts
-        // it — dialog included — before the wipe.
+        // SignOutProvider is the hoisted sign-out flow AccountSection calls: a
+        // sync first when a save hasn't synced (the background's cycle, through
+        // Providers' ExternalSyncProvider), the question for what that could not
+        // send, and the cover while the sign-out runs. Inside the authenticated
+        // branch, so the 'ending' status unmounts it — dialog included — before
+        // the wipe.
         <SignOutProvider>
           {/* 32 between sections — bracemark-web's SettingsPane gap. This page has
               no flex column to hold a `gap`, so the step is a margin here instead of

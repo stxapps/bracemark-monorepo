@@ -109,6 +109,15 @@ interface SyncContextValue {
   // grace window and shifted every row under the reader
   // (e2e SYNC-REFRESH-PILL-*, docs/client-queries.md).
   syncNow: () => void;
+  // The same cycle again, for the one caller that WAITS on it: the sign-out
+  // flow, which pushes the pending queue before it asks about erasing it
+  // (docs/data-lifecycle.md, _the press, and the wait_). Settles when the cycle
+  // has, and never rejects — how it went is on `bgSyncStatus` as for any other
+  // cycle, and the caller re-reads the queue rather than trusting a verdict.
+  // Resolves at once where no cycle can run (an expired session, no session).
+  // Separate from syncNow so that one stays a `() => void` a press handler can
+  // take as it is.
+  syncAndWait: () => Promise<void>;
 }
 
 const SyncContext = createContext<SyncContextValue | null>(null);
@@ -133,14 +142,15 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   // Latest background-sync runner; requestSync goes through this ref so its
   // identity stays stable while the account/session underneath changes. Reset to
   // a no-op on cleanup so a late caller can't sync a signed-out account.
-  const backgroundSyncRef = useRef<() => void>(() => undefined);
+  const backgroundSyncRef = useRef<() => Promise<void>>(() => Promise.resolve());
   const requestSync = useCallback(() => {
     // Mark a local edit before kicking the cycle, so the read edge applies this
     // device's own change without waiting on (or staging behind) the sync.
     setLocalWriteNonce((n) => n + 1);
-    backgroundSyncRef.current();
+    void backgroundSyncRef.current();
   }, []);
-  const syncNow = useCallback(() => backgroundSyncRef.current(), []);
+  const syncNow = useCallback(() => void backgroundSyncRef.current(), []);
+  const syncAndWait = useCallback(() => backgroundSyncRef.current(), []);
 
   const retryInitialSync = useCallback(() => {
     setStoreStatus('checking');
@@ -167,7 +177,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     // ops and push on resume. The one thing a pause can't give is a first sync
     // that never finished: that store isn't complete, so the gate says why.
     if (sessionState === 'expired') {
-      backgroundSyncRef.current = () => undefined;
+      backgroundSyncRef.current = () => Promise.resolve();
       setBgSyncStatus('paused');
       setBlockedCount(0);
       setInitialSyncProgress(null);
@@ -232,7 +242,9 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     // background cycle coexists with a usable store, so storeStatus stays put.
     const backgroundSync = () => {
       setBgSyncStatus('syncing');
-      void runIncrementalSync(deps).then(
+      // Returned for syncAndWait. Both branches below are handled, so it settles
+      // with the cycle and never rejects.
+      return runIncrementalSync(deps).then(
         (outcome) => {
           if (!active) return;
           // A completed cycle is 'idle' UNLESS the plan/quota gate refused part
@@ -263,7 +275,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
         if (await isFirstSyncDone(username)) {
           if (!active) return;
           setStoreStatus('ready');
-          backgroundSync();
+          void backgroundSync();
           return;
         }
         if (!active) return;
@@ -284,7 +296,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
         // pending ops — the initial sync never pushes — and nothing else would
         // sync until the next local edit. Invariant: reaching 'ready' always
         // kicks a cycle, on both branches.
-        backgroundSync();
+        void backgroundSync();
       } catch (err) {
         if (!active) return;
         settleProgress(false);
@@ -296,7 +308,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
 
     return () => {
       active = false;
-      backgroundSyncRef.current = () => undefined;
+      backgroundSyncRef.current = () => Promise.resolve();
       if (progressTimer !== null) clearTimeout(progressTimer);
     };
   }, [username, authStatus, sessionState, halted, attempt, api]);
@@ -313,6 +325,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       retryInitialSync,
       requestSync,
       syncNow,
+      syncAndWait,
     }),
     [
       storeStatus,
@@ -325,6 +338,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       retryInitialSync,
       requestSync,
       syncNow,
+      syncAndWait,
     ],
   );
 
@@ -341,6 +355,11 @@ export function SyncProvider({ children }: { children: ReactNode }) {
 // wherever that context reports them, e.g. `browser.storage`), defaulting to a ready,
 // idle store so the editor is usable as soon as the page mounts. `localWriteNonce`
 // still bumps on each requestSync so any read edge keyed on it stays correct.
+//
+// `syncAndWait` is delegated the same way and is REQUIRED, with no default: it has
+// to settle when that other context's cycle does, which only the caller can know,
+// and a default that resolved at once would quietly turn the sign-out flow's "sync
+// first" back into a question about changes that were about to sync anyway.
 export function ExternalSyncProvider({
   children,
   storeStatus = 'ready',
@@ -349,6 +368,7 @@ export function ExternalSyncProvider({
   lastError = null,
   blockedCount = 0,
   requestSync,
+  syncAndWait,
 }: {
   children: ReactNode;
   storeStatus?: StoreStatus;
@@ -357,6 +377,7 @@ export function ExternalSyncProvider({
   lastError?: string | null;
   blockedCount?: number;
   requestSync: () => void;
+  syncAndWait: () => Promise<void>;
 }) {
   const [localWriteNonce, setLocalWriteNonce] = useState(0);
   // The session state is this context's own to read (it runs the AuthProvider),
@@ -389,6 +410,7 @@ export function ExternalSyncProvider({
       requestSync: requestSyncWithNonce,
       // The caller's own signal, unmarked — a user-asked cycle is not a write.
       syncNow: requestSync,
+      syncAndWait,
     }),
     [
       storeStatus,
@@ -399,6 +421,7 @@ export function ExternalSyncProvider({
       localWriteNonce,
       requestSyncWithNonce,
       requestSync,
+      syncAndWait,
     ],
   );
 

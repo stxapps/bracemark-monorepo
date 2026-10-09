@@ -89,7 +89,9 @@ interface LockRecord {
   `undefined` for `hideList` at the boundary so the in-memory shape matches web's
   optional field.)
 - **Never synced; wiped on sign-out** (`clearData`) — which _is_ the
-  forgot-a-password recovery path.
+  forgot-a-password recovery path. From the app-lock pane that sign-out is taken
+  with no way to sync first, so the sign-out flow syncs for it
+  ([data-lifecycle.md](./data-lifecycle.md), _the press, and the wait_).
 - **Native uses expo-sqlite, NOT expo-secure-store — on purpose.** A verifier is
   a one-way pair guarding already-decrypted data, so it needs a _queryable_
   device-local table, not credential storage. secure-store also fights the shape:

@@ -215,9 +215,10 @@ export function MoreOptionsMenu() {
         )}
         <DropdownMenuSeparator />
         {/* The hoisted flow (contexts/sign-out-provider.tsx), not the bare
-            useSignOut mutation: it asks first when a change hasn't synced, and
-            covers the app while the revocation request is out — this item is
-            gone the moment it is pressed, so neither could live here. */}
+            useSignOut mutation: it syncs first when a change hasn't, asks about
+            what that could not save, and covers the app while the revocation
+            request is out — this item is gone the moment it is pressed, so none
+            of it could live here. */}
         <DropdownMenuItem
           variant="destructive"
           testID="links-sign-out"

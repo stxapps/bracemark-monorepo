@@ -7,15 +7,26 @@
 // a menu item, which is gone the moment it is pressed. The web sibling is
 // @stxapps/web-ui's contexts/sign-out-provider.tsx, the same flow case for case.
 //
-// It does two things the bare mutation left undone, and both are about the wait
-// between the press and the wipe.
+// It does three things the bare mutation left undone, and all of them are about
+// the wait between the press and the wipe.
 //
-//  - IT ASKS FIRST WHEN A CHANGE HASN'T SYNCED. A sign-out erases this device's
-//    copy, the pending queue with it, and a queued change exists nowhere else.
-//    The count is read at the press — one query, not a live read held for the
-//    life of the app — and with nothing pending there is no question: the
-//    library is on the server, and a dialog on the commonest path teaches
-//    people to press through the one that matters.
+//  - IT SYNCS FIRST WHEN A CHANGE HASN'T. A sign-out erases this device's copy,
+//    the pending queue with it, and a queued change exists nowhere else. The
+//    count is read at the press — one query, not a live read held for the life
+//    of the app — and with nothing pending there is no question: the library is
+//    on the server, and a dialog on the commonest path teaches people to press
+//    through the one that matters. With something pending the flow runs one
+//    sync cycle and reads the count again, and a queue that emptied signs out
+//    with no question either. It used to ask at once and say "cancel and sync
+//    first" — which the app can do itself, and which the app-lock pane's
+//    "forgot the password" caller cannot do at all: behind the lock there is no
+//    sync to press, and nothing here runs a cycle after a relock on its own.
+//    The wait is bounded and can be cancelled (@stxapps/react's
+//    sync-before-sign-out.ts); nothing is erased during it.
+//  - IT ASKS ABOUT WHAT THE SYNC COULD NOT SAVE. Still pending after the cycle
+//    — offline, an expired session, an account over its limit — or a queue
+//    that cannot be read: those changes are about to be lost for good, and that
+//    takes the user's own confirmation.
 //  - IT COVERS THE APP WHILE THE SIGN-OUT RUNS. The revocation request goes out
 //    before anything is erased (use-sign-out.ts), so for as long as the network
 //    takes the app was fully usable behind a menu that had already closed — and
@@ -30,10 +41,11 @@
 // (docs/data-lifecycle.md, _the sign-out teardown_) — and it used to reject
 // into nothing, a press that did nothing at all.
 //
-// Mounted directly under AuthGuard, ABOVE AppLockGate, and that order is the
-// point: the dialog's content unmounts while a relock covers the app
-// (ui/alert-dialog.tsx, useAppCovered), and the lock pane is exactly where one
-// of its two callers lives. Above the gate there is no cover to read.
+// Mounted inside SyncProvider — `useSync` is where the cycle comes from — and
+// ABOVE AppLockGate, and that second order is the point: the dialog's content
+// unmounts while a relock covers the app (ui/alert-dialog.tsx, useAppCovered),
+// and the lock pane is exactly where one of its two callers lives. Above the
+// gate there is no cover to read.
 //
 // This file is also where the app layer's own share of the teardown lives — see
 // the effect at the bottom of the provider.
@@ -51,8 +63,8 @@ import {
 import { ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
 
-import { countPendingOps, useAuth, useSignOut } from '@stxapps/expo-react';
-import { SESSION_COPY } from '@stxapps/react';
+import { countPendingOps, useAuth, useSignOut, useSync } from '@stxapps/expo-react';
+import { SESSION_COPY, syncBeforeSignOut } from '@stxapps/react';
 
 import { ErrorText } from '../components/error-text';
 import {
@@ -68,8 +80,9 @@ import { Button } from '../components/ui/button';
 import { Text } from '../components/ui/text';
 
 type SignOutApi = {
-  // Start a sign-out: straight to it when nothing is pending, the question
-  // first when something is. A no-op while one is already under way.
+  // Start a sign-out: straight to it when nothing is pending, a sync first
+  // when something is, and the question only for what that sync left behind.
+  // A no-op while one is already under way.
   requestSignOut: () => void;
   // True from the press that commits to it until the tree unmounts (or it
   // fails) — for a caller that wants to stop offering the action meanwhile.
@@ -89,13 +102,19 @@ const COPY = SESSION_COPY.signOut;
 export function SignOutProvider({ children }: { children: ReactNode }) {
   const { username } = useAuth();
   const { mutate, isPending, isError, isSuccess, reset } = useSignOut();
-  // The flow, while there is one: how many changes were unsynced at the press.
-  // Zero is the path that never asked.
-  const [flow, setFlow] = useState<{ pending: number | null } | null>(null);
+  const { syncAndWait } = useSync();
+  // The flow, while there is one: how many changes are unsynced, and whether
+  // the sync that might save them is still out. Zero is the path that never
+  // asks; `null` is a queue that could not be read.
+  const [flow, setFlow] = useState<{ pending: number | null; syncing: boolean } | null>(null);
   // Set at the press, ahead of the state: the count is read asynchronously, so
   // a second tap on the lock pane's link would otherwise get in before `flow`
   // exists and start a second sign-out.
   const startedRef = useRef(false);
+  // Which flow is current. A cancel during the sync leaves that flow's
+  // continuation waiting on the cycle; it must find itself superseded when the
+  // cycle settles, not carry on into a sign-out nobody is asking for any more.
+  const flowIdRef = useRef(0);
   const mountedRef = useRef(true);
   const usernameRef = useRef(username);
   usernameRef.current = username;
@@ -109,21 +128,37 @@ export function SignOutProvider({ children }: { children: ReactNode }) {
   const requestSignOut = useCallback(() => {
     if (startedRef.current) return;
     startedRef.current = true;
-    void (username ? countPendingOps(username) : Promise.resolve(0))
-      // Unknown is not empty. Keep sign-out available, but ask before risking
-      // unsynced changes that a failed count could not rule out.
-      .catch(() => null)
-      .then((pending) => {
-        // mutate reads the current session; this count belongs to the tree and
-        // account that requested it, even if another tree has mounted meanwhile.
-        if (!mountedRef.current || usernameRef.current !== username) return;
-        setFlow({ pending });
-        if (pending === 0) mutate();
-      });
-  }, [username, mutate]);
+    const id = ++flowIdRef.current;
+    // Unknown is not empty. Keep sign-out available, but ask before risking
+    // unsynced changes that a failed count could not rule out.
+    const count = () =>
+      (username ? countPendingOps(username) : Promise.resolve(0)).catch(() => null);
+    // mutate reads the current session; this flow belongs to the tree and
+    // account that requested it, even if another tree has mounted meanwhile —
+    // and to the press that started it, not one cancelled since.
+    const stale = () =>
+      !mountedRef.current || usernameRef.current !== username || flowIdRef.current !== id;
+    // Neither read rejects and neither does the bounded sync, so nor does this.
+    void (async () => {
+      let pending = await count();
+      if (stale()) return;
+      if (pending !== 0) {
+        setFlow({ pending, syncing: true });
+        await syncBeforeSignOut(syncAndWait);
+        if (stale()) return;
+        // The queue, not the cycle's outcome, is the answer: a cycle can fail
+        // after pushing everything, and complete with part of it refused.
+        pending = await count();
+        if (stale()) return;
+      }
+      setFlow({ pending, syncing: false });
+      if (pending === 0) mutate();
+    })();
+  }, [username, mutate, syncAndWait]);
 
   const close = useCallback(() => {
     startedRef.current = false;
+    flowIdRef.current += 1;
     setFlow(null);
     reset();
   }, [reset]);
@@ -154,9 +189,12 @@ export function SignOutProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  // The first wait: nothing is erased while the sync is out, so this one can be
+  // cancelled.
+  const syncing = flow !== null && flow.syncing;
   // The path that never asked shows only the wait. Once it has failed it needs
   // the buttons the other path has, so it takes that shape.
-  const waitOnly = flow !== null && flow.pending === 0 && !isError;
+  const waitOnly = flow !== null && !flow.syncing && flow.pending === 0 && !isError;
 
   return (
     <SignOutContext.Provider value={api}>
@@ -167,34 +205,47 @@ export function SignOutProvider({ children }: { children: ReactNode }) {
         <AlertDialog open onOpenChange={(open) => !open && !isPending && !waitOnly && close()}>
           <AlertDialogContent testID="sign-out-dialog">
             <AlertDialogHeader>
-              <AlertDialogTitle>{waitOnly ? COPY.progress : COPY.title}</AlertDialogTitle>
-              <AlertDialogDescription>
-                {flow.pending === null
-                  ? COPY.descriptionUnknown
-                  : flow.pending > 0
-                    ? COPY.description(flow.pending)
-                    : COPY.progressDescription}
+              <AlertDialogTitle>
+                {syncing ? COPY.syncing : waitOnly ? COPY.progress : COPY.title}
+              </AlertDialogTitle>
+              {/* Polite, not an alert: what replaces the sync's line arrives on
+                  its own, some seconds after the press, and nothing else would
+                  say the dialog now asks a question (docs/accessibility.md —
+                  _what must NOT announce_, the availability verdict). TalkBack
+                  only; VoiceOver has no live regions. */}
+              <AlertDialogDescription aria-live="polite">
+                {syncing
+                  ? COPY.syncingDescription(flow.pending)
+                  : flow.pending === null
+                    ? COPY.descriptionUnknown
+                    : flow.pending > 0
+                      ? COPY.description(flow.pending)
+                      : COPY.progressDescription}
               </AlertDialogDescription>
             </AlertDialogHeader>
             {isError && <ErrorText testID="sign-out-error">{COPY.failed}</ErrorText>}
-            {waitOnly ? (
+            {(syncing || waitOnly) && (
               // Decorative: the title above is the announcement.
               <ActivityIndicator size="small" aria-hidden />
-            ) : (
+            )}
+            {!waitOnly && (
               <AlertDialogFooter>
                 <AlertDialogCancel disabled={isPending}>
                   <Text>{COPY.cancel}</Text>
                 </AlertDialogCancel>
-                {/* The pending state rides in the LABEL, not only in the dimming
+                {/* Nothing to confirm while the sync is out — only the way back.
+                    The pending state rides in the LABEL, not only in the dimming
                     (docs/accessibility.md — _a `disabled` button says nothing_). */}
-                <Button
-                  variant="destructive"
-                  testID="sign-out-confirm"
-                  disabled={isPending}
-                  onPress={() => mutate()}
-                >
-                  <Text>{isPending ? COPY.progress : isError ? COPY.retry : COPY.confirm}</Text>
-                </Button>
+                {!syncing && (
+                  <Button
+                    variant="destructive"
+                    testID="sign-out-confirm"
+                    disabled={isPending}
+                    onPress={() => mutate()}
+                  >
+                    <Text>{isPending ? COPY.progress : isError ? COPY.retry : COPY.confirm}</Text>
+                  </Button>
+                )}
               </AlertDialogFooter>
             )}
           </AlertDialogContent>

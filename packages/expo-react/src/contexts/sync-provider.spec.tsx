@@ -74,6 +74,60 @@ it('runs the same cycle for syncNow without marking a local write', async () => 
   await waitFor(() => expect(result.current.bgSyncStatus).toBe('idle'));
 });
 
+// The sign-out flow's cycle (docs/data-lifecycle.md, _the press, and the wait_): it
+// syncs before it asks about unsynced changes, then re-reads the queue. So the promise
+// has to last exactly as long as the cycle — one that settled early would have the flow
+// count a queue the push had not reached yet, and ask about changes that were a moment
+// from being saved — and it must not reject, because offline is the ordinary reason the
+// queue is not empty.
+describe('syncAndWait', () => {
+  it('settles when the cycle does, and not before', async () => {
+    const { result } = await readySync();
+    let finish!: () => void;
+    mockRunIncrementalSync.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = () => resolve({ blocked: false, blockedCount: 0 });
+        }),
+    );
+    const before = result.current.localWriteNonce;
+    let settled = false;
+
+    let wait!: Promise<void>;
+    act(() => {
+      wait = result.current.syncAndWait().then(() => {
+        settled = true;
+      });
+    });
+    await act(async () => undefined);
+
+    expect(mockRunIncrementalSync).toHaveBeenCalledTimes(1);
+    expect(settled).toBe(false);
+    // Not a local edit, so nothing for the read edge to promote.
+    expect(result.current.localWriteNonce).toBe(before);
+
+    await act(async () => {
+      finish();
+      await wait;
+    });
+
+    expect(settled).toBe(true);
+    expect(result.current.bgSyncStatus).toBe('idle');
+  });
+
+  it('settles on a failed cycle without rejecting, and leaves the failure on the indicator', async () => {
+    const { result } = await readySync();
+    mockRunIncrementalSync.mockImplementationOnce(() => Promise.reject(new Error('offline')));
+
+    await act(async () => {
+      await expect(result.current.syncAndWait()).resolves.toBeUndefined();
+    });
+
+    expect(result.current.bgSyncStatus).toBe('error');
+    expect(result.current.lastError).toBe('offline');
+  });
+});
+
 // A first sync's writes are fenced on the account's ownership row, and a session
 // adopted by an older build may have none. The claim is made here, just before the
 // pull, and never at startup — where it would wait on the data store.
@@ -113,6 +167,16 @@ describe('while the session is expired', () => {
     expect(mockRunIncrementalSync).not.toHaveBeenCalled();
     // The edit is still marked, so the read edge shows it at once.
     expect(result.current.localWriteNonce).toBe(1);
+  });
+
+  // Nothing to wait for: the sign-out flow goes straight on to the question.
+  it('settles syncAndWait at once, with no cycle', async () => {
+    const { result } = renderHook(() => useSync(), { wrapper });
+    await waitFor(() => expect(result.current.storeStatus).toBe('ready'));
+
+    await expect(result.current.syncAndWait()).resolves.toBeUndefined();
+
+    expect(mockRunIncrementalSync).not.toHaveBeenCalled();
   });
 
   // The one thing a pause can't give: a first sync that never finished. That store is

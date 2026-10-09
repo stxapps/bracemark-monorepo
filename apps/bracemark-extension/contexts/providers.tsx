@@ -39,6 +39,18 @@ export function Providers({ children }: { children: ReactNode }) {
   const requestSync = useCallback(() => {
     void sendMessage({ type: 'KICK_SYNC' });
   }, []);
+  // The same message, waited on: the background answers KICK_SYNC only once its
+  // cycle has settled (background.ts), which is what the options page's sign-out
+  // flow needs before it re-reads the pending queue. A cycle that failed and a
+  // worker that could not be reached both just settle — the queue is the answer.
+  const syncAndWait = useCallback(
+    () =>
+      sendMessage({ type: 'KICK_SYNC' }).then(
+        () => undefined,
+        () => undefined,
+      ),
+    [],
+  );
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -51,6 +63,7 @@ export function Providers({ children }: { children: ReactNode }) {
             lastError={lastError}
             blockedCount={blockedCount}
             requestSync={requestSync}
+            syncAndWait={syncAndWait}
           >
             <ThemeProvider>{children}</ThemeProvider>
           </ExternalSyncProvider>

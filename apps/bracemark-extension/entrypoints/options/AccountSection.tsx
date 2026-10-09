@@ -40,8 +40,8 @@ import { OptionsSection } from './Shell';
 // That sentence covers the copy that can be downloaded again. What it cannot cover
 // is a save that never reached the server — the popup queues one whenever it is
 // offline — so the click goes through the hoisted sign-out flow (@stxapps/web-ui's
-// sign-out-provider, mounted in App.tsx), which stops to ask when the queue is not
-// empty and says how many.
+// sign-out-provider, mounted in App.tsx), which syncs the queue first and stops to
+// ask, with the count, about whatever is still in it.
 export function AccountSection({ className }: { className?: string }) {
   const { username } = useAuth();
   const { requestSignOut, signingOut } = useSignOutFlow();

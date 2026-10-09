@@ -896,15 +896,27 @@ A sign-out from a menu or a lock pane goes through a hoisted `SignOutProvider`
 (`requestSignOut`), not the bare `useSignOut` mutation — bracemark-web's links
 menu and lock pane and the browser extension's options page through
 `@stxapps/web-ui` `contexts/sign-out-provider.tsx`, bracemark-expo's through its
-own `contexts/sign-out-provider.tsx`. Two reasons, both about the stretch between
-the press and step 1:
+own `contexts/sign-out-provider.tsx`. Three reasons, all about the stretch
+between the press and step 1:
 
-- **It asks first when a change hasn't synced.** The wipe takes the pending
-  queue, and a queued change exists nowhere else — the reason "Use a different
-  account" already warned ([sessions.md](./sessions.md)). The count is read at
-  the press. With nothing pending there is no question: the library is on the
+- **It syncs first when a change hasn't.** The wipe takes the pending queue, and
+  a queued change exists nowhere else — the reason "Use a different account"
+  already warned ([sessions.md](./sessions.md)). The count is read at the
+  press. With nothing pending there is no question: the library is on the
   server, and a dialog on the commonest path teaches people to press through
-  the one that matters.
+  the one that matters. With something pending the flow runs one sync cycle
+  (`useSync().syncAndWait`), reads the count again, and signs out with no
+  question if the queue emptied. The wait is named in the dialog, can be
+  cancelled — nothing is erased during it, and a cancel ends that sign-out even
+  if the cycle then lands — and is bounded by `SIGN_OUT_SYNC_TIMEOUT_MS` (15 s,
+  `@stxapps/react` `lib/sync-before-sign-out.ts`): an offline cycle gives up by
+  itself inside nine seconds, and the bound is for the connection that accepts
+  a request and never answers.
+- **It asks about what the sync could not save.** Still pending after the cycle
+  — offline, an expired session (which runs no cycle at all), an account over
+  its limit — and the dialog asks, with the count that is left. The second read
+  is the answer rather than the cycle's outcome: a cycle can fail after pushing
+  everything, and complete with part of the push refused.
 - **It covers the app while the sign-out runs.** The revocation request goes out
   before anything is erased, so the app behind an already-closed menu stayed
   usable for as long as the network took, and whatever was saved then was
@@ -915,18 +927,41 @@ the press and step 1:
   cost is the one a failed request already had — the session row is not
   revoked, idles out and is purged.
 
-If the pending-count read fails, the dialog warns that unsynced changes could
-not be checked and requires confirmation. An unreadable queue is not an empty one.
+If the pending-count read fails, the flow syncs all the same and reads again;
+if that read fails too, the dialog warns that unsynced changes could not be
+checked and requires confirmation. An unreadable queue is not an empty one.
 
-A pending-count result is ignored after its provider unmounts or its account
-changes. A successful mutation also closes the dialog if the tree stays mounted:
-another tab may have resumed the session while the old sign-out request was out,
-so generation fencing preserves that session without unmounting this provider.
+The flow used to ask at the press and end "cancel and sync first". Every caller
+but one could do that, and none should have had to — it is advice the app can
+take itself. The one that could not is the **app-lock pane's "forgot the
+password" link** ([locks.md](./locks.md)): signing out is the only way past a
+forgotten app lock, and behind that pane there is no sync to press and no app to
+cancel back to. On bracemark-expo it was worse than a dead end, because nothing
+there runs a cycle on its own after a relock — cycles start when the store
+becomes ready, on a local write, and when the user asks for one (Sync, pull to
+refresh) — so a queue left by an offline edit stayed queued behind the lock for
+as long as the app stayed alive, on a device that was back online. The question now says
+"try again later", which is true from the pane too: the next press of the link
+is the retry.
+
+The cycle comes from the sync context, so the provider sits INSIDE `SyncProvider`
+(the browser extension's `ExternalSyncProvider`, whose `syncAndWait` is the
+background's `KICK_SYNC`, answered only once its cycle has settled) and still
+above `AppLockGate`. It goes through the context rather than calling the engine
+because the extension's cycle is a selective one that only its worker may run,
+and because the indicator then reports this cycle like any other.
+
+A pending-count result is ignored after its provider unmounts, its account
+changes or its flow is cancelled. A successful mutation also closes the dialog
+if the tree stays mounted: another tab may have resumed the session while the
+old sign-out request was out, so generation fencing preserves that session
+without unmounting this provider.
 
 A failed sign-out — the session record could not be deleted, so nothing was
 erased — now says so in that dialog; it used to reject into nothing.
 
-On web the provider sits under `AuthGuard` and above `AppLockGate`, as on expo.
+On web the provider sits under `AuthGuard`, inside `SyncProvider` and above
+`AppLockGate`, as on expo.
 The gate's `'ending'` unmounts it with everything else, which is what takes the
 dialog down on success.
 

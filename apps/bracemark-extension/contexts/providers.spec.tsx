@@ -117,4 +117,20 @@ describe('Providers', () => {
 
     expect(mockSendMessage).toHaveBeenCalledWith({ type: 'KICK_SYNC' });
   });
+
+  // The options page's sign-out syncs before it asks about unsynced saves, and then
+  // re-reads the queue — so the wait has to last as long as the background's cycle
+  // (it answers KICK_SYNC only once that has settled) and has to end even when the
+  // worker cannot be reached. A wait that rejected would leave the sign-out dialog
+  // with nothing to show.
+  it('waits on the background’s cycle for `syncAndWait`, and settles when it cannot be reached', async () => {
+    render(<Providers>ok</Providers>);
+    const syncAndWait = externalSyncProps[0].syncAndWait as () => Promise<void>;
+
+    await expect(syncAndWait()).resolves.toBeUndefined();
+    expect(mockSendMessage).toHaveBeenCalledWith({ type: 'KICK_SYNC' });
+
+    mockSendMessage.mockRejectedValueOnce(new Error('Could not establish connection'));
+    await expect(syncAndWait()).resolves.toBeUndefined();
+  });
 });

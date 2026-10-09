@@ -209,9 +209,10 @@ export function MoreOptionsMenu() {
         )}
         <DropdownMenuSeparator />
         {/* The hoisted flow (@stxapps/web-ui's sign-out-provider), not the bare
-            useSignOut mutation: it asks first when a change hasn't synced, and
-            covers the page while the revocation request is out — this item is
-            gone the moment it is chosen, so neither could live here. */}
+            useSignOut mutation: it syncs first when a change hasn't, asks about
+            what that could not save, and covers the page while the revocation
+            request is out — this item is gone the moment it is chosen, so none
+            of it could live here. */}
         <DropdownMenuItem
           variant="destructive"
           disabled={signingOut}

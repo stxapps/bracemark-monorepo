@@ -51,25 +51,37 @@ export const SESSION_COPY = {
 
   /**
    * The ordinary sign-out — the links menu, the lock pane's "forgot the
-   * password" way out. It asks when changes are pending or the queue cannot be
-   * read: a synced change is still on the server, so with nothing pending the erase costs a
-   * sign-in and a question would be noise on the commonest path. A pending
-   * change exists nowhere else, and that is the one case worth stopping for.
-   * The count is the argument, as it is for switchAccount above; the way to
-   * keep them differs, because this session can still sync.
+   * password" way out. With nothing pending it asks nothing: a synced change is
+   * still on the server, so the erase costs a sign-in and a question would be
+   * noise on the commonest path. A pending change exists nowhere else, and that
+   * is the one case worth stopping for — but the flow syncs first
+   * (sync-before-sign-out.ts) and asks only about what that could not save.
    *
-   * `progress` names the wait. The request that revokes the session goes out
-   * before anything is erased, and the app must not stay usable meanwhile —
-   * whatever is typed then is erased with the rest.
+   * So the question is put AFTER a sync that fell short, and says so. It used
+   * to end "cancel and sync first", which the app-lock pane's caller cannot do
+   * and every other caller no longer needs to: the next press of Sign out is
+   * the retry. No reason is given because there are three and the words would
+   * have to fit them all — offline, an expired session, a full account. The
+   * count is the argument, as it is for switchAccount above.
+   *
+   * `syncing` names the first wait and `progress` the second. The request that
+   * revokes the session goes out before anything is erased, and the app must
+   * not stay usable meanwhile — whatever is typed then is erased with the rest.
    */
   signOut: {
     title: 'Sign out?',
     description: (pending: number) =>
-      `Signing out erases this device’s copy, including ${unsyncedChanges(pending)}. To keep ${pending === 1 ? 'it' : 'them'}, cancel and sync first.`,
+      `Signing out erases this device’s copy, including ${unsyncedChanges(pending)}. We couldn’t sync ${pending === 1 ? 'it' : 'them'} just now. To keep ${pending === 1 ? 'it' : 'them'}, cancel and try again later.`,
     descriptionUnknown:
-      'Signing out erases this device’s copy. We couldn’t check for changes that haven’t synced. To keep any unsynced changes, cancel and sync first.',
+      'Signing out erases this device’s copy. We couldn’t check whether every change has synced. To keep any that haven’t, cancel and try again later.',
     confirm: 'Sign out',
     cancel: 'Cancel',
+    syncing: 'Syncing before signing out…',
+    /** `null` is a queue that could not be read: synced all the same, uncounted. */
+    syncingDescription: (pending: number | null) =>
+      pending === null
+        ? 'Sending any changes that haven’t synced, so signing out doesn’t erase them.'
+        : `Sending ${pending} ${pending === 1 ? 'change that hasn’t' : 'changes that haven’t'} synced, so signing out doesn’t erase ${pending === 1 ? 'it' : 'them'}.`,
     progress: 'Signing out…',
     progressDescription: 'Erasing this device’s copy.',
     failed: 'Couldn’t sign out. Try again.',

@@ -103,15 +103,22 @@ test.describe('account', () => {
       expect(await countPendingOps(page)).toBeGreaterThan(0);
       await page.getByRole('button', { name: /^More options/ }).click();
       await page.getByRole('menuitem', { name: 'Sign out' }).click();
+      // The flow syncs before it asks (docs/data-lifecycle.md, _the press, and the
+      // wait_), so the question is not there at the click: it replaces the sync's
+      // wait once that cycle has given up on the aborted route, which the retry
+      // policy takes up to nine seconds over, or at the flow's own 15 s bound.
       const warning = page.getByTestId('sign-out-dialog');
-      await expect(warning).toContainText('nowhere else');
+      await expect(warning).toContainText('nowhere else', { timeout: 30_000 });
       await warning.getByRole('button', { name: 'Cancel', exact: true }).click();
       await expect(warning).toHaveCount(0);
       await expect(linkRow(page, queued)).toBeVisible();
       expect(await countPendingOps(page)).toBeGreaterThan(0);
       await page.unroute('**/v1/ops/**');
-      await syncAndWait(page);
 
+      // Sign out again with the queue STILL pending, and no sync of our own in
+      // between: the flow's cycle is what pushes it now that the route is back,
+      // and an emptied queue signs out with no question. Were the sync skipped,
+      // the dialog would ask again and the wait below would time out.
       // The label gains a suffix in the sync-failed / storage-full states.
       await page.getByRole('button', { name: /^More options/ }).click();
       await page.getByRole('menuitem', { name: 'Sign out' }).click();

@@ -2,13 +2,16 @@
 // the wipe, and both halves fail without a sound:
 //
 //  - a sign-out erases this device's pending queue, and a queued change exists nowhere
-//    else. Skip the question and the press simply works — the loss shows up later, as an
-//    edit that is not there after signing back in, with nothing pointing back here;
+//    else. Skip the sync, or the question about what it could not save, and the press
+//    simply works — the loss shows up later, as an edit that is not there after signing
+//    back in, with nothing pointing back here;
 //  - the revocation request goes out BEFORE the wipe, and the app behind a closed menu
 //    was fully usable for as long as the network took. Whatever was saved then was erased.
 //
-// The mutation itself is `useSignOut` (expo-react, spec'd there) and is mocked: this file
-// is about when it is called, what covers the app meanwhile, and what a failure says.
+// The mutation itself is `useSignOut` (expo-react, spec'd there) and is mocked, and so is
+// the cycle (`useSync().syncAndWait`): this file is about when each is called, what
+// covers the app meanwhile, and what a failure says. The bound on the sync's wait is
+// sync-before-sign-out.ts's, spec'd in @stxapps/react.
 
 import * as React from 'react';
 import { Pressable } from 'react-native';
@@ -29,6 +32,10 @@ let mockIsError = false;
 const mockMutate = jest.fn();
 const mockReset = jest.fn();
 const mockCountPendingOps = jest.fn((_username: string) => Promise.resolve(mockPendingOps));
+// What the cycle does to the queue is each case's to say. The default pushes nothing,
+// which is a sync that could not save the changes: offline, expired, over the limit.
+let mockSync: () => Promise<void> = () => Promise.resolve();
+const mockSyncAndWait = jest.fn(() => mockSync());
 
 jest.mock('@stxapps/expo-react', () => ({
   useAuth: () => ({ username: 'alice' }),
@@ -40,6 +47,7 @@ jest.mock('@stxapps/expo-react', () => ({
     isSuccess: mockIsSuccess,
   }),
   countPendingOps: (username: string) => mockCountPendingOps(username),
+  useSync: () => ({ syncAndWait: mockSyncAndWait }),
 }));
 
 const mockClearMemoryCache = jest.fn(() => Promise.resolve(true));
@@ -65,10 +73,21 @@ const tree = () => (
   </>
 );
 
-// Press, and let the count the press reads resolve.
+// Press, and let the flow run as far as it can: the count, and with something pending
+// the sync and the count after it.
 async function press() {
   fireEvent.press(screen.getByText('Menu item'));
   await act(async () => undefined);
+}
+
+// A cycle the case settles by hand, to stand inside the wait.
+function heldSync() {
+  let release!: () => void;
+  mockSync = () =>
+    new Promise<void>((resolve) => {
+      release = resolve;
+    });
+  return { release: () => act(async () => release()) };
 }
 
 beforeEach(() => {
@@ -78,7 +97,10 @@ beforeEach(() => {
   mockIsError = false;
   mockMutate.mockClear();
   mockReset.mockClear();
-  mockCountPendingOps.mockClear();
+  mockCountPendingOps.mockReset();
+  mockCountPendingOps.mockImplementation(() => Promise.resolve(mockPendingOps));
+  mockSync = () => Promise.resolve();
+  mockSyncAndWait.mockClear();
   mockClearMemoryCache.mockClear();
 });
 
@@ -92,6 +114,7 @@ describe('with nothing unsynced', () => {
 
     expect(mockMutate).toHaveBeenCalledTimes(1);
     expect(screen.queryByText(COPY.title)).toBeNull();
+    expect(mockSyncAndWait).not.toHaveBeenCalled();
   });
 
   // The cover: named, and with no way out. Nothing behind it may be reachable while the
@@ -107,16 +130,110 @@ describe('with nothing unsynced', () => {
   });
 });
 
-describe('with changes that have not synced', () => {
+// "Cancel and sync first" was the old answer to a pending queue. The app can sync by
+// itself, and the app-lock pane's "forgot the password" caller cannot: behind the lock
+// there is no sync to press, and nothing runs a cycle after a relock on its own.
+describe('with changes that have not synced yet', () => {
   beforeEach(() => {
     mockPendingOps = 3;
   });
 
-  it('asks first, with the count, and signs nothing out yet', async () => {
+  it('syncs before it asks anything, and says that is the wait', async () => {
+    const sync = heldSync();
     render(tree());
 
     await press();
 
+    expect(mockSyncAndWait).toHaveBeenCalledTimes(1);
+    expect(screen.getByText(COPY.syncing)).toBeTruthy();
+    expect(screen.getByText(COPY.syncingDescription(3))).toBeTruthy();
+    expect(screen.queryByTestId('sign-out-confirm')).toBeNull();
+    expect(mockMutate).not.toHaveBeenCalled();
+
+    // Not left out: the bound's timer would outlive the spec.
+    await sync.release();
+  });
+
+  // The queue emptied, so this is the commonest path again: no question.
+  it('signs out without asking once the sync has pushed them', async () => {
+    mockSync = () => {
+      mockPendingOps = 0;
+      return Promise.resolve();
+    };
+    render(tree());
+
+    await press();
+
+    expect(mockMutate).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(COPY.title)).toBeNull();
+    expect(screen.getByText(COPY.progress)).toBeTruthy();
+  });
+
+  // The queue is the answer, not the cycle: one that pushed some and failed, or
+  // completed with part of it refused, leaves exactly what is about to be lost.
+  it('asks about what the sync left behind, by its own count', async () => {
+    mockSync = () => {
+      mockPendingOps = 1;
+      return Promise.reject(new Error('offline'));
+    };
+    render(tree());
+
+    await press();
+
+    expect(screen.getByText(COPY.title)).toBeTruthy();
+    expect(screen.getByText(COPY.description(1))).toBeTruthy();
+    expect(mockMutate).not.toHaveBeenCalled();
+  });
+
+  // Nothing is erased while the sync is out, so unlike the sign-out's own wait this
+  // one has a way back — and taking it has to END that sign-out. Its continuation is
+  // still waiting on the cycle, and a queue the cycle then empties must not sign out
+  // a user who has gone back to the app.
+  it('can be cancelled mid-sync, and stays cancelled when the sync lands', async () => {
+    const sync = heldSync();
+    render(tree());
+    await press();
+
+    fireEvent.press(screen.getByText(COPY.cancel));
+
+    expect(screen.queryByTestId('sign-out-dialog')).toBeNull();
+
+    mockPendingOps = 0;
+    await sync.release();
+
+    expect(mockMutate).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('sign-out-dialog')).toBeNull();
+  });
+
+  it('starts afresh after a cancel mid-sync', async () => {
+    const sync = heldSync();
+    render(tree());
+    await press();
+    fireEvent.press(screen.getByText(COPY.cancel));
+    await sync.release();
+    mockSync = () => {
+      mockPendingOps = 0;
+      return Promise.resolve();
+    };
+
+    await press();
+
+    expect(mockSyncAndWait).toHaveBeenCalledTimes(2);
+    expect(mockMutate).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('with changes a sync could not save', () => {
+  beforeEach(() => {
+    mockPendingOps = 3;
+  });
+
+  it('asks, with the count, and signs nothing out yet', async () => {
+    render(tree());
+
+    await press();
+
+    expect(mockSyncAndWait).toHaveBeenCalledTimes(1);
     expect(screen.getByText(COPY.title)).toBeTruthy();
     expect(screen.getByText(COPY.description(3))).toBeTruthy();
     expect(mockMutate).not.toHaveBeenCalled();
@@ -141,17 +258,18 @@ describe('with changes that have not synced', () => {
     expect(screen.queryByText(COPY.title)).toBeNull();
   });
 
-  // The count is read at the press, so a cancelled flow has to be able to start again —
-  // and read again, since the sync the dialog recommended may have emptied the queue.
+  // "Try again later" is the dialog's advice, so a cancelled flow has to be able to
+  // start again — and read again, since the queue may have emptied meanwhile.
   it('reads the count afresh the next time', async () => {
     render(tree());
     await press();
+    const read = mockCountPendingOps.mock.calls.length;
     fireEvent.press(screen.getByText(COPY.cancel));
     mockPendingOps = 0;
 
     await press();
 
-    expect(mockCountPendingOps).toHaveBeenCalledTimes(2);
+    expect(mockCountPendingOps.mock.calls.length).toBeGreaterThan(read);
     expect(mockMutate).toHaveBeenCalledTimes(1);
   });
 
@@ -170,8 +288,11 @@ describe('with changes that have not synced', () => {
 
   it('copes with a count of one', () => {
     expect(COPY.description(1)).toContain('1 change that hasn’t synced and exists nowhere else');
-    expect(COPY.description(1)).toContain('To keep it,');
+    expect(COPY.description(1)).toContain('We couldn’t sync it just now. To keep it,');
     expect(COPY.description(2)).toContain('2 changes that haven’t synced and exist nowhere else');
+    expect(COPY.syncingDescription(1)).toContain('1 change that hasn’t synced, so');
+    expect(COPY.syncingDescription(1)).toContain('erase it.');
+    expect(COPY.syncingDescription(2)).toContain('2 changes that haven’t synced, so');
   });
 });
 
@@ -208,11 +329,13 @@ describe('a sign-out that failed', () => {
 });
 
 // An unreadable queue is unknown, not empty: sign-out stays available, but
-// losing edits needs the user's explicit confirmation.
+// losing edits needs the user's explicit confirmation. It syncs all the same —
+// whatever is queued, pushing it can only help.
 it('asks before signing out when the count cannot be read', async () => {
-  mockCountPendingOps.mockImplementationOnce(() => Promise.reject(new Error('storage')));
+  mockCountPendingOps.mockImplementation(() => Promise.reject(new Error('storage')));
   render(tree());
   await press();
+  expect(mockSyncAndWait).toHaveBeenCalledTimes(1);
   expect(mockMutate).not.toHaveBeenCalled();
   expect(screen.getByText(COPY.descriptionUnknown)).toBeTruthy();
   fireEvent.press(screen.getByTestId('sign-out-confirm'));

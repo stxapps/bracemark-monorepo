@@ -28,13 +28,15 @@ import { PaywallProvider } from '@/contexts/paywall-provider';
 //   AuthGuard       — "do you have a session?" (client-side: the session lives
 //                     in IndexedDB, not a cookie, so the server can't gate).
 //                     Redirects.
-//   SignOutProvider — the hoisted sign-out flow (@stxapps/web-ui): the question
-//                     when a change hasn't synced, and the cover over the page
-//                     while the sign-out runs. Needs only the session, and sits
-//                     above AppLockGate because the lock pane's "forgot the
-//                     password" link is one of its callers.
 //   SyncProvider    — runs initial/incremental sync and exposes
 //                     storeStatus/requestSync. Never redirects.
+//   SignOutProvider — the hoisted sign-out flow (@stxapps/web-ui): a sync first
+//                     when a change hasn't synced, the question for what that
+//                     could not save, and the cover over the page while the
+//                     sign-out runs. Needs the session and SyncProvider (the
+//                     cycle it waits on), and sits above AppLockGate because
+//                     the lock pane's "forgot the password" link is one of its
+//                     callers.
 //   FileContentProvider — on-demand `files/` blobs for the link preview images.
 //                     Needs only the session + api client, so it sits shallow,
 //                     with the sync-layer providers and above the gates.
@@ -65,9 +67,9 @@ import { PaywallProvider } from '@/contexts/paywall-provider';
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <AuthGuard>
-      <SignOutProvider>
-        <SyncProvider>
-          <DanglingExtractionSweep />
+      <SyncProvider>
+        <DanglingExtractionSweep />
+        <SignOutProvider>
           <FileContentProvider>
             <FaviconProvider>
               <ExtractionProvider>
@@ -94,8 +96,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               </ExtractionProvider>
             </FaviconProvider>
           </FileContentProvider>
-        </SyncProvider>
-      </SignOutProvider>
+        </SignOutProvider>
+      </SyncProvider>
     </AuthGuard>
   );
 }

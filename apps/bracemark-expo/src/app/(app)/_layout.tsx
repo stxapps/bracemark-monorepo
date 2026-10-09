@@ -37,14 +37,16 @@ import { SignOutProvider } from '../../contexts/sign-out-provider';
 //                  client-side, since the local-first session lives on-device
 //                  (secure-store), so there's no server to gate. Reads the
 //                  AuthProvider mounted in the root `_layout`.
-//   SignOutProvider — the hoisted sign-out flow: the question when a change
-//                  hasn't synced, and the cover over the app while the sign-out
-//                  runs. Needs only the session, and must sit ABOVE AppLockGate —
-//                  the lock pane's "forgot the password" link opens it, and a
-//                  dialog under the gate unmounts while the app is covered.
 //   SyncProvider — "is the local store ready?" It runs initial/incremental sync
 //                  and exposes storeStatus/requestSync to the app. Never
 //                  redirects.
+//   SignOutProvider — the hoisted sign-out flow: a sync first when a change
+//                  hasn't synced, the question for what that could not save,
+//                  and the cover over the app while the sign-out runs. Needs
+//                  the session and SyncProvider (the cycle it waits on), and
+//                  must sit ABOVE AppLockGate — the lock pane's "forgot the
+//                  password" link opens it, and a dialog under the gate
+//                  unmounts while the app is covered.
 //   FileContentProvider — on-demand `files/` blobs for the link preview
 //                  images. Only needs the session + api client, so it sits with
 //                  the sync-layer providers, above the gates (web's placement).
@@ -86,8 +88,8 @@ import { SignOutProvider } from '../../contexts/sign-out-provider';
 export default function AppLayout() {
   return (
     <AuthGuard>
-      <SignOutProvider>
-        <SyncProvider>
+      <SyncProvider>
+        <SignOutProvider>
           <FileContentProvider>
             <FaviconProvider>
               <ExtractionProvider>
@@ -124,8 +126,8 @@ export default function AppLayout() {
               </ExtractionProvider>
             </FaviconProvider>
           </FileContentProvider>
-        </SyncProvider>
-      </SignOutProvider>
+        </SignOutProvider>
+      </SyncProvider>
     </AuthGuard>
   );
 }

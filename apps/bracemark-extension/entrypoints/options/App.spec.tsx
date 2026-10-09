@@ -17,6 +17,7 @@ import App from './App';
 const mockUseAuth = jest.fn();
 const mockUseSignOut = jest.fn();
 const mockCountPendingOps = jest.fn();
+const mockUseSync = jest.fn();
 const mockUseSettings = jest.fn();
 const mockUseSettingMutations = jest.fn();
 
@@ -30,6 +31,9 @@ jest.mock('@stxapps/web-react', () => ({
   get countPendingOps() {
     return mockCountPendingOps;
   },
+  get useSync() {
+    return mockUseSync;
+  },
   get useSettings() {
     return mockUseSettings;
   },
@@ -39,6 +43,7 @@ jest.mock('@stxapps/web-react', () => ({
 }));
 
 const signOutMutate = jest.fn();
+const mockSyncAndWait = jest.fn(async () => undefined);
 
 const body = () => document.body.textContent ?? '';
 
@@ -55,6 +60,9 @@ beforeEach(() => {
     isError: false,
   });
   mockCountPendingOps.mockResolvedValue(0);
+  // One function for the page's life, as Providers hands it over. This cycle pushes
+  // nothing — the background could not reach the server — so a queued save stays queued.
+  mockUseSync.mockReturnValue({ syncAndWait: mockSyncAndWait });
   mockUseSettings.mockReturnValue({
     themeSource: 'sync',
     syncTheme: { mode: 'system', lightStart: '06:00', darkStart: '18:00' },
@@ -134,14 +142,16 @@ describe('the account row', () => {
 
   // The sentence under the row promises the library can be downloaded again. A save the
   // popup queued while offline cannot: it exists only in this browser, and the sign-out
-  // erases the queue. So the row's one click has to stop and say so.
-  it('asks first when a save has not synced, and signs nothing out yet', async () => {
+  // erases the queue. So the row's one click has to try the sync, and stop and say so
+  // when that leaves the save where it was.
+  it('asks first when a save could not be synced, and signs nothing out yet', async () => {
     mockCountPendingOps.mockResolvedValue(2);
     render(<App />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
     await act(async () => undefined);
 
+    expect(mockSyncAndWait).toHaveBeenCalledTimes(1);
     expect(signOutMutate).not.toHaveBeenCalled();
     expect(body()).toContain('2 changes that haven’t synced and exist nowhere else');
 
