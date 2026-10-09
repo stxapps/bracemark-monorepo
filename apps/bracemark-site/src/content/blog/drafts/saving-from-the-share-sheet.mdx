@@ -1,0 +1,84 @@
+{/* Draft title: Saving a link without leaving what you’re reading */}
+{/* Draft description: How we built the iOS and Android share sheet: a smaller startup path, shared sign-in, searchable lists and tags, and room for the keyboard. */}
+
+## Save where you find the link
+
+You’re reading an article, looking at a product, or following a thread someone sent you. You want to keep the link and carry on.
+
+Copying the address, switching apps, finding the add button, and pasting it gives that small decision several steps. The share sheet puts saving alongside what you’re already doing: open Share, choose Bracemark, and tap Save. You can choose a list and add tags before saving, then return to the app you came from.
+
+For a bookmark manager, that entry point matters. Saving is the beginning of finding something again. If filing the link takes too much attention, it’s easy to put it off or leave it somewhere you won’t remember to look.
+
+We spent a lot of time on this small screen: keeping its startup path small, connecting native code to our Expo app, carrying sign-in across the iOS process boundary, and making the pickers work with the keyboard open. Here’s what sits behind those few taps.
+
+## One screen, two native hosts
+
+Our mobile app uses Expo and React Native. Both platforms render the same share screen, with the same Save button, list picker, tag picker, and confirmation. The operating systems give that screen different places to run.
+
+On iOS, our share extension runs in a separate process. It has its own JavaScript entry point and starts without the main app’s navigation, providers, or open database.
+
+On Android, we use a translucent native activity in the app’s process. It hosts the share screen over the app that supplied the link. The activity passes the shared text and title directly into the React Native screen as it starts.
+
+That handoff is part of the feature. A link can arrive while the main app is closed or sitting in the background. The share screen needs the payload that opened it, without depending on a navigation event reaching an already running screen.
+
+We keep the native hosts responsible for the platform handoff and dismissal. The shared screen handles the link and the choices you make around it.
+
+## Keep the iOS share extension small
+
+[Apple gives app extensions a much smaller memory allowance](https://developer.apple.com/library/archive/documentation/General/Conceptual/ExtensibilityPG/ExtensionCreation.html) than foreground apps. Loading the whole app to save one address would spend that allowance on work the sheet doesn’t need.
+
+The iOS share extension therefore has a separate bundle. It loads the save screen and its pickers, while database work, navigation, and other app features stay outside its startup path. We import the specific modules and icons we need, and defer upload-related code until Save needs it.
+
+The sheet also leaves page fetching to the main app. It takes the address and any title supplied by the sharing app; it doesn’t visit the page or download an image before you can save.
+
+Memory changed a native design choice too. An early version used an Expo native view to control swipe dismissal while a picker was open. It worked in the simulator, but opening a picker could terminate the iOS share extension on a phone in a development build. We replaced that view with a native module function and a hook in the share extension’s controller, avoiding the extra view initialization.
+
+That experience is why we distinguish simulator checks, development builds, and release builds. A screen working in the simulator doesn’t establish its memory headroom on a phone. We’ve measured a smaller release footprint in the simulator; release memory headroom on hardware still needs its own measurement.
+
+## Carry sign-in across the boundary
+
+You shouldn’t need to type your password again each time you save a link. On Android, the share screen can use the app’s session store. On iOS, the separate process needs an explicit way to obtain the session token and the encryption key already unlocked by your sign-in.
+
+We built a native Keychain module for that handoff. The app mirrors its session into a Keychain group that both the app and its iOS share extension can access. The share extension reads that copy when it attempts an encrypted upload. The app owns the session and updates or removes the mirror as the session changes.
+
+Lists and tags take a different route. The app writes a snapshot into an App Group container, which is a folder both processes can access. The iOS share extension reads that snapshot for its pickers, avoiding a second process opening the app’s SQLite database.
+
+These have different storage boundaries: the session copy is in Keychain; the list and tag snapshot is readable local data in the shared container. Links are encrypted before upload. This doesn’t mean every local file is encrypted at rest.
+
+If you haven’t signed in, the sheet asks you to sign in through the app. If the shared session isn’t available for an upload, a saved draft can wait for the main app to process it.
+
+## Make room for lists, tags, and the keyboard
+
+The first screen keeps the shared link in view, with a list row, a tags row, and Save. Choosing a list or adding tags opens a picker within the sheet, giving those choices more room.
+
+Both pickers filter names as you type. When a matching list is nested, its result includes the parent path, so you can distinguish Work / Specs from Home / Specs. Choosing a list returns you to the save screen. Tags stay open for several selections, with Done to return.
+
+The same field can create a new list or tag. An exact name match, ignoring case, reuses the existing entry. New lists start at the top level; you can arrange them later in the app.
+
+Typing brings another constraint into that small space. In our iOS share extension, React Native’s usual keyboard events reported a zero-sized frame because their coordinate conversion depended on an application window the share extension didn’t have. We added a Swift module that reads the keyboard’s position from native notifications and passes it to the shared screen.
+
+Android needed a different correction. Keyboard avoidance moved the panel up correctly, but could leave a gap after the keyboard closed. We use the shown keyboard’s height and explicitly remove the lift when it hides.
+
+On both platforms, the scrolling rows give up space as the keyboard appears, keeping the field and Done available. Row taps still select a result while the keyboard is open. On iOS, we also hold off the system’s swipe dismissal inside the pickers, so pulling through a list doesn’t discard an unfinished share.
+
+## Save locally, then sync
+
+Save waits for the device write. It doesn’t keep you in the sheet waiting for a network request.
+
+Android writes the link through the app’s normal storage path and queues its sync work. The iOS share extension writes a draft file into the shared container first. The main app processes that draft when it next opens or returns to the foreground.
+
+Both paths attempt sync after the local save. On iOS, the share extension can encrypt and upload the link along with any lists or tags you created. If that upload completes, another device can receive the link before you reopen the phone app. If the network fails or the process ends first, the local draft remains for the app to process later.
+
+The upload and the later draft processing use the same record IDs. That lets them refer to the same saved link, list, and tags when both paths run.
+
+The confirmation names the list you chose. The link stays in place on screen, and its preview tile gains a folded corner alongside the saved message. You can see what you saved and where it went before the sheet closes.
+
+## The limits of this small surface
+
+The iOS list and tag snapshot reflects the last refresh from the app. Changes made elsewhere may need an app open and sync before they appear in the sheet. A successful local save also isn’t a promise of immediate delivery to another device; pending work may need you to reopen the app with a connection.
+
+There’s an accessibility cost on iOS too. React Native’s font scaling resolves incorrectly in the share extension process, so we currently disable it there to keep text visible. Dynamic Type doesn’t reach the iOS share sheet. Text in the main app still scales, and Android keeps the app’s font scaling behavior.
+
+The wider product tradeoffs apply as well: search runs on each device’s synced copy, there are no shared lists, and we can’t reset your password. Your recovery code is the second way into your account. [How encryption and search work](/docs/how-encryption-and-search-work) explains those choices.
+
+You can try the flow with a link you want to keep: share it to Bracemark, choose a list, add a tag, and save. Then open the app and find it again. [Get the apps](/docs/get-the-apps) has the iOS and Android entry points, and [saving links](/docs/save-links) covers the other ways in.
