@@ -6,7 +6,7 @@
 // (a local `view` swap), not routes, exactly like web.
 
 import { useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { Keyboard, Pressable, View } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import {
@@ -72,6 +72,11 @@ function DeleteAccountView({ onBack }: { onBack: () => void }) {
 
   const onSubmit = () => {
     if (isPending) return;
+    // The three submits in this file drop the keyboard first: each answers BELOW
+    // its button (the `mt-3` ErrorText), which is the band a keyboard left up by
+    // the still-focused password field covers. docs/soft-keyboard.md, _a submit
+    // drops it_.
+    Keyboard.dismiss();
     // Report BOTH misses at once — a user who submits an empty form should not have
     // to discover the second requirement after satisfying the first.
     setPasswordNudge(password.length === 0);
@@ -247,6 +252,7 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
     // (docs/account.md, _when a submit is allowed to be `disabled`_). Same slot as
     // "Incorrect password." below.
     if (changePassword.isPending || !newPassword.ok) return;
+    Keyboard.dismiss(); // the answer lands below the button — see DeleteAccountView
     if (!proofReady) {
       setError(useRecovery ? 'Enter your recovery code.' : 'Enter your current password.');
       return;
@@ -398,6 +404,7 @@ function RecoveryCodeView({ onBack, hasRecovery }: { onBack: () => void; hasReco
 
   const onSubmit = async () => {
     if (recovery.isPending) return;
+    Keyboard.dismiss(); // the answer lands below the button — see DeleteAccountView
     // Empty answers out loud rather than holding the button down; the slot below
     // the button is the same one "Incorrect password." uses.
     if (currentPassword === '') {

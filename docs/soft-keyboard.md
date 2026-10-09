@@ -590,6 +590,64 @@ Android it maps to `none`. The current map:
 `"handled"` sits on every row above that carries a mode — the rule in 2 has no
 exception.
 
+### a submit drops it — when the answer lands below the button
+
+The three paths above are the USER's. This one is the app's, and it exists
+because of rule 2: `"handled"` delivers a press to the button and leaves the
+keyboard alone, and a `Pressable` takes no focus, so the field that was being
+typed in is still focused when the handler runs. **Nothing dismisses a keyboard
+on a button press by default.** RN's own default (`'never'`) looks like it does,
+but that is the tap-eating one — it drops the keyboard INSTEAD of pressing the
+button.
+
+Usually that is right, and the geometry says when it is not. A button that was
+pressed with the keyboard up was above the keys. Whatever the press mounts
+**above** the button is therefore on screen (it pushes the button down, not
+itself); whatever it mounts **below** is in the band the keyboard covers, because
+a `KeyboardAwareScrollView` keeps the focused FIELD clear by `bottomOffset` and
+nothing under it. The specimen is `/sign-in` on a tall Android phone: the card is
+centred, Sign in sits just above the keys, and "Incorrect username or password"
+mounted one line lower, behind them — with the recovery link, the next thing a
+wrong password needs, under that.
+
+So: **a terminal submit whose answer renders below its button calls
+`Keyboard.dismiss()` first** — in the press handler, before the work, not in the
+`catch`. Dismissed late, the keyboard is held up through the request and falls
+after the error has already mounted behind it; and on success its hide runs
+against whatever the submit navigates to. The sites:
+
+| submit                                                                 | what lands below it                         |
+| ---------------------------------------------------------------------- | ------------------------------------------- |
+| `sign-in-form.tsx`, both doors                                         | the `root` error, then the mode-switch link |
+| `account-section.tsx` — delete account, change password, recovery code | the `mt-3` `ErrorText`                      |
+
+Return on the last field of both sign-in doors is wired to the same handler
+(`onSubmitEditing`), so the two ways of submitting end in the same state; a
+single-line field has already blurred itself by then (1).
+
+**It is not a `Button` default, and must not become one.** Most presses made with
+a keyboard up are part of the typing, or have their own answer already:
+
+- the reveal eye in `password-input.tsx`, and the mode toggles that swap in a
+  field which then takes focus (sign-in's recovery door, create-account's
+  Continue into the confirm step) — the keyboard is about to be wanted again;
+- the pickers that set `submitBehavior="submit"` to keep it for the next entry (1);
+- anything parked ON the keyboard — the add panel's Save, the sticky footer's —
+  where nothing can land behind it and the press closes the surface anyway;
+- a `Dialog`'s buttons: the avoider lifts the whole card, error slot included;
+- a submit whose error belongs to the FIELD and mounts above the button —
+  `lock-pane.tsx`, create-account's confirm step. It is visible by the geometry
+  above, and the user's next act is to retype.
+
+The cost at the sites that do dismiss is one tap back into the field to retry.
+
+**Status:** not yet driven on a device or an emulator. The Maestro flows cannot
+tell either way — every one of them runs `hideKeyboard` BEFORE pressing these
+submits (`subflows/sign-in-fields.yaml`, `flows/recovery-sign-in.yaml`,
+`flows/delete-account.yaml`), so they pass with or without the dismiss. Keep it
+that order: a `hideKeyboard` placed AFTER one of these presses finds no IME, and
+on Android that is a back press delivered to the app (_verifying any of this_).
+
 ## arrival — what may take focus on mount
 
 `autoFocus` on native is not web's `autoFocus`. Focusing a `TextInput` **summons

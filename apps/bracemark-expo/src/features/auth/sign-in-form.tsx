@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { Controller } from 'react-hook-form';
-import { Pressable, View } from 'react-native';
+import { Keyboard, Pressable, View } from 'react-native';
 
 import {
   InvalidCredentialsError,
@@ -101,6 +101,24 @@ function PasswordSignIn({
     }
   }
 
+  // THE SUBMIT DROPS THE KEYBOARD, and it has to be said here because nothing
+  // does it for us: a Pressable takes no focus, and AuthScreen's scroller
+  // persists taps (`"handled"`), so a press on Sign in lands with the password
+  // field still focused and the keyboard still up. Everything the press answers
+  // with mounts BELOW the button — the `root` error, and under it the recovery
+  // link a wrong password is about to need — which is exactly the band the
+  // keyboard covers: the aware scroller keeps the focused FIELD clear, nothing
+  // under it. Before the work rather than in the `catch`, so the keyboard isn't
+  // held up through Argon2id only to fall late, and its hide doesn't run against
+  // the navigation a success ends in. Return on the last field takes the same
+  // path. docs/soft-keyboard.md, _a submit drops it_ — which is also where the
+  // buttons that must NOT do this are listed.
+  const submit = () => {
+    if (isSubmitting) return;
+    Keyboard.dismiss();
+    void handleSubmit(onSubmit)();
+  };
+
   return (
     <View className="gap-6">
       <View className="gap-2">
@@ -155,6 +173,7 @@ function PasswordSignIn({
                 field.onChange(text);
                 clearRootError();
               }}
+              onSubmitEditing={submit}
             />
           )}
         />
@@ -162,7 +181,7 @@ function PasswordSignIn({
       </View>
 
       <View className="gap-1">
-        <Button testID="sign-in-submit" disabled={isSubmitting} onPress={handleSubmit(onSubmit)}>
+        <Button testID="sign-in-submit" disabled={isSubmitting} onPress={submit}>
           <Text>{isSubmitting ? 'Signing in…' : 'Sign in'}</Text>
         </Button>
         {errors.root ? <ErrorText testID="sign-in-error">{errors.root.message}</ErrorText> : null}
@@ -221,6 +240,14 @@ function RecoverySignIn({
     }
   }
 
+  // Drops the keyboard first, for PasswordSignIn's reasons — the same error slot
+  // under the same button.
+  const submit = () => {
+    if (isSubmitting) return;
+    Keyboard.dismiss();
+    void handleSubmit(onSubmit)();
+  };
+
   return (
     <View className="gap-6">
       <View className="gap-2">
@@ -272,6 +299,7 @@ function RecoverySignIn({
                 field.onChange(text);
                 clearRootError();
               }}
+              onSubmitEditing={submit}
             />
           )}
         />
@@ -279,11 +307,7 @@ function RecoverySignIn({
       </View>
 
       <View className="gap-1">
-        <Button
-          testID="sign-in-recovery-submit"
-          disabled={isSubmitting}
-          onPress={handleSubmit(onSubmit)}
-        >
+        <Button testID="sign-in-recovery-submit" disabled={isSubmitting} onPress={submit}>
           <Text>{isSubmitting ? 'Signing in…' : 'Sign in with recovery code'}</Text>
         </Button>
         {errors.root ? (
