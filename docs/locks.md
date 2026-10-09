@@ -219,6 +219,17 @@ the affordance**, before any password dialog opens, so a free user never types a
 secret into a form that can't submit. **Unlock and remove stay open even for a
 downgraded (ex-Plus) account**, so an existing lock is never stranded.
 
+The password dialog distinguishes creation from verification. Settings passes
+`mode="create"` only for **Set app lock** and **Lock list**: the submitted
+password and hide option stay fixed until saving finishes, with editing restored
+on failure.
+Web keeps the password focused with `readOnly`; native disables editing for this
+commitment. Unlock/remove verification stays editable to preserve retry focus.
+Both the dialog and the browsing pane show an attempt's error only if the field
+still holds the text that attempt submitted — compared by value, so an edit that
+was undone meanwhile still gets its refusal — and retry uses the current value.
+Component specs pin these cases on both clients.
+
 ### biometric unlock (expo-only)
 
 Face ID / Touch ID as a **fast-path over the password**, on bracemark-expo only (web
@@ -362,7 +373,13 @@ reason expo's does — the carried-over password was measured there.
 Pinned by `expo-react`'s `contexts/lock-provider.spec.tsx` (the set's writers and
 erasers), `features/links/main.spec.tsx` (the table above) and
 `components/lock-pane.spec.tsx` / `app-lock-gate.spec.tsx`; web's guard by
-`bracemark-web`'s `components/lock-pane.spec.tsx`.
+`bracemark-web`'s `components/lock-pane.spec.tsx`. The browser case
+`LOCK-FOCUS-WEB-001` checks direct navigation between locked lists (empty, masked
+entry on the second) and a narrow-viewport relock under the open drawer, including
+transient focus into the hidden pane. `LOCK-APP-001` checks password focus after
+a cold load and after the overflow menu closes. Native `LOCK-APP-002` measures the
+keyboard between flow parts: up on cold start, down on manual relock, with
+explicit password entry still reopening the app.
 
 **Driven on both native platforms** — the Pixel 8 AVD (Android 16) and the
 iPhone 17 Pro simulator (iOS 26.5), dev build, reading the keyboard's state

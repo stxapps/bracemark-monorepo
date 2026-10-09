@@ -729,6 +729,19 @@ tag #N` in the toast. That error is RN-internal and not worth chasing: the app
   (`parts/visual-app-lock-gate.yaml` still taps the lock dialog's field, into a
   dialog `parts/visual-app-lock-dialog.yaml` has already waited out.)
 
+- ⚠ **On Android the tap that focuses a field also sets its caret, and
+  `eraseText` only deletes backwards from it.** A tap lands on the field's centre,
+  which in the lock pane is 16 characters in (Pixel 8 AVD): a refused
+  28-character password kept its last 12, the real one was typed in front of
+  them, and the retry read as a lock refusing its own password — no count fixes
+  it. `subflows/unlock-pane.yaml` carries the answer and the measurements: erase,
+  send the caret to the end with Dpad Down, erase again, re-tap. ⚠ Dpad Down on a
+  caret already at the end moves the FOCUS to the next control instead, which is
+  why that order, and why it runs only where a refusal is showing. iOS puts a
+  secure field's caret at the end on tap. `recovery-sign-in.yaml` meets the same
+  `eraseText` from the other side (a caret at index 0) and remounts the form
+  instead.
+
 - **A Maestro tap on the Pixel 8 AVD returns about six seconds after it presses.**
   Feedback shorter than that — bulk Copy's 1.5s "Copied" — has reverted before any
   assertion can run, so `flows/bulk-copy.yaml` asserts it on iOS only and proves
@@ -852,6 +865,16 @@ checked by the host step that read them, since a flow can only say "visible".
   the app's tree at all, so the frame is the touchable region `dumpsys window
 InputMethod` reports while the window is visible. Every "reachable" claim is a
   control's bounds wholly above that frame's top.
+- **Whether a keyboard is up at all** (`LOCK-APP-002`). The same reader, asked
+  twice between the case's flows: UP on the gate a cold start lands on, DOWN on
+  the gate "Lock app" raises, and then a part that unlocks it anyway. It is a
+  host step because no flow can say it — the Android IME is in no tree, and
+  `subflows/unlock-pane.yaml` taps the field before it types, so a flow that only
+  unlocked would pass over an autofocus that had stopped working, or one that had
+  come back where it must not. The browser's half of the same rule is focus, not
+  a keyboard, and is asserted in `web/locks.e2e.ts` (`LOCK-APP-001`,
+  `LOCK-FOCUS-WEB-001`); what each case pins is in
+  [locks.md](./locks.md), _a hand relock does not ask to be undone_.
 - **A tap on a region, not a control** (`VIEWPORT-KEYBOARD-001`).
   `writeTapFlow` taps a coordinate read off the controls around it — the add
   panel's header level with its ✕, the empty links pane above the keyboard, the

@@ -21,18 +21,21 @@ import { PasswordInput } from './password-input';
 // So the field must be handed the un-masking FIRST and the keyboard type in the
 // commit after. The final props are identical either way —
 // lib/input-keyboard.spec.tsx passes for both — which is exactly why this is
-// pinned as a sequence. The stand-in below records what `Input` is given on each
-// render.
+// pinned as a sequence. The stand-in records the props in each committed render.
 const mockHanded: [unknown, unknown][] = [];
 jest.mock('../../components/ui/input', () => {
   const { TextInput } = jest.requireActual('react-native');
+  const { useLayoutEffect } = jest.requireActual('react');
   return {
     Input: (props: { secureTextEntry?: boolean; keyboardType?: string }) => {
-      const last = mockHanded[mockHanded.length - 1];
-      // Collapse the repeats a StrictMode double render produces.
-      if (!last || last[0] !== props.secureTextEntry || last[1] !== props.keyboardType) {
-        mockHanded.push([props.secureTextEntry, props.keyboardType]);
-      }
+      useLayoutEffect(() => {
+        const last = mockHanded[mockHanded.length - 1];
+        // Observe committed props, not speculative renders React may discard.
+        // Collapse StrictMode's repeated effect setup for the same props.
+        if (!last || last[0] !== props.secureTextEntry || last[1] !== props.keyboardType) {
+          mockHanded.push([props.secureTextEntry, props.keyboardType]);
+        }
+      }, [props.secureTextEntry, props.keyboardType]);
       return <TextInput {...props} />;
     },
   };

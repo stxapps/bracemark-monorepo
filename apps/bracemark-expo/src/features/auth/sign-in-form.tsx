@@ -297,7 +297,7 @@ function RecoverySignIn({
               ref={codeRef}
               autoFocus={!!lockedUsername}
               // A secret that is never masked — see lib/input-keyboard.ts for what
-              // the keyboard is told about it, and what that costs the capitals.
+              // the keyboard is told about it, and that the capitals survive it.
               autoCapitalize="characters"
               keyboardType={shownSecretKeyboardType()}
               returnKeyType="go"

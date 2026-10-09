@@ -7,10 +7,26 @@
 # Unlock button (y 536–576) was under the keyboard (from 539), so the tap went to
 # the keyboard and the password was never submitted.
 #
-# The field is emptied first and read back empty-by-placeholder, because a
-# rejected attempt leaves its text in place and `eraseText` deletes backwards from
-# the caret (recovery-sign-in.yaml). Then the iOS "Save Password?" sheet, which a
-# submitted secure field can raise over the app, is waved off if it comes.
+# The field is emptied first, because a rejected attempt leaves its text in place
+# — and on Android one `eraseText` does not empty it. `eraseText` deletes
+# BACKWARDS from the caret (recovery-sign-in.yaml), and the tap that gives the
+# field its focus also puts the caret where it landed: the field's centre, which
+# measured on the Pixel 8 AVD is 16 characters in. A refused 28-character
+# password kept its last 12, the real one was typed in front of them, and the
+# retry failed as a lock that refuses its own password. Raising the count does
+# nothing; the caret has to be at the END. Maestro has no key for that, but
+# Dpad Down on a field's last line is one — with a catch that decides the order
+# below: on a caret already at the end it moves the FOCUS instead, to the Unlock
+# button. So, only where a refusal is showing (`lock-pane-error`, which is up
+# exactly while the refused text is): erase what is before the caret, send the
+# caret to the end of what is left, erase that, and tap again — the field is
+# empty by then, so this tap can only put the caret at 0, and it takes the focus
+# back if the Dpad had nothing to move through and gave it away. Measured against
+# refused texts of 8, 28 and 40 characters. iOS needs none of it: a tap on a
+# secure field there puts the caret at the end.
+#
+# Then the iOS "Save Password?" sheet, which a submitted secure field can raise
+# over the app, is waved off if it comes.
 #
 # The field is tapped, unlike type-autofocused.yaml's, because its autofocus is
 # not a guarantee here: a rejected attempt's submit blurs it. But the pane is a
@@ -27,6 +43,19 @@ appId: com.bracemark.app
     timeout: 5000
 - tapOn:
     id: 'lock-pane-password'
+- runFlow:
+    when:
+      platform: Android
+      visible:
+        id: 'lock-pane-error'
+    commands:
+      - eraseText: 100
+      - pressKey: Remote Dpad Down
+      - eraseText: 100
+      - waitForAnimationToEnd:
+          timeout: 5000
+      - tapOn:
+          id: 'lock-pane-password'
 - eraseText: 100
 - inputText: ${PASSWORD}
 - pressKey: Enter

@@ -348,6 +348,16 @@
     "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
   },
   {
+    "id": "LOCK-FOCUS-WEB-001",
+    "title": "Locked-list navigation resets entry state and manual relock preserves drawer focus",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online", "destructive"],
+    "fixture": "small",
+    "path": "web/locks.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
     "id": "DATA-DELETE-ALL-WEB-001",
     "title": "Delete all repaints an already-mounted links page",
     "surface": "web",

@@ -435,6 +435,7 @@ export function MiscSection() {
 
       {lockDialog === 'set' && (
         <LockPasswordDialog
+          mode="create"
           onOpenChange={(open) => !open && setLockDialog(null)}
           title="Set app lock"
           description="Create a password to lock this app on this device. It takes effect the next time the app loads."

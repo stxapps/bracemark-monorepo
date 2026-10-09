@@ -667,6 +667,7 @@ export function ListsSection() {
 
       {lockDialog?.mode === 'add' && (
         <LockPasswordDialog
+          mode="create"
           onOpenChange={(open) => !open && setLockDialog(null)}
           title="Lock list"
           description="This list will be locked on this device only. If you forget the password, sign out to remove all locks on this device."

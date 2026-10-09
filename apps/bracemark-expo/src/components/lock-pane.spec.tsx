@@ -55,6 +55,49 @@ test('a pane arrived at asks: the field takes focus, or the sensor is prompted',
   expect(field().props.autoFocus).toBe(false);
 });
 
+test.each(['refused', 'throws'])(
+  'a verification that %s cannot publish an error over newer typing',
+  async (outcome) => {
+    let finish!: (ok: boolean) => void;
+    let fail!: (error: Error) => void;
+    const onUnlock = jest.fn(
+      () =>
+        new Promise<boolean>((resolve, reject) => {
+          finish = resolve;
+          fail = reject;
+        }),
+    );
+    await mount({ onUnlock });
+    fireEvent.changeText(field(), 'old-password');
+    fireEvent.press(screen.getByTestId('lock-pane-unlock'));
+    fireEvent.changeText(field(), 'corrected-password');
+    await act(async () => (outcome === 'refused' ? finish(false) : fail(new Error('failed'))));
+
+    expect(screen.queryByTestId('lock-pane-error')).toBeNull();
+    expect(screen.getByTestId('lock-pane-unlock')).not.toBeDisabled();
+    fireEvent.press(screen.getByTestId('lock-pane-unlock'));
+    expect(onUnlock).toHaveBeenLastCalledWith('corrected-password');
+    await act(async () => finish(false));
+    expect(screen.getByTestId('lock-pane-error')).toBeTruthy();
+  },
+);
+
+// The other side of the same rule, and the one a change COUNTER got wrong: an
+// edit that is undone before the answer arrives leaves the refused text in the
+// field, so the refusal is about what is on screen and has to show.
+test('a refusal still shows when the field was edited and put back meanwhile', async () => {
+  let finish!: (ok: boolean) => void;
+  const onUnlock = jest.fn(() => new Promise<boolean>((resolve) => (finish = resolve)));
+  await mount({ onUnlock });
+  fireEvent.changeText(field(), 'not-the-password');
+  fireEvent.press(screen.getByTestId('lock-pane-unlock'));
+  fireEvent.changeText(field(), 'not-the-passwordx');
+  fireEvent.changeText(field(), 'not-the-password');
+  await act(async () => finish(false));
+
+  expect(screen.getByTestId('lock-pane-error')).toBeTruthy();
+});
+
 test('a pane told not to solicit raises no keyboard', async () => {
   await mount({ solicit: false });
 
@@ -68,6 +111,11 @@ test('a pane told not to solicit runs no biometric prompt, and still offers the 
   expect(offered.onUnlock).not.toHaveBeenCalled();
   expect(field().props.autoFocus).toBe(false);
   expect(screen.getByText('Unlock with Face ID')).toBeTruthy();
+
+  fireEvent.press(screen.getByText('Unlock with Face ID'));
+  await act(() => Promise.resolve());
+  expect(offered.onUnlock).toHaveBeenCalledTimes(1);
+  expect(screen.getByTestId('lock-pane-unlock')).not.toBeDisabled();
 });
 
 // The host's answer can change under a pane that is still up — the auto-relock

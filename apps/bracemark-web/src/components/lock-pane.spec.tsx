@@ -38,6 +38,49 @@ test('a pane that mounts in the open takes focus in its field', () => {
   expect(document.activeElement).toBe(field());
 });
 
+test.each(['refused', 'throws'])(
+  'a verification that %s cannot publish an error over newer typing',
+  async (outcome) => {
+    let finish!: (ok: boolean) => void;
+    let fail!: (error: Error) => void;
+    const onUnlock = jest.fn(
+      () =>
+        new Promise<boolean>((resolve, reject) => {
+          finish = resolve;
+          fail = reject;
+        }),
+    );
+    render(<LockPane title="Locked" description="Enter the password" onUnlock={onUnlock} />);
+    fireEvent.change(field(), { target: { value: 'old-password' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Unlock' }));
+    fireEvent.change(field(), { target: { value: 'corrected-password' } });
+    await act(async () => (outcome === 'refused' ? finish(false) : fail(new Error('failed'))));
+
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Unlock' }).disabled).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Unlock' }));
+    expect(onUnlock).toHaveBeenLastCalledWith('corrected-password');
+    await act(async () => finish(false));
+    expect(screen.getByRole('alert')).toBeTruthy();
+  },
+);
+
+// The other side of the same rule, and the one a change COUNTER got wrong: an
+// edit that is undone before the answer arrives leaves the refused text in the
+// field, so the refusal is about what is on screen and has to show.
+test('a refusal still shows when the field was edited and put back meanwhile', async () => {
+  let finish!: (ok: boolean) => void;
+  const onUnlock = jest.fn(() => new Promise<boolean>((resolve) => (finish = resolve)));
+  render(<LockPane title="Locked" description="Enter the password" onUnlock={onUnlock} />);
+  fireEvent.change(field(), { target: { value: 'not-the-password' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Unlock' }));
+  fireEvent.change(field(), { target: { value: 'not-the-passwordx' } });
+  fireEvent.change(field(), { target: { value: 'not-the-password' } });
+  await act(async () => finish(false));
+
+  expect(screen.getByRole('alert')).toBeTruthy();
+});
+
 // What a Radix modal does to everything outside itself while it is open.
 test.each(['aria-hidden="true"', 'inert'])(
   'a pane that mounts under a modal (%s) leaves focus where it is',

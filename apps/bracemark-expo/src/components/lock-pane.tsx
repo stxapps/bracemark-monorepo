@@ -63,6 +63,10 @@ export function LockPane({
   testID?: string;
 }) {
   const [password, setPassword] = useState('');
+  // What the field holds NOW, for an answer that arrives later: `submit`'s
+  // closure only has the text it started with, and its verdict belongs on
+  // screen only if that is still what the field shows.
+  const latestPassword = useRef('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const { requestSignOut } = useSignOutFlow();
@@ -78,14 +82,19 @@ export function LockPane({
       setError(LOCK_COPY.errors.empty);
       return;
     }
+    const submitted = password;
     setBusy(true);
     setError(null);
     try {
-      const ok = await onUnlock(password);
-      if (ok) setPassword('');
-      else setError(LOCK_COPY.errors.wrong);
+      const ok = await onUnlock(submitted);
+      if (ok) {
+        latestPassword.current = '';
+        setPassword('');
+      } else if (latestPassword.current === submitted) {
+        setError(LOCK_COPY.errors.wrong);
+      }
     } catch {
-      setError(LOCK_COPY.errors.failed);
+      if (latestPassword.current === submitted) setError(LOCK_COPY.errors.failed);
     } finally {
       setBusy(false);
     }
@@ -185,6 +194,7 @@ export function LockPane({
             // where it belongs — `submit` returns while `busy`, and the button
             // is disabled. docs/soft-keyboard.md, _a submit drops it_.
             onChangeText={(text) => {
+              latestPassword.current = text;
               setPassword(text);
               if (error) setError(null);
             }}

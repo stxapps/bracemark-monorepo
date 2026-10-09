@@ -9,7 +9,7 @@
 // message shows inline and the field stays for a retry (callers map a failed
 // verify to "Password is not correct…").
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { lockPasswordSchema } from '@stxapps/shared';
@@ -34,6 +34,7 @@ export function LockPasswordDialog({
   description,
   submitLabel,
   checkboxLabel,
+  mode = 'verify',
   onSubmit,
 }: {
   onOpenChange: (open: boolean) => void;
@@ -42,12 +43,22 @@ export function LockPasswordDialog({
   submitLabel: string;
   // Present only on "Lock list" — the "Hide this list while locked" opt-in.
   checkboxLabel?: string;
+  // What the submitted password is FOR: a new one being set ('create' — Set app
+  // lock, Lock list) or an existing one being checked ('verify', the default —
+  // unlock and remove). Only 'create' holds its fields still while it saves.
+  mode?: 'create' | 'verify';
   onSubmit: (password: string, checked: boolean) => Promise<void>;
 }) {
   const [password, setPassword] = useState('');
+  // What the field holds now — see lock-pane.tsx, `latestPassword`.
+  const latestPassword = useRef('');
   const [checked, setChecked] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // A new password is a commitment: what was submitted is what gets saved, so
+  // the field and the hide option hold still until the write settles. A password
+  // being verified stays editable — a refused one is retyped in place.
+  const frozen = mode === 'create' && busy;
 
   const submit = async () => {
     if (busy) return;
@@ -58,13 +69,16 @@ export function LockPasswordDialog({
       return;
     }
 
+    const submitted = password;
     setBusy(true);
     setError(null);
     try {
       await onSubmit(parsed.data, checked);
       onOpenChange(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      if (latestPassword.current === submitted) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
       setBusy(false);
     }
   };
@@ -91,10 +105,16 @@ export function LockPasswordDialog({
               placeholder="Password"
               aria-label="Password"
               value={password}
-              // NO `editable={!busy}` — lock-pane.tsx carries the reason. The
-              // same prop sat here, on a field a rejected password leaves up
-              // for the retry.
+              // Non-editable ONLY while frozen: on native that also drops the
+              // keyboard, which a refused password being verified must keep for
+              // the retry (docs/soft-keyboard.md, _a submit drops it_).
+              editable={!frozen}
               onChangeText={(text) => {
+                // Not a repeat of `editable`: that lands natively a moment after
+                // the state does, and a keystroke already on its way still
+                // arrives here.
+                if (frozen) return;
+                latestPassword.current = text;
                 setPassword(text);
                 if (error) setError(null);
               }}
@@ -108,10 +128,19 @@ export function LockPasswordDialog({
               testID="lock-dialog-checkbox"
               role="checkbox"
               aria-checked={checked}
+              disabled={frozen}
+              aria-disabled={frozen}
               className="flex-row items-center gap-2"
               onPress={() => setChecked((v) => !v)}
             >
-              <Checkbox checked={checked} onCheckedChange={(v) => setChecked(v === true)} />
+              {/* Disabled on its own account: the box is a pressable inside the
+                  row's, with its own hit slop, and the row's `disabled` does not
+                  reach it. */}
+              <Checkbox
+                checked={checked}
+                disabled={frozen}
+                onCheckedChange={(v) => setChecked(v === true)}
+              />
               <Text className="min-w-0 flex-1 text-sm">{checkboxLabel}</Text>
             </Pressable>
           )}

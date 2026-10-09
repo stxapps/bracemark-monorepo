@@ -1,5 +1,15 @@
-# Set the app lock in Settings, cold-start into its gate, refuse a wrong password,
-# open with the real one, then relock from the topbar menu without a restart.
+# Set the app lock in Settings and cold-start into its gate — THIS FILE IS THE
+# FIRST STEP OF A RUNNER-DRIVEN CASE. It ends on the gate; runner/mobile.ts reads
+# the soft keyboard there (UP: a lock arrived at asks for entry), runs
+# `parts/lock-app-unlock-and-relock.yaml` — refuse a wrong password, open with the
+# real one, relock from the topbar menu without a restart — reads the keyboard
+# again (DOWN: a hand relock does not ask to be undone, docs/locks.md), and
+# finishes with `parts/lock-app-reopen.yaml`.
+#
+# The keyboard is read on the host, between Maestro runs, for two reasons. On
+# Android the IME is its own window and in no flow's tree (runner/keyboard.ts).
+# And the unlock subflow taps the field before it types, so a flow that only
+# unlocked would pass over an autofocus that had stopped working.
 #
 # What only a device shows: the verifier row in expo-sqlite, the gate winning the
 # cold start (AppLockGate renders nothing while `checking`, then the pane — never
@@ -67,47 +77,4 @@ tags: [LOCK-APP-002, full, online, destructive, ios, android]
     id: 'links-screen'
 - assertNotVisible: ".*${ANCHOR_URL.replace('https://', '')}.*"
 - takeScreenshot: app-lock-after-cold-start
-
-- runFlow:
-    file: subflows/unlock-pane.yaml
-    env:
-      PASSWORD: '${LOCK_PASSWORD}-wrong'
-- extendedWaitUntil:
-    visible:
-      id: 'lock-pane-error'
-    timeout: 20000
-- assertVisible:
-    id: 'app-lock-pane'
-- assertNotVisible:
-    id: 'links-screen'
-
-- runFlow:
-    file: subflows/unlock-pane.yaml
-    env:
-      PASSWORD: ${LOCK_PASSWORD}
-- extendedWaitUntil:
-    visible: ".*${ANCHOR_URL.replace('https://', '')}.*"
-    timeout: 20000
-- assertNotVisible:
-    id: 'app-lock-pane'
-
-# --- relock by hand ---------------------------------------------------------------------------
-- tapOn:
-    id: 'links-more-options'
-- tapOn:
-    id: 'links-lock-app'
-- extendedWaitUntil:
-    visible:
-      id: 'app-lock-pane'
-    timeout: 10000
-- assertNotVisible:
-    id: 'links-screen'
-- assertNotVisible: ".*${ANCHOR_URL.replace('https://', '')}.*"
-- takeScreenshot: app-lock-after-manual-relock
-- runFlow:
-    file: subflows/unlock-pane.yaml
-    env:
-      PASSWORD: ${LOCK_PASSWORD}
-- extendedWaitUntil:
-    visible: ".*${ANCHOR_URL.replace('https://', '')}.*"
-    timeout: 20000
+# Ends here, on the gate: the runner reads the keyboard before the parts run.

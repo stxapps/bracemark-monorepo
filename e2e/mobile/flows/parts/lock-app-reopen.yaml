@@ -1,0 +1,13 @@
+# Part of LOCK-APP-002 (mobile/flows/lock-app.yaml carries the case). Runs after
+# the runner has read the keyboard DOWN on the hand-relocked gate: the pane that
+# did not ask still opens when asked — the subflow taps the field itself — and
+# the app comes back with the anchor link showing.
+appId: com.bracemark.app
+---
+- runFlow:
+    file: ../subflows/unlock-pane.yaml
+    env:
+      PASSWORD: ${LOCK_PASSWORD}
+- extendedWaitUntil:
+    visible: ".*${ANCHOR_URL.replace('https://', '')}.*"
+    timeout: 20000

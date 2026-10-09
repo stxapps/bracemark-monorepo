@@ -714,6 +714,23 @@ async function main(): Promise<void> {
         env.ANCHOR_URL = unresolvableUrl(`${run.runId}-lock-anchor`);
         env.LOCK_PASSWORD = unique('lock-password');
       }
+      if (testCase.id === 'LOCK-APP-002') {
+        const assertKeyboard = (up: boolean) => async (context: CaseStepContext) => {
+          const { keyboard } = await settledKeyboard(context, up);
+          expect(
+            Boolean(keyboard),
+            up ? 'cold-start lock asks for entry' : 'manual relock stays quiet',
+          ).toBe(up);
+          return null;
+        };
+        steps = [
+          testCase.path,
+          assertKeyboard(true),
+          'mobile/flows/parts/lock-app-unlock-and-relock.yaml',
+          assertKeyboard(false),
+          'mobile/flows/parts/lock-app-reopen.yaml',
+        ];
+      }
       if (testCase.id === 'LOCK-AUTORELOCK-001') {
         steps = [
           testCase.path,

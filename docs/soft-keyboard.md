@@ -669,9 +669,12 @@ The specimens were the two lock fields, `lock-pane.tsx` and
 keyboard and both carrying the prop. The pane calls no `Keyboard.dismiss()`, yet
 a press on Unlock with a wrong password ended with the error showing and the
 keyboard down, and the retype cost the same tap the dismissing sites pay. Their
-web twins never disabled the field. The prop is gone from both, and each has a
-spec that fails if it returns (`lock-pane.spec.tsx`,
-`lock-password-dialog.spec.tsx`).
+web twins never disabled the field. Verification leaves both fields editable,
+and each has a spec guarding that retry (`lock-pane.spec.tsx`,
+`lock-password-dialog.spec.tsx`). Creating a lock is a commitment: its dialog
+takes `mode="create"`, holds the password and hide option steady while saving,
+and restores editing on failure. The native password field then goes
+non-editable; web uses `readOnly` so focus remains in the field.
 
 So the rule has two halves:
 
@@ -681,13 +684,25 @@ So the rule has two halves:
 - **A field is taken away only where the form is a commitment the screen must
   keep showing while it runs**: `account-section.tsx`'s delete account, change
   password and recovery code (`new-password-field.tsx` through its `disabled`
-  prop), as on web. A new password edited while it is being applied is a password
-  the user remembers wrongly. Those are also the sites in the table above, which
-  have dismissed the keyboard already, so the side effect costs them nothing.
+  prop), and creating an app/list lock (`LockPasswordDialog` with
+  `mode="create"`). A new password edited while it is being applied is a
+  password the user remembers wrongly. The account operations in the table above have dismissed
+  the keyboard already. Lock creation deliberately accepts the dismissal;
+  verification keeps the keyboard for a retry.
 
 Everything else — both sign-in doors, the add panel, the editors, the rename
-fields, the pickers, the two lock fields — leaves its fields editable, and
+fields, the pickers, lock verification — leaves its fields editable, and
 decides the keyboard on purpose or not at all.
+
+Because verification stays editable, both lock surfaces keep the field's latest
+text in a ref beside the state. A refused or failed attempt may publish its
+field error only if the field still holds what that attempt submitted; a late
+answer must not label corrected typing as wrong. The comparison is by VALUE, not
+by a count of edits: a character typed and deleted while the answer was pending
+leaves the refused text on screen, and a counter would have swallowed that
+refusal. The pending button still prevents a second attempt until the first
+settles. Component specs cover refusal, failure, retry with the edited value,
+and the edit that was put back.
 
 One asymmetry remains in the lock pane, and it is the platform's: Return on a
 single-line field blurs before it submits (1), so a wrong password sent from the

@@ -10,7 +10,7 @@
 // message shows inline and the field stays for a retry (callers map a failed
 // verify to "Password is not correct…").
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { lockPasswordSchema } from '@stxapps/shared';
 import { PasswordInput } from '@stxapps/web-ui/components/auth/password-input';
@@ -33,6 +33,10 @@ interface LockPasswordDialogProps {
   submitLabel: string;
   // Present only on "Lock list" — the "Hide this list while locked" opt-in.
   checkboxLabel?: string;
+  // What the submitted password is FOR: a new one being set ('create' — Set app
+  // lock, Lock list) or an existing one being checked ('verify', the default —
+  // unlock and remove). Only 'create' holds its fields still while it saves.
+  mode?: 'create' | 'verify';
   onSubmit: (password: string, checked: boolean) => Promise<void>;
 }
 
@@ -42,12 +46,19 @@ export function LockPasswordDialog({
   description,
   submitLabel,
   checkboxLabel,
+  mode = 'verify',
   onSubmit,
 }: LockPasswordDialogProps) {
   const [password, setPassword] = useState('');
+  // What the field holds now — see lock-pane.tsx, `latestPassword`.
+  const latestPassword = useRef('');
   const [checked, setChecked] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // A new password is a commitment: what was submitted is what gets saved, so
+  // the field and the hide option hold still until the write settles. A password
+  // being verified stays editable — a refused one is retyped in place.
+  const frozen = mode === 'create' && busy;
 
   const submit = async (e: React.SubmitEvent) => {
     e.preventDefault();
@@ -59,13 +70,16 @@ export function LockPasswordDialog({
       return;
     }
 
+    const submitted = password;
     setBusy(true);
     setError(null);
     try {
       await onSubmit(parsed.data, checked);
       onOpenChange(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      if (latestPassword.current === submitted) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
       setBusy(false);
     }
   };
@@ -95,7 +109,13 @@ export function LockPasswordDialog({
                 placeholder="Password"
                 aria-label="Password"
                 value={password}
+                // `readOnly`, not `disabled`, and ONLY while frozen: focus stays
+                // in the field either way, where the expo twin's `editable` drops
+                // the keyboard. A read-only input fires no change event, so this
+                // handler needs no guard of its own (the expo one does).
+                readOnly={frozen}
                 onChange={(e) => {
+                  latestPassword.current = e.target.value;
                   setPassword(e.target.value);
                   if (error) setError(null);
                 }}
@@ -111,6 +131,7 @@ export function LockPasswordDialog({
               <div className="flex items-center gap-2">
                 <Checkbox
                   id="lock-dialog-checkbox"
+                  disabled={frozen}
                   checked={checked}
                   onCheckedChange={(v) => setChecked(v === true)}
                 />

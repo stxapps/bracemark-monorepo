@@ -1,0 +1,44 @@
+# Part of LOCK-APP-002 (mobile/flows/lock-app.yaml carries the case). Runs on the
+# app lock's gate after the cold start, once the runner has read the keyboard UP:
+# refuse a wrong password, open with the real one, then relock by hand from the
+# topbar menu. It ends on the gate again, where the runner reads the keyboard
+# DOWN — a hand relock does not ask to be undone (docs/locks.md) — so nothing
+# after "Lock app" here may touch the field.
+appId: com.bracemark.app
+---
+- runFlow:
+    file: ../subflows/unlock-pane.yaml
+    env:
+      PASSWORD: '${LOCK_PASSWORD}-wrong'
+- extendedWaitUntil:
+    visible:
+      id: 'lock-pane-error'
+    timeout: 20000
+- assertVisible:
+    id: 'app-lock-pane'
+- assertNotVisible:
+    id: 'links-screen'
+
+- runFlow:
+    file: ../subflows/unlock-pane.yaml
+    env:
+      PASSWORD: ${LOCK_PASSWORD}
+- extendedWaitUntil:
+    visible: ".*${ANCHOR_URL.replace('https://', '')}.*"
+    timeout: 20000
+- assertNotVisible:
+    id: 'app-lock-pane'
+
+# --- relock by hand ---------------------------------------------------------------------------
+- tapOn:
+    id: 'links-more-options'
+- tapOn:
+    id: 'links-lock-app'
+- extendedWaitUntil:
+    visible:
+      id: 'app-lock-pane'
+    timeout: 10000
+- assertNotVisible:
+    id: 'links-screen'
+- assertNotVisible: ".*${ANCHOR_URL.replace('https://', '')}.*"
+- takeScreenshot: app-lock-after-manual-relock

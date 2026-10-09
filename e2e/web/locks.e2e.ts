@@ -70,6 +70,7 @@ test.describe('locks', () => {
       await page.goto('/links');
       await expect(page.getByRole('heading', { name: 'Bracemark is locked' })).toBeVisible();
       await expect(linkRow(page, anchor)).toHaveCount(0);
+      await expect(page.getByLabel('Password', { exact: true })).toBeFocused();
       expect(await readTrace(page)).not.toContain('app');
 
       // --- wrong, then right ----------------------------------------------------
@@ -92,6 +93,7 @@ test.describe('locks', () => {
       await page.getByRole('menuitem', { name: 'Lock app' }).click();
       await expect(page.getByRole('heading', { name: 'Bracemark is locked' })).toBeVisible();
       await expect(linkRow(page, anchor)).toHaveCount(0);
+      await expect(page.getByLabel('Password', { exact: true })).toBeFocused();
       await unlockPane(page, password);
       await expect(linkRow(page, anchor)).toHaveCount(1);
 
@@ -191,6 +193,71 @@ test.describe('locks', () => {
       await expect(linkRow(page, covered)).toHaveCount(1);
       await openSidebarItem(page, 'Show All');
       await expect(linkRow(page, covered)).toHaveCount(1);
+    },
+  );
+
+  test(
+    'each locked list gets fresh entry state, and a hand relock keeps focus inside the open drawer',
+    { tag: ['@LOCK-FOCUS-WEB-001', '@full', '@online', '@destructive'] },
+    async ({ isolatedApp: app }) => {
+      const { page, credentials } = app;
+      await grantPlusAndLoad(page, credentials.username);
+      const first = unique('E2e focus first');
+      const second = unique('E2e focus second');
+      const password = unique('focus-lock-password');
+      await createInSettings(page, 'list', first);
+      await createInSettings(page, 'list', second);
+      await lockListInSettings(page, first, password);
+      await lockListInSettings(page, second, password);
+      await page.goto('/links');
+      await openSidebarItem(page, `${first} Locked`);
+      const field = page.getByLabel('Password', { exact: true });
+      await expect(field).toBeFocused();
+      await field.fill('password-for-the-first-pane');
+      await page.getByRole('button', { name: 'Show password', exact: true }).click();
+      await openSidebarItem(page, `${second} Locked`);
+      await expect(field).toHaveValue('');
+      await expect(field).toHaveAttribute('type', 'password');
+      await expect(field).toBeFocused();
+      await unlockPane(page, password);
+      await expect(page.getByRole('heading', { name: 'This list is locked' })).toHaveCount(0);
+
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.getByRole('banner').getByRole('button', { name: second, exact: true }).click();
+      const drawer = page.getByRole('dialog', { name: 'Lists and tags' });
+      await expect(drawer).toBeVisible();
+      const row = drawer.getByRole('button', { name: second, exact: true }).locator('..');
+      await page.evaluate(() => {
+        const trace = window as unknown as { __hiddenLockFocus: boolean };
+        trace.__hiddenLockFocus = false;
+        document.addEventListener('focusin', (event) => {
+          const target = event.target;
+          if (
+            target instanceof HTMLInputElement &&
+            target.getAttribute('aria-label') === 'Password' &&
+            target.closest('[aria-hidden="true"], [inert]')
+          )
+            trace.__hiddenLockFocus = true;
+        });
+      });
+      await row.getByRole('button', { name: 'Lock list', exact: true }).click();
+      await expect(page.locator('main input[aria-label="Password"]')).toHaveCount(1);
+      // Check settled focus; also prove no transient focus escaped to the hidden
+      // pane while the drawer stayed up.
+      await expect
+        .poll(() => drawer.evaluate((el) => el.contains(document.activeElement)))
+        .toBe(true);
+      await expect(page.locator('main input[aria-label="Password"]')).not.toBeFocused();
+      expect(
+        await page.evaluate(
+          () => (window as unknown as { __hiddenLockFocus: boolean }).__hiddenLockFocus,
+        ),
+      ).toBe(false);
+      await drawer.getByRole('button', { name: 'Close navigation' }).click();
+      await expect(drawer).toHaveCount(0);
+      await expect(page.getByRole('heading', { name: 'This list is locked' })).toBeVisible();
+      await unlockPane(page, password);
+      await expect(page.getByRole('heading', { name: 'This list is locked' })).toHaveCount(0);
     },
   );
 });
