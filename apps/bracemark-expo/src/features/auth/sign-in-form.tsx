@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { Controller } from 'react-hook-form';
-import { Keyboard, Pressable, View } from 'react-native';
+import { Keyboard, Pressable, type TextInput, View } from 'react-native';
 
 import {
   InvalidCredentialsError,
@@ -15,6 +15,7 @@ import { ErrorText } from '../../components/error-text';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Text } from '../../components/ui/text';
+import { advanceTo, shownSecretKeyboardType } from '../../lib/input-keyboard';
 import { cn } from '../../lib/utils';
 import { PasswordInput } from './password-input';
 
@@ -81,6 +82,10 @@ function PasswordSignIn({
     formState: { errors, isSubmitting },
   } = useSignInForm(lockedUsername);
   const signIn = useSignIn();
+  // Return on the username goes to the password instead of dropping the
+  // keyboard (lib/input-keyboard.ts). Not wired while the username is locked:
+  // that field is not editable, so nothing can press Return in it.
+  const passwordRef = React.useRef<TextInput>(null);
 
   // The credential failure is a submit-level `root` error, not tied to a field,
   // so react-hook-form's onChange re-validation never clears it. Drop it as soon
@@ -139,9 +144,8 @@ function PasswordSignIn({
               aria-label="Username"
               aria-invalid={!!errors.username}
               autoComplete="username"
-              autoCapitalize="none"
-              autoCorrect={false}
               editable={!lockedUsername}
+              {...advanceTo(passwordRef)}
               className={cn(errors.username && 'border-destructive')}
               value={field.value}
               onBlur={field.onBlur}
@@ -162,8 +166,10 @@ function PasswordSignIn({
           name="password"
           render={({ field }) => (
             <PasswordInput
+              ref={passwordRef}
               testID="sign-in-password"
               aria-label="Password"
+              returnKeyType="go"
               aria-invalid={!!errors.password}
               autoComplete="current-password"
               className={cn(errors.password && 'border-destructive')}
@@ -221,6 +227,7 @@ function RecoverySignIn({
     formState: { errors, isSubmitting },
   } = useRecoverySignInForm(lockedUsername);
   const signIn = useSignInWithRecovery();
+  const codeRef = React.useRef<TextInput>(null);
 
   const clearRootError = () => {
     if (errors.root) clearErrors('root');
@@ -261,10 +268,9 @@ function RecoverySignIn({
               aria-label="Username"
               aria-invalid={!!errors.username}
               autoComplete="username"
-              autoCapitalize="none"
-              autoCorrect={false}
               autoFocus={!lockedUsername}
               editable={!lockedUsername}
+              {...advanceTo(codeRef)}
               className={cn(errors.username && 'border-destructive')}
               value={field.value}
               onBlur={field.onBlur}
@@ -288,10 +294,13 @@ function RecoverySignIn({
               testID="sign-in-recovery-code"
               aria-label="Recovery code"
               aria-invalid={!!errors.recoveryCode}
+              ref={codeRef}
               autoFocus={!!lockedUsername}
-              autoComplete="off"
+              // A secret that is never masked — see lib/input-keyboard.ts for what
+              // the keyboard is told about it, and what that costs the capitals.
               autoCapitalize="characters"
-              autoCorrect={false}
+              keyboardType={shownSecretKeyboardType()}
+              returnKeyType="go"
               className={cn('font-mono', errors.recoveryCode && 'border-destructive')}
               value={field.value}
               onBlur={field.onBlur}

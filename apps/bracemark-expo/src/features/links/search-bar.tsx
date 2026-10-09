@@ -130,7 +130,8 @@ function initDraft(q: LinkQuery): Draft {
 }
 
 // A labeled word field in the advanced editor (web's Field + FieldLabel pair).
-// Search terms, not prose — autocapitalize/autocorrect off.
+// Search terms, not prose — which is `Input`'s exact-entry default, so no
+// typing hints are restated here (docs/editors.md, _typing assistance_).
 //
 // The label is ALSO the input's `aria-label`: RN has no `<label for>`, so the
 // visually adjacent Text named nothing, and VoiceOver announced six unnamed
@@ -158,8 +159,6 @@ function WordField({
         value={value}
         placeholder={placeholder}
         onChangeText={onChangeText}
-        autoCapitalize="none"
-        autoCorrect={false}
         className="h-9"
       />
     </View>
@@ -228,8 +227,6 @@ function TriCheckList({
           onChangeText={setFilter}
           placeholder={`Filter ${label.toLowerCase()}…`}
           aria-label={`Filter ${label.toLowerCase()}`}
-          autoCapitalize="none"
-          autoCorrect={false}
           // `py-0`, for ui/button.tsx's reason: the height is pinned, so the
           // padding sizes nothing and only takes room from the line. 32 minus
           // Input's `py-1` and the border left 22 for a `text-sm` line that is
@@ -791,8 +788,6 @@ export function SearchBar() {
           onSubmitEditing={submitBasic}
           returnKeyType="search"
           autoFocus
-          autoCapitalize="none"
-          autoCorrect={false}
           placeholder="Search links…"
           aria-label="Search links"
           className="h-9 pr-8 pl-8"

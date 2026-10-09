@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Pressable, View } from 'react-native';
+import { Pressable, type TextInput, View } from 'react-native';
 import { ChevronLeft, RefreshCw } from 'lucide-react-native';
 
 import { useCreateAccount, UsernameTakenError } from '@stxapps/expo-react';
@@ -11,6 +11,7 @@ import { Button } from '../../components/ui/button';
 import { Icon } from '../../components/ui/icon';
 import { Input } from '../../components/ui/input';
 import { Text } from '../../components/ui/text';
+import { advanceTo } from '../../lib/input-keyboard';
 import { cn } from '../../lib/utils';
 import { NewPasswordField, useNewPassword } from './new-password-field';
 import { PasswordInput } from './password-input';
@@ -89,6 +90,11 @@ export function CreateAccountForm() {
   // all of it, shared with Settings → change password. `username` is the zxcvbn
   // penalty term.
   const newPassword = useNewPassword({ username });
+  // Return on the username goes on to the password — when there is a password
+  // FIELD, which is typed mode only. The default is a generated passphrase, shown
+  // rather than entered, and there Return keeps its plain job of putting the
+  // keyboard away (lib/input-keyboard.ts).
+  const passwordRef = React.useRef<TextInput>(null);
 
   const [confirmInput, setConfirmInput] = React.useState('');
   const [confirmError, setConfirmError] = React.useState(false);
@@ -183,10 +189,17 @@ export function CreateAccountForm() {
               focuses — see the confirm step below. docs/soft-keyboard.md,
               _arrival_. */}
           <Input
+            // RN has no <label for>: the Text above names nothing to a screen
+            // reader, so the field is named directly (sign-in-form.tsx's header).
+            aria-label="Username"
+            // `username-new` is Android's autofill hint and has no iOS mapping in
+            // React Native, which turns only the tokens it knows into a
+            // `textContentType` — so iOS was left to guess what this field is,
+            // beside a `new-password` field it offers to save a login for.
             autoComplete="username-new"
-            autoCapitalize="none"
-            autoCorrect={false}
+            textContentType="username"
             className={cn(usernameInvalid && 'border-destructive')}
+            {...(newPassword.mode === 'own' ? advanceTo(passwordRef) : null)}
             value={username}
             onChangeText={(text) => {
               setUsername(text);
@@ -202,7 +215,7 @@ export function CreateAccountForm() {
           </Text>
         </View>
 
-        <NewPasswordField control={newPassword} copy="create" />
+        <NewPasswordField control={newPassword} copy="create" inputRef={passwordRef} />
 
         <Button disabled={!canContinueSetup} onPress={goConfirm}>
           <Text>Continue</Text>

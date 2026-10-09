@@ -716,7 +716,17 @@ right answers:
   `new-password` (expo: `username` / `username-new`, `current-password`,
   `new-password`). That token is what lets a password manager fill the field and
   what WCAG 1.3.5 (_Identify Input Purpose_) asks for; without it the manager
-  guesses, and it guesses per field.
+  guesses, and it guesses per field. Two places where the token alone is not
+  enough:
+  - **expo's `username-new` reaches Android only.** React Native turns the
+    tokens it knows into an iOS `textContentType`, and that one is not among
+    them, so on iOS create-account's username said nothing and the OS guessed.
+    It carries `textContentType="username"` beside the token.
+  - **web's change-password form has no username to read.** It holds a
+    `current-password` and a `new-password`, so a manager asked to update a
+    saved login cannot tell which one. The form carries a `hidden` text input
+    with `autocomplete="username"` and the account's username as its value —
+    a text input, not `type="hidden"`, which a manager skips.
 - **Everything else is `off`, and it is `off` by default.** The input
   primitives apply it themselves — web-ui's `ui/input.tsx` and `ui/textarea.tsx`,
   expo's `ui/input.tsx` (which `Textarea` and `PasswordInput` both go through) —
@@ -734,8 +744,9 @@ lints, every flow passes, and the evidence is a suggestion on one person's own
 machine. `input.spec.tsx` on each platform pins both answers.
 
 A field built on a raw `<input>` or a bare `TextInput` gets neither answer and
-has to state one. The two there are today are file pickers, which have no value
-to keep, and cmdk's filter field sets `off` itself.
+has to state one. The ones there are today are file pickers, which have no value
+to keep; the change-password form's hidden username, which states `username`;
+and cmdk's filter field, which sets `off` itself.
 
 Autofill is separate from capitalization, autocorrection and spellcheck. The
 primitives also declare those defaults: exact entry for `Input`, prose assistance

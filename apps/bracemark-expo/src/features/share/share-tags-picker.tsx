@@ -93,8 +93,6 @@ export function ShareTagsPicker({
         submitBehavior="submit"
         placeholder="Search or create tags…"
         aria-label="Search or create tags"
-        autoCapitalize="none"
-        autoCorrect={false}
         className="h-9"
       />
 

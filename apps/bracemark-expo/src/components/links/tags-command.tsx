@@ -98,8 +98,6 @@ export function TagsCommand({
         submitBehavior="submit"
         placeholder="Search or create tags…"
         aria-label="Search or create tags"
-        autoCapitalize="none"
-        autoCorrect={false}
         className="h-9"
       />
       {/* `interactive` for list-command.tsx's reason: the host Dialog

@@ -341,6 +341,29 @@ with no press handler — between the Enter and the shutter. Worth checking in a
 capture that ends on a `pressKey`, since nothing else reports it: the flow is
 green, the pixels are wrong, and the result ships to a store listing.
 
+**It also hides the keyboard, whatever the field asked for.** React Native's
+Android `ReactEditText.onKeyUp` calls `hideSoftKeyboard()` for a hardware
+`KEYCODE_ENTER` on any single-line field, before `submitBehavior` is consulted —
+so `adb shell input keyevent 66` and `pressKey: Enter` both put the keyboard away
+on a field that sets `submitBehavior="submit"` precisely to keep it. Measured on
+sign-in's username, which hands Return on to the password
+(`lib/input-keyboard.ts`): the focus moved correctly and `mImeShowing` read
+`false` for as long as it was polled, which is a failing result for a feature that
+works. The soft keyboard's own action key is a different code path
+(`onEditorAction`) and is the one a person presses, so **a "Return keeps the
+keyboard" check has to tap that key** — by coordinate, read off a screenshot,
+since the IME's keys are not in `uiautomator`'s dump of the app window. With that
+tap the same field read `mImeShowing=true` with the password focused. iOS has no
+such split: Maestro's `pressKey: Enter` types the return key there.
+
+Two readings that made those checks possible with `adb` alone, no screenshot:
+`dumpsys window | grep mImeShowing` for whether the keyboard is up, and the first
+`inputType=0x… imeOptions=0x…` in `dumpsys input_method` for what the focused
+field told it — the low nibble of `imeOptions` is the action (`2` go, `3` search,
+`5` next, `6` done). The second one only refreshes when input RESTARTS, so a
+`returnKeyType` changed under a field that keeps its focus shows the old label
+until the next focus; refocus before reading it.
+
 #### ⚠ a text match can resolve to a node under the drawer
 
 **Android's hierarchy contains views an overlay covers, so a `tapOn` by text can

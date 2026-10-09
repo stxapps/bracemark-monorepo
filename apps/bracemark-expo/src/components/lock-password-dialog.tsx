@@ -91,7 +91,9 @@ export function LockPasswordDialog({
               placeholder="Password"
               aria-label="Password"
               value={password}
-              editable={!busy}
+              // NO `editable={!busy}` — lock-pane.tsx carries the reason. The
+              // same prop sat here, on a field a rejected password leaves up
+              // for the retry.
               onChangeText={(text) => {
                 setPassword(text);
                 if (error) setError(null);

@@ -977,12 +977,63 @@ learning. Expo's `spellCheck` and `smartInsertDelete` props apply to iOS;
 `autoCorrect` controls correction on both native platforms. Browser and keyboard
 support and user preferences still affect the resulting assistance.
 
+**A call site states only what differs from its primitive.** The defaults above
+are the answer for a field that says nothing, so `autoCapitalize="none"`,
+`autoCorrect={false}`, `spellCheck={false}` and `autoComplete="off"` are not
+written at a call site built on `Input` — a dozen were, left over from before
+the primitives declared them, and they hid which props were real decisions. What
+remains at call sites is the overrides: the credential tokens, a recovery code's
+`autoCapitalize="characters"`, and Title's prose set.
+
 `inputMode`/`keyboardType`, return-key labels, autofocus and `maxLength` belong to
 the caller's field purpose, not the shared typing default. In particular, the
 URL fields keep `inputMode="url"`, titles/notes keep their shared text caps, and
 native multiline fields leave `submitBehavior` unset so Return inserts a newline.
 Their keyboard-dismissal paths remain the container's responsibility
 ([soft-keyboard.md](./soft-keyboard.md#dismissal--how-the-user-gets-it-back-off)).
+The purpose-level answers in use:
+
+| field                                            | sets                                                                        | why                                                                                                                                     |
+| ------------------------------------------------ | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| the links search box                             | web `enterKeyHint="search"`; expo `returnKeyType="search"`                  | Return runs the search, and the key should say so. Not `type="search"`, which adds the browser's own clear button beside ours.          |
+| expo: a field with a NEXT field in the same form | `advanceTo(ref)` — `returnKeyType="next"`, `submitBehavior="submit"`, focus | Return on a username otherwise drops the keyboard a tap away from the password. Web needs nothing: a browser walks a form's fields.     |
+| expo: the last field of a sign-in door           | `returnKeyType="go"`                                                        | Return submits (`onSubmitEditing`).                                                                                                     |
+| expo: a revealed password, and a recovery code   | Android `keyboardType="visible-password"` (`shownSecretKeyboardType()`)     | A secret shown in the clear is otherwise an ordinary text field to the IME — Gboard showed a revealed password in its suggestion strip. |
+| a password, a username, a lock password, a URL   | **no** `maxLength`                                                          | It truncates a paste without saying so; the schema's message is the better answer. Only Title and Note carry one.                       |
+| "URL contains" (advanced search)                 | **no** `inputMode="url"`                                                    | It is a word search, and the URL keyboard has no space bar.                                                                             |
+
+The two expo helpers live in `lib/input-keyboard.ts`, which carries the
+reasoning. `advanceTo` is wired on both sign-in doors, and on create-account's
+username and change-password's proof field **only while the new password is
+typed** — the default there is a generated passphrase, which is shown rather than
+entered, so there is no next field and Return keeps its plain job.
+
+⚠ **On a field that is also masked, the keyboard type must arrive a commit AFTER
+the un-masking**, and nothing but a device shows it when it doesn't. React
+Native's Android setters for `secureTextEntry={false}` and
+`keyboardType="visible-password"` write the same input-type bits, and delivered
+in one update the un-masking's clear lands last. Measured on the Pixel 8 AVD
+(Android 16, Gboard), reading the focused field's `inputType`:
+
+| the revealed field was handed…     | `inputType` | the keyboard                                     |
+| ---------------------------------- | ----------- | ------------------------------------------------ |
+| nothing (before this rule)         | `0x80001`   | ordinary text; the password shows in the strip   |
+| both props in ONE update           | `0x80000`   | no input class at all; the strip stays           |
+| the keyboard type one commit later | `0x80090`   | Gboard's password keyboard: number row, no strip |
+
+`PasswordInput` therefore holds the keyboard type back by one commit on the way
+to shown (`features/auth/password-input.tsx`), and `password-input.spec.tsx` pins
+the sequence — the final props are identical in the failing and the working
+version, so only the order can be asserted. A field that is never masked passes
+the type directly: the recovery code reads `0x81090` and keeps its capitals.
+
+**Driven on both platforms** — the Pixel 8 AVD and the iPhone 17 Pro simulator
+(iOS 26.5): Return on a sign-in username moves to the next field with the
+keyboard up, and the key reads "next" then "go"; on change password the proof
+field offers "next" only in typed mode; the fields that had no accessible name
+now expose one (all four on Android; create-account's on iOS). `visible-password` is Android-only and was driven there. Not
+driven: a keyboard other than Gboard, and iOS's reading of
+`textContentType="username"`, which has no surface a driver can query.
 
 ### invariants every editor must uphold
 

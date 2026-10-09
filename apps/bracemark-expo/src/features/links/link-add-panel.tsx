@@ -615,8 +615,6 @@ export function LinkAddPanel({ onClose }: { onClose: () => void }) {
                     aria-invalid={urlError !== null}
                     autoFocus
                     inputMode="url"
-                    autoCapitalize="none"
-                    autoCorrect={false}
                   />
                   {urlError !== null ? (
                     <ErrorText className="text-xs">{urlError}</ErrorText>

@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Pressable, View } from 'react-native';
+import { Pressable, type TextInput, View } from 'react-native';
 import { RefreshCw } from 'lucide-react-native';
 
 import { type FieldMessage, NEW_PASSWORD_COPY, newPasswordMessage } from '@stxapps/react';
@@ -97,11 +97,16 @@ export function NewPasswordField({
   // regenerate. Settings hangs its "Incorrect password." reset off this; nothing on
   // create-account needs it.
   onEdit,
+  inputRef,
 }: {
   control: NewPasswordControl;
   copy: 'create' | 'change';
   disabled?: boolean;
   onEdit?: () => void;
+  // The typed-password field, for a host whose previous field hands Return on to
+  // it (lib/input-keyboard.ts). There is nothing to point at in generated mode —
+  // no field is shown — so a host checks `control.mode` before it advances.
+  inputRef?: React.Ref<TextInput>;
 }) {
   const copy = NEW_PASSWORD_COPY[which];
   const {
@@ -174,6 +179,7 @@ export function NewPasswordField({
           Text above it. */}
       <Text className="text-sm">{copy.label}</Text>
       <PasswordInput
+        ref={inputRef}
         aria-label={copy.label}
         aria-invalid={invalid}
         autoComplete="new-password"

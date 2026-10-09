@@ -5,8 +5,8 @@
 // links ⋯ menu owns it on this platform). Sub-views are in-section VIEW STATE
 // (a local `view` swap), not routes, exactly like web.
 
-import { useState } from 'react';
-import { Keyboard, Pressable, View } from 'react-native';
+import { useRef, useState } from 'react';
+import { Keyboard, Pressable, type TextInput, View } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import {
@@ -43,6 +43,7 @@ import { Checkbox } from '../../components/ui/checkbox';
 import { Icon } from '../../components/ui/icon';
 import { Input } from '../../components/ui/input';
 import { Text } from '../../components/ui/text';
+import { advanceTo, shownSecretKeyboardType } from '../../lib/input-keyboard';
 import { cn } from '../../lib/utils';
 import { NewPasswordField, useNewPassword } from '../auth/new-password-field';
 import { PasswordInput } from '../auth/password-input';
@@ -241,6 +242,11 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
   // MISSING here while create-account passed it, so a username-derived password
   // could fail at signup and pass at rotation.
   const newPassword = useNewPassword({ username });
+  // Return on the proof field goes on to the new password when that is a FIELD —
+  // typed mode; a generated passphrase is shown, not entered
+  // (lib/input-keyboard.ts).
+  const newPasswordRef = useRef<TextInput>(null);
+  const advance = newPassword.mode === 'own' ? advanceTo(newPasswordRef) : null;
 
   const proofReady = useRecovery ? recoveryCode !== '' : currentPassword !== '';
 
@@ -306,12 +312,16 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
           <View className="gap-2">
             <Text className="text-sm font-medium">Recovery code</Text>
             <Input
+              // Named directly: RN has no <label for>, so the Text above names
+              // nothing to a screen reader. Same for the two password fields
+              // below and RecoveryCodeView's.
+              aria-label="Recovery code"
               autoCapitalize="characters"
-              autoCorrect={false}
-              autoComplete="off"
+              keyboardType={shownSecretKeyboardType()}
               className="font-mono"
               value={recoveryCode}
               editable={!changePassword.isPending}
+              {...advance}
               onChangeText={(text) => {
                 setRecoveryCode(text);
                 if (error) setError(null);
@@ -322,9 +332,11 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
           <View className="gap-2">
             <Text className="text-sm font-medium">Current password</Text>
             <PasswordInput
+              aria-label="Current password"
               autoComplete="current-password"
               value={currentPassword}
               editable={!changePassword.isPending}
+              {...advance}
               onChangeText={(text) => {
                 setCurrentPassword(text);
                 if (error) setError(null);
@@ -348,6 +360,7 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
         <NewPasswordField
           control={newPassword}
           copy="change"
+          inputRef={newPasswordRef}
           disabled={changePassword.isPending}
           onEdit={() => {
             if (error) setError(null);
@@ -473,6 +486,7 @@ function RecoveryCodeView({ onBack, hasRecovery }: { onBack: () => void; hasReco
         <View className="gap-2">
           <Text className="text-sm font-medium">Current password</Text>
           <PasswordInput
+            aria-label="Current password"
             autoComplete="current-password"
             value={currentPassword}
             editable={!recovery.isPending}

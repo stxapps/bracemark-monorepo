@@ -92,7 +92,6 @@ export function LockPasswordDialog({
             <div className="flex flex-col gap-2">
               <PasswordInput
                 autoFocus
-                autoComplete="off"
                 placeholder="Password"
                 aria-label="Password"
                 value={password}

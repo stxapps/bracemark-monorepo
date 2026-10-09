@@ -547,7 +547,15 @@ export function SidebarBody({
               onChange={(e) => setFilter(e.target.value)}
               placeholder="Filter lists & tags"
               aria-label="Filter lists and tags"
-              className="h-8 pl-8 text-sm"
+              // NO `text-sm` — it was here, and tailwind-merge let it beat
+              // `Input`'s own `text-base`, pinning this field at 14px at every
+              // width. That was harmless while the rail was desktop-only; the
+              // drawer (sidebar-drawer.tsx) puts this same body on a phone,
+              // where a field under 16px zooms the page on focus (web-ui's
+              // input.tsx, _the control type step_). Left to the step it is 16
+              // below `md` and the 14 it always was above it; `h-8` holds a 16px
+              // line, which is what search-bar.tsx's filter box already uses.
+              className="h-8 pl-8"
             />
           </div>
         </div>

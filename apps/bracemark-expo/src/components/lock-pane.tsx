@@ -177,12 +177,13 @@ export function LockPane({
             placeholder={LOCK_COPY.passwordLabel}
             aria-label={LOCK_COPY.passwordLabel}
             value={password}
-            // Also what drops the keyboard on a submit, with no
-            // `Keyboard.dismiss()` anywhere in this file: a focused field that
-            // goes non-editable loses its focus on both platforms, and nothing
-            // gives it back when `busy` clears. docs/soft-keyboard.md, _a
-            // submit drops it_.
-            editable={!busy}
+            // NO `editable={!busy}`, which this field carried and its web twin
+            // never did. On native that prop is a keyboard dismissal as much as
+            // a guard: a focused field that goes non-editable loses its focus,
+            // nothing gives it back when `busy` clears, and a wrong password
+            // then cost a tap back into the field to retype. Re-entry is guarded
+            // where it belongs — `submit` returns while `busy`, and the button
+            // is disabled. docs/soft-keyboard.md, _a submit drops it_.
             onChangeText={(text) => {
               setPassword(text);
               if (error) setError(null);

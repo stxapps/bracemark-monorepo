@@ -189,7 +189,8 @@ function TriCheckList({
           placeholder={`Filter ${label.toLowerCase()}…`}
           aria-label={`Filter ${label.toLowerCase()}`}
           // `text-base md:text-sm` — the control type step (web-ui's input.tsx).
-          // This box was the last control holding a flat `text-sm` against it,
+          // This box held a flat `text-sm` against it (as the sidebar's filter
+          // did, longer),
           // and it is a real text input: on a phone, focusing it zoomed the page,
           // which is the whole thing the step exists to stop. The height steps
           // with it — `h-7` cannot hold a 16px line box, and `h-8` is what the
@@ -625,6 +626,10 @@ export function SearchBar({ autoFocus = false }: { autoFocus?: boolean }) {
           onChange={(e) => setText(e.target.value)}
           placeholder="Search links…"
           aria-label="Search links"
+          // Labels a soft keyboard's Return "Search", as the expo twin's
+          // `returnKeyType` does. Not `type="search"`: that adds the browser's
+          // own clear button beside the one below.
+          enterKeyHint="search"
           autoFocus={autoFocus}
           className="h-9 pr-8 pl-8"
         />

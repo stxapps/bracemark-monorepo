@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { act, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
 
 import { LockPane } from './lock-pane';
 
@@ -83,4 +83,34 @@ test('a quiet pane stays quiet: the answer is read once, on the way up', async (
 
   expect(offered.onUnlock).not.toHaveBeenCalled();
   expect(field().props.autoFocus).toBe(false);
+});
+
+// THE FIELD IS NEVER TAKEN AWAY MID-SUBMIT. It used to be `editable={!busy}`,
+// which reads as a double-submit guard and on native is a keyboard dismissal: a
+// focused field that goes non-editable loses its focus on both platforms, and
+// nothing gives it back when `busy` clears. So a wrong password ended with the
+// error showing and the keyboard down, and the retype it asks for cost a tap
+// first (docs/soft-keyboard.md, _a submit drops it_). No keyboard exists here to
+// watch fall; what is pinned is the prop that made it fall — and that the guard
+// it was mistaken for is still in place, on the button.
+test('the field stays editable while a password is being verified, and after it is refused', async () => {
+  let refuse: (ok: boolean) => void = () => undefined;
+  const onUnlock = jest.fn(() => new Promise<boolean>((resolve) => (refuse = resolve)));
+  await mount({ onUnlock });
+
+  fireEvent.changeText(field(), 'not-the-password');
+  fireEvent.press(screen.getByTestId('lock-pane-unlock'));
+  await act(() => Promise.resolve());
+
+  expect(screen.getByTestId('lock-pane-unlock')).toBeDisabled();
+  expect(field().props.editable).not.toBe(false);
+
+  // ...and the press that cannot get through is how re-entry is stopped.
+  fireEvent.press(screen.getByTestId('lock-pane-unlock'));
+  expect(onUnlock).toHaveBeenCalledTimes(1);
+
+  await act(async () => refuse(false));
+
+  expect(screen.getByTestId('lock-pane-error')).toBeTruthy();
+  expect(field().props.editable).not.toBe(false);
 });

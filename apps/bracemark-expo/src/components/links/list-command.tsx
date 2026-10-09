@@ -156,8 +156,6 @@ export function ListCommand({
           onChangeText={setQuery}
           placeholder={onCreate ? 'Search or create lists…' : 'Search lists…'}
           aria-label={onCreate ? 'Search or create lists' : 'Search lists'}
-          autoCapitalize="none"
-          autoCorrect={false}
           className="h-9"
         />
       )}

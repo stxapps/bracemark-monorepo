@@ -436,7 +436,13 @@ in `link-add-panel.tsx` / `link-edit-screen.tsx` depend entirely on 2 and 3.
 So does any field that sets **`submitBehavior="submit"`** on purpose to keep the
 keyboard for the next entry: `components/links/tags-command.tsx`,
 `share/share-list-picker.tsx`, `share/share-tags-picker.tsx`. Those three are
-the ones to check first when this regresses.
+the ones to check first when this regresses. A fourth group gives up Return for
+a different reason — to hand the focus to the NEXT field rather than to keep
+typing in this one: the fields that spread `advanceTo(…)`
+(`lib/input-keyboard.ts`), which are both sign-in usernames,
+create-account's username and change-password's proof field. Their hosts are
+`auth-screen.tsx` and settings' `scroll-host.tsx`, both aware scrollers carrying
+2 and 3 ([editors.md](./editors.md), _typing assistance_).
 
 **2. Tap outside — `keyboardShouldPersistTaps="handled"`, and it is not
 optional.** Put it on **every** scroller that can be on screen under a
@@ -651,21 +657,48 @@ a keyboard up are part of the typing, or have their own answer already:
   above, and the user's next act is to retype.
 
 **A field that goes `editable={false}` while focused drops the keyboard on its
-own**, and that is a dismissal nobody wrote. `lock-pane.tsx` is the specimen, and
-it contradicts its place in the list above: the pane calls no `Keyboard.dismiss()`,
-yet a press on Unlock with a wrong password ends with the error showing and the
-keyboard down. The field is `editable={!busy}`, and disabling a focused input
-takes its focus on both platforms — iOS's `RCTUITextField` maps `editable` onto
-`enabled`, and a disabled `UITextField` resigns first responder; Android's
-`setEditable` is `view.isEnabled`, and `TextView.setEnabled(false)` hides the soft
-input. Nothing puts the focus back when `busy` clears, so the retry costs the same
-tap the dismissing sites pay. The empty-password error is the one path that keeps
-the keyboard, because it returns before `busy` is set. So a submit that guards
-double-entry by disabling its FIELD has already chosen to drop the keyboard,
-whichever list it was meant to be in; the sign-in forms guard on `isSubmitting`
-in the handler and leave their fields editable, which is why they have to dismiss
-by hand. Whether the lock pane should keep its keyboard instead — guard in the
-handler, as it already does, and stop toggling `editable` — is undecided.
+own**, and that is a dismissal nobody wrote. It reads as a double-submit guard —
+`editable={!busy}` — and it is one, but disabling a focused input also takes its
+focus on both platforms: iOS's `RCTUITextField` maps `editable` onto `enabled`,
+and a disabled `UITextField` resigns first responder; Android's `setEditable` is
+`view.isEnabled`, and `TextView.setEnabled(false)` hides the soft input. Nothing
+puts the focus back when the flag clears.
+
+The specimens were the two lock fields, `lock-pane.tsx` and
+`lock-password-dialog.tsx`, both in the list above as submits that keep their
+keyboard and both carrying the prop. The pane calls no `Keyboard.dismiss()`, yet
+a press on Unlock with a wrong password ended with the error showing and the
+keyboard down, and the retype cost the same tap the dismissing sites pay. Their
+web twins never disabled the field. The prop is gone from both, and each has a
+spec that fails if it returns (`lock-pane.spec.tsx`,
+`lock-password-dialog.spec.tsx`).
+
+So the rule has two halves:
+
+- **Re-entry is guarded in the handler and on the button** — `if (busy) return`,
+  `disabled={busy}` — at every submit. That is the whole guard; the field is not
+  part of it.
+- **A field is taken away only where the form is a commitment the screen must
+  keep showing while it runs**: `account-section.tsx`'s delete account, change
+  password and recovery code (`new-password-field.tsx` through its `disabled`
+  prop), as on web. A new password edited while it is being applied is a password
+  the user remembers wrongly. Those are also the sites in the table above, which
+  have dismissed the keyboard already, so the side effect costs them nothing.
+
+Everything else — both sign-in doors, the add panel, the editors, the rename
+fields, the pickers, the two lock fields — leaves its fields editable, and
+decides the keyboard on purpose or not at all.
+
+One asymmetry remains in the lock pane, and it is the platform's: Return on a
+single-line field blurs before it submits (1), so a wrong password sent from the
+keyboard still ends with the keyboard down, while the same password sent from the
+Unlock button keeps it. `submitBehavior="submit"` would level them, and is not
+taken: with no button press there is no geometry saying the error under the field
+is clear of the keys.
+
+The two lock fields were driven after the prop came out, on the Pixel 8 AVD and
+the iPhone 17 Pro simulator: a refused password leaves the error showing and the
+keyboard up ([locks.md](./locks.md) has the table).
 
 The cost at the sites that do dismiss is one tap back into the field to retry.
 

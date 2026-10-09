@@ -19,7 +19,7 @@
 // sheet really does mark the page — and that "Lock app", chosen from a menu
 // that is modal too, still ends with the field focused — is a browser's to say,
 // and was checked in one.
-import { render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import { LockPane } from './lock-pane';
 
@@ -28,7 +28,7 @@ jest.mock('@stxapps/web-ui/contexts/sign-out-provider', () => ({
 }));
 
 const pane = <LockPane title="Locked" description="Enter the password" onUnlock={jest.fn()} />;
-const field = () => screen.getByLabelText('Password');
+const field = () => screen.getByLabelText<HTMLInputElement>('Password');
 
 // The control, and the common case: a row press, a deep link, a reload behind
 // the app lock.
@@ -56,3 +56,27 @@ test.each(['aria-hidden="true"', 'inert'])(
     outside.remove();
   },
 );
+
+// The twin of a rule the native pane had to learn: its field was `editable={!busy}`,
+// which on native drops the keyboard, so a wrong password cost a tap before the
+// retype (docs/soft-keyboard.md, _a submit drops it_). This pane never disabled
+// its field, which is what the native one was brought back to — so the parity is
+// pinned from this side as well. The double-submit guard is the button.
+test('the field stays enabled, and focused, while a password is verified and after it is refused', async () => {
+  let refuse: (ok: boolean) => void = () => undefined;
+  const onUnlock = jest.fn(() => new Promise<boolean>((resolve) => (refuse = resolve)));
+  render(<LockPane title="Locked" description="Enter the password" onUnlock={onUnlock} />);
+
+  fireEvent.change(field(), { target: { value: 'not-the-password' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Unlock' }));
+  await act(() => Promise.resolve());
+
+  expect(screen.getByRole<HTMLButtonElement>('button', { name: /Unlocking/ }).disabled).toBe(true);
+  expect(field().disabled).toBe(false);
+
+  await act(async () => refuse(false));
+
+  expect(screen.getByRole('alert')).toBeTruthy();
+  expect(field().disabled).toBe(false);
+  expect(document.activeElement).toBe(field());
+});

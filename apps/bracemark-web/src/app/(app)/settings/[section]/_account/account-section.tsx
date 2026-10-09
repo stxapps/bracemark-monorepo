@@ -307,14 +307,29 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
       />
 
       <form onSubmit={onSubmit} className="flex max-w-sm flex-col gap-4">
+        {/* Whose password this is, for a password manager. The form holds a
+            `current-password` and a `new-password` and no username, so a manager
+            asked to update a saved login has to guess which one — or files the
+            new password as an entry with no name. It reads this field instead.
+            A real text input hidden with the `hidden` attribute, which takes it
+            out of the layout, the tab order and the accessibility tree at once —
+            not `type="hidden"`, which a password manager skips. A raw `<input>`,
+            so it states its own `autoComplete` (docs/accessibility.md, _what a
+            field tells the browser_). */}
+        <input
+          type="text"
+          name="username"
+          autoComplete="username"
+          value={username ?? ''}
+          readOnly
+          hidden
+        />
         {useRecovery ? (
           <div className="flex flex-col gap-2">
             <Label htmlFor="cp-recovery">Recovery code</Label>
             <Input
               id="cp-recovery"
-              autoComplete="off"
               autoCapitalize="characters"
-              spellCheck={false}
               className="font-mono"
               value={recoveryCode}
               disabled={changePassword.isPending}

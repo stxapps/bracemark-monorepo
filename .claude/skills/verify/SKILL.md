@@ -490,6 +490,14 @@ HardwareKeyboardLastSeen` prints `1`. Write it `false` the same way and
   Metro serves and refuses a wrong one, printing that command. A hand-driven
   session has no such guard. → `docs/device-testing.md`
 
+- **Never start Metro with `CI=1` for a hand-driven session.** In CI mode Metro
+  does not watch files: it serves the bundle it built first and every later edit
+  is absent from it, with `/status` still answering and no error anywhere. A
+  whole comparison of code variants read identically that way — each "variant"
+  was the first bundle again. `CI=1 npm run expo:android` is tempting because it
+  silences prompts; run the build without it, or kill that Metro once the app is
+  installed and start `npm run expo:start`. The tell is one line in Metro's own
+  log: `Metro is running in CI mode, reloads are disabled`.
 - **`hideKeyboard` taps a blank area on iOS**, so on a surface with a
   tap-to-close backdrop it closes the surface. If a flow loses its buttons right
   after that step, this is why.

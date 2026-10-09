@@ -127,8 +127,6 @@ export function ShareListPicker({
         submitBehavior="submit"
         placeholder="Search or create lists…"
         aria-label="Search or create lists"
-        autoCapitalize="none"
-        autoCorrect={false}
         className="h-9"
       />
 

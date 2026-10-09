@@ -263,9 +263,7 @@ function RecoverySignIn({
             id="rec-code"
             type="text"
             autoFocus={!!lockedUsername}
-            autoComplete="off"
             autoCapitalize="characters"
-            spellCheck={false}
             className="font-mono"
             aria-invalid={!!errors.recoveryCode}
             {...register('recoveryCode', { onChange: clearRootError })}

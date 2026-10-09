@@ -362,13 +362,29 @@ reason expo's does — the carried-over password was measured there.
 Pinned by `expo-react`'s `contexts/lock-provider.spec.tsx` (the set's writers and
 erasers), `features/links/main.spec.tsx` (the table above) and
 `components/lock-pane.spec.tsx` / `app-lock-gate.spec.tsx`; web's guard by
-`bracemark-web`'s `components/lock-pane.spec.tsx`. **Status:** the native half is
-not yet driven on a device or an emulator — jest raises no keyboard and has no
-sensor, so the specs pin the prop the field is given and the call the prompt
-would be. The web half was driven in headless Chrome at 390 and 1280 wide,
-reading `document.activeElement` before and after the change; a soft keyboard
-itself, and Safari — which does not focus a button on tap, so its trap may behave
-differently — were not.
+`bracemark-web`'s `components/lock-pane.spec.tsx`.
+
+**Driven on both native platforms** — the Pixel 8 AVD (Android 16) and the
+iPhone 17 Pro simulator (iOS 26.5), dev build, reading the keyboard's state
+rather than a screenshot:
+
+| the pane went up by…                             | Android               | iOS                  |
+| ------------------------------------------------ | --------------------- | -------------------- |
+| a row press on a locked list (arrival)           | keyboard up, focused  | keyboard up          |
+| "Lock list" on the list being shown, drawer open | no keyboard, no focus | no keyboard          |
+| …then the drawer closed                          | pane up, no keyboard  | pane up, no keyboard |
+| leaving that list and coming back                | keyboard up, focused  | —                    |
+| "Lock app"                                       | no keyboard, no focus | no keyboard          |
+| a cold start behind the app lock                 | keyboard up, focused  | —                    |
+
+A refused password keeps the keyboard up with the error showing — on the lock
+dialog on both platforms, and by the pane's Unlock button on Android's list pane
+and iOS's app gate (iOS's list pane puts that button under the keys). Not driven:
+the biometric half, which needs enrolled biometry neither device has, and the
+background auto-relock. The web half was driven in headless Chrome at 390 and
+1280 wide, reading `document.activeElement` before and after the change; a soft
+keyboard itself, and Safari — which does not focus a button on tap, so its trap
+may behave differently — were not.
 
 ### UI surfaces
 

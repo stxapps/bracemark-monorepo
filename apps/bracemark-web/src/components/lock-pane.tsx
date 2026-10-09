@@ -98,7 +98,6 @@ export function LockPane({ title, description, onUnlock, className }: LockPanePr
         <div className="flex flex-col gap-2">
           <PasswordInput
             ref={fieldRef}
-            autoComplete="off"
             placeholder={LOCK_COPY.passwordLabel}
             aria-label={LOCK_COPY.passwordLabel}
             value={password}
