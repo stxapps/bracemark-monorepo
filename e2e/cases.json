@@ -479,7 +479,9 @@
     "traits": ["online", "internet"],
     "fixture": "empty",
     "path": "web/extraction.e2e.ts",
-    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"],
+    "environments": ["local", "staging"],
+    "stagingGrants": ["plan"]
   },
   {
     "id": "EXTRACT-WEB-ALL-001",
@@ -489,7 +491,9 @@
     "traits": ["online", "internet"],
     "fixture": "small",
     "path": "web/extraction.e2e.ts",
-    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"],
+    "environments": ["local", "staging"],
+    "stagingGrants": ["plan"]
   },
   {
     "id": "EXTRACT-OFFLINE-001",
@@ -559,7 +563,8 @@
     "traits": ["online", "internet"],
     "fixture": "empty",
     "path": "web/subscription.e2e.ts",
-    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"],
+    "environments": ["local", "staging"]
   },
   {
     "id": "IAP-ENTITLEMENT-001",
@@ -1649,6 +1654,39 @@
   {
     "id": "STAGING-CSP-002",
     "title": "Browser blocks an unapproved connection under enforcing CSP",
+    "surface": "web",
+    "tier": "smoke",
+    "traits": ["online", "security"],
+    "fixture": "empty",
+    "path": "staging/hosting.e2e.ts",
+    "artifacts": ["trace", "screenshot"],
+    "environments": ["staging"]
+  },
+  {
+    "id": "STAGING-CSP-003",
+    "title": "Browser blocks an unapproved script and connection under the marketing site's enforcing CSP",
+    "surface": "web",
+    "tier": "smoke",
+    "traits": ["online", "security"],
+    "fixture": "empty",
+    "path": "staging/hosting.e2e.ts",
+    "artifacts": ["trace", "screenshot"],
+    "environments": ["staging"]
+  },
+  {
+    "id": "STAGING-CSP-004",
+    "title": "Signed-in app activates its service worker and loads its manifest with no CSP violation",
+    "surface": "web",
+    "tier": "smoke",
+    "traits": ["online", "security"],
+    "fixture": "empty",
+    "path": "staging/app-csp.e2e.ts",
+    "artifacts": ["trace", "screenshot"],
+    "environments": ["staging"]
+  },
+  {
+    "id": "STAGING-CSP-005",
+    "title": "Marketing site pages and the bookmark converter's worker run with no CSP violation",
     "surface": "web",
     "tier": "smoke",
     "traits": ["online", "security"],

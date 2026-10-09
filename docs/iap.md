@@ -904,7 +904,10 @@ all: `npm run seed:accounts` writes one straight into local D1
 ([e2e.md](./e2e.md), _seeding a dev account_). Nothing test-only is needed here
 for that to work, which is the point — a grant with no provider behind it was
 always a real product state, so `isEntitled` reads a null expiry on a `manual`
-row as never-expiring and `needsRefresh` skips it outright.
+row as never-expiring and `needsRefresh` skips it outright. It is also how a
+staging journey that needs a paid lever gets one: the same row, written to
+staging's remote D1 for that run's disposable account
+([e2e.md](./e2e.md), _deployed staging and mobile Release builds_).
 
 ### config per env
 
@@ -962,12 +965,14 @@ row as never-expiring and `needsRefresh` skips it outright.
   is on every account without approval. It's catalog config like the overrides,
   and the sandbox's Plus product was first created as `standard`, so check it
   whenever a product is re-created (the live catalog is recreated, not copied).
-- **CSP note**: when bracemark-web's CSP ships (it lives in the **CloudFront response
-  headers policy**, not Next or Cloudflare — bracemark-web is a static export), it
-  must allow Paddle's origins: `script-src`/`frame-src`/`connect-src`/`img-src`/
+- **CSP note**: bracemark-web's CSP is enforced (it lives in the **CloudFront response
+  headers policy**, not Next or Cloudflare — bracemark-web is a static export), and
+  it has to allow Paddle's origins: `script-src`/`frame-src`/`connect-src`/`img-src`/
   `style-src` all need `https://*.paddle.com` (one wildcard covers sandbox +
   live). Concrete directives + the `connect-src` exfiltration-widening tradeoff
   are in [hosting.md](./hosting.md#security-headers--where-the-csp-has-to-live).
+  `IAP-WEB-001` runs against staging for this reason: local runs open the same
+  overlay under no policy at all ([e2e.md](./e2e.md), _subscriptions_).
 - **Apple Pay** needs each checkout domain verified with Apple: a file downloaded
   from the Paddle dashboard, served at
   `/.well-known/apple-developer-merchantid-domain-association` on bracemark-web.

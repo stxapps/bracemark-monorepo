@@ -1197,7 +1197,8 @@ the data is gone."**
   attached by the per-tier **CloudFront response headers policy**, not
   `next.config` — see [hosting.md](./hosting.md#security-headers--where-the-csp-has-to-live) for the policy details
   and CSP gotchas (`'wasm-unsafe-eval'` for Argon2, no nonces on static export,
-  `worker-src`). Not yet built; ship it with the first deploy.
+  `worker-src`). Built: enforced on both tiers, and held there by the staging
+  suite ([hosting.md](./hosting.md#checking-the-deployed-candidate)).
 - **OPAQUE password door (future, optional)** — the documented upgrade path if
   online-only (or KMS-isolated breach-resistant) password protection becomes a
   requirement; swap the password door's KEK for OPAQUE's `export_key` in isolation

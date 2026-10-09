@@ -5,6 +5,7 @@ import { pathToFileURL } from 'node:url';
 import { expect } from '@playwright/test';
 
 import { profileDir, SEED_CREDENTIALS } from '../paths';
+import { requireLocalEnvironment } from '../runner/environment';
 import { waitForApi } from '../runner/lib';
 import { WEB_URL } from '../web/fixtures/env';
 import { launchApp } from '../web/fixtures/launch';
@@ -46,6 +47,14 @@ interface SeededAccount {
 }
 
 async function main(): Promise<void> {
+  // Local only, and not for want of a way in: a plan CAN be granted on staging
+  // (seed/plan.ts), but these accounts must not exist there. `seedPassword` is a
+  // hash of the account's key, in a public repo — on a laptop that is a
+  // convenience, on a publicly reachable host it is a paid account anyone can
+  // sign in to. Staging journeys grant a plan to their own disposable account
+  // instead (e2e/STAGING.md).
+  requireLocalEnvironment('the account seed');
+
   const selected = process.argv.slice(2).filter((arg) => !arg.startsWith('-'));
   const users = selected.length > 0 ? selected.map(seedUser) : SEED_USERS;
 

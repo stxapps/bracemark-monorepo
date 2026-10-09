@@ -1,7 +1,8 @@
-import { type Page, test as base } from '@playwright/test';
+import { expect, type Page, test as base } from '@playwright/test';
 
 import { profileDir } from '../../paths';
 import { type Credentials } from './account';
+import { takeCspViolations } from './csp';
 import { launchApp, type LaunchedApp } from './launch';
 
 // THE fixture for every web e2e. Read the constraint before changing it.
@@ -30,6 +31,7 @@ interface AppFixtures {
   // ordering and multi-profile cases use this instead of reaching around the
   // fixture and accidentally mutating the worker-shared account.
   isolatedApp: LaunchedApp;
+  cspGuard: void;
 }
 
 interface AppWorkerFixtures {
@@ -55,6 +57,21 @@ export const test = base.extend<AppFixtures, AppWorkerFixtures>({
     await use(app.credentials);
   },
 
+  // Fails a test whose journey violated the deployed CSP, whether or not anything
+  // it asserted on broke (./csp.ts). Automatic, and with no dependencies so that
+  // it is torn down LAST: every context the test opened — the worker's, an
+  // isolated app's, a second profile launched by hand — has reported by then.
+  // Nothing is discarded beforehand: a violation the worker-shared context
+  // raised between two tests is charged to the later one rather than lost.
+  cspGuard: [
+    // eslint-disable-next-line no-empty-pattern
+    async ({}, use) => {
+      await use();
+      expect(takeCspViolations(), 'the journey violated the deployed CSP').toEqual([]);
+    },
+    { auto: true },
+  ],
+
   // eslint-disable-next-line no-empty-pattern
   isolatedApp: async ({}, use, testInfo) => {
     const safeId = testInfo.testId.replace(/[^a-zA-Z0-9_-]+/g, '-').slice(-80);
@@ -78,4 +95,4 @@ export const test = base.extend<AppFixtures, AppWorkerFixtures>({
   },
 });
 
-export { expect } from '@playwright/test';
+export { expect };

@@ -1,5 +1,6 @@
+import { IS_STAGING } from '../runner/environment';
 import type { SeedPlan } from './catalog';
-import { d1, quote } from './d1';
+import { planD1, quote } from './d1';
 
 // Granting a seeded account its plan — the one part of the seed that writes to the
 // server, because it is the one part the server actually knows.
@@ -16,9 +17,17 @@ import { d1, quote } from './d1';
 // exists for comps and lifetime grants (apps/bracemark-api/src/db/schemas/directory.sql),
 // which `isEntitled` reads as never-expiring and `needsRefresh` skips outright
 // because there is no provider to ask. Nothing test-only is being added to the
-// api to make this work, and nothing here is reachable from a deployed
-// environment: `--local` reads and writes miniflare's SQLite under
-// `apps/bracemark-api/.wrangler/`.
+// api to make this work.
+//
+// Every statement here goes through `planD1` (d1.ts): miniflare's SQLite under
+// `apps/bracemark-api/.wrangler/` on a local run, and STAGING's remote directory
+// on a staging run that declared the grant. Staging can reach it for the same
+// reason the local seed can — the row is the product's own, so the deployed api
+// folds it exactly as it folds a comp — and it is the only route there: a Paddle
+// sandbox checkout is not automated and leaves a live subscription behind
+// (docs/iap.md), and an endpoint that grants a plan is a test hook on a public
+// host. The account it lands on is the case's own disposable one. There is no
+// standing paid account on staging, and `seed:accounts` refuses to make one.
 
 // The user id behind a username, or null if the name has never been claimed.
 // Usernames are stored canonical (trim → NFKC → lowercase), and every seeded name
@@ -29,8 +38,7 @@ import { d1, quote } from './d1';
 // will fail and sign-in will fail, and the seed should say so rather than grant a
 // plan to a user id that no longer exists.
 export async function findUserId(username: string): Promise<string | null> {
-  const rows = await d1(
-    'DIRECTORY_DB',
+  const rows = await planD1(
     `SELECT user_id, deleted_at FROM usernames WHERE username = ${quote(username)}`,
   );
   const row = rows[0];
@@ -38,7 +46,10 @@ export async function findUserId(username: string): Promise<string | null> {
   if (row.deleted_at !== null && row.deleted_at !== undefined) {
     throw new Error(
       `username "${username}" is tombstoned — its account was deleted and the name cannot be ` +
-        `re-claimed. Clear local api state (rm -rf apps/bracemark-api/.wrangler) and re-seed.`,
+        `re-claimed. ` +
+        (IS_STAGING
+          ? 'Use a fresh username.'
+          : 'Clear local api state (rm -rf apps/bracemark-api/.wrangler) and re-seed.'),
     );
   }
   return String(row.user_id);
@@ -51,8 +62,7 @@ export async function findUserId(username: string): Promise<string | null> {
 export async function grantPlan(userId: string, plan: Exclude<SeedPlan, 'free'>): Promise<void> {
   const now = Date.now();
   const externalId = `seed-${userId}`;
-  await d1(
-    'DIRECTORY_DB',
+  await planD1(
     `INSERT INTO purchases (
        id, user_id, source, external_id, plan, status, provider_customer_id,
        expires_at, canceled_at, linked_external_id, event_occurred_at,
@@ -86,8 +96,7 @@ export async function grantPlan(userId: string, plan: Exclude<SeedPlan, 'free'>)
 // docs/iap.md, _enforcement_. Nothing here needs to undo that.
 export async function lapsePlan(userId: string): Promise<void> {
   const now = Date.now();
-  await d1(
-    'DIRECTORY_DB',
+  await planD1(
     `UPDATE purchases SET
        status = 'canceled',
        expires_at = ${now - 1000},
@@ -102,8 +111,7 @@ export async function lapsePlan(userId: string): Promise<void> {
 // confirm the grant landed before the seed imports a library that a free plan
 // would refuse whole.
 export async function readGrantedPlan(userId: string): Promise<string | null> {
-  const rows = await d1(
-    'DIRECTORY_DB',
+  const rows = await planD1(
     `SELECT plan FROM purchases WHERE user_id = ${quote(userId)} AND status = 'active'`,
   );
   return rows[0] ? String(rows[0].plan) : null;

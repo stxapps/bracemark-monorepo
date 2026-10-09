@@ -1,3 +1,4 @@
+import { requireLocalEnvironment } from '../runner/environment';
 import { d1, quote } from './d1';
 import { findUserId } from './plan';
 
@@ -16,6 +17,9 @@ import { findUserId } from './plan';
 // Every session, not just the device's: the provisioning browser's is already
 // closed, and the runner reads the result back from a fresh sign-in.
 export async function forgetSessions(username: string): Promise<void> {
+  // Before the lookup, not after it: `findUserId` is a plan statement and can
+  // reach staging's directory, and this purge must never follow it there.
+  requireLocalEnvironment('the session purge');
   const userId = await findUserId(username);
   if (!userId) throw new Error(`no user id for ${username}; was the account created?`);
   const where = `WHERE user_id = ${quote(userId)}`;

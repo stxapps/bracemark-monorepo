@@ -21,6 +21,14 @@ export interface E2ECase {
   artifacts: string[];
   // Omitted entries are local-only. Staging admission is reviewed per case.
   environments?: E2EEnvironment[];
+  // Server state the runner writes for this case on STAGING, outside the app.
+  // `plan` is the only one there is: the `manual` purchase row (seed/plan.ts),
+  // written to staging's remote D1 with a Cloudflare credential. Declared here
+  // so the web runner can prove that credential before any account is created,
+  // and so the cases that need one are a list rather than a discovery — an
+  // undeclared grant is refused at the write (seed/d1.ts). A local grant needs
+  // no credential and is not declared.
+  stagingGrants?: 'plan'[];
 }
 
 export interface CaseFilters {
@@ -87,6 +95,16 @@ export function validateCaseRegistry(cases = readCaseRegistry()): void {
         (testCase.tier === 'release' && testCase.environments.includes('staging')))
     ) {
       throw new Error(`${testCase.id}: invalid automated environments`);
+    }
+    if (
+      testCase.stagingGrants &&
+      (testCase.stagingGrants.length !== 1 ||
+        testCase.stagingGrants[0] !== 'plan' ||
+        // Only the web runner carries the credential preflight.
+        testCase.surface !== 'web' ||
+        !testCase.environments?.includes('staging'))
+    ) {
+      throw new Error(`${testCase.id}: stagingGrants is ["plan"], on a staging-admitted web case`);
     }
     if (!CASE_ID.test(testCase.id)) throw new Error(`invalid E2E case id: ${testCase.id}`);
     const key = `${testCase.surface}:${testCase.id}`;

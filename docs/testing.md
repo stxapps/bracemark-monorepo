@@ -70,7 +70,8 @@ builds alongside the local suite. Browser CSP/CORS checks require actual deploye
 headers and enforcement; native Release tests verify the installed binary against
 a build receipt. This is still the whole-flow layer and stays outside
 `npm run test`. Runner integrity checks use `npx nx check:runner @stxapps/e2e`
-(Node's test runner, no Jest config). Design and exclusions:
+(Node's test runner, no Jest config); `check:headers` reads a tier's deployed
+security headers, production included. Design and exclusions:
 [e2e.md](./e2e.md#deployed-staging-and-mobile-release-builds); commands:
 [e2e/STAGING.md](../e2e/STAGING.md). Store, biometric and real-iPhone checks retain
 their manual release qualification.

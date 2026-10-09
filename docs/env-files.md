@@ -665,6 +665,14 @@ roles on dryrunbase.com and refuses mixed-tier overrides. Production is not an
 E2E mode. Existing `E2E_*_URL` overrides remain available for local loopback ports;
 they cannot silently turn a local seed or fault-injection run into a deployed run.
 
+A staging web run needs **one credential, and only when a selected case grants a
+plan**: a Cloudflare token with D1 Edit on the staging account, resolved from an
+exported `CLOUDFLARE_API_TOKEN` or the keychain item
+`bracemark-cf-token-staging-e2e` (_what's committed vs ignored_, below). The
+account it is used against comes from `apps/bracemark-api/.env.staging.local`,
+which wrangler reads for `--env staging` as it does on a deploy. Every other
+staging run reads no credential at all.
+
 `e2e:build:staging` pins `EXPO_PUBLIC_API_URL=https://api.dryrunbase.com` and
 `EXPO_PUBLIC_SITE_URL=https://dryrunbase.com` in the native build's environment,
 above Nx/Expo dotenv precedence. Release compilation uses `NODE_ENV=production`;
@@ -742,6 +750,14 @@ browser frontends — bracemark-web and bracemark-site — need an allowed origi
   from the shell, then the login keychain (`bracemark-paddle-key-<tier>`), and
   nowhere else — a live Paddle key can issue refunds and read every customer, so
   it gets the Cloudflare token's treatment, not the account id's.
+- **in no env file at all, the token's sibling:** the **staging e2e token**. A
+  second Cloudflare token for the staging account, D1 Edit only, in its own
+  keychain item (`bracemark-cf-token-staging-e2e`) — what lets a staging journey
+  write its disposable account a plan ([e2e.md](./e2e.md), _deployed staging and
+  mobile Release builds_). Separate so that the test runner never holds the
+  deploy token's right to replace a Worker; `e2e/runner/staging-credential.ts`
+  reads the shell, then that item, and has no fallback to the deploy one. There is
+  no production counterpart, because production is not an E2E target.
 - **in no env file at all, fourth case:** bracemark-api's **local** secrets,
   the store keys above all — _bracemark-api local secrets_, above. The sandbox
   Paddle pair sat in `.dev.vars`, and the store keys were headed there too,

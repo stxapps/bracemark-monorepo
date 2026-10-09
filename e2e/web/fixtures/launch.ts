@@ -9,6 +9,7 @@ import {
   newCredentials,
   signIn,
 } from './account';
+import { watchCspViolations } from './csp';
 import { CHROME_PATH, WEB_URL } from './env';
 
 // Launching a signed-in bracemark-web, as a plain function rather than a fixture —
@@ -93,6 +94,10 @@ export async function launchApp(
     deviceScaleFactor: options.deviceScaleFactor ?? 2,
     viewport: { width: 1280, height: 900 },
   });
+
+  // Before the account ceremony: Argon2's wasm and its blob-started worker are
+  // the first things a policy can refuse.
+  await watchCspViolations(context, options.baseURL);
 
   await options.prepare?.(context);
 

@@ -12,9 +12,13 @@ what each app is, and [account.md](./account.md) for the threat model the CSP
 below serves.
 
 > **Staging is deployed.** The staging E2E run on 2026-10-09 verified the app,
-> marketing site, both Workers and encrypted R2 file transfers. The app still
-> serves report-only CSP, so its enforcement checks fail. Production deployment
-> status is not established by that run. See [e2e/STAGING.md](../e2e/STAGING.md).
+> marketing site, both Workers and encrypted R2 file transfers. **The CSP is
+> enforced on both tiers** as of the same day: all four CloudFront policies send
+> `Content-Security-Policy` and no report-only header. Staging's then passed
+> the whole staging suite with no document violating it; production serves no
+> build yet, so its policy is checked by header and by a browser refusal, not by
+> a journey. Results and what is still open:
+> [e2e/STAGING.md](../e2e/STAGING.md).
 
 ### the hosts
 
@@ -158,11 +162,31 @@ staging host should be worth.
 `npm run e2e:web:staging` tests the deployed app at `app.dryrunbase.com` and
 marketing site at `dryrunbase.com`, with the real Workers and R2. It checks HTML,
 security headers, app build identity, Worker CORS and deliberate browser CSP
-refusals. `--include-trait security` runs the deployment checks alone. Report-only
-CSP is a rollout step, not enforcement: the two refusal cases remain red until
-CloudFront serves `Content-Security-Policy`. The test runner changes no CDN policy
-and deploys nothing. Operational details and coverage limits:
+refusals on both origins. `--include-trait security` runs the deployment checks
+alone. Three things hold the policy, and each catches what the other two cannot:
+
+- **the refusals** — the browser must raise an `enforce` violation for an
+  unapproved script and an unapproved connection. A report-only header fails
+  them, which is the point: it blocks nothing.
+- **the pinned header** — `e2e/staging/policy.ts` is the whole policy, source by
+  source, and the hosting case compares it with what CloudFront sends. A refusal
+  cannot see what a policy _allows_, so `'unsafe-eval'` added to quiet a console
+  message, a wildcard R2 host or the other tier's api would all pass it.
+- **the violation guard** — every signed-in journey fails if the browser reports
+  a CSP violation along the way (`e2e/web/fixtures/csp.ts`), asserted or not.
+  That is what catches a host the policy is _missing_.
+
+The test runner changes no CDN policy and deploys nothing. Its one write outside
+the app is a `manual` purchase row in staging's D1, for the two server-extraction
+journeys that need a paid plan — made with a D1-only token of its own, never the
+deploy token below. Operational details and coverage limits:
 [e2e/STAGING.md](../e2e/STAGING.md).
+
+**Production is not a runner target**, so none of that runs there. What can is
+`npx nx check:headers @stxapps/e2e -- production`: the same header comparison
+and the same browser refusals, which create nothing and need no build behind the
+CDN. It says the policy is the designed one and is enforced. It cannot say a
+build works under it — the first production deploy needs that looked at by hand.
 
 ### security headers — where the CSP has to live
 
@@ -175,9 +199,27 @@ and they serve JSON rather than HTML, so the app's CSP is a **CloudFront**
 artifact even though the backend is on Cloudflare.
 
 One policy per tier, not one shared policy, because `connect-src` must name that
-tier's own api and extractor origins. Keep them otherwise identical, and roll out
-as `Content-Security-Policy-Report-Only` before enforcing. The constraints to
-bake in:
+tier's own api and extractor origins. Keep them otherwise identical.
+
+**It is enforced, on both tiers and both apps.** It shipped as
+`Content-Security-Policy-Report-Only` first and moved to the enforcing header
+once staging served a build to run against. Three consequences of that:
+
+- **A violation is now a broken feature, and still a silent one.** The policy
+  carries no `report-uri`, so the only record is the console of the browser that
+  hit it. What stands in for a report endpoint is the staging suite's violation
+  guard (_checking the deployed candidate_, above) — which sees only what a
+  journey walks through.
+- **Change the CDN's policy and `e2e/staging/policy.ts` in the same pass**, and
+  staging before production. The pinned header goes red on any difference in
+  either direction, so the table is where a new host gets argued for.
+- **Trial a tightening as Report-Only _beside_ the enforcing header**, never in
+  place of it: the two are independent headers, and swapping one for the other
+  turns the protection off for the length of the trial. The guard counts a
+  report-only violation as a failure too, so the suite says what the candidate
+  would break.
+
+The constraints baked in:
 
 - `script-src` needs `'wasm-unsafe-eval'` — hash-wasm's Argon2.
 - **`'unsafe-eval'` is deliberately absent, and one thing in the source keeps it
@@ -211,8 +253,9 @@ bake in:
   ([local-first-sync.md](./local-first-sync.md)). Omit it and the app still signs
   in, still lists links, and silently loses every image, screenshot and page copy —
   a console violation is the only symptom, and local runners do not execute
-  under a CSP. The staging image-import/cross-profile case now exercises this
-  path with the deployed headers. Name the tier's **exact** account host rather than
+  under a CSP. The staging image-import/cross-profile case exercises this path
+  with the deployed headers, and the violation guard fails it on the violation
+  itself rather than on the missing image. Name the tier's **exact** account host rather than
   `https://*.r2.cloudflarestorage.com`; the wildcard authorises every Cloudflare
   account's R2 as a destination, and the id it hides is already visible to any
   signed-in user in devtools.

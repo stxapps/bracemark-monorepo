@@ -22,9 +22,11 @@ The deployed web and receipt-verified mobile Release targets are implemented.
 The authoritative admission list is `cases.json`'s `environments`; operational
 commands, local-only fixture exclusions and release qualification limits live
 in [STAGING.md](./STAGING.md). Results are recorded per invocation, separately
-from historical local measurements below. CSP report-only rollout does not pass
-the enforcing browser checks. Plus/server-extraction staging journeys still
-need a supported disposable entitlement fixture before admission.
+from historical local measurements below. The CSP is enforced on both tiers; a
+report-only header does not pass the enforcing browser checks.
+Server extraction is admitted to staging on a disposable account granted Plus
+through staging's remote D1 (`stagingGrants`); the other Plus journeys could
+ride the same grant and are not admitted yet.
 
 Validation checkpoint (2026-10-09): all 26 admitted web cases finished without
 retries: 24 passed, including hosting, CORS and all 22 product journeys. Both
@@ -39,9 +41,20 @@ Runner checks (6), browser CSP detector checks (2), registry (156 cases), lint
 and typecheck passed. Exact run IDs, receipts, device versions and retained
 failed attempts are in [STAGING.md](./STAGING.md#measured-staging-verification--2026-10-09).
 
-The staging CSP enforcement gate remains red until CloudFront sends an
-enforcing policy; no deployment configuration was changed in this verification.
-Rerun the staging security cases after that rollout. The selected native slice
+CSP enforcement checkpoint (2026-10-09, later): CloudFront now sends the
+enforcing policy on all four distributions, and all 30 admitted web cases pass
+under it without retries — both formerly red enforcement cases, the marketing
+site's refusals and its pages/converter case, the service worker/manifest case,
+and `IAP-WEB-001` under the deployed policy. The first enforced run had two
+failures from the new violation guard alone: the staging marketing site was
+serving an old build whose zod chunk tripped an `eval` violation; redeploying
+it cleared both. Open: run `check:headers -- production` and a manual pass on
+production's first deploy; run the two server-extraction journeys against
+staging — they are admitted, but have not run there until the D1-only token
+exists ([STAGING.md](./STAGING.md#the-two-cases-that-grant-a-plan)). Details:
+[STAGING.md](./STAGING.md#measured-csp-enforcement--2026-10-09).
+
+The selected native slice
 does not qualify every admitted native case, physical devices or store builds;
 their existing release checklists and local-only legs remain separate.
 

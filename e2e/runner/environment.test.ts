@@ -26,8 +26,17 @@ test('staging selection includes deployment checks and rejects unavailable fixtu
   const selected = selectCases('web', { environment: 'staging', suite: 'smoke' });
   assert.ok(selected.some((entry) => entry.id === 'STAGING-CSP-001'));
   assert.ok(selected.some((entry) => entry.id === 'WEB-LINK-001'));
+  // Server extraction is admitted, and says what it writes to get there.
+  for (const id of ['EXTRACT-WEB-001', 'EXTRACT-WEB-ALL-001']) {
+    const [extraction] = selectCases('web', { environment: 'staging', cases: [id] });
+    assert.deepEqual(extraction.stagingGrants, ['plan']);
+  }
+  assert.ok(
+    selected.every((entry) => !entry.stagingGrants),
+    'smoke needs no credential',
+  );
   assert.throws(
-    () => selectCases('web', { environment: 'staging', cases: ['EXTRACT-WEB-001'] }),
+    () => selectCases('web', { environment: 'staging', cases: ['EXTRACT-OFFLINE-001'] }),
     /does not support staging/,
   );
   assert.throws(

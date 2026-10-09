@@ -927,6 +927,16 @@ device's sign-in reads the entitlement; the web specs take the same grant. And a
 through `wrangler d1 execute --local`, which retries `SQLITE_BUSY` and nothing else:
 parallel web workers granting at once contend for the one local SQLite file.
 
+⚠ **`wrangler d1 execute --json` reports a failed statement on stdout**, as
+`{"error": {"text": …}}`, with stderr empty — and a child-process error's message
+is the command line plus stderr. So the reason is in neither the message nor the
+trace unless `d1Once` (`e2e/seed/d1.ts`) puts it there, and a check written
+against the message matches nothing. That is how the busy retry came to retry
+nothing: a grant that lost the race failed its case on the first attempt with a
+bare `Command failed`, and Playwright's own retry passed it, so the suite reported
+a flake rather than a broken guard. Holding a write lock on the local directory
+database while a statement runs is the whole reproduction.
+
 That is not a shortcut around native key derivation — signing in on the device
 runs the full Argon2id + HKDF path there, which is the thing under test. It is
 also why the web fixture takes create-account's "Choose my own" branch rather than
@@ -1596,6 +1606,11 @@ sandbox account and leaves a live sandbox subscription behind.
 account pays a Paddle round trip. On the worker-shared account that would be
 every later case's status read.
 
+**`IAP-WEB-001` also runs against staging**, as the one journey that puts
+Paddle's script, frame, styles, images and connections under the deployed CSP
+(_deployed staging and mobile Release builds_, below). It needs nothing local —
+a free account and the staging api's own sandbox key — and leaves the same trace.
+
 **What `IAP-WEB-001` leaves in the Paddle sandbox:** one `ready` transaction per
 run, never paid — the second press inside `CHECKOUT_REUSE_MS` re-uses it. That is
 the same trace `npm run check:paddle` makes (which cancels its own); an
@@ -1798,9 +1813,35 @@ The operational commands and coverage exclusions are in
 roles once; `cases.json` makes admission explicit per case, with local-only as
 the default. A requested unsupported case fails before account provisioning.
 Staging uses fresh Free accounts and serial browser execution, preserving the
-real Cloudflare limits. Local D1 grants, direct session edits, process/network
-fault injection, and Android `run-as` sandbox reads remain local. The D1 helper
-also refuses staging so an accidental call cannot mutate unrelated local state.
+real Cloudflare limits. Direct session edits, process/network fault injection,
+and Android `run-as` sandbox reads remain local, and the D1 helper refuses
+staging so an accidental call cannot mutate unrelated local state.
+
+**The plan grant is the one direct write that follows a case to staging.** A web
+case that declares `"stagingGrants": ["plan"]` puts its own disposable account on
+Plus by writing the `manual` purchase row to staging's **remote** D1 — the same
+row, for the same reason, as the local seed (_the split down the encryption
+boundary_, below): a plan is plaintext server state no client can author, and a
+grant with no provider behind it is a product state the deployed api already
+folds. The alternatives were each worse. A Paddle sandbox checkout is not
+automated and leaves a live subscription (_what e2e may not assert_). An endpoint
+that grants a plan is a test hook on a public host. A standing paid account is
+shared state between runs and between machines, and seeded the way local ones
+are its password would be a hash of a public constant — so `seed:accounts`
+refuses staging outright.
+
+⚠ **The write is deliberately narrow, and nothing but its own guards keeps it
+so.** `planD1` (`e2e/seed/d1.ts`) is the only path, and it carries directory
+statements for `seed/plan.ts` alone; `d1`, which takes any binding, still refuses
+staging. The credential is its own keychain item with D1 Edit on the staging
+account — not the deploy token, and with no fallback to it or to
+`wrangler login`. The web runner proves it before Playwright creates an account,
+and the write refuses any run that did not declare a grant, so importing
+`plan.ts` from another entrypoint reaches nothing. `--env staging` pins the
+`database_id`, so no token and no exported account id can turn it into a
+production write. Widening any of these — a second binding, a second runner, the
+deploy token "just for now" — passes every check there is. Setup and the
+operational detail: [e2e/STAGING.md](../e2e/STAGING.md).
 
 The shared persistent browser profiles remain required for non-extractable
 IndexedDB keys. Staging uses the deployed app and marketing site, preserves TLS
@@ -1808,11 +1849,48 @@ validation and browser CSP enforcement, and starts no Next/Wrangler server. The
 image import/cross-profile case exercises real presigned R2 uploads and reads.
 Dedicated hosting/CORS cases cover deployed HTML/build identity and both Workers.
 CSP cases require an enforcing response header and actual browser refusal of an
-unapproved script and connection. Report-only produces a red enforcement gate;
+unapproved script and connection, on the app and on the marketing site — two
+distributions, two policies. Report-only produces a red enforcement gate;
 transport failures cannot count as a CSP block. The external sentinel has a
 successful intercepted response if mistakenly allowed. This policy deliberately
 allows inline Next bootstrap scripts; these cases do not claim inline-script
 refusal or a complete security audit.
+
+A refusal proves one thing is blocked. Two more checks cover the two ways a
+policy goes wrong with every refusal still green. **The hosting case pins the
+whole header** against `staging/policy.ts`, source by source, on both origins'
+documents and their 404 pages: a policy that _allows_ too much — `'unsafe-eval'`,
+a wildcard R2 host, the other tier's api — changes no journey. **The app fixture
+fails any test whose journey raised a `securitypolicyviolation`**
+(`web/fixtures/csp.ts`, the `cspGuard` auto fixture), in every context the test
+opened: a policy that is _missing_ a host breaks a path the journey walks through
+but may not assert on, and with no `report-uri` the browser's console is the only
+other record. Local runs are under no CSP and never trip it. It does not see a
+violation raised inside a worker's own scope, only the refusal to start one, and
+it ignores third-party documents — Paddle's checkout reports against Paddle's
+policy, not ours.
+
+Two cases exist because the browser, not the app, fetches the resource:
+`STAGING-CSP-004` waits for the signed-in app's service worker to activate and
+asks Chrome for the manifest the way its installability check does
+(`worker-src`, `manifest-src`). `STAGING-CSP-005` is the marketing site's
+counterpart to the guard, which only signed-in journeys carry: it walks the
+site's pages under the same watcher and converts a file in the bookmark
+converter, whose `blob:`-started worker is the one allowance that policy makes
+beyond `'self'`. And `IAP-WEB-001` is admitted to staging, where
+the real Paddle overlay opens under the deployed policy — `script-src`,
+`frame-src`, `style-src`, `img-src` and `connect-src` in one journey.
+`EXTRACT-WEB-001` and `EXTRACT-WEB-ALL-001` are admitted for the extractor's
+sake: with the plan granted as above, they send a real extraction from the
+shipped bundle to the deployed Worker under the policy. The pinned header and
+the CORS case's fetch from the page hold the extractor origin too, but neither
+uses the origin the bundle was built with, and neither asks the Worker to fetch
+anything.
+
+`check:headers` runs the header comparison and the refusals outside the runner,
+against either tier. It is the only thing here that may name production: it
+reads headers and makes two requests the browser must refuse, so it creates
+nothing — the reason journeys are barred from production does not apply to it.
 
 `build-release:staging` regenerates native output, pins staging API/site values
 above dotenv precedence, and builds an Android release APK or iOS Release
@@ -1891,6 +1969,10 @@ On Android, run `npm run expo:android:reverse` after each emulator boot.
 The optional `environments` field selects local/staging admission independently
 of tier. Missing means local-only; the `release` tier remains manual qualification,
 not the optimized build variant. Automated staging cases retain smoke/full tiers.
+`stagingGrants` names the server state a staging-admitted web case writes outside
+the app — only `["plan"]` exists — and is what lets the runner ask for the
+credential before it creates anything (_deployed staging and mobile Release
+builds_, above).
 
 [`e2e/cases.json`](../e2e/cases.json) is the machine-readable registry. Every
 case has an id, surface, primary `smoke`, `full`, or `release` tier, traits,
@@ -2083,7 +2165,10 @@ The seed is two mechanisms, not one, and which half does what is forced:
   — the source that already exists for comps and lifetime grants — via
   `wrangler d1 execute --local`. Nothing test-only was added to bracemark-api to
   make this work, and `needsRefresh` skips `manual` rows because there is no
-  provider to ask ([iap.md](./iap.md)).
+  provider to ask ([iap.md](./iap.md)). The same row is how a staging journey
+  gets a plan, written `--remote` to its own disposable account — but the
+  **seed** stays local: these four accounts are never created on staging
+  (_deployed staging and mobile Release builds_, above).
 
 Accounts are still created through the real create-account form, Argon2id and
 all: the rule in `web/fixtures/account.ts` — there is no seeding shortcut and

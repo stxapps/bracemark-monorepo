@@ -29,12 +29,67 @@ reads it through a separate signed-in browser profile. It exercises R2's actual
 presigned URLs, browser CORS, decryption, and blob images alongside entity sync.
 Sign-out/account-switch flows visit the real marketing site in this mode.
 
+### The two cases that grant a plan
+
+`EXTRACT-WEB-001` and `EXTRACT-WEB-ALL-001` need Plus: server extraction is a paid
+lever, gated in the client on the entitlement the api folds. They create a
+disposable account like every other journey, and then the runner writes that
+account a `manual` purchase row in staging's remote D1 — the row a comp is in
+production, and the one the local suite writes with `--local`
+(`seed/plan.ts`). The deployed api folds it; nothing test-only is deployed to make
+it work. These are the journeys that send a server extraction through the
+deployed CSP and the deployed extractor Worker, using the extractor origin baked
+into the shipped bundle.
+
+That row is the **only write a runner makes outside the app**, and the only thing
+on this page that needs a credential:
+
+```sh
+security add-generic-password -a bracemark -s bracemark-cf-token-staging-e2e -w
+```
+
+Mint it as an **account-owned** token against the **staging** account, with D1
+Edit and nothing else. It is deliberately not the deploy token
+(`bracemark-cf-token-staging`), and the runner never falls back to that one: a
+process that drives a browser for minutes should not also hold the right to
+replace a Worker. An exported `CLOUDFLARE_API_TOKEN` wins over the keychain, as it
+does for the deploy scripts; with neither, the run stops — it does not fall
+through to a `wrangler login` session.
+
+- **It is proved before anything is created.** When a selected case declares
+  `"stagingGrants": ["plan"]`, the web runner resolves the token and sends
+  staging's directory an `UPDATE … WHERE 0` — no row changes, but the token, the
+  account, the database and the `purchases` table all have to answer. A missing
+  or refused token fails there, before Playwright provisions an account. A run
+  that selects neither case never reads the keychain, and `--list` never does.
+- **Only a declared case may grant.** The registry's `stagingGrants` is the list
+  of cases that write to staging D1, and the write itself refuses a run that
+  declared none (`seed/d1.ts`). So the native runner, the account seed and an
+  undeclared web case are all still refused, as before.
+- **It cannot spell production.** The statement is addressed to the
+  `database_id` committed under `env.staging` in the api's `wrangler.jsonc`, in
+  the account `apps/bracemark-api/.env.staging.local` names. The other tier's
+  token gets a refusal; nothing gets a production write.
+- **Only the plan.** Session-row removal and every other direct D1 fixture stay
+  local. So does `npm run seed:accounts`: its passwords are a hash of a public
+  constant, which is fine on a laptop and is not a thing to create on a public
+  host. There is no standing paid account on staging.
+
+Each grant is three `wrangler d1 execute --remote` calls, a few seconds apiece.
+The disposable account keeps its purchase row, as it keeps everything else.
+
 The security cases are:
 
-- `STAGING-HOSTING-001`: app/marketing HTML, security headers, and agreement
-  between the document's build ID and the deployed `build.json`.
+- `STAGING-HOSTING-001`: app/marketing HTML and their 404 pages, security
+  headers, the whole enforcing CSP compared with `staging/policy.ts`, and
+  agreement between the document's build ID and the deployed `build.json`.
 - `STAGING-CSP-001`: an unapproved external script is blocked by the browser.
 - `STAGING-CSP-002`: an unapproved connection is blocked by the browser.
+- `STAGING-CSP-003`: the marketing site, under its own policy, blocks both.
+- `STAGING-CSP-004`: the signed-in app's service worker activates and Chrome
+  loads its manifest, with no violation (`worker-src`, `manifest-src`).
+- `STAGING-CSP-005`: marketing-site pages load and the bookmark converter
+  converts a file in its `blob:`-started worker, with no violation.
 - `STAGING-CORS-001`: both Workers answer browser health requests; their
   preflights allow the app and omit permission for an unrelated origin.
 
@@ -43,9 +98,18 @@ The CSP cases require a real `Content-Security-Policy` response header and an
 ordinary successful user flows cannot satisfy them. Sentinel responses are
 intercepted only to make an accidentally allowed request succeed; no probe goes
 to a third-party host. The policy here allows inline Next bootstrap scripts, so
-these checks do not assert that every inline script is blocked. Review-only CSP
-rollout is expected to make the enforcement cases red until CloudFront enforces
-it. Running a subset never counts as the full staging security gate.
+these checks do not assert that every inline script is blocked. CloudFront
+enforces the policy on both tiers; a policy moved back to report-only turns the
+refusals and the hosting case red. Running a subset never counts as the full
+staging security gate.
+
+Every signed-in journey is a CSP check as well: the app fixture fails a test
+whose browser reported a violation in an app or marketing-site document, in any
+profile the test opened, whether or not an assertion noticed. The failure lists
+each violation's document, blocked URI and directive. `IAP-WEB-001` is admitted
+for this reason — it opens the real Paddle sandbox overlay under the deployed
+policy and closes it without paying, leaving one unpaid `ready` transaction per
+run. When the CDN's policy changes on purpose, change `staging/policy.ts` with it.
 
 ## Mobile Release builds
 
@@ -132,11 +196,17 @@ case explicitly in staging fails before provisioning, rather than silently
 skipping it. The staging manifests also list excluded cases. Production is not a
 runner mode, and staging refuses origin overrides to production or localhost.
 
-The first staging suite uses Free accounts. Plus grants/downgrades and paid server
-extraction depend on local D1 fixtures and are excluded. Native on-device
-extraction is admitted; it does not call the server extractor. Worker health and
-CORS checks cover the deployed extractor's transport, not its paid extraction
-journey. Purchases/restores retain their sandbox release checklists.
+Staging journeys use Free accounts, with one exception: the two server-extraction
+cases grant their own disposable account Plus through staging's remote D1
+(_the two cases that grant a plan_, above). They are what sends an extraction
+through the CSP; the pinned header and the CORS case's fetch from the page hold
+the extractor's place in `connect-src` as well, and are all that holds it in a
+run that selects neither. The other Plus journeys — locks, nested lists, the
+search editor, the downgrade — are not admitted: the same grant would carry
+them, and each is its own review. `EXTRACT-OFFLINE-001` stays local, since it
+aborts the extractor at the browser and tests nothing a deployed tier changes.
+Native on-device extraction is admitted; it does not call the server extractor.
+Purchases/restores retain their sandbox release checklists.
 
 Local fault-injection cases remain local: process pause/throttle, reverse-route
 cuts, fake error servers, direct session-row removal, and the browser interception
@@ -152,7 +222,9 @@ receipts are evidence of build configuration and artifact identity; passing flow
 are the runtime evidence. Neither proves store distribution, every native
 architecture, or all provider configurations. Disposable accounts are isolated
 but are not automatically deleted after a run. No cloud-administrator credentials
-are needed by the runners; build signing credentials stay outside the checkout.
+are needed by the runners — the plan grant's token is scoped to D1 on the staging
+account and lives in the keychain — and build signing credentials stay outside
+the checkout.
 
 Validate runner changes with:
 
@@ -169,8 +241,27 @@ origin/selection refusal and artifact/mapping tamper checks. It adds no Jest
 config and remains outside `npm run test`.
 
 `check:browser` uses system Chrome with synthetic CSP documents to verify that
-the probe passes an enforcing refusal and rejects report-only/allowed policies.
-It changes no deployed headers and does not count as staging qualification.
+the probe passes an enforcing refusal and rejects report-only/allowed policies,
+and that the violation guard records an app document under either header while
+ignoring an allowed request and a third party's document. It also checks the
+header comparison against widened, narrowed and duplicated policies. It changes
+no deployed headers and does not count as staging qualification.
+
+`check:headers` is the one check here that may be pointed at production:
+
+```sh
+npx nx check:headers @stxapps/e2e                 # staging
+npx nx check:headers @stxapps/e2e -- production
+```
+
+It reads the security headers of the tier's app and marketing-site hosts — a
+page and a missing path on each — compares them with `staging/policy.ts`, and
+has system Chrome attempt one unapproved connection and one unapproved script
+per host, which the policy must refuse. It creates no account and sends nothing
+off the machine, which is why it is not bound by the runner's refusal of
+production. It needs no build behind the CDN: CloudFront attaches the policy to
+its own 403, so an origin with empty buckets is checked on that. It does not
+show that a build works under the policy; only the journeys do.
 
 ## Measured staging verification — 2026-10-09
 
@@ -239,3 +330,66 @@ subprocess timeout made its regression test fail; restoring it passed. The
 signature checks rejected the original unsigned app and accepted the corrected
 signed build/installation. These harness checks supplement the runtime results
 above; they do not turn the failed deployed CSP checks green.
+
+## Measured CSP enforcement — 2026-10-09
+
+Later the same day the CSP moved from the report-only header to the enforcing
+one on all four CloudFront policies, staging first. Runner baseline: `7940897`
+plus the uncommitted changes of this pass — the violation guard, the pinned
+header, `STAGING-CSP-003`/`-004`/`-005`, `IAP-WEB-001` admitted, and
+`check:headers`. The deployed web build is the one the hosting case recorded.
+The staging marketing site was redeployed from the same baseline between the two
+full runs below, for the reason they give. No automatic retry counted as a pass.
+
+| Surface                                           | Result                                                        | Evidence                                            |
+| ------------------------------------------------- | ------------------------------------------------------------- | --------------------------------------------------- |
+| Deployed web, 29 admitted cases, old site build   | 27 passed; `ACCOUNT-DELETE-001` and `WEB-ACCOUNT-004` failed  | `staging-web-2026-10-09T06-39-50-163Z-24015-93e5c4` |
+| Deployed web, all 30 admitted cases, current site | 30 passed                                                     | `staging-web-2026-10-09T06-57-35-115Z-38045-7a9f17` |
+| `check:headers`, staging                          | 4 responses and 4 refusals as designed                        | console output; no run directory                    |
+| `check:headers`, production                       | 4 responses and 4 refusals as designed, all on CloudFront 403 | console output; no run directory                    |
+
+In the final run the two enforcement cases that were red under report-only
+passed, as did the marketing site's own refusals, the service worker and
+manifest case, and the whole-header comparison on both origins' pages and 404s.
+`IAP-WEB-001` opened and closed the real Paddle sandbox overlay under the
+enforced policy, `DATA-IMPORT-WEB-001` moved encrypted images through R2 to a
+second profile, and the bookmark converter ran a conversion in its
+`blob:`-started worker. **No app or marketing-site document reported a
+violation in any journey.**
+
+The first run's two failures were the violation guard, and one finding: the
+staging **marketing site** was serving a build far older than the app's, whose
+zod chunk probed for eval on every page. Enforced, the browser refused the probe
+and reported `script-src` / `eval` against `dryrunbase.com`; the page worked,
+which is why nothing but the guard noticed. The two cases are the ones that end
+on the marketing site, and every assertion of their own passed. It was not a
+policy gap and `'unsafe-eval'` was not the fix: current source takes `z` from
+`@stxapps/shared`, which is jitless. Before deploying, the current site export
+was driven locally under the deployed site header — all 42 pages, the 404 and
+the converter — with no violation; after `npm run deploy:site:staging` the same
+two cases passed and `STAGING-CSP-005` now holds the site's pages and converter
+on the CDN itself. That older build also predated the converter, so the site
+policy's `worker-src blob:` had never been exercised on staging before this.
+
+Production serves no build, so no journey can run there and none was claimed.
+Its two policies were read back and differ from staging's only in the api,
+extractor and R2 hosts (app) and the api host (site); its hosts send the designed
+headers on CloudFront's 403; and Chrome refused the unapproved connection and
+script on both. The first production deploy still needs a pass of its own.
+
+Still not covered by any journey: a server extraction under the policy (it needs
+a paid plan), and a violation raised inside a worker's own scope.
+
+The first of those now has its journeys — `EXTRACT-WEB-001` and
+`EXTRACT-WEB-ALL-001`, on a plan granted through staging's D1 (_the two cases
+that grant a plan_, above) — but **they have not run against staging yet**, so
+nothing here is a result for them. What has been checked is the edge of the
+grant: with no token the run stops in preflight with the keychain command, and
+with a token Cloudflare refuses it stops there too, naming the staging database;
+neither creates a run directory or an account. Their first run needs the token
+minted, and is the first time the deployed extractor fetches a page for a client
+under this policy.
+
+Runner checks passed 6/6, browser and header-comparison checks 6/6, registry
+validation passed for 161 cases, and scoped lint/typecheck passed. Two local
+smoke cases passed with the guard in place, under no CSP.

@@ -22,7 +22,7 @@ export async function probeCsp(
     });
   });
   const response = await page.goto(documentUrl);
-  if (!response) throw new Error('staging sign-in returned no document response');
+  if (!response) throw new Error(`${documentUrl} returned no document response`);
   const headers = await response.allHeaders();
   expect(
     headers['content-security-policy'],
@@ -53,9 +53,12 @@ export async function probeCsp(
           { signal: controller.signal },
         );
         if (kind === 'script') {
-          const script = document.createElement('script');
-          script.src = url;
-          document.head.append(script);
+          // Namespaced, and appended to whatever root there is: an origin with
+          // no build answers CloudFront's XML error, which has no <head> and
+          // would make a plain `createElement` an inert XML element.
+          const script = document.createElementNS('http://www.w3.org/1999/xhtml', 'script');
+          script.setAttribute('src', url);
+          (document.head ?? document.documentElement).append(script);
         } else void fetch(url).catch(() => undefined);
       });
     },

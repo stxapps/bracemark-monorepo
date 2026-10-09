@@ -14,6 +14,11 @@ import { findUserId, grantPlan, lapsePlan, readGrantedPlan } from '../../seed/pl
 // and the client still has to fetch and honour the entitlement for the gated
 // control to open.
 //
+// On a staging run the same row lands in staging's remote D1 instead, for a web
+// case whose registry entry declares `stagingGrants` and for no other caller
+// (seed/d1.ts, `planD1`). Nothing below changes: the deployed api folds it the
+// same way, and the client has the same reading to do.
+//
 // No Playwright import: the native runner grants the plan before a device signs
 // in, outside any test context. (`type Page` below is erased at compile time, so
 // the runtime import graph is still Playwright-free.)

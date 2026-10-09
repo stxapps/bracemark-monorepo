@@ -1,5 +1,6 @@
 import { type Page } from '@playwright/test';
 
+import { IS_STAGING } from '../runner/environment';
 import { expect, test } from './fixtures/app';
 import { EXTRACTOR_URL } from './fixtures/env';
 import { knownPage, writePendingExtractionLibrary } from './fixtures/extraction';
@@ -20,6 +21,15 @@ import { grantPlusAndLoad } from './fixtures/plan';
 //
 // The public page is example.com (web/fixtures/extraction.ts says why, and what
 // that choice leaves unproved — no image, no redirect).
+//
+// The first two also run against STAGING, where they are the only journeys that
+// put server extraction under the deployed CSP and through the deployed
+// extractor Worker — the origin baked into the shipped bundle, its real
+// preflight, a fetch from Cloudflare's network rather than a laptop's. They get
+// their plan the way they do locally, the row landing in staging's remote D1
+// (seed/plan.ts; the registry's `stagingGrants` is what admits that write). The
+// offline case stays local: it aborts the extractor at the browser's network
+// boundary, which says nothing a deployed tier could change.
 test.describe('server extraction', () => {
   // Each case builds a Plus account (Argon2id) and then waits on a real fetch.
   test.describe.configure({ timeout: 4 * 60 * 1000 });
@@ -27,14 +37,17 @@ test.describe('server extraction', () => {
   // `npm run dev` brings the extractor up; Playwright's webServer starts only the
   // api and the web app. A missing extractor would otherwise present as a row
   // that simply never acquires its title — indistinguishable from the bug these
-  // cases exist to catch — so say it up front instead.
+  // cases exist to catch — so say it up front instead. (On staging nothing is
+  // started at all, and the same check reads as an undeployed Worker.)
   test.beforeAll(async () => {
     const health = await fetch(`${EXTRACTOR_URL}/health`).catch(() => null);
     if (!health?.ok) {
       throw new Error(
-        `bracemark-extractor is not answering on ${EXTRACTOR_URL}. Run \`npm run dev\` ` +
-          `(it starts api, web and extractor) or exclude these cases with ` +
-          `\`--exclude-trait internet\`.`,
+        `bracemark-extractor is not answering on ${EXTRACTOR_URL}. ` +
+          (IS_STAGING
+            ? 'Deploy it with `npm run deploy:extractor:staging`'
+            : 'Run `npm run dev` (it starts api, web and extractor)') +
+          ' or exclude these cases with `--exclude-trait internet`.',
       );
     }
   });
