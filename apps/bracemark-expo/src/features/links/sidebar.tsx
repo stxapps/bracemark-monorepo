@@ -507,7 +507,11 @@ export function Sidebar({ closeDrawer }: { closeDrawer: () => void }) {
   // get it: a locked row already shows the static badge above and its press-
   // through is the unlock pane (Main), and a row with no lock has nothing to
   // re-lock. A separate Pressable from the row, so tapping it re-locks without
-  // selecting the list or closing the drawer. Re-locking a `hideList` list also
+  // selecting the list or closing the drawer. When the row IS the list being
+  // shown (or covers it), Main swaps to the lock pane underneath this open rail —
+  // and that pane goes up WITHOUT asking for the unlock: no autofocus, so no
+  // keyboard over the drawer, and no biometric prompt (main.tsx; docs/locks.md,
+  // _a hand relock does not ask to be undone_). Re-locking a `hideList` list also
   // re-prunes it from this rail on the next coverage recompute, so it simply
   // disappears. Web parity: sidebar.tsx's hover-revealed button (native has no
   // hover, so it's always shown).

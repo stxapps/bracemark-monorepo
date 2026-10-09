@@ -1,0 +1,86 @@
+import * as React from 'react';
+import { act, render, screen } from '@testing-library/react-native';
+
+import { LockPane } from './lock-pane';
+
+// WHAT THE PANE DOES ON ITS WAY UP — the two things it does unasked, and the one
+// prop that withholds them.
+//
+// A pane that mounts raises a keyboard (the password field is `autoFocus`) or,
+// when the lock has opted in, runs the OS biometric prompt. Both are the pane
+// ASKING for the unlock, and both are wrong when the lock was engaged by hand a
+// moment ago: the drawer's "Lock now" raised a keyboard under the drawer, for a
+// field nobody could see, and a Face ID lock prompted to reopen itself
+// (docs/locks.md, _a hand relock does not ask to be undone_). The hosts decide
+// when — features/links/main.spec.tsx pins the list's half — and pass
+// `solicit={false}`; this file pins that the pane then does NEITHER, and still
+// offers both.
+//
+// Neither failure shows anywhere but a device. `solicit` is an optional boolean,
+// jest raises no keyboard, and the prompt needs an enrolled sensor — so what is
+// pinned here is the prop the field is given and the call the prompt would be.
+jest.mock('../contexts/sign-out-provider', () => ({
+  useSignOutFlow: () => ({ requestSignOut: jest.fn() }),
+}));
+
+const field = () => screen.getByTestId('lock-pane-password');
+
+// The prompt resolves `false` (a cancel), which is the outcome that leaves the
+// pane up to be asserted on.
+const biometric = () => ({ label: 'Face ID', onUnlock: jest.fn().mockResolvedValue(false) });
+
+const pane = (props: Partial<React.ComponentProps<typeof LockPane>> = {}) => (
+  <LockPane title="Locked" description="Enter the password" onUnlock={jest.fn()} {...props} />
+);
+
+// `await act` because the auto-prompt starts async work in a mount effect
+// (docs/testing.md, _an update that lands after `act()` returns_).
+async function mount(props: Partial<React.ComponentProps<typeof LockPane>> = {}) {
+  const view = render(pane(props));
+  await act(() => Promise.resolve());
+  return view;
+}
+
+// The control: the default is to ask, by whichever means the lock offers — and
+// by ONE of them, since a keyboard under the OS sheet is nobody's.
+test('a pane arrived at asks: the field takes focus, or the sensor is prompted', async () => {
+  await mount();
+  expect(field().props.autoFocus).toBe(true);
+
+  screen.unmount();
+  const offered = biometric();
+  await mount({ biometric: offered });
+
+  expect(offered.onUnlock).toHaveBeenCalledTimes(1);
+  expect(field().props.autoFocus).toBe(false);
+});
+
+test('a pane told not to solicit raises no keyboard', async () => {
+  await mount({ solicit: false });
+
+  expect(field().props.autoFocus).toBe(false);
+});
+
+test('a pane told not to solicit runs no biometric prompt, and still offers the button', async () => {
+  const offered = biometric();
+  await mount({ solicit: false, biometric: offered });
+
+  expect(offered.onUnlock).not.toHaveBeenCalled();
+  expect(field().props.autoFocus).toBe(false);
+  expect(screen.getByText('Unlock with Face ID')).toBeTruthy();
+});
+
+// The host's answer can change under a pane that is still up — the auto-relock
+// clears the by-hand mark — and biometry can become available after mount (the
+// provider probes the device once, asynchronously). Neither may turn a pane that
+// went up quiet into one that summons a Face ID sheet later, on its own.
+test('a quiet pane stays quiet: the answer is read once, on the way up', async () => {
+  const view = await mount({ solicit: false });
+  const offered = biometric();
+
+  view.rerender(pane({ solicit: true, biometric: offered }));
+  await act(() => Promise.resolve());
+
+  expect(offered.onUnlock).not.toHaveBeenCalled();
+  expect(field().props.autoFocus).toBe(false);
+});

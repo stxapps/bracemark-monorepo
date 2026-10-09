@@ -8,7 +8,7 @@ import { Text } from './ui/text';
 import { AppLockGate } from './app-lock-gate';
 
 let mockStatus = 'ready';
-let mockAppLock = { exists: false, unlocked: false, biometric: false };
+let mockAppLock = { exists: false, unlocked: false, biometric: false, lockedByHand: false };
 
 jest.mock('@stxapps/expo-react', () => ({
   useLocks: () => ({
@@ -24,7 +24,14 @@ jest.mock('@stxapps/expo-react', () => ({
 
 jest.mock('./lock-pane', () => {
   const { Text: MockText } = jest.requireActual('react-native');
-  return { LockPane: () => <MockText>Lock pane</MockText> };
+  return {
+    LockPane: ({ solicit = true }: { solicit?: boolean }) => (
+      <>
+        <MockText>Lock pane</MockText>
+        <MockText>{solicit ? 'asks' : 'quiet'}</MockText>
+      </>
+    ),
+  };
 });
 
 let mounts = 0;
@@ -49,7 +56,7 @@ const tree = () => (
 beforeEach(() => {
   mounts = 0;
   mockStatus = 'ready';
-  mockAppLock = { exists: true, unlocked: false, biometric: false };
+  mockAppLock = { exists: true, unlocked: false, biometric: false, lockedByHand: false };
 });
 
 test('a cold start behind the lock never mounts the app', () => {
@@ -132,4 +139,27 @@ test('an unlock keeps the app covered until the keyboard it was typed on is down
   keyboardUp = false;
   view.rerender(tree());
   expect(screen.getByText('uncovered')).toBeTruthy();
+});
+
+// "Lock app" puts the pane up under the thumb that just pressed it. Left to its
+// defaults the pane autofocuses — a keyboard nobody asked for — or, with
+// biometric on, prompts Face ID to reopen the gate the press had just closed
+// (docs/locks.md, _a hand relock does not ask to be undone_). A cold start and
+// the background auto-relock are the other two ways the pane goes up, and both
+// meet someone who wants in. The pane's side is lock-pane.spec.tsx.
+test('the pane asks for the unlock unless the app was locked by hand', () => {
+  const view = render(tree());
+  expect(screen.getByText('asks')).toBeTruthy();
+
+  mockAppLock = { ...mockAppLock, unlocked: true };
+  view.rerender(tree());
+  mockAppLock = { ...mockAppLock, unlocked: false, lockedByHand: true };
+  view.rerender(tree());
+  expect(screen.getByText('quiet')).toBeTruthy();
+
+  mockAppLock = { ...mockAppLock, unlocked: true, lockedByHand: false };
+  view.rerender(tree());
+  mockAppLock = { ...mockAppLock, unlocked: false };
+  view.rerender(tree());
+  expect(screen.getByText('asks')).toBeTruthy();
 });

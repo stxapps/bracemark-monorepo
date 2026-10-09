@@ -159,23 +159,61 @@ type ItemExtra = {
 
 export function Main() {
   const { selection } = useLinksPage();
-  const { isListLocked, unlockList, biometricForList, biometricLabel, unlockListWithBiometric } =
-    useLocks();
+  const {
+    isListLocked,
+    isListLockedByHand,
+    unlockList,
+    biometricForList,
+    biometricLabel,
+    unlockListWithBiometric,
+  } = useLocks();
+
+  const listId = selection.kind === 'list' ? selection.id : null;
+  const locked = listId !== null && isListLocked(listId);
+
+  // Whether the pane below went up IN PLACE — over a list this pane was already
+  // showing open — as opposed to being arrived at (a row press, a deep link, the
+  // back gesture, the landing). That is the half of "may the pane ask for the
+  // unlock" only this component can know; the other half is the provider's
+  // (`isListLockedByHand`), and it takes both to say no:
+  //  - in place AND by hand is the drawer's "Lock now" on the list being shown
+  //    (or on an ancestor whose lock covers it). The drawer is still open over
+  //    this pane, so an autofocused field raised a keyboard for an input nobody
+  //    could see, and a Face ID lock prompted to reopen itself;
+  //  - in place but NOT by hand is the background auto-relock, where the prompt
+  //    on return is the point ("a glance, not a password");
+  //  - by hand but NOT in place is a list locked from the drawer while another
+  //    was showing and visited later — an arrival like any other.
+  // State adjusted during render (React's documented pattern, the same one
+  // app-lock-gate.tsx uses), so the answer is settled in the commit that mounts
+  // the pane — `solicit` is read once, there. docs/locks.md, _a hand relock does
+  // not ask to be undone_.
+  const [shown, setShown] = useState({ listId, locked, inPlace: false });
+  let inPlace = shown.inPlace;
+  if (shown.listId !== listId || shown.locked !== locked) {
+    inPlace = locked && shown.listId === listId;
+    setShown({ listId, locked, inPlace });
+  }
 
   // The main pane's body while the selected list is locked — a SWAP for the
   // list, not an overlay (web main.tsx's rationale): UnlockedMain (and its
   // link query) simply doesn't mount, so the locked links are never fetched.
   // Unlocking flips lock-provider's in-memory state and the list mounts fresh.
-  if (selection.kind === 'list' && isListLocked(selection.id)) {
-    const listId = selection.id;
+  if (listId !== null && locked) {
     return (
       <View className="min-h-0 flex-1">
         <LockPane
+          // Keyed by the list: going from one locked list straight to another
+          // is an arrival at a DIFFERENT lock, and without the key the one
+          // instance served both — the second list got the password typed for
+          // the first, no focus and no biometric prompt of its own.
+          key={listId}
           testID="list-lock-pane"
           className="flex-1"
           title={LOCK_COPY.list.title}
           description={LOCK_COPY.list.description}
           onUnlock={(password) => unlockList(listId, password)}
+          solicit={!(inPlace && isListLockedByHand(listId))}
           biometric={
             biometricForList(listId)
               ? { label: biometricLabel, onUnlock: () => unlockListWithBiometric(listId) }

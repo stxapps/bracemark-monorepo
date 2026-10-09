@@ -25,6 +25,10 @@ import { Main } from './main';
 // do. FlashList is stood in for by the ScrollView it forwards these props to.
 let mockLinks: LinkView[] = [];
 let mockSelection: { kind: string; id?: string } = { kind: 'none' };
+// The lock provider's two answers about a list, for the pane-swap cases at the
+// foot of the file. Both empty everywhere else: nothing is locked.
+let mockLocked = new Set<string>();
+let mockLockedByHand = new Set<string>();
 
 jest.mock('@shopify/flash-list', () => {
   const { ScrollView } = jest.requireActual('react-native');
@@ -40,7 +44,14 @@ jest.mock('@shopify/flash-list', () => {
 });
 jest.mock('@stxapps/expo-react', () => ({
   useExtraction: () => ({ reportDisplayedLinkPaths: jest.fn() }),
-  useLocks: () => ({ isListLocked: () => false }),
+  useLocks: () => ({
+    isListLocked: (id: string) => mockLocked.has(id),
+    isListLockedByHand: (id: string) => mockLockedByHand.has(id),
+    unlockList: jest.fn(),
+    biometricForList: () => false,
+    biometricLabel: '',
+    unlockListWithBiometric: jest.fn(),
+  }),
   useSettings: () => ({ linksLayout: 'list' }),
   useSync: () => ({ bgSyncStatus: 'idle', requestSync: jest.fn() }),
   useTags: () => [],
@@ -64,9 +75,25 @@ jest.mock('./use-links', () => ({
   }),
 }));
 // Neither is under test, and each drags in a tree of its own (the bulk
-// toolbar's dialogs, the lock pane's keyboard-aware scroller).
+// toolbar's dialogs, the lock pane's keyboard-aware scroller). The lock pane's
+// stand-in reports the one prop this pane DECIDES — and latches it at mount, as
+// the real one does, so a case reads what the pane was told on the way up.
 jest.mock('./bulk-edit-bar', () => ({ BulkEditBar: () => null }));
-jest.mock('../../components/lock-pane', () => ({ LockPane: () => null }));
+jest.mock('../../components/lock-pane', () => {
+  const { useState } = jest.requireActual('react');
+  const { Text: MockText } = jest.requireActual('react-native');
+  return {
+    LockPane: ({ solicit = true }: { solicit?: boolean }) => {
+      const [solicited] = useState(solicit);
+      return <MockText testID="lock-pane">{solicited ? 'asks' : 'quiet'}</MockText>;
+    },
+  };
+});
+
+beforeEach(() => {
+  mockLocked = new Set();
+  mockLockedByHand = new Set();
+});
 
 const link = { path: 'links/a.enc', url: 'https://example.com', tagIds: [] } as unknown as LinkView;
 
@@ -112,4 +139,94 @@ test('an empty view shows its message rather than an empty list', () => {
 
   expect(screen.getByText('No links match')).toBeTruthy();
   expect(screen.queryByTestId('links-list')).toBeNull();
+});
+
+// --- the locked-list swap: may the pane ask for the unlock as it goes up? -----
+//
+// The lock pane autofocuses its password field and auto-prompts biometrics on
+// mount. Both are right on ARRIVAL at a locked list and wrong after the drawer's
+// "Lock now" on the list being shown: the drawer is still open over this pane,
+// so the keyboard came up for a field nobody could see, and a Face ID lock
+// prompted to reopen itself (docs/locks.md, _a hand relock does not ask to be
+// undone_). It takes BOTH facts to stay quiet — the pane went up in place, and
+// the lock was engaged by hand — and each case below is one of the ways of
+// having only one of them. Nothing else can see any of this: `solicit` is an
+// optional boolean, and the symptom needs a keyboard or a sensor.
+const X = { kind: 'list', id: 'list-x' };
+const Y = { kind: 'list', id: 'list-y' };
+const paneSays = () => screen.getByTestId('lock-pane').props.children as string;
+
+test('"Lock now" on the list being shown puts the pane up without asking', () => {
+  mockSelection = X;
+  const view = render(<Main />);
+  expect(screen.queryByTestId('lock-pane')).toBeNull();
+
+  mockLocked = new Set([X.id]);
+  mockLockedByHand = new Set([X.id]);
+  view.rerender(<Main />);
+
+  expect(paneSays()).toBe('quiet');
+});
+
+// The background auto-relock: same pane, same place, and the prompt on return is
+// the point of it.
+test('a list that relocks under the user, not by hand, still asks', () => {
+  mockSelection = X;
+  const view = render(<Main />);
+
+  mockLocked = new Set([X.id]);
+  view.rerender(<Main />);
+
+  expect(paneSays()).toBe('asks');
+});
+
+// Locked from the drawer while ANOTHER list was showing, then visited: the mark
+// is still on the lock, and it must not follow the user into an arrival.
+test('a list locked by hand and arrived at later asks like any other', () => {
+  mockSelection = Y;
+  const view = render(<Main />);
+
+  mockLocked = new Set([X.id]);
+  mockLockedByHand = new Set([X.id]);
+  view.rerender(<Main />);
+  mockSelection = X;
+  view.rerender(<Main />);
+
+  expect(paneSays()).toBe('asks');
+});
+
+test('leaving a list locked in place and coming back is an arrival again', () => {
+  mockSelection = X;
+  const view = render(<Main />);
+  mockLocked = new Set([X.id]);
+  mockLockedByHand = new Set([X.id]);
+  view.rerender(<Main />);
+  expect(paneSays()).toBe('quiet');
+
+  mockSelection = Y;
+  view.rerender(<Main />);
+  mockSelection = X;
+  view.rerender(<Main />);
+
+  expect(paneSays()).toBe('asks');
+});
+
+// One locked list straight to another: a different lock, so a different pane —
+// not the first one's instance carrying its typed password across.
+test('each locked list gets a pane of its own', () => {
+  mockLocked = new Set([X.id, Y.id]);
+  mockLockedByHand = new Set([X.id]);
+  mockSelection = Y;
+  const view = render(<Main />);
+  mockLocked = new Set([Y.id]);
+  mockSelection = X;
+  view.rerender(<Main />);
+  mockLocked = new Set([X.id, Y.id]);
+  view.rerender(<Main />);
+  expect(paneSays()).toBe('quiet');
+
+  mockSelection = Y;
+  view.rerender(<Main />);
+
+  expect(paneSays()).toBe('asks');
 });

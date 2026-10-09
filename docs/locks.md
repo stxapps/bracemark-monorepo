@@ -211,7 +211,8 @@ The provider exposes:
   closes **without a reload/relaunch**. No password (relocking is free), no store
   write. These live on the `Locks` interface **beside their inverses**
   (`unlock*`), as session interaction — not on `LockMutations`, which is the
-  persisted-write surface.
+  persisted-write surface. On expo they also record that the relock was made **by
+  hand** (_a hand relock does not ask to be undone_, below).
 
 **Entitlement.** `locks` is a **Plus** lever. It's gated **at
 the affordance**, before any password dialog opens, so a free user never types a
@@ -269,7 +270,8 @@ face there labelled the toggle "Face Unlock" for a user who had enrolled only a
 finger.
 
 **Where it surfaces.** The `LockPane` (app gate + locked-list pane)
-**auto-prompts once on mount** when the gating lock has opted in, with a "Unlock
+**auto-prompts once on mount** when the gating lock has opted in — unless the
+lock was re-engaged by hand a moment ago (next section) — with a "Unlock
 with {label}" button and the password field as the ever-present fallback; a
 cancel drops to the password, never loops. Enable/disable lives in Settings — a
 Switch in Misc (app lock) and an "Enable/Disable {label}" item in the Lists row
@@ -277,6 +279,96 @@ kebab (per list). Toggling it needs no entitlement (creating the lock was the
 paywalled step). This is what makes the 60 s auto-relock pleasant — re-entry is a
 glance, not a password. Native module → `expo prebuild` + a real device with
 enrolled biometry to exercise; jest/Metro can't drive the prompt.
+
+### a hand relock does not ask to be undone (expo-only)
+
+A `LockPane` does two things unasked as it goes up: it autofocuses the password
+field, which on native raises the keyboard, or — when the lock has opted in — it
+runs the biometric prompt. Both are the pane **asking for the unlock**, and both
+assume the person in front of it wants in. That holds for every way a pane goes
+up except one: the user pressing "Lock now" or "Lock app".
+
+The specimen is the drawer's "Lock now" on the list being shown (or on an
+ancestor whose lock covers it). `Main` swaps to the pane underneath the drawer,
+which stays open — the press deliberately neither selects the row nor closes the
+rail — so the autofocus raised a keyboard over the drawer, typing into a field
+nobody could see. With biometric enabled the same mount ran the OS prompt
+instead: the lock asked to be reopened in the same second it was closed, and
+Face ID needs no further act from the user to say yes. "Lock app" in the topbar
+overflow reaches the same pane through `AppLockGate` and had both halves.
+
+**The fix is not to close the drawer** — locking a list you are not viewing
+changes nothing on screen, locking several in a row is the affordance, and the
+row's badge already confirms the press — **and not to drop the autofocus**, which
+is right on arrival ([soft-keyboard.md](./soft-keyboard.md), _arrival_). It is to
+know why the pane is up:
+
+- **The provider keeps the fact.** `expo-react`'s lock-provider holds a second
+  in-memory set beside the unlocked one: the locks re-engaged **by hand**.
+  `lockApp` / `lockList` are its only writers. An id leaves when its lock is
+  opened; the auto-relock empties the set (past the grace window every engaged
+  lock is the auto-relock's, whoever closed it first); a fresh `addListLock`
+  drops any mark an earlier lock on that list left. It surfaces as
+  `appLock.lockedByHand` and `isListLockedByHand(listId)`, the latter resolving
+  the **covering** lock like `biometricForList` — "Lock now" sits on the row that
+  owns the lock, while the pane is asked about the list being shown.
+- **The host decides.** `LockPane` takes `solicit` (default `true`), which gates
+  the autofocus and the auto-prompt together and nothing else — the field and the
+  biometric button are still there, one tap away. `AppLockGate` passes
+  `!appLock.lockedByHand`. `Main` needs a second fact only it has: whether the
+  pane went up **in place**, over a list it was already showing open. It takes
+  both to stay quiet:
+
+  | the pane went up…                            | in place | by hand | asks? |
+  | -------------------------------------------- | -------- | ------- | ----- |
+  | "Lock now" on the list being shown           | yes      | yes     | no    |
+  | the background auto-relock                   | yes      | no      | yes   |
+  | a list locked from the drawer, visited later | no       | yes     | yes   |
+  | a row press, a deep link, back, the landing  | no       | no      | yes   |
+
+  The second row is why "in place" alone is not the test — the prompt on return
+  is what makes the auto-relock bearable — and the third is why "by hand" alone
+  is not: the mark stays on the lock until it is opened, and must not follow the
+  user into an arrival. Leaving a list locked in place and coming back is an
+  arrival too.
+
+- **The answer is read once, on the way up.** `LockPane` latches `solicit` at
+  mount. The host's answer can change under a pane that is still up (the
+  auto-relock clears the mark), and a pane that started quiet must not summon a
+  keyboard or a Face ID sheet later, unprompted.
+
+`Main` also keys the pane by list id. Going from one locked list straight to
+another used to reuse the one instance: the second list inherited the password
+typed for the first and got no focus and no prompt of its own.
+
+**Web has the same press and a different problem, so it takes a different fix.**
+It has no biometric prompt, and in the two-pane layout the autofocus is right
+even after "Lock list": the button that was pressed unmounts with the press, and
+the password field is a better place for focus than `<body>`. Below `md` the
+rail is a sheet (`sidebar-drawer.tsx`), and there the same autofocus pulled focus
+out of the open sheet's trap and into the page the sheet had marked
+`aria-hidden` — a focused field no screen reader can reach, and on a phone a
+keyboard for an input behind the scrim. The trap does not pull it back: the
+element it would return to is the "Lock list" button, which that commit removed.
+So web's `LockPane` asks one question native has no way to ask — is a modal open
+over me? — and focuses from an effect only when none is, instead of carrying the
+`autoFocus` attribute. No by-hand set, no `solicit`: "Lock app" keeps its focus
+on every viewport, which on a touch device may still raise the keyboard. The
+effect is passive because "Lock app" is chosen from a menu that is modal too and
+unmounts in the same commit; its `aria-hidden` comes off in that commit's effect
+cleanups, which run first. Web's `Main` keys `ListLockPane` by list id for the
+reason expo's does — the carried-over password was measured there.
+
+Pinned by `expo-react`'s `contexts/lock-provider.spec.tsx` (the set's writers and
+erasers), `features/links/main.spec.tsx` (the table above) and
+`components/lock-pane.spec.tsx` / `app-lock-gate.spec.tsx`; web's guard by
+`bracemark-web`'s `components/lock-pane.spec.tsx`. **Status:** the native half is
+not yet driven on a device or an emulator — jest raises no keyboard and has no
+sensor, so the specs pin the prop the field is given and the call the prompt
+would be. The web half was driven in headless Chrome at 390 and 1280 wide,
+reading `document.activeElement` before and after the change; a soft keyboard
+itself, and Safari — which does not focus a button on tap, so its trap may behave
+differently — were not.
 
 ### UI surfaces
 
@@ -377,15 +469,16 @@ app, and a portaled Radix dialog with it.
 The providers are mirrored; the shared coverage math and verifier parameters keep
 them honest. The divergences are all platform-shaped:
 
-|                       | web (`web-react`)        | expo (`expo-react`)                      |
-| --------------------- | ------------------------ | ---------------------------------------- |
-| Store                 | Dexie `locks` table      | expo-sqlite + drizzle                    |
-| Reactivity            | `useLiveQuery`           | drizzle `useLiveQuery` (change listener) |
-| Verifier crypto       | Web Crypto `subtle`      | `react-native-quick-crypto`              |
-| Locked-list pane      | `ListLockPane` component | inlined in `main.tsx`                    |
-| "Lock now" affordance | hover-revealed           | always shown                             |
-| Auto-relock           | — (tab-close relocks)    | background-elapsed (`AppState`)          |
-| Biometric unlock      | —                        | `expo-local-authentication`              |
+|                       | web (`web-react`)                       | expo (`expo-react`)                       |
+| --------------------- | --------------------------------------- | ----------------------------------------- |
+| Store                 | Dexie `locks` table                     | expo-sqlite + drizzle                     |
+| Reactivity            | `useLiveQuery`                          | drizzle `useLiveQuery` (change listener)  |
+| Verifier crypto       | Web Crypto `subtle`                     | `react-native-quick-crypto`               |
+| Locked-list pane      | `ListLockPane` component                | inlined in `main.tsx`                     |
+| "Lock now" affordance | hover-revealed                          | always shown                              |
+| Auto-relock           | — (tab-close relocks)                   | background-elapsed (`AppState`)           |
+| A relock by hand      | pane takes no focus under an open modal | `handLockedIds` → a pane that doesn't ask |
+| Biometric unlock      | —                                       | `expo-local-authentication`               |
 
 One shared subtlety in both: an **orphan sweep.** List deletion _syncs_ from
 other devices while locks are device-local, so a lock can outlive its list. Both

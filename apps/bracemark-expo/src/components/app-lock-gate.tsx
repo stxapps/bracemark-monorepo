@@ -79,6 +79,10 @@ export function AppLockGate({ children }: { children: ReactNode }) {
         title={LOCK_COPY.app.title}
         description={LOCK_COPY.app.description}
         onUnlock={unlockApp}
+        // "Lock app" (more-options-menu.tsx) puts this pane up under the thumb
+        // that just asked for it: no keyboard, and no Face ID sheet opening the
+        // gate straight back. A cold start and the auto-relock still ask.
+        solicit={!appLock.lockedByHand}
         biometric={
           appLock.biometric && biometricAvailable
             ? { label: biometricLabel, onUnlock: unlockAppWithBiometric }

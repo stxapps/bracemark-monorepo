@@ -32,6 +32,7 @@ export function LockPane({
   onUnlock,
   className,
   biometric,
+  solicit = true,
   testID,
 }: {
   title: string;
@@ -46,6 +47,17 @@ export function LockPane({
   // and resolves true when it opened the lock — the gate then unmounts. The
   // password field below is always the fallback (docs/locks.md).
   biometric?: { label: string; onUnlock: () => Promise<boolean> };
+  // Whether the pane may ASK for the unlock as it goes up — the autofocus that
+  // raises the keyboard, and the biometric auto-prompt. Both are right for
+  // someone arriving at a lock, and wrong for someone who has just engaged it by
+  // hand: "Lock now" on the list being shown raised a keyboard under the open
+  // drawer, typing into a field nobody could see, and with Face ID enabled the
+  // prompt that followed could open the lock the press had just closed. The
+  // host decides (it knows how the pane got here); `false` leaves the field, the
+  // biometric button and everything else exactly as they are, one tap away.
+  // Read ONCE, at mount — see `solicited` below. docs/locks.md, _a hand relock
+  // does not ask to be undone_.
+  solicit?: boolean;
   // The pane's root marker for the mobile flows. Each host passes its own
   // (`app-lock-pane`, `list-lock-pane`): which gate is up is the assertion.
   testID?: string;
@@ -54,6 +66,11 @@ export function LockPane({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const { requestSignOut } = useSignOutFlow();
+  // Latched: asking is something the pane does on the way up or not at all. The
+  // host's answer can change under a pane that is still up (the auto-relock
+  // clears a by-hand mark), and a pane that started quiet must not summon a
+  // keyboard or a Face ID sheet later, unprompted.
+  const [solicited] = useState(solicit);
 
   const submit = async () => {
     if (busy) return;
@@ -90,12 +107,14 @@ export function LockPane({
 
   // Auto-prompt ONCE when biometric is offered (open the gate → prompt at once).
   // The ref makes it strictly once-on-offer even though `biometric` is a fresh
-  // object each render, so a cancel doesn't immediately re-prompt.
+  // object each render, so a cancel doesn't immediately re-prompt. A pane that
+  // may not solicit spends its one offer without prompting — the button below
+  // is still there.
   const autoPrompted = useRef(false);
   useEffect(() => {
     if (!biometric || autoPrompted.current) return;
     autoPrompted.current = true;
-    void tryBiometric();
+    if (solicited) void tryBiometric();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [biometric]);
 
@@ -104,8 +123,8 @@ export function LockPane({
   // screen's list-lock pane) had the same bug, and a fix typed into two places
   // drifts into two behaviours.
   //
-  // The bug: the password field is `autoFocus` when there's no biometric, so
-  // the keyboard is up on mount — and with nothing keyboard-aware above it, the
+  // The bug: the password field is `autoFocus` when there's no biometric (and
+  // the pane may solicit), so the keyboard is up on mount — and with nothing keyboard-aware above it, the
   // pane stayed centred in the WHOLE window while the keyboard covered its
   // bottom third. What sits in that third is the Unlock button and the "forgot
   // the password" escape hatch, i.e. both ways forward. docs/safe-area.md's
@@ -154,10 +173,15 @@ export function LockPane({
         <View className="gap-2">
           <PasswordInput
             testID="lock-pane-password"
-            autoFocus={!biometric}
+            autoFocus={solicited && !biometric}
             placeholder={LOCK_COPY.passwordLabel}
             aria-label={LOCK_COPY.passwordLabel}
             value={password}
+            // Also what drops the keyboard on a submit, with no
+            // `Keyboard.dismiss()` anywhere in this file: a focused field that
+            // goes non-editable loses its focus on both platforms, and nothing
+            // gives it back when `busy` clears. docs/soft-keyboard.md, _a
+            // submit drops it_.
             editable={!busy}
             onChangeText={(text) => {
               setPassword(text);

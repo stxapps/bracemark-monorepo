@@ -539,6 +539,17 @@ deliberately: a Drawer mounts its content with the screen rather than on first o
 and `SearchBar` can mount autofocused in that same commit (a `?text=` query arriving
 with the screen — _arrival_ below), so a dismiss on mount would race that focus.
 
+That dismiss and an autofocus the row press leads to do NOT race, but only by
+an ordering nothing here owns. Selecting a locked list closes the drawer and
+mounts a lock pane whose password field autofocuses, and the keyboard stays up.
+The row calls `setSimpleQuery` and then `closeDrawer`: the second dispatches to
+the navigator at once, while the first is `router.push`, which expo-router only
+QUEUES and dispatches from an effect a commit later (`routingQueue`,
+`useImperativeApiEmitter`). So the status flips and the dismiss runs in one
+commit, and the pane mounts and focuses in the next. Make the selection land
+first — a synchronous params write in place of the push — and the dismiss would
+arrive after the focus and take the keyboard back down, with nothing failing.
+
 **The add panel adds a FOURTH vector, and it is the one that needs guarding.**
 Its backdrop closes on a tap — web's outside-click, and swallowed by the same
 rule while the optional section holds work (`link-add-panel.tsx`). Everything
@@ -639,6 +650,23 @@ a keyboard up are part of the typing, or have their own answer already:
   `lock-pane.tsx`, create-account's confirm step. It is visible by the geometry
   above, and the user's next act is to retype.
 
+**A field that goes `editable={false}` while focused drops the keyboard on its
+own**, and that is a dismissal nobody wrote. `lock-pane.tsx` is the specimen, and
+it contradicts its place in the list above: the pane calls no `Keyboard.dismiss()`,
+yet a press on Unlock with a wrong password ends with the error showing and the
+keyboard down. The field is `editable={!busy}`, and disabling a focused input
+takes its focus on both platforms — iOS's `RCTUITextField` maps `editable` onto
+`enabled`, and a disabled `UITextField` resigns first responder; Android's
+`setEditable` is `view.isEnabled`, and `TextView.setEnabled(false)` hides the soft
+input. Nothing puts the focus back when `busy` clears, so the retry costs the same
+tap the dismissing sites pay. The empty-password error is the one path that keeps
+the keyboard, because it returns before `busy` is set. So a submit that guards
+double-entry by disabling its FIELD has already chosen to drop the keyboard,
+whichever list it was meant to be in; the sign-in forms guard on `isSubmitting`
+in the handler and leave their fields editable, which is why they have to dismiss
+by hand. Whether the lock pane should keep its keyboard instead — guard in the
+handler, as it already does, and stop toggling `editable` — is undecided.
+
 The cost at the sites that do dismiss is one tap back into the field to retry.
 
 **Status:** not yet driven on a device or an emulator. The Maestro flows cannot
@@ -663,7 +691,13 @@ and whether the user arrived already committed to typing:
 - **Focus on mount** when the screen exists to receive the typing and carries
   nothing to read first: the add panel's URL field (`links/link-add-panel.tsx`),
   the links search box (`links/search-bar.tsx`), `lock-pane.tsx`'s password when
-  there is no biometric to offer instead.
+  there is no biometric to offer instead — and the pane was arrived at.
+- **Don't** when the surface went up because the user just asked for the
+  opposite. "Lock now" on the list being shown mounts that same lock pane
+  underneath the open drawer, and its autofocus raised a keyboard over the rail
+  for a field nobody could see. The pane takes `solicit={false}` there and from
+  "Lock app", which withholds the focus and the biometric prompt alike
+  ([locks.md](./locks.md), _a hand relock does not ask to be undone_).
 - **Don't** when the screen opens with something the user has to read. `/sign-in`
   and `/create-account` are pushed from the landing CTAs (`components/landing.tsx`)
   and open with the lockup, the heading, and — on create-account — the step

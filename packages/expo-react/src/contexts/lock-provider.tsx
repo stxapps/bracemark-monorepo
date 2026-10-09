@@ -39,6 +39,10 @@ import { useSync } from './sync-provider';
 // re-engage locks; a mobile process keeps `unlockedIds` in memory across
 // backgrounding, so an unlocked, backgrounded phone handed to someone would stay
 // open. This is a deliberate, justified divergence — see docs/locks.md.
+//
+// And one expo-only FACT the provider keeps for the panes: which engaged locks
+// the user re-engaged BY HAND (`handLockedIds` below). Web has no use for it —
+// see docs/locks.md, _a hand relock does not ask to be undone_.
 
 // A list lock's row state, for settings/sidebar chrome (does this list have its
 // own lock, is it currently engaged, does it hide, may it use biometry) —
@@ -56,7 +60,9 @@ export interface Locks {
   // 'checking' while the first locks read is in flight — gates render null (the
   // same no-flash rule as web's InitialSyncGate) instead of flashing the app open.
   status: 'checking' | 'ready';
-  appLock: { exists: boolean; unlocked: boolean; biometric: boolean };
+  // `lockedByHand`: the gate is up because the user pressed "Lock app", not
+  // because of a launch or the auto-relock — see isListLockedByHand below.
+  appLock: { exists: boolean; unlocked: boolean; biometric: boolean; lockedByHand: boolean };
   // Device biometry (Face ID / Touch ID) — hardware present + enrolled — and a
   // user-facing label for it. Gates every biometric affordance; expo-only.
   biometricAvailable: boolean;
@@ -70,6 +76,14 @@ export interface Locks {
   // chrome. Absent key = no lock on that list.
   listLocks: ReadonlyMap<string, ListLockInfo>;
   isListLocked: (listId: string) => boolean;
+  // Whether the lock currently GATING this list (the covering lock, like
+  // biometricForList) is engaged because the user re-engaged it by hand — "Lock
+  // now" — rather than by a launch or the background auto-relock. A fact, not a
+  // policy: the LockPane's hosts read it to decide whether a pane that just went
+  // up may ask for the unlock straight back (autofocus, the biometric prompt).
+  // False again once the lock is opened, or once the auto-relock has re-engaged
+  // everything. Expo-only.
+  isListLockedByHand: (listId: string) => boolean;
   // Verify against the app lock / the list's covering lock; true opens it.
   unlockApp: (password: string) => Promise<boolean>;
   unlockList: (listId: string, password: string) => Promise<boolean>;
@@ -135,6 +149,16 @@ export function LockProvider({ children }: { children: ReactNode }) {
   // Lock row ids opened this session (APP_LOCK_ID and/or list ids). In-memory
   // only — the whole point; see the header.
   const [unlockedIds, setUnlockedIds] = useState<ReadonlySet<string>>(new Set());
+
+  // The engaged locks the user re-engaged BY HAND this session (lockApp /
+  // lockList, and nothing else). Kept apart from `unlockedIds` because that set
+  // can only say a lock is engaged, not why — and the why is what a pane needs:
+  // a lock engaged by a launch or by the auto-relock meets someone who wants in,
+  // one engaged by hand meets someone who has just asked for the opposite. An id
+  // leaves when its lock is opened, and the auto-relock empties the set — past
+  // the grace window every engaged lock is the auto-relock's, whoever closed it
+  // first. In-memory like the set above, for the same reason.
+  const [handLockedIds, setHandLockedIds] = useState<ReadonlySet<string>>(new Set());
 
   // When the app last went to the background (null while foregrounded). Drives
   // the auto-relock effect below; a ref, not state, since only the effect reads
@@ -208,6 +232,7 @@ export function LockProvider({ children }: { children: ReactNode }) {
         if (at !== null && Date.now() - at > AUTO_RELOCK_AFTER_MS) {
           // Stable identity when nothing is unlocked, so this is a true no-op then.
           setUnlockedIds((prev) => (prev.size === 0 ? prev : new Set()));
+          setHandLockedIds((prev) => (prev.size === 0 ? prev : new Set()));
         }
       }
     });
@@ -235,14 +260,29 @@ export function LockProvider({ children }: { children: ReactNode }) {
   const appLockExists = appLockRow !== undefined;
   const appLockUnlocked = appLockRow === undefined || unlockedIds.has(appLockRow.id);
   const appLockBiometric = appLockRow?.biometric ?? false;
+  const appLockedByHand = handLockedIds.has(APP_LOCK_ID);
 
-  const markUnlocked = useCallback((id: string) => {
-    setUnlockedIds((prev) => {
+  // Drop an id from the by-hand set (a no-op, same identity, when it isn't in it).
+  const forgetHandLock = useCallback((id: string) => {
+    setHandLockedIds((prev) => {
+      if (!prev.has(id)) return prev;
       const next = new Set(prev);
-      next.add(id);
+      next.delete(id);
       return next;
     });
   }, []);
+
+  const markUnlocked = useCallback(
+    (id: string) => {
+      setUnlockedIds((prev) => {
+        const next = new Set(prev);
+        next.add(id);
+        return next;
+      });
+      forgetHandLock(id);
+    },
+    [forgetHandLock],
+  );
 
   const markLocked = useCallback((id: string) => {
     setUnlockedIds((prev) => {
@@ -319,10 +359,12 @@ export function LockProvider({ children }: { children: ReactNode }) {
       const verifier = await createLockVerifier(password);
       await putLock({ id: listId, kind: 'list', ...verifier, hideList: opts.hideList });
       // Drop any stale unlock from an earlier lock on the same list this
-      // session — a fresh lock engages immediately.
+      // session — a fresh lock engages immediately. And any by-hand mark the
+      // earlier lock left: this one was SET UP, in Settings, not relocked.
       markLocked(listId);
+      forgetHandLock(listId);
     },
-    [markLocked],
+    [markLocked, forgetHandLock],
   );
 
   const removeListLock = useCallback(async (listId: string, password: string): Promise<boolean> => {
@@ -338,9 +380,29 @@ export function LockProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Re-lock without a password: just drop the session unlock (markLocked no-ops
-  // when the id isn't currently unlocked, so these are safe to call any time).
-  const lockApp = useCallback(() => markLocked(APP_LOCK_ID), [markLocked]);
-  const lockList = useCallback((listId: string) => markLocked(listId), [markLocked]);
+  // when the id isn't currently unlocked, so these are safe to call any time) —
+  // and record that it was done by hand. These two are the ONLY writers of that
+  // set; every other way a lock engages (a launch, the auto-relock, a fresh
+  // addListLock) is not a relock the user just asked for.
+  const lockByHand = useCallback(
+    (id: string) => {
+      markLocked(id);
+      setHandLockedIds((prev) => {
+        if (prev.has(id)) return prev;
+        const next = new Set(prev);
+        next.add(id);
+        return next;
+      });
+    },
+    [markLocked],
+  );
+  const lockApp = useCallback(() => lockByHand(APP_LOCK_ID), [lockByHand]);
+  const lockList = useCallback((listId: string) => lockByHand(listId), [lockByHand]);
+
+  const isListLockedByHand = useCallback(
+    (listId: string): boolean => handLockedIds.has(coverage.coveringLockIds.get(listId) ?? listId),
+    [coverage, handLockedIds],
+  );
 
   const biometricForList = useCallback(
     (listId: string): boolean => {
@@ -408,13 +470,19 @@ export function LockProvider({ children }: { children: ReactNode }) {
   const value = useMemo<Locks & LockMutations>(
     () => ({
       status: locks === undefined ? 'checking' : 'ready',
-      appLock: { exists: appLockExists, unlocked: appLockUnlocked, biometric: appLockBiometric },
+      appLock: {
+        exists: appLockExists,
+        unlocked: appLockUnlocked,
+        biometric: appLockBiometric,
+        lockedByHand: appLockedByHand,
+      },
       biometricAvailable: biometricCap.available,
       biometricLabel: biometricCap.label,
       lockedListIds: coverage.lockedListIds,
       hiddenListIds: coverage.hiddenListIds,
       listLocks,
       isListLocked,
+      isListLockedByHand,
       unlockApp,
       unlockList,
       lockApp,
@@ -434,10 +502,12 @@ export function LockProvider({ children }: { children: ReactNode }) {
       appLockExists,
       appLockUnlocked,
       appLockBiometric,
+      appLockedByHand,
       biometricCap,
       coverage,
       listLocks,
       isListLocked,
+      isListLockedByHand,
       unlockApp,
       unlockList,
       lockApp,

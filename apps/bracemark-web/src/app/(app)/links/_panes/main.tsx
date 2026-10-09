@@ -49,7 +49,10 @@ export function Main() {
     return (
       <main className="flex min-h-0 flex-1 flex-col">
         <div className="min-h-0 flex-1">
-          <ListLockPane listId={selection.id} />
+          {/* Keyed by the list: one locked list straight to another is a
+              different lock, and the one instance used to serve both — the
+              second pane opened holding the password typed for the first. */}
+          <ListLockPane key={selection.id} listId={selection.id} />
         </div>
       </main>
     );
