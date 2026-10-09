@@ -17,11 +17,15 @@ export function useSignOut() {
   const { endSession } = useAuth();
 
   return useMutation({
-    mutationFn: async () => {
+    mutationFn: async (target: { generation: string | null } | void) => {
       // The session this sign-out ends: the one whose token the request below
       // carries. A resume while it is in flight mints a replacement, and that
       // one must survive the late step 2.
       const generation = getSession()?.generation ?? null;
+      // A hoisted flow captures its target before waiting for sync or consent.
+      // TanStack can start this mutation after a resume replaced that target;
+      // then neither server revocation nor local teardown belongs to this call.
+      if (target && target.generation !== generation) return;
 
       // Step 1: ask the server to revoke this session, while the bearer token is
       // still held (once endSession clears the local session, the token is gone).

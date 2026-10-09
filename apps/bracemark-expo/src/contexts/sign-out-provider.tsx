@@ -63,7 +63,7 @@ import {
 import { ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
 
-import { countPendingOps, useAuth, useSignOut, useSync } from '@stxapps/expo-react';
+import { countPendingOps, getSession, useAuth, useSignOut, useSync } from '@stxapps/expo-react';
 import { SESSION_COPY, syncBeforeSignOut } from '@stxapps/react';
 
 import { ErrorText } from '../components/error-text';
@@ -106,7 +106,11 @@ export function SignOutProvider({ children }: { children: ReactNode }) {
   // The flow, while there is one: how many changes are unsynced, and whether
   // the sync that might save them is still out. Zero is the path that never
   // asks; `null` is a queue that could not be read.
-  const [flow, setFlow] = useState<{ pending: number | null; syncing: boolean } | null>(null);
+  const [flow, setFlow] = useState<{
+    pending: number | null;
+    syncing: boolean;
+    generation: string | null;
+  } | null>(null);
   // Set at the press, ahead of the state: the count is read asynchronously, so
   // a second tap on the lock pane's link would otherwise get in before `flow`
   // exists and start a second sign-out.
@@ -125,10 +129,18 @@ export function SignOutProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  const close = useCallback(() => {
+    startedRef.current = false;
+    flowIdRef.current += 1;
+    setFlow(null);
+    reset();
+  }, [reset]);
+
   const requestSignOut = useCallback(() => {
     if (startedRef.current) return;
     startedRef.current = true;
     const id = ++flowIdRef.current;
+    const generation = getSession()?.generation ?? null;
     // Unknown is not empty. Keep sign-out available, but ask before risking
     // unsynced changes that a failed count could not rule out.
     const count = () =>
@@ -136,14 +148,22 @@ export function SignOutProvider({ children }: { children: ReactNode }) {
     // mutate reads the current session; this flow belongs to the tree and
     // account that requested it, even if another tree has mounted meanwhile —
     // and to the press that started it, not one cancelled since.
-    const stale = () =>
-      !mountedRef.current || usernameRef.current !== username || flowIdRef.current !== id;
+    const stale = () => {
+      if (!mountedRef.current || flowIdRef.current !== id) return true;
+      // A same-account resume also replaces the session. Release this flow's
+      // cover and latch so a fresh request can target the replacement.
+      if (usernameRef.current !== username || (getSession()?.generation ?? null) !== generation) {
+        close();
+        return true;
+      }
+      return false;
+    };
     // Neither read rejects and neither does the bounded sync, so nor does this.
     void (async () => {
       let pending = await count();
       if (stale()) return;
       if (pending !== 0) {
-        setFlow({ pending, syncing: true });
+        setFlow({ pending, syncing: true, generation });
         await syncBeforeSignOut(syncAndWait);
         if (stale()) return;
         // The queue, not the cycle's outcome, is the answer: a cycle can fail
@@ -151,17 +171,10 @@ export function SignOutProvider({ children }: { children: ReactNode }) {
         pending = await count();
         if (stale()) return;
       }
-      setFlow({ pending, syncing: false });
-      if (pending === 0) mutate();
+      setFlow({ pending, syncing: false, generation });
+      if (pending === 0) mutate({ generation });
     })();
-  }, [username, mutate, syncAndWait]);
-
-  const close = useCallback(() => {
-    startedRef.current = false;
-    flowIdRef.current += 1;
-    setFlow(null);
-    reset();
-  }, [reset]);
+  }, [username, mutate, syncAndWait, close]);
 
   // A resumed session survives the old generation's sign-out. In that case
   // AuthGuard keeps us mounted, so success must release the cover here.
@@ -241,7 +254,10 @@ export function SignOutProvider({ children }: { children: ReactNode }) {
                     variant="destructive"
                     testID="sign-out-confirm"
                     disabled={isPending}
-                    onPress={() => mutate()}
+                    onPress={() => {
+                      if ((getSession()?.generation ?? null) !== flow.generation) close();
+                      else mutate({ generation: flow.generation });
+                    }}
                   >
                     <Text>{isPending ? COPY.progress : isError ? COPY.retry : COPY.confirm}</Text>
                   </Button>

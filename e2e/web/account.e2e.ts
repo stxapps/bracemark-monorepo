@@ -52,7 +52,7 @@ test.describe('account', () => {
       // This one CANNOT use the shared worker fixture: signing out would strand
       // every other test in this worker on a dead session. It buys its own account
       // and its own profile, and pays a second Argon2id for the privilege.
-      const { page } = app;
+      const { page, credentials } = app;
 
       // Stub the marketing site. `npm run dev` is the app stack and deliberately
       // excludes bracemark-site (docs/env-files.md), so :3001 normally isn't
@@ -129,6 +129,113 @@ test.describe('account', () => {
       // would hang; one that asserted on the site's content would be testing the
       // wrong project.
       await page.waitForURL((url) => url.origin === site.origin, { timeout: 30_000 });
+      // The wipe must be recoverable from the server, including the edit that
+      // only this sign-out's sync could push.
+      await signIn(page, credentials);
+      await expect(page.getByRole('button', { name: list })).toBeVisible({ timeout: 60_000 });
+      await page.getByRole('button', { name: list }).click();
+      await expect(linkRow(page, queued)).toBeVisible();
+    },
+  );
+
+  test(
+    'cancelling a sync wait stays cancelled after its timeout and late completion',
+    { tag: ['@SIGN-OUT-CANCEL-WEB-001', '@full', '@online', '@destructive'] },
+    async ({ isolatedApp: app }) => {
+      const { page } = app;
+      await page.goto('/links');
+      await syncAndWait(page);
+      const queued = unresolvableUrl(unique('signout-cancel'));
+      let release!: () => void;
+      const held = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      await page.route('**/v1/ops/**', async (route) => {
+        await held;
+        await route.continue();
+      });
+      let signOutRequests = 0;
+      page.on('request', (request) => {
+        if (new URL(request.url()).pathname === '/v1/auth/sign-out') signOutRequests += 1;
+      });
+      try {
+        await addLink(page, queued);
+        expect(await countPendingOps(page)).toBeGreaterThan(0);
+        await requestSignOut(page);
+        const dialog = page.getByTestId('sign-out-dialog');
+        await expect(dialog).toContainText('Syncing before signing out');
+        await expect(dialog.getByTestId('sign-out-confirm')).toHaveCount(0);
+        await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+        await expect(dialog).toHaveCount(0);
+
+        // Restart while the original cycle still waits. Only this second flow
+        // may replace the spinner with a question when its bounded wait ends.
+        await requestSignOut(page);
+        await expect(dialog).toContainText('nowhere else', { timeout: 30_000 });
+        await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+        release();
+        await expect.poll(() => countPendingOps(page), { timeout: 60_000 }).toBe(0);
+        await expect(dialog).toHaveCount(0);
+        await expect(linkRow(page, queued)).toBeVisible();
+        expect(signOutRequests).toBe(0);
+        await page.reload();
+        await expect(linkRow(page, queued)).toBeVisible();
+      } finally {
+        release();
+      }
+    },
+  );
+
+  test(
+    'a sign-out warning cannot revoke a session resumed in another tab',
+    { tag: ['@SIGN-OUT-RESUME-WEB-001', '@full', '@online', '@destructive'] },
+    async ({ isolatedApp: app }) => {
+      const { page, context, credentials } = app;
+      await page.goto('/links');
+      await syncAndWait(page);
+      await forgeStoredToken(page, `unknown-${unique('signout-resume')}`);
+      await page.reload();
+      await expect(pausedNotice(page)).toBeVisible({ timeout: 60_000 });
+      const other = await context.newPage();
+      await other.goto('/links');
+      await expect(pausedNotice(other)).toBeVisible();
+      const queued = unresolvableUrl(unique('signout-resume-queued'));
+      await addLink(page, queued);
+      await requestSignOut(page);
+      const dialog = page.getByTestId('sign-out-dialog');
+      await expect(dialog).toContainText('nowhere else');
+      let signOutRequests = 0;
+      page.on('request', (request) => {
+        if (new URL(request.url()).pathname === '/v1/auth/sign-out') signOutRequests += 1;
+      });
+
+      await other.getByRole('button', { name: 'Sign in to resume' }).click();
+      const resume = other.getByRole('dialog', { name: 'Sign in to resume' });
+      await resume.locator('#password').fill(credentials.password);
+      await resume.getByRole('button', { name: /^Sign in$/ }).click();
+      await expect(resume).toHaveCount(0, { timeout: 60_000 });
+      await expect(pausedNotice(other)).toHaveCount(0);
+      await expect(pausedNotice(page)).toHaveCount(0);
+      // The replacement owns a new edit that has not reached the server.
+      // A stale confirmation must not erase it with the replacement session.
+      await context.route('**/v1/ops/**', (route) => route.abort());
+      const replacementQueued = unresolvableUrl(unique('resumed-unsynced'));
+      await addLink(other, replacementQueued);
+      expect(await countPendingOps(other)).toBeGreaterThan(0);
+      await dialog.getByTestId('sign-out-confirm').click();
+      await expect(dialog).toHaveCount(0);
+      await expect(addLinkButton(page)).toBeEnabled();
+      expect(signOutRequests).toBe(0);
+      await page.reload();
+      await expect(linkRow(page, queued)).toBeVisible();
+      await expect(linkRow(page, replacementQueued)).toBeVisible();
+      expect(await countPendingOps(page)).toBeGreaterThan(0);
+      await context.unroute('**/v1/ops/**');
+
+      // The old flow also releases its latch: a fresh sign-out still works.
+      const site = await stubMarketingSite(page);
+      await syncAndWait(page);
+      await signOutToSite(page, site);
     },
   );
 
@@ -537,7 +644,9 @@ async function signOutToSite(page: Page, site: URL): Promise<void> {
 }
 
 function pausedNotice(page: Page) {
-  return page.getByRole('status').filter({ hasText: 'Sync is paused' });
+  // Modal dialogs hide the underlying status from accessibility queries. Its
+  // disappearance must mean resume landed, even while sign-out covers the page.
+  return page.getByRole('status', { includeHidden: true }).filter({ hasText: 'Sync is paused' });
 }
 
 // How many edits are waiting to push — the `pendingOps` table alone.
@@ -615,4 +724,9 @@ async function changePasswordElsewhere(
   } finally {
     await other.close();
   }
+}
+
+async function requestSignOut(page: Page): Promise<void> {
+  await page.getByRole('button', { name: /^More options/ }).click();
+  await page.getByRole('menuitem', { name: 'Sign out' }).click();
 }

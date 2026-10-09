@@ -64,3 +64,25 @@ it('still ends the session locally when the request fails', async () => {
 
   expect(mockEndSession).toHaveBeenCalledWith({ generation: 'gen-1' });
 });
+
+it('does not revoke or wipe a session replaced before the mutation starts', async () => {
+  const { result } = renderSignOut();
+  mockGeneration = 'gen-2';
+
+  await act(() => result.current.mutateAsync({ generation: 'gen-1' }));
+  await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+  expect(mockCall).not.toHaveBeenCalled();
+  expect(mockEndSession).not.toHaveBeenCalled();
+});
+
+it('revokes and ends an explicitly targeted session that is still current', async () => {
+  mockCall.mockResolvedValue({});
+  const { result } = renderSignOut();
+
+  await act(() => result.current.mutateAsync({ generation: 'gen-1' }));
+  await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+  expect(mockCall).toHaveBeenCalledTimes(1);
+  expect(mockEndSession).toHaveBeenCalledWith({ generation: 'gen-1' });
+});

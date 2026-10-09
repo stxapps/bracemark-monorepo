@@ -22,6 +22,7 @@ const mockUseSettings = jest.fn();
 const mockUseSettingMutations = jest.fn();
 
 jest.mock('@stxapps/web-react', () => ({
+  getSession: () => ({ generation: 'options-session' }),
   get useAuth() {
     return mockUseAuth;
   },

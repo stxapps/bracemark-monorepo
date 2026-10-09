@@ -25,6 +25,7 @@ import { SignOutProvider, useSignOutFlow } from './sign-out-provider';
 
 const COPY = SESSION_COPY.signOut;
 
+let mockGeneration = 'original';
 let mockPendingOps = 0;
 let mockIsPending = false;
 let mockIsSuccess = false;
@@ -39,6 +40,7 @@ const mockSyncAndWait = jest.fn(() => mockSync());
 
 jest.mock('@stxapps/expo-react', () => ({
   useAuth: () => ({ username: 'alice' }),
+  getSession: () => ({ generation: mockGeneration }),
   useSignOut: () => ({
     mutate: mockMutate,
     reset: mockReset,
@@ -91,6 +93,7 @@ function heldSync() {
 }
 
 beforeEach(() => {
+  mockGeneration = 'original';
   mockPendingOps = 0;
   mockIsPending = false;
   mockIsSuccess = false;
@@ -399,4 +402,60 @@ it('releases the cover when sign-out settles without unmounting the tree', async
   view.rerender(tree());
   await press();
   expect(mockMutate).toHaveBeenCalledTimes(2);
+});
+
+// The sync wait precedes the mutation's own generation capture. A resume here
+// must not let an older click revoke the replacement session.
+it('abandons a sync wait when the same account resumes, and allows a fresh request', async () => {
+  mockPendingOps = 3;
+  const sync = heldSync();
+  render(tree());
+  await press();
+  mockGeneration = 'resumed';
+  mockPendingOps = 0;
+  await sync.release();
+
+  expect(mockMutate).not.toHaveBeenCalled();
+  expect(screen.queryByTestId('sign-out-dialog')).toBeNull();
+  await press();
+  expect(mockMutate).toHaveBeenCalledTimes(1);
+});
+
+it('does not confirm a warning belonging to a replaced session', async () => {
+  mockPendingOps = 3;
+  render(tree());
+  await press();
+  mockGeneration = 'resumed';
+
+  fireEvent.press(screen.getByTestId('sign-out-confirm'));
+
+  expect(mockMutate).not.toHaveBeenCalled();
+  expect(screen.queryByTestId('sign-out-dialog')).toBeNull();
+});
+
+it('drops a sync completion after unmount', async () => {
+  mockPendingOps = 3;
+  const sync = heldSync();
+  const view = render(tree());
+  await press();
+  view.unmount();
+  mockPendingOps = 0;
+  await sync.release();
+  expect(mockMutate).not.toHaveBeenCalled();
+});
+
+it('keeps a cancelled sync separate from a second request already waiting', async () => {
+  mockPendingOps = 3;
+  const first = heldSync();
+  render(tree());
+  await press();
+  fireEvent.press(screen.getByText(COPY.cancel));
+  const second = heldSync();
+  await press();
+  mockPendingOps = 0;
+  await first.release();
+  expect(mockMutate).not.toHaveBeenCalled();
+  expect(screen.getByText(COPY.syncing)).toBeTruthy();
+  await second.release();
+  expect(mockMutate).toHaveBeenCalledTimes(1);
 });

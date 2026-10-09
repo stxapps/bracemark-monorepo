@@ -390,9 +390,11 @@ retry with no session first finishes the old cleanup. The in-memory token
 changes only after its durable write or delete succeeds. New-account seeding
 also runs inside this lock, after cleanup. An explicit end names its target when
 its action begins, and is decided under the lock like a server verdict: sign-out
-names the generation whose token it sends, so a resume while its request is in
-flight survives the late local step; delete-account names the account, so every
-generation of it goes — but never an account adopted since. The target is an
+captures the generation at the initial click, before waiting for sync or
+confirmation, and passes it to the mutation. A replacement before the POST
+abandons that flow; a resume while the POST is in flight survives the late local
+step; delete-account names the account, so every generation of it goes — but
+never an account adopted since. The target is an
 argument to `endSession`, never read from the render that finishes the request:
 a mutation's `onSuccess` runs the latest render's callbacks, not the ones that
 were current when it started.
@@ -586,6 +588,10 @@ The layers ([testing.md](./testing.md)), and where each part of the rule is pinn
 - `SESSION-RACE-WEB-001` — a delayed sign-out and revoked response arrive
   after resume in another tab; the replacement session and its unsynced edit
   survive, including reload.
+- `SIGN-OUT-RESUME-WEB-001` — a warning opened before resume in another tab
+  cannot revoke or wipe the replacement; a fresh sign-out remains available.
+- `SIGN-OUT-CANCEL-WEB-001` — cancellation, restart during the original sync,
+  the sync-wait deadline, and late completion preserve the signed-in library.
 - `WEB-ACCOUNT-004` — two accounts in turn on one profile: the second starts
   empty and writable, the first returns to only its own library. The sequential
   account switch; its RACES are the line below.

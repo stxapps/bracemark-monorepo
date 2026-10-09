@@ -21,6 +21,26 @@
     "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
   },
   {
+    "id": "SIGN-OUT-CANCEL-WEB-001",
+    "title": "Cancelling sync before sign-out survives restart, timeout and late sync completion",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online", "destructive"],
+    "fixture": "empty",
+    "path": "web/account.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
+    "id": "SIGN-OUT-RESUME-WEB-001",
+    "title": "A stale sign-out warning preserves a session resumed in another tab",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online", "destructive"],
+    "fixture": "empty",
+    "path": "web/account.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+  },
+  {
     "id": "ACCOUNT-DELETE-001",
     "title": "Deleting an account ends the session and refuses a later sign-in",
     "surface": "web",

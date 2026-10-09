@@ -951,9 +951,15 @@ above `AppLockGate`. It goes through the context rather than calling the engine
 because the extension's cycle is a selective one that only its worker may run,
 and because the indicator then reports this cycle like any other.
 
-A pending-count result is ignored after its provider unmounts, its account
-changes or its flow is cancelled. A successful mutation also closes the dialog
-if the tree stays mounted: another tab may have resumed the session while the
+A pending-count or sync result is ignored after its provider unmounts, its
+account or session generation changes, or its flow is cancelled. A same-account
+resume replaces the generation too: an old flow releases its cover and latch
+instead of signing out the resumed session. Confirmation and retry also check
+the flow's generation, and pass that target into `useSignOut`; the mutation
+checks it again before sending a revocation request, covering a replacement
+between the event handler and TanStack starting the mutation.
+
+A successful mutation also closes the dialog if the tree stays mounted: another tab may have resumed the session while the
 old sign-out request was out, so generation fencing preserves that session
 without unmounting this provider.
 
