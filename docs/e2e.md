@@ -217,12 +217,14 @@ storage-state shortcut, or test-only message.
 
 #### the PWA target
 
-`e2e-pwa` is the only e2e run against bracemark-web's **production** build, and
-that is its reason to exist: the serwist service worker (`src/sw.ts` — the
+`e2e-pwa` runs a controlled local bracemark-web **production** build. The
+staging web target also runs production output, but this target owns its origin
+and can replace builds or take the server away: the serwist service worker (`src/sw.ts` — the
 precache, a network-only rule for cross-origin requests, then `@serwist/next`'s
 `defaultCache`) is built by `serwist build`
 after `next build` and is disabled outright in development
-(`SerwistProvider disable`), so no `e2e-web` case ever meets it. What the
+(`SerwistProvider disable`), so local `e2e-web` cases never meet it. Staging cases do run with the deployed
+worker, but do not own the CDN or its update schedule. What the
 worker must and must not do, and the cases it still needs, is
 [offline-mode.md](./offline-mode.md).
 
@@ -554,8 +556,9 @@ The repo-specific gotchas:
   neither screen has a reason to appear. One link covers both platforms: the
   param rides on the inner URL, which is what Android reads as the manifest URL
   and iOS as `expoUrl`. The hand-driven twins are `npm run expo:ios:open` and
-  `npm run expo:android:open`. Its cost is that the mobile legs now assume a
-  **dev** build with Metro up, which they already did. The published-captures leg
+  `npm run expo:android:open`. Its cost is that local mobile legs assume a
+  **dev** build with Metro up. Staging Release uses plain `launchApp` instead
+  (see _deployed staging and mobile Release builds_). The published-captures leg
   opts out of the wipe altogether — _the published screenshots_, below.
 - **Android needs `adb reverse tcp:8787 tcp:8787`** (and `8788` for the
   extractor, `8081` for Metro — `npm run expo:android:reverse` does all three). Both
@@ -1781,9 +1784,57 @@ The device legs make one app change to be drivable: `links-empty`, the settled
 empty state's testID (_the testID contract_, above), so the flow waits for the
 empty screen rather than for body copy or the loading bones.
 
+### deployed staging and mobile Release builds
+
+Environment and compilation are independent: staging chooses deployed services;
+Release chooses optimized native code and bundled JS. `e2e-web:staging`,
+`e2e-mobile:staging`, and `e2e-contract:staging` use the exact dryrunbase.com
+origins, start no servers, and select only cases whose registry entry admits
+`staging`. Default runs stay local. Origin overrides cannot silently send a local
+run to staging or a staging run to production.
+
+The operational commands and coverage exclusions are in
+[e2e/STAGING.md](../e2e/STAGING.md). `runner/environment.ts` resolves the four
+roles once; `cases.json` makes admission explicit per case, with local-only as
+the default. A requested unsupported case fails before account provisioning.
+Staging uses fresh Free accounts and serial browser execution, preserving the
+real Cloudflare limits. Local D1 grants, direct session edits, process/network
+fault injection, and Android `run-as` sandbox reads remain local. The D1 helper
+also refuses staging so an accidental call cannot mutate unrelated local state.
+
+The shared persistent browser profiles remain required for non-extractable
+IndexedDB keys. Staging uses the deployed app and marketing site, preserves TLS
+validation and browser CSP enforcement, and starts no Next/Wrangler server. The
+image import/cross-profile case exercises real presigned R2 uploads and reads.
+Dedicated hosting/CORS cases cover deployed HTML/build identity and both Workers.
+CSP cases require an enforcing response header and actual browser refusal of an
+unapproved script and connection. Report-only produces a red enforcement gate;
+transport failures cannot count as a CSP block. The external sentinel has a
+successful intercepted response if mistakenly allowed. This policy deliberately
+allows inline Next bootstrap scripts; these cases do not claim inline-script
+refusal or a complete security audit.
+
+`build-release:staging` regenerates native output, pins staging API/site values
+above dotenv precedence, and builds an Android release APK or iOS Release
+simulator app. It records source revision, SHA-256 and Android's R8 mapping.
+Before testing, native preflight verifies the installed binary against that
+receipt and refuses debuggable Android apps. The cold-launch subflow selects
+plain `launchApp: clearState: true` for Release and the dev-client link for local
+debug. Release needs no Metro or reverse mappings. iOS simulator Release is not
+a store IPA or real-iPhone qualification. Frozen vectors stay local because the
+screen redirects away in Release; both encrypted cross-client round trips run
+against staging.
+
+Run manifests record environment, origins, exclusions and, for mobile, the
+Release receipt independently of the runner checkout. A receipt establishes build
+configuration and identity, while flow results establish runtime behavior. A
+subset pass never replaces the complete security gate or the real-device/store
+checklists. Tests leave disposable staging accounts; there is no automatic cloud
+cleanup or deployment in a runner.
+
 ### running it
 
-Everything needs Metro and an installed Expo development build except web. The
+For the local targets, everything needs Metro and an installed Expo development build except web. The
 API/web/extractor stack is additionally required by every `online` native or
 contract case; frozen vectors are the exception because they have no account or
 server. Web starts the stack when the ports are free. Native runners require it
@@ -1833,6 +1884,10 @@ can boot, build, select, and prepare both native platforms. `expo:ios` and
 On Android, run `npm run expo:android:reverse` after each emulator boot.
 
 #### cases, suites and fixtures
+
+The optional `environments` field selects local/staging admission independently
+of tier. Missing means local-only; the `release` tier remains manual qualification,
+not the optimized build variant. Automated staging cases retain smoke/full tiers.
 
 [`e2e/cases.json`](../e2e/cases.json) is the machine-readable registry. Every
 case has an id, surface, primary `smoke`, `full`, or `release` tier, traits,
@@ -2598,7 +2653,8 @@ npm run measure:native -- --platform android --device <serial> --links 1000,1000
   (a shell variable outranks every env file), and the runner fetches the
   served bundle and refuses to continue unless it names the local api and no
   deployed one. Metro must not already be on :8081. `--no-dev` also turns
-  `__DEV__` off, so everything gated on it is live in this run and in no Maestro
+  `__DEV__` off, so everything gated on it is live in this run and in staging Release runs,
+  but not in local debug Maestro
   run: the app-store review prompt is the one that matters, because the simulator
   shows its sheet on every ask. The flows here only import and export, which the
   prompt ignores — a flow that saved ten links through the add panel would have

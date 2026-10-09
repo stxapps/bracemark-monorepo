@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 
 import { E2E_ROOT } from '../paths';
+import { requireLocalEnvironment } from '../runner/environment';
 
 const run = promisify(execFile);
 
@@ -25,6 +26,7 @@ const API_DIR = join(E2E_ROOT, '..', 'apps', 'bracemark-api');
 const D1_BUSY_ATTEMPTS = 20;
 
 export async function d1(binding: string, sql: string): Promise<Record<string, unknown>[]> {
+  requireLocalEnvironment('direct D1 fixtures');
   for (let attempt = 1; ; attempt++) {
     try {
       return await d1Once(binding, sql);

@@ -7,7 +7,8 @@
     "traits": ["online"],
     "fixture": "empty",
     "path": "web/account.e2e.ts",
-    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"],
+    "environments": ["local", "staging"]
   },
   {
     "id": "WEB-ACCOUNT-002",
@@ -27,7 +28,8 @@
     "traits": ["online", "destructive"],
     "fixture": "empty",
     "path": "web/account.e2e.ts",
-    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"],
+    "environments": ["local", "staging"]
   },
   {
     "id": "SESSION-INVALID-WEB-001",
@@ -77,7 +79,8 @@
     "traits": ["online", "destructive"],
     "fixture": "empty",
     "path": "web/account.e2e.ts",
-    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"],
+    "environments": ["local", "staging"]
   },
   {
     "id": "WEB-ACCOUNT-004",
@@ -87,7 +90,8 @@
     "traits": ["online", "destructive"],
     "fixture": "empty",
     "path": "web/account.e2e.ts",
-    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"],
+    "environments": ["local", "staging"]
   },
   {
     "id": "VERSION-SKEW-WEB-001",
@@ -117,7 +121,8 @@
     "traits": ["online"],
     "fixture": "empty",
     "path": "web/links.e2e.ts",
-    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"],
+    "environments": ["local", "staging"]
   },
   {
     "id": "WEB-LINK-002",
@@ -127,7 +132,8 @@
     "traits": ["online"],
     "fixture": "empty",
     "path": "web/links.e2e.ts",
-    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"],
+    "environments": ["local", "staging"]
   },
   {
     "id": "LINK-EDITOR-001",
@@ -137,7 +143,8 @@
     "traits": ["online"],
     "fixture": "empty",
     "path": "web/link-editor.e2e.ts",
-    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"],
+    "environments": ["local", "staging"]
   },
   {
     "id": "LINK-CLOSE-001",
@@ -147,7 +154,8 @@
     "traits": ["online"],
     "fixture": "empty",
     "path": "web/link-editor.e2e.ts",
-    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"],
+    "environments": ["local", "staging"]
   },
   {
     "id": "LINK-LIFECYCLE-001",
@@ -157,7 +165,8 @@
     "traits": ["online", "destructive"],
     "fixture": "empty",
     "path": "web/link-lifecycle.e2e.ts",
-    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"],
+    "environments": ["local", "staging"]
   },
   {
     "id": "LINK-MOVE-001",
@@ -167,7 +176,8 @@
     "traits": ["online"],
     "fixture": "empty",
     "path": "web/link-move.e2e.ts",
-    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"],
+    "environments": ["local", "staging"]
   },
   {
     "id": "WEB-TAXONOMY-001",
@@ -177,7 +187,8 @@
     "traits": ["online"],
     "fixture": "empty",
     "path": "web/lists.e2e.ts",
-    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"],
+    "environments": ["local", "staging"]
   },
   {
     "id": "TAXONOMY-EDITOR-001",
@@ -187,7 +198,8 @@
     "traits": ["online"],
     "fixture": "small",
     "path": "web/taxonomy.e2e.ts",
-    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"],
+    "environments": ["local", "staging"]
   },
   {
     "id": "TAXONOMY-DND-001",
@@ -227,7 +239,8 @@
     "traits": ["online"],
     "fixture": "small",
     "path": "web/search.e2e.ts",
-    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"],
+    "environments": ["local", "staging"]
   },
   {
     "id": "SEARCH-002",
@@ -247,7 +260,8 @@
     "traits": ["online", "destructive", "scale"],
     "fixture": "scale",
     "path": "web/search.e2e.ts",
-    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"],
+    "environments": ["local", "staging"]
   },
   {
     "id": "BULK-001",
@@ -257,7 +271,8 @@
     "traits": ["online", "destructive", "scale"],
     "fixture": "scale",
     "path": "web/bulk-edit.e2e.ts",
-    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"],
+    "environments": ["local", "staging"]
   },
   {
     "id": "BULK-ACTIONS-001",
@@ -267,7 +282,8 @@
     "traits": ["online", "destructive"],
     "fixture": "small",
     "path": "web/bulk-edit.e2e.ts",
-    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"],
+    "environments": ["local", "staging"]
   },
   {
     "id": "BULK-TRASH-001",
@@ -277,7 +293,8 @@
     "traits": ["online", "destructive"],
     "fixture": "small",
     "path": "web/bulk-edit.e2e.ts",
-    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"],
+    "environments": ["local", "staging"]
   },
   {
     "id": "BULK-COPY-001",
@@ -287,7 +304,8 @@
     "traits": ["online"],
     "fixture": "small",
     "path": "web/bulk-edit.e2e.ts",
-    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"],
+    "environments": ["local", "staging"]
   },
   {
     "id": "LOCK-APP-001",
@@ -317,7 +335,8 @@
     "traits": ["online", "destructive"],
     "fixture": "empty",
     "path": "web/delete-all-data.e2e.ts",
-    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"],
+    "environments": ["local", "staging"]
   },
   {
     "id": "DATA-IMPORT-WEB-001",
@@ -327,7 +346,8 @@
     "traits": ["online"],
     "fixture": "small",
     "path": "web/data-lifecycle.e2e.ts",
-    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"],
+    "environments": ["local", "staging"]
   },
   {
     "id": "DATA-IMPORT-WEB-002",
@@ -337,7 +357,8 @@
     "traits": ["online"],
     "fixture": "scale",
     "path": "web/data-lifecycle.e2e.ts",
-    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"],
+    "environments": ["local", "staging"]
   },
   {
     "id": "DATA-IMPORT-WEB-003",
@@ -377,7 +398,8 @@
     "traits": ["online", "scale"],
     "fixture": "scale",
     "path": "web/sync.e2e.ts",
-    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"]
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"],
+    "environments": ["local", "staging"]
   },
   {
     "id": "SYNC-CURSOR-001",
@@ -827,7 +849,8 @@
     "traits": ["online", "ios", "android"],
     "fixture": "empty",
     "path": "mobile/flows/sign-in.yaml",
-    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"],
+    "environments": ["local", "staging"]
   },
   {
     "id": "NATIVE-ACCOUNT-002",
@@ -837,7 +860,8 @@
     "traits": ["online", "ios", "android"],
     "fixture": "empty",
     "path": "mobile/flows/recovery-sign-in.yaml",
-    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"],
+    "environments": ["local", "staging"]
   },
   {
     "id": "ACCOUNT-DELETE-002",
@@ -847,7 +871,8 @@
     "traits": ["online", "destructive", "ios", "android"],
     "fixture": "empty",
     "path": "mobile/flows/delete-account.yaml",
-    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"],
+    "environments": ["local", "staging"]
   },
   {
     "id": "NATIVE-LINK-001",
@@ -857,7 +882,8 @@
     "traits": ["online", "ios", "android"],
     "fixture": "empty",
     "path": "mobile/flows/add-link.yaml",
-    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"],
+    "environments": ["local", "staging"]
   },
   {
     "id": "LINK-EDITOR-002",
@@ -867,7 +893,8 @@
     "traits": ["online", "ios", "android"],
     "fixture": "empty",
     "path": "mobile/flows/link-editor.yaml",
-    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"],
+    "environments": ["local", "staging"]
   },
   {
     "id": "LINK-CLOSE-001",
@@ -877,7 +904,8 @@
     "traits": ["online", "ios", "android"],
     "fixture": "empty",
     "path": "mobile/flows/link-close-guard.yaml",
-    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"],
+    "environments": ["local", "staging"]
   },
   {
     "id": "LINK-LIFECYCLE-002",
@@ -887,7 +915,8 @@
     "traits": ["online", "destructive", "ios", "android"],
     "fixture": "empty",
     "path": "mobile/flows/link-lifecycle.yaml",
-    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"],
+    "environments": ["local", "staging"]
   },
   {
     "id": "LINK-MOVE-001",
@@ -897,7 +926,8 @@
     "traits": ["online", "ios", "android"],
     "fixture": "empty",
     "path": "mobile/flows/link-move.yaml",
-    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"],
+    "environments": ["local", "staging"]
   },
   {
     "id": "TAXONOMY-EDITOR-002",
@@ -907,7 +937,8 @@
     "traits": ["online", "ios", "android"],
     "fixture": "small",
     "path": "mobile/flows/taxonomy-editor.yaml",
-    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"],
+    "environments": ["local", "staging"]
   },
   {
     "id": "TAXONOMY-DND-002",
@@ -927,7 +958,8 @@
     "traits": ["online", "destructive", "ios", "android"],
     "fixture": "small",
     "path": "mobile/flows/filters.yaml",
-    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"],
+    "environments": ["local", "staging"]
   },
   {
     "id": "SEARCH-001",
@@ -937,7 +969,8 @@
     "traits": ["online", "ios", "android"],
     "fixture": "small",
     "path": "mobile/flows/search.yaml",
-    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"],
+    "environments": ["local", "staging"]
   },
   {
     "id": "SEARCH-002",
@@ -957,7 +990,8 @@
     "traits": ["online", "destructive", "scale", "ios", "android"],
     "fixture": "scale",
     "path": "mobile/flows/bulk-select.yaml",
-    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"],
+    "environments": ["local", "staging"]
   },
   {
     "id": "BULK-ACTIONS-001",
@@ -967,7 +1001,8 @@
     "traits": ["online", "destructive", "ios", "android"],
     "fixture": "small",
     "path": "mobile/flows/bulk-actions.yaml",
-    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"],
+    "environments": ["local", "staging"]
   },
   {
     "id": "BULK-TRASH-001",
@@ -977,7 +1012,8 @@
     "traits": ["online", "destructive", "ios", "android"],
     "fixture": "small",
     "path": "mobile/flows/bulk-trash.yaml",
-    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"],
+    "environments": ["local", "staging"]
   },
   {
     "id": "BULK-COPY-001",
@@ -987,7 +1023,8 @@
     "traits": ["online", "ios", "android"],
     "fixture": "small",
     "path": "mobile/flows/bulk-copy.yaml",
-    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"],
+    "environments": ["local", "staging"]
   },
   {
     "id": "LOCK-APP-002",
@@ -1047,7 +1084,8 @@
     "traits": ["online", "destructive", "ios", "android"],
     "fixture": "empty",
     "path": "mobile/flows/delete-all-data.yaml",
-    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"],
+    "environments": ["local", "staging"]
   },
   {
     "id": "DATA-IMPORT-NATIVE-001",
@@ -1057,7 +1095,8 @@
     "traits": ["online", "ios"],
     "fixture": "small",
     "path": "mobile/flows/import-data.yaml",
-    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"],
+    "environments": ["local", "staging"]
   },
   {
     "id": "DATA-IMPORT-NATIVE-002",
@@ -1067,7 +1106,8 @@
     "traits": ["online", "android"],
     "fixture": "small",
     "path": "mobile/flows/import-data.yaml",
-    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"],
+    "environments": ["local", "staging"]
   },
   {
     "id": "DATA-EXPORT-NATIVE-RELEASE-001",
@@ -1177,7 +1217,8 @@
     "traits": ["online", "scale", "ios"],
     "fixture": "scale",
     "path": "mobile/flows/refresh-pill.yaml",
-    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"],
+    "environments": ["local", "staging"]
   },
   {
     "id": "SYNC-REFRESH-PILL-ANDROID-001",
@@ -1187,7 +1228,8 @@
     "traits": ["online", "scale", "android"],
     "fixture": "scale",
     "path": "mobile/flows/refresh-pill.yaml",
-    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"],
+    "environments": ["local", "staging"]
   },
   {
     "id": "SYNC-LOCAL-TOP-001",
@@ -1197,7 +1239,8 @@
     "traits": ["online", "scale", "ios", "android"],
     "fixture": "scale",
     "path": "mobile/flows/local-top.yaml",
-    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"],
+    "environments": ["local", "staging"]
   },
   {
     "id": "SYNC-CONFLICT-001",
@@ -1217,7 +1260,8 @@
     "traits": ["online", "internet", "ios", "android"],
     "fixture": "empty",
     "path": "mobile/flows/extract-save.yaml",
-    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"],
+    "environments": ["local", "staging"]
   },
   {
     "id": "EXTRACT-NATIVE-ALL-001",
@@ -1227,7 +1271,8 @@
     "traits": ["online", "internet", "ios", "android"],
     "fixture": "small",
     "path": "mobile/flows/extract-all.yaml",
-    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"],
+    "environments": ["local", "staging"]
   },
   {
     "id": "SCALE-IOS-001",
@@ -1267,7 +1312,8 @@
     "traits": ["online", "scale", "visual", "ios", "android"],
     "fixture": "scale",
     "path": "mobile/flows/bulk-viewport.yaml",
-    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"],
+    "environments": ["local", "staging"]
   },
   {
     "id": "OFFLINE-IOS-001",
@@ -1367,7 +1413,8 @@
     "traits": ["online", "scale", "visual", "ios", "android"],
     "fixture": "scale",
     "path": "mobile/flows/keyboard.yaml",
-    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"],
+    "environments": ["local", "staging"]
   },
   {
     "id": "IAP-NATIVE-001",
@@ -1447,7 +1494,8 @@
     "traits": ["online", "ios", "android"],
     "fixture": "small",
     "path": "mobile/contract/verify-links.yaml",
-    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"],
+    "environments": ["local", "staging"]
   },
   {
     "id": "CONTRACT-MOBILE-WEB-001",
@@ -1457,7 +1505,8 @@
     "traits": ["online", "ios", "android"],
     "fixture": "small",
     "path": "mobile/contract/add-link.yaml",
-    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"],
+    "environments": ["local", "staging"]
   },
   {
     "id": "VISUAL-APP-001",
@@ -1554,5 +1603,49 @@
       "maestro-output",
       "hierarchy-on-failure"
     ]
+  },
+  {
+    "id": "STAGING-HOSTING-001",
+    "title": "Deployed app and marketing site serve release documents and security headers",
+    "surface": "web",
+    "tier": "smoke",
+    "traits": ["online", "security"],
+    "fixture": "empty",
+    "path": "staging/hosting.e2e.ts",
+    "artifacts": ["trace", "screenshot"],
+    "environments": ["staging"]
+  },
+  {
+    "id": "STAGING-CSP-001",
+    "title": "Browser blocks an unapproved script under enforcing CSP",
+    "surface": "web",
+    "tier": "smoke",
+    "traits": ["online", "security"],
+    "fixture": "empty",
+    "path": "staging/hosting.e2e.ts",
+    "artifacts": ["trace", "screenshot"],
+    "environments": ["staging"]
+  },
+  {
+    "id": "STAGING-CSP-002",
+    "title": "Browser blocks an unapproved connection under enforcing CSP",
+    "surface": "web",
+    "tier": "smoke",
+    "traits": ["online", "security"],
+    "fixture": "empty",
+    "path": "staging/hosting.e2e.ts",
+    "artifacts": ["trace", "screenshot"],
+    "environments": ["staging"]
+  },
+  {
+    "id": "STAGING-CORS-001",
+    "title": "Cloudflare Workers allow the staging app and refuse an unrelated origin",
+    "surface": "web",
+    "tier": "smoke",
+    "traits": ["online", "security"],
+    "fixture": "empty",
+    "path": "staging/hosting.e2e.ts",
+    "artifacts": ["trace", "screenshot"],
+    "environments": ["staging"]
   }
 ]

@@ -1,5 +1,11 @@
 # Web release qualification
 
+Automated staging checks now run through the separate staging targets; see
+[STAGING.md](../STAGING.md). Optimized Release builds can be driven by Maestro;
+the manual cases here remain for the platform/store boundaries that the admitted
+automated suite does not prove. A staging subset pass does not complete this
+checklist.
+
 These checks own browser surfaces Playwright cannot drive honestly. Run them in
 the supported production Chrome build against a disposable account. Do not stub
 `showSaveFilePicker`: the native dialog and the file it creates are the boundary.

@@ -16,6 +16,25 @@ permanent records:
 When this roadmap is complete, move any lasting decisions into the appropriate
 document above and delete this file. Do not preserve a stale completed backlog.
 
+## Deployed staging
+
+The deployed web and receipt-verified mobile Release targets are implemented.
+The authoritative admission list is `cases.json`'s `environments`; operational
+commands, local-only fixture exclusions and release qualification limits live
+in [STAGING.md](./STAGING.md). Results are recorded per invocation, separately
+from historical local measurements below. CSP report-only rollout does not pass
+the enforcing browser checks. Plus/server-extraction staging journeys still
+need a supported disposable entitlement fixture before admission.
+
+Validation checkpoint (2026-10-08): runner checks, browser CSP detector checks,
+registry, lint and typecheck passed. Four selected deployed web journeys passed;
+the broader run completed nine cases successfully before the user requested a
+pause. Hosting and CORS checks passed. Both enforcing CSP checks failed because
+the deployed app serves report-only CSP. The Android Release build was stopped
+before completion; Android/iOS Release and contract runtime verification remain
+pending. Resume with the commands in [STAGING.md](./STAGING.md); interrupted
+builds and runs are not release qualification evidence.
+
 ## Outcome
 
 The goal is not to repeat every unit assertion through four user interfaces. The

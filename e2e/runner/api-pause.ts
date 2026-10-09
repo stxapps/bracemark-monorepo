@@ -1,3 +1,4 @@
+import { requireLocalEnvironment } from './environment';
 import { capture } from './process';
 import { assertOriginOwnedByRepo } from './stack';
 
@@ -31,6 +32,7 @@ export interface ApiControl {
 }
 
 async function apiPid(): Promise<number> {
+  requireLocalEnvironment('API process fault injection');
   // Only this checkout's api may be touched.
   await assertOriginOwnedByRepo(`http://localhost:${API_PORT}`, 'bracemark-api', {
     required: true,

@@ -23,7 +23,8 @@
     "playwright.config.ts",
     "extension.playwright.config.ts",
     "pwa.playwright.config.ts",
-    "visual.playwright.config.ts"
+    "visual.playwright.config.ts",
+    "staging/**/*.ts"
   ],
   "exclude": [".artifacts", "node_modules", "eslint.config.mjs"],
   "references": [

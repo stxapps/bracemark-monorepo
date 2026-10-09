@@ -56,7 +56,11 @@
     "deploy:extractor:production": "bash tools/scripts/deploy-worker.sh extractor production",
     "d1:migrate": "nx run @stxapps/bracemark-api:d1-migrate",
     "d1:migrate:staging": "nx run @stxapps/bracemark-api:d1-migrate --configuration=staging",
-    "d1:migrate:production": "nx run @stxapps/bracemark-api:d1-migrate --configuration=production"
+    "d1:migrate:production": "nx run @stxapps/bracemark-api:d1-migrate --configuration=production",
+    "e2e:web:staging": "nx e2e-web:staging @stxapps/e2e",
+    "e2e:mobile:staging": "nx e2e-mobile:staging @stxapps/e2e",
+    "e2e:contract:staging": "nx e2e-contract:staging @stxapps/e2e",
+    "e2e:build:staging": "nx build-release:staging @stxapps/e2e"
   },
   "private": true,
   "engines": {

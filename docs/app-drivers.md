@@ -71,6 +71,18 @@ popover, list management, the cross-origin sign-out — live in
 `.claude/skills/verify/SKILL.md`, which is the operational companion to this
 section. Keep them there; this doc is the design record.
 
+### driving native Release builds
+
+Maestro controls the installed UI through platform automation; it does not need
+a debuggable app or app-side test instrumentation. Android release APKs can run
+on an emulator or ADB-connected physical device with R8 enabled. iOS automation
+here uses a Release-configured simulator `.app`, not a store IPA or physical
+phone. Official Maestro's physical-iOS limitation is separate from Release
+configuration. Android's `run-as` sandbox inspection still requires a debuggable
+app, so those cases stay local. The staging runner verifies installed artifact
+identity and cold-launches it without Metro:
+[e2e/STAGING.md](../e2e/STAGING.md). Real-device/store checklists remain separate.
+
 ### driving the native apps
 
 The thing that makes a browser useful to automation is not the screenshot, it is

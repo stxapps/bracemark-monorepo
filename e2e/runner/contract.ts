@@ -1,4 +1,5 @@
 import { parseNativeCli } from './cli';
+import { E2E_ENVIRONMENT } from './environment';
 import { runMobileToWeb } from './mobile-to-web';
 import { prepareNativeRun } from './native-run';
 import { selectCasesForPlatform, validateCaseRegistry } from './registry';
@@ -8,7 +9,10 @@ import { runWebToMobile } from './web-to-mobile';
 async function main(): Promise<void> {
   validateCaseRegistry();
   const options = parseNativeCli();
-  const selected = selectCasesForPlatform('contract', options.platform, options);
+  const selected = selectCasesForPlatform('contract', options.platform, {
+    ...options,
+    environment: E2E_ENVIRONMENT,
+  });
   const run = await prepareNativeRun('contract', options, selected);
 
   try {

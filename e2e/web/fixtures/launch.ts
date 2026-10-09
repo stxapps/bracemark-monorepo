@@ -84,6 +84,8 @@ export async function launchApp(
   const context = await chromium.launchPersistentContext(userDataDir, {
     executablePath: CHROME_PATH,
     baseURL: options.baseURL ?? WEB_URL,
+    bypassCSP: false,
+    ignoreHTTPSErrors: false,
     headless: !options.headed,
     slowMo: options.slowMo,
     // The repo's type sizes are small enough that a 1x screenshot is hard to read

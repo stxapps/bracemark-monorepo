@@ -53,6 +53,24 @@
       },
       "measure:native": {
         "cache": false
+      },
+      "e2e-web:staging": {
+        "cache": false
+      },
+      "e2e-mobile:staging": {
+        "cache": false
+      },
+      "e2e-contract:staging": {
+        "cache": false
+      },
+      "build-release:staging": {
+        "cache": false
+      },
+      "check:runner": {
+        "cache": false
+      },
+      "check:browser": {
+        "cache": false
       }
     }
   },
@@ -75,7 +93,13 @@
     "shot:ext": "tsx shot/extension.ts",
     "shot:mobile": "tsx shot/mobile.ts",
     "measure:data": "tsx measure/data.ts",
-    "measure:native": "tsx measure/native.ts"
+    "measure:native": "tsx measure/native.ts",
+    "e2e-web:staging": "E2E_ENVIRONMENT=staging tsx runner/web.ts",
+    "e2e-mobile:staging": "E2E_ENVIRONMENT=staging tsx runner/mobile.ts",
+    "e2e-contract:staging": "E2E_ENVIRONMENT=staging tsx runner/contract.ts",
+    "build-release:staging": "tsx runner/release-build.ts",
+    "check:runner": "node --import tsx --test runner/*.test.ts",
+    "check:browser": "node --import tsx --test staging/*.test.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",

@@ -657,6 +657,24 @@ bound, so a `CORS_ORIGINS` line in a `.dev.vars.development` or an
 `CORS_ORIGINS=… npm run dev` — and the script forwards it as `--var`, which
 overrides the committed value ([device-testing.md](./device-testing.md)).
 
+### E2E environment selection
+
+The runner defaults to local loopback origins. `E2E_ENVIRONMENT=staging` (set by
+the three `e2e:*:staging` root scripts) selects the exact app/API/extractor/site
+roles on dryrunbase.com and refuses mixed-tier overrides. Production is not an
+E2E mode. Existing `E2E_*_URL` overrides remain available for local loopback ports;
+they cannot silently turn a local seed or fault-injection run into a deployed run.
+
+`e2e:build:staging` pins `EXPO_PUBLIC_API_URL=https://api.dryrunbase.com` and
+`EXPO_PUBLIC_SITE_URL=https://dryrunbase.com` in the native build's environment,
+above Nx/Expo dotenv precedence. Release compilation uses `NODE_ENV=production`;
+staging is a service tier, not a Node mode. It disables the measurement probe,
+leaves `.env.local` alone, and checks the embedded bundle before writing a hashed
+build receipt. No committed Expo `.env.staging` or credentials file is added.
+This finite build task can use Nx because the values are pinned explicitly and
+it needs none of Metro's interactive terminal UI. Details:
+[e2e/STAGING.md](../e2e/STAGING.md).
+
 ### wiring the frontends to the backend
 
 Each frontend environment points at the matching bracemark-api environment, and

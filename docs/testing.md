@@ -63,6 +63,18 @@ runtime surprise. See [architecture.md](./architecture.md).
 the only git hook (`tools/git-hooks/pre-commit`) guards `internal/`, not tests.
 `npm run test` is a thing you run.
 
+### deployed release qualification
+
+The staging E2E targets exercise AWS/Cloudflare services and optimized client
+builds alongside the local suite. Browser CSP/CORS checks require actual deployed
+headers and enforcement; native Release tests verify the installed binary against
+a build receipt. This is still the whole-flow layer and stays outside
+`npm run test`. Runner integrity checks use `npx nx check:runner @stxapps/e2e`
+(Node's test runner, no Jest config). Design and exclusions:
+[e2e.md](./e2e.md#deployed-staging-and-mobile-release-builds); commands:
+[e2e/STAGING.md](../e2e/STAGING.md). Store, biometric and real-iPhone checks retain
+their manual release qualification.
+
 ### the layer to reach for
 
 Push work down. A spec that can be written against a rendered component should

@@ -10,6 +10,7 @@ import { type Credentials } from '../web/fixtures/account';
 import { API_URL } from '../web/fixtures/env';
 import { launchApp, type LaunchedApp } from '../web/fixtures/launch';
 import { type NativePlatform } from './cli';
+import { IS_STAGING } from './environment';
 
 // --- the dev stack ----------------------------------------------------------
 
@@ -38,7 +39,10 @@ export async function waitForHttp(url: string, label: string, timeoutMs = 90_000
 
   throw new Error(
     `${label} did not answer ${url} within ${timeoutMs / 1000}s ` +
-      `(last: ${lastError}). Start the stack with \`npm run dev\` and retry.`,
+      `(last: ${lastError}). ` +
+      (IS_STAGING
+        ? 'Check the staging deployment and network, then retry.'
+        : 'Start the stack with `npm run dev` and retry.'),
   );
 }
 

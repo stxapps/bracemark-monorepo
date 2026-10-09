@@ -7,9 +7,17 @@ layer, why the standard Playwright auth fixture cannot work in this app, and the
 constraints that shape everything here. This file is the operational half; read
 that one before changing anything.
 
-## running
+## staging Release runs
 
-Everything needs the dev stack first — with one exception, the vectors leg,
+`npm run e2e:web:staging`, `e2e:mobile:staging`, and `e2e:contract:staging`
+test deployed dryrunbase.com services. Mobile needs an installed Release artifact
+and its build receipt, produced by `npm run e2e:build:staging -- --platform
+android|ios`. No local stack or Metro is used. Commands, admitted cases, CSP
+requirements, and coverage limits: [STAGING.md](./STAGING.md).
+
+## running locally
+
+The local targets need the dev stack first — with one exception, the vectors leg,
 which talks to no server and needs no account:
 
 ```sh

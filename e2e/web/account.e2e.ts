@@ -1,6 +1,7 @@
 import { type Page } from '@playwright/test';
 
 import { profileDir } from '../paths';
+import { IS_STAGING } from '../runner/environment';
 import { createAccount, type Credentials, newCredentials, signIn } from './fixtures/account';
 import { expect, test } from './fixtures/app';
 import { unique, unresolvableUrl } from './fixtures/data';
@@ -13,6 +14,7 @@ import { syncAndWait } from './fixtures/sync';
 // `location.replace`. See the sign-out spec below for why it is stubbed.
 async function stubMarketingSite(page: Page): Promise<URL> {
   const site = new URL(SITE_URL);
+  if (IS_STAGING) return site;
   await page.route(`${site.origin}/**`, (route) =>
     route.fulfill({ contentType: 'text/html', body: '<title>site stub</title>' }),
   );

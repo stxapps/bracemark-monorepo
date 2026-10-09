@@ -17,6 +17,26 @@ survives until the next `--clean` and then is gone, with a clean working tree
 the whole time. See _local build workflow_ below for why they aren't committed,
 and how to diff a prebuild on demand when you do want the native delta.
 
+#### staging Release E2E artifacts
+
+`npm run e2e:build:staging -- --platform android|ios` is a finite Nx build task
+owned by `@stxapps/e2e`. It regenerates the selected native directory, pins the
+staging API/site above dotenv precedence, and runs Gradle `assembleRelease` with
+R8/resource shrinking or Xcode Release for `iphonesimulator`. It starts no Metro.
+Existing Android signing prerequisites apply. Outputs include the artifact,
+source/build receipt and Android mapping file under `e2e/.artifacts/releases/`.
+Install the printed artifact explicitly, then pass its receipt to the staging
+mobile/contract target. Hash comparison refuses an older installed binary;
+Android also refuses `DEBUGGABLE`. iOS hashes the whole simulator app, including
+the share extension. This is a simulator build, not an App Store IPA.
+
+The embedded bundle must name staging and contain no local/production API URL.
+The receipt proves build configuration and identity; passing flows provide
+runtime evidence. These targets leave `.env.local` alone and add no test library
+to the app. Commands and remaining release checks:
+[e2e/STAGING.md](../e2e/STAGING.md). The interactive `expo:*` scripts below retain
+their direct npm/terminal behavior.
+
 #### local build workflow — the npm scripts
 
 Builds are local (**no EAS** — [setup.md](./setup.md), _expo_, for what that
@@ -594,8 +614,9 @@ _"Couldn't find class `X`! … If you are using ProGuard, add `@Keep` and
 a blanket keep.
 
 **Only a real release build exercises this** — not jest, not Metro, not `expo
-run:android` (debug). Until bracemark-expo has a release/EAS pipeline,
-this is configured but unproven; verify with a release build before the first store
+run:android` (debug). The staging Release build target now records
+R8 configuration, mapping and installed artifact identity. Passing Release flows
+provide runtime coverage, not proof of every shrinker rule; verify the store
 submission.
 
 #### android release — the dev launcher's ML Kit

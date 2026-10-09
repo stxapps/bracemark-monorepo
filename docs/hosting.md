@@ -153,6 +153,17 @@ run" is what a staging tier does, and nothing in it reads as Bracemark. It
 carries none of the brand's SEO or trademark weight, which is precisely what a
 staging host should be worth.
 
+### checking the deployed candidate
+
+`npm run e2e:web:staging` tests the deployed app at `app.dryrunbase.com` and
+marketing site at `dryrunbase.com`, with the real Workers and R2. It checks HTML,
+security headers, app build identity, Worker CORS and deliberate browser CSP
+refusals. `--include-trait security` runs the deployment checks alone. Report-only
+CSP is a rollout step, not enforcement: the two refusal cases remain red until
+CloudFront serves `Content-Security-Policy`. The test runner changes no CDN policy
+and deploys nothing. Operational details and coverage limits:
+[e2e/STAGING.md](../e2e/STAGING.md).
+
 ### security headers — where the CSP has to live
 
 bracemark-web is `output: 'export'`, so **there is no Next server and
@@ -199,8 +210,9 @@ bake in:
   blobs straight from the browser over a presigned URL
   ([local-first-sync.md](./local-first-sync.md)). Omit it and the app still signs
   in, still lists links, and silently loses every image, screenshot and page copy —
-  a console violation is the only symptom, and no test in either runner executes
-  under a CSP. Name the tier's **exact** account host rather than
+  a console violation is the only symptom, and local runners do not execute
+  under a CSP. The staging image-import/cross-profile case now exercises this
+  path with the deployed headers. Name the tier's **exact** account host rather than
   `https://*.r2.cloudflarestorage.com`; the wildcard authorises every Cloudflare
   account's R2 as a destination, and the id it hides is already visible to any
   signed-in user in devtools.

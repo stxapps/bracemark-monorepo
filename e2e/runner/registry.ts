@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { E2E_ROOT } from '../paths';
+import { type E2EEnvironment } from './environment';
 import { validateVisualCatalog } from './visual-catalog';
 
 export type E2ESurface = 'web' | 'extension' | 'pwa' | 'native' | 'contract';
@@ -18,6 +19,8 @@ export interface E2ECase {
   fixture: FixtureSize;
   path: string;
   artifacts: string[];
+  // Omitted entries are local-only. Staging admission is reviewed per case.
+  environments?: E2EEnvironment[];
 }
 
 export interface CaseFilters {
@@ -31,6 +34,7 @@ export interface CaseFilters {
   // nothing reviews. (`visual` alone is a trait of functional cases that make a
   // pixel claim — SKELETON-*, VIEWPORT-* — and selects nothing special.)
   baseline?: boolean;
+  environment?: E2EEnvironment;
 }
 
 const REGISTRY_PATH = join(E2E_ROOT, 'cases.json');
@@ -75,6 +79,15 @@ export function validateCaseRegistry(cases = readCaseRegistry()): void {
   // its own surface, so the pair can never be picked up by the same invocation.
   const ids = new Set<string>();
   for (const testCase of cases) {
+    if (
+      testCase.environments &&
+      (testCase.environments.length === 0 ||
+        new Set(testCase.environments).size !== testCase.environments.length ||
+        testCase.environments.some((value) => !['local', 'staging'].includes(value)) ||
+        (testCase.tier === 'release' && testCase.environments.includes('staging')))
+    ) {
+      throw new Error(`${testCase.id}: invalid automated environments`);
+    }
     if (!CASE_ID.test(testCase.id)) throw new Error(`invalid E2E case id: ${testCase.id}`);
     const key = `${testCase.surface}:${testCase.id}`;
     if (ids.has(key)) throw new Error(`duplicate E2E case id: ${key}`);
@@ -109,6 +122,7 @@ export function selectCases(surface: E2ESurface, filters: CaseFilters = {}): E2E
   const exclude = new Set(filters.excludeTraits ?? []);
   const requestedCases = new Set(filters.cases ?? []);
   const all = readCaseRegistry();
+  const environment = filters.environment ?? 'local';
 
   for (const id of requestedCases) {
     const requested = all.find((testCase) => testCase.id === id && testCase.surface === surface);
@@ -117,6 +131,11 @@ export function selectCases(surface: E2ESurface, filters: CaseFilters = {}): E2E
     }
     if (requested.tier === 'release') {
       throw new Error(`${id} is release qualification and cannot run automatically`);
+    }
+    if (!(requested.environments ?? ['local']).includes(environment)) {
+      throw new Error(
+        `${id} does not support ${environment}; its required fixtures are local-only`,
+      );
     }
     if (requested.traits.includes('baseline') !== Boolean(filters.baseline)) {
       throw new Error(
@@ -129,6 +148,7 @@ export function selectCases(surface: E2ESurface, filters: CaseFilters = {}): E2E
 
   const selected = all.filter((testCase) => {
     if (testCase.surface !== surface) return false;
+    if (!(testCase.environments ?? ['local']).includes(environment)) return false;
     if (testCase.tier === 'release') return false;
     if (testCase.traits.includes('baseline') !== Boolean(filters.baseline)) return false;
     if (requestedCases.size > 0 && !requestedCases.has(testCase.id)) return false;

@@ -39,10 +39,22 @@
 # the literal in step with DEFAULT_DEV_CLIENT_LINK there.
 appId: com.bracemark.app
 ---
-- clearState
-- openLink:
-    link: "${EXPO_DEV_CLIENT_LINK || 'bracemark://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081%2F%3FdisableOnboarding%3D1'}"
-    autoVerify: false
+# Release bundles are embedded in the app. This mode comes from the runner,
+# whose preflight verifies the installed binary against its Release receipt.
+- runFlow:
+    when:
+      true: ${E2E_BUILD_VARIANT === 'release'}
+    commands:
+      - launchApp:
+          clearState: true
+- runFlow:
+    when:
+      true: ${E2E_BUILD_VARIANT !== 'release'}
+    commands:
+      - clearState
+      - openLink:
+          link: "${EXPO_DEV_CLIENT_LINK || 'bracemark://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081%2F%3FdisableOnboarding%3D1'}"
+          autoVerify: false
 
 # iOS 26.5 confirms custom-scheme handoff after app state is cleared. Older iOS
 # versions and Android open immediately, so keep the system button optional and
@@ -51,6 +63,7 @@ appId: com.bracemark.app
 - runFlow:
     when:
       platform: iOS
+      true: ${E2E_BUILD_VARIANT !== 'release'}
     commands:
       # The alert can arrive after the app has already painted behind it. Pace
       # the optional tap with an optional lookup so we do not race that arrival.

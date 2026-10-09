@@ -1,3 +1,4 @@
+import { IS_STAGING } from './environment';
 import { type E2ETier } from './registry';
 
 export type NativePlatform = 'ios' | 'android';
@@ -12,6 +13,7 @@ export interface CommonFilters {
 export interface NativeCliOptions extends CommonFilters {
   platform: NativePlatform;
   deviceId: string;
+  releaseReceipt?: string;
 }
 
 interface ParsedArguments {
@@ -76,7 +78,10 @@ function filters(values: Map<string, string[]>): CommonFilters {
 const FILTER_FLAGS = new Set(['suite', 'case', 'include-trait', 'exclude-trait']);
 
 export function parseNativeCli(argv = process.argv.slice(2)): NativeCliOptions {
-  const parsed = parseArguments(argv, new Set([...FILTER_FLAGS, 'platform', 'device']));
+  const parsed = parseArguments(
+    argv,
+    new Set([...FILTER_FLAGS, 'platform', 'device', 'release-receipt']),
+  );
   if (parsed.passthrough.length > 0) {
     throw new Error(`unknown native E2E arguments: ${parsed.passthrough.join(' ')}`);
   }
@@ -86,10 +91,13 @@ export function parseNativeCli(argv = process.argv.slice(2)): NativeCliOptions {
     throw new Error(`--platform must be "ios" or "android", got ${platform}`);
   }
 
+  const releaseReceipt = one(parsed.values, 'release-receipt', IS_STAGING);
+  if (!IS_STAGING && releaseReceipt) throw new Error('--release-receipt requires staging mode');
   return {
     ...filters(parsed.values),
     platform,
     deviceId: one(parsed.values, 'device', true) as string,
+    releaseReceipt,
   };
 }
 

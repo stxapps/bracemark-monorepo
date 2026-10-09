@@ -316,3 +316,14 @@ off every device that does not need it.
 
 Nothing is configured for either yet. When one is chosen, this section becomes a
 _how_ and the alternative stays here as the record of why it wasn't taken.
+
+### automated staging Release runs
+
+For repeatable Release automation, use the receipt-producing build and
+`e2e:mobile:staging` / `e2e:contract:staging` targets described in
+[e2e/STAGING.md](../e2e/STAGING.md). They pin the build's staging URLs without
+changing the device domain switch, verify the installed binary, and need no
+Metro or reverse mappings. Android works through ADB on an emulator or physical
+device; iOS uses the simulator. A simulator Release app cannot qualify store
+distribution or real-iPhone-only behavior. The local debug runs described above
+retain their existing Metro/origin preflight.

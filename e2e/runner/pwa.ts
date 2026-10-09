@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { E2E_ROOT, runArtifactDir } from '../paths';
 import { API_URL, CHROME_PATH } from '../web/fixtures/env';
 import { parseWebCli } from './cli';
+import { requireLocalEnvironment } from './environment';
 import { createRunId, waitForApi, writeJson } from './lib';
 import { capture, inherit } from './process';
 import { selectCases, validateCaseRegistry } from './registry';
@@ -18,6 +19,7 @@ const REPO_ROOT = join(E2E_ROOT, '..');
 const PWA_URL = process.env.E2E_PWA_URL ?? 'http://localhost:3001';
 
 async function main(): Promise<void> {
+  requireLocalEnvironment('pwa E2E');
   validateCaseRegistry();
   const options = parseWebCli();
   if (

@@ -1,5 +1,11 @@
 # Native release qualification
 
+Automated staging checks now run through the separate staging targets; see
+[STAGING.md](../STAGING.md). Optimized Release builds can be driven by Maestro;
+the manual cases here remain for the platform/store boundaries that the admitted
+automated suite does not prove. A staging subset pass does not complete this
+checklist.
+
 These checks cover hardware that the simulator, the emulator and Maestro cannot
 represent honestly. Record the device model, OS version, app build, build commit,
 and pass/fail result outside the repository with the rest of the release

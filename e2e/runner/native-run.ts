@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { E2E_ROOT, runArtifactDir } from '../paths';
 import { API_URL, EXTRACTOR_URL, SITE_URL, WEB_URL } from '../web/fixtures/env';
 import { type NativeCliOptions, type NativePlatform } from './cli';
+import { E2E_ENVIRONMENT, IS_STAGING } from './environment';
 import {
   createRunId,
   maestro,
@@ -15,7 +16,8 @@ import {
   writeJson,
 } from './lib';
 import { capture } from './process';
-import { type E2ECase } from './registry';
+import { type E2ECase, readCaseRegistry } from './registry';
+import { assertInstalledRelease, type ReleaseReceipt } from './release-artifact';
 import { assertOriginOwnedByRepo, assertStackOwnedByRepo } from './stack';
 
 const APP_ID = 'com.bracemark.app';
@@ -65,8 +67,12 @@ interface RunManifest {
     includeTraits: string[];
     excludeTraits: string[];
   };
-  devClientLink: string;
-  origins: { web: string; api: string; extractor: string; metro: string };
+  environment: 'local' | 'staging';
+  buildVariant: 'debug' | 'release';
+  release?: ReleaseReceipt;
+  excludedCases: string[];
+  devClientLink?: string;
+  origins: { web: string; api: string; extractor: string; metro?: string };
   checkout: { root: string; commit: string; dirty: boolean };
   cases: CaseResult[];
 }
@@ -109,7 +115,7 @@ export interface NativeRun {
   platform: NativePlatform;
   deviceId: string;
   device: DeviceIdentity;
-  devClientLink: string;
+  devClientLink?: string;
   runCase(
     testCase: E2ECase,
     env?: Record<string, string>,
@@ -398,13 +404,17 @@ export async function prepareNativeRun(
   options: NativeCliOptions,
   selectedCases: E2ECase[],
 ): Promise<NativeRun> {
-  const runId = createRunId(`${kind}-${options.platform}`);
+  const runId = createRunId(`${IS_STAGING ? 'staging-' : ''}${kind}-${options.platform}`);
   process.env.E2E_RUN_ID = runId;
   const runDir = runArtifactDir(runId);
   await mkdir(runDir, { recursive: true });
 
-  const devClientLink = process.env.EXPO_DEV_CLIENT_LINK ?? DEFAULT_DEV_CLIENT_LINK;
-  const metro = metroOrigin(devClientLink);
+  if (IS_STAGING && !options.releaseReceipt)
+    throw new Error('staging native runs require --release-receipt');
+  const devClientLink = IS_STAGING
+    ? undefined
+    : (process.env.EXPO_DEV_CLIENT_LINK ?? DEFAULT_DEV_CLIENT_LINK);
+  const metro = devClientLink ? metroOrigin(devClientLink) : undefined;
   const requiresOnlineStack = selectedCases.some((testCase) => testCase.traits.includes('online'));
   if (requiresOnlineStack) {
     await waitForApi();
@@ -415,13 +425,27 @@ export async function prepareNativeRun(
     ]);
     await waitForHttp(new URL('/create-account', WEB_URL).href, 'bracemark-web', 30_000);
   }
-  await probeMetro(metro);
-  if (requiresOnlineStack) await assertBundleNamesApi(metro, options.platform);
+  if (metro) {
+    await probeMetro(metro);
+    if (requiresOnlineStack) await assertBundleNamesApi(metro, options.platform);
+  }
 
   const identity =
     options.platform === 'ios'
       ? await iosDevice(options.deviceId)
-      : await androidDevice(options.deviceId, requiresOnlineStack ? [8081, 8787, 8788] : [8081]);
+      : await androidDevice(
+          options.deviceId,
+          IS_STAGING ? [] : requiresOnlineStack ? [8081, 8787, 8788] : [8081],
+        );
+  const release = IS_STAGING
+    ? await assertInstalledRelease({
+        receiptPath: options.releaseReceipt as string,
+        platform: options.platform,
+        deviceId: options.deviceId,
+        installPath: identity.app.installPath,
+        workDir: runDir,
+      })
+    : undefined;
   const maestroVersion = (
     await capture(join(process.env.HOME ?? '', '.maestro/bin/maestro'), ['--version'])
   ).stdout.trim();
@@ -440,6 +464,18 @@ export async function prepareNativeRun(
     device: identity.device,
     maestroVersion,
     app: identity.app,
+    environment: E2E_ENVIRONMENT,
+    buildVariant: IS_STAGING ? 'release' : 'debug',
+    release,
+    excludedCases: IS_STAGING
+      ? readCaseRegistry()
+          .filter(
+            (entry) =>
+              entry.surface === (kind === 'contract' ? 'contract' : 'native') &&
+              !(entry.environments ?? ['local']).includes('staging'),
+          )
+          .map((entry) => entry.id)
+      : [],
     suite: options.suite,
     filters: {
       cases: options.cases,
@@ -493,7 +529,12 @@ export async function prepareNativeRun(
         const maestroOptions: MaestroOptions = {
           platform: options.platform,
           deviceId: options.deviceId,
-          env: { EXPO_DEV_CLIENT_LINK: devClientLink, ...env, ...stepEnv },
+          env: {
+            ...env,
+            ...stepEnv,
+            E2E_BUILD_VARIANT: IS_STAGING ? 'release' : 'debug',
+            ...(devClientLink ? { EXPO_DEV_CLIENT_LINK: devClientLink } : {}),
+          },
           reportPath: join(caseDir, `junit${suffix}.xml`),
           testOutputDir: join(caseDir, `maestro${suffix}`),
           debugOutputDir: join(caseDir, `debug${suffix}`),

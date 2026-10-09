@@ -31,6 +31,7 @@ import {
   stageDocumentPickerFile,
 } from './device-files';
 import { cycleAppearance } from './device-look';
+import { E2E_ENVIRONMENT, IS_STAGING } from './environment';
 import {
   type Box,
   boxById,
@@ -481,7 +482,10 @@ function assertClosedOver(
 async function main(): Promise<void> {
   validateCaseRegistry();
   const options = parseNativeCli();
-  const selected = selectCasesForPlatform('native', options.platform, options);
+  const selected = selectCasesForPlatform('native', options.platform, {
+    ...options,
+    environment: E2E_ENVIRONMENT,
+  });
   const run = await prepareNativeRun('mobile', options, selected);
 
   try {
@@ -797,7 +801,7 @@ async function main(): Promise<void> {
       // for the whole case, so a title can only have come from the device's own
       // fetch. (The iOS simulator shares this Mac's loopback; there is no
       // per-device cut to make, and the case proves the device path alone.)
-      if (testCase.id.startsWith('EXTRACT-NATIVE-') && run.platform === 'android') {
+      if (!IS_STAGING && testCase.id.startsWith('EXTRACT-NATIVE-') && run.platform === 'android') {
         await setPortReachable(run.deviceId, 8788, false);
         cleanupActions.push(() => setPortReachable(run.deviceId, 8788, true));
       }

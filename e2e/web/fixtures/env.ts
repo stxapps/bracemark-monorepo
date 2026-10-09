@@ -1,4 +1,5 @@
 // The origins and the browser binary every web e2e run needs, resolved once.
+import { E2E_ORIGINS } from '../../runner/environment';
 //
 // These deliberately DUPLICATE the values in `apps/bracemark-web/.env.development`
 // rather than importing or parsing them. E2e asserts on the running system from
@@ -9,12 +10,12 @@
 // files, so hard-coding them here adds no new coupling.
 
 // bracemark-web — the app under test.
-export const WEB_URL = process.env.E2E_WEB_URL ?? 'http://localhost:3000';
+export const WEB_URL = E2E_ORIGINS.web;
 
 // bracemark-api — polled in global-setup, because `npm run dev` brings up Next on
 // 3000 well before wrangler finishes booting local D1/R2, and an account created
 // against a half-up api fails in a way that looks like a UI bug.
-export const API_URL = process.env.E2E_API_URL ?? 'http://localhost:8787';
+export const API_URL = E2E_ORIGINS.api;
 
 // bracemark-extractor — the server-extraction origin, on 8788 (docs/env-files.md,
 // _the local port map_), and brought up by `npm run dev` alongside the api and the
@@ -23,13 +24,13 @@ export const API_URL = process.env.E2E_API_URL ?? 'http://localhost:8787';
 // a zone behind Cloudflare answers a Worker where it 403s a shell — and the
 // `internet` extraction cases (web/extraction.e2e.ts), which fetch example.com
 // through it. Playwright's webServer does not start it; `npm run dev` does.
-export const EXTRACTOR_URL = process.env.E2E_EXTRACTOR_URL ?? 'http://localhost:8788';
+export const EXTRACTOR_URL = E2E_ORIGINS.extractor;
 
 // bracemark-site — the marketing apex. Sign-out leaves the app for this origin via
 // a cross-origin `location.replace`, so a spec that asserts on it needs the value
 // but NOT a running server: asserting on the URL the browser navigated to is the
 // point, and `npm run dev` deliberately excludes the site (docs/env-files.md).
-export const SITE_URL = process.env.E2E_SITE_URL ?? 'http://localhost:3001';
+export const SITE_URL = E2E_ORIGINS.site;
 
 // The system Chrome. `@playwright/test` normally launches a browser it downloaded
 // itself; no install here fetches one, so every launch has to be told where the

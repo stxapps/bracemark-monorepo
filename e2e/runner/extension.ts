@@ -8,12 +8,14 @@ import { buildDevelopmentExtension, stageExtensionCopy } from '../extension/fixt
 import { E2E_ROOT, runArtifactDir } from '../paths';
 import { API_URL, WEB_URL } from '../web/fixtures/env';
 import { parseWebCli } from './cli';
+import { requireLocalEnvironment } from './environment';
 import { createRunId, writeJson } from './lib';
 import { capture, inherit } from './process';
 import { selectCases, validateCaseRegistry } from './registry';
 import { assertStackOwnedByRepo } from './stack';
 
 async function main(): Promise<void> {
+  requireLocalEnvironment('extension E2E');
   validateCaseRegistry();
   const options = parseWebCli();
   if (

@@ -1,3 +1,4 @@
+import { requireLocalEnvironment } from './environment';
 import { type NativeRun } from './native-run';
 import { type E2ECase } from './registry';
 
@@ -18,6 +19,7 @@ import { type E2ECase } from './registry';
 // Prerequisites: a bracemark-expo dev build on a booted simulator/emulator, with
 // Metro up. No `npm run dev` needed — see e2e/README.md.
 export async function runVectors(run: NativeRun, testCase: E2ECase): Promise<void> {
+  requireLocalEnvironment('frozen vector dev screen');
   await run.runCase(testCase);
   console.log('contract vectors on device: OK');
 }

@@ -1,3 +1,4 @@
+import { IS_STAGING } from './runner/environment';
 import { waitForApi } from './runner/lib';
 import { assertStackOwnedByRepo } from './runner/stack';
 import { API_URL, WEB_URL } from './web/fixtures/env';
@@ -12,6 +13,7 @@ import { API_URL, WEB_URL } from './web/fixtures/env';
 // web/fixtures/app.ts, where it is scoped and torn down.
 export default async function globalSetup(): Promise<void> {
   await waitForApi();
+  if (IS_STAGING) return;
   await assertStackOwnedByRepo([
     { origin: WEB_URL, label: 'bracemark-web', required: true },
     { origin: API_URL, label: 'bracemark-api', required: true },

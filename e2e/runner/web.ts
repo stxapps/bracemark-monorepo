@@ -4,9 +4,10 @@ import { join } from 'node:path';
 import { E2E_ROOT, runArtifactDir } from '../paths';
 import { API_URL, CHROME_PATH, WEB_URL } from '../web/fixtures/env';
 import { parseWebCli } from './cli';
+import { E2E_ENVIRONMENT, E2E_ORIGINS, IS_STAGING } from './environment';
 import { createRunId, writeJson } from './lib';
 import { capture, inherit } from './process';
-import { selectCases, validateCaseRegistry } from './registry';
+import { readCaseRegistry, selectCases, validateCaseRegistry } from './registry';
 import { assertStackOwnedByRepo } from './stack';
 
 async function main(): Promise<void> {
@@ -21,7 +22,7 @@ async function main(): Promise<void> {
       'use --case/--suite/--include-trait/--exclude-trait; do not combine them with --grep',
     );
   }
-  const selected = selectCases('web', options);
+  const selected = selectCases('web', { ...options, environment: E2E_ENVIRONMENT });
 
   // If a stack already exists, prove it belongs to this checkout before
   // Playwright's reuseExistingServer path can silently attach to it. Missing
@@ -31,13 +32,13 @@ async function main(): Promise<void> {
     { origin: API_URL, label: 'bracemark-api' },
   ]);
 
-  const runId = createRunId('web');
+  const runId = createRunId(IS_STAGING ? 'staging-web' : 'web');
   const runDir = runArtifactDir(runId);
   await mkdir(runDir, { recursive: true });
   // The selection travels in the environment, not as `--grep`: the config applies
   // it to each project, which is the only filter a dependency project honours
   // (playwright.config.ts, `selection`).
-  const grep = selected.map((testCase) => `@${testCase.id}`).join('|');
+  const grep = selected.map((testCase) => `@${testCase.id}(?=\\s|$)`).join('|');
   const env = { ...process.env, E2E_RUN_ID: runId, E2E_RUN_DIR: runDir, E2E_GREP: grep };
   const args = ['test', ...options.playwrightArgs];
   const [playwrightVersion, chromeVersion, commit, status] = await Promise.all([
@@ -51,6 +52,7 @@ async function main(): Promise<void> {
     schemaVersion: 1,
     runId,
     kind: 'web',
+    environment: E2E_ENVIRONMENT,
     status: 'running',
     startedAt: new Date().toISOString(),
     suite: options.suite,
@@ -60,7 +62,15 @@ async function main(): Promise<void> {
       excludeTraits: options.excludeTraits,
     },
     selectedCases: selected.map((testCase) => testCase.id),
-    origins: { web: WEB_URL, api: API_URL },
+    origins: E2E_ORIGINS,
+    excludedCases: IS_STAGING
+      ? readCaseRegistry()
+          .filter(
+            (entry) =>
+              entry.surface === 'web' && !(entry.environments ?? ['local']).includes('staging'),
+          )
+          .map((entry) => entry.id)
+      : [],
     browser: { executable: CHROME_PATH, version: chromeVersion.stdout.trim() || 'unknown' },
     playwrightVersion: playwrightVersion.stdout.trim(),
     checkout: {
@@ -76,7 +86,7 @@ async function main(): Promise<void> {
 
   try {
     await inherit('playwright', args, { cwd: E2E_ROOT, env });
-    manifest.status = 'passed';
+    manifest.status = options.playwrightArgs.includes('--list') ? 'listed' : 'passed';
   } catch (error) {
     manifest.status = 'failed';
     throw error;

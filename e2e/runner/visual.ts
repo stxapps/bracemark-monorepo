@@ -5,6 +5,7 @@ import { E2E_ROOT, runArtifactDir } from '../paths';
 import { API_URL, CHROME_PATH, WEB_URL } from '../web/fixtures/env';
 import { parseVisualCli, type VisualCliOptions } from './cli';
 import { readDeviceLook, restoreDeviceLook, setAppearance } from './device-look';
+import { requireLocalEnvironment } from './environment';
 import { createRunId, writeJson } from './lib';
 import { prepareNativeRun } from './native-run';
 import { capture, inherit } from './process';
@@ -136,6 +137,7 @@ async function runNative(options: VisualCliOptions & { platform: 'ios' | 'androi
 }
 
 async function main(): Promise<void> {
+  requireLocalEnvironment('visual E2E');
   validateCaseRegistry();
   const options = parseVisualCli();
   if (options.platform === 'web') await runWeb(options);
