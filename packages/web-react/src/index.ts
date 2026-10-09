@@ -43,6 +43,7 @@ export * from './hooks/use-link-mutations';
 export * from './hooks/use-link-quota';
 export * from './hooks/use-list-mutations';
 export * from './hooks/use-lists';
+export * from './hooks/use-object-url';
 export * from './hooks/use-pending-changes-count';
 export * from './hooks/use-pin-mutations';
 export * from './hooks/use-recovery-code';

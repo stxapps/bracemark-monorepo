@@ -38,6 +38,11 @@ jest.mock('@stxapps/web-react', () => ({
   get readFileBytes() {
     return mockReadFileBytes;
   },
+  // The real hook: the revoke-on-close case below is a statement about it.
+  get useObjectUrl() {
+    return jest.requireActual<typeof import('@stxapps/web-react')>('@stxapps/web-react')
+      .useObjectUrl;
+  },
 }));
 jest.mock('@stxapps/web-ui/components/links/list-command', () => ({
   get useListRows() {

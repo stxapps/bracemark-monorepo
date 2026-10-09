@@ -12,8 +12,9 @@
 // per-host, a settled library asks the network nothing: this reduces to one
 // primary-key get per rendered row.
 //
-// The URL is revoked when the bytes change and on unmount; a remounted row re-reads
-// Dexie and mints a fresh one (cheap — a single-key get, no network once resident).
+// The URL is useObjectUrl's — revoked when the bytes change and on unmount; a
+// remounted row re-reads Dexie and mints a fresh one (cheap — a single-key get, no
+// network once resident).
 //
 // THE BLOB CARRIES ITS MIME, re-sniffed here rather than stored on the row. An
 // object URL is served with the Blob's `type`, and a typeless one gets none: an
@@ -32,6 +33,7 @@ import { sniffIconMime } from '@stxapps/shared';
 import { useFavicon } from '../contexts/favicon-provider';
 import { type FaviconRecord } from '../data/db';
 import { isFaviconStale, readFavicon } from '../data/favicon-store';
+import { useObjectUrl } from './use-object-url';
 
 // The mounted-and-settled gate before a request — rows are virtualized, so this
 // keeps a fast scroll from asking for every host it flies past. Matches
@@ -66,20 +68,10 @@ export function useFaviconUrl(host: string | undefined): string | undefined {
 
   const bytes = settled?.status === 'ok' ? settled.bytes : undefined;
 
-  const url = useMemo(() => {
-    if (bytes === undefined) return undefined;
-    const type = sniffIconMime(bytes);
-    // `type` is undefined only for a row written before this verdict existed (or
-    // by a future filler that widened it); an untyped Blob is what such a row
-    // already rendered as, so it degrades to exactly the old behaviour.
-    return URL.createObjectURL(new Blob([bytes as BlobPart], type ? { type } : undefined));
-  }, [bytes]);
-  useEffect(
-    () => () => {
-      if (url) URL.revokeObjectURL(url);
-    },
-    [url],
-  );
+  // `type` is undefined only for a row written before this verdict existed (or by
+  // a future filler that widened it); an untyped Blob is what such a row already
+  // rendered as, so it degrades to exactly the old behaviour.
+  const type = useMemo(() => (bytes ? sniffIconMime(bytes) : undefined), [bytes]);
 
-  return url;
+  return useObjectUrl(bytes, type);
 }

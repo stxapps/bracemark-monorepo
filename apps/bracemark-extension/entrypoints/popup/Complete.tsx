@@ -1,4 +1,3 @@
-import { useEffect, useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { ArrowUpRight, Folder } from 'lucide-react';
 
@@ -8,6 +7,7 @@ import {
   readExtraction,
   readFileBytes,
   readLinkByUrl,
+  useObjectUrl,
 } from '@stxapps/web-react';
 import { useListRows } from '@stxapps/web-ui/components/links/list-command';
 import { Button } from '@stxapps/web-ui/components/ui/button';
@@ -54,16 +54,7 @@ export function Complete({ link, tab }: { link: LinkItem; tab?: ActiveTab }) {
     () => (imageId ? readFileBytes(imageId) : Promise.resolve(undefined)),
     [imageId],
   );
-  const imageUrl = useMemo(
-    () => (imageBytes ? URL.createObjectURL(new Blob([imageBytes as BlobPart])) : undefined),
-    [imageBytes],
-  );
-  useEffect(
-    () => () => {
-      if (imageUrl) URL.revokeObjectURL(imageUrl);
-    },
-    [imageUrl],
-  );
+  const imageUrl = useObjectUrl(imageBytes);
 
   // The list's own name, from the same live tree ListSelect just picked from — so
   // a list renamed on another device reads correctly here too. Undefined only in

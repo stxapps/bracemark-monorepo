@@ -21,7 +21,7 @@
 // field so the display falls back to `extraction.title ?? host(url)` — revert
 // is trivial because the discovered value was never destroyed.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { ImageOff, ImagePlus } from 'lucide-react';
 
@@ -34,6 +34,7 @@ import {
   readFileBytes,
   resizeImage,
   useLinkMutations,
+  useObjectUrl,
   useUnsavedDraft,
 } from '@stxapps/web-react';
 import { ListSelect } from '@stxapps/web-ui/components/links/list-select';
@@ -126,16 +127,7 @@ function LinkEditForm({
     () => (storedImageId ? readFileBytes(storedImageId) : Promise.resolve(undefined)),
     [storedImageId],
   );
-  const storedUrl = useMemo(
-    () => (storedBytes ? URL.createObjectURL(new Blob([storedBytes as BlobPart])) : undefined),
-    [storedBytes],
-  );
-  useEffect(
-    () => () => {
-      if (storedUrl) URL.revokeObjectURL(storedUrl);
-    },
-    [storedUrl],
-  );
+  const storedUrl = useObjectUrl(storedBytes);
   // The picked file's object URL lives inside the draft; revoke it whenever the
   // draft moves off that pick (new pick, clear, unmount).
   useEffect(

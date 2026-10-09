@@ -12,15 +12,16 @@
 // every row it flies past: only rows still mounted after REQUEST_SETTLE_MS ask.
 //
 // Returns the object URL, or undefined while there's nothing to show (caller
-// renders its placeholder). The URL is revoked whenever the bytes change and on
-// unmount; a remounted row re-reads Dexie and mints a fresh URL (cheap — a
-// single-key get, no network once resident).
+// renders its placeholder). The URL is useObjectUrl's — revoked whenever the bytes
+// change and on unmount; a remounted row re-reads Dexie and mints a fresh URL
+// (cheap — a single-key get, no network once resident).
 
-import { useEffect, useMemo } from 'react';
+import { useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 
 import { useFileContent } from '../contexts/file-content-provider';
 import { readFileBytes } from '../data/queries';
+import { useObjectUrl } from './use-object-url';
 
 // See the module comment — the mounted-and-settled gate before a network request.
 const REQUEST_SETTLE_MS = 300;
@@ -48,19 +49,5 @@ export function useImageFileUrl(fileId: string | undefined): string | undefined 
     return () => clearTimeout(timer);
   }, [fileId, bytes, requestFileContent]);
 
-  const url = useMemo(
-    () =>
-      bytes !== undefined && bytes !== LOADING
-        ? URL.createObjectURL(new Blob([bytes as BlobPart]))
-        : undefined,
-    [bytes],
-  );
-  useEffect(
-    () => () => {
-      if (url) URL.revokeObjectURL(url);
-    },
-    [url],
-  );
-
-  return url;
+  return useObjectUrl(bytes === LOADING ? undefined : bytes);
 }

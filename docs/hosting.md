@@ -217,11 +217,11 @@ bake in:
   account's R2 as a destination, and the id it hides is already visible to any
   signed-in user in devtools.
 - `img-src` needs `blob:`. Favicons and link images are decrypted locally and
-  rendered from `URL.createObjectURL` (`use-favicon-url.ts`,
-  `use-image-file-url.ts`), never fetched from the site they came from — which is
-  also why neither `img-src` nor `connect-src` needs a bare `https:`. Extraction
-  and favicon fetches go through the extractor origin, and that property is worth
-  more than any directive here: keep it.
+  rendered from `URL.createObjectURL` (`use-object-url.ts`, behind
+  `use-favicon-url.ts` and `use-image-file-url.ts`), never fetched from the site
+  they came from — which is also why neither `img-src` nor `connect-src` needs a
+  bare `https:`. Extraction and favicon fetches go through the extractor origin,
+  and that property is worth more than any directive here: keep it.
 - Both of the above are what makes `'unsafe-inline'` on `script-src` survivable,
   so every host added to `connect-src` widens the one control that is holding —
   add deliberately.
