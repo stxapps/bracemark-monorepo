@@ -9,14 +9,18 @@ import { useMirroredSyncState } from '@/hooks/use-mirrored-sync-state';
 import { apiClient } from '@/utils/api-client';
 import { sendMessage } from '@/utils/messages';
 
-// The popup's provider tree — bracemark-web's inner-layout, minus Serwist and the sync
-// ENGINE: QueryClient → ApiClient → Auth → (External)Sync → Theme.
+// The provider tree of the browser extension's two pages — the popup and the options
+// page each mount it from their own main.tsx. It is bracemark-web's root tree
+// (inner-layout.tsx) without Serwist and ExtractClientProvider — nothing here is
+// precached, and extraction runs in bracemark-web — plus the sync seam web mounts one
+// level down, in its (app) layout: QueryClient → ApiClient → Auth → (External)Sync →
+// Theme.
 //
-// The sync engine runs in the background service worker (a separate JS context — see
-// Phase 4), so the popup does NOT mount SyncProvider. Instead it mounts
+// The sync ENGINE runs in the background service worker (a separate JS context —
+// entrypoints/background.ts), so neither page mounts SyncProvider. Instead they mount
 // ExternalSyncProvider, whose `requestSync` just messages the background to run a
 // cycle. This satisfies the editor hooks' `useSync()` (useLinkMutations &c. call
-// requestSync after each local write) without the popup double-running the sync.
+// requestSync after each local write) without a page double-running the sync.
 //
 // The live sync status comes from the background's browser.storage.local mirror
 // (useMirroredSyncState) and is fed into ExternalSyncProvider, so every consumer — the popup
@@ -24,8 +28,9 @@ import { sendMessage } from '@/utils/messages';
 // `useSync()` seam as bracemark-web, instead of subscribing to storage on its own. The
 // popup is still usable immediately: nothing here gates render on storeStatus.
 export function Providers({ children }: { children: ReactNode }) {
-  // One QueryClient per popup session, created lazily so it isn't shared across
-  // renders. ApiClientProvider hands the shared hooks the mode-configured client.
+  // One QueryClient per page load (a popup opening, an options tab), created lazily
+  // so it isn't shared across renders. ApiClientProvider hands the shared hooks the
+  // mode-configured client.
   const [queryClient] = useState(() => new QueryClient());
   const { storeStatus, bgSyncStatus, lastSyncAt, lastError, blockedCount } = useMirroredSyncState();
 

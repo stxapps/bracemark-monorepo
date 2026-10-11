@@ -19,7 +19,12 @@ import { usePausedWhileCovered } from '../../../features/links/use-paused-while-
 //
 // LiveReadPause stops the section's live reads while another screen covers it
 // (features/links/use-paused-while-covered.ts), so a write made from Settings
-// doesn't re-render a links screen nobody can see.
+// doesn't re-render a links screen nobody can see. It is OUTSIDE
+// LinksPageProvider on purpose: that provider holds live reads of its own
+// (useLists, useTags, useSettings), and a pause mounted under it would leave
+// them running. The hook is called here for the matching reason — outside the
+// Drawer, `useNavigation()` is the (app) stack's, whose events say when this
+// route is covered.
 export default function LinksLayout() {
   const paused = usePausedWhileCovered();
   return (

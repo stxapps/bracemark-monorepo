@@ -34,10 +34,10 @@ if (process.env.EXPO_PUBLIC_MEASURE_STALLS === '1') startStallProbe();
 // plugins/with-android-variable-font.js on Android (app.config.ts). So
 // `fontFamily: 'Inter'` / the `font-sans` utility resolve at first paint on both
 // iOS and Android with no runtime load — no useFonts, and nothing the splash
-// hold below has to wait for. Single variable
-// file, mirroring the web/extension build; the `wght` axis backs the
-// font-weight utilities. `global.css` is imported here (once, at the top of the
-// app tree) as Uniwind wants.
+// hold below has to wait for. Single variable file, mirroring the web and
+// browser-extension builds; the `wght` axis backs the font-weight utilities.
+// `global.css` is imported here (once, at the top of the app tree) as Uniwind
+// wants.
 //
 // expo-router mounts a NavigationContainer that already provides a safe-area
 // context (react-navigation's SafeAreaProviderCompat), so screens can use
@@ -70,15 +70,22 @@ if (process.env.EXPO_PUBLIC_MEASURE_STALLS === '1') startStallProbe();
 //
 // PortalHost is @rn-primitives/portal's default host: floating primitive
 // content (the links topbar's dropdown menu) portals into it so it renders
-// above the screen tree. Last sibling of the Stack so portaled content draws
-// on top; inside the providers so it can still read their contexts.
+// above the screen tree. After RootNavigator (the Stack) so portaled content
+// draws on top; inside the providers of THIS file so it can still read their
+// contexts. Only theirs: the host is above the whole `(app)` layout, and an
+// @rn-primitives portal re-parents its children rather than carrying context
+// the way a DOM portal does — so portaled content sees no SyncProvider,
+// LockProvider or PaywallProvider, nor a links provider. A hook that needs one
+// is called on the host side and its result handed in
+// (features/links/move-to-dialog.tsx carries the specimen).
 //
 // ThemeProvider is the read/apply half of the theme (docs/theme.md): it reads
 // the resolved ThemeState from useSettings and applies it via Uniwind. Mounted
 // here at the root so it covers every route group (auth + app) — settings read
 // from the sqlite singletons, so it needs no account. It also drives
-// `Appearance`, so the `<StatusBar style="auto">` above it follows the app
+// `Appearance`, so the `<StatusBar style="auto">` inside it follows the app
 // theme. `useTheme()` (the rendered light/dark) is available to anything below.
+//
 // SplashHold + `preventAutoHideAsync()` are one mechanism in two places, and the
 // call has to be HERE, at module scope: expo-router arms its own auto-hide in a
 // `setTimeout` at entry (renderRootComponent) explicitly so an app can get its

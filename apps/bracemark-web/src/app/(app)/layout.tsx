@@ -45,8 +45,11 @@ import { PaywallProvider } from '@/contexts/paywall-provider';
 //                     opt-in, and its rows are device-local.
 //   ExtractionProvider — the extraction drain. Needs the session AND a ready
 //                     store, so it sits inside SyncProvider. Nothing between it
-//                     and FileContent/Favicon binds them — that pair is above it
-//                     only because it depends on less.
+//                     and FileContent/Favicon binds them HERE — that pair is
+//                     above it only because it depends on less. On expo the
+//                     Favicon half is a real dependency (its `extractNow` calls
+//                     `useFavicon`), so the order is not free to change: the two
+//                     stacks stay in step.
 //   LockProvider    — app + list locks state. Needs SyncProvider (its orphan
 //                     sweep waits for a ready store) and serves both AppLockGate
 //                     here and the links page's list-lock surfaces.

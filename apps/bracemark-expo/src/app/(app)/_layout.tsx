@@ -37,9 +37,8 @@ import { SignOutProvider } from '../../contexts/sign-out-provider';
 //                  client-side, since the local-first session lives on-device
 //                  (secure-store), so there's no server to gate. Reads the
 //                  AuthProvider mounted in the root `_layout`.
-//   SyncProvider — "is the local store ready?" It runs initial/incremental sync
-//                  and exposes storeStatus/requestSync to the app. Never
-//                  redirects.
+//   SyncProvider — runs initial/incremental sync and exposes
+//                  storeStatus/requestSync to the app. Never redirects.
 //   SignOutProvider — the hoisted sign-out flow: a sync first when a change
 //                  hasn't synced, the question for what that could not save,
 //                  and the cover over the app while the sign-out runs. Needs
@@ -75,7 +74,12 @@ import { SignOutProvider } from '../../contexts/sign-out-provider';
 //   InitialSyncGate — "is the local store ready?" Renders a decrypting screen
 //                  on first sync, then the app. Never redirects (sync-provider).
 //   PaywallProvider — the hoisted upgrade dialog behind the entitlement gates
-//                  (locks, nested lists).
+//                  (locks, nested lists). Must stay BELOW AppLockGate — the
+//                  mirror image of SignOutProvider above: its dialog portals out
+//                  to the root PortalHost, and what takes it down under a
+//                  relock is reading the gate's `useAppCovered()`
+//                  (docs/locks.md, _overlays over a relock_). Hoisted beside
+//                  SignOutProvider it would stay painted over the lock pane.
 //
 // ShareBridge is the share sheet's app-side half (docs/share-sheet.md): it
 // drains the iOS extension's outbox through the write edge on launch/foreground
