@@ -14,7 +14,9 @@ import {
 } from '@stxapps/shared';
 import { cn } from '@stxapps/web-ui/lib/utils';
 
+import { type DocFigure, type FigureName, FIGURES, figureStem } from '../content/figures';
 import { APP_URL } from '../lib/site';
+import { HeroPanel } from './hero-panel';
 
 // Everything a /docs page or /blog post may use beyond plain Markdown. The pages
 // import nothing (docs.spec.ts and blog.spec.ts hold that), so this map is the
@@ -155,11 +157,89 @@ function DemoClip() {
   );
 }
 
+/**
+ * A picture of one surface of the product, e.g. `<Figure name="advanced-search" />`
+ * under the paragraph that describes it. The files, the alt text and the caption
+ * are the entry in content/figures.ts, which also says what earns a figure.
+ *
+ * It is shown AT THE SIZE THE APP DRAWS IT and never wider — `width`/`height` are
+ * that size in CSS px, and `max-w-full` is the only thing that moves it, on a
+ * column narrower than the surface. A panel stretched to fill a 608px column is
+ * the app's 14px labels set at 27px. So the ladder is densities of one width,
+ * and `sizes` says the same thing to the browser: the figure's own width, or
+ * the column once the viewport (less the page's `px-4` gutters) is under it.
+ *
+ * The edge is a ring, not a border: a border sits INSIDE an `<img>`'s box, so
+ * the 320px variant would be drawn at 318 and every glyph in it resampled.
+ * `rounded-2xl` is the radius the app's own panels have, which is what lets a
+ * capture framed on a popover lose the four corners of page behind it. `edge`
+ * on the entry is for the two captures that is wrong for: a dialog, whose
+ * radius is larger, and a box that carries its own border.
+ */
+function Figure({ name }: { name: FigureName }) {
+  // tsc never reads the MDX, so a misspelt name must fail the build rather than
+  // ship an `<img>` with no source. (`StoreLink` above, same reason.)
+  const figure: DocFigure | undefined = FIGURES[name];
+  if (!figure) throw new Error(`Figure: no figure named "${name}" in content/figures.ts`);
+  const stem = figureStem(name);
+
+  return (
+    <figure className={cn('mt-8')}>
+      {/* Not next/image, for the landing page's reason (app/page.tsx, above
+          SCREENSHOT): the export is unoptimized, so it would emit this same
+          tag. `src` is the 1x file — what a browser without `srcSet` gets. */}
+      <img
+        src={`${stem}-${figure.widths[0]}.webp`}
+        srcSet={figure.widths.map((width) => `${stem}-${width}.webp ${width}w`).join(', ')}
+        sizes={`(min-width: ${figure.width + 32}px) ${figure.width}px, calc(100vw - 2rem)`}
+        alt={figure.alt}
+        width={figure.width}
+        height={figure.height}
+        loading="lazy"
+        decoding="async"
+        className={cn(
+          'block h-auto max-w-full',
+          figure.edge !== 'own' && 'shadow-sm ring-1 ring-border',
+          figure.edge === undefined && 'rounded-2xl',
+          figure.edge === 'dialog' && 'rounded-4xl',
+        )}
+      />
+      {figure.caption && (
+        <figcaption className={cn('mt-4 text-sm leading-6 text-muted-foreground')}>
+          {figure.caption}
+        </figcaption>
+      )}
+    </figure>
+  );
+}
+
+/**
+ * The landing page's two-halved panel — a saved link as your device shows it,
+ * over the record our servers hold for it — e.g. `<SignaturePanel />` under the
+ * paragraph that says the same thing in words.
+ *
+ * The SAME component the hero draws, not a figure of it and not a second
+ * drawing: it is type, so it is read by a screen reader and it cannot fall
+ * behind the strings it is set in (hero-panel.tsx has why that matters for this
+ * object in particular). `max-w-md` is the cap the hero gives it below `lg`,
+ * so it is one size on both pages; `.mdx-embed` keeps the prose rules out of
+ * it (globals.css).
+ */
+function SignaturePanel() {
+  return (
+    <div className={cn('mdx-embed mt-8 max-w-md')}>
+      <HeroPanel />
+    </div>
+  );
+}
+
 export const MDX_COMPONENTS: MDXComponents = {
   a: Anchor,
   AppLink,
   DemoClip,
+  Figure,
   FreeLinks,
   PlanName,
+  SignaturePanel,
   StoreLink,
 };

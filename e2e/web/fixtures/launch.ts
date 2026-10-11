@@ -51,6 +51,12 @@ export interface LaunchOptions {
   // createAccountWithRecovery. Ignored when `existing` is set: that account was
   // created elsewhere and its code, if any, was shown once and is gone.
   withRecovery?: boolean;
+  // Skip the account ceremony altogether and hand back the first page, signed
+  // out, with `credentials` minted and unused. Only shot/ wants this: its picture
+  // of create-account's recovery step is of a screen the ceremony walks THROUGH,
+  // and an account nobody finishes creating is one nobody has to clean up.
+  // Ignored when `existing` or `create` is set.
+  signedOut?: boolean;
   // Watch the run. `slowMo` is only useful with this on.
   headed?: boolean;
   slowMo?: number;
@@ -106,6 +112,7 @@ export async function launchApp(
 
   let recoveryCode: string | undefined;
   if (options.existing) await signIn(page, credentials);
+  else if (options.signedOut && !options.create) await page.goto('/');
   else if (options.withRecovery) recoveryCode = await createAccountWithRecovery(page, credentials);
   else await createAccount(page, credentials);
 

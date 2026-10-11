@@ -140,17 +140,18 @@ pages link to the relevant product page without repeating its pitch. Comparison
 pages need explicit criteria, sources and a review date so their facts stay
 current.
 
-| piece                               | what it is                                                                                                                                             |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `src/content/docs/index.ts`         | the manifest — groups, reading order, and each page's slug, title and description (the meta description, printed as the lede)                          |
-| `src/content/docs/<slug>.mdx`       | the prose, starting at `##` — the page prints its own `<h1>` from the manifest                                                                         |
-| `src/app/docs/[slug]/page.tsx`      | the one route; `generateStaticParams` from the manifest, `dynamicParams = false`                                                                       |
-| `src/lib/mdx/load.ts`               | reads the file and compiles it with `@mdx-js/mdx` at build time                                                                                        |
-| `src/lib/mdx/headings.ts`           | the heading-id rule and the rehype plugin that stamps it — the "On this page" column                                                                   |
-| `src/components/mdx-components.tsx` | everything a page may use beyond Markdown: `<AppLink path=…>`, `<StoreLink store=…>`, `<FreeLinks />`, `<DemoClip />`, and on-site links via next/link |
-| `.mdx-prose` (`globals.css`)        | the styling, as `.legal-prose` does for /terms and /privacy — so a page stays plain Markdown                                                           |
+| piece                               | what it is                                                                                                                                                                                      |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/content/docs/index.ts`         | the manifest — groups, reading order, and each page's slug, title and description (the meta description, printed as the lede)                                                                   |
+| `src/content/docs/<slug>.mdx`       | the prose, starting at `##` — the page prints its own `<h1>` from the manifest                                                                                                                  |
+| `src/app/docs/[slug]/page.tsx`      | the one route; `generateStaticParams` from the manifest, `dynamicParams = false`                                                                                                                |
+| `src/lib/mdx/load.ts`               | reads the file and compiles it with `@mdx-js/mdx` at build time                                                                                                                                 |
+| `src/lib/mdx/headings.ts`           | the heading-id rule and the rehype plugin that stamps it — the "On this page" column                                                                                                            |
+| `src/components/mdx-components.tsx` | everything a page may use beyond Markdown: `<AppLink path=…>`, `<StoreLink store=…>`, `<FreeLinks />`, `<DemoClip />`, `<Figure name=…>`, `<SignaturePanel />`, and on-site links via next/link |
+| `src/content/figures.ts`            | the pictures `<Figure>` may show — each one's files (`public/figures/`), size, alt text and caption                                                                                             |
+| `.mdx-prose` (`globals.css`)        | the styling, as `.legal-prose` does for /terms and /privacy — so a page stays plain Markdown                                                                                                    |
 
-The last four rows are shared with `/blog` (next section), which is why they are
+The last five rows are shared with `/blog` (next section), which is why they are
 named for MDX rather than for docs; what only docs uses — `lib/docs/metadata.ts`,
 `components/docs-nav.tsx` — stays named for it.
 
@@ -190,6 +191,47 @@ ESM-only and dozens of packages deep for jest — and it is only sound while
 computable from its source line. The spec holds that too. What it can't check is
 the copy itself: run each page through the `brand-review` skill, and write the
 steps from the UI strings, click for web and tap for the apps.
+
+**A figure is one surface at the size the app draws it, and most pages have
+none.** A docs picture is read for its labels, and a "how do I…" page is mostly
+read on a phone: a capture of the whole app lands in a 358px column at a quarter
+of its size, showing that a screen exists and none of what it says. So a figure
+is a panel, a popup or a sheet — a few hundred CSS px wide — shown at that width
+and never wider, and its files are that width at each pixel density
+(`<name>-<width>.webp`, cut by hand with `tools/scripts/make-image-variants.sh`
+and committed, like the landing page's). A page earns one where the reader has to
+recognise a control the prose can only name — a form with a dozen fields, a mode,
+a state — and not where the page states a rule, or where the screen belongs to
+somebody else's product (the "Move from…" pages: their menus change without
+telling us, and those pages link the vendor's own instructions).
+
+Each is drawn with a hairline ring at the radius the app's own panels have. An
+entry's `edge` is for the two captures that is wrong for: `dialog`, the same ring
+at a dialog's larger radius, and `own`, no ring, for a row or box cut out at a
+border it already carries.
+
+**A drawing the site already makes is embedded, not photographed.**
+`<SignaturePanel />` on the encryption page is the landing page's own hero panel
+(`components/hero-panel.tsx`) — the same component, so it is type a screen reader
+reads and it cannot fall behind the strings it is set in. A component embedded
+in a page wears `.mdx-embed`, which hands back what `.mdx-prose` would otherwise
+push into it: the paragraph margin, the muted ink and the prose leading.
+
+Everything about a figure except where it goes is its entry in
+`content/figures.ts` — a page writes `<Figure name="advanced-search" />` and
+nothing else — so the alt text and the caption are in a file ESLint reads.
+`content/figures.spec.ts` holds that list to `public/figures/` in both
+directions and to each file's pixel size, and to the pages: a figure no page
+shows, or a page naming a figure that does not exist, fails there.
+
+⚠ **Nothing holds a figure to the product.** A capture of a panel that has since
+gained a field renders exactly as well as a current one, and these are not
+stamped in `assets.stamp.json` — they draw no tagline and no caption for
+`check:assets` to compare. Each entry names the `e2e/shot` scene that takes it
+([e2e.md](./e2e.md), _the published screenshots_); re-taking one is a line on the
+regenerate list in [brand-assets.md](./brand-assets.md), _the generated pictures_.
+The alt text describes the capture state by state, so it is re-read against
+every re-take.
 
 ### the marketing site's `/blog`
 

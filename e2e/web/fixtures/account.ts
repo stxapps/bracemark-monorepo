@@ -90,8 +90,10 @@ export async function createAccountWithRecovery(
 }
 
 // Steps 1 and 2 of the ceremony — username, password, confirm — which both exits
-// share. Leaves the page on step 3, the recovery panel.
-async function fillCredentialSteps(page: Page, credentials: Credentials): Promise<void> {
+// share. Leaves the page on step 3, the recovery panel. Nothing has reached the
+// server's accounts when it returns: the account is made by whichever exit is
+// pressed next, which is what lets shot/ photograph step 3 and walk away.
+export async function fillCredentialSteps(page: Page, credentials: Credentials): Promise<void> {
   await page.goto('/create-account');
 
   await page.locator('#username').fill(credentials.username);

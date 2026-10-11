@@ -2279,8 +2279,9 @@ matters if you want the order to match.
 `e2e/shot/` is the seed's odd cousin, and sits beside it rather than inside it: a
 fifth account whose only job is to be photographed — `npm run shot:account` makes it,
 three `shot:*` legs photograph it. Everything this project publishes a picture of
-the product for is made here — the marketing site's one figure (the links page under "A private
-library is still a library"), the screenshots `apps/bracemark-web`'s
+the product for is made here — the marketing site's figures (the links page under "A private
+library is still a library" on the landing page, and the ones its `/docs` pages
+show), the screenshots `apps/bracemark-web`'s
 `manifest.json` hands Chrome's install dialog, and the browser extension's Chrome
 Web Store and AMO listings, and the native captures used to compose the App Store
 and Play Store phone listings.
@@ -2351,7 +2352,9 @@ prerequisites — a booted simulator, Playwright's Chromium, one platform at a t
 Out comes one PNG per scene in `e2e/.artifacts/shot/`, and for `library-list` the
 run also prints the `tools/scripts/make-image-variants.sh` line that turns it into
 the `.webp` variants `SCREENSHOT` in `apps/bracemark-site/src/app/page.tsx` points
-at. The mobile runner freezes the platform status bar, captures three app scenes
+at — likewise for `search-advanced` and its entry in
+`apps/bracemark-site/src/content/figures.ts`; the other docs figures are cut the
+same way, at the widths their entries there list. The mobile runner freezes the platform status bar, captures three app scenes
 plus the real platform share surface, verifies the native raster, and restores
 the status bar. Run iOS and Android separately: iOS uses Safari plus the share
 extension; Android uses Chrome behind `ShareActivity`. These are raw captures,
@@ -2428,7 +2431,11 @@ account, the import, the extraction drain and the waits are one apparatus every
 picture needs; the only things that vary are a viewport, a URL and what "finished"
 means on that screen. A scene declares `viewport`, `scale`, `goto`, an optional
 `prepare` and a `settle`; the file it produces is `<id>.png` at `viewport × scale`
-device pixels. Nothing in `e2e/` knows where a picture ends up.
+device pixels. A scene may also declare a `frame` — a locator — and is then
+photographed through it: the PNG is that element's box at the same density
+(grown by `bleed` CSS px of page on every side, when it sets one), and the
+viewport is only the room the element is given. Nothing in `e2e/` knows where a
+picture ends up.
 
 ⚠ **A scene's geometry is a contract with something off-stage, and nothing in this
 repo checks both ends.** `library-list` answers to the marketing site:
@@ -2452,6 +2459,52 @@ instead, and their contract is stricter: each is exactly one of the two PWA size
 disagree with the size it expects, and `npm run check:assets` refuses a
 `manifest.json` that declares a size the file does not have. What each size is and
 why is `docs/brand-assets.md`, _the generated pictures_.
+
+`search-advanced` answers to a **docs figure** — `advanced-search` in
+`apps/bracemark-site/src/content/figures.ts`, shown on `/docs/search` — and it is
+the one framed scene: the Advanced search panel, 320 CSS px wide, at DPR 3 so a
+figure drawn at the panel's own width has a 960px file for a DPR-3 phone. Its
+viewport height is room rather than design. The panel is capped at `70vh` and
+scrolls inside that cap, so a viewport too short for it does not fail and does
+not look wrong: it photographs with Clear and Search pinned under a checklist
+that is cut off. The scene's `settle` measures both scroll boxes and fails the
+run instead. The draft in the picture is built through the real controls and
+never committed, and the figure's alt text and caption read that draft back —
+change one and the other two are describing a different picture
+([architecture.md](./architecture.md), _the marketing site's `/docs`_).
+
+Five more scenes are docs figures, each with a way to come out wrong that fails
+nothing:
+
+| scene               | the frame                       | what goes wrong silently                                                                                                                                                                                                                                              |
+| ------------------- | ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `select-links`      | the whole 390x420 viewport      | a tick below the fold is still clickable — Playwright scrolls the row into view — so the capture is of a scrolled list under a count naming rows that have left the picture; and the height is counted off how this library's first three titles wrap                 |
+| `sync-status`       | the Sync row                    | its second line is a clock ("just now", then "N min ago"), so it depends on how many scenes ran first; the scene presses Sync now to pin it                                                                                                                           |
+| `import-over-limit` | the import's question           | pressing "Import 10 links" instead of leaving the question unanswered fills the account, and every later run photographs a different sentence                                                                                                                         |
+| `edit-link`         | the Edit link dialog            | the preview is read from local bytes only, so the dialog can be open and complete-looking over an empty plate; and the picture is of a link with NO title of its own — retitle the library's first link and the figure's caption describes a state it no longer shows |
+| `recovery-code`     | the auth card and 16px round it | finishing the ceremony instead of stopping at step 3 makes the code in the picture a working door to an account                                                                                                                                                       |
+
+`import-over-limit` is also the one scene that is **not a picture of the shot
+account**: the question is only asked of a free plan, which the shot account's
+Plus grant removes. It declares `account: 'free-full'` — the seeded dev account
+with 190 of the plan's 200 links (_seeding a dev account_, above) — so
+`npm run seed:accounts` is a second prerequisite for it, checked before the
+first launch. Like `scale`, the account is fixed per browser context, so
+`web.ts` launches once per (DPR, account) pair. The picture prints the plan's
+cap, which no page is otherwise allowed to type; the site's `figures.spec.ts`
+fails when the plan table stops agreeing with it.
+
+`recovery-code` is the one scene with **nobody signed in** (`account:
+SIGNED_OUT`), and what it leans on is where the ceremony commits: the client
+mints the recovery code when step 3 mounts, and the server hears of neither the
+code nor the username until one of that step's two buttons is pressed. The scene
+presses neither, so no account exists afterwards and the string a reader sees
+opens nothing — the only kind of recovery code a public page should print.
+`launchApp` takes `signedOut` for it and skips the ceremony. It is also the one
+scene with a `bleed`: the auth card's top-right corner is the brand's fold rather
+than a radius, so the frame is grown by a margin of the page and the card's own
+edge is in the picture, where every other framed capture leaves its edge to the
+site's `<Figure>`.
 
 `library-window` answers to a **store listing**, and its width is the contract:
 1152 CSS px is the content width of the browser window the compositor draws

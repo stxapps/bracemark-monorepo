@@ -46,8 +46,9 @@ export const BRAND = {
 
 // The signature panel — what you see, and what we store — as the strings its
 // drawings share. The marketing site's hero draws it in JSX
-// (apps/bracemark-site/src/app/page.tsx, `HeroPanel`, which argues every value
-// below); a picture that draws the same object is composed outside this repo and
+// (apps/bracemark-site/src/components/hero-panel.tsx, `HeroPanel`, which argues
+// every value below); a picture that draws the same object is composed outside
+// this repo and
 // reads these through `tools/scripts/check-assets.ts`. They are here for the
 // reason the three lines above are: two drawings of one object is two things to
 // keep true, and this panel has already been wrong once in a way a reader could

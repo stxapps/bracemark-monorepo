@@ -69,7 +69,7 @@ import { cn } from '@stxapps/web-ui/lib/utils';
 // marketing site's hero panel, which depicts exactly this: a saved bookmark as
 // the user sees it, above the ciphertext the server gets. The hero is a drawing
 // of this component; they should measure the same, and it moved to 64x40 in the
-// same change (bracemark-site `app/page.tsx`, HeroPanel).
+// same change (bracemark-site `components/hero-panel.tsx`, HeroPanel).
 
 // The address, minus the noise: `https://` reads on every row and distinguishes
 // nothing, and a trailing slash is not part of what anyone recognises. Everything

@@ -226,6 +226,23 @@
   .mdx-prose td {
     @apply border-b border-border py-2 pr-4 align-top;
   }
+  /*
+   * A component a page EMBEDS is not prose, and the rules above reach into it
+   * anyway: every one is a descendant selector or an inherited property, so
+   * `<SignaturePanel />`'s own paragraphs took the prose top margin wherever
+   * they set none, its specimen title inherited the muted ink, and every line
+   * that sets a size without a leading (the chip, the tags) inherited
+   * `text-body`'s 28px one. `.mdx-embed` on the component's wrapper hands all
+   * three back — `text-base` is the page default the panel was drawn against.
+   * It only has to out-specify this block — the component's own utilities are
+   * a later layer and win regardless.
+   */
+  .mdx-prose .mdx-embed {
+    @apply text-base text-foreground;
+  }
+  .mdx-prose .mdx-embed p {
+    @apply mt-0;
+  }
   .mdx-prose a {
     @apply rounded-sm text-signal underline decoration-signal-line underline-offset-2 hover:decoration-signal focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none;
   }

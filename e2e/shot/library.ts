@@ -16,7 +16,7 @@ import {
 import type { SeedUser } from '../seed/catalog';
 import type { SeedLibrary } from '../seed/library';
 
-// The library behind the marketing site's ONE screenshot — the list layout in the
+// The library behind the landing page's screenshot — the list layout in the
 // "A private library is still a library" band
 // (apps/bracemark-site/src/app/page.tsx, `SCREENSHOT`).
 //

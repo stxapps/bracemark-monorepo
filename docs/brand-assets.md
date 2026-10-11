@@ -348,7 +348,10 @@ product whose whole argument is that intent is worthless — putting them next t
 what we store: both eyebrows, the chip on the seam, the stored record (a path, a
 size, when it last changed, a block of ciphertext), and the one sentence under it
 that says the panel in words. `HeroPanel` in
-`apps/bracemark-site/src/app/page.tsx` draws it and argues every value;
+`apps/bracemark-site/src/components/hero-panel.tsx` draws it and argues every
+value — on the landing page's hero and, through `<SignaturePanel />`, on the
+`/docs` page about encryption, which is one component so that there is one
+inventory;
 `tools/scripts/check-assets.ts` prints it for any picture that draws the same
 object. It is in `brand.ts` for the three lines' reason, with a sharper failure:
 the record is an **inventory**, and the panel has already shipped a short one — a
@@ -996,9 +999,16 @@ and the string that constant says now.
 changes; **a screenshot caption changes**; **the slogan changes** (the promo tile
 below and the film's last frame are set in it); **a `SIGNATURE` string changes**
 (any picture that draws the hero's panel — the film does); the mark changes; a `--color-*` token moves; the links list layout changes shape; the browser extension's popup changes
-shape; or a screenshot shows a screen that no longer exists. Nothing else will
+shape; the share sheet does; the Advanced search panel gains, loses or renames a field; the
+selection bar, the Sync row in Settings → Data, the import's over-limit question, the Edit link
+dialog or create-account's recovery step is reworded or rearranged; the free plan's link cap moves (the import figure prints it); or a screenshot
+shows a screen that no longer exists. Nothing else will
 tell you — that list _is_ the tripwire, and for the store pictures further down it
-is the _only_ thing there is, since those are not stamped.
+is the _only_ thing there is, since those are not stamped. The same holds for the
+marketing site's own figures — the landing page's and the ones its `/docs` pages
+show (`apps/bracemark-site/src/content/figures.ts`): bare `.webp` captures, checked
+for their files and sizes and not stamped
+([architecture.md](./architecture.md), _the marketing site's `/docs`_).
 
 **The card has two designs and the stamp records which one is committed.**
 `slab` is type on white over an inverted ciphertext band — the page's own
