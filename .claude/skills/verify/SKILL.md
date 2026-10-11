@@ -294,7 +294,15 @@ chromium` (~550 MB into `~/Library/Caches/ms-playwright/`) if it is absent.
   hash `.next/dev/build/postcss.js` no longer references. Fix is
   `rm -rf apps/<app>/.next/dev/cache/turbopack` — that directory alone, no need
   to nuke `.next`, and `nx reset` does not touch it. Both `bracemark-web` and
-  `bracemark-site` are Next 16 + Turbopack and can both hit it.
+  `bracemark-site` are Next 16 + Turbopack, but only `bracemark-web` still keeps
+  this cache: `bracemark-site` turns it off
+  (`experimental.turbopackFileSystemCacheForDev: false`) for a second, quieter
+  failure of the same directory — a dev stylesheet **one edit behind
+  `globals.css`**, with no error, after the stylesheet and a component both
+  changed while the server was stopped. Its `next.config.js` has the mechanism
+  and the measurement. The same recipe did not reproduce on `bracemark-web` in
+  three tries, so its cache was left on; if a rule that is in `globals.css` is
+  not on the page there, clear the directory before debugging the rule.
 - **A hydration error on `localhost:3001` is your browser, not the site.** Under
   `npm run dev:site`, visiting the marketing site can log "Hydration failed…" with
   `+ <main className="flex-1">` / `- <div className="px-safe">`. It is not an app
