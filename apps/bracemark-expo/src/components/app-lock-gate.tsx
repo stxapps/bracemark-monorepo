@@ -7,7 +7,7 @@ import { withUniwind } from 'uniwind';
 import { useLocks } from '@stxapps/expo-react';
 import { LOCK_COPY } from '@stxapps/react';
 
-import { AppCoveredProvider } from '../contexts/app-covered-provider';
+import { AppCover } from '../contexts/app-cover';
 import { LockPane } from './lock-pane';
 
 const StyledSafeAreaView = withUniwind(SafeAreaView);
@@ -38,8 +38,8 @@ const StyledSafeAreaView = withUniwind(SafeAreaView);
 // `display: none` only reaches what is IN the subtree, and not every overlay the
 // app opens is (docs/locks.md, _overlays over a relock_). The kit's dialogs and
 // menus portal to the root PortalHost — on iOS inside a FullWindowOverlay — and
-// stayed up over the pane, so the provider below tells them to unmount while
-// covered (contexts/app-covered-provider.tsx). A react-native `Modal` is its
+// stayed up over the pane, so the AppCover below tells them to unmount while
+// covered (contexts/app-cover.tsx). A react-native `Modal` is its
 // own window on Android and stayed up too; its one user gates `visible` on the
 // same flag. The router modal (`edit-link`) IS reached: hidden on both
 // platforms — though iOS dismisses it outright, so an unsaved edit there does
@@ -97,7 +97,7 @@ export function AppLockGate({ children }: { children: ReactNode }) {
   return (
     <>
       <View style={{ flex: 1, display: locked ? 'none' : 'flex' }}>
-        <AppCoveredProvider value={covered}>{children}</AppCoveredProvider>
+        <AppCover covered={covered}>{children}</AppCover>
       </View>
       {pane}
     </>

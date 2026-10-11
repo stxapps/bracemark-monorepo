@@ -3,7 +3,7 @@ import { useEffect } from 'react';
 import { useKeyboardState } from 'react-native-keyboard-controller';
 import { render, screen } from '@testing-library/react-native';
 
-import { useAppCovered } from '../contexts/app-covered-provider';
+import { useAppCovered } from '../contexts/app-cover';
 import { Text } from './ui/text';
 import { AppLockGate } from './app-lock-gate';
 

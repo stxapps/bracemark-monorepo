@@ -3,7 +3,7 @@ import { View } from 'react-native';
 import { PortalHost } from '@rn-primitives/portal';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 
-import { AppCoveredProvider } from '../../contexts/app-covered-provider';
+import { AppCover } from '../../contexts/app-cover';
 import { AlertDialog, AlertDialogContent, AlertDialogTitle } from './alert-dialog';
 import { Dialog, DialogContent, DialogTitle } from './dialog';
 import {
@@ -88,7 +88,7 @@ const SURFACES: Surface[] = [
 
 const withCover = (covered: boolean, tree: React.ReactNode) => (
   <>
-    <AppCoveredProvider value={covered}>{tree}</AppCoveredProvider>
+    <AppCover covered={covered}>{tree}</AppCover>
     <PortalHost />
   </>
 );

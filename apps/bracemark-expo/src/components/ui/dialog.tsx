@@ -15,7 +15,7 @@ import * as DialogPrimitive from '@rn-primitives/dialog';
 import { X } from 'lucide-react-native';
 import { withUniwind } from 'uniwind';
 
-import { useAppCovered } from '../../contexts/app-covered-provider';
+import { useAppCovered } from '../../contexts/app-cover';
 import { cn } from '../../lib/utils';
 import { Button } from './button';
 import { Icon } from './icon';
@@ -44,7 +44,7 @@ import { Text } from './text';
 // FadeIn (Reanimated's 300) behind a 50ms delay; POPUP_FADE_MS in
 // native-only-animated-view.tsx. Content renders through @rn-primitives/portal
 // — the root `_layout.tsx` mounts the default `<PortalHost />` it lands in. It renders
-// nothing while a relock covers the app (contexts/app-covered-provider.tsx).
+// nothing while a relock covers the app (contexts/app-cover.tsx).
 
 // Composite components need the wrapper to accept `className` (the note in
 // components/landing.tsx) — same as the screens' KeyboardAwareScrollView.
@@ -258,7 +258,7 @@ function DialogContent({
   const covered = useAppCovered();
 
   // Unmounted while a relock covers the app
-  // (contexts/app-covered-provider.tsx): this subtree portals OUT of
+  // (contexts/app-cover.tsx): this subtree portals OUT of
   // AppLockGate's hidden wrapper — to the root PortalHost, and on iOS into a
   // FullWindowOverlay — so it would otherwise stay painted, and tappable, above
   // the lock pane. The caller owns the open state,

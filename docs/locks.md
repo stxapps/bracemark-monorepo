@@ -469,7 +469,7 @@ accessibility tree (Maestro could not find `app-lock-pane` behind it). An Androi
 is locked", which the swap had never allowed.
 
 The fix is per channel, not per call site, so a new dialog cannot miss it. The
-gate provides `useAppCovered()` (`contexts/app-covered-provider.tsx`) to its
+gate provides `useAppCovered()` (`contexts/app-cover.tsx`) to its
 subtree, and the three kit content components render `null` while it is set; the
 caller still owns the open state, so the overlay comes back on unlock (a field
 typed into inside it does not — the content remounted). The one `Modal` gates `visible` on

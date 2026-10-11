@@ -78,7 +78,7 @@ export default [
     // VoiceOver. Two channels escape it: @rn-primitives' portals (to the root
     // PortalHost; on iOS a FullWindowOverlay) and a react-native `Modal` on
     // Android (its own dialog window). The kit's portaled content answers to
-    // useAppCovered (contexts/app-covered-provider.tsx), so an overlay built
+    // useAppCovered (contexts/app-cover.tsx), so an overlay built
     // from src/components/ui is covered by construction; one built on the
     // primitives directly, or on a bare Modal, is not, and nothing but a device
     // relock would show it (docs/locks.md, _overlays over a relock_). A router modal needs no

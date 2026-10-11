@@ -1,4 +1,4 @@
-import { createContext, useContext } from 'react';
+import { createContext, type ReactNode, useContext } from 'react';
 
 // True while AppLockGate's pane covers a signed-in app it has kept mounted (a
 // relock — see that file). The gate hides its own subtree with `display: none`,
@@ -11,9 +11,17 @@ import { createContext, useContext } from 'react';
 //
 // Defaults to false, so everything outside the gate — the lock pane itself, the
 // auth screens — is never covered.
+//
+// A context provider to React, but not a Provider in the sense the files beside
+// it use the word, which is why it does not carry the suffix: it owns no state —
+// the gate decides `covered` — and the gate mounts it, not a layout. It marks a
+// scope, the same shape as @stxapps/expo-react's LiveReadPause
+// (contexts/live-read-pause.tsx carries the distinction in full).
 const AppCoveredContext = createContext(false);
 
-export const AppCoveredProvider = AppCoveredContext.Provider;
+export function AppCover({ covered, children }: { covered: boolean; children: ReactNode }) {
+  return <AppCoveredContext.Provider value={covered}>{children}</AppCoveredContext.Provider>;
+}
 
 export function useAppCovered(): boolean {
   return useContext(AppCoveredContext);

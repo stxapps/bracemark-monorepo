@@ -42,7 +42,7 @@ import { Button } from '../../components/ui/button';
 import { Icon } from '../../components/ui/icon';
 import { Input } from '../../components/ui/input';
 import { Text } from '../../components/ui/text';
-import { useAppCovered } from '../../contexts/app-covered-provider';
+import { useAppCovered } from '../../contexts/app-cover';
 import { usePaywall } from '../../contexts/paywall-provider';
 import { cn } from '../../lib/utils';
 import { useLinksPage } from './page-provider';

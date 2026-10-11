@@ -6,7 +6,7 @@ import { FullWindowOverlay as RNFullWindowOverlay } from 'react-native-screens';
 import * as AlertDialogPrimitive from '@rn-primitives/alert-dialog';
 import type { VariantProps } from 'class-variance-authority';
 
-import { useAppCovered } from '../../contexts/app-covered-provider';
+import { useAppCovered } from '../../contexts/app-cover';
 import { cn } from '../../lib/utils';
 import { buttonTextVariants, buttonVariants } from './button';
 import { NativeOnlyAnimatedView, POPUP_FADE_MS } from './native-only-animated-view';
@@ -27,7 +27,7 @@ import { Text, TextClassContext } from './text';
 // in and 150 out — POPUP_FADE_MS in native-only-animated-view.tsx. Content
 // renders through @rn-primitives/portal — the root `_layout.tsx` mounts the
 // default `<PortalHost />` it lands in. It renders
-// nothing while a relock covers the app (contexts/app-covered-provider.tsx).
+// nothing while a relock covers the app (contexts/app-cover.tsx).
 
 const AlertDialog = AlertDialogPrimitive.Root;
 
