@@ -2,7 +2,7 @@
   "assets": {
     "apps/bracemark-site/public/video/demo.mp4": {
       "pixels": "1920x1080",
-      "sha256": "da9c03ff361906c6b30ccba765bbd0f4c14b8851da96ee1abcff060b4ad39c92",
+      "sha256": "1acad17b94e51eac57bd15e58287525f24fc94a5b675fc61166cd83e805ca996",
       "variant": "demo",
       "inputs": {
         "brand.name": "Bracemark",

@@ -86,7 +86,7 @@ function PlanName({ plan }: { plan: keyof typeof PLAN_LABELS }) {
   return PLAN_LABELS[plan];
 }
 
-// The demo clip: 1920x1080, silent, about eighteen seconds. The mp4 and its
+// The demo clip: 1920x1080, silent, about nineteen seconds. The mp4 and its
 // poster are generated artifacts in `public/video/`, stamped in
 // assets.stamp.json — every line of type in the film is a constant from
 // `@stxapps/shared`, and `npm run check:assets` fails when one of them moves

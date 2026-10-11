@@ -936,7 +936,7 @@ build, committed, and governed by the contract below rather than by a generator
 this repo runs.
 
 **And one film, under the same contract.** `apps/bracemark-site/public/video/`
-holds `demo.mp4` and `demo.poster.png` — 1920x1080, silent, about eighteen
+holds `demo.mp4` and `demo.poster.png` — 1920x1080, silent, about nineteen
 seconds — which the launch post plays through `<DemoClip />`
 (`apps/bracemark-site/src/components/mdx-components.tsx`). Every line of type in
 it is a constant this repo owns: the tagline, the hero's `SIGNATURE` panel, three
