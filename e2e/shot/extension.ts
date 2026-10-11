@@ -17,7 +17,7 @@ import { profileDir, SHOT_OUTPUT, SHOT_STAGED_EXTENSION } from '../paths';
 import { waitForApi } from '../runner/lib';
 import { seedPassword } from '../seed/catalog';
 import { findUserId } from '../seed/plan';
-import { SHOT_USER } from './library';
+import { SHOT_USER, shotLinkList } from './library';
 
 // The browser extension's popup, photographed for the Chrome Web Store and AMO.
 //
@@ -182,15 +182,27 @@ const SCALE = 2;
 // The way to a real cover, if one is ever wanted, is the save path plus
 // `<all_urls>` on the staged copy (the click grants that too) plus deleting the
 // link and emptying the trash afterwards — three moving parts to change one tile.
-// ⚠ `SAVED_URL` MUST BE A URL `library.ts` STILL HOLDS, and nothing here checks
-// it. When the library was made listing-safe this pointed at
-// `en.wikipedia.org/wiki/Lisbon`, which left the list — and the failure is not a
-// missing link but a WRONG PICTURE waiting 60s to become an error: the revisit
-// path never triggers, `Complete` never renders, and the run dies on a
-// `getByText('Saved')` that describes a popup showing "Save this page". If this
-// throws there, check this constant against the list before anything else.
+// ⚠ `SAVED_URL` MUST BE A URL `library.ts` STILL HOLDS, IN `TAB_LIST`, and
+// `assertFixtureAgrees` is what checks it — because twice now nothing did. The
+// library is arranged for other pictures (its first seven rows are the landing
+// figure's fold), so a row this leg names can leave the list, or just change
+// lists, in a commit that never opens this file:
+//
+//   - made listing-safe, the library dropped `en.wikipedia.org/wiki/Lisbon`.
+//     The failure is not a missing link but a WRONG PICTURE waiting 60s to
+//     become an error: the revisit path never triggers, `Complete` never
+//     renders, and the run dies on a `getByText('Saved')` that describes a
+//     popup showing "Save this page".
+//   - `Sintra`, its replacement, was then moved to My List to fill that fold.
+//     The receipt rendered, read "In My List", and the run died 30s later on
+//     the list name instead — after the build and both sign-ins.
+//
+// `Porto` is one of the two links the list still holds, and it is the one whose
+// address is plain ASCII. The other is `Óbidos`, and the receipt prints a
+// link's address as stored: `en.wikivoyage.org/wiki/%C3%93bidos`, under the
+// title, in a picture a store listing is composed from.
 const UNSAVED_URL = 'https://en.wikipedia.org/wiki/Alfama';
-const SAVED_URL = 'https://en.wikivoyage.org/wiki/Sintra';
+const SAVED_URL = 'https://en.wikivoyage.org/wiki/Porto';
 
 // What the person does to the unsaved one, driven through the real controls
 // rather than prefilled: the list the trip is already filed under, and two tags
@@ -230,6 +242,9 @@ async function main(): Promise<void> {
   }
   const shooting = (id: string) => wanted.size === 0 || wanted.has(id);
 
+  // Before the api, the build and two sign-ins: this is a fact about two files
+  // in this folder, and it is the one that has broken this leg both times.
+  assertFixtureAgrees();
   await waitForApi();
 
   // The account is `npm run shot:account`'s to make: it imports the library, grants the
@@ -290,9 +305,10 @@ async function main(): Promise<void> {
       height: POPUP_VIEWPORT_HEIGHT,
     });
     await expect(revisit.getByText('Saved', { exact: true })).toBeVisible({ timeout: 60_000 });
-    // `In <list>`, not the bare list name: this page's TITLE is "Lisbon -
-    // Wikipedia", so the name alone matches the specimen as well as the row, and
-    // the row is the thing the caption under this picture is about.
+    // `In <list>`, not the bare list name: the name alone can match the
+    // specimen's title as well as the row (it did, when this page was "Lisbon -
+    // Wikipedia"), and the row is the thing the caption under this picture is
+    // about.
     await expect(revisit.getByText(`In ${TAB_LIST}`)).toBeVisible({ timeout: 30_000 });
     await assertTileIdentifiesPage(revisit);
     if (shooting('ext-saved')) await shoot(revisit, EXT_SCENES[1]);
@@ -301,6 +317,32 @@ async function main(): Promise<void> {
     if (shooting('ext-sync')) await shoot(revisit, EXT_SCENES[2]);
   } finally {
     await context.close();
+  }
+}
+
+/**
+ * The two pages this leg opens, held to `library.ts`: the editor's must be one
+ * the library does not have, the receipt's one it has in `TAB_LIST`. See the
+ * note above `SAVED_URL` for what each mismatch photographs when it is left to
+ * be found by the run.
+ */
+function assertFixtureAgrees(): void {
+  const unsavedIn = shotLinkList(UNSAVED_URL);
+  if (unsavedIn !== undefined) {
+    throw new Error(
+      `UNSAVED_URL is in the shot library (list \`${unsavedIn}\`), so the popup would open on\n` +
+        '    the receipt instead of the editor. Pick a page `library.ts` does not hold.',
+    );
+  }
+  const savedIn = shotLinkList(SAVED_URL);
+  if (savedIn !== TAB_LIST) {
+    throw new Error(
+      (savedIn === undefined
+        ? 'SAVED_URL is not in the shot library, so the popup would offer to save it\n'
+        : `SAVED_URL is filed under \`${savedIn}\` in the shot library, not \`${TAB_LIST}\`\n`) +
+        `    and the receipt would not read "In ${TAB_LIST}". Point it at a link \`library.ts\`\n` +
+        `    still keeps in \`${TAB_LIST}\`, or change TAB_LIST with it.`,
+    );
   }
 }
 

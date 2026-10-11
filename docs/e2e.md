@@ -2564,6 +2564,17 @@ revisit path — the same component with the same content). Undoing a save would
 otherwise mean deleting the link _and_ emptying the trash through bracemark-web,
 in a second browser, to leave the account as it was found.
 
+⚠ **Which pages those are is a fact about `library.ts`, and the leg now checks it
+before it does anything else.** The receipt's page has to be a link the library
+still holds, in the list the picture names (`In Lisbon`); the editor's has to be
+one it does not hold. The library is arranged for other pictures — its first
+seven rows are the landing figure's fold — so a row this leg names has twice been
+dropped or moved to another list in a change that never opened `extension.ts`.
+Neither time did anything fail where the cause was: the run built the extension,
+signed in twice, photographed the first scene and died half a minute later on a
+locator. `assertFixtureAgrees` reads both URLs back through `shotLinkList` and
+refuses to start, naming the list the link is actually in.
+
 One consequence, worth knowing before trying to "fix" it: on the revisit path the
 specimen's tile is the live tab's **favicon**, never the extracted cover. The
 upgrade `Complete.tsx` describes belongs to the save path, where the extension

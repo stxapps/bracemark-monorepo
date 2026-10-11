@@ -411,6 +411,16 @@ export function shotLinkUrls(): string[] {
   return SHOT_LINKS.map((link) => link.url);
 }
 
+/**
+ * The list a link is filed under, or `undefined` for a URL this library does not
+ * hold. For a leg that photographs ONE named link (shot/extension.ts): which
+ * list a row is in is decided up there for the sake of a different picture, so
+ * a leg that depends on it asks rather than remembers.
+ */
+export function shotLinkList(url: string): string | undefined {
+  return SHOT_LINKS.find((link) => link.url === url)?.list;
+}
+
 // ~14 hours between links, so twenty-six of them span about a fortnight and the
 // list's dates read as one recent, ordinary stretch. The big seed walks back at
 // 3.7h because it has a thousand to place; this one is a fortnight of somebody's
