@@ -24,9 +24,9 @@ which talks to no server and needs no account:
 npm run dev        # api :8787, web :3000, extractor :8788
 ```
 
-The web wrapper boots and waits for it itself when the ports are free. Every
-wrapper rejects a listener owned by another checkout before it creates test
-data. Native runners require an already-running stack and Metro.
+No wrapper starts it: each fails at once, naming the leg, when one it needs has
+no listener, and rejects a listener owned by another checkout before it creates
+test data. Native runners need Metro as well.
 
 ```sh
 npx nx e2e-web @stxapps/e2e
@@ -161,8 +161,8 @@ passing its comma-separated case ids to `--case`, once per platform.
 The extraction cases (Phase 7: `EXTRACT-*`, and Phase 6's `SHARE-EXTRACT-*` pair)
 are the only ones that reach the
 public internet — example.com, from `fixtures.json` — and carry the `internet`
-trait for it. They need the extractor on 8788: the web wrapper starts it with
-the api and web, native runs need `npm run dev`. `--exclude-trait internet` gives
+trait for it. They need the extractor on 8788, which `npm run dev` starts with
+the api and web. `--exclude-trait internet` gives
 a run with no third-party network dependency; `online` does not, because every
 stack-backed case carries it.
 

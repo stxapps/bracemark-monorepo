@@ -1958,24 +1958,23 @@ cleanup or deployment in a runner.
 
 ### running it
 
-For the local targets, everything needs Metro and an installed Expo development build except web. The
-API/web/extractor stack is additionally required by every `online` native or
-contract case; frozen vectors are the exception because they have no account or
-server. Web starts the stack when the ports are free. Native runners require it
-already running:
+Every local target needs the stack already running, and **no runner starts
+it**:
 
 ```sh
 npm run dev # api :8787, web :3000, extractor :8788
 ```
 
-Every entrypoint now owns a preflight. Web resolves existing listeners on 3000,
-8787 and 8788 to their process cwd before Playwright may reuse them; CI disables
-server reuse completely. Playwright starts or reuses the web, API and extractor
-legs independently, so an orphaned same-checkout Next listener cannot prevent the
-missing API from starting. The extractor leg was missing at first: `e2e-web`
-booted a stack one leg short of `npm run dev`'s, and the three `EXTRACT-*` web
-cases failed on every run started from free ports. `e2e-visual` shares the three
-legs; `e2e-extension` starts only web and API. Native resolves Metro in the Expo
+`e2e-web` and `e2e-visual` require all three legs, `e2e-extension` web and api,
+`e2e-pwa` the api alone, and the native and contract runners all three for any
+`online` case — frozen vectors are the exception because they have no account or
+server. The native targets additionally need Metro and an installed Expo
+development build.
+
+Every entrypoint owns a preflight. Each resolves the listeners it needs on 3000,
+8787 and 8788 to their process cwd, so a stack belonging to another checkout is
+refused rather than used, and a leg with no listener fails at once with the
+instruction above. Native resolves Metro in the Expo
 dev-client link, requires it to report a running packager from this checkout,
 and records the link and all stack origins. It also requires the selected device
 to be booted, the development build to be installed, and Android to have
@@ -1984,18 +1983,29 @@ selected it also fetches the bundle Metro serves and requires its api origin to
 be the one the run provisions against (_driving the native apps_). A failed
 preflight happens before account provisioning.
 
-⚠ **A leg Playwright started is stopped with SIGTERM (`gracefulShutdown`), and
-nothing fails at the time when it isn't.** Playwright's default is SIGKILL to
-the process group. That takes `nx` and leaves the dev server it spawned: the
-wrangler legs went away by themselves, the Next server stayed on :3000 with the
-other end of its output closed. The NEXT run found a same-checkout listener,
-got a 200 from it and reused it; the server then spun at full CPU on its first
-log write and answered nothing more, so every case timed out setting up its app
-fixture, with no step named. Measured 2026-10-11: `/` 200 in 0.03s, `/links`
-200, then no answer in 10s and the process at ~120% CPU. With SIGTERM nx stops
-its own task and all three ports are free after the run. If a run was killed
-hard and the next one times out in a fixture, look for a `next dev --port 3000`
-whose parent is pid 1 and stop it.
+The listeners are checked **before** anything waits for a leg to answer. The
+wait (`waitForHttp`, 90s) is for a wrangler that is still booting — Next is up
+well before local D1/R2 are — and in the other order a run begun without
+`npm run dev` sat silent for those 90 seconds and then printed the instruction it
+could have printed at once.
+
+**Why no runner starts the stack.** The Playwright targets once did, through
+`webServer`, and that second definition of "the stack" went wrong three times
+where `npm run dev` could not. Keyed to the web origin alone, it reused an
+orphaned Next listener while the api was absent and nothing started one. Split
+into legs, it was a leg short — no extractor — and the three `EXTRACT-*` web
+cases failed on every run started from free ports. And Playwright stops what it
+started with SIGKILL to the process group, which took `nx` and left the Next
+server it had spawned on :3000 with the other end of its output closed: the next
+run got a 200 from it and reused it, the server then spun at full CPU on its
+first log write and answered nothing more, and every case timed out setting up
+its app fixture with no step named (measured 2026-10-11: `/` 200 in 0.03s,
+`/links` 200, then no answer in 10s and the process at ~120% CPU). A started leg
+also had its output discarded, so a failed run showed nothing the api had said.
+One command in one terminal has none of this, and the native runners, the seed
+and the captures needed it regardless. If a run times out in a fixture with the
+stack apparently up, look for a `next dev --port 3000` whose parent is pid 1 and
+stop it.
 
 ```sh
 npx nx e2e-web @stxapps/e2e

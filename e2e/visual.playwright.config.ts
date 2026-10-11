@@ -35,5 +35,4 @@ export default defineConfig({
   },
   outputDir: join(runDir, 'test-results'),
   reporter: [['list'], ['html', { outputFolder: join(runDir, 'report'), open: 'never' }]],
-  webServer: baseConfig.webServer,
 });

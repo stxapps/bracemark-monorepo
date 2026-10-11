@@ -26,13 +26,14 @@ async function main(): Promise<void> {
   }
   const selected = selectCases('web', { ...options, environment: E2E_ENVIRONMENT });
 
-  // If a stack already exists, prove it belongs to this checkout before
-  // Playwright's reuseExistingServer path can silently attach to it. Missing
-  // listeners are fine here: Playwright will start the stack itself.
+  // The stack is `npm run dev`'s, and must be up and this checkout's before a
+  // run directory exists (global-setup.ts then waits for it to answer). Listing
+  // talks to nothing; staging origins are not local and pass through.
+  const required = !options.playwrightArgs.includes('--list');
   await assertStackOwnedByRepo([
-    { origin: WEB_URL, label: 'bracemark-web' },
-    { origin: API_URL, label: 'bracemark-api' },
-    { origin: EXTRACTOR_URL, label: 'bracemark-extractor' },
+    { origin: WEB_URL, label: 'bracemark-web', required },
+    { origin: API_URL, label: 'bracemark-api', required },
+    { origin: EXTRACTOR_URL, label: 'bracemark-extractor', required },
   ]);
 
   // The one credential a staging run can need, proved before a run directory

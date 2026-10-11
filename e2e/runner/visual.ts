@@ -29,9 +29,9 @@ import { runVisualNativeCase } from './visual-native';
 async function runWeb(options: VisualCliOptions): Promise<void> {
   const selected = selectCases('web', { ...options, baseline: true });
   await assertStackOwnedByRepo([
-    { origin: WEB_URL, label: 'bracemark-web' },
-    { origin: API_URL, label: 'bracemark-api' },
-    { origin: EXTRACTOR_URL, label: 'bracemark-extractor' },
+    { origin: WEB_URL, label: 'bracemark-web', required: true },
+    { origin: API_URL, label: 'bracemark-api', required: true },
+    { origin: EXTRACTOR_URL, label: 'bracemark-extractor', required: true },
   ]);
 
   const runId = createRunId('visual-web');

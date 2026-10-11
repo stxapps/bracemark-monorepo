@@ -7,17 +7,18 @@ import { dirname, join } from 'node:path';
 
 import { E2E_ROOT, profileDir } from '../paths';
 import { type Credentials } from '../web/fixtures/account';
-import { API_URL } from '../web/fixtures/env';
+import { API_URL, EXTRACTOR_URL, WEB_URL } from '../web/fixtures/env';
 import { launchApp, type LaunchedApp } from '../web/fixtures/launch';
 import { type NativePlatform } from './cli';
 import { IS_STAGING } from './environment';
+import { assertStackOwnedByRepo } from './stack';
 
 // --- the dev stack ----------------------------------------------------------
 
-// `playwright test` boots and waits for the stack itself (webServer in
-// playwright.config.ts). Everything in this folder runs outside Playwright's
-// runner, so it checks by hand and fails with an instruction instead of a stack
-// trace against a closed port.
+// Nothing in e2e/ starts the stack: `npm run dev` is its one definition, and
+// every entrypoint requires it (docs/e2e.md, _running it_). So each checks by
+// hand and fails with an instruction instead of a stack trace against a closed
+// port.
 export async function waitForApi(timeoutMs = 90_000): Promise<void> {
   await waitForHttp(`${API_URL}/health`, 'bracemark-api', timeoutMs);
 }
@@ -44,6 +45,27 @@ export async function waitForHttp(url: string, label: string, timeoutMs = 90_000
         ? 'Check the staging deployment and network, then retry.'
         : 'Start the stack with `npm run dev` and retry.'),
   );
+}
+
+const STACK_LEGS = {
+  web: { origin: WEB_URL, label: 'bracemark-web', probe: WEB_URL },
+  api: { origin: API_URL, label: 'bracemark-api', probe: `${API_URL}/health` },
+  extractor: {
+    origin: EXTRACTOR_URL,
+    label: 'bracemark-extractor',
+    probe: `${EXTRACTOR_URL}/health`,
+  },
+};
+
+// The legs of `npm run dev` a local run needs: each listening from this
+// checkout, then each answering. Listeners first, so a stack nobody started
+// fails at once; the wait is for one still booting — Next is up well before
+// wrangler has local D1/R2, and an account created in that window fails at the
+// auth call, which reads exactly like a broken form.
+export async function requireLocalStack(legs: Array<keyof typeof STACK_LEGS>): Promise<void> {
+  const required = legs.map((leg) => STACK_LEGS[leg]);
+  await assertStackOwnedByRepo(required.map((leg) => ({ ...leg, required: true })));
+  for (const leg of required) await waitForHttp(leg.probe, leg.label);
 }
 
 // --- accounts ---------------------------------------------------------------

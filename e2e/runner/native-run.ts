@@ -417,12 +417,14 @@ export async function prepareNativeRun(
   const metro = devClientLink ? metroOrigin(devClientLink) : undefined;
   const requiresOnlineStack = selectedCases.some((testCase) => testCase.traits.includes('online'));
   if (requiresOnlineStack) {
-    await waitForApi();
+    // Listeners before the wait: no native runner starts the stack, so a leg
+    // with no listener fails here at once instead of after waitForApi's 90s.
     await assertStackOwnedByRepo([
       { origin: WEB_URL, label: 'bracemark-web', required: true },
       { origin: API_URL, label: 'bracemark-api', required: true },
       { origin: EXTRACTOR_URL, label: 'bracemark-extractor', required: true },
     ]);
+    await waitForApi();
     await waitForHttp(new URL('/create-account', WEB_URL).href, 'bracemark-web', 30_000);
   }
   if (metro) {

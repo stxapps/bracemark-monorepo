@@ -34,9 +34,11 @@ async function main(): Promise<void> {
   const selected = selectCases('pwa', options);
 
   // The api is borrowed and must be this checkout's; the web origin is the
-  // spec's own, so its port must be free before anything is built.
-  await waitForApi();
+  // spec's own, so its port must be free before anything is built. The listener
+  // check comes first: nothing here starts the api, so with no listener the
+  // wait below was 90 silent seconds before the same instruction.
   await assertOriginOwnedByRepo(API_URL, 'bracemark-api', { required: true });
+  await waitForApi();
   await assertPortFree(PWA_URL, 'the PWA origin');
 
   const runId = createRunId('pwa');

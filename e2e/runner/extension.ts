@@ -29,9 +29,10 @@ async function main(): Promise<void> {
   }
   const selected = selectCases('extension', options);
 
+  // Before the browser extension is built: the stack is `npm run dev`'s.
   await assertStackOwnedByRepo([
-    { origin: WEB_URL, label: 'bracemark-web' },
-    { origin: API_URL, label: 'bracemark-api' },
+    { origin: WEB_URL, label: 'bracemark-web', required: true },
+    { origin: API_URL, label: 'bracemark-api', required: true },
   ]);
 
   const chromiumPath = chromium.executablePath();

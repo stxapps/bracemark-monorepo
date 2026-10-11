@@ -11,8 +11,8 @@ const runDir = process.env.E2E_RUN_DIR ?? runArtifactDir(runId);
 
 // The installed-PWA cases (docs/e2e.md, _the PWA target_). Run them through
 // runner/pwa.ts: it builds the production export against the local stack and
-// hands its staged copy over as E2E_PWA_ROOT. There is no `webServer` for the
-// web origin on purpose — the spec serves the export itself so it can stop it.
+// hands its staged copy over as E2E_PWA_ROOT. The spec serves that export
+// itself so it can stop it; the api is `npm run dev`'s, as for every target.
 export default defineConfig({
   testDir: './pwa',
   testMatch: '**/*.e2e.ts',

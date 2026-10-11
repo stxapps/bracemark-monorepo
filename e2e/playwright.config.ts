@@ -5,20 +5,12 @@ import { defineConfig } from '@playwright/test';
 import { IS_STAGING } from './runner/environment';
 import { createRunId } from './runner/lib';
 import { selectCases } from './runner/registry';
-import { API_URL, CHROME_PATH, EXTRACTOR_URL, WEB_URL } from './web/fixtures/env';
-import { E2E_ROOT, runArtifactDir } from './paths';
+import { CHROME_PATH, WEB_URL } from './web/fixtures/env';
+import { runArtifactDir } from './paths';
 
 const runId = process.env.E2E_RUN_ID ?? createRunId('web-direct');
 process.env.E2E_RUN_ID = runId;
 const runDir = process.env.E2E_RUN_DIR ?? runArtifactDir(runId);
-
-// How a leg this run started is stopped. Playwright's default is SIGKILL to the
-// process group, which takes `nx` and leaves the dev server it spawned running:
-// the Next server stayed on :3000 with its output closed, answered the next
-// run's reuse check, then spun on its first log write and never answered again
-// — every case in that run timed out in its fixture. SIGTERM lets nx stop its
-// own task (docs/e2e.md, _running it_).
-const STACK_SHUTDOWN = { signal: 'SIGTERM', timeout: 10_000 } as const;
 
 // The wrapper's case selection (runner/web.ts), applied per PROJECT instead of as
 // `--grep`. A command-line filter only reaches the projects it selects directly:
@@ -72,7 +64,8 @@ export default defineConfig({
     },
   ],
 
-  // Waits for bracemark-api, which `webServer` below cannot express.
+  // No `webServer`: `npm run dev` is the one definition of the stack, and this
+  // proves it is up and this checkout's (docs/e2e.md, _running it_).
   globalSetup: './global-setup.ts',
 
   // Every worker holds its own account and its own browser profile, so tests are
@@ -124,48 +117,4 @@ export default defineConfig({
   // `testInfo.config.rootDir` is `testDir` (`./web`), not this directory.
   outputDir: join(runDir, 'test-results'),
   reporter: [['list'], ['html', { outputFolder: join(runDir, 'report'), open: 'never' }]],
-
-  // Start missing legs independently. Keying one root `npm run dev` command only
-  // to WEB_URL reused an orphaned Next listener while the API was absent, then
-  // global setup spent 90 seconds waiting for a process nothing had started.
-  // Local runs reuse each verified listener independently; CI owns all three.
-  //
-  // The extractor is a leg of its own for the same reason: without it the stack
-  // this target boots was a leg short of `npm run dev`'s, and the `internet`
-  // extraction cases (web/extraction.e2e.ts) failed on every run that started
-  // from free ports.
-  webServer: IS_STAGING
-    ? []
-    : [
-        {
-          command: 'npx nx dev @stxapps/bracemark-api',
-          cwd: join(E2E_ROOT, '..'),
-          url: `${API_URL}/health`,
-          reuseExistingServer: !process.env.CI,
-          timeout: 180_000,
-          gracefulShutdown: STACK_SHUTDOWN,
-          stdout: 'ignore',
-          stderr: 'pipe',
-        },
-        {
-          command: 'npx nx dev @stxapps/bracemark-extractor',
-          cwd: join(E2E_ROOT, '..'),
-          url: `${EXTRACTOR_URL}/health`,
-          reuseExistingServer: !process.env.CI,
-          timeout: 180_000,
-          gracefulShutdown: STACK_SHUTDOWN,
-          stdout: 'ignore',
-          stderr: 'pipe',
-        },
-        {
-          command: 'npx nx dev @stxapps/bracemark-web',
-          cwd: join(E2E_ROOT, '..'),
-          url: WEB_URL,
-          reuseExistingServer: !process.env.CI,
-          timeout: 180_000,
-          gracefulShutdown: STACK_SHUTDOWN,
-          stdout: 'ignore',
-          stderr: 'pipe',
-        },
-      ],
 });

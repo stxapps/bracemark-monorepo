@@ -39,7 +39,11 @@ export async function assertOriginOwnedByRepo(
 
   const pids = await listenerPids(port);
   if (pids.length === 0) {
-    if (options.required) throw new Error(`${label} has no listener at ${origin}`);
+    if (options.required) {
+      throw new Error(
+        `${label} has no listener at ${origin}. Start the stack with \`npm run dev\` and retry.`,
+      );
+    }
     return;
   }
 
