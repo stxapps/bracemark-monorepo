@@ -47,6 +47,7 @@ from it:
 | taxonomy for the pickers | read live from sqlite                                | **snapshot** JSON in the App Group container                                                                     |
 | saving the link          | the real write edge (mutations → items + pending op) | **outbox** JSON file in the App Group container                                                                  |
 | sync after Save          | inline `runIncrementalSync` (process is alive)       | best-effort upload from the extension + main app drains outbox on next launch/foreground                         |
+| page fetch after Save    | a **handoff** marker the main app collects           | the outbox drain returns the link it landed                                                                      |
 | session check            | `getSession()`                                       | `sessionPresent` flag in the snapshot to gate the form; the shared-Keychain session mirror arms the upload's api |
 
 **The two shells meet at one `AppRegistry` string.** Each native host mounts
@@ -721,7 +722,8 @@ not by the in-sheet kick landing.
   lives in `saveSharedDraft` itself — the sheet passes the app's api client in,
   and the un-awaited `runIncrementalSync` promise runs on the app-level React
   host's JS runtime, which the activity's `finish()` doesn't cancel; that IS the
-  process scope in RN terms.)
+  process scope in RN terms.) Between the write and that kick, Save leaves a
+  **handoff marker** for the main app — _the Android handoff_, below.
 - **iOS Save** = outbox write + best-effort upload kick + the fold +
   `close()`. Down-sync happens on next launch/foreground drain (`ShareBridge`);
   an opportunistic BGAppRefresh backstop (expo-background-task) remains a
@@ -754,15 +756,18 @@ the app-side pump for both App Group artifacts:
   immediately and the read edge shows the user their own share without a
   refresh pill, and hands the landed links to `extractNow` — a share is a save
   gesture made on this device, so its page fetch needs no opt-in
-  ([link-extraction.md](./link-extraction.md), _the stance_).
+  ([link-extraction.md](./link-extraction.md), _the stance_). The same pass
+  collects what the Android share activity handed off (`takeShareHandoffs()`),
+  into the same list and the same two kicks — _the Android handoff_, below.
 - **outbound**: `refreshShareTaxonomy()` after every drain (a draft can mint
   new lists/tags), after every completed sync cycle (`lastSyncAt` — a pull may
   have changed lists/tags), and on every local edit (`localWriteNonce`). Locks
   never enter the snapshot (the pickers filter only Trash — see _Locks_ above),
   so lock edits are no concern here.
 
-Both calls are platform no-ops on Android and failure-tolerant — a missed pass
-self-heals on the next signal.
+The drain and the snapshot are platform no-ops on Android, the handoff one on
+iOS, and all three are failure-tolerant — a missed pass self-heals on the next
+signal.
 
 **The drain waits for the first sync; the snapshot does not.** `ShareBridge` is
 mounted above `InitialSyncGate`, so it is live for the whole of a first sync,
@@ -783,9 +788,54 @@ written on every pass, ready or not: its existence is how the sheet knows there
 is a session at all (_the shape_), so holding it back would turn the sheet away
 for the length of a first sync.
 
-Android has no drain to hold: its Save writes through the write edge whenever
-it happens, first sync or not. That write is safe for the reason above, and its
-inline kick is declined the same way.
+**A first sync is the long case of "not ready", not the common one.**
+`storeStatus` is `checking` at the start of every launch, for as long as one
+read of the bookkeeping row takes, and the mount pass runs inside that window —
+closed over the `extractNow` of that first render, which returns at once. A
+drain there hands the whole outbox to it: the drain is synchronous sqlite under
+its `await`s, so it has finished before the render that turns `ready` can
+replace the closure. That is every share found by a cold start, which is how a
+share is usually found — landed, synced, and at extraction mode `saves` left
+with its provisional title and no image, with nothing reporting it. The same
+line holds both windows, and `share-bridge.spec.tsx` runs its case once per
+status the gate is closed in. On a device it is `SHARE-EXTRACT-IOS-001`: a page
+shared from Safari with the app killed, then a cold start — which, with the
+drain let through unready, leaves the "links without a preview" prompt up for
+the link it just drained ([e2e.md](./e2e.md), _across a real share boundary_).
+
+**The Android handoff.** Android has no draft to hold back: its Save writes
+through the write edge whenever it happens, first sync or not. That write is
+safe for the reason above, and its inline kick is declined the same way. What
+it has no way to do is fetch the page. `extractNow` belongs to
+`<ExtractionProvider>`, which the share activity does not mount — it renders
+`ShareRoot` with no providers — and its process may be reaped seconds after
+Save, mid-fetch. So until the handoff existed nothing told the main app which
+links had arrived by share, and at extraction mode `saves` an Android share
+never got its page fetch: not a race, every one of them. The iOS drain had been
+handing its links on all along, because the outbox file is that record.
+
+So Android's Save leaves one: a small file per link under the app's document
+directory (`share/handoff/<link id>`, beside the theme mirror), written
+**after** the link's write commits — a marker must only ever name a link that
+is in the store, since the main app's pass can run between two awaits of a
+save. `ShareBridge` collects them beside the drain, under the same ready-store
+rule, and each is deleted as it is read. A file and not memory, because the
+process that took the share is often not the one the user comes back to; a file
+and not a table, because it is the per-item shape the outbox already has and
+there is nothing to migrate. The marker is a hint and never the only copy of
+anything, so an unreadable one is dropped rather than quarantined, and one that
+fails to land costs that share its page fetch and nothing else. Sign-out removes
+the directory (`clearShareData`) — the ids are the account's.
+`SHARE-EXTRACT-ANDROID-001` holds the whole path on a device: a share taken with
+the app killed, under a title the page does not have, and the row takes the
+page's own once the app is opened ([e2e.md](./e2e.md), _across a real share
+boundary_).
+
+The handoff also gets the sync kick the drain gets, and on Android that is not
+redundant. The share activity's own kick is best-effort — declined during a
+first sync, lost with a reaped process, failed when the share was made offline —
+and nothing else in the app pushes on a return to the foreground, so a share
+made offline beside a running app otherwise waited for the next edit.
 
 ### immediate upload from the iOS extension
 
@@ -1009,10 +1059,10 @@ can neither see the share sheet nor anything in this process. →
 | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | share screen UI + prop normalizing + close() seam                                                                    | `apps/bracemark-expo/src/features/share/` — `share-root` (prop normalizing), `share-screen` (the four screens + the draft), `share-kit` (frame/header/row/notice), `share-specimen` (the page + the fold), `share-list-picker`, `share-tags-picker`, `share-host` (close), `share-theme` (apply the mirrored theme) |
 | entries: `index.js` (main, registers `bracemarkShare`), `index.share.js` (iOS extension, registers `shareExtension`) | `apps/bracemark-expo/` (package.json `main` is now `index.js`, which imports `expo-router/entry` — required by expo-share-extension)                                                                                                                                                                                |
-| snapshot + outbox + saveSharedDraft (with both post-Add kicks) + drain/refresh                                       | `@stxapps/expo-react` `data/share-store.ts`                                                                                                                                                                                                                                                                         |
+| snapshot + outbox + saveSharedDraft (with both post-Add kicks) + drain/refresh + the Android handoff                 | `@stxapps/expo-react` `data/share-store.ts`                                                                                                                                                                                                                                                                         |
 | theme mirror (app writes, sheet reads) + the sheet's apply step                                                      | `@stxapps/expo-react` `data/share-theme-store.ts` + `features/share/share-theme.ts`, written from `contexts/theme-provider.tsx` ([theme.md](./theme.md))                                                                                                                                                            |
 | best-effort upload (entities from the draft, sign → PUT → commit)                                                    | `@stxapps/expo-react` `data/share-upload.ts`                                                                                                                                                                                                                                                                        |
-| app-side pump: outbox drain on launch/foreground, snapshot refresh on sync/edit                                      | bracemark-expo `components/share-bridge.tsx`, mounted in `(app)/_layout`                                                                                                                                                                                                                                            |
+| app-side pump: outbox drain + Android handoff on launch/foreground, snapshot refresh on sync/edit                    | bracemark-expo `components/share-bridge.tsx`, mounted in `(app)/_layout`                                                                                                                                                                                                                                            |
 | session mirror in the shared Keychain (App Group id as access group) + `loadSharedSession`                           | `@stxapps/expo-react` `data/session-store.ts` over `@stxapps/expo-crypto` `lib/shared-keychain.ts` (BracemarkSharedKeychain, iOS Swift)                                                                                                                                                                             |
 | write edge (writeLink/writeTag/writeExtraction)                                                                      | `@stxapps/expo-react` `data/mutations.ts`                                                                                                                                                                                                                                                                           |
 | iOS extension target, App Group, preprocessing JS                                                                    | `expo-share-extension` plugin in `app.config.ts` + `share-extension/preprocessing.js` + `withShareExtension` in `metro.config.js`                                                                                                                                                                                   |

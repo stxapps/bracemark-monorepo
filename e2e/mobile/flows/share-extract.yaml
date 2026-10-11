@@ -1,0 +1,44 @@
+# SHARE-EXTRACT-ANDROID-001 / SHARE-EXTRACT-IOS-001 setup. The main app and its
+# process begin dead; the runner then shares a PUBLIC page across the real
+# system boundary, saves it to the default list, and launches the app.
+#
+# What the pair proves is that a share gets the page fetch it is owed at the
+# default `saves` mode — where nothing un-gestured fetches, so the only thing
+# that can is `extractNow`, and the share surface cannot call it. Each platform
+# has its own way of telling the main app which link arrived, and each had its
+# own way of losing it (docs/share-sheet.md, _the main app's half_):
+#
+#   - Android's share activity writes the store itself and leaves a handoff
+#     marker for ShareBridge to collect. The process that took the share is gone
+#     by the time the app opens, so the marker has to have survived it.
+#   - iOS's outbox draft is drained by ShareBridge, which must hold the drain
+#     until the store is ready: a cold start's first pass runs while the status
+#     is still `checking`, closed over an `extractNow` that returns at once.
+#
+# LINK_URL is example.com with a run-scoped query and LINK_TITLE its known title
+# (e2e/fixtures.json) — `internet` cases, like EXTRACT-NATIVE-001. The oracle is
+# per platform and lives in the result part (parts/share-extract-android.yaml,
+# parts/share-extract-ios.yaml), because the two shells hand the sheet different
+# titles.
+appId: com.bracemark.app
+tags: [SHARE-EXTRACT-ANDROID-001, SHARE-EXTRACT-IOS-001, full, online, internet, ios, android]
+---
+- runFlow:
+    file: subflows/sign-in.yaml
+
+# A fresh account sits at the default. Assert it rather than assume it: at `all`
+# the displayed-row drain would fetch the shared link whether or not anything
+# was handed over, and the case would stop proving the handoff.
+- runFlow:
+    file: subflows/open-settings.yaml
+    env:
+      SECTION: extraction
+- runFlow:
+    file: subflows/assert-radio-checked.yaml
+    env:
+      RADIO_ID: extraction-mode-saves
+- tapOn:
+    id: 'settings-close'
+
+- assertNotVisible: '.*${LINK_TITLE}.*'
+- stopApp

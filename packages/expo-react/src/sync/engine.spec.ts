@@ -967,6 +967,83 @@ describe('the cycle, against this copy of it', () => {
     expect(await bodyAt(OTHER_LINK_PATH)).toBe('shared mid-pull');
   });
 
+  it('joins a first sync already in flight, and pulls nothing once the flag is set', async () => {
+    // What the case above rests on. A cycle declines by reading the flag, so the
+    // two stay apart only while every pull began with the flag unset and is the
+    // only one running — and a provider effect that re-ran over a pull in flight
+    // could start a second beside it. Whichever finished first set the flag with
+    // the other still reconciling, and a cycle was then free to run beside that
+    // one. Web's pull gets both halves from its cycle lock; this one has a slot.
+    getDb().delete(syncMeta).run();
+    await beginInitialSync(USER);
+    mockGetBlob.mockResolvedValue(new Uint8Array([0xee, ...utf8('the server copy')]));
+    let listings = 0;
+    const listing = () => {
+      listings += 1;
+      return [{ path: LINK_PATH, updatedAt: 5000 }];
+    };
+    const opsList = () => ({
+      ops: [],
+      oldestUpdatedAt: 2000,
+      newestUpdatedAt: 6000,
+      hasMore: false,
+    });
+
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    const first = runInitialSync(
+      deps({
+        filesList: listing,
+        opsList,
+        filesSign: async (_paths, op) => {
+          if (op === 'get') await held;
+        },
+      }),
+    );
+    // The second caller is the gate still on screen, so the count is its to show.
+    const joinedTicks: [number, number][] = [];
+    const second = runInitialSync(deps({ filesList: listing, opsList }), (done, total) =>
+      joinedTicks.push([done, total]),
+    );
+
+    release();
+    await Promise.all([first, second]);
+    expect(listings).toBe(1);
+    expect(joinedTicks).toContainEqual([1, 1]);
+    expect(await bodyAt(LINK_PATH)).toBe('the server copy');
+
+    // A pull asked for after that one finished: its caller read the flag before
+    // its wait for the claim, and the flag has been set since.
+    await runInitialSync(deps({ filesList: listing, opsList }));
+    expect(listings).toBe(1);
+    expect(await getSyncMeta(USER)).toMatchObject({
+      syncCursorUpdatedAt: 6000,
+      syncCursorPath: '',
+    });
+  });
+
+  it('frees the slot when a first sync fails, so the retry is a pull of its own', async () => {
+    // The other edge of the slot: one that outlived a failed pull would hand its
+    // rejection to every retry, and the gate's "Try again" could never succeed.
+    getDb().delete(syncMeta).run();
+    await beginInitialSync(USER);
+    mockGetBlob.mockResolvedValue(new Uint8Array([0xee, ...utf8('the server copy')]));
+
+    await expect(
+      runInitialSync(
+        deps({
+          filesList: () => {
+            throw new ApiError(400, JSON.stringify({ error: 'bad_request' }));
+          },
+        }),
+      ),
+    ).rejects.toThrow();
+    expect(await getItem(LINK_PATH)).toBeUndefined();
+
+    await runInitialSync(deps({ filesList: () => [{ path: LINK_PATH, updatedAt: 5000 }] }));
+    expect(await bodyAt(LINK_PATH)).toBe('the server copy');
+  });
+
   it('does not upload an entity rewritten after the queue was read', async () => {
     // Device extraction's two passes: the title is queued, the cycle reads its
     // queue — and then the image lands, with the patch that names it. An op carries

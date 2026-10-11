@@ -1175,6 +1175,26 @@
     "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
   },
   {
+    "id": "SHARE-EXTRACT-ANDROID-001",
+    "title": "An Android share taken while the main app was killed gets its page's title from the device extractor when the app is next opened",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "internet", "android"],
+    "fixture": "empty",
+    "path": "mobile/flows/share-extract.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
+    "id": "SHARE-EXTRACT-IOS-001",
+    "title": "A page shared from Safari while the main app was killed is handed to the device extractor when the app is next opened",
+    "surface": "native",
+    "tier": "full",
+    "traits": ["online", "internet", "ios"],
+    "fixture": "empty",
+    "path": "mobile/flows/share-extract.yaml",
+    "artifacts": ["junit", "maestro-output", "checkpoint", "hierarchy-on-failure"]
+  },
+  {
     "id": "SHARE-IOS-001",
     "title": "Safari enters the iOS share extension and the foregrounded main app drains its outbox",
     "surface": "native",

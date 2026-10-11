@@ -80,7 +80,13 @@ import {
 import { holdLiveReads } from '../data/live-read-invalidation';
 import { clearDrainedOps, listPendingOps, type PendingOpRecord } from '../data/pending-store';
 import { toItemRecord } from '../data/projection';
-import { advanceCursor, getSyncMeta, markFirstSyncDone, resetCursor } from '../data/sync-store';
+import {
+  advanceCursor,
+  getSyncMeta,
+  isFirstSyncDone,
+  markFirstSyncDone,
+  resetCursor,
+} from '../data/sync-store';
 import { BlobRequestError, getBlob, getBlobToFile, putBlob, putBlobFromFile } from './r2';
 
 // Everything the engine needs to run a sync, passed in by the caller (the sync
@@ -199,10 +205,61 @@ async function withBulkHold<T>(paths: number, run: () => Promise<T>): Promise<T>
 // It stays silent through the listing below (no denominator exists yet, and
 // inventing one is the fake-progress-bar failure); the first tick arrives once
 // storeDownloads knows exactly how much it is about to fetch.
-export async function runInitialSync(
-  deps: SyncDeps,
-  onProgress?: InitialSyncProgressFn,
-): Promise<void> {
+//
+// ONE PULL AT A TIME PER ACCOUNT, AND ONLY WHILE THE FLAG IS UNSET. The cycle's
+// guard (incrementalSyncOnce) keeps a cycle and the pull apart by reading the
+// flag, and that holds only if two things are true of EVERY pull: it began with
+// the flag unset, and it is the only one running. Neither was this function's
+// doing. The provider reads the flag, then waits on the lifecycle lock for its
+// claim, then calls here — and nothing stopped an effect that re-ran over a pull
+// still in flight (the same account signed out and back in, a session paused and
+// resumed) from starting a second beside it. Whichever finished first set the
+// flag with the other still reconciling against its own, older listing, and from
+// then a cycle was free to run beside that one: the overlap the guard is there
+// to prevent, by another door.
+//
+// So a second caller joins the pull in flight, and a pull asked for once the
+// flag is set does nothing. Those are the two things web's runInitialSync gets
+// from holding the cycle lock and re-reading the flag inside it; with one
+// runtime per store, a slot per account is the whole lock. A joiner's
+// `onProgress` is fed from where it joined rather than dropped — it is usually
+// the only gate still on screen, the first caller's effect having been replaced.
+interface InflightPull {
+  run: Promise<void>;
+  listeners: Set<InitialSyncProgressFn>;
+}
+
+const inflightPulls = new Map<string, InflightPull>();
+
+export function runInitialSync(deps: SyncDeps, onProgress?: InitialSyncProgressFn): Promise<void> {
+  const key = deps.username;
+  const inflight = inflightPulls.get(key);
+  if (inflight) {
+    if (onProgress) inflight.listeners.add(onProgress);
+    return inflight.run;
+  }
+  const listeners = new Set<InitialSyncProgressFn>();
+  if (onProgress) listeners.add(onProgress);
+  const run = (async () => {
+    try {
+      await initialSyncOnce(deps, (done, total) => {
+        for (const listener of listeners) listener(done, total);
+      });
+    } finally {
+      inflightPulls.delete(key);
+    }
+  })();
+  inflightPulls.set(key, { run, listeners });
+  return run;
+}
+
+async function initialSyncOnce(deps: SyncDeps, onProgress: InitialSyncProgressFn): Promise<void> {
+  // Inside the slot, so it is this pull's own reading and not its caller's: the
+  // caller's is as old as its wait for the claim. The flag set means this
+  // account's first sync has been done here already, by whoever held the slot
+  // before — the store is complete up to its cursor, and listing the namespace
+  // again would be a pull running where cycles are allowed.
+  if (await isFirstSyncDone(deps.username)) return;
   deps = withRetryDeps(deps);
   // The bookkeeping row is claimed before this runs, under the lifecycle lock
   // (sync-store.ts, claimIfStillSignedIn). The engine never claims it: a stale
@@ -329,8 +386,9 @@ async function incrementalSyncOnce(deps: SyncDeps): Promise<SyncOutcome> {
   //
   // This is the step web's engine takes with its cycle lock, which
   // runInitialSync holds like any other cycle. There is no lock here (one
-  // runtime per store), so the flag does it: a pull only ever starts with the
-  // flag unset, and no cycle starts until it is set, so the two never overlap.
+  // runtime per store), so the flag does it: a pull only ever runs with the
+  // flag unset, one at a time (runInitialSync holds both), and no cycle starts
+  // until it is set, so the two never overlap.
   // Same predicate as isFirstSyncDone — an absent row is not-done.
   if (!meta || meta.firstSyncDoneAt <= 0) return outcome;
   // The cursor is the compound key (updatedAt, path); both halves go over the

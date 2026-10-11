@@ -454,6 +454,14 @@ and calling it E2E.
       XCTest tree returns to Safari after extension text entry.
 - [x] `SHARE-CROSS-CLIENT-001` After a successful share, prove a web profile can
       read the uploaded link without requiring another native edit.
+- [x] `SHARE-EXTRACT-ANDROID-001` Start from a killed main app, share a public
+      page under a title it does not have, launch the app, and prove the row takes
+      the page's own title at the default `saves` mode — the share activity's
+      handoff to the main app's extractor.
+- [x] `SHARE-EXTRACT-IOS-001` The same journey from Safari. The iOS share
+      extension is handed the document's real title, so no row can tell a fetched
+      page from an unfetched one; the oracle is that the "links without a preview"
+      prompt never comes up for the drained link.
 
 The iOS system-sheet entry gesture must be followed by an assertion on an element
 only the share extension renders. A successful tap command is not evidence that

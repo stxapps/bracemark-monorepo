@@ -1,6 +1,7 @@
 # Foreground the existing main-app task/process. `stopApp: false` is the
 # load-bearing part: a bare launch terminates it first. ShareBridge drains the
-# iOS outbox on this transition; Android's mounted store already holds the row.
+# iOS outbox on this transition; Android's mounted store already holds the row,
+# and what the pass collects there is the share activity's handoff marker.
 appId: com.bracemark.app
 ---
 - launchApp:

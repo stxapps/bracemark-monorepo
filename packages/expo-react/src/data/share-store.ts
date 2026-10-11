@@ -3,7 +3,11 @@
 //
 //  - ANDROID's share activity runs in the app's own process, so it reads the
 //    taxonomy live from sqlite and saves through the real write edge
-//    (mutations.ts) — the pending op then rides the normal sync drain.
+//    (mutations.ts) — the pending op then rides the normal sync drain. What it
+//    cannot do from there is fetch the page: that is the main app's
+//    ExtractionProvider, which the share activity does not mount. So each save
+//    leaves a HANDOFF marker the main app collects (_the Android handoff_,
+//    below).
 //  - iOS's share extension is a SEPARATE process that must not open the app's
 //    sqlite (a shared-container file lock invites the 0xdead10cc kill), so it
 //    exchanges atomic per-item JSON files in the App Group container instead:
@@ -37,7 +41,7 @@
 // of the sign-out teardown (clear-data.ts) so none of it outlives the session.
 
 import { Platform } from 'react-native';
-import { Directory, File } from 'expo-file-system';
+import { Directory, File, Paths } from 'expo-file-system';
 
 import {
   type ApiClient,
@@ -386,6 +390,9 @@ export async function saveSharedDraft(draft: ShareDraft, api: ApiClient): Promis
   if (!session) throw new Error('saveSharedDraft: no session');
   if (await isAtLinkCap()) return 'quota';
   await applyShareDraft(session.username, draft);
+  // Before the expired return below: a paused session stops the sync, not the
+  // page fetch the main app owes this save.
+  markShareHandoff(draft.id);
   // An EXPIRED session syncs nothing until a sign-in resumes it (docs/sessions.md):
   // the link is saved and queued like any offline edit, and pushes on resume.
   if (session.state === 'expired') return 'saved';
@@ -583,6 +590,80 @@ export async function drainShareOutbox(): Promise<string[]> {
   return applied;
 }
 
+// --- the Android handoff ---------------------------------------------------------
+
+// Where the Android share activity leaves word of what it saved: one small file
+// per link, named for the link's id and holding it, under the app's own
+// document directory (there is no App Group on Android, and the activity runs
+// in the app's sandbox — share-theme-store's reasoning). It exists because a
+// share is a save gesture made on this device, which earns a page fetch at
+// extraction mode `saves` (docs/link-extraction.md, _the stance_), and the
+// fetch belongs to the main app's ExtractionProvider: the share activity mounts
+// no providers, and its process may be gone seconds after Save. On iOS the
+// outbox file already is this record — the drain returns the paths it landed.
+// Android writes the store itself, so until this marker existed nothing told
+// the app which links had arrived by share, and at `saves` they kept their
+// provisional title and no image for good.
+//
+// A file, not a table, and not memory. Memory would do while the process that
+// took the share is still the one the user comes back to, and Android reaps a
+// cached process freely. A file because a marker has to survive exactly that,
+// and because it is the same per-item shape the outbox already has: no
+// read-modify-write, and nothing to migrate.
+function handoffDir(): Directory {
+  return new Directory(Paths.document, 'share/handoff');
+}
+
+// Leave the marker for one landed link. Called AFTER the link's write commits,
+// so a marker only ever names a link that is in the store: the main app's pass
+// can run between any two awaits of a save, and a marker it collected ahead of
+// the link would be spent on a path with nothing at it. Best-effort — a marker
+// that fails to land costs this share its page fetch, never the link.
+function markShareHandoff(linkId: string): void {
+  try {
+    const dir = handoffDir();
+    if (!dir.exists) dir.create({ intermediates: true, idempotent: true });
+    new File(dir, linkId).write(linkId);
+  } catch {
+    // The link is saved and queued either way.
+  }
+}
+
+// Collect the markers — the main app's half, called by ShareBridge beside the
+// iOS drain and under the same rule: only once the store is ready, since what
+// the paths are handed to is inert before that. Returns the `links/` PATH of
+// each, the drain's own return shape, and removes every file it read: a marker
+// is a hint, never the only copy of anything, so one that cannot be read is
+// dropped rather than quarantined. No-op on iOS (the outbox is the record).
+//
+// Never throws, and returns what it had read when something did: a path is
+// collected before its file is removed, so a failed delete hands the same link
+// over again on the next pass — which `extractNow` absorbs, since a link that
+// is no longer pending is not fetched twice — where the other order would lose
+// it.
+export function takeShareHandoffs(): string[] {
+  if (Platform.OS !== 'android') return [];
+  const paths: string[] = [];
+  try {
+    const dir = handoffDir();
+    if (!dir.exists) return paths;
+    for (const entry of dir.list()) {
+      if (!(entry instanceof File)) continue;
+      let linkId = '';
+      try {
+        linkId = entry.textSync();
+      } catch {
+        // Unreadable: nothing to hand on.
+      }
+      if (linkId) paths.push(pathFromId(linkId, LINKS_PREFIX));
+      entry.delete();
+    }
+  } catch {
+    // What was read is handed on; the rest waits for the next pass.
+  }
+  return paths;
+}
+
 // Rewrite the iOS taxonomy snapshot from the current store — called by the main
 // app whenever lists/tags change and after sign-in/first sync. No-op on
 // Android (the share activity reads live) and when signed out (clearShareData
@@ -606,7 +687,25 @@ export async function refreshShareTaxonomy(): Promise<void> {
 // under it later is covered by construction — an enumeration here is exactly the
 // kind of list that silently misses the next addition. Failure-tolerant like the
 // rest of the teardown's file half.
+//
+// Android has one artifact, the handoff markers: link ids of this account's,
+// which the next account's ExtractionProvider must never be handed. Only that
+// directory goes — the theme mirror beside it is rewritten by the app itself
+// (share-theme-store.ts).
 export function clearShareData(): void {
+  if (Platform.OS === 'android') {
+    // Guarded, because this call was a no-op on Android until the markers
+    // existed and the steps after it in clearData must still run.
+    try {
+      const dir = handoffDir();
+      if (dir.exists) dir.delete();
+    } catch {
+      // A launch with no session runs the teardown again. A marker that outlives
+      // even that names a link the next account's store does not hold, so the
+      // pass that collects it fetches nothing.
+    }
+    return;
+  }
   if (Platform.OS !== 'ios') return;
   const group = appGroupDir();
   if (!group) return;

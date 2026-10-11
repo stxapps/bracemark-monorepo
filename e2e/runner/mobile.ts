@@ -805,6 +805,24 @@ async function main(): Promise<void> {
         if (testCase.id === 'SHARE-BOUNDARY-001') {
           env.CAP_HOST = new URL(pagedUrls[0]).host;
         }
+        if (
+          testCase.id === 'SHARE-EXTRACT-ANDROID-001' ||
+          testCase.id === 'SHARE-EXTRACT-IOS-001'
+        ) {
+          // The share cases that share a page the device can fetch: their
+          // subject is the fetch. On Android EXTRA_SUBJECT stays the run-scoped
+          // title, so the row has something to change FROM. On iOS Safari is
+          // the producer, so the page's own heading is what settles there and
+          // its own title is what the sheet shows.
+          const known = knownPage('e2e-share-extract');
+          env.LINK_URL = known.url;
+          env.LINK_TEXT = displayUrl(known.url);
+          env.LINK_TITLE = known.title;
+          if (run.platform === 'ios') {
+            env.SHARE_TITLE = known.title;
+            env.SHARE_SOURCE_TEXT = `.*${known.title}.*`;
+          }
+        }
       }
 
       const credentials: Credentials = { username: account.username, password: account.password };
@@ -856,7 +874,9 @@ async function main(): Promise<void> {
           });
           return;
         }
-        env.SHARE_SOURCE_TEXT = '.*status.*ok.*';
+        // Not reassigned here: a case that shares another page than the api's
+        // health document has already said what Safari settles on.
+        env.SHARE_SOURCE_TEXT ??= '.*status.*ok.*';
         await openSystemShare({
           platform: run.platform,
           deviceId: run.deviceId,
@@ -931,6 +951,18 @@ async function main(): Promise<void> {
             );
             return null;
           },
+        ];
+      }
+      if (testCase.id === 'SHARE-EXTRACT-ANDROID-001' || testCase.id === 'SHARE-EXTRACT-IOS-001') {
+        steps = [
+          testCase.path,
+          async () => {
+            await assertMainAppStopped(run.platform, run.deviceId, 'before killed-app share');
+            await openShare();
+            return null;
+          },
+          'mobile/flows/parts/share-save-default.yaml',
+          `mobile/flows/parts/share-extract-${run.platform}.yaml`,
         ];
       }
       if (testCase.id === 'SHARE-IOS-002') {

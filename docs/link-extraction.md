@@ -262,6 +262,16 @@ lets the foreground/background queue do the real extraction later (the same
 provisional-seed pattern as a Brace.to import's extracted title — see _imported
 links_, _capability tiers_).
 
+**How a share-sheet save reaches that fetch is per platform**, because the two
+shells reach the store differently. The iOS drain returns the links it landed
+and `ShareBridge` passes them to `extractNow`. Android's share activity writes
+the store itself, so no drain returns its link: it leaves a handoff marker that
+the same pass collects ([share-sheet.md](./share-sheet.md), _the Android
+handoff_). The marker is not a convenience. Below `all` the un-gestured drain is
+off, so `extractNow` is the only thing that fetches for a save — and an Android
+share that never reached it stayed pending for good, with a provisional title
+and no image.
+
 Note what the mobile/foreground row does **not** carry: an opt-in. The fetch is
 local, to a host the user just handed the app, in the gesture that asked for the
 link to be saved — so the save _is_ the consent, exactly as it is for the
@@ -1168,6 +1178,20 @@ that this fallback has a **direction**: unknown coerces to `saves`, never up to
 `all`, so a blob from the future can't become network activity nobody agreed to.
 A stricter mode added later must therefore be one old clients coerce _down_ to.
 
+**`extractNow` reads the mode from the store, at the gesture.** That same
+fallback is why. The hook's value is a render's copy, and `useSettings` answers
+`saves` until its read of the settings blob lands — so an `extractNow` captured
+by such a render would fetch for an account set to `off`, and nothing would show
+it: the fetch succeeds. `ShareBridge` can be holding exactly that closure when a
+first sync ends. It hands over what waited in the render the gate opens, and a
+bulk pull lets live reads re-run only on a flush every two seconds, so that
+render may not have seen the settings blob the pull just stored. So the hook's
+value is only the cheap exit, and the gate is one read of the settings row
+inside the run, before any request leaves the device; a read that fails fetches
+nothing. The opt-in the run passes down (`optedIn`) comes from the same read.
+The un-gestured drain needs no such step: it is armed by `all`, and a render
+still on the default can only leave it off.
+
 **`expo:fg` is the tier that's built; `expo:bg` is the extra.** The foreground
 drain is the direct analogue of the web provider — expo-react's
 `contexts/extraction-provider.tsx` over `lib/device-extraction.ts`, with
@@ -1178,8 +1202,9 @@ cross-device back-fill of what the user is actually looking at, and the
 whole-library job. Two honest platform notes on it. First, the gestured save gets
 its own entry point, `extractNow(linkPaths)` — outside the queue, the budget and
 the opt-in (the gestured/un-gestured split in _the stance_); the add screen calls
-it after a create, and ShareBridge after the outbox drain, since a
-share-extension save reaches the app only there. Second, web's "extract-all keeps
+it after a create, and ShareBridge for what the share sheet saved — the links the
+iOS outbox drain landed, and the ones the Android share activity handed off —
+since a share-sheet save reaches the app only there. Second, web's "extract-all keeps
 running while the tab is hidden" is **not literally available** on iOS: a
 backgrounded app is suspended, so the drain isn't cancelled on background (a quick
 app switch resumes from the in-memory cursor) but progress can't be promised. The

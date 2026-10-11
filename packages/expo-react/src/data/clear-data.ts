@@ -103,8 +103,9 @@ export async function clearData(): Promise<void> {
   // same tables-first fail-safe ordering).
   clearFaviconFiles();
   // The share sheet's App Group artifacts (iOS taxonomy snapshot + outbox) —
-  // they name the account's lists/tags and may hold undrained URLs
-  // (share-store.ts).
+  // they name the account's lists/tags and may hold undrained URLs — and, on
+  // Android, the handoff markers its share activity left: this account's link
+  // ids (share-store.ts).
   clearShareData();
   // Plaintext left in the OS cache dir, which nothing above reaches — an export,
   // an import's picked copy, a custom image's picked file (cache-files.ts).

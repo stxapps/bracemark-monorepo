@@ -1,0 +1,33 @@
+# Open the main app after a share it was not running for, and watch the shared
+# row trade the title the share carried for the one the page has.
+#
+# SHARE_TITLE is the run-scoped EXTRA_SUBJECT — a title the page does not have,
+# so the row has something to change FROM, and only a page fetch changes it.
+#
+# A bare `launchApp` stops the app first, which here is the share activity's
+# leftover process — so this is a cold start, and what it reads the handoff from
+# is the file, not anything that process still held in memory.
+appId: com.bracemark.app
+---
+- launchApp
+- extendedWaitUntil:
+    visible:
+      id: 'links-screen'
+    timeout: 30000
+
+# The page fetch, at `saves`, with nothing but the handoff to have asked for it.
+# Without one the row stays on ${SHARE_TITLE} for good and this times out.
+- extendedWaitUntil:
+    visible: '.*${LINK_TITLE}.*'
+    timeout: 60000
+- assertNotVisible: '.*${SHARE_TITLE}.*'
+- takeScreenshot: shared-link-extracted
+
+# Written to the local store, not only painted: a second cold start reads it
+# back, with no marker left to ask again.
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible: '.*${LINK_TITLE}.*'
+    timeout: 30000
+- takeScreenshot: shared-link-extracted-after-cold-start

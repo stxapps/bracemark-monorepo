@@ -29,6 +29,12 @@ import { ExtractionProvider, useExtraction } from './extraction-provider';
 //
 // Everything below the provider is mocked — the store, the counts, the fetch — the
 // same seam favicon-provider.spec.tsx takes: this file is about one number.
+//
+// And about one gate, because it is the same function and fails the same way.
+// `extractNow` re-reads the extraction mode from the STORE before anything leaves
+// the device: the mode a render holds is useSettings' default until the settings
+// blob has been read, and a caller can be holding the `extractNow` of exactly that
+// render. Nothing shows the difference — the fetch succeeds.
 
 let mockMode = 'saves';
 
@@ -58,10 +64,14 @@ jest.mock('../hooks/use-live-read', () => ({
 
 const mockReadPendingForPaths = jest.fn();
 const mockReadPage = jest.fn();
+// The store's copy of the settings blob — what `extractNow` re-reads. It agrees
+// with the render's mode unless a test makes the two differ.
+const mockReadSettings = jest.fn();
 jest.mock('../data/queries', () => ({
   readLinksPendingTitleImageForLinkPaths: (...args: unknown[]) => mockReadPendingForPaths(...args),
   readLinksPendingTitleImagePage: (...args: unknown[]) => mockReadPage(...args),
   readRawPendingTitleImageCount: jest.fn(),
+  readSettingsGeneral: () => mockReadSettings(),
 }));
 
 const mockRunBatch = jest.fn();
@@ -119,6 +129,8 @@ beforeEach(() => {
   mockRawPending = 0;
   mockReadPage.mockReset();
   mockReadPendingForPaths.mockReset();
+  mockReadSettings.mockReset();
+  mockReadSettings.mockImplementation(async () => ({ deviceExtractionMode: mockMode }));
   mockRunBatch.mockReset();
   mockRunBatch.mockResolvedValue(1);
 });
@@ -133,9 +145,11 @@ test('counts a save from before its first await until the run ends', async () =>
   act(() => {
     extractNow(['links/a.enc']);
   });
-  // Nothing has been read, let alone claimed — this is the window in which the
-  // banner's live read observes the new `items` row.
-  expect(mockReadPendingForPaths).toHaveBeenCalledTimes(1);
+  // Nothing has been claimed, or even looked up: the run is on its first await,
+  // the mode's re-read. This is the window in which the banner's live read
+  // observes the new `items` row.
+  expect(mockReadSettings).toHaveBeenCalledTimes(1);
+  expect(mockReadPendingForPaths).not.toHaveBeenCalled();
   expect(getByText(inFlight(1))).toBeTruthy();
 
   await act(async () => {
@@ -181,6 +195,43 @@ test('counts nothing at `off`, where the gesture itself is declined', async () =
 
   expect(mockReadPendingForPaths).not.toHaveBeenCalled();
   expect(getByText(inFlight(0))).toBeTruthy();
+});
+
+test('declines a gesture the store says is `off`, whatever the render still holds', async () => {
+  // The render is on `saves` — what useSettings answers before it has read the
+  // settings blob — and the store already holds the account's `off`. ShareBridge
+  // calls the `extractNow` of such a render when a first sync ends. The first test
+  // above is the control: the same call with the store on `saves` fetches.
+  mockReadSettings.mockResolvedValue({ deviceExtractionMode: 'off' });
+  mockReadPendingForPaths.mockResolvedValue([link('links/a.enc')]);
+
+  const { getByText } = mount();
+  await act(async () => {
+    extractNow(['links/a.enc']);
+    await Promise.resolve();
+  });
+
+  expect(mockReadPendingForPaths).not.toHaveBeenCalled();
+  expect(mockRunBatch).not.toHaveBeenCalled();
+  // Counted for the length of the re-read, and released with it.
+  expect(getByText(inFlight(0))).toBeTruthy();
+});
+
+test('takes the opt-in from the same read', async () => {
+  // The other direction of the same lag: the render's `saves` would fetch the page
+  // and then hold back what `all` allows.
+  mockReadSettings.mockResolvedValue({ deviceExtractionMode: 'all' });
+  mockReadPendingForPaths.mockResolvedValue([link('links/a.enc')]);
+
+  mount();
+  await act(async () => {
+    extractNow(['links/a.enc']);
+    await Promise.resolve();
+  });
+
+  expect(mockRunBatch).toHaveBeenCalledWith('alice', [link('links/a.enc')], 'expo:fg', {
+    optedIn: true,
+  });
 });
 
 test('starts Extract all when it is pressed while an auto step is in flight', async () => {

@@ -10,17 +10,25 @@ appId: com.bracemark.app
     when:
       platform: iOS
     commands:
+      # The page, or the coachmark Safari 26 shows once over the bottom menu —
+      # whichever comes first. The coachmark is modal: while it is up neither the
+      # page nor the address bar is in the tree, so a wait on the page alone runs
+      # out under it. The api's health document paints before it and never met
+      # that; a page that costs a network round trip (the SHARE-EXTRACT cases'
+      # example.com) is beaten by it every time on a simulator that has not
+      # dismissed it yet.
       - extendedWaitUntil:
-          visible: ${SHARE_SOURCE_TEXT}
+          visible: '(${SHARE_SOURCE_TEXT})|Close'
           timeout: 30000
-
-      # Safari 26 shows this coachmark once over the bottom menu.
       - assertVisible:
           text: 'Close'
           optional: true
       - tapOn:
           text: 'Close'
           optional: true
+      - extendedWaitUntil:
+          visible: ${SHARE_SOURCE_TEXT}
+          timeout: 30000
 
       - tapOn: 'More'
       - extendedWaitUntil:

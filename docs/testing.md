@@ -333,10 +333,11 @@ always**, plus a thin drift guard:
   The load-bearing case is the asymmetry — a pull tears down the plaintext only
   for the rows it actually re-stored, because a path the local-wins guard spared
   still has a queued op whose upload reads that file.
-  It also carries the one case where expo has no lock to lean on: web keeps a
+  It also carries the cases where expo has no lock to lean on: web keeps a
   cycle and the first sync apart with `withCycleLock`, expo by declining the
-  cycle, and only expo's own spec can see that guard go
-  ([local-first-sync.md](./local-first-sync.md), _two tabs, one queue_).
+  cycle and by giving the pull a slot of its own, and only expo's own spec can
+  see either go ([local-first-sync.md](./local-first-sync.md), _two tabs, one
+  queue_).
 - **the drift guards are the exception to "once".** The engines are duplicated
   _source_, so a spec that passes on web's copy proves nothing about expo's:
   edit expo's phase order, its self-heal, where it writes its cursor, its

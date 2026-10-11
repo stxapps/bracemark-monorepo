@@ -57,6 +57,7 @@ import {
 import { AppState, type AppStateStatus } from 'react-native';
 
 import {
+  coerceDeviceExtractionMode,
   hostFromText,
   isRetryableTransportError,
   jitteredDelayMs,
@@ -69,6 +70,7 @@ import {
   readLinksPendingTitleImageForLinkPaths,
   readLinksPendingTitleImagePage,
   readRawPendingTitleImageCount,
+  readSettingsGeneral,
 } from '../data/queries';
 import { useLiveRead } from '../hooks/use-live-read';
 import { useSettings } from '../hooks/use-settings';
@@ -130,8 +132,9 @@ interface ExtractionContextValue {
   // literally just handed it, so the save IS the consent — the same reason the browser
   // extension's active-tab capture has never carried a toggle (docs/link-extraction.md —
   // _the stance_: the axis is gestured vs. un-gestured, not client vs. server). Call it
-  // from the add panel after a successful create, and from ShareBridge after the
-  // outbox drain (share-extension saves reach the app only there).
+  // from the add panel after a successful create, and from ShareBridge for what the
+  // share sheet saved (the iOS outbox drain's links and the Android share activity's
+  // handoff — a share-sheet save reaches the app only there).
   //
   // The rule that keeps this honest: ONE save is automatic, N-at-once is a prompt. An
   // import is a gesture too, but it's a thousand hosts — so it gets the explicit
@@ -324,12 +327,32 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
       // `off` is the one position that reaches in here: it means "this device never
       // contacts a site you save", and a save gesture is not an exception to it —
       // it's the exact thing being declined. `saves` and `all` both proceed.
+      //
+      // This test is the cheap exit, not the gate: it reads the mode this RENDER
+      // holds, and the gate is the re-read below.
       if (deviceExtractionMode === 'off') return;
       // Before the first await, so nothing observes the save as un-owned (see the type).
       setGesturedInFlightCount((n) => n + linkPaths.length);
       void (async () => {
         let links: LinkItem[] = [];
         try {
+          // THE MODE IS READ FROM THE STORE, at the moment of the gesture, before
+          // anything leaves the device. `deviceExtractionMode` above is a render's
+          // copy, and useSettings answers `saves` until its read of the settings
+          // blob lands — so a caller holding an `extractNow` from a render that was
+          // still on the default would fetch for an account set to `off`. One
+          // caller can: ShareBridge hands over what waited out a first sync in the
+          // very render the gate opens, and a bulk pull lets live reads re-run only
+          // on a flush every two seconds (live-read-invalidation.ts), so that
+          // render may not have seen the settings blob the pull just stored.
+          // Nothing would show it: the fetch succeeds, and the link gets a preview
+          // its owner asked never to have fetched. The store has no such lag — the
+          // blob is a row by the time the pull that brought it has returned. A
+          // read that fails lands in the catch below and fetches nothing.
+          const mode = coerceDeviceExtractionMode(
+            (await readSettingsGeneral())?.deviceExtractionMode,
+          );
+          if (mode === 'off') return;
           // Anything the drain already has in flight is dropped, not waited on — it's the
           // same fetch at the same tier, so the gesture is already being served (see
           // inFlightPathsRef). Only reachable at mode `all`; at `saves` the drain can't run,
@@ -348,7 +371,7 @@ export function ExtractionProvider({ children }: { children: ReactNode }) {
           // drain is mid-fetch on gets its icon from that run's capture instead.
           requestFaviconNow([...new Set(links.map((link) => hostFromText(link.url)))]);
           await runDeviceTitleImageBatch(username, links, 'expo:fg', {
-            optedIn: deviceExtractionMode === 'all',
+            optedIn: mode === 'all',
           });
           requestSync();
         } catch {

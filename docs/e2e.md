@@ -408,7 +408,9 @@ Extraction has five vitest specs against the real `HTMLRewriter`; that is the
 right layer for it.
 
 **The exception is the `internet` cases, and it is narrow on purpose.** The
-`EXTRACT-*` cases (Phase 7) do assert an extracted title, and they get it from
+`EXTRACT-*` cases (Phase 7) do assert an extracted title — and so does the
+`SHARE-EXTRACT-*` pair, whose subject is the page fetch a share is owed — and
+they get it from
 one real public origin: `example.com`, IANA's reserved documentation domain —
 the `onlineExtraction` table in [`e2e/fixtures.json`](../e2e/fixtures.json), read
 by `e2e/web/fixtures/extraction.ts`, which both runners use. A run-scoped `?e2e=`
@@ -908,6 +910,24 @@ InputMethod` reports while the window is visible. Every "reachable" claim is a
   existing taxonomy pickers, save, outbox drain and cross-client upload; the
   shared create state machine stays at component level. Do not replace the
   missing iOS gesture with screen coordinates and call it a pass.
+  The `SHARE-EXTRACT-*` pair is the killed-app shape with the one thing every
+  other share case avoids: a page the device can fetch (example.com, so
+  `internet`). Its subject is the page fetch a share is owed at the default
+  `saves` mode, which only the main app can make and only if it is told which
+  link arrived ([share-sheet.md](./share-sheet.md), _the main app's half_). The
+  two platforms need different oracles, because the two shells are handed
+  different titles. Android's `EXTRA_SUBJECT` is the run-scoped title, which the
+  page does not have, so the row has something to change FROM and the part
+  waits for the page's own. Safari gives the iOS share extension the document's
+  real title, so there the provisional title and the extracted one are the same
+  string and no row can tell a fetched page from an unfetched one. The iOS part
+  reads the "links without a preview" prompt instead: it arms two seconds after
+  a link is seen pending with nothing fetching it, so it comes up for a draft
+  drained into a dead `extractNow` and never for one a live `extractNow` took.
+  ⚠ That oracle is an ABSENCE, so the part first waits — optionally, and
+  expecting to time out — for the prompt's `Dismiss`, and only then asserts it
+  is not there. Asserted straight after the row appears it would pass on a
+  prompt that had not armed yet.
 - **One flick, opposite outcomes** (`SHARE-IOS-003`). The host's own sheet
   answers a downward drag on the iOS share extension, and the two pickers ask
   native to hold that off while they are up
@@ -3114,6 +3134,42 @@ last one, after all four picker flicks had passed — the compose screen could n
 longer be swiped away (`share-add` still visible). Its first draft flicked at
 100ms and passed the first of those two with no guard at all; that is recorded
 with the case (_gestures and waits the runner performs_).
+
+The `SHARE-EXTRACT-*` pair was measured 2026-10-11 from commit `62ea83c` with
+its changes present in the working tree — the iPhone 17 Pro simulator on iOS
+26.5, `bracemark-pixel8` (`sdk_gphone64_arm64`, Android 16), app 1.0.0 (1),
+Maestro 2.8.0, against live example.com: **passed**, twice on each platform, in
+about three minutes a run. Each was then run against the behaviour it guards
+and failed at the step that guards it:
+
+- `SHARE-EXTRACT-ANDROID-001` with ShareBridge's pass no longer collecting the
+  handoff — at the title wait: after 60s the row was still on its
+  `EXTRA_SUBJECT`. That is every Android share before the handoff existed, not
+  a race.
+- `SHARE-EXTRACT-IOS-001` with the drain no longer held for a ready store — at
+  the absence check: the prompt's `Dismiss` was up for the link the cold start
+  had just drained. Until this run, that a cold start's first pass hands its
+  links to a dead `extractNow` was read from source
+  ([share-sheet.md](./share-sheet.md), _the main app's half_).
+
+One harness fault, found by the iOS case's first run and fixed in the same
+change: Safari's one-time coachmark came up before example.com had painted, and
+while it is up the page is not in the tree, so the wait on the page ran out
+under it. `subflows/open-system-share.yaml` now waits for the page OR the
+coachmark, dismisses the coachmark, and then waits for the page. The other iOS
+share cases never met it — the api's health document paints first. The new
+order has only run on a simulator whose coachmark was already dismissed, which
+is the state the probe that found it left behind.
+
+The cases those changes could reach were re-run the same day, each leg
+alone: Android **11/11** (`NATIVE-ACCOUNT-001`,
+`SHARE-ANDROID-001`/`002`, `SHARE-BOUNDARY-001`, `SHARE-CREATE-001`,
+`SHARE-CROSS-CLIENT-001`, `EXTRACT-NATIVE-001`, `EXTRACT-NATIVE-ALL-001`,
+`SKELETON-NATIVE-001`, `SIGN-OUT-RESIDUE-NATIVE-001`,
+`SESSION-EXPIRED-NATIVE-001`) and iOS **9/9** (`NATIVE-ACCOUNT-001`,
+`SHARE-IOS-001`–`003`, `SHARE-BOUNDARY-001`, `SHARE-CROSS-CLIENT-001`,
+`EXTRACT-NATIVE-001`, `SIGN-OUT-RESIDUE-NATIVE-001`,
+`SESSION-EXPIRED-NATIVE-001`).
 
 The PWA update and navigation cases were measured 2026-10-05 from commit
 `c6e089e` with their changes present in the working tree — system Chrome

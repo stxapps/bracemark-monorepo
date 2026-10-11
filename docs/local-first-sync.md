@@ -1355,9 +1355,27 @@ simply did not have what its user had just saved, for as long as that took.
 The same cycle had no cursor, so it routed to the fallback and downloaded
 everything the pull had not stored yet a second time. So expo's
 `incrementalSyncOnce` **returns without doing anything while the first-sync flag
-is unset**: a pull only starts with the flag unset and no cycle starts until it
+is unset**: a pull only runs with the flag unset and no cycle starts until it
 is set, which is the whole of what the lock gives web here. What is queued waits
 for the cycle the provider kicks on reaching `ready`.
+
+That argument needs two things to be true of **every** pull — it began with the
+flag unset, and it is the only one running — and both were the provider's doing
+rather than the engine's. The provider reads the flag, waits on the lifecycle
+lock for its claim, and only then calls `runInitialSync`; nothing stopped an
+effect that re-ran over a pull still in flight from starting a second beside it.
+Whichever finished first set the flag with the other still reconciling against
+its own older listing, and a cycle was then free to run beside that one — the
+same overlap, by another door. So expo's `runInitialSync` holds **a slot per
+account**: a second caller joins the pull in flight (its `onProgress` is fed from
+where it joined, since it is usually the only gate still on screen), and the
+pull **re-reads the flag inside the slot** and does nothing once it is set.
+Those are the two things web's pull gets from the cycle lock, above; with one
+runtime per store the slot is the whole lock. This half is read from source, not
+reproduced — the triggers found were the same account signed out and back in
+mid-pull, and a session that paused and resumed. Coverage: expo's
+`engine.spec.ts`, the first-sync cases under _the cycle, against this copy of
+it_.
 
 **What two drains did**, kept here as the reason the lock exists. Four things
 are each sound while only one cycle can run, and together were not:

@@ -10,7 +10,7 @@
 //   - the cached icon FILES (favicon-store's split storage — the table delete only removes
 //     the verdicts),
 //   - the share sheet's App Group artifacts, which name the account's lists and tags and
-//     may hold undrained URLs.
+//     may hold undrained URLs (and on Android its handoff markers, which name links).
 //   - the plaintext parked in the OS cache dir (cache-files.ts) — an export above all,
 //     which is the whole library in one file.
 // A wipe that clears the tables and stops leaves decrypted bookmark images on disk with no
@@ -48,7 +48,8 @@ jest.mock('@stxapps/expo-crypto', () => ({ newId: () => globalThis.crypto.random
 
 // The share sheet's App Group artifacts live behind a native container lookup; the wipe's
 // contract with them is only that it CALLS for them, so the module is stubbed and the call
-// asserted. (share-store.spec.ts owns what clearShareData actually removes.)
+// asserted. (share-store.spec.ts owns what clearShareData actually removes, on each
+// platform.)
 const mockClearShareData = jest.fn();
 jest.mock('./share-store', () => ({ clearShareData: () => mockClearShareData() }));
 

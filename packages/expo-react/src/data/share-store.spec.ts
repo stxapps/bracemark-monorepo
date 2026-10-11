@@ -3,8 +3,10 @@
 // outbox drain's FILE handling — above all that a file the drain can't read is
 // quarantined rather than deleted (an outbox draft is sometimes the only copy of
 // a share) — and the one rule the post-Add kick carries: an EXPIRED session
-// sends nothing. What the drain writes into sqlite, and the encrypt/upload
-// itself, stay on-device (docs/share-sheet.md).
+// sends nothing. And the Android handoff: the marker a save leaves for the main
+// app, which is the only thing that gets that share its page fetch. What the
+// drain writes into sqlite, and the encrypt/upload itself, stay on-device
+// (docs/share-sheet.md).
 //
 // The import graph reaches the native stores (db.ts → expo-sqlite, the App Group
 // helpers → expo-file-system, session-store → expo-secure-store). The pure
@@ -40,6 +42,7 @@ import {
   saveSharedDraft,
   type ShareDraft,
   type ShareTaxonomy,
+  takeShareHandoffs,
 } from './share-store';
 import { uploadShareDraft } from './share-upload';
 import { readCachedStatus } from './subscription-store';
@@ -739,5 +742,175 @@ describe('saveSharedDraft — the review-prompt count', () => {
 
       expect(counted).not.toHaveBeenCalled();
     });
+  });
+});
+
+// The Android share activity writes the store itself, so no drain ever returns
+// its link — and the page fetch a share is owed at extraction mode `saves`
+// belongs to the main app's ExtractionProvider, which the activity does not
+// mount (docs/share-sheet.md, _the main app's half_). The marker is the whole
+// of the link between them, and its absence is silent: the link is saved, it
+// syncs, and it keeps a provisional title and no image for good.
+describe('the Android handoff', () => {
+  const currentSession = getSession as jest.Mock;
+  const write = writeLink as jest.Mock;
+  const count = countLinks as jest.Mock;
+  const cached = readCachedStatus as jest.Mock;
+  const platform = Platform as { OS: string };
+  const api = {} as ApiClient;
+  const HANDOFF = 'file:/documents/share/handoff';
+
+  const draft: ShareDraft = {
+    id: 'link-1',
+    url: 'https://example.com/a',
+    listId: MY_LIST_ID,
+    tagIds: [],
+    newTags: [],
+    newLists: [],
+    sharedAt: 1_700_000_000_000,
+  };
+
+  let original: string;
+
+  beforeEach(() => {
+    mockFiles.clear();
+    mockDirs.clear();
+    write.mockReset().mockResolvedValue(undefined);
+    count.mockReset().mockResolvedValue(0);
+    cached.mockReset().mockReturnValue(null);
+    original = platform.OS;
+    platform.OS = 'android';
+  });
+  afterEach(() => {
+    platform.OS = original;
+    currentSession.mockReset();
+    currentSession.mockImplementation(() => ({
+      username: 'alice',
+      encryptionKey: new Uint8Array(32),
+    }));
+  });
+
+  it('hands a saved link to the main app once, by its links/ path', async () => {
+    expect(await saveSharedDraft(draft, api)).toBe('saved');
+
+    // The drain's return shape, so the bridge treats both platforms' as one list.
+    expect(takeShareHandoffs()).toEqual(['links/link-1.enc']);
+    // Taken means gone: the next pass must not fetch the page a second time.
+    expect(takeShareHandoffs()).toEqual([]);
+    expect([...mockFiles.keys()]).toEqual([]);
+  });
+
+  // A paused session stops the sync kick, not the page fetch.
+  it('leaves the marker while the session is expired', async () => {
+    currentSession.mockReturnValue({
+      username: 'alice',
+      encryptionKey: new Uint8Array(32),
+      state: 'expired',
+      generation: 'g1',
+    });
+    expect(await saveSharedDraft(draft, api)).toBe('saved');
+
+    expect(takeShareHandoffs()).toEqual(['links/link-1.enc']);
+  });
+
+  // A marker only ever names a link that is in the store. Left ahead of the
+  // write, the main app's pass could collect it between two awaits of the save
+  // and spend it on a path with nothing at it yet.
+  it('leaves no marker for a save whose write failed', async () => {
+    write.mockRejectedValueOnce(new Error('disk full'));
+    await expect(saveSharedDraft(draft, api)).rejects.toThrow('disk full');
+
+    expect(takeShareHandoffs()).toEqual([]);
+  });
+
+  // Best-effort in the one direction that matters: the marker is owed to the page
+  // fetch, and the link is not hostage to it.
+  it('saves the link even when the marker cannot be written', async () => {
+    const { File } = jest.requireMock<typeof import('expo-file-system')>('expo-file-system');
+    const fileWrite = jest.spyOn(File.prototype, 'write').mockImplementationOnce(() => {
+      throw new Error('ENOSPC');
+    });
+
+    expect(await saveSharedDraft(draft, api)).toBe('saved');
+    fileWrite.mockRestore();
+    expect(takeShareHandoffs()).toEqual([]);
+  });
+
+  it('leaves no marker for a share refused at the link cap', async () => {
+    cached.mockReturnValue({
+      plan: 'free',
+      status: 'none',
+      source: null,
+      expiresAt: null,
+      willRenew: false,
+    });
+    count.mockResolvedValue(Number.MAX_SAFE_INTEGER);
+    expect(await saveSharedDraft(draft, api)).toBe('quota');
+
+    expect(takeShareHandoffs()).toEqual([]);
+  });
+
+  it('drops a marker it cannot use and still hands on the rest', async () => {
+    expect(await saveSharedDraft(draft, api)).toBe('saved');
+    // Cut off between create and write: a file with nothing in it.
+    mockFiles.set(`${HANDOFF}/link-2`, '');
+
+    expect(takeShareHandoffs()).toEqual(['links/link-1.enc']);
+    // A marker is a hint, never the only copy of anything — so not quarantined.
+    expect([...mockFiles.keys()]).toEqual([]);
+  });
+
+  it('hands on what it read when a marker cannot be removed', async () => {
+    // Collected before it is deleted: the other order loses the link to a failed
+    // delete, where this one only offers it twice — and a link that is no longer
+    // pending is not fetched twice.
+    expect(await saveSharedDraft(draft, api)).toBe('saved');
+    const { File } = jest.requireMock<typeof import('expo-file-system')>('expo-file-system');
+    const remove = jest.spyOn(File.prototype, 'delete').mockImplementationOnce(() => {
+      throw new Error('EBUSY');
+    });
+
+    expect(takeShareHandoffs()).toEqual(['links/link-1.enc']);
+    remove.mockRestore();
+    expect(takeShareHandoffs()).toEqual(['links/link-1.enc']);
+    expect([...mockFiles.keys()]).toEqual([]);
+  });
+
+  it('clears the markers on sign-out and leaves the theme mirror beside them', async () => {
+    // The ids are this account's; the next one's ExtractionProvider must never
+    // be handed them. The theme file is the app's to rewrite
+    // (share-theme-store.ts), and carries no account data.
+    expect(await saveSharedDraft(draft, api)).toBe('saved');
+    mockFiles.set('file:/documents/share/theme.json', '{}');
+
+    clearShareData();
+
+    expect([...mockFiles.keys()]).toEqual(['file:/documents/share/theme.json']);
+    expect(takeShareHandoffs()).toEqual([]);
+  });
+
+  // This call was a no-op on Android until the markers existed, and clearData
+  // runs the cache sweep and the decode-cache clear after it.
+  it('does not fail the sign-out when the markers cannot be removed', async () => {
+    expect(await saveSharedDraft(draft, api)).toBe('saved');
+    const { Directory } = jest.requireMock<typeof import('expo-file-system')>('expo-file-system');
+    const remove = jest.spyOn(Directory.prototype, 'delete').mockImplementationOnce(() => {
+      throw new Error('EBUSY');
+    });
+
+    expect(() => clearShareData()).not.toThrow();
+    remove.mockRestore();
+  });
+
+  // jest-expo's own platform. The outbox file is the record there, and the
+  // drain returns what it landed.
+  it('is no part of the iOS path', async () => {
+    platform.OS = 'ios';
+    expect(await saveSharedDraft(draft, api)).toBe('queued');
+
+    expect([...mockFiles.keys()]).toEqual(['group/share/outbox/link-1.json']);
+    mockDirs.add(HANDOFF);
+    mockFiles.set(`${HANDOFF}/link-9`, 'link-9');
+    expect(takeShareHandoffs()).toEqual([]);
   });
 });

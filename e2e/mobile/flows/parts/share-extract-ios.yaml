@@ -1,0 +1,32 @@
+# Open the main app after a share it was not running for, and prove the drained
+# link was handed to a live extractor.
+#
+# The row cannot say so on iOS. Safari gives the share extension the document's
+# real title, so the provisional title and the extracted one are the same
+# string. What does differ is the "links without a preview" prompt: it arms two
+# seconds after a link is seen pending with nothing fetching it, and it stays.
+# A draft drained into an `extractNow` that returned at once is exactly that
+# link. Handed to a live one, the link is owned by the gestured fetch for as
+# long as it is pending and settled after, so the prompt never has a reason to
+# come up (bracemark-expo features/links/previews-prompt.tsx).
+#
+# So the oracle is an absence, and it is given the time a presence would need:
+# the wait below is expected to run out. `Dismiss` is the prompt's own control,
+# the name every other flow reaches it by.
+appId: com.bracemark.app
+---
+- launchApp
+- extendedWaitUntil:
+    visible:
+      id: 'links-screen'
+    timeout: 30000
+- extendedWaitUntil:
+    visible: '.*${LINK_TITLE}.*'
+    timeout: 30000
+
+- extendedWaitUntil:
+    visible: 'Dismiss'
+    timeout: 12000
+    optional: true
+- assertNotVisible: 'Dismiss'
+- takeScreenshot: shared-link-owned-by-the-extractor

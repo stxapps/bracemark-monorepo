@@ -82,13 +82,14 @@ import { SignOutProvider } from '../../contexts/sign-out-provider';
 //                  SignOutProvider it would stay painted over the lock pane.
 //
 // ShareBridge is the share sheet's app-side half (docs/share-sheet.md): it
-// drains the iOS extension's outbox through the write edge on launch/foreground
-// and keeps the App Group taxonomy snapshot fresh after syncs and local edits.
-// It reads useSync AND useExtraction (a drained share is a gestured save, so it
-// gets the same immediate page fetch the add panel's does), so it sits inside
-// both — hence its place under ExtractionProvider rather than directly under
-// SyncProvider. (The Android share activity's inline sync kick lives in
-// saveSharedDraft itself, not here.)
+// drains the iOS share extension's outbox through the write edge on
+// launch/foreground and keeps the App Group taxonomy snapshot fresh after syncs
+// and local edits. It reads useSync AND useExtraction (a drained share is a
+// gestured save, so it gets the same immediate page fetch the add panel's
+// does), so it sits inside both — hence its place under ExtractionProvider
+// rather than directly under SyncProvider. (The Android share activity's inline
+// sync kick lives in saveSharedDraft itself, not here; what it cannot do from
+// its own root — that page fetch — it hands off, and this collects it.)
 export default function AppLayout() {
   return (
     <AuthGuard>

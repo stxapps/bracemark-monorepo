@@ -158,7 +158,8 @@ prepares the main-app state; `runner/share.ts` then performs the real Safari or
 Android `ACTION_SEND` handoff between committed part flows. Run Phase 6 alone by
 passing its comma-separated case ids to `--case`, once per platform.
 
-The extraction cases (Phase 7: `EXTRACT-*`) are the only ones that reach the
+The extraction cases (Phase 7: `EXTRACT-*`, and Phase 6's `SHARE-EXTRACT-*` pair)
+are the only ones that reach the
 public internet — example.com, from `fixtures.json` — and carry the `internet`
 trait for it. They need `npm run dev` for the extractor on 8788 (web's
 `webServer` starts only api and web). `--exclude-trait internet` gives a run with
