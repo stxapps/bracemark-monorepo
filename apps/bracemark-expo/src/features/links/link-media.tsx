@@ -211,8 +211,8 @@ function PreviewFallbackPanel({ host, className }: { host: string; className: st
 // `imageId` is the row's override-wins image ref (LinkView), read local-first
 // and fetched on demand the moment the item mounts (FlashList items are
 // virtualized, so mounted = displayed — useImageFileUri adds the settle delay).
-// Until a uri exists — or when the link has no image at all — the slot shows a
-// fallback keyed by `fallback`: the site favicon on a quiet plate, escalating
+// When the link has no image at all — or its file isn't on this device yet — the
+// slot shows a fallback keyed by `fallback`: the site favicon on a quiet plate, escalating
 // to the full-bleed monogram when there is no favicon either (`icon`, the row's
 // compact slot), or the full-bleed hue panel (`panel`, the card's banner). Either way the placeholder still identifies the link and the
 // geometry never shifts — both call sites pass a FIXED-size `className` (the
@@ -230,13 +230,22 @@ export function LinkPreviewImage({
 }) {
   const uri = useImageFileUri(link.imageId);
 
-  if (uri) {
-    // recyclingKey is the whole reason this slot is expo-image: FlashList
-    // RECYCLES this view down the list, and on a plain Image the previous link's
-    // photo stays painted until this file decodes — a wrong-thumbnail flash on
-    // any fast scroll. Changing the key blanks the view first. (The fallbacks
-    // below are steady states, not that gap — they render when there is no uri
-    // at all.)
+  // `null` is the fallback's case (no image, or nothing local yet); `undefined`
+  // is the read still in flight, and it keeps THIS view mounted with no source.
+  if (uri !== null) {
+    // FlashList RECYCLES this view down the list, so the previous link's photo
+    // must be gone in the render that hands it the next link — a wrong-thumbnail
+    // flash on any fast scroll otherwise. The null source is what does that: the
+    // hook reports in flight for the beat after `imageId` changes, and expo-image
+    // clears a view whose source went away. Not the fallback for that beat — it
+    // is a monogram, so it would flash between two photos on every recycle, and
+    // swapping to it tears this native view down and builds it again.
+    //
+    // recyclingKey was this slot's only guard and it was a beat late: it is fed
+    // from the uri, which arrived WITH the new source, and until then the hook
+    // went on returning the previous link's. It stays as expo-image's own guard
+    // for a source swapped with no in-flight render between. (The fallbacks
+    // below are steady states, not that gap.)
     //
     // cachePolicy 'memory': a file id is IMMUTABLE (content written once under a
     // minted id — file-store.ts), so unlike the favicon above nothing can go
@@ -244,7 +253,7 @@ export function LinkPreviewImage({
     // rows recycle back into view. 'disk' would duplicate the file it just read.
     return (
       <Image
-        source={{ uri }}
+        source={uri ? { uri } : null}
         accessibilityIgnoresInvertColors
         contentFit="cover"
         cachePolicy="memory"

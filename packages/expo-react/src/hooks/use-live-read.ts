@@ -28,6 +28,15 @@
 // Under a paused LiveReadPause (contexts/live-read-pause.tsx), which marks a
 // screen nobody can see, a change is noted the same way. A hold flush skips a
 // paused read, and the read re-runs when the pause lifts.
+//
+// THE STALE BEAT IS THE CALLER'S TO HANDLE, and there are two ways. use-links
+// echoes its page identity through the read and compares. A caller keyed by ONE
+// value, whose result means nothing under any other key, takes
+// `useKeyedLiveRead` at the bottom of this file instead — which is every hook a
+// FlashList-recycled row calls with a per-row key (use-favicon-uri,
+// use-image-file-uri). A recycled row is not remounted: the same instance is
+// handed the next link, so its held value belongs to the PREVIOUS one, and
+// nothing in a row's render says so.
 
 import { useEffect, useRef, useState } from 'react';
 import { addDatabaseChangeListener } from 'expo-sqlite';
@@ -160,4 +169,30 @@ export function useLiveRead<T>(
   }, [paused]);
 
   return value;
+}
+
+// useLiveRead for a read keyed by one value, WITHOUT the stale beat: after `key`
+// changes this reports `undefined` — the same "read in flight" a first mount
+// reports — until the read for the NEW key lands. The read echoes the key it
+// ran for and a mismatch is dropped here, which is use-links' echoed page
+// identity done once for the per-key callers.
+//
+// The specimen is use-favicon-uri, which held the previous host's `ok` verdict
+// for that beat and derived the NEW host's file path from it: a row recycled
+// from an icon'd host onto an icon-less one handed expo-image a path with no
+// file behind it, on every such recycle, with nothing to show for it but a
+// failed load in the device log.
+//
+// So a caller keeps the two sentinels it already has — `undefined` in flight,
+// its own `null` for resolved-empty — and neither can be the previous key's.
+// One consequence to hold onto: a read that FAILS after a key change stays "in
+// flight" (useLiveRead keeps its last good value, which is the old key's, and
+// that is dropped here) until the next change event retries it.
+export function useKeyedLiveRead<K, T>(
+  key: K,
+  read: (key: K) => Promise<T>,
+  tables: readonly string[],
+): T | undefined {
+  const live = useLiveRead(async () => ({ key, value: await read(key) }), [key], tables);
+  return live !== undefined && Object.is(live.key, key) ? live.value : undefined;
 }

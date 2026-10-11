@@ -616,6 +616,19 @@ changes is mechanical, and only the substrate forces it:
   from a querier must be `Promise.resolve`-wrapped or writes silently stop
   re-firing the query — **does not exist here**; expo helpers await freely.
   `react-virtual` likewise becomes `FlashList`.
+- **A recycled row's read is keyed.** Like Dexie's hook, `useLiveRead` holds its
+  previous value for a beat after its `deps` change. Web never meets that beat in
+  a row: its rows are keyed by link path and remount. FlashList **recycles** —
+  the same row instance is handed the next link — so a per-row hook is asked
+  about a new key while still holding the previous key's answer.
+  `useKeyedLiveRead` (same file) reports `undefined`, "in flight", for that beat
+  instead, and every per-row read uses it: `useFaviconUri` and `useImageFileUri`.
+  The specimen is the favicon: its value is a path _derived from the host_, so
+  the previous host's `ok` verdict became the next host's path and expo-image was
+  handed a `file://` uri with nothing behind it on every recycle from an icon'd
+  host to an icon-less one. What each slot renders for the beat is its own
+  decision — the favicon answers from the disk, the preview image blanks — and
+  lives in those two hooks' headers.
 - **The FlashList scroll host stays structurally stable.** `main.tsx` always
   supplies its `RefreshControl`, including while bulk edit suspends
   pull-to-refresh. The rule is about the control's _presence_, not its identity —

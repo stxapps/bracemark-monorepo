@@ -54,7 +54,12 @@ is the usual reason to reach for it:
   `Image` keeps painting the previous source until the new one decodes, so a fast
   scroll flashes the wrong thumbnail on the row it's recycling into;
   `recyclingKey` blanks the view when the key changes. This is the FlashList
-  docs' own recommendation for images in recycled cells.
+  docs' own recommendation for images in recycled cells. It only covers the
+  _decode_, though — the key is the uri, and the uri arrives a read after the
+  link does. The favicon slots close that gap in the hook (the uri is derived
+  from the host, so it changes in the same render); the preview slot renders a
+  `null` source while its read is in flight, which is what actually blanks it
+  ([client-queries.md](./client-queries.md), _a recycled row's read is keyed_).
 - **SVG decoding** — `SDWebImageSVGCoder` on iOS, `androidsvg` on Android, both
   content-sniffed rather than extension-driven (the favicon cache writes
   extension-less files, so that matters). This is what lets the icon sniff accept

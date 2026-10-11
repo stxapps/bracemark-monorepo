@@ -15,6 +15,9 @@
 //     one beat after `deps` change. use-links depends on exactly that to tell a stale page
 //     from a fresh one via the echoed page identity, so "clear on deps change" would look
 //     tidier and would break paging.
+//   - …AND ITS KEYED OPT-OUT. `useKeyedLiveRead` is for the caller whose value means nothing
+//     under another key: a FlashList-recycled row, handed the next link while it is still
+//     holding the previous link's answer. There the beat has to read as "in flight".
 //   - THE PAUSE. A covered screen's reads only note a change and catch up when it shows
 //     again. One that never catches up shows stale rows once Settings closes.
 //   - THE BULK-WRITE HOLD. An import holds live reads so they re-run on a flush every
@@ -31,7 +34,7 @@ import { act, renderHook, waitFor } from '@testing-library/react-native';
 import { LiveReadPause } from '../contexts/live-read-pause';
 import { DB_NAME } from '../data/db';
 import { HELD_FLUSH_MS, holdLiveReads, invalidateLiveReads } from '../data/live-read-invalidation';
-import { useLiveRead } from './use-live-read';
+import { useKeyedLiveRead, useLiveRead } from './use-live-read';
 
 type ChangeEvent = {
   databaseName: string;
@@ -519,6 +522,98 @@ describe('deps', () => {
     await flush();
 
     expect(read).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('the keyed read', () => {
+  // THE RECYCLED ROW. FlashList hands a mounted row the next link, so the hook instance
+  // that answered for one key is asked about another — and useFaviconUri once paired the
+  // held `ok` verdict with the NEW host, deriving a path to an icon that was never
+  // fetched. Under a key the held value is the previous key's, so it must not be reported.
+  it("reports in flight, never the previous key's value, until the new key's read lands", async () => {
+    let release: (() => void) | undefined;
+    const read = jest.fn((key: string) =>
+      key === 'a'
+        ? Promise.resolve('value for a')
+        : new Promise<string>((resolve) => {
+            release = () => resolve(`value for ${key}`);
+          }),
+    );
+    const seen: { key: string; value: string | undefined }[] = [];
+    const { result, rerender } = renderHook(
+      ({ key }: { key: string }) => {
+        const value = useKeyedLiveRead(key, read, ['items']);
+        seen.push({ key, value });
+        return value;
+      },
+      { initialProps: { key: 'a' } },
+    );
+    await waitFor(() => expect(result.current).toBe('value for a'));
+
+    rerender({ key: 'b' });
+    await flush();
+    expect(result.current).toBeUndefined();
+
+    await act(async () => {
+      release?.();
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(result.current).toBe('value for b'));
+
+    // Every render, not just the settled ones: the beat is a single commit.
+    expect(seen.filter((s) => s.key === 'b').map((s) => s.value)).not.toContain('value for a');
+    expect(read).toHaveBeenLastCalledWith('b');
+  });
+
+  // The control for the case above: dropping the held value is for a KEY change only. A
+  // re-read under the same key keeps the value on screen while it runs — blanking there
+  // would flicker every icon and thumbnail on each sync write to their table.
+  it('holds its value through a re-read for the same key', async () => {
+    let version = 1;
+    const seen: (string | undefined)[] = [];
+    const { result } = renderHook(() => {
+      const value = useKeyedLiveRead('a', async (key) => `${key} v${version}`, ['items']);
+      seen.push(value);
+      return value;
+    });
+    await waitFor(() => expect(result.current).toBe('a v1'));
+    const settled = seen.length;
+
+    version = 2;
+    act(() => emit('items'));
+    await waitFor(() => expect(result.current).toBe('a v2'));
+
+    expect(seen.slice(settled)).not.toContain(undefined);
+  });
+
+  // The cost of the rule, pinned so it stays a decision: useLiveRead keeps its last good
+  // value when a read throws, and after a key change that value is the OLD key's — so the
+  // keyed read stays in flight rather than answering for the wrong key, and the next
+  // change event is what retries it.
+  it("stays in flight when the new key's read fails, and recovers on the next change", async () => {
+    let failing = false;
+    const { result, rerender } = renderHook(
+      ({ key }: { key: string }) =>
+        useKeyedLiveRead(
+          key,
+          async (k) => {
+            if (failing) throw new Error('database is locked');
+            return `value for ${k}`;
+          },
+          ['items'],
+        ),
+      { initialProps: { key: 'a' } },
+    );
+    await waitFor(() => expect(result.current).toBe('value for a'));
+
+    failing = true;
+    rerender({ key: 'b' });
+    await flush();
+    expect(result.current).toBeUndefined();
+
+    failing = false;
+    act(() => emit('items'));
+    await waitFor(() => expect(result.current).toBe('value for b'));
   });
 });
 
