@@ -1,6 +1,6 @@
 // Specs for the sheet's apply step. Two things are worth pinning here: that
 // `system` is HANDED to Uniwind rather than resolved (pinning it would shadow
-// the OS signal — the divergence components/theme-provider.tsx documents), and
+// the OS signal — the divergence contexts/theme-provider.tsx documents), and
 // that the sheet defers once the app tree has claimed the theme, which is what
 // keeps an Android share from re-theming the running app it shares a process
 // with.

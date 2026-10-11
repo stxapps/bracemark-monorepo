@@ -40,7 +40,7 @@ import { useCSSVariable } from 'uniwind';
 // Colours come from the active Uniwind theme via `useCSSVariable`, the same
 // mechanism and reasoning as the mark itself: react-native-svg takes fill and
 // stroke as PROPS, so there is no `currentColor` and no className to resolve
-// against. They re-read when `Uniwind.setTheme` fires (components/theme-provider).
+// against. They re-read when `Uniwind.setTheme` fires (contexts/theme-provider).
 
 const RADIUS = 16; // rounded-2xl, matching the Card the rest of the app uses
 const CUT = 24; // the fold — one step above RADIUS (see SIZE above)

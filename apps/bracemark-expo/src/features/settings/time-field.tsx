@@ -34,7 +34,6 @@ import { Platform, View } from 'react-native';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { Clock } from 'lucide-react-native';
 
-import { useTheme } from '../../components/theme-provider';
 import { Button } from '../../components/ui/button';
 import {
   Dialog,
@@ -45,6 +44,7 @@ import {
 } from '../../components/ui/dialog';
 import { Icon } from '../../components/ui/icon';
 import { Text } from '../../components/ui/text';
+import { useTheme } from '../../contexts/theme-provider';
 
 // "HH:mm" 24h ⇄ Date, the picker's currency. `value` reaches us through
 // `coerceThemeState`, so it is always a real "HH:mm" and the parse is total;

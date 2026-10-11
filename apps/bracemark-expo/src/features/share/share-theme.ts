@@ -2,7 +2,7 @@
 // the preference the app mirrored for us and hand it to Uniwind, once, on the
 // sheet's first render.
 //
-// This is `components/theme-provider.tsx`'s apply step and nothing else — no
+// This is `contexts/theme-provider.tsx`'s apply step and nothing else — no
 // `useSettings` (the sheet has no store), no `effectiveTheme` context (nothing
 // under it reads one; `components/ui/input.tsx` gets the keyboard appearance
 // from `useUniwind()`), and no re-resolve triggers: Uniwind's own `Appearance`

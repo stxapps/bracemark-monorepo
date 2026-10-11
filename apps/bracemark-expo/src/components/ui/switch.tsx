@@ -19,7 +19,7 @@ import { useCSSVariable, useUniwind } from 'uniwind';
 // React Native takes switch colors as PROPS, not classNames, so the tokens come
 // from the active Uniwind theme via `useCSSVariable` — the same per-`@variant`
 // vars `global.css` declares, re-read when `Uniwind.setTheme` fires (see
-// components/theme-provider.tsx). Reading them here rather than hardcoding hexes
+// contexts/theme-provider.tsx). Reading them here rather than hardcoding hexes
 // is what keeps this in sync with `global.css`, and reading them from Uniwind
 // rather than our own `useTheme()` keeps this folder free of app contexts (every
 // sibling imports nothing but `../../lib/utils`; `useTheme` also throws without

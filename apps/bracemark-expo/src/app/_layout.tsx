@@ -13,7 +13,7 @@ import { AuthProvider, startStallProbe, useQueryManagers } from '@stxapps/expo-r
 import { ApiClientProvider } from '@stxapps/react';
 
 import { SplashHold } from '../components/splash-hold';
-import { ThemeProvider } from '../components/theme-provider';
+import { ThemeProvider } from '../contexts/theme-provider';
 import { apiClient } from '../lib/api-client';
 
 import '../../global.css';

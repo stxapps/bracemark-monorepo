@@ -213,7 +213,7 @@ plain JS. Single source, no hand-copied duplicate of the resolver.
 
   The second is the **read/apply half**, because RN has no DOM class and no
   pre-paint `<script>`. The `ThemeProvider`
-  (`apps/bracemark-expo/src/components/theme-provider.tsx`) is the port of web-ui's:
+  (`apps/bracemark-expo/src/contexts/theme-provider.tsx`) is the port of web-ui's:
   it consumes the already-resolved `useSettings().theme`, exposes
   `useTheme().effectiveTheme`, and re-resolves on each mode's trigger. It mounts
   once at the root `_layout.tsx`, wrapping `<Stack>` inside the data-layer

@@ -39,7 +39,7 @@ jest.mock('@react-native-community/datetimepicker', () => {
   };
 });
 
-jest.mock('../../components/theme-provider', () => ({
+jest.mock('../../contexts/theme-provider', () => ({
   useTheme: () => ({ effectiveTheme: 'light' }),
 }));
 

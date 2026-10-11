@@ -15,7 +15,7 @@ import { useCSSVariable } from 'uniwind';
 // — which is all the web copy needs — has nothing to resolve against here; the
 // colour comes from the active Uniwind theme via `useCSSVariable`, the same
 // mechanism and the same reasoning as `components/ui/switch.tsx`. It re-reads
-// when `Uniwind.setTheme` fires (components/theme-provider.tsx), and reading the
+// when `Uniwind.setTheme` fires (contexts/theme-provider.tsx), and reading the
 // var beats a `useTheme()` branch over hardcoded hexes, which would duplicate
 // global.css and drag the settings data layer into any spec that renders the
 // mark. It is `--color-foreground` rather than a brand-owned token on purpose:
