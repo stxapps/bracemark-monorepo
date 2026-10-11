@@ -215,4 +215,31 @@ describe('applyMovePlan', () => {
     applyMovePlan(lists, { item: items[0], parentId: 'B', index: 1 });
     expect(shape(lists)).toEqual(before);
   });
+
+  // A destination inside the dragged subtree is not a place the row can land:
+  // the plan is stale, and the forest comes back as it was.
+  it('refuses a destination inside the subtree being moved', () => {
+    expect(applyMovePlan(lists, { item: items[1], parentId: 'B1', index: 0 })).toBe(lists);
+  });
+
+  // The Lists table renders this in the drop's own render, over a forest as deep
+  // as the library's `parentId` chain (tree.ts) — so it copies on its own stack.
+  it('moves a row out of a chain deeper than the call stack', () => {
+    const DEPTH = 50_000;
+    const id = (i: number) => `n${String(i).padStart(6, '0')}`;
+    const deep = Array.from({ length: DEPTH }, (_, i) =>
+      item(id(i), i === 0 ? null : id(i - 1), 'a'),
+    );
+    const forest = buildTree(deep);
+
+    const moved = applyMovePlan(forest, { item: deep[1], parentId: null, index: 1 });
+
+    expect(moved.map((node) => `${node.item.id}:${node.depth}`)).toEqual([
+      `${id(0)}:0`,
+      `${id(1)}:0`,
+    ]);
+    const rows = flattenToRows(moved, NONE);
+    expect(rows).toHaveLength(DEPTH);
+    expect(rows[DEPTH - 1]).toMatchObject({ item: { id: id(DEPTH - 1) }, depth: DEPTH - 2 });
+  });
 });

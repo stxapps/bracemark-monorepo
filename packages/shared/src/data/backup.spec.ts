@@ -249,6 +249,45 @@ describe('classifyBundleLine', () => {
     expect(entry?.data).toEqual({ ...ENTITIES[kind].data, [field]: MINTED_ID });
   });
 
+  // A timestamp the calendar cannot name passes every entity schema — they ask
+  // for an integer — and then throws in the first reader that formats it. A
+  // restore writes what it admits verbatim and syncs it to every device, so this
+  // is the edge that has to refuse it. Listed by hand for the reason FILE_REFS
+  // is: a new clock on an entity has to be added here.
+  const CLOCKS = [
+    ['link', 'createdAt'],
+    ['link', 'updatedAt'],
+    ['list', 'createdAt'],
+    ['list', 'updatedAt'],
+    ['tag', 'createdAt'],
+    ['tag', 'updatedAt'],
+    ['pin', 'createdAt'],
+    ['pin', 'updatedAt'],
+    ['extraction', 'createdAt'],
+    ['extraction', 'updatedAt'],
+    ['extraction', 'extractedAt'],
+  ] as const;
+  const LAST_INSTANT = 8.64e15;
+
+  const withClock = (kind: (typeof CLOCKS)[number][0], field: string, value: number): string =>
+    jsonlLine(ENTITIES[kind].path, { ...ENTITIES[kind].data, [field]: value });
+
+  it.each(CLOCKS)('refuses the %s line whose %s is outside the calendar', (kind, field) => {
+    expect(classifyBundleLine(withClock(kind, field, LAST_INSTANT + 1))).toBeUndefined();
+    expect(classifyBundleLine(withClock(kind, field, -LAST_INSTANT - 1))).toBeUndefined();
+  });
+
+  // The control: the last instant on each side is a date, and a line carrying it
+  // comes back with the value untouched — refused or verbatim, never re-dated.
+  it.each(CLOCKS)('keeps the %s line whose %s is the last instant either way', (kind, field) => {
+    for (const value of [LAST_INSTANT, -LAST_INSTANT]) {
+      const entry = classifyBundleLine(withClock(kind, field, value));
+
+      expect(entry?.kind).toBe(kind);
+      expect(entry?.data).toEqual({ ...ENTITIES[kind].data, [field]: value });
+    }
+  });
+
   // The gate and the wire contract are one question asked at two edges, and this
   // is where they are held against each other. An id the reader admits and
   // `syncPathSchema` refuses is the unsendable op itself; the reverse is a backup

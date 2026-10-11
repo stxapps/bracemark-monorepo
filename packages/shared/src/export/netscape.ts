@@ -33,18 +33,35 @@ function linkLines(link: ExportLinkRow, indent: string, includeNotes: boolean): 
   return lines;
 }
 
-function pushFolder(
-  folder: ExportFolder,
+// Folders open, hold their links and children, and close — walked with an
+// explicit stack rather than recursion, since the tree is as deep as the
+// library's `parentId` chain (see csv.ts). A frame is either a folder still to
+// open or the closing line of one already opened, pushed UNDER its children so it
+// comes off after the last of them.
+function pushFolders(
+  folders: ExportFolder[],
   indent: string,
   out: string[],
   includeNotes: boolean,
 ): void {
-  out.push(`${indent}<DT><H3>${esc(folder.name)}</H3>`);
-  out.push(`${indent}<DL><p>`);
-  const inner = indent + '    ';
-  for (const link of folder.links) out.push(...linkLines(link, inner, includeNotes));
-  for (const child of folder.children) pushFolder(child, inner, out, includeNotes);
-  out.push(`${indent}</DL><p>`);
+  type Frame = { folder: ExportFolder; indent: string } | { close: string };
+  const pending: Frame[] = [];
+  for (let i = folders.length - 1; i >= 0; i--) pending.push({ folder: folders[i], indent });
+  for (let frame = pending.pop(); frame !== undefined; frame = pending.pop()) {
+    if ('close' in frame) {
+      out.push(frame.close);
+      continue;
+    }
+    const { folder } = frame;
+    out.push(`${frame.indent}<DT><H3>${esc(folder.name)}</H3>`);
+    out.push(`${frame.indent}<DL><p>`);
+    const inner = frame.indent + '    ';
+    for (const link of folder.links) out.push(...linkLines(link, inner, includeNotes));
+    pending.push({ close: `${frame.indent}</DL><p>` });
+    for (let i = folder.children.length - 1; i >= 0; i--) {
+      pending.push({ folder: folder.children[i], indent: inner });
+    }
+  }
 }
 
 export function toNetscapeHtml(
@@ -63,8 +80,7 @@ export function toNetscapeHtml(
   ];
   for (const link of bundle.rootLinks ?? [])
     out.push(...linkLines(link, '    ', options.includeNotes === true));
-  for (const folder of bundle.folders)
-    pushFolder(folder, '    ', out, options.includeNotes === true);
+  pushFolders(bundle.folders, '    ', out, options.includeNotes === true);
   out.push('</DL><p>');
   return out.join('\n') + '\n';
 }

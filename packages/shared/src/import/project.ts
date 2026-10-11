@@ -32,6 +32,7 @@
 // nested tree, cannot deepen it by hand, and can always flatten it — the same state a
 // downgrade produces. See docs/data-lifecycle.md, _the shapes_.
 
+import { isCalendarTime } from '../sync/calendar-time';
 import {
   type Extraction,
   extractionSchema,
@@ -53,7 +54,13 @@ import { ranksBetween } from '../sync/rank';
 import { ARCHIVE_ID, TRASH_ID } from '../sync/system-lists';
 import { hostFromText } from '../url/url';
 import type { ImportedLink } from './bundle';
-import { ListResolver, type ResolverNode, TagResolver } from './resolve';
+import {
+  IMPORT_MAX_FOLDER_DEPTH,
+  ImportFolderDepthError,
+  ListResolver,
+  type ResolverNode,
+  TagResolver,
+} from './resolve';
 import { runSteps, runStepsWithPauses } from './steps';
 
 // One entity to write, structurally the write edge's RawEntityEntry on both
@@ -69,10 +76,11 @@ export interface ProjectedImport {
   // pins. (A dangling reference is survivable — the read layer skips it — but
   // it's free to avoid.)
   entries: ProjectedEntry<object>[];
-  // The custom-image blobs, one per distinct source reference. Written BEFORE
-  // `entries` by the orchestrator (content before metadata: a run that dies
-  // between the two leaves an unreferenced blob, never a link pointing at bytes
-  // that never arrived) and one at a time, since they can be MB-sized.
+  // The custom-image blobs, one per distinct source reference that a link in
+  // `entries` actually names — a row the schema refuses contributes none. Written
+  // BEFORE `entries` by the orchestrator (content before metadata: a run that
+  // dies between the two leaves an unreferenced blob, never a link pointing at
+  // bytes that never arrived) and one at a time, since they can be MB-sized.
   files: ProjectedEntry<Uint8Array>[];
   linkCount: number;
   listCount: number;
@@ -112,6 +120,16 @@ function namesOnlyTheAddress(title: string, url: string): boolean {
   return candidate === bare(url) || candidate === bare(hostFromText(url));
 }
 
+// A row's date, or nothing when it is an integer the calendar cannot name
+// (sync/calendar-time.ts). A date is the one field a row can lose and still be
+// the same bookmark, so the row is kept and dated like an undated one rather
+// than refused — what the bookmark converter does with the same value. Anything
+// that is not an integer at all is left for the schema to refuse, as before.
+function calendarDate(epochMs: number | undefined): number | undefined {
+  if (epochMs === undefined || !Number.isInteger(epochMs)) return epochMs;
+  return isCalendarTime(epochMs) ? epochMs : undefined;
+}
+
 // Rows projected between two pauses in `projectImportedLinksInChunks`. The
 // per-row cost is URL parsing (`hostFromText`), an id mint and two schema
 // checks: about 13 ms per thousand rows on web at a 4x CPU slowdown, so a chunk
@@ -140,21 +158,23 @@ export function projectImportedLinksInChunks(
 function* projectSteps(options: ProjectImportOptions): Generator<void, ProjectedImport> {
   const { rows, images, newId, now } = options;
 
+  // Refused whole and FIRST — before a resolver exists, so no list of a
+  // too-deep chain is ever minted (resolve.ts, IMPORT_MAX_FOLDER_DEPTH). A
+  // system-list row's path is never resolved, so it is not counted.
+  for (const row of rows) {
+    if (row.systemList === undefined && row.folderPath.length > IMPORT_MAX_FOLDER_DEPTH) {
+      throw new ImportFolderDepthError();
+    }
+  }
+
   const lists = new ListResolver(options.lists, now, newId);
   const tags = new TagResolver(options.tags, now, newId);
 
   // One blob per distinct reference — two links sharing an image share the file.
+  // Filled as links are ACCEPTED, below: a reference enters this map, and its
+  // bytes enter `files`, only once a link naming it has passed the schema.
   const files: ProjectedEntry<Uint8Array>[] = [];
   const fileIdByRef = new Map<string, string>();
-  for (const row of rows) {
-    const { imageRef } = row;
-    if (imageRef === undefined || fileIdByRef.has(imageRef)) continue;
-    const bytes = images.get(imageRef);
-    if (bytes === undefined) continue;
-    const fileId = newId();
-    fileIdByRef.set(imageRef, fileId);
-    files.push({ path: pathFromId(fileId, FILES_PREFIX), data: bytes });
-  }
 
   let invalidCount = 0;
   let linkCount = 0;
@@ -166,8 +186,8 @@ function* projectSteps(options: ProjectImportOptions): Generator<void, Projected
     const row = rows[i];
     // Undated rows get descending stamps from `now`, so the file's order IS the
     // library's newest-first display order after import.
-    const createdAt = row.createdAt ?? now - i;
-    const updatedAt = Math.max(row.updatedAt ?? createdAt, createdAt);
+    const createdAt = calendarDate(row.createdAt) ?? now - i;
+    const updatedAt = Math.max(calendarDate(row.updatedAt) ?? createdAt, createdAt);
     const id = newId();
     const link: Link = {
       url: row.url,
@@ -196,13 +216,33 @@ function* projectSteps(options: ProjectImportOptions): Generator<void, Projected
     if (customTitle !== undefined && !namesOnlyTheAddress(customTitle, row.url)) {
       link.customTitle = customTitle;
     }
+    // The row's custom image: the blob an earlier accepted row already claimed
+    // for this reference, or a new one that is only PROVISIONAL until this link
+    // validates. The orchestrators write `files` before `entries`, so a blob
+    // selected for a row that is then refused would be stored, uploaded and
+    // counted against the account's storage with no link anywhere naming it.
+    // Selecting here, after the check, is the fix; deleting on refusal would not
+    // be, since a refused row can share its image with an accepted one.
+    let newFile: { ref: string; id: string; bytes: Uint8Array } | undefined;
     if (row.imageRef !== undefined) {
-      const fileId = fileIdByRef.get(row.imageRef);
-      if (fileId !== undefined) link.customImageId = fileId;
+      const claimed = fileIdByRef.get(row.imageRef);
+      if (claimed !== undefined) {
+        link.customImageId = claimed;
+      } else {
+        const bytes = images.get(row.imageRef);
+        if (bytes !== undefined) {
+          newFile = { ref: row.imageRef, id: newId(), bytes };
+          link.customImageId = newFile.id;
+        }
+      }
     }
     if (!linkSchema.safeParse(link).success) {
       invalidCount += 1;
       continue;
+    }
+    if (newFile !== undefined) {
+      fileIdByRef.set(newFile.ref, newFile.id);
+      files.push({ path: pathFromId(newFile.id, FILES_PREFIX), data: newFile.bytes });
     }
     linkEntries.push({ path: pathFromId(id, LINKS_PREFIX), data: link });
     linkCount += 1;

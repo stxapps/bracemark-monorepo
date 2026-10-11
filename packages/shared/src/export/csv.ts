@@ -1,3 +1,4 @@
+import { isCalendarTime } from '../sync/calendar-time';
 import type { ExportBundle, ExportFolder, ExportLinkRow } from './bundle';
 
 // CSV serializer targeting Raindrop.io's import (its documented columns:
@@ -20,6 +21,16 @@ function cell(value: string, spreadsheetSafe: boolean): string {
   return field(spreadsheetSafe && /^[\s]*[=+@-]|^[\t\r\n]/.test(value) ? "'" + value : value);
 }
 
+// The `created` cell: ISO 8601, or empty when the link has no date — or has one
+// the calendar cannot name (sync/calendar-time.ts), for which `toISOString`
+// throws. A stored link can carry such a value from before the import edges
+// refused it, or from another device, and one of them must cost the export one
+// empty cell, not the whole file.
+function created(createdAt: number | undefined): string {
+  if (createdAt === undefined || !isCalendarTime(createdAt)) return '';
+  return new Date(createdAt).toISOString();
+}
+
 function pushLinks(links: ExportLinkRow[], path: string, out: string[], safe: boolean): void {
   for (const link of links) {
     const row = [
@@ -28,16 +39,27 @@ function pushLinks(links: ExportLinkRow[], path: string, out: string[], safe: bo
       link.title,
       link.note ?? '',
       link.tagNames.join(','),
-      link.createdAt === undefined ? '' : new Date(link.createdAt).toISOString(),
+      created(link.createdAt),
     ];
     out.push(row.map((value) => cell(value, safe)).join(','));
   }
 }
 
-function pushFolder(folder: ExportFolder, parentPath: string, out: string[], safe: boolean): void {
-  const path = parentPath === '' ? folder.name : `${parentPath}/${folder.name}`;
-  pushLinks(folder.links, path, out, safe);
-  for (const child of folder.children) pushFolder(child, path, out, safe);
+// Folders are walked with an explicit stack, parents before children and
+// siblings in order: a list tree is as deep as its `parentId` chain, which a
+// backup or another device can make deeper than the call stack.
+function pushFolders(folders: ExportFolder[], out: string[], safe: boolean): void {
+  const pending: { folder: ExportFolder; parentPath: string }[] = [];
+  for (let i = folders.length - 1; i >= 0; i--)
+    pending.push({ folder: folders[i], parentPath: '' });
+  for (let next = pending.pop(); next !== undefined; next = pending.pop()) {
+    const { folder, parentPath } = next;
+    const path = parentPath === '' ? folder.name : `${parentPath}/${folder.name}`;
+    pushLinks(folder.links, path, out, safe);
+    for (let i = folder.children.length - 1; i >= 0; i--) {
+      pending.push({ folder: folder.children[i], parentPath: path });
+    }
+  }
 }
 
 export function toRaindropCsv(
@@ -47,6 +69,6 @@ export function toRaindropCsv(
   const out = [HEADER.join(',')];
   const safe = options.spreadsheetSafe === true;
   pushLinks(bundle.rootLinks ?? [], '', out, safe);
-  for (const folder of bundle.folders) pushFolder(folder, '', out, safe);
+  pushFolders(bundle.folders, out, safe);
   return out.join('\r\n') + '\r\n';
 }

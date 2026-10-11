@@ -11,12 +11,11 @@ import {
 } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 
-import { computeCoverage, type TreeNode } from '@stxapps/shared';
+import { computeCoverage, flattenTree } from '@stxapps/shared';
 import { createLockVerifier, verifyLockPassword } from '@stxapps/web-crypto';
 
 import type { LockRecord } from '../data/db';
 import { APP_LOCK_ID, deleteLock, putLock, readLocks } from '../data/lock-store';
-import type { ListItem } from '../data/queries';
 import { useLists } from '../hooks/use-lists';
 import { useSync } from './sync-provider';
 
@@ -116,14 +115,7 @@ export function LockProvider({ children }: { children: ReactNode }) {
   // sweeping then would wrongly drop every list lock.
   useEffect(() => {
     if (storeStatus !== 'ready' || locks === undefined || lists.length === 0) return;
-    const listIds = new Set<string>();
-    const collect = (nodes: TreeNode<ListItem>[]) => {
-      for (const node of nodes) {
-        listIds.add(node.item.id);
-        collect(node.children);
-      }
-    };
-    collect(lists);
+    const listIds = new Set(flattenTree(lists).map((node) => node.item.id));
     const orphans = (locks ?? []).filter((l) => l.kind === 'list' && !listIds.has(l.id));
     if (orphans.length === 0) return;
     void Promise.all(orphans.map((l) => deleteLock(l.id))).catch(() => {

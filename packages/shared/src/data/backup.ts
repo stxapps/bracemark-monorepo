@@ -25,6 +25,7 @@
 //   files/{id}      the raw decrypted blob bytes for each referenced media id
 //                   (note: NO `.enc` suffix — the zip holds plaintext)
 
+import { isCalendarTime } from '../sync/calendar-time';
 import {
   type Extraction,
   extractionSchema,
@@ -181,6 +182,22 @@ const BUNDLE_NAMESPACES = [
   { prefix: EXTRACTIONS_PREFIX, schema: extractionSchema, kind: 'extraction' as const },
 ];
 
+const ENTITY_TIME_FIELDS = ['createdAt', 'updatedAt'];
+const EXTRACTION_TIME_FIELDS = [...ENTITY_TIME_FIELDS, 'extractedAt'];
+
+// Whether every timestamp an entity line carries is an instant the calendar can
+// name (sync/calendar-time.ts). The schemas above ask only for an integer, and
+// they have to keep asking only that: they also decode what is already stored.
+// `extractedAt` is the extraction's third clock, in the same milliseconds.
+function hasCalendarTimes(data: object, kind: BundleEntryKind): boolean {
+  const fields = kind === 'extraction' ? EXTRACTION_TIME_FIELDS : ENTITY_TIME_FIELDS;
+  for (const field of fields) {
+    const value = (data as Record<string, unknown>)[field];
+    if (typeof value === 'number' && !isCalendarTime(value)) return false;
+  }
+  return true;
+}
+
 // Parse and validate one line; `undefined` means "invalid" — the caller counts
 // it and carries on (a bad line is reported, never fatal).
 export function classifyBundleLine(line: string): BundleEntry | undefined {
@@ -205,6 +222,14 @@ export function classifyBundleLine(line: string): BundleEntry | undefined {
     const id = path.slice(prefix.length, path.length - ENC_SUFFIX.length);
     if (!path.endsWith(ENC_SUFFIX) || !isPathId(id)) return undefined;
     if (!schema.safeParse(data).success) return undefined;
+    // A date outside the calendar is refused here for the reason an id outside
+    // the path grammar is refused below: this is the one edge where the value
+    // comes from a file rather than from this app, and once stored it is
+    // everyone's problem — every device it syncs to, and every reader that turns
+    // it into a calendar string. Refused, never re-dated: a restore promises the
+    // admitted values verbatim, and a backup whose link came back dated today
+    // would not be one. No backup this app writes is affected.
+    if (!hasCalendarTimes(data, kind)) return undefined;
     const entry: BundleEntry = { path, data, kind };
     // The same gate for the ids INSIDE the data. A link's or an extraction's file
     // refs become `files/{id}.enc` paths without ever passing the check above:

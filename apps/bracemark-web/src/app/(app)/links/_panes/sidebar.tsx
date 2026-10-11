@@ -75,6 +75,7 @@ import {
   TRASH_ID,
   type TreeItem,
   type TreeNode,
+  withoutSubtrees,
 } from '@stxapps/shared';
 import {
   readSidebarCollapsedIds,
@@ -162,23 +163,6 @@ function useCollapsedIds() {
   }, []);
 
   return { collapsed, toggle, expand };
-}
-
-// Drop the currently-hidden lists (a locked lock with hideList — lock-provider's
-// closure set, so a hidden parent takes its subtree with it structurally too).
-// The lists stay reachable in Settings → Lists, which is the reveal path.
-function pruneHidden<T extends TreeItem>(
-  nodes: TreeNode<T>[],
-  hiddenIds: ReadonlySet<string>,
-): TreeNode<T>[] {
-  if (hiddenIds.size === 0) return nodes;
-  return nodes
-    .filter((node) => !hiddenIds.has(node.item.id))
-    .map((node) =>
-      node.children.length > 0
-        ? { ...node, children: pruneHidden(node.children, hiddenIds) }
-        : node,
-    );
 }
 
 // The icon for a list row: the system three keep their familiar marks, every
@@ -451,9 +435,11 @@ export function SidebarBody({
   const [filter, setFilter] = useState('');
 
   // What the Lists section actually renders: the tree minus the hidden lists
-  // (locked + hideList). Their LINKS are excluded separately at the query layer
-  // (use-links); this is the navigation half of hiding.
-  const visibleLists = useMemo(() => pruneHidden(lists, hiddenListIds), [lists, hiddenListIds]);
+  // (locked + hideList — lock-provider's closure set, so a hidden parent takes
+  // its subtree with it structurally too). Their LINKS are excluded separately at
+  // the query layer (use-links); this is the navigation half of hiding. The lists
+  // stay reachable in Settings → Lists, which is the reveal path.
+  const visibleLists = useMemo(() => withoutSubtrees(lists, hiddenListIds), [lists, hiddenListIds]);
 
   // A lock marker on rows that carry their OWN engaged lock (children a lock
   // merely covers stay unmarked — the locked ancestor is the visual cue).

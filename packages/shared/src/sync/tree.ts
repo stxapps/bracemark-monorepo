@@ -9,8 +9,19 @@
 // `parentId` that points at a deleted entity, forms a cycle, or names a
 // forbidden parent; none of that may crash or hide an entity, so each is folded
 // back to a root placement. Given identical input the output is identical on
-// every device (sibling order is by `rank`, ties broken by `id`; the cycle scan
-// walks ids in sorted order), so two devices render the same tree.
+// every device (sibling order is by `rank`, ties broken by `id`; a cycle is cut
+// at an edge chosen by id alone), so two devices render the same tree.
+//
+// NOTHING IN THIS FILE RECURSES, and that is a rule rather than a style. A tree
+// is as deep as its `parentId` chain, and the chain is data: a backup restores
+// `parentId` verbatim and another device can sync any chain at all, so depth is
+// decided outside this device. `useLists` builds the tree in render and the lock
+// provider reads it above every signed-in screen, so a walk that used one call
+// frame per level turned one deep chain into a stack overflow that took the whole
+// app down with it — on every launch, since the chain is stored. Every walk here
+// keeps its own stack on the heap instead. (An import's folder chain is bounded
+// separately, import/resolve.ts; that bound covers what an import mints, not what
+// is already stored.)
 
 import { compareRank } from './rank';
 import { LIST_NO_CHILDREN_IDS } from './system-lists';
@@ -55,22 +66,7 @@ export function buildTree<T extends TreeItem>(
     parentOf.set(item.id, p !== null && byId.has(p) && !noChildren.has(p) ? p : null);
   }
 
-  // Break cycles: an entity that can't reach a root by following effective
-  // parents is part of a loop, so detach it (root). Walked over ids in sorted
-  // order so the broken edge is the same on every device. Each detach can only
-  // free other members, never create a new cycle, so one pass suffices.
-  for (const id of [...byId.keys()].sort()) {
-    const seen = new Set<string>();
-    let cur: string | null = id;
-    while (cur !== null) {
-      if (seen.has(cur)) {
-        parentOf.set(id, null);
-        break;
-      }
-      seen.add(cur);
-      cur = parentOf.get(cur) ?? null;
-    }
-  }
+  breakCycles(parentOf);
 
   // Group by effective parent, then assemble top-down, sorting each sibling group.
   const childrenOf = new Map<string | null, T[]>();
@@ -81,32 +77,119 @@ export function buildTree<T extends TreeItem>(
     else childrenOf.set(p, [item]);
   }
 
-  const build = (parentId: string | null, depth: number): TreeNode<T>[] =>
+  const nodesUnder = (parentId: string | null, depth: number): TreeNode<T>[] =>
     (childrenOf.get(parentId) ?? [])
       .slice()
       .sort(compareRank)
-      .map((item) => ({ item, depth, children: build(item.id, depth + 1) }));
+      .map((item) => ({ item, depth, children: [] }));
 
-  return build(null, 0);
+  const roots = nodesUnder(null, 0);
+  const pending = roots.slice();
+  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
+    node.children = nodesUnder(node.item.id, node.depth + 1);
+    for (const child of node.children) pending.push(child);
+  }
+  return roots;
+}
+
+// Break cycles: an entity that can't reach a root by following effective parents
+// runs into a loop, so some edges are cut (the entity becomes a root) until
+// every entity reaches one. WHICH edges is part of the contract — two devices
+// must cut the same ones — and it is defined by a scan this function no longer
+// performs literally: take the ids in sorted order, and detach each one whose
+// walk, at its turn, does not reach a root. That scan re-walked the chain from
+// every id, which is quadratic in the depth, so one long chain cost as much as a
+// large library.
+//
+// What the scan computes has a closed form, and this is it. Say an entity's
+// walk "runs into a cycle" when following parents from it never ends. Then:
+//
+//  - of a cycle's own members, exactly the least id is detached — it is the
+//    first of them the scan reaches, and once it is a root the others reach it;
+//  - an entity on a TAIL leading into a cycle is detached exactly when its id is
+//    less than every id after it on its walk (the rest of the tail and the whole
+//    cycle) — otherwise something nearer the cycle was detached first, and the
+//    walk now ends there.
+//
+// So one number per entity settles it: `floor`, the least id on its walk from
+// itself onward, or null when the walk reaches a root. Each entity is walked
+// once. tree.spec.ts holds the sorted scan as an oracle and compares the two on
+// generated graphs, cycles with tails included.
+function breakCycles(parentOf: Map<string, string | null>): void {
+  const floor = new Map<string, string | null>();
+  // Position of an id on the walk in progress. Never cleared: an id left over
+  // from an earlier walk is already in `floor`, which is tested first.
+  const onWalk = new Map<string, number>();
+  const detached: string[] = [];
+
+  for (const start of parentOf.keys()) {
+    if (floor.has(start)) continue;
+
+    const walk: string[] = [];
+    let cur: string | null = start;
+    while (cur !== null && !floor.has(cur) && !onWalk.has(cur)) {
+      onWalk.set(cur, walk.length);
+      walk.push(cur);
+      cur = parentOf.get(cur) ?? null;
+    }
+
+    // What the walk ran into: a root, an entity already settled, or itself.
+    let least: string | null;
+    let tailLength = walk.length;
+    if (cur === null) {
+      least = null;
+    } else if (floor.has(cur)) {
+      least = floor.get(cur) ?? null;
+    } else {
+      tailLength = onWalk.get(cur) ?? 0;
+      least = walk[tailLength];
+      for (let i = tailLength + 1; i < walk.length; i++) if (walk[i] < least) least = walk[i];
+      for (let i = tailLength; i < walk.length; i++) floor.set(walk[i], least);
+      detached.push(least);
+    }
+
+    // Back down the tail, nearest the cycle first.
+    for (let i = tailLength - 1; i >= 0; i--) {
+      const id = walk[i];
+      if (least !== null && id < least) {
+        detached.push(id);
+        least = id;
+      }
+      floor.set(id, least);
+    }
+  }
+
+  for (const id of detached) parentOf.set(id, null);
+}
+
+// Visit every node of a forest depth-first — a parent before its children,
+// siblings in order: the order the UI renders rows in. `each` returns true to
+// stop the walk. The one traversal the readers below share, on its own stack.
+function visit<T extends TreeItem>(
+  nodes: TreeNode<T>[],
+  each: (node: TreeNode<T>) => boolean | void,
+): void {
+  const pending: TreeNode<T>[] = [];
+  for (let i = nodes.length - 1; i >= 0; i--) pending.push(nodes[i]);
+  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
+    if (each(node) === true) return;
+    for (let i = node.children.length - 1; i >= 0; i--) pending.push(node.children[i]);
+  }
 }
 
 // Flatten a forest back to a depth-first list — the order the UI renders rows in,
 // each row already carrying its `depth`. Saves every consumer rewriting the same
-// recursion just to map over nodes.
+// walk just to map over nodes.
 export function flattenTree<T extends TreeItem>(nodes: TreeNode<T>[]): TreeNode<T>[] {
   const out: TreeNode<T>[] = [];
-  const walk = (ns: TreeNode<T>[]): void => {
-    for (const n of ns) {
-      out.push(n);
-      walk(n.children);
-    }
-  };
-  walk(nodes);
+  visit(nodes, (node) => {
+    out.push(node);
+  });
   return out;
 }
 
 // --- projections over a forest -------------------------------------------------
-// The walks below all recur the same depth-first shape as flattenTree, but each
+// The walks below all follow the same depth-first shape as flattenTree, but each
 // carries a different accumulator (a name map, ancestor names, sibling groups),
 // so flattenTree — which only yields the nodes — can't express them. They lived
 // hand-rolled and duplicated across web and expo before landing here.
@@ -118,13 +201,9 @@ export function treeNameMap<T extends TreeItem & { name: string }>(
   nodes: TreeNode<T>[],
 ): Map<string, string> {
   const map = new Map<string, string>();
-  const walk = (ns: TreeNode<T>[]): void => {
-    for (const n of ns) {
-      map.set(n.item.id, n.item.name);
-      walk(n.children);
-    }
-  };
-  walk(nodes);
+  visit(nodes, (node) => {
+    map.set(node.item.id, node.item.name);
+  });
   return map;
 }
 
@@ -148,15 +227,46 @@ export function flattenToPathRows<T extends TreeItem & { name: string }>(
   excludeIds?: readonly string[],
 ): TreePathRow<T>[] {
   const out: TreePathRow<T>[] = [];
-  const walk = (ns: TreeNode<T>[], ancestors: string[]): void => {
-    for (const n of ns) {
-      if (!excludeIds?.includes(n.item.id)) {
-        out.push({ item: n.item, depth: n.depth, ancestors });
-      }
-      walk(n.children, [...ancestors, n.item.name]);
+  const pending: { node: TreeNode<T>; ancestors: string[] }[] = [];
+  const root: string[] = [];
+  for (let i = nodes.length - 1; i >= 0; i--) pending.push({ node: nodes[i], ancestors: root });
+  for (let next = pending.pop(); next !== undefined; next = pending.pop()) {
+    const { node, ancestors } = next;
+    if (!excludeIds?.includes(node.item.id)) {
+      out.push({ item: node.item, depth: node.depth, ancestors });
     }
-  };
-  walk(nodes, []);
+    if (node.children.length === 0) continue;
+    // One array per PARENT, shared by its children's rows.
+    const below = [...ancestors, node.item.name];
+    for (let i = node.children.length - 1; i >= 0; i--) {
+      pending.push({ node: node.children[i], ancestors: below });
+    }
+  }
+  return out;
+}
+
+// A forest without the subtrees rooted at `ids` — the sidebar's "drop the hidden
+// lists" (a hidden parent takes its subtree with it structurally). Returns
+// `nodes` itself when there is nothing to drop, so a memo keyed on it holds.
+export function withoutSubtrees<T extends TreeItem>(
+  nodes: TreeNode<T>[],
+  ids: ReadonlySet<string>,
+): TreeNode<T>[] {
+  if (ids.size === 0) return nodes;
+  const out: TreeNode<T>[] = [];
+  const pending: { from: TreeNode<T>[]; into: TreeNode<T>[] }[] = [{ from: nodes, into: out }];
+  for (let group = pending.pop(); group !== undefined; group = pending.pop()) {
+    for (const node of group.from) {
+      if (ids.has(node.item.id)) continue;
+      if (node.children.length === 0) {
+        group.into.push(node);
+        continue;
+      }
+      const copy: TreeNode<T> = { ...node, children: [] };
+      group.into.push(copy);
+      pending.push({ from: node.children, into: copy.children });
+    }
+  }
   return out;
 }
 
@@ -188,15 +298,41 @@ export function flattenToRows<T extends TreeItem>(
   collapsedIds: ReadonlySet<string>,
 ): TreeRow<T>[] {
   const rows: TreeRow<T>[] = [];
-  const walk = (group: TreeNode<T>[], parentId: string | null) => {
-    const siblings = group.map((node) => node.item);
-    group.forEach((node, index) => {
-      const hasChildren = node.children.length > 0;
-      rows.push({ item: node.item, depth: node.depth, parentId, hasChildren, siblings, index });
-      if (hasChildren && !collapsedIds.has(node.item.id)) walk(node.children, node.item.id);
+  // One frame per open sibling group, with how far through it the walk is.
+  interface Frame {
+    group: TreeNode<T>[];
+    siblings: T[];
+    parentId: string | null;
+    index: number;
+  }
+  const open = (group: TreeNode<T>[], parentId: string | null): Frame => ({
+    group,
+    siblings: group.map((node) => node.item),
+    parentId,
+    index: 0,
+  });
+  const frames: Frame[] = [open(nodes, null)];
+  while (frames.length > 0) {
+    const frame = frames[frames.length - 1];
+    if (frame.index >= frame.group.length) {
+      frames.pop();
+      continue;
+    }
+    const index = frame.index++;
+    const node = frame.group[index];
+    const hasChildren = node.children.length > 0;
+    rows.push({
+      item: node.item,
+      depth: node.depth,
+      parentId: frame.parentId,
+      hasChildren,
+      siblings: frame.siblings,
+      index,
     });
-  };
-  walk(nodes, null);
+    if (hasChildren && !collapsedIds.has(node.item.id)) {
+      frames.push(open(node.children, node.item.id));
+    }
+  }
   return rows;
 }
 
@@ -230,27 +366,45 @@ export function forbiddenParentIds<T extends TreeItem>(
 // must be expanded for `id`'s row to be visible (the sidebar's auto-expand).
 // Empty when `id` isn't in the forest.
 export function ancestorIds<T extends TreeItem>(nodes: TreeNode<T>[], id: string): string[] {
-  const walk = (ns: TreeNode<T>[], trail: string[]): string[] | null => {
-    for (const n of ns) {
-      if (n.item.id === id) return trail;
-      const found = walk(n.children, [...trail, n.item.id]);
-      if (found) return found;
+  // Each frame remembers the frame it was reached from, so the path is read back
+  // off the one that matched instead of being copied down to every node.
+  interface Frame {
+    node: TreeNode<T>;
+    parent: Frame | null;
+  }
+  const pending: Frame[] = [];
+  for (let i = nodes.length - 1; i >= 0; i--) pending.push({ node: nodes[i], parent: null });
+  for (let frame = pending.pop(); frame !== undefined; frame = pending.pop()) {
+    if (frame.node.item.id === id) {
+      const trail: string[] = [];
+      for (let up = frame.parent; up !== null; up = up.parent) trail.push(up.node.item.id);
+      return trail.reverse();
     }
-    return null;
-  };
-  return walk(nodes, []) ?? [];
+    const { children } = frame.node;
+    for (let i = children.length - 1; i >= 0; i--) {
+      pending.push({ node: children[i], parent: frame });
+    }
+  }
+  return [];
 }
 
-function findNode<T extends TreeItem>(nodes: TreeNode<T>[], id: string): TreeNode<T> | undefined {
-  for (const node of nodes) {
-    if (node.item.id === id) return node;
-    const inChild = findNode(node.children, id);
-    if (inChild) return inChild;
-  }
-  return undefined;
+// The node with `id`, wherever it sits in the forest — the first in depth-first
+// order, should a malformed forest ever hold two.
+export function findNode<T extends TreeItem>(
+  nodes: TreeNode<T>[],
+  id: string,
+): TreeNode<T> | undefined {
+  let found: TreeNode<T> | undefined;
+  visit(nodes, (node) => {
+    if (node.item.id !== id) return false;
+    found = node;
+    return true;
+  });
+  return found;
 }
 
 function collectSubtreeIds<T extends TreeItem>(node: TreeNode<T>, into: Set<string>): void {
-  into.add(node.item.id);
-  for (const child of node.children) collectSubtreeIds(child, into);
+  visit([node], (each) => {
+    into.add(each.item.id);
+  });
 }

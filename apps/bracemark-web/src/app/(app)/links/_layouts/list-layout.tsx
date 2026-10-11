@@ -28,6 +28,7 @@ import {
   useScrollTopOnQuery,
   useTagMap,
 } from './shared';
+import { SortedDate } from './sorted-date';
 
 // Row heights are MEASURED, not budgeted. The title is `line-clamp-2`, so a row's
 // height turns on whether that title wraps — and whether it wraps is a fact about
@@ -88,32 +89,6 @@ const ESTIMATE_TAGGED = 116;
 // Past this many pixels we treat the pane as "scrolled away from the top", so a
 // background sync is staged behind the refresh pill (see view-state-provider).
 const SCROLL_TOP_THRESHOLD = 8;
-
-// Compact, localized "N ago" for the wide-pane date column (the sorted field —
-// created or updated; the row supplies the verb). Intl.RelativeTimeFormat
-// only formats a (count, unit) pair, so we pick the largest unit that fits and hand it the
-// count; `numeric: 'auto'` yields "yesterday"/"last week" where they read better than
-// "1 … ago", and `style: 'short'` keeps the column narrow ("3 days ago", "2 mo. ago").
-const relativeTimeFormat = new Intl.RelativeTimeFormat(undefined, {
-  numeric: 'auto',
-  style: 'short',
-});
-const RELATIVE_UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
-  ['year', 365 * 24 * 60 * 60 * 1000],
-  ['month', 30 * 24 * 60 * 60 * 1000],
-  ['week', 7 * 24 * 60 * 60 * 1000],
-  ['day', 24 * 60 * 60 * 1000],
-  ['hour', 60 * 60 * 1000],
-  ['minute', 60 * 1000],
-];
-function formatRelativeTime(epochMs: number): string {
-  const diff = epochMs - Date.now(); // < 0 for the past
-  const abs = Math.abs(diff);
-  for (const [unit, ms] of RELATIVE_UNITS) {
-    if (abs >= ms) return relativeTimeFormat.format(Math.round(diff / ms), unit);
-  }
-  return relativeTimeFormat.format(Math.round(diff / 1000), 'second');
-}
 
 export function ListLayout({
   links,
@@ -419,14 +394,7 @@ export function ListLayout({
                     rows are ordered by (see dateVerb above). dateTime carries the exact
                     instant; title/aria-label prefix the verb so the field is legible
                     to hover and AT (the bare visible text can't say which it is). */}
-                <time
-                  dateTime={new Date(link[sortOn]).toISOString()}
-                  title={`${dateVerb} ${new Date(link[sortOn]).toLocaleString()}`}
-                  aria-label={`${dateVerb} ${formatRelativeTime(link[sortOn])}`}
-                  className="hidden shrink-0 text-xs whitespace-nowrap text-muted-foreground @xl:block"
-                >
-                  {formatRelativeTime(link[sortOn])}
-                </time>
+                <SortedDate epochMs={link[sortOn]} verb={dateVerb} />
                 {!bulkEditing && (
                   <LinkRowMenu
                     link={link}

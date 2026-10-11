@@ -39,15 +39,29 @@ export const EMPTY_COVERAGE: Coverage = {
 // open the outermost door first; an inner lock takes over on the recompute after
 // that unlock). `ancestorHidden` propagates hide from any locked ancestor, and a
 // list's OWN locked hide flag applies even under a non-hiding ancestor lock.
+//
+// On an explicit stack, each entry carrying what its ancestors decided, rather
+// than recursing: the forest is as deep as the library's `parentId` chain
+// (tree.ts), and this runs in the lock provider above every signed-in screen. It
+// walks the SAME forest the screens render — never a flattened or depth-capped
+// copy of it, which would detach a deep list from the lock that covers it.
 function walkCoverage<T extends TreeItem>(
   nodes: TreeNode<T>[],
   lockRows: ReadonlyMap<string, CoverageLock>,
   unlockedIds: ReadonlySet<string>,
-  ancestorLockId: string | null,
-  ancestorHidden: boolean,
   out: { locked: Set<string>; hidden: Set<string>; covering: Map<string, string> },
 ): void {
-  for (const node of nodes) {
+  interface Entry {
+    node: TreeNode<T>;
+    ancestorLockId: string | null;
+    ancestorHidden: boolean;
+  }
+  const pending: Entry[] = [];
+  for (let i = nodes.length - 1; i >= 0; i--) {
+    pending.push({ node: nodes[i], ancestorLockId: null, ancestorHidden: false });
+  }
+  for (let entry = pending.pop(); entry !== undefined; entry = pending.pop()) {
+    const { node, ancestorLockId, ancestorHidden } = entry;
     const own = lockRows.get(node.item.id);
     const ownActive = own !== undefined && !unlockedIds.has(own.id) ? own : undefined;
     const lockId = ancestorLockId ?? ownActive?.id ?? null;
@@ -57,7 +71,9 @@ function walkCoverage<T extends TreeItem>(
       out.covering.set(node.item.id, lockId);
       if (isHidden) out.hidden.add(node.item.id);
     }
-    walkCoverage(node.children, lockRows, unlockedIds, lockId, isHidden, out);
+    for (let i = node.children.length - 1; i >= 0; i--) {
+      pending.push({ node: node.children[i], ancestorLockId: lockId, ancestorHidden: isHidden });
+    }
   }
 }
 
@@ -72,6 +88,6 @@ export function computeCoverage<T extends TreeItem>(
     hidden: new Set<string>(),
     covering: new Map<string, string>(),
   };
-  walkCoverage(lists, lockRows, unlockedIds, null, false, out);
+  walkCoverage(lists, lockRows, unlockedIds, out);
   return { lockedListIds: out.locked, hiddenListIds: out.hidden, coveringLockIds: out.covering };
 }

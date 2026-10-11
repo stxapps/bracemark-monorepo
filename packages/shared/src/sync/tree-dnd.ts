@@ -17,7 +17,7 @@
 // only the px constants and the gesture plumbing aren't.
 
 import { LIST_NO_CHILDREN_IDS } from './system-lists';
-import { childrenOf, type TreeItem, type TreeNode, type TreeRow } from './tree';
+import { childrenOf, findNode, type TreeItem, type TreeNode, type TreeRow } from './tree';
 
 export interface Projection {
   depth: number;
@@ -196,37 +196,51 @@ export function applyMovePlan<T extends TreeItem>(
 ): TreeNode<T>[] {
   const id = plan.item.id;
 
-  const lifted: TreeNode<T>[] = [];
-  const without = (group: TreeNode<T>[]): TreeNode<T>[] =>
-    group.flatMap((node) => {
-      if (node.item.id === id) {
-        lifted.push(node);
-        return [];
-      }
-      return [{ ...node, children: without(node.children) }];
-    });
-  const rest = without(nodes);
-  if (lifted.length === 0) return nodes;
+  const lifted = findNode(nodes, id);
+  if (lifted === undefined) return nodes;
 
-  const atDepth = (node: TreeNode<T>, depth: number): TreeNode<T> => ({
-    ...node,
-    depth,
-    children: node.children.map((child) => atDepth(child, depth + 1)),
-  });
-  const setDown = (group: TreeNode<T>[], depth: number): TreeNode<T>[] => {
-    const next = group.slice();
-    next.splice(plan.index, 0, atDepth(lifted[0], depth));
-    return next;
+  // A fresh copy of everything else, so the set-down below can splice into it.
+  const rest = copyForest(nodes, { skipId: id });
+  const setDown = (group: TreeNode<T>[], depth: number): void => {
+    group.splice(plan.index, 0, ...copyForest([lifted], { depth }));
   };
-  if (plan.parentId === null) return setDown(rest, 0);
+  if (plan.parentId === null) {
+    setDown(rest, 0);
+    return rest;
+  }
 
-  let placed = false;
-  const into = (group: TreeNode<T>[]): TreeNode<T>[] =>
-    group.map((node) => {
-      if (node.item.id !== plan.parentId) return { ...node, children: into(node.children) };
-      placed = true;
-      return { ...node, children: setDown(node.children, node.depth + 1) };
-    });
-  const next = into(rest);
-  return placed ? next : nodes;
+  // Looked up in `rest`, so a destination inside the lifted subtree is not found.
+  const parent = findNode(rest, plan.parentId);
+  if (parent === undefined) return nodes;
+  setDown(parent.children, parent.depth + 1);
+  return rest;
+}
+
+// A deep copy of a forest, on its own stack (the tree is as deep as the
+// library's `parentId` chain — tree.ts). `skipId` leaves that node and its
+// subtree out; `depth` re-roots the copy at that depth, each level one deeper,
+// and without it every node keeps the depth it had.
+function copyForest<T extends TreeItem>(
+  nodes: TreeNode<T>[],
+  options: { skipId?: string; depth?: number },
+): TreeNode<T>[] {
+  const out: TreeNode<T>[] = [];
+  const pending: { from: TreeNode<T>[]; into: TreeNode<T>[]; depth: number | undefined }[] = [
+    { from: nodes, into: out, depth: options.depth },
+  ];
+  for (let group = pending.pop(); group !== undefined; group = pending.pop()) {
+    for (const node of group.from) {
+      if (node.item.id === options.skipId) continue;
+      const copy: TreeNode<T> = { ...node, depth: group.depth ?? node.depth, children: [] };
+      group.into.push(copy);
+      if (node.children.length > 0) {
+        pending.push({
+          from: node.children,
+          into: copy.children,
+          depth: group.depth === undefined ? undefined : group.depth + 1,
+        });
+      }
+    }
+  }
+  return out;
 }

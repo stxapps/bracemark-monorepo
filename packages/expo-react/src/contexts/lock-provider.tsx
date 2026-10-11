@@ -11,7 +11,7 @@ import {
 import { AppState } from 'react-native';
 
 import { createLockVerifier, verifyLockPassword } from '@stxapps/expo-crypto';
-import { computeCoverage, type ListItem, type TreeNode } from '@stxapps/shared';
+import { computeCoverage, flattenTree } from '@stxapps/shared';
 
 import { APP_LOCK_ID, deleteLock, type LockRecord, putLock, readLocks } from '../data/lock-store';
 import { useLists } from '../hooks/use-lists';
@@ -194,14 +194,7 @@ export function LockProvider({ children }: { children: ReactNode }) {
   // would wrongly drop every list lock.
   useEffect(() => {
     if (storeStatus !== 'ready' || locks === undefined || lists.length === 0) return;
-    const listIds = new Set<string>();
-    const collect = (nodes: TreeNode<ListItem>[]) => {
-      for (const node of nodes) {
-        listIds.add(node.item.id);
-        collect(node.children);
-      }
-    };
-    collect(lists);
+    const listIds = new Set(flattenTree(lists).map((node) => node.item.id));
     const orphans = (locks ?? []).filter((l) => l.kind === 'list' && !listIds.has(l.id));
     if (orphans.length === 0) return;
     void Promise.all(orphans.map((l) => deleteLock(l.id))).catch(() => {

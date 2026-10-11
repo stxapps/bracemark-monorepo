@@ -3,12 +3,14 @@ import {
   ancestorIds,
   buildTree,
   childrenOf,
+  findNode,
   flattenToPathRows,
   flattenToRows,
   flattenTree,
   forbiddenParentIds,
   type TreeItem,
   treeNameMap,
+  withoutSubtrees,
 } from './tree';
 
 // Minimal tree item; `name` rides along to prove the whole entity is carried.
@@ -85,6 +87,156 @@ describe('buildTree', () => {
     const forward = shape(buildTree(items));
     const reversed = shape(buildTree([...items].reverse()));
     expect(forward).toEqual(reversed);
+  });
+
+  // WHICH edge a cycle is cut at is part of the contract: every device must cut
+  // the same one, or the same library renders as two different trees. The rule is
+  // the scan below — ids in sorted order, detach each one whose walk does not
+  // reach a root at its turn. buildTree used to run it literally, re-walking the
+  // chain from every id, which is quadratic in depth; it now computes the same
+  // answer in one pass. This is that scan kept as an oracle, so the faster form
+  // cannot quietly start choosing a different edge.
+  function rootsByTheSortedScan(items: Node[]): string[] {
+    const ids = new Set(items.map((i) => i.id));
+    const parentOf = new Map<string, string | null>();
+    for (const i of items)
+      parentOf.set(i.id, i.parentId !== null && ids.has(i.parentId) ? i.parentId : null);
+    for (const id of [...ids].sort()) {
+      const seen = new Set<string>();
+      let cur: string | null = id;
+      while (cur !== null) {
+        if (seen.has(cur)) {
+          parentOf.set(id, null);
+          break;
+        }
+        seen.add(cur);
+        cur = parentOf.get(cur) ?? null;
+      }
+    }
+    return [...ids].filter((id) => parentOf.get(id) === null).sort();
+  }
+  const roots = (items: Node[]) =>
+    buildTree(items)
+      .map((node) => node.item.id)
+      .sort();
+
+  // A tail leading INTO a cycle is the case with two answers: the tail's own node
+  // is detached when its id sorts before everything it leads to, and left in
+  // place when something nearer the cycle was detached first. `t` → a ⇄ b.
+  it.each([
+    ['the tail sorts first', 'a0', ['a0', 'b1']],
+    ['the tail sorts last', 'z9', ['b1']],
+  ])('cuts a cycle with a tail the way the sorted scan does (%s)', (_, tail, expected) => {
+    const items = [n('b1', 'c2', 'a'), n('c2', 'b1', 'a'), n(tail, 'b1', 'a')];
+
+    expect(rootsByTheSortedScan(items)).toEqual(expected);
+    expect(roots(items)).toEqual(expected);
+  });
+
+  it('agrees with the sorted scan on generated graphs, cycles and tails included', () => {
+    // A fixed-seed generator, so a failure names a graph that can be replayed.
+    let seed = 0x2f6e2b1;
+    const next = (bound: number) => {
+      seed = (Math.imul(seed, 1103515245) + 12345) & 0x7fffffff;
+      return seed % bound;
+    };
+
+    for (let round = 0; round < 400; round++) {
+      const size = 1 + next(12);
+      // Ids whose sort order is unrelated to their position in any chain.
+      const ids = Array.from(
+        { length: size },
+        (_, i) => `${String.fromCharCode(97 + next(26))}${i}`,
+      );
+      // Mostly parented, so chains run long enough to close on themselves; a
+      // sixth point at an id that is not in the set (an orphan).
+      const items = ids.map((id) => {
+        const pick = next(size + 3);
+        const parentId = pick < size ? ids[pick] : pick === size ? 'ghost' : null;
+        return n(id, parentId, 'a');
+      });
+
+      expect({ round, roots: roots(items) }).toEqual({ round, roots: rootsByTheSortedScan(items) });
+      // And no entity is lost or duplicated by the cut.
+      expect(
+        shape(buildTree(items))
+          .map((x) => x.id)
+          .sort(),
+      ).toEqual([...ids].sort());
+    }
+  });
+});
+
+// A tree is as deep as its `parentId` chain, and the chain is data: a backup
+// restores it verbatim and another device can sync any chain. Every reader here
+// used to take one call frame per level, and `useLists` builds the tree in render
+// under a provider that sits above every signed-in screen — so one deep chain was
+// a stack overflow on every launch. The depth below is several times what any
+// engine's stack holds; the old walks throw RangeError on it.
+describe('a chain deeper than the call stack', () => {
+  const DEPTH = 50_000;
+  const id = (i: number) => `n${String(i).padStart(6, '0')}`;
+  const chain = Array.from({ length: DEPTH }, (_, i) => n(id(i), i === 0 ? null : id(i - 1), 'a'));
+  const leaf = id(DEPTH - 1);
+  // Built once, from the leaf up, so the builder cannot lean on input order.
+  const tree = buildTree([...chain].reverse());
+
+  it('builds, with every entity at its own depth', () => {
+    const flat = flattenTree(tree);
+
+    expect(flat).toHaveLength(DEPTH);
+    expect(flat[0]).toMatchObject({ item: { id: id(0) }, depth: 0 });
+    expect(flat[DEPTH - 1]).toMatchObject({ item: { id: leaf }, depth: DEPTH - 1 });
+  });
+
+  it('is readable by every walker the screens use', () => {
+    expect(treeNameMap(tree).size).toBe(DEPTH);
+    expect(flattenToRows(tree, new Set())).toHaveLength(DEPTH);
+    expect(flattenToRows(tree, new Set([id(2)]))).toHaveLength(3);
+    expect(findNode(tree, leaf)?.depth).toBe(DEPTH - 1);
+    expect(childrenOf(tree, id(DEPTH - 2)).map((item) => item.id)).toEqual([leaf]);
+    expect(ancestorIds(tree, leaf)).toHaveLength(DEPTH - 1);
+    expect(ancestorIds(tree, id(2))).toEqual([id(0), id(1)]);
+    expect(forbiddenParentIds(tree, id(1), new Set()).size).toBe(DEPTH - 1);
+    expect(flattenTree(withoutSubtrees(tree, new Set([id(3)])))).toHaveLength(3);
+  });
+
+  it('breaks a cycle that long without re-walking it from every member', () => {
+    // The whole chain closed into one loop: the least id is cut, the rest hang
+    // from it. The literal scan walks DEPTH entities DEPTH times here.
+    const loop = chain.map((item, i) => (i === 0 ? { ...item, parentId: leaf } : item));
+    const out = buildTree(loop);
+
+    expect(out.map((node) => node.item.id)).toEqual([id(0)]);
+    expect(flattenTree(out)).toHaveLength(DEPTH);
+  });
+});
+
+describe('withoutSubtrees', () => {
+  it('drops each named node with everything under it, and nothing else', () => {
+    const out = withoutSubtrees(fixture(), new Set(['cooking']));
+
+    expect(shape(out)).toEqual([
+      { id: 'work', depth: 0 },
+      { id: 'travel', depth: 1 },
+      { id: 'home', depth: 0 },
+    ]);
+  });
+
+  it('does not mutate the forest it was given', () => {
+    const forest = fixture();
+    const before = shape(forest);
+    withoutSubtrees(forest, new Set(['cooking', 'home']));
+
+    expect(shape(forest)).toEqual(before);
+  });
+
+  // The sidebar memoizes on the result; a fresh array per render for the common
+  // "nothing is hidden" case would repaint the whole list tree every time.
+  it('hands back the same forest when there is nothing to drop', () => {
+    const forest = fixture();
+
+    expect(withoutSubtrees(forest, new Set())).toBe(forest);
   });
 });
 

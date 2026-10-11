@@ -36,6 +36,34 @@ export interface ResolverNode {
   rank: string;
 }
 
+// The deepest folder chain an import builds. A file names its own depth — a
+// Netscape file by how many <DL>s it opens, a CSV by the separators in one cell,
+// a LinkWarden backup by its parentId chain — and every level becomes a list, so
+// without a bound the file decides how deep this library's tree is. The readers
+// no longer depend on that (sync/tree.ts walks with its own stack, not the call
+// stack), but a tree nobody could have built by hand is still not one an import
+// should mint, and the per-level costs that remain grow with it: a picker row
+// carries its ancestors' names, an exported folder its whole path.
+//
+// 100 is the bookmark converter's rule (tools/bookmark-converter.ts), which now
+// reads this constant, so the tool on the marketing site and the app's import
+// refuse the same file. It is far past any export a bookmark manager writes —
+// browsers and their users stop within a dozen levels — which is the point: the
+// bound should never be met by a real library.
+export const IMPORT_MAX_FOLDER_DEPTH = 100;
+
+// Thrown before anything is resolved or written. The message is user-facing: both
+// import views and the converter render it verbatim. The WHOLE file is refused,
+// not the deep rows: dropping them would leave an import that looks complete,
+// and cutting their paths short would file links in folders the file never put
+// them in.
+export class ImportFolderDepthError extends Error {
+  constructor() {
+    super('This file has too many nested folders. Flatten the folder tree and try again.');
+    this.name = 'ImportFolderDepthError';
+  }
+}
+
 export class ListResolver {
   private childrenOf = new Map<string | null, { id: string; name: string; rank: string }[]>();
   private resolved = new Map<string, string>();

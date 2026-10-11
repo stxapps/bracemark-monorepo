@@ -127,6 +127,14 @@ first; an inner lock takes over on the recompute _after_ that unlock). `hideList
 propagates from any locked ancestor, and a list's own locked `hideList` applies
 even under a non-hiding ancestor lock.
 
+The walk keeps its own stack rather than recursing, because the forest is as
+deep as the library's `parentId` chain and this runs above every signed-in
+screen ([data-lifecycle.md](./data-lifecycle.md), _import_). It walks the **same
+forest the screens render** — never a flattened or depth-capped copy. Either
+would be the easy way to bound the work and would detach a deep list from the
+lock that covers it, showing its links; a display limit, if one is ever wanted,
+belongs in the row's indentation, not in the tree coverage reads.
+
 ### unlocked state is in-memory only — the load-bearing invariant
 
 The one thing the store deliberately does **not** persist is _which locks are

@@ -89,6 +89,40 @@ describe('computeCoverage', () => {
     });
   });
 
+  // Coverage runs in the lock provider, above every signed-in screen, over a
+  // forest as deep as the library's `parentId` chain — which a backup or another
+  // device decides. One call frame per level made a deep chain a crash on every
+  // launch. The fix must not be a depth cap or a flattened copy: either would
+  // detach a deep list from the lock above it and show its links.
+  describe('a chain deeper than the call stack', () => {
+    const DEPTH = 50_000;
+    // Built leaf-up so constructing the fixture does not recurse either.
+    let chain = node(`n${DEPTH - 1}`);
+    for (let i = DEPTH - 2; i >= 0; i--) chain = node(`n${i}`, [chain]);
+    const lists = [chain];
+    const deepest = `n${DEPTH - 1}`;
+
+    it('covers the deepest descendant with the lock at the top', () => {
+      const coverage = computeCoverage(lists, rows(listLock('n0', true)), new Set());
+
+      expect(coverage.lockedListIds.size).toBe(DEPTH);
+      expect(coverage.coveringLockIds.get(deepest)).toBe('n0');
+      expect(coverage.hiddenListIds.has(deepest)).toBe(true);
+    });
+
+    it('still lets an inner lock take over below an unlocked outer one', () => {
+      const inner = `n${DEPTH - 2}`;
+      const coverage = computeCoverage(
+        lists,
+        rows(listLock('n0'), listLock(inner)),
+        new Set(['n0']),
+      );
+
+      expect(coverage.lockedListIds).toEqual(new Set([inner, deepest]));
+      expect(coverage.coveringLockIds.get(deepest)).toBe(inner);
+    });
+  });
+
   it('returns the empty coverage when there are no list locks', () => {
     const lists = [node('parent', [node('child')])];
     expect(computeCoverage(lists, rows(), new Set()).lockedListIds.size).toBe(0);

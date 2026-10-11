@@ -23,6 +23,7 @@ import { detectTextImportFormat } from '../import/detect';
 import { parseLinkwardenExport } from '../import/linkwarden';
 import { parseNetscapeHtml } from '../import/netscape';
 import { isRaindropCsvHeader } from '../import/raindrop';
+import { IMPORT_MAX_FOLDER_DEPTH, ImportFolderDepthError } from '../import/resolve';
 import { parseUrlText } from '../import/text';
 import type { Extraction, Link, List, Tag } from '../sync/entities';
 import { EXTRACTIONS_PREFIX, LINKS_PREFIX, rekey } from '../sync/paths';
@@ -121,13 +122,8 @@ function flatten(bundle: ExportBundle): ImportedLink[] {
   function rows(links: ExportLinkRow[], path: string[]) {
     for (const link of links) out.push({ ...link, customTitle: link.title, folderPath: path });
   }
-  function walk(folder: ExportFolder, path: string[]) {
-    const next = [...path, folder.name];
-    rows(folder.links, next);
-    for (const child of folder.children) walk(child, next);
-  }
   rows(bundle.rootLinks ?? [], []);
-  for (const folder of bundle.folders) walk(folder, []);
+  for (const { folder, path } of foldersWithPaths(bundle.folders)) rows(folder.links, path);
   return out;
 }
 
@@ -173,13 +169,28 @@ function readBackup(
   };
 }
 
+// Every folder in the tree with its root-first path, parents before children and
+// siblings in order. Walked with its own stack: a backup's list tree is as deep
+// as the backup says, and this runs before the depth rule below can refuse it.
+function foldersWithPaths(folders: ExportFolder[]): { folder: ExportFolder; path: string[] }[] {
+  const out: { folder: ExportFolder; path: string[] }[] = [];
+  const pending: { folder: ExportFolder; parent: string[] }[] = [];
+  for (let i = folders.length - 1; i >= 0; i--) pending.push({ folder: folders[i], parent: [] });
+  for (let next = pending.pop(); next !== undefined; next = pending.pop()) {
+    const path = [...next.parent, next.folder.name];
+    out.push({ folder: next.folder, path });
+    const { children } = next.folder;
+    for (let i = children.length - 1; i >= 0; i--) {
+      pending.push({ folder: children[i], parent: path });
+    }
+  }
+  return out;
+}
+
 // Every folder path in the tree, parents before children — how a backup's lists,
 // empty ones included, reach the observer.
-function folderPaths(folders: ExportFolder[], parent: string[] = []): string[][] {
-  return folders.flatMap((folder) => {
-    const path = [...parent, folder.name];
-    return [path, ...folderPaths(folder.children, path)];
-  });
+function folderPaths(folders: ExportFolder[]): string[][] {
+  return foldersWithPaths(folders).map(({ path }) => path);
 }
 
 /** Strict file inspection around the tolerant app parsers. No URL mining fallback. */
@@ -211,10 +222,7 @@ export function convertBookmarkFiles(
   let sourceRowCount = 0;
   let trashCount = 0;
   const addFolder = (path: string[]) => {
-    if (path.length > 100)
-      throw new Error(
-        'This file has too many nested folders. Flatten the folder tree and try again.',
-      );
+    if (path.length > IMPORT_MAX_FOLDER_DEPTH) throw new ImportFolderDepthError();
     for (let length = 1; length <= path.length; length++) {
       const part = path.slice(0, length);
       paths.set(JSON.stringify(part), part);

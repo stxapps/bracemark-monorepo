@@ -72,6 +72,21 @@ describe('toUrlText', () => {
 // export/text.ts and import/text.ts are documented as read mirrors, and nothing
 // tested the pair. Going through parseImportText pins detection too: a URL list
 // must not sniff as one of the richer formats.
+describe('toUrlText over a deep tree', () => {
+  // The folder tree is as deep as the library's list chain (sync/tree.ts), which
+  // a restored backup or another device decides — deeper than the call stack here.
+  it('reaches a link at the bottom of a chain deeper than the call stack', () => {
+    let chain: ExportBundle['folders'][number] = {
+      name: 'leaf',
+      links: [link('https://example.com/deep')],
+      children: [],
+    };
+    for (let i = 0; i < 50_000; i++) chain = { name: 'f', links: [], children: [chain] };
+
+    expect(toUrlText(bundle([chain]))).toBe('https://example.com/deep\n');
+  });
+});
+
 describe('toUrlText → parseImportText', () => {
   it('recovers every url, in order, with no folder or tag signal', () => {
     const text = toUrlText(

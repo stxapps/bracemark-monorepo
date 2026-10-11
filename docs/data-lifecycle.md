@@ -87,7 +87,8 @@ write an account; original files still import directly through Settings → Data
 
 Limits cover file and expanded ZIP bytes, archive entries, bookmark records,
 folder count and depth, plus a worker deadline — see _the bookmark converter's
-limits_ below. ZIP decoding uses native streams in the existing worker, checks
+limits_ below. The depth limit is the app's own import rule
+(`IMPORT_MAX_FOLDER_DEPTH`), read from one constant. ZIP decoding uses native streams in the existing worker, checks
 CRCs, and measures emitted bytes as well as declared sizes. It never fetches
 saved addresses or archive references. Clear/cancel and unmount terminate work;
 changing the output replaces the receipt and download.
@@ -442,6 +443,55 @@ The policy, decided once:
   this app writes is affected, since every id either platform mints is a UUID;
   the converter counts such a line as an invalid record through the same
   function.
+- **A backup line's timestamps are gated to the calendar, at the same edge.** An
+  entity's `createdAt`/`updatedAt` are `z.number().int()`, and an integer is a
+  larger set than a date: `Date` represents ±8.64e15 ms around the epoch, the
+  schema admits every safe integer, and `toISOString` **throws** on a value in
+  the gap. The web list row called it in render for the field the list is sorted
+  by — hidden column or not — so one such link took down the list layout of
+  every view containing it, on every device it synced to.
+  `classifyBundleLine` now refuses a link, list, tag, pin or extraction line
+  carrying one (an extraction's `extractedAt` included) and counts it invalid,
+  through `isCalendarTime` (`sync/calendar-time.ts`). **Refused, never re-dated**
+  — a restore promises the admitted values verbatim, and a link that came back
+  dated today would not be a restore. As with the ids above, the entity schemas
+  are _not_ where this lives, for the same reason: they decode what is already
+  stored. So the readers that turn a date into a calendar string tolerate one
+  regardless — the list row renders "date unknown" with no `dateTime`
+  (`sorted-date.tsx`), and the CSV export leaves the `created` cell empty rather
+  than aborting the file. No backup this app writes is affected.
+- **An interop date the calendar cannot name is dropped; the row is kept.** The
+  same value reaches the projection legitimately — the epoch parser's unit
+  inference is by magnitude, and a source can simply carry a wrong number. A date
+  is the one field a row can lose and still be the same bookmark, so
+  `projectImportedLinks` treats it as absent, each of the two dates on its own,
+  and the row is stamped as an undated one would be. This is what the bookmark
+  converter already did with the same value. A date that is not an integer at
+  all is still refused by the schema, row and all, as before.
+- **A custom image crosses only with a link that was accepted.** The projection
+  hands back `files` and the orchestrators write them _first_ (content before
+  metadata), so a blob chosen for a row the schema then refuses would be stored,
+  queued and uploaded with no link anywhere naming it — counted against the
+  account's storage, reported by nothing. The blob is therefore selected
+  **after** its row validates, under a provisional id until then. Selection, not
+  cleanup: deleting on refusal would take the image from an accepted row that
+  shares it. A reference is claimed by the first _accepted_ row, so a refused row
+  ahead of it in the file does not cost the later one its image.
+- **A folder chain past 100 levels refuses the whole file.**
+  `IMPORT_MAX_FOLDER_DEPTH` (`import/resolve.ts`). Every segment of a folder path
+  becomes a list, and each format lets the file choose the depth — nested `<DL>`s,
+  separators in one CSV cell, a `parentId` chain — so without a bound the file
+  decides how deep this library's tree is. The check runs before a resolver
+  exists, so nothing of a refused file is minted; it throws
+  `ImportFolderDepthError`, whose message both import views render verbatim. The
+  **file** is refused rather than the deep rows — dropping them would leave an
+  import that looks complete, and shortening their paths would file links where
+  the file never put them. A system-list row is not counted: its path is never
+  resolved. 100 was already the bookmark converter's rule, which now reads the
+  same constant, so the tool and the app refuse the same file. It bounds what an
+  import **mints**, not what is stored: a backup restores `parentId` verbatim and
+  another device can sync any chain, which is why nothing that reads the tree
+  recurses (below).
 - **The plan's link cap is enforced up front**, _before anything is written_ —
   see _the import's quota gate_ below for the shape, which differs between an
   interop file and a backup. This is one of the places that enforce the cap at
@@ -506,6 +556,23 @@ The policy, decided once:
   which is where an action-triggered paywall belongs. A free account can hold a
   nested tree, cannot deepen it by hand, and can always flatten it — the same
   state a downgrade produces.
+
+**Nothing that reads the list tree recurses.** A tree is as deep as its
+`parentId` chain, and the chain is data this device does not choose. `useLists`
+builds the tree in render and the lock provider reads it above every signed-in
+screen, so a walk that took one call frame per level turned one deep chain into
+a stack overflow on every launch — the chain is stored, so reloading reproduces
+it, and the screens that could have removed it are under the provider that threw.
+`buildTree` and every projection beside it (`sync/tree.ts`), lock coverage
+(`sync/lock-coverage.ts`), the drop preview (`sync/tree-dnd.ts`), the library →
+folder snapshot (`export/bundle.ts`) and the three interop serializers all keep
+their own stack on the heap. `buildTree`'s cycle cut went with it: it used to
+re-walk the chain from every id, quadratic in depth, and now settles each entity
+once while cutting exactly the edges the sorted scan did — which edge is cut is
+part of the contract, since two devices must render the same tree, and
+`tree.spec.ts` holds the old scan as an oracle. What stays proportional to depth
+is output, not stack: a picker row carries its ancestors' names, an exported
+folder its whole path, a Netscape line its indent.
 
 Only the platform-bound half of that lives in each orchestrator (the store
 reads, the zip library, the file API). The rest is shared, so the two can't

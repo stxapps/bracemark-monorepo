@@ -1,5 +1,12 @@
 import { type Link, LINK_NOTE_MAX } from '../sync/entities';
-import { EXTRACTIONS_PREFIX, LINKS_PREFIX, PINS_PREFIX } from '../sync/paths';
+import {
+  EXTRACTIONS_PREFIX,
+  FILES_PREFIX,
+  LINKS_PREFIX,
+  LISTS_PREFIX,
+  pathFromId,
+  PINS_PREFIX,
+} from '../sync/paths';
 import { ranksBetween } from '../sync/rank';
 import { ARCHIVE_ID, MY_LIST_ID, TRASH_ID } from '../sync/system-lists';
 import type { ImportedLink } from './bundle';
@@ -10,6 +17,7 @@ import {
   projectImportedLinksInChunks,
   type ProjectImportOptions,
 } from './project';
+import { IMPORT_MAX_FOLDER_DEPTH, ImportFolderDepthError } from './resolve';
 
 // The pure half of an import: rows in, every blob the run will write out. It is
 // where an import's USER-VISIBLE behaviour is decided — which list a row lands in,
@@ -183,12 +191,198 @@ describe('projectImportedLinks', () => {
       images: new Map([['kept.png', bytes]]),
     });
 
-    expect(result.files).toEqual([{ path: 'files/new-1.enc', data: bytes }]);
     const links = linksOf(result);
-    expect(links[0].customImageId).toBe('new-1');
-    expect(links[1].customImageId).toBe('new-1');
+    expect(links[0].customImageId).toBeDefined();
+    expect(links[1].customImageId).toBe(links[0].customImageId);
     expect(links[2].customImageId).toBeUndefined();
+    expect(result.files).toEqual([
+      { path: pathFromId(links[0].customImageId as string, FILES_PREFIX), data: bytes },
+    ]);
     expect(result.linkCount).toBe(3);
+  });
+
+  // The orchestrators write `files` BEFORE `entries` and both write edges queue a
+  // put for each, so a blob selected for a row that is then refused is stored,
+  // uploaded and charged to the account with no link naming it. Nothing reports
+  // it: the receipt counts the refused row, and the image is simply there. The
+  // refusal below is a fractional date, which the schema still refuses outright.
+  const REFUSED = { createdAt: 1.5 };
+
+  it('selects no blob for a row the schema refuses', () => {
+    const result = project({
+      rows: [row({ url: 'https://example.com/bad', imageRef: 'only.png', ...REFUSED })],
+      images: new Map([['only.png', new Uint8Array([1, 2, 3])]]),
+    });
+
+    expect(result).toMatchObject({ invalidCount: 1, linkCount: 0 });
+    expect(result.files).toEqual([]);
+  });
+
+  // A refused row and an accepted one can name the same image, in either order.
+  // Refused-first is the case a "skip the ref once seen" map gets wrong: the
+  // refused row would claim the reference and the accepted row's image would be
+  // dropped with it.
+  it.each([
+    ['refused first', ['bad', 'good']],
+    ['accepted first', ['good', 'bad']],
+  ] as const)('keeps one blob for an image shared with a refused row (%s)', (_, order) => {
+    const bytes = new Uint8Array([4, 5, 6]);
+    const result = project({
+      rows: order.map((name) =>
+        row({
+          url: `https://example.com/${name}`,
+          imageRef: 'shared.png',
+          ...(name === 'bad' ? REFUSED : {}),
+        }),
+      ),
+      images: new Map([['shared.png', bytes]]),
+    });
+
+    const [good] = linksOf(result);
+    expect(result).toMatchObject({ invalidCount: 1, linkCount: 1 });
+    expect(good.url).toBe('https://example.com/good');
+    expect(result.files).toEqual([
+      { path: pathFromId(good.customImageId as string, FILES_PREFIX), data: bytes },
+    ]);
+  });
+
+  // A date the calendar cannot name passes `z.number().int()` and then throws in
+  // whichever reader first asks for it as a string — the web list row did, in
+  // render. It arrives legitimately: a microsecond timestamp read as milliseconds
+  // is one. The row is the user's bookmark either way, so it is kept and dated as
+  // an undated row would be.
+  describe('a date outside the calendar', () => {
+    const LAST_INSTANT = 8.64e15;
+
+    it('is treated as no date, each of the two on its own', () => {
+      const result = project({
+        rows: [
+          row({ url: 'https://example.com/both', createdAt: LAST_INSTANT + 1, updatedAt: -9e15 }),
+          row({ url: 'https://example.com/created', createdAt: LAST_INSTANT + 1, updatedAt: 500 }),
+          row({ url: 'https://example.com/updated', createdAt: 400, updatedAt: LAST_INSTANT + 1 }),
+        ],
+      });
+
+      expect(result).toMatchObject({ invalidCount: 0, linkCount: 3 });
+      expect(linksOf(result).map(({ createdAt, updatedAt }) => ({ createdAt, updatedAt }))).toEqual(
+        [
+          // Both gone: the undated row's descending stamp.
+          { createdAt: NOW, updatedAt: NOW },
+          // The stamp replaces createdAt; updatedAt may not precede it.
+          { createdAt: NOW - 1, updatedAt: NOW - 1 },
+          { createdAt: 400, updatedAt: 400 },
+        ],
+      );
+    });
+
+    // The control: a gate that dropped every unusual date would pass the case
+    // above. The last representable instant on each side is a real date.
+    it('keeps the last instant the calendar can name, on both sides', () => {
+      const result = project({
+        rows: [
+          row({ url: 'https://example.com/late', createdAt: LAST_INSTANT }),
+          row({ url: 'https://example.com/early', createdAt: -LAST_INSTANT, updatedAt: 0 }),
+        ],
+      });
+
+      expect(linksOf(result).map(({ createdAt, updatedAt }) => ({ createdAt, updatedAt }))).toEqual(
+        [
+          { createdAt: LAST_INSTANT, updatedAt: LAST_INSTANT },
+          { createdAt: -LAST_INSTANT, updatedAt: 0 },
+        ],
+      );
+    });
+
+    it('never reaches the extraction or the pin written beside the link', () => {
+      const result = project({
+        rows: [
+          row({
+            url: 'https://example.com/a',
+            title: 'A',
+            pinRank: 'aa',
+            createdAt: LAST_INSTANT + 1,
+            updatedAt: LAST_INSTANT + 2,
+          }),
+        ],
+      });
+
+      const stamps = [...under(result, EXTRACTIONS_PREFIX), ...under(result, PINS_PREFIX)].map(
+        (entry) => entry.data as { createdAt: number; updatedAt: number },
+      );
+      expect(stamps).toHaveLength(2);
+      for (const { createdAt, updatedAt } of stamps) {
+        expect(createdAt).toBe(NOW);
+        expect(updatedAt).toBe(NOW);
+      }
+    });
+  });
+
+  // Every segment of a folder path becomes a list, so the file decides how deep
+  // the library's tree is unless something says otherwise. The whole file is
+  // refused, before anything is minted: a refusal that came after resolution
+  // would leave the half-built chain behind as empty lists.
+  describe('a folder chain past the import limit', () => {
+    const chain = (depth: number) => Array.from({ length: depth }, (_, i) => `f${i}`);
+
+    it('builds a chain exactly at the limit', () => {
+      const result = project({
+        rows: [row({ url: 'https://example.com/a', folderPath: chain(IMPORT_MAX_FOLDER_DEPTH) })],
+      });
+
+      expect(result).toMatchObject({ linkCount: 1, listCount: IMPORT_MAX_FOLDER_DEPTH });
+      expect(under(result, LISTS_PREFIX)).toHaveLength(IMPORT_MAX_FOLDER_DEPTH);
+    });
+
+    it('refuses the file one level deeper, before minting anything', () => {
+      let minted = 0;
+      const run = () =>
+        project({
+          rows: [
+            row({ url: 'https://example.com/shallow', folderPath: ['Work'] }),
+            row({
+              url: 'https://example.com/deep',
+              folderPath: chain(IMPORT_MAX_FOLDER_DEPTH + 1),
+            }),
+          ],
+          newId: () => `new-${++minted}`,
+        });
+
+      expect(run).toThrow(ImportFolderDepthError);
+      expect(minted).toBe(0);
+    });
+
+    it('rejects the chunked projection the orchestrators call, too', async () => {
+      await expect(
+        projectImportedLinksInChunks(
+          {
+            rows: [
+              row({ url: 'https://example.com/a', folderPath: chain(IMPORT_MAX_FOLDER_DEPTH + 1) }),
+            ],
+            lists: [],
+            tags: [],
+            existingPinRanks: [],
+            images: new Map(),
+            newId: idMinter(),
+            now: NOW,
+          },
+          async () => undefined,
+        ),
+      ).rejects.toThrow(ImportFolderDepthError);
+    });
+
+    it('does not count the path of a system-list row, which is never resolved', () => {
+      const result = project({
+        rows: [
+          row({
+            url: 'https://example.com/a',
+            systemList: 'archive',
+            folderPath: chain(IMPORT_MAX_FOLDER_DEPTH + 1),
+          }),
+        ],
+      });
+
+      expect(result).toMatchObject({ linkCount: 1, listCount: 0 });
+    });
   });
 
   it('keeps the source extractor’s title provisional and the user’s own title deliberate', () => {

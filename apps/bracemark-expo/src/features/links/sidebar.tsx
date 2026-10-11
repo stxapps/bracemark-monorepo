@@ -51,6 +51,7 @@ import {
   TRASH_ID,
   type TreeItem,
   type TreeNode,
+  withoutSubtrees,
 } from '@stxapps/shared';
 
 import { BrandLockup } from '../../components/brand-lockup';
@@ -122,23 +123,6 @@ function listIcon(id: string): LucideIcon {
   if (id === ARCHIVE_ID) return Archive;
   if (id === TRASH_ID) return Trash2;
   return Folder;
-}
-
-// Drop the currently-hidden lists (a locked lock with hideList — lock-provider's
-// closure set, so a hidden parent takes its subtree with it structurally too).
-// The lists stay reachable in Settings → Lists, which is the reveal path.
-function pruneHidden<T extends TreeItem>(
-  nodes: TreeNode<T>[],
-  hiddenIds: ReadonlySet<string>,
-): TreeNode<T>[] {
-  if (hiddenIds.size === 0) return nodes;
-  return nodes
-    .filter((node) => !hiddenIds.has(node.item.id))
-    .map((node) =>
-      node.children.length > 0
-        ? { ...node, children: pruneHidden(node.children, hiddenIds) }
-        : node,
-    );
 }
 
 // The row's stable handle for the mobile flows (docs/e2e.md, _the testID
@@ -435,9 +419,11 @@ export function Sidebar({ closeDrawer }: { closeDrawer: () => void }) {
   const [filter, setFilter] = useState('');
 
   // What the Lists section actually renders: the tree minus the hidden lists
-  // (locked + hideList). Their LINKS are excluded separately at the query
-  // layer (use-links); this is the navigation half of hiding.
-  const visibleLists = useMemo(() => pruneHidden(lists, hiddenListIds), [lists, hiddenListIds]);
+  // (locked + hideList — lock-provider's closure set, so a hidden parent takes
+  // its subtree with it structurally too). Their LINKS are excluded separately
+  // at the query layer (use-links); this is the navigation half of hiding. The
+  // lists stay reachable in Settings → Lists, which is the reveal path.
+  const visibleLists = useMemo(() => withoutSubtrees(lists, hiddenListIds), [lists, hiddenListIds]);
 
   // Flattened once for the count gate and the filter matches (web parity). When
   // filtering we show a FLAT list of matches — hierarchy and collapse ignored,

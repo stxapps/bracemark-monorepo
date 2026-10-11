@@ -1,5 +1,11 @@
 import { parseImportText } from '../import/parse';
-import type { ExportBundle, ExportFolder, ExportLinkRow } from './bundle';
+import type { ListItem } from '../sync/items';
+import {
+  bundleFromLibrary,
+  type ExportBundle,
+  type ExportFolder,
+  type ExportLinkRow,
+} from './bundle';
 import { toRaindropCsv } from './csv';
 import { toNetscapeHtml } from './netscape';
 
@@ -101,6 +107,65 @@ describe('toRaindropCsv', () => {
 // exporting their library and importing it back is the one path that exercises
 // both halves, and it goes through DETECTION too — a file we write but do not
 // recognise re-imports as the wrong format.
+// What a stored library can hold that no export this app writes would produce.
+// Both arrive by a restored backup or a sync from another device, and both used
+// to end the export with an exception instead of a file.
+describe('toRaindropCsv over a library the import edges would now refuse', () => {
+  it('leaves the created cell empty for a date the calendar cannot name', () => {
+    // `toISOString` throws on it. One such link must cost one cell, not the file.
+    const csv = toRaindropCsv(
+      bundle([
+        folder('F', [
+          link({ url: 'https://example.com/before', title: 'Before' }),
+          link({ url: 'https://example.com/odd', title: 'Odd', createdAt: 8.64e15 + 1 }),
+          link({ url: 'https://example.com/after', title: 'After' }),
+        ]),
+      ]),
+    );
+
+    expect(csv.trimEnd().split('\r\n').slice(1)).toEqual([
+      'https://example.com/before,F,Before,,,2026-01-02T03:04:05.000Z',
+      'https://example.com/odd,F,Odd,,,',
+      'https://example.com/after,F,After,,,2026-01-02T03:04:05.000Z',
+    ]);
+  });
+
+  it('writes a list chain deeper than the call stack, library to file', () => {
+    // bundleFromLibrary and the serializer both walked the tree recursively.
+    const DEPTH = 20_000;
+    const id = (i: number) => `l${i}`;
+    const lists: ListItem[] = Array.from({ length: DEPTH }, (_, i) => ({
+      path: `lists/${id(i)}.enc`,
+      id: id(i),
+      name: 'f',
+      parentId: i === 0 ? null : id(i - 1),
+      rank: 'a',
+      createdAt: 0,
+      updatedAt: 0,
+    }));
+    const stored = {
+      link: {
+        url: 'https://example.com/deep',
+        listId: id(DEPTH - 1),
+        tagIds: [],
+        customTitle: 'Deep',
+        createdAt: Date.UTC(2026, 0, 2, 3, 4, 5),
+        updatedAt: Date.UTC(2026, 0, 2, 3, 4, 5),
+      },
+      extraction: undefined,
+    };
+
+    const rows = toRaindropCsv(bundleFromLibrary([stored], lists, []))
+      .trimEnd()
+      .split('\r\n');
+
+    expect(rows).toHaveLength(2);
+    expect(rows[1]).toBe(
+      `https://example.com/deep,${Array(DEPTH).fill('f').join('/')},Deep,,,2026-01-02T03:04:05.000Z`,
+    );
+  });
+});
+
 describe('toRaindropCsv → parseImportText', () => {
   const reimport = (text: string) => parseImportText(text).links;
 

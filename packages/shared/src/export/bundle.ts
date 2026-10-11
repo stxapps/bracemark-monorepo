@@ -148,10 +148,22 @@ export function bundleFromLibrary(
     else rowsByListId.set(listId, [row]);
   }
 
-  const toFolder = (node: TreeNode<ListItem>): ExportFolder => ({
-    name: node.item.name,
-    links: rowsByListId.get(node.item.id) ?? [],
-    children: node.children.map(toFolder),
-  });
-  return { folders: tree.map(toFolder) };
+  // Tree → folders with an explicit stack, not `children.map(toFolder)`: the
+  // tree is as deep as the library's `parentId` chain (sync/tree.ts).
+  const folders: ExportFolder[] = [];
+  const pending: { nodes: TreeNode<ListItem>[]; into: ExportFolder[] }[] = [
+    { nodes: tree, into: folders },
+  ];
+  for (let group = pending.pop(); group !== undefined; group = pending.pop()) {
+    for (const node of group.nodes) {
+      const folder: ExportFolder = {
+        name: node.item.name,
+        links: rowsByListId.get(node.item.id) ?? [],
+        children: [],
+      };
+      group.into.push(folder);
+      if (node.children.length > 0) pending.push({ nodes: node.children, into: folder.children });
+    }
+  }
+  return { folders };
 }
