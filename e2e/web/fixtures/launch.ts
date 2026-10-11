@@ -57,7 +57,11 @@ export interface LaunchOptions {
   // and an account nobody finishes creating is one nobody has to clean up.
   // Ignored when `existing` or `create` is set.
   signedOut?: boolean;
-  // Watch the run. `slowMo` is only useful with this on.
+  // Watch the run. `slowMo` is only useful with this on. Unset, they follow
+  // E2E_HEADED and E2E_SLOW_MO, which runner/web.ts sets from `--headed` and
+  // `--slow-mo`: Playwright's own flag reaches only a browser Playwright
+  // launches, and every context here is launched by this function — a headed
+  // run stayed headless until this read it.
   headed?: boolean;
   slowMo?: number;
   // Raster density for `page.screenshot`. 2 everywhere except the marketing
@@ -93,8 +97,8 @@ export async function launchApp(
     baseURL: options.baseURL ?? WEB_URL,
     bypassCSP: false,
     ignoreHTTPSErrors: false,
-    headless: !options.headed,
-    slowMo: options.slowMo,
+    headless: !(options.headed ?? process.env.E2E_HEADED === '1'),
+    slowMo: options.slowMo ?? (Number(process.env.E2E_SLOW_MO) || undefined),
     // The repo's type sizes are small enough that a 1x screenshot is hard to read
     // when a failure needs eyeballing.
     deviceScaleFactor: options.deviceScaleFactor ?? 2,

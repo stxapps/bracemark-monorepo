@@ -1968,22 +1968,38 @@ already running:
 npm run dev # api :8787, web :3000, extractor :8788
 ```
 
-Every entrypoint now owns a preflight. Web resolves existing listeners on 3000
-and 8787 to their process cwd before Playwright may reuse them; CI disables
-server reuse completely. Playwright starts or reuses the web and API legs
-independently, so an orphaned same-checkout Next listener cannot prevent the
-missing API from starting. Native resolves Metro in the Expo dev-client link,
-requires it to report a running packager from this checkout, and records the
-link and all stack origins. It also requires the selected device to be booted,
-the development build to be installed, and Android to have completed boot with
-the 8081/8787/8788 reverse mappings. With an `online` case selected it also
-fetches the bundle Metro serves and requires its api origin to be the one the
-run provisions against (_driving the native apps_). A failed preflight happens
-before account provisioning.
+Every entrypoint now owns a preflight. Web resolves existing listeners on 3000,
+8787 and 8788 to their process cwd before Playwright may reuse them; CI disables
+server reuse completely. Playwright starts or reuses the web, API and extractor
+legs independently, so an orphaned same-checkout Next listener cannot prevent the
+missing API from starting. The extractor leg was missing at first: `e2e-web`
+booted a stack one leg short of `npm run dev`'s, and the three `EXTRACT-*` web
+cases failed on every run started from free ports. `e2e-visual` shares the three
+legs; `e2e-extension` starts only web and API. Native resolves Metro in the Expo
+dev-client link, requires it to report a running packager from this checkout,
+and records the link and all stack origins. It also requires the selected device
+to be booted, the development build to be installed, and Android to have
+completed boot with the 8081/8787/8788 reverse mappings. With an `online` case
+selected it also fetches the bundle Metro serves and requires its api origin to
+be the one the run provisions against (_driving the native apps_). A failed
+preflight happens before account provisioning.
+
+⚠ **A leg Playwright started is stopped with SIGTERM (`gracefulShutdown`), and
+nothing fails at the time when it isn't.** Playwright's default is SIGKILL to
+the process group. That takes `nx` and leaves the dev server it spawned: the
+wrangler legs went away by themselves, the Next server stayed on :3000 with the
+other end of its output closed. The NEXT run found a same-checkout listener,
+got a 200 from it and reused it; the server then spun at full CPU on its first
+log write and answered nothing more, so every case timed out setting up its app
+fixture, with no step named. Measured 2026-10-11: `/` 200 in 0.03s, `/links`
+200, then no answer in 10s and the process at ~120% CPU. With SIGTERM nx stops
+its own task and all three ports are free after the run. If a run was killed
+hard and the next one times out in a fixture, look for a `next dev --port 3000`
+whose parent is pid 1 and stop it.
 
 ```sh
 npx nx e2e-web @stxapps/e2e
-npx nx e2e-web:headed @stxapps/e2e
+npx nx e2e-web @stxapps/e2e --headed   # watch it; `npm run e2e:web:headed` adds the pacing
 npx nx e2e-web:report @stxapps/e2e
 npx nx e2e-extension @stxapps/e2e
 npx nx e2e-pwa @stxapps/e2e   # builds the production export itself; needs :3001 free
@@ -2006,6 +2022,20 @@ The six targets also have root scripts — `npm run e2e:web`, `e2e:extension`,
 can boot, build, select, and prepare both native platforms. `expo:ios` and
 `expo:android` are prerequisites, not tests; see [expo-build.md](./expo-build.md).
 On Android, run `npm run expo:android:reverse` after each emulator boot.
+
+To watch a web run, `npm run e2e:web:headed` opens the browser window and paces
+it: the root script is `e2e-web` with `--headed --slow-mo 250 --workers 1`, not
+a target of its own, so there is one definition of the run and the flags compose
+with `--case` after `--`. `--slow-mo <ms>` is the wrapper's flag, not
+Playwright's — it holds every browser operation back by that long, and a later
+one overrides the script's. It also eats into the same test timeouts, so pace a
+selected case rather than the suite. ⚠ **Playwright's `--headed` alone does
+nothing here, and says nothing.** It sets `use.headless`, which reaches only a
+browser Playwright launches; every web case runs in a persistent context that
+`web/fixtures/launch.ts` launches itself (_the fixture constraint_). So
+`runner/web.ts` turns the two flags into `E2E_HEADED` and `E2E_SLOW_MO`, and
+`launchApp` reads those. A headed run stayed headless before it did, and a bare
+`playwright test --headed` that skips the wrapper still does.
 
 #### cases, suites and fixtures
 

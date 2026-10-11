@@ -3,7 +3,7 @@ import { join } from 'node:path';
 
 import { E2E_ROOT, runArtifactDir } from '../paths';
 import { proveStagingPlanAccess } from '../seed/d1';
-import { API_URL, CHROME_PATH, WEB_URL } from '../web/fixtures/env';
+import { API_URL, CHROME_PATH, EXTRACTOR_URL, WEB_URL } from '../web/fixtures/env';
 import { parseWebCli } from './cli';
 import { E2E_ENVIRONMENT, E2E_ORIGINS, IS_STAGING } from './environment';
 import { createRunId, writeJson } from './lib';
@@ -14,7 +14,7 @@ import { STAGING_PLAN_GRANTS } from './staging-credential';
 
 async function main(): Promise<void> {
   validateCaseRegistry();
-  const options = parseWebCli();
+  const options = parseWebCli(undefined, true);
   if (
     options.playwrightArgs.some(
       (argument) => argument === '--grep' || argument.startsWith('--grep='),
@@ -32,6 +32,7 @@ async function main(): Promise<void> {
   await assertStackOwnedByRepo([
     { origin: WEB_URL, label: 'bracemark-web' },
     { origin: API_URL, label: 'bracemark-api' },
+    { origin: EXTRACTOR_URL, label: 'bracemark-extractor' },
   ]);
 
   // The one credential a staging run can need, proved before a run directory
@@ -58,6 +59,10 @@ async function main(): Promise<void> {
     E2E_GREP: grep,
   };
   const args = ['test', ...options.playwrightArgs];
+  // `--headed` alone changes nothing: the specs launch their own persistent
+  // contexts (web/fixtures/launch.ts), which read these instead.
+  if (options.playwrightArgs.includes('--headed')) env.E2E_HEADED = '1';
+  if (options.slowMo) env.E2E_SLOW_MO = String(options.slowMo);
 
   if (stagingPlanFrom) {
     console.log(

@@ -1,7 +1,7 @@
 import { IS_STAGING } from './runner/environment';
 import { waitForApi } from './runner/lib';
 import { assertStackOwnedByRepo } from './runner/stack';
-import { API_URL, WEB_URL } from './web/fixtures/env';
+import { API_URL, EXTRACTOR_URL, WEB_URL } from './web/fixtures/env';
 
 // `webServer` in playwright.config.ts waits for bracemark-web on :3000, but
 // `npm run dev` is a three-project `nx run-many` and Next is reliably first up.
@@ -17,5 +17,8 @@ export default async function globalSetup(): Promise<void> {
   await assertStackOwnedByRepo([
     { origin: WEB_URL, label: 'bracemark-web', required: true },
     { origin: API_URL, label: 'bracemark-api', required: true },
+    // Not required: the browser-extension config shares this setup and starts
+    // no extractor. One that IS listening still has to be this checkout's.
+    { origin: EXTRACTOR_URL, label: 'bracemark-extractor' },
   ]);
 }

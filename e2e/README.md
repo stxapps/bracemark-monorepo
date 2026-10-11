@@ -30,7 +30,7 @@ data. Native runners require an already-running stack and Metro.
 
 ```sh
 npx nx e2e-web @stxapps/e2e
-npx nx e2e-web:headed @stxapps/e2e
+npx nx e2e-web @stxapps/e2e --headed
 npx nx e2e-web:report @stxapps/e2e
 npx nx e2e-extension @stxapps/e2e
 npx nx e2e-pwa @stxapps/e2e
@@ -161,10 +161,10 @@ passing its comma-separated case ids to `--case`, once per platform.
 The extraction cases (Phase 7: `EXTRACT-*`, and Phase 6's `SHARE-EXTRACT-*` pair)
 are the only ones that reach the
 public internet — example.com, from `fixtures.json` — and carry the `internet`
-trait for it. They need `npm run dev` for the extractor on 8788 (web's
-`webServer` starts only api and web). `--exclude-trait internet` gives a run with
-no third-party network dependency; `online` does not, because every stack-backed
-case carries it.
+trait for it. They need the extractor on 8788: the web wrapper starts it with
+the api and web, native runs need `npm run dev`. `--exclude-trait internet` gives
+a run with no third-party network dependency; `online` does not, because every
+stack-backed case carries it.
 
 The PWA target (`PWA-001`–`013`) builds bracemark-web's production export
 against the local stack itself (`nx build @stxapps/bracemark-web -c

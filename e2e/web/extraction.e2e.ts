@@ -34,11 +34,12 @@ test.describe('server extraction', () => {
   // Each case builds a Plus account (Argon2id) and then waits on a real fetch.
   test.describe.configure({ timeout: 4 * 60 * 1000 });
 
-  // `npm run dev` brings the extractor up; Playwright's webServer starts only the
-  // api and the web app. A missing extractor would otherwise present as a row
-  // that simply never acquires its title — indistinguishable from the bug these
-  // cases exist to catch — so say it up front instead. (On staging nothing is
-  // started at all, and the same check reads as an undeployed Worker.)
+  // Playwright's webServer starts the extractor beside the api and the web app
+  // (playwright.config.ts), so locally this is a backstop — for a config that
+  // does not carry that leg. A missing extractor would otherwise present as a
+  // row that simply never acquires its title — indistinguishable from the bug
+  // these cases exist to catch — so say it up front instead. (On staging nothing
+  // is started at all, and the same check reads as an undeployed Worker.)
   test.beforeAll(async () => {
     const health = await fetch(`${EXTRACTOR_URL}/health`).catch(() => null);
     if (!health?.ok) {

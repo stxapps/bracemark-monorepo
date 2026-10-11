@@ -2,7 +2,7 @@ import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { E2E_ROOT, runArtifactDir } from '../paths';
-import { API_URL, CHROME_PATH, WEB_URL } from '../web/fixtures/env';
+import { API_URL, CHROME_PATH, EXTRACTOR_URL, WEB_URL } from '../web/fixtures/env';
 import { parseVisualCli, type VisualCliOptions } from './cli';
 import { readDeviceLook, restoreDeviceLook, setAppearance } from './device-look';
 import { requireLocalEnvironment } from './environment';
@@ -31,6 +31,7 @@ async function runWeb(options: VisualCliOptions): Promise<void> {
   await assertStackOwnedByRepo([
     { origin: WEB_URL, label: 'bracemark-web' },
     { origin: API_URL, label: 'bracemark-api' },
+    { origin: EXTRACTOR_URL, label: 'bracemark-extractor' },
   ]);
 
   const runId = createRunId('visual-web');

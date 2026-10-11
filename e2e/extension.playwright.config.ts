@@ -10,6 +10,10 @@ const runId = process.env.E2E_RUN_ID ?? createRunId('extension-direct');
 process.env.E2E_RUN_ID = runId;
 const runDir = process.env.E2E_RUN_DIR ?? runArtifactDir(runId);
 
+// SIGTERM, not Playwright's default SIGKILL, so nx stops the dev server it
+// spawned instead of orphaning it (playwright.config.ts, `STACK_SHUTDOWN`).
+const STACK_SHUTDOWN = { signal: 'SIGTERM', timeout: 10_000 } as const;
+
 export default defineConfig({
   testDir: './extension',
   testMatch: '**/*.e2e.ts',
@@ -38,6 +42,7 @@ export default defineConfig({
       url: `${API_URL}/health`,
       reuseExistingServer: !process.env.CI,
       timeout: 180_000,
+      gracefulShutdown: STACK_SHUTDOWN,
       stdout: 'ignore',
       stderr: 'pipe',
     },
@@ -47,6 +52,7 @@ export default defineConfig({
       url: WEB_URL,
       reuseExistingServer: !process.env.CI,
       timeout: 180_000,
+      gracefulShutdown: STACK_SHUTDOWN,
       stdout: 'ignore',
       stderr: 'pipe',
     },

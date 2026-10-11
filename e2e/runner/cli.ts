@@ -103,11 +103,25 @@ export function parseNativeCli(argv = process.argv.slice(2)): NativeCliOptions {
 
 export interface WebCliOptions extends CommonFilters {
   playwrightArgs: string[];
+  // `--slow-mo <ms>`: how long each browser operation is held back, for
+  // watching a `--headed` run. Playwright has no such flag, so it is the
+  // wrapper's — and only where `watch` is set (runner/web.ts). Anywhere else it
+  // stays a passthrough and Playwright refuses it by name.
+  slowMo?: number;
 }
 
-export function parseWebCli(argv = process.argv.slice(2)): WebCliOptions {
-  const parsed = parseArguments(argv, FILTER_FLAGS);
-  return { ...filters(parsed.values), playwrightArgs: parsed.passthrough };
+export function parseWebCli(argv = process.argv.slice(2), watch = false): WebCliOptions {
+  const parsed = parseArguments(argv, watch ? new Set([...FILTER_FLAGS, 'slow-mo']) : FILTER_FLAGS);
+  // The last one wins, so a value after `--` overrides the root script's.
+  const slowMo = parsed.values.get('slow-mo')?.at(-1);
+  if (slowMo !== undefined && !/^\d+$/.test(slowMo)) {
+    throw new Error(`--slow-mo takes whole milliseconds, got ${slowMo}`);
+  }
+  return {
+    ...filters(parsed.values),
+    playwrightArgs: parsed.passthrough,
+    slowMo: slowMo === undefined ? undefined : Number(slowMo),
+  };
 }
 
 export interface VisualCliOptions extends CommonFilters {
