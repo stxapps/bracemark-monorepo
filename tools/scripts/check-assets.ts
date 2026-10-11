@@ -10,7 +10,9 @@
 // tagline, the wrong mark, an encryption claim we no longer make, and eleven
 // third-party wordmarks. Nothing caught it, because a picture has nothing to lint.
 // No type error, no test, no failing build, and a wrong one renders exactly as
-// well as a right one (docs/brand-assets.md, _the generated pictures_).
+// well as a right one (docs/brand-assets.md, _the generated pictures_). The demo
+// clip the marketing site plays is the same kind of file with a clock: an mp4
+// and its poster, set in the tagline, the signature panel and three captions.
 //
 // So each picture is stamped with the strings and tokens it was drawn from, and
 // this recomputes those from the live constants and diffs them. A tagline edit now
@@ -139,7 +141,7 @@ function collectInputs(): Record<string, string> {
 // --- the checks ------------------------------------------------------------
 
 interface StampedAsset {
-  /** `WIDTHxHEIGHT`, checked against the file's own IHDR. */
+  /** `WIDTHxHEIGHT`, checked against the file's own header — IHDR, or an mp4's `tkhd`. */
   pixels: string;
   sha256: string;
   /**
@@ -165,6 +167,55 @@ function pngPixels(buffer: Buffer): string {
   if (buffer.readUInt32BE(0) !== 0x89504e47) throw new Error('not a PNG');
   return `${buffer.readUInt32BE(16)}x${buffer.readUInt32BE(20)}`;
 }
+
+/** The boxes directly inside `[start, end)` of an ISO base media file. */
+function* mp4Boxes(
+  buffer: Buffer,
+  start: number,
+  end: number,
+): Generator<{ type: string; start: number; end: number }> {
+  while (start + 8 <= end) {
+    let size = buffer.readUInt32BE(start);
+    let header = 8;
+    if (size === 1) {
+      size = Number(buffer.readBigUInt64BE(start + 8));
+      header = 16;
+    } else if (size === 0) {
+      size = end - start;
+    }
+    if (size < header || start + size > end) return;
+    yield {
+      type: buffer.toString('latin1', start + 4, start + 8),
+      start: start + header,
+      end: start + size,
+    };
+    start += size;
+  }
+}
+
+/**
+ * A video's width and height out of its track header, for the PNG reader's
+ * reason: no decoder, no dependency. `tkhd` ends in the two numbers, 16.16
+ * fixed-point. A sound track's header carries 0x0, so the first track with a
+ * size is the picture.
+ */
+function mp4Pixels(buffer: Buffer): string {
+  for (const moov of mp4Boxes(buffer, 0, buffer.length)) {
+    if (moov.type !== 'moov') continue;
+    for (const trak of mp4Boxes(buffer, moov.start, moov.end)) {
+      if (trak.type !== 'trak') continue;
+      for (const tkhd of mp4Boxes(buffer, trak.start, trak.end)) {
+        if (tkhd.type !== 'tkhd') continue;
+        const width = buffer.readUInt32BE(tkhd.end - 8) >>> 16;
+        const height = buffer.readUInt32BE(tkhd.end - 4) >>> 16;
+        if (width && height) return `${width}x${height}`;
+      }
+    }
+  }
+  throw new Error('no video track in the mp4');
+}
+
+const POSTER = '.poster.png';
 
 const failures: string[] = [];
 const fail = (file: string, message: string) => failures.push(`${file}\n    ${message}`);
@@ -198,9 +249,24 @@ function main(): void {
       fail(file, `the file changed without a re-stamp (sha256 ${sha256.slice(0, 12)}…)`);
     }
 
-    const pixels = pngPixels(bytes);
+    const pixels = file.endsWith('.mp4') ? mp4Pixels(bytes) : pngPixels(bytes);
     if (pixels !== asset.pixels) {
       fail(file, `is ${pixels}; the stamp says ${asset.pixels}`);
+    }
+
+    // A video and its poster are one film, and the poster is what the page shows
+    // until someone presses play. Stamped as a pair so neither can be redrawn
+    // alone: a poster from another render is a first frame the clip never has,
+    // and one of another size makes the box jump the moment it starts.
+    if (file.endsWith('.mp4')) {
+      const poster = stamp.assets[file.replace(/\.mp4$/, POSTER)];
+      if (!poster) {
+        fail(file, `has no stamped \`${POSTER}\` beside it`);
+      } else if (poster.pixels !== asset.pixels) {
+        fail(file, `is ${asset.pixels} but its poster is ${poster.pixels}`);
+      } else if (JSON.stringify(poster.inputs) !== JSON.stringify(asset.inputs)) {
+        fail(file, 'and its poster were stamped from different inputs — render them together');
+      }
     }
 
     for (const [key, was] of Object.entries(asset.inputs)) {
@@ -299,12 +365,12 @@ function main(): void {
     const file = `apps/bracemark-web/public/${shot.src}`;
 
     if (Math.min(width, height) < 320 || Math.max(width, height) > 3840) {
-      fail(file, `${shot.sizes} is outside Chrome's 320–3840 bounds`);
+      fail(file, `${shot.sizes} is outside Chrome’s 320–3840 bounds`);
     }
 
     const ratio = Math.max(width, height) / Math.min(width, height);
     if (ratio > 2.3) {
-      fail(file, `${shot.sizes} is ${ratio.toFixed(3)}:1 — Chrome's ceiling is 2.3`);
+      fail(file, `${shot.sizes} is ${ratio.toFixed(3)}:1 — Chrome’s ceiling is 2.3`);
     }
 
     const factor = shot.form_factor ?? '(none)';

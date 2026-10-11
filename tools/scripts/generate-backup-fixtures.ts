@@ -43,7 +43,12 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { BlobWriter, TextReader, Uint8ArrayReader, ZipWriter } from '@zip.js/zip.js';
+import {
+  BlobWriter,
+  TextReader,
+  Uint8ArrayReader,
+  ZipWriter,
+} from '@zip.js/zip.js/index-native.js';
 import { zipSync } from 'fflate';
 
 import {

@@ -39,8 +39,9 @@ readonly REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 #   immutable  everything under `_next/` is content-hashed or build-ID-scoped
 #              (`_next/static/chunks/…`, `_next/<buildId>/…`), so a given URL can
 #              never change meaning. Cache forever, never delete (see below).
-#   week       icons, social images, favicon — real files with stable names, so
-#              a changed one needs the CloudFront invalidation to appear.
+#   week       icons, social images, favicon, and the marketing site's demo
+#              clip — real files with stable names, so a changed one needs the
+#              CloudFront invalidation to appear.
 #   revalidate HTML, the `.txt` RSC payloads Next 16 emits beside it, sw.js,
 #              manifest.json, robots.txt, sitemap.xml. These point at the hashed
 #              assets above or at pages, so they must never be served stale.
@@ -349,14 +350,18 @@ SYNC_FLAGS=( --no-progress )
 # copied into out/ by `next build` and would otherwise be published.
 JUNK=( --exclude "*.DS_Store" )
 
-# Anything not under `_next/` that a browser treats as an image. Ordering of the
-# filters is significant — the aws cli applies them left to right, last match
-# wins — so the `_next/*` exclusion comes last to keep hashed fonts and media
-# out of this pass and in the immutable one above.
-IMAGES=(
+# Anything not under `_next/` that a browser treats as an image — and `.mp4`,
+# which is the same kind of file: a stable name, bytes that change only when it
+# is re-rendered. Left out of this list it falls into DOCUMENTS below and is
+# revalidated on every play. Ordering of the filters is significant — the aws
+# cli applies them left to right, last match wins — so the `_next/*` exclusion
+# comes last to keep the hashed fonts and images of `_next/static/media` out
+# of this pass and in the immutable one above.
+MEDIA=(
   --exclude "*"
   --include "*.png" --include "*.jpg" --include "*.jpeg" --include "*.gif"
   --include "*.svg" --include "*.webp" --include "*.avif" --include "*.ico"
+  --include "*.mp4"
   --exclude "_next/*"
 )
 
@@ -367,6 +372,7 @@ DOCUMENTS=(
   --exclude "_next/*"
   --exclude "*.png" --exclude "*.jpg" --exclude "*.jpeg" --exclude "*.gif"
   --exclude "*.svg" --exclude "*.webp" --exclude "*.avif" --exclude "*.ico"
+  --exclude "*.mp4"
 )
 
 step "Syncing _next/ (immutable, 1 year)"
@@ -382,10 +388,10 @@ aws s3 sync "$OUT_DIR/_next" "$S3_URI/_next" "${SYNC_FLAGS[@]}" \
   "${JUNK[@]}" \
   --cache-control "$CACHE_IMMUTABLE"
 
-step "Syncing images and icons (1 week)"
+step "Syncing images, icons and video (1 week)"
 aws s3 sync "$OUT_DIR" "$S3_URI" "${SYNC_FLAGS[@]}" \
   --delete \
-  "${IMAGES[@]}" \
+  "${MEDIA[@]}" \
   "${JUNK[@]}" \
   --cache-control "$CACHE_WEEK"
 

@@ -82,6 +82,10 @@ const RESTRICTED = [
   { name: '__DEV__', message: `__DEV__ ${RN_ONLY} Take the flag as a parameter.` },
 ];
 
+// The globs in the block comment below carry a zero-width space after each
+// `**`, because the real spelling would end the comment at its first slash.
+/* eslint-disable no-irregular-whitespace -- see the line comment above */
+
 /**
  * Flat-config block for the platform:agnostic packages. Spread it into
  * `packages/<agnostic>/eslint.config.mjs` AFTER the base config.

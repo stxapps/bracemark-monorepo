@@ -1,7 +1,7 @@
 import nx from '@nx/eslint-plugin';
-import jsoncParser from 'jsonc-eslint-parser';
-import simpleImportSort from 'eslint-plugin-simple-import-sort';
 import prettier from 'eslint-config-prettier/flat';
+import simpleImportSort from 'eslint-plugin-simple-import-sort';
+import jsoncParser from 'jsonc-eslint-parser';
 
 // The typographic selectors and the files they skip, exported because
 // `no-restricted-syntax` does not MERGE across flat-config blocks — the last
@@ -368,6 +368,19 @@ export default [
     files: ['**/modules/**/package.json'],
     rules: {
       '@nx/dependency-checks': 'off',
+    },
+  },
+  {
+    // `handler` is the CloudFront function's entry point. cloudfront-js calls a
+    // bare global of that name and gives the file no module system, so nothing
+    // in the file refers to it and there is no `export` to mark it used. The
+    // exception is here rather than in a disable comment beside the function
+    // because that file, COMMENTS INCLUDED, counts against CloudFront's 10 KB
+    // function-size limit. Repo-relative on purpose: `tools/` is no Nx project,
+    // so this file is only ever linted from the workspace root (`lint:root`).
+    files: ['tools/cloudfront/rewrite-url.js'],
+    rules: {
+      '@typescript-eslint/no-unused-vars': ['warn', { varsIgnorePattern: '^handler$' }],
     },
   },
   // Must be last: disables ESLint rules that conflict with Prettier formatting.

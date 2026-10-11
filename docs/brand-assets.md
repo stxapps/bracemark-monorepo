@@ -935,6 +935,29 @@ with an `.alt.txt` beside each); four are the PWA screenshots in
 build, committed, and governed by the contract below rather than by a generator
 this repo runs.
 
+**And one film, under the same contract.** `apps/bracemark-site/public/video/`
+holds `demo.mp4` and `demo.poster.png` — 1920x1080, silent, about eighteen
+seconds — which the launch post plays through `<DemoClip />`
+(`apps/bracemark-site/src/components/mdx-components.tsx`). Every line of type in
+it is a constant this repo owns: the tagline, the hero's `SIGNATURE` panel, three
+of `SCREENSHOT_CAPTIONS` (`saveTab`, `encryptedBeforeSync`, `searchNotOurs`) and
+the slogan. So it is stamped like a card and goes stale like one, with two
+differences worth knowing. The pair is stamped **together** — the poster is
+frame 0 of the same render, `check:assets` reads the mp4's size out of its track
+header the way it reads a PNG's, and it refuses a clip whose poster is missing, a
+different size, or stamped from different inputs. And its text alternative is
+**not a sidecar**: a `<video>` has no `alt`, so the component builds the label
+from the same constants, in the order the film shows them, and there is no
+second file to forget.
+
+⚠ **The film shows the iOS app beside bracemark-web, in sync, and no stamp
+records that.** It is a claim made by a picture rather than by a string, so
+_only what ships_ (above) binds it and nothing checks it: the clip is true on a
+page that also says the iOS app is available, and on no other. The launch post
+says so in its first paragraph. Before the clip is put anywhere else — the
+landing page, a post written for a platform we have not shipped on — that is the
+question to ask of it.
+
 ⚠ **BOTH FAMILIES SHIPPED BRACE.TO v1 FOR THE PRODUCT'S WHOLE LIFE, AND NOTHING
 SAID SO.** The card this repo shipped from `Initial commit` read "Save links to
 visit later", named the _predecessor_ in its body copy, claimed "Powered by
@@ -971,8 +994,8 @@ and the string that constant says now.
 
 **Regenerate and re-stamp when:** the tagline, subtitle or a listing line
 changes; **a screenshot caption changes**; **the slogan changes** (the promo tile
-below is set in it); **a `SIGNATURE` string changes** (any picture that draws the
-hero's panel); the mark changes; a `--color-*` token moves; the links list layout changes shape; the browser extension's popup changes
+below and the film's last frame are set in it); **a `SIGNATURE` string changes**
+(any picture that draws the hero's panel — the film does); the mark changes; a `--color-*` token moves; the links list layout changes shape; the browser extension's popup changes
 shape; or a screenshot shows a screen that no longer exists. Nothing else will
 tell you — that list _is_ the tripwire, and for the store pictures further down it
 is the _only_ thing there is, since those are not stamped.

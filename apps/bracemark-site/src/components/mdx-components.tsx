@@ -3,12 +3,16 @@ import Link from 'next/link';
 
 import {
   APP_STORE_URL,
+  BRAND,
   CHROME_WEB_STORE_URL,
   entitlementsOf,
   FIREFOX_ADDONS_URL,
   PLAN_LABELS,
   PLAY_STORE_URL,
+  SCREENSHOT_CAPTIONS,
+  SIGNATURE,
 } from '@stxapps/shared';
+import { cn } from '@stxapps/web-ui/lib/utils';
 
 import { APP_URL } from '../lib/site';
 
@@ -82,9 +86,79 @@ function PlanName({ plan }: { plan: keyof typeof PLAN_LABELS }) {
   return PLAN_LABELS[plan];
 }
 
+// The demo clip: 1920x1080, silent, about eighteen seconds. The mp4 and its
+// poster are generated artifacts in `public/video/`, stamped in
+// assets.stamp.json — every line of type in the film is a constant from
+// `@stxapps/shared`, and `npm run check:assets` fails when one of them moves
+// (docs/brand-assets.md, _the generated pictures_). Nothing fails when a file is
+// simply swapped for another name, so the two paths below are the join.
+//
+// SAME-ORIGIN, and not an embed. /privacy and the FAQ say Bracemark loads no
+// third-party code outside one screen of the app, and the apex CSP has no
+// `frame-src` and no `media-src`: a file under `public/` plays under
+// `default-src 'self'` with the policy untouched, where a hosted player would
+// falsify both sentences and widen the header (docs/hosting.md, _security
+// headers_).
+export const DEMO_CLIP = {
+  src: '/video/demo.mp4',
+  poster: '/video/demo.poster.png',
+  width: 1920,
+  height: 1080,
+  // The film has no sound, so its type is all of it to a reader who can't see
+  // the picture: this is every line it shows, in the order it shows them, built
+  // from the constants it is set in rather than typed again. The one bend is
+  // the signature panel. Its server half read out field by field is a file id
+  // and a byte count, which describes nothing, so it is the sentence the
+  // landing page sets under the same panel; and the device half, which is a
+  // photograph of a row, gets three words for what the row is.
+  alt:
+    [
+      `${BRAND.name} — ${BRAND.tagline}`,
+      `${SIGNATURE.deviceLabel}: a saved link`,
+      `${SIGNATURE.serverLabel}: ${SIGNATURE.caption.replace(/\.$/, '')}`,
+      SCREENSHOT_CAPTIONS.saveTab,
+      SCREENSHOT_CAPTIONS.encryptedBeforeSync,
+      SCREENSHOT_CAPTIONS.searchNotOurs,
+    ].join('. ') + `. ${BRAND.slogan}`,
+} as const;
+
+/**
+ * The demo clip, e.g. `<DemoClip />` above a post's first heading.
+ *
+ * It plays when the reader presses play and not before: its argument is set in
+ * type from the first frame, so a film already running when it scrolls into
+ * view has lost its opening line, and motion on this site answers a person
+ * (globals.css, on page-load animation). `preload="none"` follows from that —
+ * the poster is frame 0, so the box is complete without a byte of the mp4. No
+ * `<track>`: there is no audio to caption, and the text alternative is the
+ * label.
+ */
+function DemoClip() {
+  return (
+    <figure
+      className={cn(
+        'mt-8 overflow-hidden rounded-2xl border border-border bg-card shadow-sm first:mt-0',
+      )}
+    >
+      <video
+        src={DEMO_CLIP.src}
+        poster={DEMO_CLIP.poster}
+        width={DEMO_CLIP.width}
+        height={DEMO_CLIP.height}
+        aria-label={DEMO_CLIP.alt}
+        controls
+        playsInline
+        preload="none"
+        className={cn('block aspect-video h-auto w-full')}
+      />
+    </figure>
+  );
+}
+
 export const MDX_COMPONENTS: MDXComponents = {
   a: Anchor,
   AppLink,
+  DemoClip,
   FreeLinks,
   PlanName,
   StoreLink,

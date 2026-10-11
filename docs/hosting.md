@@ -327,6 +327,19 @@ starts it from a `blob:` bootstrap exactly as it does the app's Argon2 worker
 file with "Could not check this file", and the rest of the site looks fine.
 `'self'` is not needed here: the site has no service worker.
 
+**The demo clip needs nothing, and that is why it is a file.** The launch post
+plays an mp4 from `public/video/` (`<DemoClip />`,
+`apps/bracemark-site/src/components/mdx-components.tsx`). The policy has no
+`media-src`, so the browser falls back to `default-src 'self'`, which a
+same-origin file satisfies. A hosted player is the other way to put a video on a
+page and it costs two things at once: a `frame-src` for someone else's origin in
+both tiers' policies and in `e2e/staging/policy.ts`, and the sentence /privacy
+and the FAQ both print — that Bracemark loads no third-party code outside one
+screen of the app. Serving it from a second bucket or a media subdomain would
+keep the sentence and still need a `media-src`; under `public/` it rides the
+deploy that already exists, and CloudFront answers the `Range` requests Safari
+will not play a video without.
+
 ### clean URLs — the CloudFront function
 
 `tools/cloudfront/rewrite-url.js`, associated with the **viewer request** event on
@@ -728,11 +741,14 @@ production's origin in its card metadata. That is now
 | what                                         | `Cache-Control`               | `--delete` |
 | -------------------------------------------- | ----------------------------- | ---------- |
 | `_next/**` — content-hashed, build-ID-scoped | `max-age=31536000, immutable` | no         |
-| images and icons — stable names              | `max-age=604800`              | yes        |
+| images, icons and `.mp4` — stable names      | `max-age=604800`              | yes        |
 | `.html`, `.txt`, `.xml`, `sw.js`, `*.json`   | `max-age=0, must-revalidate`  | yes        |
 
 Uploaded in that order, so a client loading a page mid-deploy can always resolve
-the chunks it was just handed. The `.txt` files are Next 16's RSC payloads and
+the chunks it was just handed. The middle class is an extension list in
+`deploy-static.sh`, and an extension missing from it is not an error: the file
+falls into the last class and is revalidated on every request, which is how a
+video would have shipped had `.mp4` not been added beside the image types. The `.txt` files are Next 16's RSC payloads and
 travel with the HTML, not with the assets — they must not outlive it. `_next/`
 is the one pass without `--delete`: a client on the previous build is still
 fetching chunks by hash, and deleting them mid-session breaks navigation. That

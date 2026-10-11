@@ -140,15 +140,15 @@ pages link to the relevant product page without repeating its pitch. Comparison
 pages need explicit criteria, sources and a review date so their facts stay
 current.
 
-| piece                               | what it is                                                                                                                             |
-| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/content/docs/index.ts`         | the manifest — groups, reading order, and each page's slug, title and description (the meta description, printed as the lede)          |
-| `src/content/docs/<slug>.mdx`       | the prose, starting at `##` — the page prints its own `<h1>` from the manifest                                                         |
-| `src/app/docs/[slug]/page.tsx`      | the one route; `generateStaticParams` from the manifest, `dynamicParams = false`                                                       |
-| `src/lib/mdx/load.ts`               | reads the file and compiles it with `@mdx-js/mdx` at build time                                                                        |
-| `src/lib/mdx/headings.ts`           | the heading-id rule and the rehype plugin that stamps it — the "On this page" column                                                   |
-| `src/components/mdx-components.tsx` | everything a page may use beyond Markdown: `<AppLink path=…>`, `<StoreLink store=…>`, `<FreeLinks />`, and on-site links via next/link |
-| `.mdx-prose` (`globals.css`)        | the styling, as `.legal-prose` does for /terms and /privacy — so a page stays plain Markdown                                           |
+| piece                               | what it is                                                                                                                                             |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `src/content/docs/index.ts`         | the manifest — groups, reading order, and each page's slug, title and description (the meta description, printed as the lede)                          |
+| `src/content/docs/<slug>.mdx`       | the prose, starting at `##` — the page prints its own `<h1>` from the manifest                                                                         |
+| `src/app/docs/[slug]/page.tsx`      | the one route; `generateStaticParams` from the manifest, `dynamicParams = false`                                                                       |
+| `src/lib/mdx/load.ts`               | reads the file and compiles it with `@mdx-js/mdx` at build time                                                                                        |
+| `src/lib/mdx/headings.ts`           | the heading-id rule and the rehype plugin that stamps it — the "On this page" column                                                                   |
+| `src/components/mdx-components.tsx` | everything a page may use beyond Markdown: `<AppLink path=…>`, `<StoreLink store=…>`, `<FreeLinks />`, `<DemoClip />`, and on-site links via next/link |
+| `.mdx-prose` (`globals.css`)        | the styling, as `.legal-prose` does for /terms and /privacy — so a page stays plain Markdown                                                           |
 
 The last four rows are shared with `/blog` (next section), which is why they are
 named for MDX rather than for docs; what only docs uses — `lib/docs/metadata.ts`,
@@ -203,6 +203,13 @@ The article page reuses the docs component map and prose rules, without the docs
 sidebar. The post source imports nothing. `content/blog/blog.spec.ts` checks its
 file/manifest parity, mapped components, date format, and internal links, since
 MDX is outside the TypeScript and ESLint passes described above.
+
+The launch post opens on `<DemoClip />`, the one moving picture on the site: a
+plain `<video>` over two files in `public/video/`, served from the apex itself
+and started by the reader. Why it is a file here rather than a hosted player is
+[hosting.md](./hosting.md), _security headers_; what it is drawn from, and what
+makes it stale, is [brand-assets.md](./brand-assets.md), _the generated
+pictures_.
 
 `app/feed.xml/route.ts` emits an RSS 2.0 summary feed as a static GET response
 during `next build`; no request-time server runs at the apex. Its item GUID is

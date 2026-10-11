@@ -260,6 +260,15 @@ Each refusal there has a passing control built from the same fixture, and the
 deployed half runs against a node server standing in for the CDN — which is the
 one thing it cannot be, and why the real check runs against the real host.
 
+**Lint does reach them, by a script rather than a target.** `tools/` and the
+root-level config files (`eslint.config.mjs`, the `jest.*` files) belong to no Nx
+project, so no `lint` target covers them and for a long time nothing did: a
+restricted import and two straight apostrophes sat in `tools/scripts/` with lint
+green. `npm run lint:root` is ESLint over exactly those files, and `npm run lint`
+and `npm run lint:fix` run it after the Nx targets. The scoped forms do **not** —
+`npx nx lint <project>` and `npx nx affected -t lint` never see a file outside a
+project — so after an edit under `tools/`, run `npm run lint:root`.
+
 For the CloudFront function, node is not the runtime it will execute in, and this
 is the rare case where that gap is not fixable from inside the repo: `cloudfront-js-2.0` is ES 5.1 plus a subset of
 ES 6-12, and only `aws cloudfront test-function` runs the real thing. The node suite

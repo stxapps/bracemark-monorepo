@@ -1,5 +1,57 @@
 {
   "assets": {
+    "apps/bracemark-site/public/video/demo.mp4": {
+      "pixels": "1920x1080",
+      "sha256": "da9c03ff361906c6b30ccba765bbd0f4c14b8851da96ee1abcff060b4ad39c92",
+      "variant": "demo",
+      "inputs": {
+        "brand.name": "Bracemark",
+        "brand.tagline": "The bookmark manager that can’t read your bookmarks",
+        "brand.slogan": "We don’t promise not to look. We built it so we can’t.",
+        "icon.d": "M254.101 0L382.101 128C385.101 168 360.1 223.5 324.101 241C458.6 248.001 466.6 502.499 324.101 512H48C21.4903 512 0 490.51 0 464V48C0 21.4903 21.4903 0 48 0H254.101ZM103.101 443H286.101C328.074 443 362.101 408.973 362.101 367C362.101 325.027 328.074 291 286.101 291H103.101V443ZM103.101 198H245.101C280.447 198 309.101 169.346 309.101 134C309.101 98.6539 280.447 70.0003 245.101 70H103.101V198Z",
+        "signature.deviceLabel": "On your device",
+        "signature.cipher": "AES-256-GCM",
+        "signature.serverLabel": "What our servers store",
+        "signature.path": "links/01JD7QK2X8N4WYB3F0.enc",
+        "signature.size": "2.1 KB",
+        "signature.changed": "last changed 2 minutes ago",
+        "signature.ciphertext": "k7QpV0sZ4mL8xR1cGf9tYb2NwJ3hD6aE5uT0iO8pA1sD4fG7hJ2kL5nM8qR3tV6xZ9yB2nM5kJ8hG1fD4sA7pO0iU3tE6rW9qY2xC5vB8nM1kL4jH7gF0dS3aP6oI9uY2tR5eW8qA1zX4cV7bN0mK3jH6gF9dS2aP5oI8uY1tR4eW7qZ0xC3vB6nM9kJ2hG5",
+        "signature.caption": "A path, a size, a timestamp, and bytes we hold no key to open. Not the title, not the address, not the tags — there is nowhere for them to be.",
+        "listing.caption.saveTab": "Save the tab you’re reading",
+        "listing.caption.encryptedBeforeSync": "Every link is encrypted before it syncs",
+        "listing.caption.searchNotOurs": "Search runs on your device, not ours",
+        "token.foreground": "oklch(0.145 0 0)",
+        "token.mutedForeground": "oklch(0.54 0 0)",
+        "token.border": "oklch(0.922 0 0)",
+        "token.signal": "oklch(0.43 0.062 205)"
+      }
+    },
+    "apps/bracemark-site/public/video/demo.poster.png": {
+      "pixels": "1920x1080",
+      "sha256": "48f518c686432217db8f2ae397ada37e4fa7c670eb6acb2d8b55dce2a38f19b6",
+      "variant": "demo",
+      "inputs": {
+        "brand.name": "Bracemark",
+        "brand.tagline": "The bookmark manager that can’t read your bookmarks",
+        "brand.slogan": "We don’t promise not to look. We built it so we can’t.",
+        "icon.d": "M254.101 0L382.101 128C385.101 168 360.1 223.5 324.101 241C458.6 248.001 466.6 502.499 324.101 512H48C21.4903 512 0 490.51 0 464V48C0 21.4903 21.4903 0 48 0H254.101ZM103.101 443H286.101C328.074 443 362.101 408.973 362.101 367C362.101 325.027 328.074 291 286.101 291H103.101V443ZM103.101 198H245.101C280.447 198 309.101 169.346 309.101 134C309.101 98.6539 280.447 70.0003 245.101 70H103.101V198Z",
+        "signature.deviceLabel": "On your device",
+        "signature.cipher": "AES-256-GCM",
+        "signature.serverLabel": "What our servers store",
+        "signature.path": "links/01JD7QK2X8N4WYB3F0.enc",
+        "signature.size": "2.1 KB",
+        "signature.changed": "last changed 2 minutes ago",
+        "signature.ciphertext": "k7QpV0sZ4mL8xR1cGf9tYb2NwJ3hD6aE5uT0iO8pA1sD4fG7hJ2kL5nM8qR3tV6xZ9yB2nM5kJ8hG1fD4sA7pO0iU3tE6rW9qY2xC5vB8nM1kL4jH7gF0dS3aP6oI9uY2tR5eW8qA1zX4cV7bN0mK3jH6gF9dS2aP5oI8uY1tR4eW7qZ0xC3vB6nM9kJ2hG5",
+        "signature.caption": "A path, a size, a timestamp, and bytes we hold no key to open. Not the title, not the address, not the tags — there is nowhere for them to be.",
+        "listing.caption.saveTab": "Save the tab you’re reading",
+        "listing.caption.encryptedBeforeSync": "Every link is encrypted before it syncs",
+        "listing.caption.searchNotOurs": "Search runs on your device, not ours",
+        "token.foreground": "oklch(0.145 0 0)",
+        "token.mutedForeground": "oklch(0.54 0 0)",
+        "token.border": "oklch(0.922 0 0)",
+        "token.signal": "oklch(0.43 0.062 205)"
+      }
+    },
     "apps/bracemark-site/src/app/opengraph-image.png": {
       "pixels": "1200x630",
       "sha256": "10caf8aa8bd0ea75b1bb25a3122a1b75f6a2555bbe53610afdcd39a043692aed",
