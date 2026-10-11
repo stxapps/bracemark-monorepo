@@ -182,18 +182,19 @@ const BUNDLE_NAMESPACES = [
   { prefix: EXTRACTIONS_PREFIX, schema: extractionSchema, kind: 'extraction' as const },
 ];
 
-const ENTITY_TIME_FIELDS = ['createdAt', 'updatedAt'];
-const EXTRACTION_TIME_FIELDS = [...ENTITY_TIME_FIELDS, 'extractedAt'];
-
-// Whether every timestamp an entity line carries is an instant the calendar can
-// name (sync/calendar-time.ts). The schemas above ask only for an integer, and
-// they have to keep asking only that: they also decode what is already stored.
-// `extractedAt` is the extraction's third clock, in the same milliseconds.
+// Whether every clock a line carries is an instant the calendar can name
+// (sync/calendar-time.ts). The schemas above ask only for an integer, and they
+// have to keep asking only that: they also decode what is already stored. Every
+// kind has the two entity clocks; an extraction has one more PER FACET —
+// `facets.<name>.extractedAt`, the time retries are scheduled from — which is
+// where the schema defines it, not on the extraction itself.
 function hasCalendarTimes(data: object, kind: BundleEntryKind): boolean {
-  const fields = kind === 'extraction' ? EXTRACTION_TIME_FIELDS : ENTITY_TIME_FIELDS;
-  for (const field of fields) {
-    const value = (data as Record<string, unknown>)[field];
-    if (typeof value === 'number' && !isCalendarTime(value)) return false;
+  const { createdAt, updatedAt } = data as { createdAt: number; updatedAt: number };
+  if (!isCalendarTime(createdAt) || !isCalendarTime(updatedAt)) return false;
+  if (kind !== 'extraction') return true;
+  for (const facet of Object.values((data as Extraction).facets)) {
+    const extractedAt = facet?.extractedAt;
+    if (extractedAt !== undefined && !isCalendarTime(extractedAt)) return false;
   }
   return true;
 }
@@ -213,6 +214,8 @@ export function classifyBundleLine(line: string): BundleEntry | undefined {
 
   if (path === SETTINGS_GENERAL_PATH) {
     if (!settingsGeneralSchema.safeParse(data).success) return undefined;
+    // The same two clocks as every entity below, under the same rule.
+    if (!hasCalendarTimes(data, 'settings')) return undefined;
     return { path, data, kind: 'settings' };
   }
   for (const { prefix, schema, kind } of BUNDLE_NAMESPACES) {
@@ -228,7 +231,8 @@ export function classifyBundleLine(line: string): BundleEntry | undefined {
     // everyone's problem — every device it syncs to, and every reader that turns
     // it into a calendar string. Refused, never re-dated: a restore promises the
     // admitted values verbatim, and a backup whose link came back dated today
-    // would not be one. No backup this app writes is affected.
+    // would not be one. A backup this app wrote carries such a value only if the
+    // library it was exported from already held one — the export is verbatim too.
     if (!hasCalendarTimes(data, kind)) return undefined;
     const entry: BundleEntry = { path, data, kind };
     // The same gate for the ids INSIDE the data. A link's or an extraction's file

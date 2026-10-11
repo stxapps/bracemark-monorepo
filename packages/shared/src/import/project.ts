@@ -130,6 +130,23 @@ function calendarDate(epochMs: number | undefined): number | undefined {
   return isCalendarTime(epochMs) ? epochMs : undefined;
 }
 
+// Refuse a file whose folder chain runs past IMPORT_MAX_FOLDER_DEPTH (resolve.ts)
+// — the WHOLE file, by throwing ImportFolderDepthError. A system-list row's path
+// is never resolved, so it is not counted.
+//
+// The orchestrators call this on every parsed row, before the dedupe and before
+// the over-cap prompt. Asked only inside the projection it ran after both, and
+// the answer then depended on what they had removed: the same file imported or
+// was refused according to which rows the library already held, and a user
+// could be asked "import what fits?", say yes, and have the file refused.
+export function assertImportFolderDepth(rows: readonly ImportedLink[]): void {
+  for (const row of rows) {
+    if (row.systemList === undefined && row.folderPath.length > IMPORT_MAX_FOLDER_DEPTH) {
+      throw new ImportFolderDepthError();
+    }
+  }
+}
+
 // Rows projected between two pauses in `projectImportedLinksInChunks`. The
 // per-row cost is URL parsing (`hostFromText`), an id mint and two schema
 // checks: about 13 ms per thousand rows on web at a 4x CPU slowdown, so a chunk
@@ -159,13 +176,10 @@ function* projectSteps(options: ProjectImportOptions): Generator<void, Projected
   const { rows, images, newId, now } = options;
 
   // Refused whole and FIRST — before a resolver exists, so no list of a
-  // too-deep chain is ever minted (resolve.ts, IMPORT_MAX_FOLDER_DEPTH). A
-  // system-list row's path is never resolved, so it is not counted.
-  for (const row of rows) {
-    if (row.systemList === undefined && row.folderPath.length > IMPORT_MAX_FOLDER_DEPTH) {
-      throw new ImportFolderDepthError();
-    }
-  }
+  // too-deep chain is ever minted. The orchestrators have already asked this of
+  // the whole file (assertImportFolderDepth, above); asked again here because
+  // this is where the lists are made, and a caller that forgot must not make them.
+  assertImportFolderDepth(rows);
 
   const lists = new ListResolver(options.lists, now, newId);
   const tags = new TagResolver(options.tags, now, newId);

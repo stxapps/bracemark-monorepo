@@ -11,6 +11,7 @@ import { ranksBetween } from '../sync/rank';
 import { ARCHIVE_ID, MY_LIST_ID, TRASH_ID } from '../sync/system-lists';
 import type { ImportedLink } from './bundle';
 import {
+  assertImportFolderDepth,
   PROJECT_CHUNK,
   type ProjectedImport,
   projectImportedLinks,
@@ -368,6 +369,20 @@ describe('projectImportedLinks', () => {
           async () => undefined,
         ),
       ).rejects.toThrow(ImportFolderDepthError);
+    });
+
+    // The orchestrators ask BEFORE the dedupe and the over-cap prompt, of every
+    // parsed row, so the verdict cannot depend on which rows those two remove.
+    it('is the same verdict when asked of the whole file up front', () => {
+      const at = row({ url: 'https://example.com/a', folderPath: chain(IMPORT_MAX_FOLDER_DEPTH) });
+      const past = row({
+        url: 'https://example.com/b',
+        folderPath: chain(IMPORT_MAX_FOLDER_DEPTH + 1),
+      });
+
+      expect(() => assertImportFolderDepth([at])).not.toThrow();
+      expect(() => assertImportFolderDepth([at, past])).toThrow(ImportFolderDepthError);
+      expect(() => assertImportFolderDepth([{ ...past, systemList: 'trash' }])).not.toThrow();
     });
 
     it('does not count the path of a system-list row, which is never resolved', () => {

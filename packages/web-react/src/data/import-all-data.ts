@@ -73,6 +73,7 @@ import type { FileEntry } from '@zip.js/zip.js/index-native.js';
 
 import type { BundleEntry, ImportOutcome, ImportProgress } from '@stxapps/shared';
 import {
+  assertImportFolderDepth,
   assertUnderImportQuota,
   BACKUP_ITEMS_ENTRY,
   BACKUP_MANIFEST_ENTRY,
@@ -148,6 +149,11 @@ async function importInterop(
   onQuotaPrompt?: ImportQuotaResolver,
 ): Promise<Omit<ImportOutcome, 'syncFailed'>> {
   const existing = await readExistingLinks();
+
+  // Before anything is asked or written: a folder chain past the import limit
+  // refuses the file whole, whichever of its rows the dedupe and the cap below
+  // would have kept (@stxapps/shared import/project.ts).
+  assertImportFolderDepth(bundle.links);
 
   // Dedupe against the library and within the file, by canonical identity.
   const seen = new Set(existing.urlKeys);

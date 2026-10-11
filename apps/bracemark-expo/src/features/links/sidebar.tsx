@@ -13,7 +13,7 @@
 // The one intentional divergence left is native affordances (no hover, so the
 // "Lock now" action is always shown; the row press also closes the drawer).
 
-import { Fragment, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Keyboard, Platform, Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useDrawerStatus } from '@react-navigation/drawer';
@@ -46,6 +46,7 @@ import {
   ALL_LABEL,
   ancestorIds,
   ARCHIVE_ID,
+  flattenToRows,
   flattenTree,
   MY_LIST_ID,
   TRASH_ID,
@@ -268,9 +269,17 @@ function NavItem({
   );
 }
 
-// One subtree → rows, parents before their children, each indented by its
+// One forest → rows, parents before their children, each indented by its
 // depth; collapsed parents keep their subtree unrendered. Generic over lists
 // and tags — the two differ only in icon and selection kind.
+//
+// Rendered FLAT, from `flattenToRows`, not by a component that renders itself
+// for each node's children (web's sidebar, verbatim): a row is indented by
+// padding and never nested in its parent's view, so the output is the same, but
+// a self-rendering component makes the React tree as deep as the list tree —
+// which is as deep as a `parentId` chain a restored backup or another device
+// decides (@stxapps/shared sync/tree.ts) — and React's commit walks its tree
+// with a call frame per level.
 function NavTree<T extends TreeItem & { name: string }>({
   nodes,
   iconFor,
@@ -292,38 +301,21 @@ function NavTree<T extends TreeItem & { name: string }>({
 }) {
   return (
     <>
-      {nodes.map((node) => {
-        const hasChildren = node.children.length > 0;
-        const isCollapsed = collapsed.has(node.item.id);
-        return (
-          <Fragment key={node.item.id}>
-            <NavItem
-              icon={iconFor(node.item.id)}
-              label={node.item.name}
-              selection={selectionFor(node.item.id)}
-              onSelected={onSelected}
-              depth={node.depth}
-              expanded={hasChildren ? !isCollapsed : undefined}
-              onToggle={hasChildren ? () => onToggle(node.item.id) : undefined}
-              showSlot
-              badge={badgeFor?.(node.item.id)}
-              action={actionFor?.(node.item.id)}
-            />
-            {hasChildren && !isCollapsed && (
-              <NavTree
-                nodes={node.children}
-                iconFor={iconFor}
-                selectionFor={selectionFor}
-                onSelected={onSelected}
-                collapsed={collapsed}
-                onToggle={onToggle}
-                badgeFor={badgeFor}
-                actionFor={actionFor}
-              />
-            )}
-          </Fragment>
-        );
-      })}
+      {flattenToRows(nodes, collapsed).map(({ item, depth, hasChildren }) => (
+        <NavItem
+          key={item.id}
+          icon={iconFor(item.id)}
+          label={item.name}
+          selection={selectionFor(item.id)}
+          onSelected={onSelected}
+          depth={depth}
+          expanded={hasChildren ? !collapsed.has(item.id) : undefined}
+          onToggle={hasChildren ? () => onToggle(item.id) : undefined}
+          showSlot
+          badge={badgeFor?.(item.id)}
+          action={actionFor?.(item.id)}
+        />
+      ))}
     </>
   );
 }

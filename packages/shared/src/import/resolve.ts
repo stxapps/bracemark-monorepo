@@ -47,7 +47,7 @@ export interface ResolverNode {
 //
 // 100 is the bookmark converter's rule (tools/bookmark-converter.ts), which now
 // reads this constant, so the tool on the marketing site and the app's import
-// refuse the same file. It is far past any export a bookmark manager writes —
+// hold a file to the same number. It is far past any export a bookmark manager writes —
 // browsers and their users stop within a dozen levels — which is the point: the
 // bound should never be met by a real library.
 export const IMPORT_MAX_FOLDER_DEPTH = 100;

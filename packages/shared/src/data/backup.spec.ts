@@ -265,7 +265,8 @@ describe('classifyBundleLine', () => {
     ['pin', 'updatedAt'],
     ['extraction', 'createdAt'],
     ['extraction', 'updatedAt'],
-    ['extraction', 'extractedAt'],
+    ['settings', 'createdAt'],
+    ['settings', 'updatedAt'],
   ] as const;
   const LAST_INSTANT = 8.64e15;
 
@@ -286,6 +287,28 @@ describe('classifyBundleLine', () => {
       expect(entry?.kind).toBe(kind);
       expect(entry?.data).toEqual({ ...ENTITIES[kind].data, [field]: value });
     }
+  });
+
+  // An extraction's third clock is per FACET — `facets.<name>.extractedAt`, where
+  // the schema defines it. A gate that looked for it on the extraction itself
+  // would check a field no writer produces and pass every real one.
+  const withFacetClock = (extractedAt: number): string =>
+    jsonlLine(ENTITIES.extraction.path, {
+      ...ENTITIES.extraction.data,
+      facets: {
+        titleImage: { status: 'done', attempts: 1, extractedAt: 1 },
+        screenshot: { status: 'failed', attempts: 2, extractedAt },
+      },
+    });
+
+  it('refuses the extraction line with a facet extracted outside the calendar', () => {
+    expect(classifyBundleLine(withFacetClock(LAST_INSTANT + 1))).toBeUndefined();
+    expect(classifyBundleLine(withFacetClock(-LAST_INSTANT - 1))).toBeUndefined();
+  });
+
+  it('keeps the extraction line whose facets were extracted inside it', () => {
+    expect(classifyBundleLine(withFacetClock(LAST_INSTANT))?.kind).toBe('extraction');
+    expect(classifyBundleLine(withFacetClock(1_700_000_000_000))?.kind).toBe('extraction');
   });
 
   // The gate and the wire contract are one question asked at two edges, and this

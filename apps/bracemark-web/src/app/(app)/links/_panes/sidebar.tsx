@@ -42,15 +42,7 @@
 // Search, which searches saved LINK content. It's count-gated so small accounts
 // never see a box that could be mistaken for link search.
 
-import {
-  createContext,
-  Fragment,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-} from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import {
   Archive,
   ChevronRight,
@@ -70,6 +62,7 @@ import {
   ALL_LABEL,
   ancestorIds,
   ARCHIVE_ID,
+  flattenToRows,
   flattenTree,
   MY_LIST_ID,
   TRASH_ID,
@@ -280,10 +273,19 @@ function NavItem({
   );
 }
 
-// One subtree → rows, parents before their children, each indented by its
+// One forest → rows, parents before their children, each indented by its
 // depth; collapsed parents keep their subtree unrendered. Selection is by the
 // entity's own id. Generic over lists and tags — the two differ only in icon
 // and selection kind.
+//
+// The rows are rendered FLAT, from `flattenToRows`, and not by a component that
+// renders itself for each node's children. The markup is the same either way —
+// a row is indented by padding, never nested in its parent's element — but a
+// self-rendering component makes the React tree as deep as the list tree, and
+// React's commit walks its tree with a call frame per level. The list tree is as deep
+// as its `parentId` chain, which a restored backup or another device decides
+// (@stxapps/shared sync/tree.ts), so the sidebar would overflow the stack on the
+// one screen every session opens.
 function NavTree<T extends TreeItem & { name: string }>({
   nodes,
   iconFor,
@@ -303,36 +305,20 @@ function NavTree<T extends TreeItem & { name: string }>({
 }) {
   return (
     <>
-      {nodes.map((node) => {
-        const hasChildren = node.children.length > 0;
-        const isCollapsed = collapsed.has(node.item.id);
-        return (
-          <Fragment key={node.item.id}>
-            <NavItem
-              icon={iconFor(node.item.id)}
-              label={node.item.name}
-              selection={selectionFor(node.item.id)}
-              badge={badgeFor?.(node.item.id)}
-              action={actionFor?.(node.item.id)}
-              depth={node.depth}
-              expanded={hasChildren ? !isCollapsed : undefined}
-              onToggle={hasChildren ? () => onToggle(node.item.id) : undefined}
-              showSlot
-            />
-            {hasChildren && !isCollapsed && (
-              <NavTree
-                nodes={node.children}
-                iconFor={iconFor}
-                selectionFor={selectionFor}
-                badgeFor={badgeFor}
-                actionFor={actionFor}
-                collapsed={collapsed}
-                onToggle={onToggle}
-              />
-            )}
-          </Fragment>
-        );
-      })}
+      {flattenToRows(nodes, collapsed).map(({ item, depth, hasChildren }) => (
+        <NavItem
+          key={item.id}
+          icon={iconFor(item.id)}
+          label={item.name}
+          selection={selectionFor(item.id)}
+          badge={badgeFor?.(item.id)}
+          action={actionFor?.(item.id)}
+          depth={depth}
+          expanded={hasChildren ? !collapsed.has(item.id) : undefined}
+          onToggle={hasChildren ? () => onToggle(item.id) : undefined}
+          showSlot
+        />
+      ))}
     </>
   );
 }

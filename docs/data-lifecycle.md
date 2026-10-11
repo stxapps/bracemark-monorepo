@@ -450,16 +450,20 @@ The policy, decided once:
   the gap. The web list row called it in render for the field the list is sorted
   by — hidden column or not — so one such link took down the list layout of
   every view containing it, on every device it synced to.
-  `classifyBundleLine` now refuses a link, list, tag, pin or extraction line
-  carrying one (an extraction's `extractedAt` included) and counts it invalid,
-  through `isCalendarTime` (`sync/calendar-time.ts`). **Refused, never re-dated**
+  `classifyBundleLine` now refuses any line carrying one — a link, list, tag,
+  pin, extraction or the settings file, and for an extraction each facet's
+  `extractedAt` as well — and counts it invalid, through `isCalendarTime`
+  (`sync/calendar-time.ts`). **Refused, never re-dated**
   — a restore promises the admitted values verbatim, and a link that came back
   dated today would not be a restore. As with the ids above, the entity schemas
   are _not_ where this lives, for the same reason: they decode what is already
   stored. So the readers that turn a date into a calendar string tolerate one
   regardless — the list row renders "date unknown" with no `dateTime`
   (`sorted-date.tsx`), and the CSV export leaves the `created` cell empty rather
-  than aborting the file. No backup this app writes is affected.
+  than aborting the file. A backup this app wrote carries such a value only when
+  the library it was exported from already held one, since the export is
+  verbatim as well: that link is then refused on restore and counted, where it
+  used to come back and break the list.
 - **An interop date the calendar cannot name is dropped; the row is kept.** The
   same value reaches the projection legitimately — the epoch parser's unit
   inference is by magnitude, and a source can simply carry a wrong number. A date
@@ -481,14 +485,19 @@ The policy, decided once:
   `IMPORT_MAX_FOLDER_DEPTH` (`import/resolve.ts`). Every segment of a folder path
   becomes a list, and each format lets the file choose the depth — nested `<DL>`s,
   separators in one CSV cell, a `parentId` chain — so without a bound the file
-  decides how deep this library's tree is. The check runs before a resolver
-  exists, so nothing of a refused file is minted; it throws
-  `ImportFolderDepthError`, whose message both import views render verbatim. The
+  decides how deep this library's tree is. `assertImportFolderDepth` asks it of
+  every parsed row, before the dedupe and before the over-cap prompt, so the
+  verdict is a fact about the file and not about which of its rows the library
+  already holds — and nobody answers "import what fits?" for a file that is then
+  refused. The projection asks again before a resolver exists, so nothing of a
+  refused file is minted. It throws `ImportFolderDepthError`, whose message both
+  import views render verbatim. The
   **file** is refused rather than the deep rows — dropping them would leave an
   import that looks complete, and shortening their paths would file links where
   the file never put them. A system-list row is not counted: its path is never
   resolved. 100 was already the bookmark converter's rule, which now reads the
-  same constant, so the tool and the app refuse the same file. It bounds what an
+  same constant and throws the same error; the converter also counts a folder
+  with no links in it, which the app never sees as a row. It bounds what an
   import **mints**, not what is stored: a backup restores `parentId` verbatim and
   another device can sync any chain, which is why nothing that reads the tree
   recurses (below).
@@ -566,7 +575,11 @@ it, and the screens that could have removed it are under the provider that threw
 `buildTree` and every projection beside it (`sync/tree.ts`), lock coverage
 (`sync/lock-coverage.ts`), the drop preview (`sync/tree-dnd.ts`), the library →
 folder snapshot (`export/bundle.ts`) and the three interop serializers all keep
-their own stack on the heap. `buildTree`'s cycle cut went with it: it used to
+their own stack on the heap. The same rule reaches the components: both
+sidebars render the tree as **flat rows** from `flattenToRows`, where they used
+to render a component that rendered itself per level — identical markup, since a
+row is indented by padding, but a React tree as deep as the list tree, which
+React commits with a call frame per level. `buildTree`'s cycle cut went with it: it used to
 re-walk the chain from every id, quadratic in depth, and now settles each entity
 once while cutting exactly the edges the sorted scan did — which edge is cut is
 part of the contract, since two devices must render the same tree, and
