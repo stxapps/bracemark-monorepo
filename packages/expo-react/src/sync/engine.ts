@@ -315,13 +315,31 @@ async function incrementalSyncOnce(deps: SyncDeps): Promise<SyncOutcome> {
   // clipped without either of them inspecting an error.
   const outcome = emptySyncOutcome();
   const meta = await getSyncMeta(deps.username);
+  // NO CYCLE UNTIL THE FIRST SYNC IS DONE — it resolves having done nothing, and
+  // whatever is queued waits for the cycle the provider kicks on reaching
+  // 'ready'. A write CAN land before that (a share: the Android activity's save,
+  // or an iOS outbox draft), and the pull spares it, because it is queued. What
+  // it could not survive was the cycle its own kick started alongside the pull:
+  // that cycle pushed the link and cleared its op, and the pull — still
+  // reconciling against a listing taken before the push — then found a path that
+  // was local-only and unqueued, and dropped it. The server kept the link; the
+  // device lost it until a later cycle listed it back. That cycle also had no
+  // cursor, so it routed to the fallback and fetched everything the pull had not
+  // stored yet a second time, beside it.
+  //
+  // This is the step web's engine takes with its cycle lock, which
+  // runInitialSync holds like any other cycle. There is no lock here (one
+  // runtime per store), so the flag does it: a pull only ever starts with the
+  // flag unset, and no cycle starts until it is set, so the two never overlap.
+  // Same predicate as isFirstSyncDone — an absent row is not-done.
+  if (!meta || meta.firstSyncDoneAt <= 0) return outcome;
   // The cursor is the compound key (updatedAt, path); both halves go over the
   // wire as opsListEndpoint's `since` + `sincePath`. `since` is always sent
   // (even 0, for a seeded-but-empty new account) so the server's bounds can
   // route us; an empty `sincePath` is omitted (server reads it as the low
   // sentinel).
-  const since = meta?.syncCursorUpdatedAt ?? 0;
-  const sincePath = meta?.syncCursorPath ?? '';
+  const since = meta.syncCursorUpdatedAt;
+  const sincePath = meta.syncCursorPath;
   const pending = await listPendingOps(deps.username);
 
   // Peek the first page: its retained-range bounds decide incremental vs.
@@ -1153,7 +1171,8 @@ async function signPaths(
 
 // Route incremental vs. fallback from the op log's retained-range bounds (docs
 // "the ops/list endpoint" routing table). A returning client always has a cursor
-// here (incremental only runs post-first-sync), so an empty or out-of-range log
+// here (incremental only runs post-first-sync — incrementalSyncOnce returns
+// before this when the flag is unset), so an empty or out-of-range log
 // means the log was wiped/compacted/reset beneath us — re-list R2.
 function needsFallback(since: number, page: OpsListResponse): boolean {
   const { oldestUpdatedAt: oldest, newestUpdatedAt: newest } = page;

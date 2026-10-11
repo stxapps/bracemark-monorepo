@@ -1338,6 +1338,27 @@ flag is re-read inside the lock, and the pull the first tab just finished was
 the device's: the store is complete up to its cursor, and listing the namespace
 again would only hold the lock against the cycle that comes next.
 
+**bracemark-expo has no lock, and needed the same separation anyway** — a cycle
+and the first sync must not overlap, in one runtime as much as in two tabs. A
+write can land before the first sync is done there, where on web the gate keeps
+every editor out: a share, saved by the Android activity or drained from the iOS
+outbox ([share-sheet.md](./share-sheet.md)). The write is safe — it is queued,
+and the pull spares a queued path in both directions. The cycle its own kick
+started was not. `runInitialSync` is outside the single-flight, so that cycle ran
+beside the pull: it pushed the link and cleared its op, and the pull, still
+reconciling against a listing taken before the push, then met a path that was
+local-only and unqueued and dropped it (_the three flows_, the first sync's
+second paragraph — the rule was right, and the queue test it rests on had just
+been emptied by a cycle that should not have been running). The server kept the
+link and a later cycle listed it back, so nothing was lost for good; the device
+simply did not have what its user had just saved, for as long as that took.
+The same cycle had no cursor, so it routed to the fallback and downloaded
+everything the pull had not stored yet a second time. So expo's
+`incrementalSyncOnce` **returns without doing anything while the first-sync flag
+is unset**: a pull only starts with the flag unset and no cycle starts until it
+is set, which is the whole of what the lock gives web here. What is queued waits
+for the cycle the provider kicks on reaching `ready`.
+
 **What two drains did**, kept here as the reason the lock exists. Four things
 are each sound while only one cycle can run, and together were not:
 

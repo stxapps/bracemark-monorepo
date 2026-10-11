@@ -921,6 +921,52 @@ describe('the cycle, against this copy of it', () => {
     expect(await pendingPaths()).toEqual([EXTRACTION_PATH]);
   });
 
+  it('runs no cycle while the first sync is still pulling, so a link saved meanwhile is not dropped', async () => {
+    // A share lands during a long first pull and kicks a cycle, as any local
+    // write does. Run beside the pull, that cycle pushed the link and cleared its
+    // op — and the pull, reconciling against a listing taken before the push, then
+    // dropped a path that was local-only and no longer queued. Web's engine holds
+    // its cycle lock across the pull; this one has no lock, so the cycle declines.
+    getDb().delete(syncMeta).run();
+    await beginInitialSync(USER);
+    mockGetBlob.mockResolvedValue(new Uint8Array([0xee, ...utf8('the server copy')]));
+    const listing = () => [{ path: LINK_PATH, updatedAt: 5000 }];
+    const opsList = () => ({
+      ops: [],
+      oldestUpdatedAt: 2000,
+      newestUpdatedAt: 6000,
+      hasMore: false,
+    });
+
+    // The pull, held at its first download so the cycle below runs inside it.
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    const pull = runInitialSync(
+      deps({
+        filesList: listing,
+        opsList,
+        filesSign: async (_paths, op) => {
+          if (op === 'get') await held;
+        },
+      }),
+    );
+
+    seedQueued(OTHER_LINK_PATH, 'shared mid-pull');
+    await runIncrementalSync(deps({ filesList: listing, opsList }));
+    expect(commits).toEqual([]);
+
+    release();
+    await pull;
+    expect(await bodyAt(OTHER_LINK_PATH)).toBe('shared mid-pull');
+    expect(await pendingPaths()).toEqual([OTHER_LINK_PATH]);
+
+    // The control: the cycle that follows the pull is the one that pushes it.
+    await runIncrementalSync(deps({ filesList: listing, opsList }));
+    expect(committedPaths()).toEqual([OTHER_LINK_PATH]);
+    expect(await pendingPaths()).toEqual([]);
+    expect(await bodyAt(OTHER_LINK_PATH)).toBe('shared mid-pull');
+  });
+
   it('does not upload an entity rewritten after the queue was read', async () => {
     // Device extraction's two passes: the title is queued, the cycle reads its
     // queue — and then the image lands, with the patch that names it. An op carries

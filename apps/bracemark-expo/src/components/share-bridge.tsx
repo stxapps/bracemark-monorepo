@@ -12,9 +12,10 @@ import {
 // component mounted inside <SyncProvider> (it reads useSync): keeps the two App
 // Group artifacts flowing in both directions.
 //
-//  - INBOUND (outbox → store): drain the iOS extension's queued drafts through
-//    the write edge on mount and on every return to foreground — the moments
-//    the user comes back after sharing. A drain that landed drafts calls
+//  - INBOUND (outbox → store): drain the iOS share extension's queued drafts
+//    through the write edge on mount and on every return to foreground — the
+//    moments the user comes back after sharing — ONCE THE STORE IS READY (see
+//    the effect). A drain that landed drafts calls
 //    requestSync(), so the pending ops push now and the read edge shows the
 //    user their own share immediately (localWriteNonce semantics). It also
 //    hands the landed paths to `extractNow`: a share IS a save gesture made on
@@ -35,13 +36,28 @@ import {
 // failure-tolerant: this bridge must never take the app tree down over a share
 // artifact — a missed pass self-heals on the next signal.
 export function ShareBridge() {
-  const { lastSyncAt, localWriteNonce, requestSync } = useSync();
+  const { storeStatus, lastSyncAt, localWriteNonce, requestSync } = useSync();
   const { extractNow } = useExtraction();
+  const ready = storeStatus === 'ready';
 
   useEffect(() => {
     const pass = () => {
       void (async () => {
-        const applied = await drainShareOutbox();
+        // THE DRAIN WAITS FOR A READY STORE; the drafts wait in the outbox, where
+        // they are durable. This component is mounted above InitialSyncGate, so it
+        // is live through the whole first sync, and everything a drain hands on is
+        // inert until that finishes: `extractNow` returns at once
+        // (extraction-provider), and by the time it would not, the outbox is empty
+        // and nothing offers the link again — at extraction mode `saves` that was
+        // a share with no page fetch, ever. The sync kick is declined too (the
+        // engine runs no cycle before the first sync is done — sync/engine.ts
+        // carries what happened when it did), and the draft's list is checked
+        // against a store that is still filling. `ready` is a dependency, so the
+        // pass that was skipped runs the moment the gate opens.
+        //
+        // The snapshot is NOT held back: its existence is what tells the sheet
+        // there is a session at all (share-store's loadShareTaxonomy).
+        const applied = ready ? await drainShareOutbox() : [];
         await refreshShareTaxonomy();
         if (applied.length > 0) {
           requestSync();
@@ -58,7 +74,7 @@ export function ShareBridge() {
     // when the session/store readiness or the extraction opt-in does, and a
     // re-run is harmless — the drain is idempotent and an empty outbox is a
     // no-op.
-  }, [requestSync, extractNow]);
+  }, [ready, requestSync, extractNow]);
 
   useEffect(() => {
     // Skip the initial render (nothing synced/edited yet — the mount pass above

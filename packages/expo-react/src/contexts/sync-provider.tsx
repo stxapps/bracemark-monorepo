@@ -100,7 +100,8 @@ interface SyncContextValue {
   // (bgSyncStatus 'error'): retrying a failed cycle and running a fresh one are the
   // same operation, so there's no separate retryBgSync. Safe to call eagerly:
   // the engine single-flights per account (overlapping calls coalesce into one
-  // trailing rerun). No-op until a session is usable.
+  // trailing rerun). No-op until a session is usable, and until the first sync
+  // is done — the engine declines a cycle beside the pull (sync/engine.ts).
   requestSync: () => void;
   // The same cycle, asked for by the USER rather than by a write: the ⋯ menu's
   // Sync and the Data card's Sync now / Retry. It does NOT bump

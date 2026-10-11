@@ -393,7 +393,9 @@ export async function saveSharedDraft(draft: ShareDraft, api: ApiClient): Promis
   // activity's process is still alive (one entity, sub-second). Un-awaited JS
   // on the app-level React host IS the doc's "application/process scope" — the
   // activity's finish() doesn't cancel it; only a process reap does, and that
-  // loss is covered by the pending op + the app's next sync cycle.
+  // loss is covered by the pending op + the app's next sync cycle. Before the
+  // first sync is done the engine declines the cycle (sync/engine.ts,
+  // incrementalSyncOnce) and the op waits for the one that follows the pull.
   void engine()
     .runIncrementalSync({
       username: session.username,
@@ -539,7 +541,8 @@ function quarantine(group: Directory, entry: File): void {
 }
 
 // Drain the iOS outbox into the local store — called by the main app on launch
-// and foreground (and by the background-task pass). Returns the `links/` PATH of
+// and foreground, once its store is ready (bracemark-expo's
+// components/share-bridge.tsx carries why it waits). Returns the `links/` PATH of
 // every draft that landed (the caller kicks a sync off `length`, and hands the
 // paths to the gestured extraction — a share IS the save gesture, it just
 // reaches the app here instead of through the add screen). Each file is deleted

@@ -748,7 +748,8 @@ component mounted inside `<ExtractionProvider>` — and so inside `<SyncProvider
 — in `(app)/_layout`, since it reads both `useSync` and `useExtraction`. It is
 the app-side pump for both App Group artifacts:
 
-- **inbound**: `drainShareOutbox()` on mount and on every return to foreground;
+- **inbound**: `drainShareOutbox()` on mount and on every return to foreground
+  — **once the store is ready**, below;
   a drain that landed drafts calls `requestSync()` so the pending ops push
   immediately and the read edge shows the user their own share without a
   refresh pill, and hands the landed links to `extractNow` — a share is a save
@@ -762,6 +763,29 @@ the app-side pump for both App Group artifacts:
 
 Both calls are platform no-ops on Android and failure-tolerant — a missed pass
 self-heals on the next signal.
+
+**The drain waits for the first sync; the snapshot does not.** `ShareBridge` is
+mounted above `InitialSyncGate`, so it is live for the whole of a first sync,
+and a share can arrive during one: the session is mirrored at sign-in, so the
+sheet works while the library is still downloading. Drained then, a draft lands
+with everything the drain hands on switched off. `extractNow` returns at once
+until the store is ready, and by the time it would not the outbox is empty and
+nothing offers the link again — at extraction mode `saves`, a share that never
+gets its page fetch. The sync kick is declined
+([local-first-sync.md](./local-first-sync.md), _two tabs, one queue_, the expo
+paragraph — which is also what it cost when it was not). And the draft's list is
+checked against a store that is still filling. So the drain is skipped until
+`storeStatus` is `ready`, with `ready` a dependency of the effect: the pass that
+was skipped runs when the gate opens, with no foreground needed. The drafts
+lose nothing by waiting — the outbox is the durable record, and the share
+extension's own upload has usually put them on the server already. The **snapshot** is still
+written on every pass, ready or not: its existence is how the sheet knows there
+is a session at all (_the shape_), so holding it back would turn the sheet away
+for the length of a first sync.
+
+Android has no drain to hold: its Save writes through the write edge whenever
+it happens, first sync or not. That write is safe for the reason above, and its
+inline kick is declined the same way.
 
 ### immediate upload from the iOS extension
 
@@ -986,7 +1010,7 @@ can neither see the share sheet nor anything in this process. →
 | share screen UI + prop normalizing + close() seam                                                                    | `apps/bracemark-expo/src/features/share/` — `share-root` (prop normalizing), `share-screen` (the four screens + the draft), `share-kit` (frame/header/row/notice), `share-specimen` (the page + the fold), `share-list-picker`, `share-tags-picker`, `share-host` (close), `share-theme` (apply the mirrored theme) |
 | entries: `index.js` (main, registers `bracemarkShare`), `index.share.js` (iOS extension, registers `shareExtension`) | `apps/bracemark-expo/` (package.json `main` is now `index.js`, which imports `expo-router/entry` — required by expo-share-extension)                                                                                                                                                                                |
 | snapshot + outbox + saveSharedDraft (with both post-Add kicks) + drain/refresh                                       | `@stxapps/expo-react` `data/share-store.ts`                                                                                                                                                                                                                                                                         |
-| theme mirror (app writes, sheet reads) + the sheet's apply step                                                      | `@stxapps/expo-react` `data/share-theme-store.ts` + `features/share/share-theme.ts`, written from `components/theme-provider.tsx` ([theme.md](./theme.md))                                                                                                                                                          |
+| theme mirror (app writes, sheet reads) + the sheet's apply step                                                      | `@stxapps/expo-react` `data/share-theme-store.ts` + `features/share/share-theme.ts`, written from `contexts/theme-provider.tsx` ([theme.md](./theme.md))                                                                                                                                                            |
 | best-effort upload (entities from the draft, sign → PUT → commit)                                                    | `@stxapps/expo-react` `data/share-upload.ts`                                                                                                                                                                                                                                                                        |
 | app-side pump: outbox drain on launch/foreground, snapshot refresh on sync/edit                                      | bracemark-expo `components/share-bridge.tsx`, mounted in `(app)/_layout`                                                                                                                                                                                                                                            |
 | session mirror in the shared Keychain (App Group id as access group) + `loadSharedSession`                           | `@stxapps/expo-react` `data/session-store.ts` over `@stxapps/expo-crypto` `lib/shared-keychain.ts` (BracemarkSharedKeychain, iOS Swift)                                                                                                                                                                             |
