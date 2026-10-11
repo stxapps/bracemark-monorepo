@@ -90,6 +90,16 @@ import { useLinksViewState } from './view-state-provider';
 
 type BulkAction = 'restore' | 'move' | 'pin' | 'unpin' | 'archive' | 'remove';
 
+// Every target in this bar is under the platform floors as drawn — the top row
+// is 40 tall, the actions 36 — and `hitSlop` makes up the difference rather
+// than a taller bar, which would be paid for out of the list (docs/
+// accessibility.md, _a 36dp box is not a 44pt target_). The two rows are 8
+// apart, the action row's `py-2`, and each takes HALF of it, so neither eats
+// the other's visible box. The actions also take the 8 of `py-2` under them,
+// where nothing is pressable: 48 tall on a phone. No horizontal slop — they
+// share the row's width at `gap-2`, so there is none to take and none needed.
+const ACTION_HIT_SLOP = { top: 4, bottom: 8 } as const;
+
 export function BulkEditBar({ links }: { links: LinkView[] }) {
   const { selection } = useLinksPage();
   const {
@@ -224,6 +234,11 @@ export function BulkEditBar({ links }: { links: LinkView[] }) {
             testID="bulk-exit"
             aria-label="Exit bulk edit"
             onPress={exitBulkEdit}
+            // 56x48 effective on the 40 box. `bottom: 4` is this row's half of
+            // the gap to the actions (ACTION_HIT_SLOP); `top: 4` stays inside
+            // the bar's own `pt-2`, short of the list above, whose rows are
+            // pressable. The sides are free: the frame edge, and a Text.
+            hitSlop={{ top: 4, bottom: 4, left: 8, right: 8 }}
           >
             <Icon as={X} className="size-5 text-foreground" />
           </Button>
@@ -238,6 +253,10 @@ export function BulkEditBar({ links }: { links: LinkView[] }) {
           aria-label="Select all"
           disabled={links.length === 0}
           onPress={() => (allSelected ? clearSelected() : selectAll(links))}
+          // The ✕'s vertical slop, for the ✕'s reasons; `right: 12` runs out to
+          // the frame edge across the bar's `px-3`. This Pressable is the
+          // WHOLE target, the Checkbox inside it included — see below.
+          hitSlop={{ top: 4, bottom: 4, right: 12 }}
           className="h-10 flex-row items-center gap-2 rounded-md px-1"
         >
           <Text className="text-sm text-muted-foreground">Select all</Text>
@@ -246,6 +265,12 @@ export function BulkEditBar({ links }: { links: LinkView[] }) {
             disabled={links.length === 0}
             checked={allSelected}
             onCheckedChange={() => (allSelected ? clearSelected() : selectAll(links))}
+            // The kit's default 24 is switched off here: around a 16 box in a
+            // 40 row it reaches 12 above and below the row — 4 past the bar's
+            // `pt-2` into the list, where it would take a tap meant for the
+            // last visible link, and 4 into the action under it. The Pressable
+            // around it does the same thing on press and is sized to the bar.
+            hitSlop={0}
           />
         </Pressable>
       </View>
@@ -255,6 +280,7 @@ export function BulkEditBar({ links }: { links: LinkView[] }) {
           size="sm"
           className="flex-1"
           testID="bulk-copy"
+          hitSlop={ACTION_HIT_SLOP}
           aria-label={copied ? 'Copied' : 'Copy'}
           disabled={disabled}
           onPress={() => void onCopy()}
@@ -268,6 +294,7 @@ export function BulkEditBar({ links }: { links: LinkView[] }) {
               size="sm"
               className="flex-1"
               testID="bulk-restore"
+              hitSlop={ACTION_HIT_SLOP}
               aria-label={busy === 'restore' ? 'Restoring…' : 'Restore'}
               disabled={disabled}
               onPress={() => void runMove('restore', selected, DEFAULT_LIST_ID)}
@@ -279,6 +306,7 @@ export function BulkEditBar({ links }: { links: LinkView[] }) {
               size="sm"
               className="flex-1"
               testID="bulk-delete"
+              hitSlop={ACTION_HIT_SLOP}
               aria-label="Delete forever"
               disabled={disabled}
               onPress={() => requestDestroy(selected)}
@@ -293,6 +321,7 @@ export function BulkEditBar({ links }: { links: LinkView[] }) {
               size="sm"
               className="flex-1"
               testID="bulk-move"
+              hitSlop={ACTION_HIT_SLOP}
               aria-label={busy === 'move' ? 'Moving…' : 'Move to'}
               disabled={disabled || actionable.length === 0}
               onPress={() => setMoveOpen(true)}
@@ -309,6 +338,7 @@ export function BulkEditBar({ links }: { links: LinkView[] }) {
                   variant="outline"
                   size="sm"
                   testID="bulk-more"
+                  hitSlop={ACTION_HIT_SLOP}
                   aria-label="More actions"
                   disabled={disabled || actionable.length === 0}
                 >
@@ -376,6 +406,7 @@ export function BulkEditBar({ links }: { links: LinkView[] }) {
               size="sm"
               className="flex-1"
               testID="bulk-remove"
+              hitSlop={ACTION_HIT_SLOP}
               aria-label={busy === 'remove' ? 'Removing…' : 'Remove'}
               disabled={disabled || actionable.length === 0}
               onPress={() => void runMove('remove', actionable, TRASH_ID)}

@@ -602,6 +602,25 @@ that every one-letter pill now has a 44 by 44 target; true two-axis compliance
 would require visible minimum-width wrappers (and new fit arithmetic) or one
 strip-level action instead of adjacent tag actions.
 
+The **bulk-edit bar** (`features/links/bulk-edit-bar.tsx`) is the one piece of
+chrome with two rows of targets stacked, so there the half-gap rule below runs
+vertically. Its ✕ is a 40 box and Select all a 40 row; its actions are 36 (`sm`,
+glyph-only, sharing the row's width); and the rows are 8 apart, the action row's
+`py-2`. Each row takes 4 of that 8. The top row takes `top: 4, bottom: 4` (48
+tall on a phone — the upward 4 stays inside the bar's own `pt-2`, short of the
+list above it, whose rows are pressable), and the ✕ a further 8 a side (56 wide:
+the frame edge on one side, the count `Text` on the other). Select all's
+`Pressable` is the whole target there, and the `Checkbox` inside it passes
+`hitSlop={0}`: the kit's default 24 around a 16 box in a 40 row reaches 12 above
+and below the row, which is 4 past the bar's top edge into the list and 4 into
+the action beneath — the one place the kit's slop has to be switched off rather
+than relied on. The actions take
+`top: 4, bottom: 8` (48 — the 8 beneath them is the row's own padding and holds
+nothing pressable) and no horizontal slop, since at `gap-2` across the full
+width there is none to take and none needed. The tempting fix was a taller top
+row, and it buys nothing: that row is already exactly the height of its tallest
+child, so more height is air around the same 40 box, paid for out of the list.
+
 **The one rule for the value: never take more than HALF the gap to a pressable
 neighbour.** RN resolves overlapping touch regions by tree order — the later
 sibling wins — and what gets eaten is the loser's own VISIBLE box, so an
