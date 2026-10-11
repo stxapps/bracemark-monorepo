@@ -301,9 +301,12 @@ function NavTree<T extends TreeItem & { name: string }>({
 }) {
   return (
     <>
-      {flattenToRows(nodes, collapsed).map(({ item, depth, hasChildren }) => (
+      {flattenToRows(nodes, collapsed).map(({ item, depth, hasChildren, parentId }) => (
         <NavItem
-          key={item.id}
+          // Scoped to the sibling group, as a key was when each level was its own
+          // list: a row that changes parent remounts, and a store holding one id
+          // twice under different parents does not hand React two equal keys.
+          key={`${parentId ?? ''}/${item.id}`}
           icon={iconFor(item.id)}
           label={item.name}
           selection={selectionFor(item.id)}

@@ -306,6 +306,19 @@ describe('classifyBundleLine', () => {
     expect(classifyBundleLine(withFacetClock(-LAST_INSTANT - 1))).toBeUndefined();
   });
 
+  // "A bad line is reported, never fatal" has to hold for a line built to break
+  // the gate itself. JSON.parse makes `__proto__` an ordinary own key, the record
+  // schema skips it unvalidated, and the gate walks the raw object — so a value
+  // there that cannot be turned into a number must be passed over, not handed to
+  // `Date`, which would throw and take the whole restore with it.
+  it('does not throw on a facet key the schema never validated', () => {
+    const line =
+      '{"path":"extractions/lnk1.enc","data":{"id":"lnk1","createdAt":1,"updatedAt":1,' +
+      '"facets":{"__proto__":{"extractedAt":{"valueOf":1,"toString":1}}}}}';
+
+    expect(() => classifyBundleLine(line)).not.toThrow();
+  });
+
   it('keeps the extraction line whose facets were extracted inside it', () => {
     expect(classifyBundleLine(withFacetClock(LAST_INSTANT))?.kind).toBe('extraction');
     expect(classifyBundleLine(withFacetClock(1_700_000_000_000))?.kind).toBe('extraction');

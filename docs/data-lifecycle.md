@@ -487,9 +487,9 @@ The policy, decided once:
   separators in one CSV cell, a `parentId` chain — so without a bound the file
   decides how deep this library's tree is. `assertImportFolderDepth` asks it of
   every parsed row, before the dedupe and before the over-cap prompt, so the
-  verdict is a fact about the file and not about which of its rows the library
-  already holds — and nobody answers "import what fits?" for a file that is then
-  refused. The projection asks again before a resolver exists, so nothing of a
+  verdict is a fact about the file's rows and not about which of them the
+  library already holds — and nobody answers "import what fits?" for a file that
+  is then refused. The projection asks again before a resolver exists, so nothing of a
   refused file is minted. It throws `ImportFolderDepthError`, whose message both
   import views render verbatim. The
   **file** is refused rather than the deep rows — dropping them would leave an
@@ -583,9 +583,11 @@ React commits with a call frame per level. `buildTree`'s cycle cut went with it:
 re-walk the chain from every id, quadratic in depth, and now settles each entity
 once while cutting exactly the edges the sorted scan did — which edge is cut is
 part of the contract, since two devices must render the same tree, and
-`tree.spec.ts` holds the old scan as an oracle. What stays proportional to depth
-is output, not stack: a picker row carries its ancestors' names, an exported
-folder its whole path, a Netscape line its indent.
+`tree.spec.ts` holds the old scan as an oracle. What still grows with depth is
+work per ROW, not stack: a picker row carries its ancestors' names and draws a
+guide line per level, an exported folder carries its whole path, a Netscape line
+its indent. Each is paid once per row, so a single long chain costs the square
+of its depth in those places — slow at an extreme, never a stack overflow.
 
 Only the platform-bound half of that lives in each orchestrator (the store
 reads, the zip library, the file API). The rest is shared, so the two can't

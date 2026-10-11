@@ -192,9 +192,16 @@ function hasCalendarTimes(data: object, kind: BundleEntryKind): boolean {
   const { createdAt, updatedAt } = data as { createdAt: number; updatedAt: number };
   if (!isCalendarTime(createdAt) || !isCalendarTime(updatedAt)) return false;
   if (kind !== 'extraction') return true;
-  for (const facet of Object.values((data as Extraction).facets)) {
-    const extractedAt = facet?.extractedAt;
-    if (extractedAt !== undefined && !isCalendarTime(extractedAt)) return false;
+  // Read off the RAW line, so every value is tested for being a number first.
+  // The schema has vouched for the facets it knows — but it parses this record
+  // key by key and skips one named `__proto__`, which JSON.parse creates as an
+  // ordinary own property, so `Object.values` can hand back something no schema
+  // ever looked at. Passing that to `Date` unguarded can throw, and a line that
+  // throws here fails the whole restore instead of being counted.
+  for (const facet of Object.values((data as { facets: Record<string, unknown> }).facets)) {
+    if (typeof facet !== 'object' || facet === null) continue;
+    const { extractedAt } = facet as { extractedAt?: unknown };
+    if (typeof extractedAt === 'number' && !isCalendarTime(extractedAt)) return false;
   }
   return true;
 }
