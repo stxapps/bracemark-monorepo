@@ -202,6 +202,39 @@ rely on a single run:
   `@babel/runtime` that it cannot resolve from there, and `node_modules/` is not
   transformed at all.
 
+#### tripwire: jest cannot time out a synchronous test
+
+A spec whose subject is "this finishes" — a walk that must not be quadratic, a
+parser that must not climb a chain per row — does **not** fail when the code
+gets slow. jest's per-test timeout is a timer, and a timer cannot fire while a
+synchronous test body holds the thread; when the body finally returns the test
+has passed. The specimen: `import/linkwarden.spec.ts` pinned "settles a long
+chain once" with a 50,000-collection file and no assertion on the work done.
+Deleting the memo that IS the fix left the file green — 15 of 15 — after 132
+seconds. Nothing was red; the suite was just slow, on whichever machine ran it.
+
+So pin what the fast path **leaves behind**, not the clock:
+
+- **Sharing.** Work done once is usually shared afterwards: that parser's
+  collections past the depth limit all hold the same path array, and
+  `flattenToPathRows`' rows past the cut share one `ancestors`
+  (`new Set(rows.map((r) => r.ancestors)).size`). Redo the work per row and each
+  gets its own.
+- **A crash, where there is one.** "Deeper than the call stack" specs
+  (`sync/tree.spec.ts`, both `sidebar.spec.tsx`) fail by `RangeError`, which is
+  a real failure — but only at a depth the old shape actually fell over at.
+  Measure it against the reverted code rather than guessing: the recursive
+  sidebar survived 1,000 levels under jest and died by 3,000.
+
+And keep the input small enough that the SLOW path still finishes in seconds —
+an assertion that needs two minutes to go red is one nobody will wait for.
+
+A query can be the slow thing, too. The web sidebar's deep-chain case took 100
+seconds while it found its 6,000 rows through a `getByRole` (an accessible name
+computed for each of 12,000 buttons) and 3 seconds reading the DOM with
+`querySelectorAll`; expo's took 22 through a `getAllByTestId` regex and 3.5
+through `UNSAFE_root.findAll`. At that size read the tree directly.
+
 ### which runner, and why
 
 Two runners, split by **the runtime the code has to execute in** — not by

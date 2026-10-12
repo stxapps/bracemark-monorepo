@@ -1,6 +1,12 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
-import { buildTree, LIST_NO_CHILDREN_IDS, type ListItem } from '@stxapps/shared';
+import {
+  buildTree,
+  LIST_NO_CHILDREN_IDS,
+  type ListItem,
+  TREE_PATH_CUT,
+  TREE_ROW_MAX_LEVELS,
+} from '@stxapps/shared';
 import { useLists } from '@stxapps/web-react';
 
 import { installJsdomStubs } from '../../testing/jsdom-stubs';
@@ -408,5 +414,49 @@ describe('ListCommand — the Create row', () => {
 
     expect((filterBox() as HTMLInputElement).value).toBe('');
     expect(listRows()).toEqual(['Work', 'Cooking', 'Recipes', 'Personal', 'Trash']);
+  });
+});
+
+// How deep the tree is gets decided outside this device — a restored backup
+// keeps `parentId` verbatim and another device can sync any chain — and every
+// row here is mounted, so anything a row pays PER LEVEL is paid depth² times
+// over. Two things did: the guide lines, and the ancestor names behind the path
+// label. A long chain did not overflow a stack; it cost hundreds of megabytes
+// the moment a picker opened. Both are bounded by TREE_ROW_MAX_LEVELS
+// (@stxapps/shared sync/tree.ts) — a bound on what a row draws, with every row
+// still present and still selectable.
+describe('ListCommand — a row deeper than a row can show', () => {
+  const DEPTH = TREE_ROW_MAX_LEVELS + 4;
+  const chain = () =>
+    Array.from({ length: DEPTH }, (_, i) => list(`l${i}`, `L${i}`, i === 0 ? null : `l${i - 1}`));
+  const guideLines = (row: HTMLElement) => row.querySelectorAll('[aria-hidden] > span').length;
+
+  it('draws a guide line per level up to the bound, and no more below it', () => {
+    setLists(chain());
+    render(<ListCommand onSelect={jest.fn()} />);
+
+    const rows = screen.getAllByRole('option');
+    expect(rows).toHaveLength(DEPTH);
+    // The control: under the bound a line per level is still the rule.
+    expect(guideLines(rows[3])).toBe(3);
+    expect(guideLines(rows[TREE_ROW_MAX_LEVELS])).toBe(TREE_ROW_MAX_LEVELS);
+    expect(guideLines(rows[DEPTH - 1])).toBe(TREE_ROW_MAX_LEVELS);
+  });
+
+  it('labels a filtered match with a cut path, and still moves into it', () => {
+    const onSelect = jest.fn();
+    setLists(chain());
+    render(<ListCommand onSelect={onSelect} />);
+
+    type(`L${DEPTH - 1}`);
+
+    const [row] = screen.getAllByRole('option');
+    expect(row.textContent).toBe(
+      [...Array.from({ length: TREE_ROW_MAX_LEVELS }, (_, i) => `L${i}`), TREE_PATH_CUT].join(
+        ' / ',
+      ) + ` / L${DEPTH - 1}`,
+    );
+    fireEvent.click(row);
+    expect(onSelect).toHaveBeenCalledWith(`l${DEPTH - 1}`);
   });
 });

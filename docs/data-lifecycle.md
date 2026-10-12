@@ -500,7 +500,12 @@ The policy, decided once:
   with no links in it, which the app never sees as a row. It bounds what an
   import **mints**, not what is stored: a backup restores `parentId` verbatim and
   another device can sync any chain, which is why nothing that reads the tree
-  recurses (below).
+  recurses (below). The rule reads the ROWS a parse returns, so a parser has to
+  get that far cheaply whatever the file nests: `import/linkwarden.ts` used to
+  climb the whole `parentId` chain again from every collection, and 10,000
+  nested empty collections — half a megabyte — took 25 seconds to parse before
+  there was a row to refuse. It settles each collection's path once now, from
+  its parent's, and stops extending one that is already past the limit.
 - **The plan's link cap is enforced up front**, _before anything is written_ —
   see _the import's quota gate_ below for the shape, which differs between an
   interop file and a backup. This is one of the places that enforce the cap at
@@ -583,11 +588,24 @@ React commits with a call frame per level. `buildTree`'s cycle cut went with it:
 re-walk the chain from every id, quadratic in depth, and now settles each entity
 once while cutting exactly the edges the sorted scan did — which edge is cut is
 part of the contract, since two devices must render the same tree, and
-`tree.spec.ts` holds the old scan as an oracle. What still grows with depth is
-work per ROW, not stack: a picker row carries its ancestors' names and draws a
-guide line per level, an exported folder carries its whole path, a Netscape line
-its indent. Each is paid once per row, so a single long chain costs the square
-of its depth in those places — slow at an extreme, never a stack overflow.
+`tree.spec.ts` holds the old scan as an oracle.
+
+**A row describes at most `TREE_ROW_MAX_LEVELS` levels** (32, `sync/tree.ts`).
+Removing the recursion left work per ROW that still grew with depth, and paid
+once per row it is the square of a long chain: every list picker handed each row
+a copy of its whole ancestor chain and drew a guide line per level, in a list
+that mounts every row. A 10,000-deep chain held 600 MB of ancestor names before
+anything was drawn — so the app launched, and the bill came when a picker opened.
+`flattenToPathRows` now names the first 32 ancestors and then `TREE_PATH_CUT`
+(the rows past the cut share one array), the share sheet's picker rebuilds its
+paths under the same bound, and both platforms' guide lines stop at 32. It is a
+bound on what a row **shows** — the row keeps its true `depth`, and the forest
+is untouched, which is where [locks.md](./locks.md) says a display limit has to
+live — and 32 guide lines are 768px of indent, wider than any picker, so nothing
+a person can see moved. What still grows with depth is the export: a folder
+carries its whole path in the CSV and a Netscape line its indent, each once per
+folder, so a single long chain costs the square of its depth there — an export
+the user asked for, not a screen that opens on its own.
 
 Only the platform-bound half of that lives in each orchestrator (the store
 reads, the zip library, the file API). The rest is shared, so the two can't

@@ -33,13 +33,23 @@
 // `w-6` is that unit: 24, the step the names already had (`w-4` plus the gap),
 // so depth 1 does not move and only depth 2+ changes. web-ui's
 // links/list-command.tsx carries the same pair and the same derivation.
+//
+// AT MOST `TREE_ROW_MAX_LEVELS` LINES, whatever `depth` says. Both pickers mount
+// every row in a ScrollView, so a view per level per row is the square of a deep
+// `parentId` chain's length in native views — and how deep a chain is gets
+// decided by a restored backup or another device, not here. Past the bound a row
+// keeps the indent of the level at it, which is already wider than the screen.
+// The bound and its reasoning are @stxapps/shared's (sync/tree.ts), which the
+// share bundle may import.
 
 import { View } from 'react-native';
+
+import { TREE_ROW_MAX_LEVELS } from '@stxapps/shared';
 
 export function GuideLines({ depth }: { depth: number }) {
   return (
     <View aria-hidden className="-my-2.5 -mr-2 flex-row self-stretch">
-      {Array.from({ length: depth }, (_, i) => (
+      {Array.from({ length: Math.min(depth, TREE_ROW_MAX_LEVELS) }, (_, i) => (
         <View key={i} className="w-6 border-l border-border" />
       ))}
     </View>

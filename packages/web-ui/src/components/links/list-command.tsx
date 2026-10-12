@@ -30,7 +30,7 @@
 import { useMemo, useState } from 'react';
 import { PlusIcon } from 'lucide-react';
 
-import { flattenToPathRows, type TreePathRow } from '@stxapps/shared';
+import { flattenToPathRows, TREE_ROW_MAX_LEVELS, type TreePathRow } from '@stxapps/shared';
 import { type ListItem, useLists } from '@stxapps/web-react';
 import {
   Command,
@@ -221,8 +221,14 @@ export function ListCommand({
               // changes is depth 2 and deeper, which used to step 16 while the
               // first level stepped 24. bracemark-expo's guide-lines.tsx is the
               // same pair of numbers.
+              //
+              // At most TREE_ROW_MAX_LEVELS of them. Every row here is mounted
+              // (nothing is virtualized), so a line per level per row is the
+              // square of a deep chain's length in elements; past the bound a
+              // row keeps the indent of the level at it, which is already wider
+              // than this list (@stxapps/shared sync/tree.ts).
               <span aria-hidden className="-my-2 -mr-2 flex self-stretch">
-                {Array.from({ length: depth }, (_, i) => (
+                {Array.from({ length: Math.min(depth, TREE_ROW_MAX_LEVELS) }, (_, i) => (
                   <span key={i} className="w-6 border-l border-border" />
                 ))}
               </span>

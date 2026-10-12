@@ -8,6 +8,8 @@ import {
   flattenToRows,
   flattenTree,
   forbiddenParentIds,
+  TREE_PATH_CUT,
+  TREE_ROW_MAX_LEVELS,
   type TreeItem,
   treeNameMap,
   withoutSubtrees,
@@ -201,6 +203,20 @@ describe('a chain deeper than the call stack', () => {
     expect(flattenTree(withoutSubtrees(tree, new Set([id(3)])))).toHaveLength(3);
   });
 
+  // The walk that is NOT in the list above, because for a long time it could not
+  // be: it handed every row a copy of its whole ancestor chain, so this tree cost
+  // DEPTH² / 2 names — over a billion here, and 600 MB at a fifth of the depth.
+  // No stack overflow, so the app launched, and the cost landed on the first
+  // list picker opened. What bounds it is that the rows past the cut SHARE one
+  // path.
+  it('gives the list pickers a path per row without copying the chain per row', () => {
+    const rows = flattenToPathRows(tree);
+
+    expect(rows).toHaveLength(DEPTH);
+    expect(rows[DEPTH - 1].depth).toBe(DEPTH - 1);
+    expect(new Set(rows.map((row) => row.ancestors)).size).toBe(TREE_ROW_MAX_LEVELS + 2);
+  });
+
   it('breaks a cycle that long without re-walking it from every member', () => {
     // The whole chain closed into one loop: the least id is cut, the rest hang
     // from it. The literal scan walks DEPTH entities DEPTH times here.
@@ -282,6 +298,25 @@ describe('flattenToPathRows', () => {
     expect(rows.map((r) => r.item.id)).toEqual(['work', 'recipes', 'travel', 'home']);
     // The dropped ancestor still contributes its name to descendants' paths.
     expect(rows.find((r) => r.item.id === 'recipes')?.ancestors).toEqual(['Work', 'Cooking']);
+  });
+
+  // The bound is on what a row SHOWS. A path cut one level early would name the
+  // wrong parent for a row a person can actually reach, and one cut without the
+  // marker would name the wrong parent for every row below it — so both edges
+  // are pinned, and so is the row's own depth, which the cut must not touch.
+  it('names every ancestor down to the row bound, and marks the cut past it', () => {
+    const names = Array.from({ length: TREE_ROW_MAX_LEVELS + 3 }, (_, i) => `L${i}`);
+    const rows = flattenToPathRows(
+      buildTree(names.map((name, i) => n(name, i === 0 ? null : names[i - 1], 'a'))),
+    );
+
+    const atBound = rows[TREE_ROW_MAX_LEVELS];
+    expect(atBound.ancestors).toEqual(names.slice(0, TREE_ROW_MAX_LEVELS));
+
+    const cut = [...names.slice(0, TREE_ROW_MAX_LEVELS), TREE_PATH_CUT];
+    expect(rows[TREE_ROW_MAX_LEVELS + 1].ancestors).toEqual(cut);
+    expect(rows[TREE_ROW_MAX_LEVELS + 2].ancestors).toEqual(cut);
+    expect(rows[TREE_ROW_MAX_LEVELS + 2].depth).toBe(TREE_ROW_MAX_LEVELS + 2);
   });
 });
 

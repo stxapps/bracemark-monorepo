@@ -1,6 +1,8 @@
 import { detectTextImportFormat } from './detect';
 import { parseLinkwardenExport } from './linkwarden';
 import { parseImportText } from './parse';
+import { assertImportFolderDepth } from './project';
+import { IMPORT_MAX_FOLDER_DEPTH, ImportFolderDepthError } from './resolve';
 
 // LinkWarden's backup.json, rule by rule.
 //
@@ -209,6 +211,67 @@ describe('parseLinkwardenExport', () => {
     expect(links).toHaveLength(1);
     // Each name appears once; which end the walk stops at is not the point.
     expect([...links[0].folderPath].sort()).toEqual(['A', 'B']);
+  });
+
+  // A chain of collections, each the parent of the next. `name` null leaves a
+  // collection out of every path; `everyLink` puts a link in each collection
+  // rather than only in the last.
+  const chainOf = (length: number, name: (i: number) => string | null, everyLink = false) =>
+    JSON.stringify({
+      collections: Array.from({ length }, (_, i) => ({
+        id: i + 1,
+        name: name(i),
+        parentId: i === 0 ? null : i,
+        links:
+          everyLink || i === length - 1
+            ? [{ id: 9000 + i, url: `https://example.com/${i}`, tags: [] }]
+            : [],
+      })),
+    });
+
+  // FINISHING again, by the other road: no cycle, just depth. The walk used to
+  // climb the whole chain from every collection, so the cost was the chain's
+  // length per collection — and the depth rule could not help, because it reads
+  // the rows this parse returns. Half a megabyte of nested EMPTY collections
+  // took 25 seconds to parse.
+  //
+  // Pinned by what settling each collection ONCE leaves behind, not by a clock:
+  // jest cannot time out a synchronous test, so a slow parse would only make
+  // this file slow. A collection's path is its parent's plus one name, so paths
+  // are shared — every collection past the depth limit holds the very same
+  // array. Climb the chain again per collection and each gets its own.
+  it('settles each collection of a long chain once', () => {
+    const links = parseLinkwardenExport(chainOf(5_000, (i) => `c${i}`, true));
+
+    expect(links).toHaveLength(5_000);
+    // Not the whole chain — only enough of it to be refused (below).
+    expect(links[4_999].folderPath.length).toBe(IMPORT_MAX_FOLDER_DEPTH + 1);
+    expect(links[4_999].folderPath.slice(0, 3)).toEqual(['c0', 'c1', 'c2']);
+    expect(new Set(links.map((link) => link.folderPath)).size).toBe(IMPORT_MAX_FOLDER_DEPTH + 1);
+  });
+
+  // The same chain with nothing to stop on: a collection with no name adds
+  // nothing to a path, so a walk bounded only by NAMES would still climb all of
+  // it from every collection. One shared empty path says it did not.
+  it('settles a chain of unnamed collections once as well', () => {
+    const links = parseLinkwardenExport(chainOf(5_000, () => null, true));
+
+    expect(links).toHaveLength(5_000);
+    expect(links[4_999].folderPath).toEqual([]);
+    expect(new Set(links.map((link) => link.folderPath)).size).toBe(1);
+  });
+
+  // The parser stops extending a path once it is past the limit, which is only
+  // sound if "past the limit" is still what the import refuses on — and if a
+  // chain exactly AT the limit still arrives whole, name for name.
+  it('carries a chain at the depth limit whole, and one past it far enough to be refused', () => {
+    const names = Array.from({ length: IMPORT_MAX_FOLDER_DEPTH }, (_, i) => `c${i}`);
+    const atLimit = parseLinkwardenExport(chainOf(IMPORT_MAX_FOLDER_DEPTH, (i) => `c${i}`));
+    const pastLimit = parseLinkwardenExport(chainOf(IMPORT_MAX_FOLDER_DEPTH + 1, (i) => `c${i}`));
+
+    expect(atLimit[0].folderPath).toEqual(names);
+    expect(() => assertImportFolderDepth(atLimit)).not.toThrow();
+    expect(() => assertImportFolderDepth(pastLimit)).toThrow(ImportFolderDepthError);
   });
 
   it('ends the chain at a parent the file does not contain', () => {

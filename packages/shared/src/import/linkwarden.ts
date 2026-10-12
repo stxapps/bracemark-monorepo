@@ -2,6 +2,7 @@ import { decodeHtmlEntities } from '../html/entities';
 import { normalizeUrl } from '../url/url';
 import type { ImportedLink, ImportObserver } from './bundle';
 import { parseEpoch } from './epoch';
+import { IMPORT_MAX_FOLDER_DEPTH } from './resolve';
 import { PARSE_CHUNK, runSteps } from './steps';
 
 // LinkWarden backup parser — the second importer (with brace.ts) whose input is a
@@ -148,21 +149,42 @@ export function* parseLinkwardenExportSteps(
     if (typeof collection.id === 'number') byId.set(collection.id, collection);
   }
 
-  // The folder chain, root first. The `seen` set is not defensive dressing: a
-  // parentId cycle (a hand-edited file, a restore that reparented two
-  // collections into each other) makes this walk NON-TERMINATING, and an import
-  // that hangs with no error is worse than one that files a link in the wrong
-  // place. A parent that isn't in the file — LinkWarden can share a collection
-  // whose parent belongs to someone else — simply ends the chain.
+  // The folder chain, root first — settled ONCE per collection. A collection's
+  // path is its parent's path plus its own name, so the walk climbs only as far
+  // as the first collection already settled and extends from there. Walking the
+  // whole chain again for every collection, as this did, costs the chain's
+  // length per collection (and building each path front-first cost its length
+  // again per name): half a megabyte of nothing but nested empty collections
+  // took 25 seconds to parse — before the depth rule, which reads the ROWS this
+  // parse returns, had anything to refuse.
+  //
+  // `onWalk` is not defensive dressing: a parentId cycle (a hand-edited file, a
+  // restore that reparented two collections into each other) makes the climb
+  // NON-TERMINATING, and an import that hangs with no error is worse than one
+  // that files a link in the wrong place. The cycle is cut where the climb
+  // re-enters it. A parent that isn't in the file — LinkWarden can share a
+  // collection whose parent belongs to someone else — simply ends the chain.
+  const paths = new Map<LwCollection, string[]>();
   function folderPath(collection: LwCollection): string[] {
-    const path: string[] = [];
-    const seen = new Set<LwCollection>();
+    const walk: LwCollection[] = [];
+    const onWalk = new Set<LwCollection>();
     let current: LwCollection | undefined = collection;
-    while (current !== undefined && !seen.has(current)) {
-      seen.add(current);
-      const name = nonEmpty(current.name);
-      if (name !== undefined) path.unshift(name);
+    while (current !== undefined && !paths.has(current) && !onWalk.has(current)) {
+      onWalk.add(current);
+      walk.push(current);
       current = typeof current.parentId === 'number' ? byId.get(current.parentId) : undefined;
+    }
+
+    // Back down, nearest the root first, each collection extending the path
+    // above it. A path already PAST the import's depth limit is not extended:
+    // one name over is all it takes to refuse the file, wherever a row or the
+    // converter's observer meets it (resolve.ts), so the names below would never
+    // be read — and copying them is what made a long chain quadratic.
+    let path = (current !== undefined ? paths.get(current) : undefined) ?? [];
+    for (let i = walk.length - 1; i >= 0; i--) {
+      const name = nonEmpty(walk[i].name);
+      if (name !== undefined && path.length <= IMPORT_MAX_FOLDER_DEPTH) path = [...path, name];
+      paths.set(walk[i], path);
     }
     return path;
   }

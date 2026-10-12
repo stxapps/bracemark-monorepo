@@ -32,6 +32,7 @@ import Check from 'lucide-react-native/icons/check';
 import Plus from 'lucide-react-native/icons/plus';
 
 import type { ShareNewEntity, ShareTaxonomyList } from '@stxapps/expo-react/data/share-store';
+import { TREE_PATH_CUT, TREE_ROW_MAX_LEVELS } from '@stxapps/shared';
 
 import { GuideLines } from '../../components/links/guide-lines';
 import { Button } from '../../components/ui/button';
@@ -48,12 +49,18 @@ type PathRow = { list: ShareTaxonomyList; ancestors: string[] };
 // name seen at each depth below d. The stand-in for shared's `flattenToPathRows`
 // (which needs the real tree) — and the reason `ShareTaxonomy` did not have to
 // grow an `ancestors` field for the filtered view to be legible.
+//
+// Under the same bound as that walk, TREE_ROW_MAX_LEVELS: a row deeper than it
+// gets that many names and then TREE_PATH_CUT, and the stack never tracks a
+// level past it. Copying each row's whole chain made one deep `parentId` chain
+// cost the square of its length in names — in the process with the least memory
+// to spend on it (docs/share-sheet.md).
 function withAncestors(lists: ShareTaxonomyList[]): PathRow[] {
   const stack: string[] = [];
   return lists.map((list) => {
-    stack.length = list.depth;
-    const ancestors = [...stack];
-    stack[list.depth] = list.name;
+    stack.length = Math.min(list.depth, TREE_ROW_MAX_LEVELS);
+    const ancestors = list.depth > TREE_ROW_MAX_LEVELS ? [...stack, TREE_PATH_CUT] : [...stack];
+    if (list.depth < TREE_ROW_MAX_LEVELS) stack[list.depth] = list.name;
     return { list, ancestors };
   });
 }

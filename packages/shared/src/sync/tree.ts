@@ -207,6 +207,25 @@ export function treeNameMap<T extends TreeItem & { name: string }>(
   return map;
 }
 
+// The most levels one ROW describes: the ancestor names in a path row below, and
+// the guide lines a picker draws for a row's indent (web-ui's ListCommand, expo's
+// guide-lines.tsx). Both are paid per row and both used to be the row's whole
+// depth, so one long `parentId` chain cost the SQUARE of its length — a 10,000-
+// deep chain held 600 MB of ancestor names before a picker had drawn anything.
+// Nothing here recursed, so the app launched; the bill came when a picker opened.
+//
+// A bound on what a row SHOWS, never on the tree: the row keeps its true `depth`
+// and the forest under it is untouched, which is the only place a display limit
+// may live (lock coverage reads the real forest — lock-coverage.ts). 32 is far
+// past what either number can show — a path label is one truncated line, and 32
+// guide lines are 768px of indent in pickers narrower than that — so the bound
+// changes nothing anyone can see in a tree a person built.
+export const TREE_ROW_MAX_LEVELS = 32;
+
+// Stands in for the names a path row leaves out past TREE_ROW_MAX_LEVELS, so a
+// cut path reads "Work / … / Recipes" rather than naming the wrong parent.
+export const TREE_PATH_CUT = '…';
+
 // One flattened row carrying the ANCESTOR NAMES on the path down to it — the path
 // label the list pickers show on filtered rows ("Work / Cooking / Recipes") and
 // on ListSelect's trigger. `flattenTree` yields `depth` but not the names, which
@@ -214,6 +233,8 @@ export function treeNameMap<T extends TreeItem & { name: string }>(
 export interface TreePathRow<T extends TreeItem & { name: string }> {
   item: T;
   depth: number;
+  // Root first. Every ancestor's name down to TREE_ROW_MAX_LEVELS of them; a row
+  // deeper than that gets the first TREE_ROW_MAX_LEVELS and then TREE_PATH_CUT.
   ancestors: string[];
 }
 
@@ -227,17 +248,24 @@ export function flattenToPathRows<T extends TreeItem & { name: string }>(
   excludeIds?: readonly string[],
 ): TreePathRow<T>[] {
   const out: TreePathRow<T>[] = [];
+  const excluded = new Set(excludeIds);
   const pending: { node: TreeNode<T>; ancestors: string[] }[] = [];
   const root: string[] = [];
   for (let i = nodes.length - 1; i >= 0; i--) pending.push({ node: nodes[i], ancestors: root });
   for (let next = pending.pop(); next !== undefined; next = pending.pop()) {
     const { node, ancestors } = next;
-    if (!excludeIds?.includes(node.item.id)) {
+    if (!excluded.has(node.item.id)) {
       out.push({ item: node.item, depth: node.depth, ancestors });
     }
     if (node.children.length === 0) continue;
-    // One array per PARENT, shared by its children's rows.
-    const below = [...ancestors, node.item.name];
+    // One array per PARENT, shared by its children's rows — and once the path is
+    // cut, one array for everything below, however far down that goes.
+    const below =
+      ancestors.length < TREE_ROW_MAX_LEVELS
+        ? [...ancestors, node.item.name]
+        : ancestors.length === TREE_ROW_MAX_LEVELS
+          ? [...ancestors, TREE_PATH_CUT]
+          : ancestors;
     for (let i = node.children.length - 1; i >= 0; i--) {
       pending.push({ node: node.children[i], ancestors: below });
     }

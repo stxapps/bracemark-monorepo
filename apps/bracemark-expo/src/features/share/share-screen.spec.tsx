@@ -6,7 +6,13 @@ import {
   saveSharedDraft,
   type ShareDraft,
 } from '@stxapps/expo-react/data/share-store';
-import { DEFAULT_LIST_ID, MY_LIST_ID, rankBetween } from '@stxapps/shared';
+import {
+  DEFAULT_LIST_ID,
+  MY_LIST_ID,
+  rankBetween,
+  TREE_PATH_CUT,
+  TREE_ROW_MAX_LEVELS,
+} from '@stxapps/shared';
 
 import { apiClient } from '../../lib/api-client';
 import { ShareScreen } from './share-screen';
@@ -334,4 +340,38 @@ test('holds the system swipe off on the pickers, and only on the pickers', async
   expect(getByTestId('share-swipe-guard')).toBeTruthy();
   fireEvent.press(getByTestId('share-back'));
   expect(queryByTestId('share-swipe-guard')).toBeNull();
+});
+
+// The snapshot ships each list's depth and nothing else, so the picker rebuilds
+// a row's ancestor path from the rows above it — and used to copy the whole
+// chain into every row. A list tree is as deep as a restored backup or another
+// device makes it, so one long chain cost the square of its length in names, in
+// the one process with a memory ceiling and no warning before it (docs/
+// share-sheet.md). The path is bounded like the in-app picker's now
+// (@stxapps/shared sync/tree.ts): whole down to the bound, marked as cut past
+// it, and the row is still there to pick.
+test('labels a filtered list with its path, cut past the row bound', async () => {
+  const depth = TREE_ROW_MAX_LEVELS + 3;
+  loadShareTaxonomyMock.mockResolvedValue({
+    ...TAXONOMY,
+    lists: Array.from({ length: depth }, (_, i) => ({
+      id: `deep-${i}`,
+      name: `L${i}`,
+      depth: i,
+      rank: 'a0',
+    })),
+  });
+  const names = Array.from({ length: TREE_ROW_MAX_LEVELS }, (_, i) => `L${i}`);
+  const { findByTestId, getByTestId, getByText } = render(
+    <ShareScreen url="https://example.com/i" />,
+  );
+  fireEvent.press(await findByTestId('share-list-row'));
+
+  // The control, a row AT the bound: every ancestor named, nothing cut.
+  fireEvent.changeText(getByTestId('share-list-input'), `L${TREE_ROW_MAX_LEVELS}`);
+  expect(getByText(`${names.join(' / ')} / `)).toBeTruthy();
+
+  fireEvent.changeText(getByTestId('share-list-input'), `L${depth - 1}`);
+  expect(getByText(`${[...names, TREE_PATH_CUT].join(' / ')} / `)).toBeTruthy();
+  expect(getByTestId(`share-list-deep-${depth - 1}`)).toBeTruthy();
 });
