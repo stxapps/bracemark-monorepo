@@ -546,6 +546,27 @@ describe('the bracemark backup round trip, through fflate', () => {
     expect(lockedItems).toContain('https://trash.invalid/gone');
   });
 
+  // The coverage set names a list by the id the read edge gives it — its path's.
+  // The backup reads the raw plaintext, where `id` is a copy that can disagree,
+  // and filtering on the copy shipped the locked list, name and all.
+  it('keeps a locked list out by the id it is stored under, not the one its plaintext claims', async () => {
+    seedEntities();
+    await seedContent();
+    const workPath = `${LISTS_PREFIX}work.enc`;
+    const work = ENTITIES.find(({ path }) => path === workPath);
+    getDb().transaction((tx) =>
+      putItemsTx(tx, [
+        toItemRecord(workPath, 5000, utf8(JSON.stringify({ ...work?.data, id: 'claimed' }))),
+      ]),
+    );
+
+    const locked = unzipSaved((await exportBackup(new Set(['work']))).file.uri);
+    const lockedItems = new TextDecoder().decode(locked[BACKUP_ITEMS_ENTRY]);
+    expect(lockedItems).not.toContain(workPath);
+    expect(lockedItems).not.toContain('"name":"Work"');
+    expect(lockedItems).toContain(`${TAGS_PREFIX}read.enc`);
+  });
+
   // Skip-existing by path, on this platform's store. The failure it prevents is
   // a restore silently rolling back edits made since the backup.
   it('never clobbers a path the local store already holds', async () => {
@@ -726,6 +747,28 @@ describe('the output the share sheet is presented over', () => {
     expect(outcome.file.mimeType).toBe('application/zip');
     expect(outcome.file.uri.startsWith('file:///cache/')).toBe(true);
     expect(readFileBytes(outcome.file.uri).length).toBeGreaterThan(0);
+  });
+
+  // The interop formats take their tags from the read edge, so a link's `tagIds`
+  // resolve against the id a tag is STORED under. Against the raw plaintext copy,
+  // a tag whose two ids disagree showed on the link and was missing from the file.
+  it('names a tag by the id it is stored under, not the one its plaintext claims', async () => {
+    seedEntities();
+    const tagPath = `${TAGS_PREFIX}read.enc`;
+    const tag = ENTITIES.find(({ path }) => path === tagPath);
+    getDb().transaction((tx) =>
+      putItemsTx(tx, [
+        toItemRecord(tagPath, 5000, utf8(JSON.stringify({ ...tag?.data, id: 'claimed' }))),
+      ]),
+    );
+
+    const outcome = await exportAllData({
+      format: 'csv',
+      deps: deps(),
+      excludedListIds: new Set<string>(),
+    });
+
+    expect(new TextDecoder().decode(readFileBytes(outcome.file.uri))).toContain('reading');
   });
 
   // That file is the whole library in plaintext, and it has to outlive the run for the

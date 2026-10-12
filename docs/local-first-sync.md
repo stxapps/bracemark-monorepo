@@ -484,7 +484,17 @@ extraction.title ?? host(url)`). Written by client extractors (the browser
   result: the wire is payload-blind, schema knowledge lives in exactly two
   places (the write-edge projector and the read layer, sharing one `parseBlob`),
   and turning a record into a typed bookmark/tag/list entity is still a read
-  layer **above** sync.
+  layer **above** sync. The same division settles **identity**: an entity is the
+  one its path names, and an `id` inside the plaintext (lists, tags, pins and
+  extractions carry one) is a copy for self-containment. Sync stores what
+  arrives without opening it, so nothing below the read layer can make that copy
+  agree with the path, and the read layer is where it has to be set aside —
+  `idFromPath` (`sync/paths.ts`) is the way to an id. `readLists`/`readTags`
+  apply it to every list and tag they return, a link's id has always come from
+  its path, and an extraction is fetched by path; the pinned overlay still
+  resolves a pin's link through the pin's own copy, the one reader that has not
+  been moved ([data-lifecycle.md](./data-lifecycle.md), _a list's identity is
+  its path_).
 
 ### the three flows
 

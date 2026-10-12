@@ -83,7 +83,25 @@ interface LockRecord {
 
 - **Keying.** The app lock is the single constant row `APP_LOCK_ID = 'app'`. List
   locks are keyed by their **list id** (stable across renames; a system-list
-  constant or a random token — neither collides with `'app'`).
+  constant or a random token — neither collides with `'app'`). That id is the
+  `{id}` of the list's **path**, which is what the read edge hands every reader
+  ([data-lifecycle.md](./data-lifecycle.md), _a list's identity is its path_) —
+  never the copy inside the list's plaintext. The two agree for every list this
+  app wrote. **For a stored list where they do not, a lock set while the copy was
+  still the id stops covering anything**, and that is wider than the one row.
+  Coverage is looked up by tree node id, and the node now carries the path's id,
+  so the lock matches no node; the orphan sweep then deletes it. What it gated
+  was reached through the old id and is no longer covered: the list itself, the
+  lists nested under it by a `parentId` naming the old id (roots now, with their
+  own links), and every link whose `listId` still names the old id — those show
+  in Show All, tag views, search and the pinned section, and leave in exports.
+  **Locking the list again does not put that back**: the new lock covers links
+  filed under the path's id, and the links naming the old one belong to no list
+  until they are moved into one. The exception is a second list stored AT the
+  old id — then the lock is no orphan, stays, and covers that list and those
+  links. Nothing announces any of this, and no code path in this app writes a
+  list whose two ids disagree; it is the cost, for a record that arrived
+  otherwise, of the read edge no longer taking a record's word for its identity.
 - **Same shape on both platforms**, deliberately, so `@stxapps/shared`'s
   `computeCoverage` sees one type. (The expo store maps drizzle's `null` ⇄
   `undefined` for `hideList` at the boundary so the in-memory shape matches web's

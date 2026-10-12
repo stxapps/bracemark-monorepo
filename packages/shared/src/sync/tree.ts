@@ -22,6 +22,20 @@
 // keeps its own stack on the heap instead. (An import's folder chain is bounded
 // separately, import/resolve.ts; that bound covers what an import mints, not what
 // is already stored.)
+//
+// ONE NODE PER ID, for the same reason: how many nodes a forest holds must not be
+// data either. Parents are resolved by id, so two items sharing an id were both
+// children of one parent and both parents of everything naming them — each copy
+// of a level got its own copy of the level below, and a chain of repeated ids
+// multiplied at every step: twenty records, two to an id and ten deep, built two
+// thousand nodes, and each further level doubled that. So an id is placed once,
+// and a forest is never larger than the set it was built from. The read edges
+// take a list's and a tag's id from its PATH (`pathIdentified`, items.ts), which
+// is unique, so nothing stored is hidden by this; it is the backstop for a caller
+// holding a set that never went through one — the marketing site's converter
+// reading a backup that repeats a line. The LAST item with an id is the one
+// placed, which follows input order: the one thing here that does, and only for
+// input that already broke the contract.
 
 import { compareRank } from './rank';
 import { LIST_NO_CHILDREN_IDS } from './system-lists';
@@ -56,12 +70,14 @@ export function buildTree<T extends TreeItem>(
   options?: BuildTreeOptions,
 ): TreeNode<T>[] {
   const noChildren = options?.noChildrenIds ?? EMPTY_SET;
+  // Last wins on a repeated id — and from here on the walk is over `byId`, never
+  // `items`, which is what makes the forest one node per id (header).
   const byId = new Map(items.map((i) => [i.id, i]));
 
   // Resolve each entity's EFFECTIVE parent: null (root) when the declared parent
   // is null, missing (orphan), or a forbidden (no-children) id.
   const parentOf = new Map<string, string | null>();
-  for (const item of items) {
+  for (const item of byId.values()) {
     const p = item.parentId;
     parentOf.set(item.id, p !== null && byId.has(p) && !noChildren.has(p) ? p : null);
   }
@@ -70,7 +86,7 @@ export function buildTree<T extends TreeItem>(
 
   // Group by effective parent, then assemble top-down, sorting each sibling group.
   const childrenOf = new Map<string | null, T[]>();
-  for (const item of items) {
+  for (const item of byId.values()) {
     const p = parentOf.get(item.id) ?? null;
     const group = childrenOf.get(p);
     if (group) group.push(item);

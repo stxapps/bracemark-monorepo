@@ -205,6 +205,25 @@ describe('classifyBundleLine', () => {
     expect(classifyBundleLine(jsonlLine('links/../x.enc', link))).toBeUndefined();
   });
 
+  // A list's or tag's identity is its path; the `id` inside is a copy. A line
+  // whose copy disagrees claims an id it is not stored under — and a restore that
+  // took its word kept two lists under one id, or a user list under Trash's.
+  it.each(['list', 'tag'] as const)('refuses a %s line whose own id is not its path id', (kind) => {
+    const { path, data } = ENTITIES[kind];
+
+    expect(classifyBundleLine(jsonlLine(path, { ...data, id: 'other' }))).toBeUndefined();
+    expect(classifyBundleLine(jsonlLine(path, data))?.kind).toBe(kind);
+  });
+
+  it('refuses a user list claiming a system list id, and keeps the override stored at it', () => {
+    const { path, data } = ENTITIES.list;
+
+    expect(classifyBundleLine(jsonlLine(path, { ...data, id: 'trash' }))).toBeUndefined();
+    expect(classifyBundleLine(jsonlLine('lists/trash.enc', { ...data, id: 'trash' }))?.kind).toBe(
+      'list',
+    );
+  });
+
   // The ids INSIDE the data, which the path check above never sees. Each of these
   // four fields names a `files/{id}.enc` blob, so a restore turns it into a path
   // and a queued put — and any later delete of the link turns it into a queued

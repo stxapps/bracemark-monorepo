@@ -72,6 +72,8 @@ import {
   listSchema,
   mergeSystemLists,
   pathFromId,
+  pathIdentifiedList,
+  pathIdentifiedTag,
   PINS_PREFIX,
   pinSchema,
   rekey,
@@ -269,13 +271,16 @@ async function readNamespace<T extends z.ZodTypeAny>(
 // The full logical list set: synced lists merged with the system defaults
 // (My List / Archive / Trash). Flat — the caller assembles the tree via
 // `buildTree` (see use-lists), so non-sidebar readers can take the flat set.
+// Each entity comes back under its PATH's id, lists before the merge — web
+// queries.ts readLists has the reasoning.
 export async function readLists(): Promise<ListItem[]> {
   const stored = await readNamespace(LISTS_PREFIX, listSchema);
-  return mergeSystemLists(stored);
+  return mergeSystemLists(stored.map(pathIdentifiedList));
 }
 
-export function readTags(): Promise<TagItem[]> {
-  return readNamespace(TAGS_PREFIX, tagSchema);
+export async function readTags(): Promise<TagItem[]> {
+  const stored = await readNamespace(TAGS_PREFIX, tagSchema);
+  return stored.map(pathIdentifiedTag);
 }
 
 // Every pin (one per pinned link). Small by design, like lists/tags.

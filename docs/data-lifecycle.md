@@ -104,7 +104,11 @@ formats is decided once in the orchestrator: **locked lists are excluded**
 with their pins/extractions/files, and the list entities drop too — a hidden
 list's _name_ is as sensitive as its contents; the UI warns with the count),
 and a dangling `listId` files under My List, the read layer's reconciliation
-spirit.
+spirit. The backup reads raw plaintext, so it drops a covered list by the id of
+its **path** — the id the coverage set was computed over (_import_, below: a
+list's identity is its path) — and never by the `id` copy inside, which is the
+one the read edge does not trust; the interop formats take lists and tags from
+`readLists`/`readTags`, which have already made that substitution.
 
 ### the export's empty run
 
@@ -464,6 +468,25 @@ The policy, decided once:
   the library it was exported from already held one, since the export is
   verbatim as well: that link is then refused on restore and counted, where it
   used to come back and break the list.
+- **A backup's list or tag line carries its path's id, or is refused.** Both
+  entities hold an `id` in their plaintext that repeats the `{id}` of their path,
+  and until this rule nothing compared the two: `listSchema`/`tagSchema` ask for
+  a string. So a file could store a list under `lists/a.enc` that called itself
+  `b` — a second record on an id another line already held, or a user list
+  calling itself `trash` — and every reader went by the copy.
+  `classifyBundleLine` refuses the line and counts it invalid, at the same edge
+  and for the same reason as the two gates above: this is where the value comes
+  from a file rather than from this app. Refused, never rewritten — a restore is
+  verbatim. Every writer of a list or a tag in this app builds the path **from**
+  the id (`pathFromId`), the first edit of a system list included, so a backup
+  carries such a line only when the library it was exported from already held
+  the record — pulled from another client, or restored before this rule — since
+  the export is verbatim as well. That line is then refused on restore and
+  counted: the list or tag does not come back, its children return as roots and
+  the links naming it return with a dangling reference. The same trade as the
+  calendar rule above. It is one of three rules that hold the same line — the
+  read edge and the tree builder are the other two (_a list's identity is its
+  path_, below) — and the only one that keeps such a record out of the store.
 - **An interop date the calendar cannot name is dropped; the row is kept.** The
   same value reaches the projection legitimately — the epoch parser's unit
   inference is by magnitude, and a source can simply carry a wrong number. A date
@@ -606,6 +629,55 @@ a person can see moved. What still grows with depth is the export: a folder
 carries its whole path in the CSV and a Netscape line its indent, each once per
 folder, so a single long chain costs the square of its depth there — an export
 the user asked for, not a screen that opens on its own.
+
+**A list's identity is its path, and a forest holds one node per id.** Depth was
+one number the data chose; the node count was the other. `buildTree` resolves
+parents by id, and the ids it was handed were the plaintext copies, which
+nothing made unique: the store is keyed by path, a restore and a pull both write
+what arrives, and two records under different paths could carry one id. Each was
+then a child of that id's parent **and** a parent of everything naming it, so
+every copy of a level got its own copy of the level below — twenty stored lists,
+two to an id and ten deep, built two thousand nodes, and each further level
+doubled it. It is the same shape as the stack overflow above (stored, rebuilt in
+render, above every signed-in screen) and none of that section's bounds touch
+it: it is neither deep nor one long row. Three rules now hold the line, each at
+a different edge:
+
+- **The read edge takes the id from the path.** Both platforms' `readLists` and
+  `readTags` hand each entity back under `idFromPath` of its path
+  (`pathIdentifiedList`/`pathIdentifiedTag`, `sync/items.ts`) — for lists
+  _before_ `mergeSystemLists`, because that merge is by id. Paths are unique, so
+  ids are; a record stored anywhere else is no longer taken for a system list's
+  override, and the one stored at a system id is that override whatever it calls
+  itself. This is the rule `sync/paths.ts` already stated for every namespace and
+  links already followed (`linkIdOf`); lists and tags were the two that carried a
+  copy and went by it.
+- **`buildTree` places each id once** — the last item holding it, the one
+  parents were already resolved against — so a forest is never larger than the
+  set it was built from. Nothing stored is hidden by this, since the read edge
+  has already made stored ids unique; it is the backstop for a set that never
+  went through one, which today is the marketing site's converter reading a
+  backup that repeats a line.
+- **The backup reader refuses a line whose two ids disagree** (above), which is
+  what keeps such a record from being stored and pushed in the first place.
+
+What the read-edge rule changes is confined to a record whose two ids already
+disagree, which nothing in this app writes — but for such a record it is not
+small. Whatever named its **old** id is dangling from then on and is read the
+way a dangling reference always is: a child naming it as `parentId` is a root; a
+link naming it as `listId` shows under no list (the list reads as empty) and
+exports under My List; a link naming it in `tagIds` loses that chip, and the
+tag's name in an interop export; a selection naming it in a URL falls back to
+home. And a **list lock** keyed by it covers nothing, so the lock provider
+sweeps it and what it gated is readable and exportable again — the list, the
+lists that were nested under it, and the links still naming the old id, which
+locking the list again does not re-cover ([locks.md](./locks.md), _Keying_, has
+the whole of it). Nothing is rewritten on read; the next edit of the record
+writes the path's id into its plaintext, and until then a client on an older
+build still goes by the copy. A pin and an extraction carry the same kind of
+copy: an extraction is fetched by path, and a pin's link is still resolved
+through the pin's own copy — the one reader left that goes by it, and not part
+of this rule.
 
 Only the platform-bound half of that lives in each orchestrator (the store
 reads, the zip library, the file API). The rest is shared, so the two can't

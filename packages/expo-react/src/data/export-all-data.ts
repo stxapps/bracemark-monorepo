@@ -80,7 +80,7 @@ import { getDb } from './db';
 import { dataFileFor } from './file-store';
 import { bulkGetItems, getItem, namespaceRows } from './item-store';
 import { parseBlob } from './projection';
-import { readLists, readSettingsGeneral } from './queries';
+import { readLists, readSettingsGeneral, readTags } from './queries';
 import { assertAccountOwnsStoreTx } from './sync-store';
 
 // The written output, for the UI's share-sheet handoff. Lives in the CACHE dir
@@ -412,13 +412,11 @@ export async function exportAllData(options: {
     // readLists merges the system-list defaults, so My List/Archive always
     // exist as folders even when never overridden.
     const mergedLists = (await readLists()).filter((list) => !excludedListIds.has(list.id));
-    const tags = readRawNamespace(TAGS_PREFIX, tagSchema);
+    // readTags, not the raw namespace: a link's `tagIds` name a tag by its path's
+    // id, which is the id the read edge hands back (queries.ts readTags).
+    const tags = await readTags();
     const interopLinks = links.filter(({ link }) => link.listId !== TRASH_ID);
-    const bundle = bundleFromLibrary(
-      interopLinks,
-      mergedLists,
-      tags.map(({ entity }) => entity),
-    );
+    const bundle = bundleFromLibrary(interopLinks, mergedLists, tags);
     const content =
       format === 'netscape'
         ? toNetscapeHtml(bundle)
@@ -438,8 +436,10 @@ export async function exportAllData(options: {
   // Bracemark backup. Raw stored entities only (no synthesized system-list
   // defaults — import's merge-on-read reconstructs those, exactly like sync).
   const includedLinkIds = new Set(links.map(({ path }) => idFromPath(path, LINKS_PREFIX)));
+  // Excluded by the PATH's id, like the pins below — the id the lock coverage is
+  // computed over; web export-all-data.ts has the reasoning.
   const lists = readRawNamespace(LISTS_PREFIX, listSchema).filter(
-    ({ entity }) => !excludedListIds.has(entity.id),
+    ({ path }) => !excludedListIds.has(idFromPath(path, LISTS_PREFIX)),
   );
   const tags = readRawNamespace(TAGS_PREFIX, tagSchema);
   const pins = readRawNamespace(PINS_PREFIX, pinSchema).filter(({ path }) =>

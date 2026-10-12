@@ -26,19 +26,35 @@
 // table of expectations against SQLite — the two implementations are independent (a JS
 // bulkGet+decode join here, a LEFT JOIN on the token junction there), so agreeing on
 // these cases is the point.
+//
+// Below them, the one rule of the NAMESPACE reads that is silent in the same way:
+// whose id a list or tag is read back under (_the id a list or tag is read under_).
 import {
+  buildTree,
   emptyQuery,
+  flattenTree,
   type LinkQuery,
   LINKS_PREFIX,
+  LISTS_PREFIX,
   MY_LIST_ID,
   newFacet,
   pathFromId,
+  ranksBetween,
+  SYSTEM_LIST_IDS,
+  SYSTEM_LIST_NAMES,
+  TAGS_PREFIX,
   TRASH_ID,
 } from '@stxapps/shared';
 
 import { db } from './db';
-import { writeExtraction, writeLink } from './mutations';
-import { readExtractionFacetCounts, readLinks, readRawPendingTitleImageCount } from './queries';
+import { bulkWriteEntities, writeExtraction, writeLink } from './mutations';
+import {
+  readExtractionFacetCounts,
+  readLinks,
+  readLists,
+  readRawPendingTitleImageCount,
+  readTags,
+} from './queries';
 import { seedNewAccount } from './sync-store';
 
 const USER = 'alice';
@@ -234,5 +250,86 @@ describe('readLinks with a note clause', () => {
     expect((await readLinks(noteQuery(['kept']), 20)).total).toBeUndefined();
     // The same view with no note clause still counts off the index.
     expect((await readLinks(emptyQuery(), 20)).total).toBe(2);
+  });
+});
+
+// A list's and a tag's identity is its PATH (shared sync/paths.ts, idFromPath);
+// the `id` in its plaintext is a copy, and nothing between a backup or another
+// device and this store makes the copy agree. Every reader downstream goes by the
+// `id` these two hand back — the tree resolves parents against it, the system
+// lists are recognised by it, the lock model covers it — so a read edge that
+// passed the copy through let a stored record choose its own identity. Seeded
+// through bulkWriteEntities, the edge a restore writes through: it stores what it
+// is given.
+describe('the id a list or tag is read under', () => {
+  const [RANK_A, RANK_B] = ranksBetween(null, null, 2);
+  const entity = (id: string, name: string, parentId: string | null, rank: string) => ({
+    id,
+    name,
+    parentId,
+    rank,
+    createdAt: 1,
+    updatedAt: 1,
+  });
+  const userLists = async () => (await readLists()).filter((list) => !SYSTEM_LIST_IDS.has(list.id));
+
+  it('is the path id, whatever the plaintext says', async () => {
+    await bulkWriteEntities(USER, [
+      { path: pathFromId('a', LISTS_PREFIX), data: entity('claimed', 'A', null, RANK_A) },
+      { path: pathFromId('t', TAGS_PREFIX), data: entity('claimed', 'T', null, RANK_A) },
+    ]);
+
+    expect((await userLists()).map(({ id, name }) => ({ id, name }))).toEqual([
+      { id: 'a', name: 'A' },
+    ]);
+    expect((await readTags()).map(({ id, name }) => ({ id, name }))).toEqual([
+      { id: 't', name: 'T' },
+    ]);
+  });
+
+  // The case the rule exists for. Two records under one id were both a child of
+  // its parent and a parent of its children, so the tree held each level once per
+  // copy of the level above — more nodes than there were lists.
+  it('keeps records that claim one id apart, so the tree holds each once', async () => {
+    await bulkWriteEntities(USER, [
+      { path: pathFromId('a', LISTS_PREFIX), data: entity('shared', 'A', null, RANK_A) },
+      { path: pathFromId('b', LISTS_PREFIX), data: entity('shared', 'B', null, RANK_B) },
+      { path: pathFromId('c', TAGS_PREFIX), data: entity('shared', 'C', null, RANK_A) },
+      { path: pathFromId('d', TAGS_PREFIX), data: entity('shared', 'D', null, RANK_B) },
+    ]);
+
+    const lists = await userLists();
+    const tags = await readTags();
+
+    expect(lists.map((list) => list.id)).toEqual(['a', 'b']);
+    expect(flattenTree(buildTree(lists)).map((node) => node.item.name)).toEqual(['A', 'B']);
+    expect(tags.map((tag) => tag.id)).toEqual(['c', 'd']);
+    expect(flattenTree(buildTree(tags)).map((node) => node.item.name)).toEqual(['C', 'D']);
+  });
+
+  // The system-list merge is by id, so it has to see the path's. A record stored
+  // anywhere else that calls itself `trash` replaced Trash — its name, its place
+  // in the tree — for every screen at once.
+  it('does not take a record stored elsewhere for a system list', async () => {
+    await bulkWriteEntities(USER, [
+      { path: pathFromId('a', LISTS_PREFIX), data: entity(TRASH_ID, 'Not Trash', null, RANK_A) },
+    ]);
+
+    const lists = await readLists();
+
+    expect(lists.find((list) => list.id === TRASH_ID)?.name).toBe(SYSTEM_LIST_NAMES[TRASH_ID]);
+    expect(lists.find((list) => list.id === 'a')?.name).toBe('Not Trash');
+    expect(lists.filter((list) => list.id === TRASH_ID)).toHaveLength(1);
+  });
+
+  it('reads the record at a system path as that list, whatever it calls itself', async () => {
+    await bulkWriteEntities(USER, [
+      { path: pathFromId(TRASH_ID, LISTS_PREFIX), data: entity('claimed', 'Bin', null, RANK_A) },
+    ]);
+
+    const lists = await readLists();
+
+    expect(lists.find((list) => list.id === TRASH_ID)?.name).toBe('Bin');
+    expect(lists.some((list) => list.id === 'claimed')).toBe(false);
   });
 });

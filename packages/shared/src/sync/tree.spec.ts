@@ -91,6 +91,52 @@ describe('buildTree', () => {
     expect(forward).toEqual(reversed);
   });
 
+  // How many nodes a forest holds must not be something the data chooses. Parents
+  // resolve by id, so every copy of a repeated id was once a child of its parent
+  // AND a parent of everything naming it: each copy of a level got its own copy
+  // of the level below. Kept small on purpose — the unbounded build doubles per
+  // level, and at this size it still finishes, with 2,046 nodes where 10 belong.
+  describe('given ids that repeat', () => {
+    const LEVELS = 10;
+    const COPIES = 2;
+    const id = (level: number) => `l${String(level).padStart(2, '0')}`;
+    const repeated = Array.from({ length: LEVELS }, (_, level) =>
+      Array.from({ length: COPIES }, (_, copy) =>
+        n(id(level), level === 0 ? null : id(level - 1), 'a', `${id(level)}#${copy}`),
+      ),
+    ).flat();
+
+    it('places each id once, so a forest never outgrows the set it was built from', () => {
+      const flat = flattenTree(buildTree(repeated));
+
+      expect(repeated).toHaveLength(LEVELS * COPIES);
+      expect(flat.map((node) => node.item.id)).toEqual(
+        Array.from({ length: LEVELS }, (_, i) => id(i)),
+      );
+      expect(flat.map((node) => node.depth)).toEqual(Array.from({ length: LEVELS }, (_, i) => i));
+    });
+
+    it('places the last item holding an id, the one parents are resolved against', () => {
+      const flat = flattenTree(buildTree(repeated));
+
+      expect(flat.map((node) => node.item.name)).toEqual(
+        Array.from({ length: LEVELS }, (_, i) => `${id(i)}#${COPIES - 1}`),
+      );
+    });
+
+    // The same OBJECT twice is still one id twice — a rule that compared items
+    // rather than ids would place both.
+    it('places an item handed in twice once', () => {
+      const root = n('root', null, 'a');
+      const child = n('child', 'root', 'a');
+
+      expect(shape(buildTree([root, root, child, child]))).toEqual([
+        { id: 'root', depth: 0 },
+        { id: 'child', depth: 1 },
+      ]);
+    });
+  });
+
   // WHICH edge a cycle is cut at is part of the contract: every device must cut
   // the same one, or the same library renders as two different trees. The rule is
   // the scan below — ids in sorted order, detach each one whose walk does not

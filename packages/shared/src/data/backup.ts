@@ -232,6 +232,17 @@ export function classifyBundleLine(line: string): BundleEntry | undefined {
     const id = path.slice(prefix.length, path.length - ENC_SUFFIX.length);
     if (!path.endsWith(ENC_SUFFIX) || !isPathId(id)) return undefined;
     if (!schema.safeParse(data).success) return undefined;
+    // A list or tag whose own `id` is not its path's. The path is the identity
+    // (sync/paths.ts, idFromPath) and the read edges go by it, so the copy inside
+    // is only ever a restatement — and one that disagrees is a record saying it
+    // is a different list from the one it is stored as: a second claim on an id
+    // another line holds, or on a system list's. Refused, never rewritten, like
+    // everything else here. No writer in this app builds a list's or tag's path
+    // from anything but its id, so a backup this app wrote carries one only if
+    // the library it was exported from already held it — the export is verbatim.
+    if ((kind === 'list' || kind === 'tag') && (data as { id: string }).id !== id) {
+      return undefined;
+    }
     // A date outside the calendar is refused here for the reason an id outside
     // the path grammar is refused below: this is the one edge where the value
     // comes from a file rather than from this app, and once stored it is

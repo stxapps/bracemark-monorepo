@@ -618,6 +618,29 @@ describe('the bracemark backup round trip', () => {
     expect(await zipEntryNames(file)).toContain('files/img_work');
   });
 
+  // The coverage set names a list by the id the READ EDGE gives it, which is its
+  // path's (queries.ts readLists). The backup reads the raw plaintext instead,
+  // where `id` is a copy that can disagree — and filtering on the copy shipped
+  // the locked list, name and all.
+  it('excludes a locked list by the id it is stored under, not the one its plaintext claims', async () => {
+    const secretPath = `${LISTS_PREFIX}secret.enc`;
+    await seed(
+      library().map((entry) =>
+        entry.path === secretPath ? { ...entry, data: { ...entry.data, id: 'claimed' } } : entry,
+      ),
+    );
+    await exportAllData({
+      format: 'bracemark',
+      deps: deps(),
+      excludedListIds: new Set(['secret']),
+    });
+
+    const items = await zipEntryText(savedZip(), BACKUP_ITEMS_ENTRY);
+    expect(items).not.toContain(secretPath);
+    expect(items).not.toContain('Diary');
+    expect(items).toContain(`${LISTS_PREFIX}work.enc`);
+  });
+
   // A blob the archive references but cannot include (deleted server-side, never
   // known locally) is counted and shipped anyway. The alternative — failing the
   // export — would make one dangling ref cost the user their whole backup.
@@ -677,6 +700,20 @@ describe('the interop formats', () => {
     expect(outcome.linkCount).toBe(0);
     expect(outcome.skippedCount).toBe(2);
     expect(await storedEntities()).toEqual(before);
+  });
+
+  // A link names its tags by the id the read edge hands back — the path's. The
+  // export resolved names against the raw plaintext copy instead, so a tag whose
+  // two ids disagree showed on the link in the app and was missing from the file.
+  it('names a tag by the id it is stored under, not the one its plaintext claims', async () => {
+    const tagPath = `${TAGS_PREFIX}read.enc`;
+    await seed(
+      library().map((entry) =>
+        entry.path === tagPath ? { ...entry, data: { ...entry.data, id: 'claimed' } } : entry,
+      ),
+    );
+
+    expect(await exportedText('csv')).toContain('reading');
   });
 
   // Into an EMPTY library the same file rebuilds the folder tree at position, not

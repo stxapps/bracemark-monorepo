@@ -10,17 +10,23 @@
 // no record yet. The share sheet's picker leans on all three (share-store.ts —
 // buildShareLists takes the already-merged set).
 //
+// And the rule under the merge: a list or tag is read back under its PATH's id,
+// never the copy in its plaintext (_the id a list or tag is read under_, below).
+//
 // Only the row scan is stubbed: `namespaceRows` (item-store.ts) stands in for
 // sqlite, everything above it — decode, parseBlob, the merge — runs for real.
 
 import {
   ARCHIVE_ID,
+  buildTree,
+  flattenTree,
   type List,
   LISTS_PREFIX,
   MY_LIST_ID,
   pathFromId,
   SYSTEM_LIST_DEFAULTS,
   SYSTEM_LIST_IDS,
+  SYSTEM_LIST_NAMES,
   type Tag,
   TAGS_PREFIX,
   TRASH_ID,
@@ -153,5 +159,77 @@ describe('readTags', () => {
 
   it('is empty when nothing is stored', async () => {
     await expect(readTags()).resolves.toEqual([]);
+  });
+});
+
+// A list's and a tag's identity is its PATH (shared sync/paths.ts, idFromPath);
+// the `id` in its plaintext is a copy that nothing between a backup or another
+// device and this store makes agree. Everything downstream goes by the `id` these
+// two hand back, so a read edge that passed the copy through let a stored record
+// choose its own identity. Web's queries.spec.ts pins the same four cases against
+// Dexie.
+describe('the id a list or tag is read under', () => {
+  const userLists = async () => (await readLists()).filter((list) => !SYSTEM_LIST_IDS.has(list.id));
+
+  it('is the path id, whatever the plaintext says', async () => {
+    mockRowsByPrefix.set(LISTS_PREFIX, [
+      row(pathFromId('a', LISTS_PREFIX), makeList('claimed', 'A', null, 'a')),
+    ]);
+    mockRowsByPrefix.set(TAGS_PREFIX, [
+      row(pathFromId('t', TAGS_PREFIX), makeTag('claimed', 'T', 'a')),
+    ]);
+
+    expect((await userLists()).map(({ id, name }) => ({ id, name }))).toEqual([
+      { id: 'a', name: 'A' },
+    ]);
+    expect((await readTags()).map(({ id, name }) => ({ id, name }))).toEqual([
+      { id: 't', name: 'T' },
+    ]);
+  });
+
+  // The case the rule exists for: two records under one id were both a child of
+  // its parent and a parent of its children, so the tree held more nodes than
+  // there were lists.
+  it('keeps records that claim one id apart, so the tree holds each once', async () => {
+    mockRowsByPrefix.set(LISTS_PREFIX, [
+      row(pathFromId('a', LISTS_PREFIX), makeList('shared', 'A', null, 'a')),
+      row(pathFromId('b', LISTS_PREFIX), makeList('shared', 'B', null, 'b')),
+    ]);
+    mockRowsByPrefix.set(TAGS_PREFIX, [
+      row(pathFromId('c', TAGS_PREFIX), makeTag('shared', 'C', 'a')),
+      row(pathFromId('d', TAGS_PREFIX), makeTag('shared', 'D', 'b')),
+    ]);
+
+    const lists = await userLists();
+    const tags = await readTags();
+
+    expect(lists.map((list) => list.id)).toEqual(['a', 'b']);
+    expect(flattenTree(buildTree(lists)).map((node) => node.item.name)).toEqual(['A', 'B']);
+    expect(tags.map((tag) => tag.id)).toEqual(['c', 'd']);
+    expect(flattenTree(buildTree(tags)).map((node) => node.item.name)).toEqual(['C', 'D']);
+  });
+
+  // The merge is by id, so it has to see the path's.
+  it('does not take a record stored elsewhere for a system list', async () => {
+    mockRowsByPrefix.set(LISTS_PREFIX, [
+      row(pathFromId('a', LISTS_PREFIX), makeList(TRASH_ID, 'Not Trash', null, 'a')),
+    ]);
+
+    const lists = await readLists();
+
+    expect(lists.find((list) => list.id === TRASH_ID)?.name).toBe(SYSTEM_LIST_NAMES[TRASH_ID]);
+    expect(lists.find((list) => list.id === 'a')?.name).toBe('Not Trash');
+    expect(lists.filter((list) => list.id === TRASH_ID)).toHaveLength(1);
+  });
+
+  it('reads the record at a system path as that list, whatever it calls itself', async () => {
+    mockRowsByPrefix.set(LISTS_PREFIX, [
+      row(pathFromId(TRASH_ID, LISTS_PREFIX), makeList('claimed', 'Bin', null, 'a')),
+    ]);
+
+    const lists = await readLists();
+
+    expect(lists.find((list) => list.id === TRASH_ID)?.name).toBe('Bin');
+    expect(lists.some((list) => list.id === 'claimed')).toBe(false);
   });
 });

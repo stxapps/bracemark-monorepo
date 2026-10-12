@@ -44,6 +44,8 @@ import {
   listSchema,
   mergeSystemLists,
   pathFromId,
+  pathIdentifiedList,
+  pathIdentifiedTag,
   PINS_PREFIX,
   pinSchema,
   rekey,
@@ -279,13 +281,21 @@ async function readNamespace<T extends z.ZodTypeAny>(
 // defaults (My List / Archive / Trash). Flat — the tree is assembled by the
 // caller via `buildTree` (see use-lists), so non-sidebar readers (settings) can
 // take the flat set. Tags have no system entries, so `readTags` is a plain read.
+//
+// Both hand back each entity under its PATH's id, not the copy in its plaintext
+// (pathIdentified, shared sync/items.ts) — and for lists BEFORE the merge, since
+// the merge is by id: it is what stops a record stored anywhere else from being
+// taken for a system list's override, and makes the one stored at a system id
+// that override whatever it calls itself. Ids are then unique because paths are,
+// which is the property buildTree needs of the set it is given.
 export async function readLists(): Promise<ListItem[]> {
   const stored = await readNamespace(LISTS_PREFIX, listSchema);
-  return mergeSystemLists(stored);
+  return mergeSystemLists(stored.map(pathIdentifiedList));
 }
 
-export function readTags(): Promise<TagItem[]> {
-  return readNamespace(TAGS_PREFIX, tagSchema);
+export async function readTags(): Promise<TagItem[]> {
+  const stored = await readNamespace(TAGS_PREFIX, tagSchema);
+  return stored.map(pathIdentifiedTag);
 }
 
 // Every pin (one per pinned link). Small by design — a user pins a handful — so

@@ -79,7 +79,7 @@ import { yieldToMain } from '../lib/yield-to-main';
 import { loadEntityContents, runIncrementalSync, type SyncDeps } from '../sync/engine';
 import { db } from './db';
 import { parseBlob } from './projection';
-import { readLists, readSettingsGeneral } from './queries';
+import { readLists, readSettingsGeneral, readTags } from './queries';
 
 // The user dismissed the save dialog — not a failure; the caller returns to idle.
 export class ExportCancelledError extends Error {
@@ -335,13 +335,11 @@ export async function exportAllData(options: {
     // readLists merges the system-list defaults, so My List/Archive always
     // exist as folders even when never overridden.
     const mergedLists = (await readLists()).filter((list) => !excludedListIds.has(list.id));
-    const tags = await readRawNamespace(TAGS_PREFIX, tagSchema);
+    // readTags, not the raw namespace: a link's `tagIds` name a tag by its path's
+    // id, which is the id the read edge hands back (queries.ts readTags).
+    const tags = await readTags();
     const interopLinks = links.filter(({ link }) => link.listId !== TRASH_ID);
-    const bundle = bundleFromLibrary(
-      interopLinks,
-      mergedLists,
-      tags.map(({ entity }) => entity),
-    );
+    const bundle = bundleFromLibrary(interopLinks, mergedLists, tags);
     const content =
       format === 'netscape'
         ? toNetscapeHtml(bundle)
@@ -360,8 +358,12 @@ export async function exportAllData(options: {
   // Bracemark backup. Raw stored entities only (no synthesized system-list
   // defaults — import's merge-on-read reconstructs those, exactly like sync).
   const includedLinkIds = new Set(links.map(({ path }) => idFromPath(path, LINKS_PREFIX)));
+  // Excluded by the PATH's id, like the pins below: the lock coverage is computed
+  // over the read edge's lists, which go by it (queries.ts readLists), and the
+  // raw plaintext `id` here is the copy that edge does not trust. Filtering on
+  // the copy would ship a locked list whose two ids disagree.
   const lists = (await readRawNamespace(LISTS_PREFIX, listSchema)).filter(
-    ({ entity }) => !excludedListIds.has(entity.id),
+    ({ path }) => !excludedListIds.has(idFromPath(path, LISTS_PREFIX)),
   );
   const tags = await readRawNamespace(TAGS_PREFIX, tagSchema);
   const pins = (await readRawNamespace(PINS_PREFIX, pinSchema)).filter(({ path }) =>
