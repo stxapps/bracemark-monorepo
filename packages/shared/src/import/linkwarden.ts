@@ -164,12 +164,14 @@ export function* parseLinkwardenExportSteps(
   // that files a link in the wrong place. The cycle is cut where the climb
   // re-enters it: the collection whose parent is the one re-entered settles as
   // a root, and the rest of the loop nests under it. ONE edge goes, so every
-  // collection still has one path and a loop mints one list per collection —
-  // but WHICH edge follows the order of the file, because the first climb to
-  // reach a loop is the one that cuts it. The same loop listed in another order
-  // is cut at another edge, and the depth rule (resolve.ts) reads the paths as
-  // cut, so a loop is not refused for being one. linkwarden.spec.ts holds both
-  // halves. A parent that isn't in the file — LinkWarden can share a
+  // collection still has one path and a loop yields at most one folder per
+  // collection (one each when all are named and distinct) — but WHICH edge
+  // follows the order of the file, because the first climb to reach a loop is
+  // the one that cuts it. The same loop listed in another order can be cut at
+  // another edge — it is the first-listed collection reaching the loop, and
+  // where it enters, that decide — and the depth rule (resolve.ts) reads the
+  // paths as cut, so a loop is not refused for being one. linkwarden.spec.ts
+  // holds both halves. A parent that isn't in the file — LinkWarden can share a
   // collection whose parent belongs to someone else — simply ends the chain.
   const paths = new Map<LwCollection, string[]>();
   function folderPath(collection: LwCollection): string[] {

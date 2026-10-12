@@ -216,10 +216,12 @@ describe('parseLinkwardenExport', () => {
   // WHERE it stops, which the case above declines to say and the parser's
   // comment does. Settling each collection once takes ONE edge out of a loop —
   // the parent of the collection that closes the first climb to reach it — so
-  // every collection keeps one path, its parent's plus its own name, and the
-  // loop mints a list per collection. The walk before this one gave each member
-  // the whole loop rotated to end in itself: three chains of three here, nine
-  // lists for three collections, which is what the resolver count refuses.
+  // every collection keeps one path — its parent's plus its own name, except
+  // the one the cut files at the root — and here, where every collection is
+  // named and holds a link, the loop mints a list per collection. The walk
+  // before this one gave each member the whole loop rotated to end in itself:
+  // three chains of three here, nine lists for the loop's three collections and
+  // a tenth for T, which is what the resolver count refuses.
   //
   // And which edge goes is the FILE'S ORDER, not a property of the loop: the
   // same four collections listed from B are cut at a different edge. That is the

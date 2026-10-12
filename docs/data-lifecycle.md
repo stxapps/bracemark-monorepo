@@ -536,15 +536,22 @@ The policy, decided once:
   anything. Settling each collection once takes exactly one edge out of a loop:
   the collection whose parent is where the first climb entered the loop is filed
   at the top level and the rest nest under it in order, so every collection
-  still has one path and a loop mints one list per collection. Which climb is
-  first is the order the file lists its collections in, so the same loop listed
-  in another order is cut at another edge. The rule then reads the paths as cut
-  — the app's rows and the converter's folders both come from this one parser —
-  so such a file is refused when one of them is past the limit, and not for
-  looping. The walk this replaced gave every member the whole loop, rotated to
-  end in itself — the same answer in any order, and a separate copy of the loop
-  minted for each member that held a link. `import/linkwarden.spec.ts` holds the
-  cut and its dependence on order.
+  still has one path, and a loop yields at most one folder per collection:
+  exactly one when each is named, no two under one parent share a name, and none
+  matches a list already there — and in the app a list is minted only along the
+  path of a link row. Which climb is first is the order the file lists its
+  collections in, and it need not start on the loop: a collection that only
+  hangs off it, holding no link, cuts it where its chain comes in. So the same
+  loop listed in another order can be cut at another edge — the cut follows the
+  first-listed collection whose parent chain reaches the loop, and where that
+  chain enters. The rule then reads the paths as cut — the app's rows and the
+  converter's folders both come from this one parser — so such a file is refused
+  when one of them is past the limit, and not for looping; the order sets every
+  member's depth, so it can decide that as well. The walk this replaced gave
+  every member the whole loop, rotated to end in itself — the same answer in any
+  order, and a separate copy of the loop minted for each member that held a link
+  or had a link-holding collection hanging from it. `import/linkwarden.spec.ts`
+  holds the cut and its dependence on order.
 
 - **The plan's link cap is enforced up front**, _before anything is written_ —
   see _the import's quota gate_ below for the shape, which differs between an
@@ -641,19 +648,21 @@ anything was drawn — so the app launched, and the bill came when a picker open
 paths under the same bound, and both platforms' guide lines stop at 32. It is a
 bound on what a row **shows** — the row keeps its true `depth`, and the forest
 is untouched, which is where [locks.md](./locks.md) says a display limit has to
-live — and 32 guide lines are 768px of indent, wider than any picker, so a row
-with 32 ancestors or fewer looks as it did. A deeper row does read differently.
-Its path label — a filtered picker row, `ListSelect`'s trigger and the
-accessibility label on it — names the first 32 ancestors and then the cut, so
-the names left out are the ones NEAREST the row, its parent's among them, and
-two lists with one name under the same deep ancestor carry one label. Its indent
-stops at 32 guide lines, so it sits level with every other row that deep.
-Display is all the bound reaches: a row is keyed and picked by its id, and the
-picker's filter matches a list's own name, never the label.
+live. A row with 32 ancestors or fewer looks as it did; 32 guide lines are
+already 768px of indent. A deeper row does read differently. Its path label — a
+filtered row in a picker (the share sheet's included), `ListSelect`'s trigger,
+and on expo the accessibility label on that trigger — names the first 32
+ancestors and then the cut, so the names left out are the ones NEAREST the row,
+its parent's among them, and two lists with one name under the same deep
+ancestor carry one label. Where a picker draws guide lines its indent stops at
+32 of them, so it sits level there with every other row that deep. Display is
+all the bound reaches: a row is keyed and picked by its id, and the picker's
+filter matches a list's own name, never the label.
 
 What still grows with depth, each by up to the square of one long chain: the two
-exports — the CSV writes a folder's whole path on every link row in it, and a
-Netscape file indents every line by its folder's depth — which are an export the
+exports — the CSV forms every folder's whole path and writes it on every link
+row in that folder, and a Netscape file indents every line by its folder's depth
+— which are an export the
 user asked for, not a screen that opens on its own; the web Lists settings
 table, which is a screen, and works out `forbiddenParentIds` for every row it
 shows on every render, each call walking the forest to the row and then the
@@ -710,7 +719,9 @@ of a list or a tag and of nothing else. An extraction is fetched by path. A pin
 is still read by its copy, in three places on each platform: the pinned overlay
 resolves the pin's link through it (`readPinnedOverlay`), pin reordering finds
 the moved pin and its neighbour by it (`usePinMutations`), and the bulk-edit bar
-splits a selection into pinned and unpinned by it.
+splits a selection into pinned and unpinned by it. Nor does a pin's next write
+set the copy right, as a list's or a tag's does: reordering writes the pin back
+with the copy it was read with (`writePin`).
 
 Only the platform-bound half of that lives in each orchestrator (the store
 reads, the zip library, the file API). The rest is shared, so the two can't

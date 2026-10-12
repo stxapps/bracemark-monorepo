@@ -232,10 +232,11 @@ export function treeNameMap<T extends TreeItem & { name: string }>(
 //
 // A bound on what a row SHOWS, never on the tree: the row keeps its true `depth`
 // and the forest under it is untouched, which is the only place a display limit
-// may live (lock coverage reads the real forest — lock-coverage.ts). 32 is far
-// past what either number can show — a path label is one truncated line, and 32
-// guide lines are 768px of indent in pickers narrower than that — so the bound
-// changes nothing anyone can see in a tree a person built.
+// may live (lock coverage reads the real forest — lock-coverage.ts). A row with
+// 32 ancestors or fewer is unchanged by it. A deeper row's label ends in the cut
+// marker in place of its nearest ancestors — one truncated line where it is
+// drawn, and read out whole where expo's ListSelect makes it an accessibility
+// label — and its indent stays at 32 guide lines, 768px of it.
 export const TREE_ROW_MAX_LEVELS = 32;
 
 // Stands in for the names a path row leaves out past TREE_ROW_MAX_LEVELS, so a

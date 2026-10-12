@@ -44,7 +44,8 @@ export interface ResolverNode {
 // stack), but a tree nobody could have built by hand is still not one an import
 // should mint, and the per-level costs that remain grow with it: an exported
 // folder carries its whole path, and a picker row its ancestors' names — those
-// only up to TREE_ROW_MAX_LEVELS of them (sync/tree.ts).
+// only up to TREE_ROW_MAX_LEVELS of them (sync/tree.ts). docs/data-lifecycle.md
+// lists the readers known to still pay per level.
 //
 // 100 is the bookmark converter's rule (tools/bookmark-converter.ts), which now
 // reads this constant, so the tool on the marketing site and the app's import
