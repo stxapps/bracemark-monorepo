@@ -46,6 +46,7 @@ import {
   useHasRecoveryDoor,
   useRecoveryCode,
 } from '@stxapps/web-react';
+import { HiddenUsername } from '@stxapps/web-ui/components/auth/hidden-username';
 import {
   NewPasswordField,
   useNewPassword,
@@ -68,6 +69,7 @@ type AccountView = 'overview' | 'change-password' | 'recovery' | 'sign-out-other
 
 function DeleteAccountView({ onBack }: { onBack: () => void }) {
   const { subscription } = useEntitlements();
+  const { username } = useAuth();
   const { mutate, isPending, error, reset } = useDeleteAccount();
   const [password, setPassword] = useState('');
   const [confirmed, setConfirmed] = useState(false);
@@ -151,6 +153,9 @@ function DeleteAccountView({ onBack }: { onBack: () => void }) {
       )}
 
       <form onSubmit={onSubmit}>
+        {/* One `current-password` and no username: without this a password
+            manager can't tell which saved login to fill here. */}
+        <HiddenUsername username={username} />
         {/* Fresh proof, not just the session: the server only accepts this call
             signed by a key the password unwraps, so the password is required
             here even though you're signed in. */}
@@ -307,23 +312,11 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
       />
 
       <form onSubmit={onSubmit} className="flex max-w-sm flex-col gap-4">
-        {/* Whose password this is, for a password manager. The form holds a
-            `current-password` and a `new-password` and no username, so a manager
-            asked to update a saved login has to guess which one — or files the
-            new password as an entry with no name. It reads this field instead.
-            A real text input hidden with the `hidden` attribute, which takes it
-            out of the layout, the tab order and the accessibility tree at once —
-            not `type="hidden"`, which a password manager skips. A raw `<input>`,
-            so it states its own `autoComplete` (docs/accessibility.md, _what a
-            field tells the browser_). */}
-        <input
-          type="text"
-          name="username"
-          autoComplete="username"
-          value={username ?? ''}
-          readOnly
-          hidden
-        />
+        {/* The form holds a `current-password` and a `new-password` and no
+            username, so a password manager asked to update a saved login has to
+            guess which one — or files the new password as an entry with no name.
+            It reads this field instead. */}
+        <HiddenUsername username={username} />
         {useRecovery ? (
           <div className="flex flex-col gap-2">
             <Label htmlFor="cp-recovery">Recovery code</Label>
@@ -419,6 +412,7 @@ function ChangePasswordView({ onBack }: { onBack: () => void }) {
 // code server-side, and show it ONCE. Regenerating invalidates any previous code.
 function RecoveryCodeView({ onBack, hasRecovery }: { onBack: () => void; hasRecovery: boolean }) {
   const recovery = useRecoveryCode();
+  const { username } = useAuth();
   const queryClient = useQueryClient();
   const [currentPassword, setCurrentPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -503,6 +497,11 @@ function RecoveryCodeView({ onBack, hasRecovery }: { onBack: () => void; hasReco
       />
 
       <form onSubmit={onSubmit} className="flex max-w-sm flex-col gap-4">
+        {/* One `current-password` and no username — and this form DISAPPEARS on
+            success, replaced by the code, which is the shape a password manager
+            reads as a login it should offer to save. Unnamed, that is an entry
+            with the username blank. */}
+        <HiddenUsername username={username} />
         <div className="flex flex-col gap-2">
           <Label htmlFor="rc-current">Current password</Label>
           <PasswordInput

@@ -129,6 +129,31 @@ describe('CreateAccountForm — the confirm step', () => {
     expect(heading('Confirm your password')).not.toBeNull();
     expect(screen.getByRole('alert').textContent).toMatch(/doesn’t match/);
   });
+
+  // The username's own input unmounted with step one, and on the generated path
+  // this step's field is the only password input the ceremony ever renders — so
+  // it is the one a password manager saves from, and with nothing beside it the
+  // saved login has no username. Nothing reports that: the account is created,
+  // sign-in works, and the evidence is a nameless entry in one person's browser.
+  // The field has to be a TEXT input (`type="hidden"` is skipped), carrying the
+  // name the account is created under, ahead of the password in the document.
+  it('names the account to a password manager beside the only password field', () => {
+    render(<CreateAccountForm />);
+
+    fireEvent.change(screen.getByLabelText('Username'), { target: { value: ' Wit_E2E ' } });
+    fireEvent.click(attestation());
+    fireEvent.click(continueButton());
+
+    const named = document.querySelector<HTMLInputElement>('input[autocomplete="username"]');
+    const password = screen.getByLabelText('Confirm your password');
+
+    expect(named).not.toBeNull();
+    expect(named?.type).toBe('text');
+    expect(named?.value).toBe(USERNAME);
+    expect(
+      named && named.compareDocumentPosition(password) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
 });
 
 describe('CreateAccountForm — a username taken at the last moment', () => {

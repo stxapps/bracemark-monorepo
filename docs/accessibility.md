@@ -741,11 +741,29 @@ right answers:
     tokens it knows into an iOS `textContentType`, and that one is not among
     them, so on iOS create-account's username said nothing and the OS guessed.
     It carries `textContentType="username"` beside the token.
-  - **web's change-password form has no username to read.** It holds a
-    `current-password` and a `new-password`, so a manager asked to update a
-    saved login cannot tell which one. The form carries a `hidden` text input
-    with `autocomplete="username"` and the account's username as its value —
-    a text input, not `type="hidden"`, which a manager skips.
+  - **web has four forms that take the account's password and show no
+    username.** A manager reads a login as a pair, so a password field with
+    nothing beside it leaves it guessing — which saved login to fill, which one
+    an update belongs to, and what to call the entry it offers to save. Each
+    carries `HiddenUsername` (`web-ui/components/auth/hidden-username.tsx`)
+    ahead of its password field: a `hidden` text input with
+    `autocomplete="username"` and the account's username as its value — a
+    **text** input, not `type="hidden"`, which a manager skips.
+    - **create-account's confirm step** is the one a manager saves from. The
+      username is typed on step one and its input unmounts; on the default
+      path the generated passphrase is shown, not typed, so the confirm field
+      is the only password input in the ceremony. Chrome offered to save a
+      login with a blank username. The value is the canonical username, the
+      name the account is created under.
+    - **Settings → change password** holds a `current-password` and a
+      `new-password`, so a manager asked to update a saved login cannot tell
+      which one.
+    - **Settings → recovery code** and **delete account** each hold one
+      `current-password`. The recovery form also disappears on success, which
+      is the shape a manager reads as a login worth offering to save.
+
+    Not the lock surfaces: a lock password is not this site's login, and naming
+    the account beside it would file it as one.
 - **Everything else is `off`, and it is `off` by default.** The input
   primitives apply it themselves — web-ui's `ui/input.tsx` and `ui/textarea.tsx`,
   expo's `ui/input.tsx` (which `Textarea` and `PasswordInput` both go through) —
@@ -764,8 +782,8 @@ machine. `input.spec.tsx` on each platform pins both answers.
 
 A field built on a raw `<input>` or a bare `TextInput` gets neither answer and
 has to state one. The ones there are today are file pickers, which have no value
-to keep; the change-password form's hidden username, which states `username`;
-and cmdk's filter field, which sets `off` itself.
+to keep; `HiddenUsername` above, which states `username`; and cmdk's filter
+field, which sets `off` itself.
 
 Autofill is separate from capitalization, autocorrection and spellcheck. The
 primitives also declare those defaults: exact entry for `Input`, prose assistance

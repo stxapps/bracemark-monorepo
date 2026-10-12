@@ -6,6 +6,7 @@ import { ChevronLeft, RefreshCw } from 'lucide-react';
 import { RECOVERY_CODE_COPY, usernameMessage, useUsernameAvailable } from '@stxapps/react';
 import { canonicalizePassword, canonicalizeUsername, generateRecoveryCode } from '@stxapps/shared';
 import { useCreateAccount, UsernameTakenError } from '@stxapps/web-react';
+import { HiddenUsername } from '@stxapps/web-ui/components/auth/hidden-username';
 import {
   NewPasswordField,
   useNewPassword,
@@ -214,6 +215,15 @@ export function CreateAccountForm() {
       <FieldGroup>
         <StepHeader step="confirm" onBack={() => setStep('setup')} />
         <Field data-invalid={confirmError}>
+          {/* The username was typed a step ago and its input is gone; what a
+              password manager finds on THIS step is one `new-password` and
+              nothing else, and this is the field it saves from. On the default
+              path it is the only password input in the whole ceremony — the
+              generated passphrase is shown in an <output>, never typed on step
+              one — so Chrome offered to save a login with the username blank.
+              Canonical, because that is the name the account is created under.
+              HiddenUsername carries the rest. */}
+          <HiddenUsername username={canonicalizeUsername(username)} />
           {/* The visible label for this input is the step's own title, up in the
               StepHeader — but a heading is not a label, so the field would be
               left unnamed for a screen reader. Keep the real <label htmlFor>,
