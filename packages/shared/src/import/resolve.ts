@@ -42,8 +42,9 @@ export interface ResolverNode {
 // without a bound the file decides how deep this library's tree is. The readers
 // no longer depend on that (sync/tree.ts walks with its own stack, not the call
 // stack), but a tree nobody could have built by hand is still not one an import
-// should mint, and the per-level costs that remain grow with it: a picker row
-// carries its ancestors' names, an exported folder its whole path.
+// should mint, and the per-level costs that remain grow with it: an exported
+// folder carries its whole path, and a picker row its ancestors' names — those
+// only up to TREE_ROW_MAX_LEVELS of them (sync/tree.ts).
 //
 // 100 is the bookmark converter's rule (tools/bookmark-converter.ts), which now
 // reads this constant, so the tool on the marketing site and the app's import

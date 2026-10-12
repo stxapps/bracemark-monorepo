@@ -162,7 +162,14 @@ export function* parseLinkwardenExportSteps(
   // restore that reparented two collections into each other) makes the climb
   // NON-TERMINATING, and an import that hangs with no error is worse than one
   // that files a link in the wrong place. The cycle is cut where the climb
-  // re-enters it. A parent that isn't in the file — LinkWarden can share a
+  // re-enters it: the collection whose parent is the one re-entered settles as
+  // a root, and the rest of the loop nests under it. ONE edge goes, so every
+  // collection still has one path and a loop mints one list per collection —
+  // but WHICH edge follows the order of the file, because the first climb to
+  // reach a loop is the one that cuts it. The same loop listed in another order
+  // is cut at another edge, and the depth rule (resolve.ts) reads the paths as
+  // cut, so a loop is not refused for being one. linkwarden.spec.ts holds both
+  // halves. A parent that isn't in the file — LinkWarden can share a
   // collection whose parent belongs to someone else — simply ends the chain.
   const paths = new Map<LwCollection, string[]>();
   function folderPath(collection: LwCollection): string[] {

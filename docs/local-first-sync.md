@@ -491,10 +491,10 @@ extraction.title ?? host(url)`). Written by client extractors (the browser
   agree with the path, and the read layer is where it has to be set aside —
   `idFromPath` (`sync/paths.ts`) is the way to an id. `readLists`/`readTags`
   apply it to every list and tag they return, a link's id has always come from
-  its path, and an extraction is fetched by path; the pinned overlay still
-  resolves a pin's link through the pin's own copy, the one reader that has not
-  been moved ([data-lifecycle.md](./data-lifecycle.md), _a list's identity is
-  its path_).
+  its path, and an extraction is fetched by path; a pin is the one that has not
+  been moved — the pinned overlay, pin reordering and the bulk-edit bar's pinned
+  set still go by the pin's own copy ([data-lifecycle.md](./data-lifecycle.md),
+  _a list's identity is its path_).
 
 ### the three flows
 

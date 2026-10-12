@@ -2,7 +2,7 @@ import { detectTextImportFormat } from './detect';
 import { parseLinkwardenExport } from './linkwarden';
 import { parseImportText } from './parse';
 import { assertImportFolderDepth } from './project';
-import { IMPORT_MAX_FOLDER_DEPTH, ImportFolderDepthError } from './resolve';
+import { IMPORT_MAX_FOLDER_DEPTH, ImportFolderDepthError, ListResolver } from './resolve';
 
 // LinkWarden's backup.json, rule by rule.
 //
@@ -211,6 +211,63 @@ describe('parseLinkwardenExport', () => {
     expect(links).toHaveLength(1);
     // Each name appears once; which end the walk stops at is not the point.
     expect([...links[0].folderPath].sort()).toEqual(['A', 'B']);
+  });
+
+  // WHERE it stops, which the case above declines to say and the parser's
+  // comment does. Settling each collection once takes ONE edge out of a loop —
+  // the parent of the collection that closes the first climb to reach it — so
+  // every collection keeps one path, its parent's plus its own name, and the
+  // loop mints a list per collection. The walk before this one gave each member
+  // the whole loop rotated to end in itself: three chains of three here, nine
+  // lists for three collections, which is what the resolver count refuses.
+  //
+  // And which edge goes is the FILE'S ORDER, not a property of the loop: the
+  // same four collections listed from B are cut at a different edge. That is the
+  // half nobody would guess, so it is pinned rather than left to be rediscovered
+  // as a bug — a walk made order-independent has to change this case on purpose.
+  //
+  // A → B → C → A by `parentId`, and T hanging off B from outside the loop.
+  it('cuts a parentId cycle at one edge, chosen by the order of the file', () => {
+    const collection = { A: [1, 2], B: [2, 3], C: [3, 1], T: [4, 2] } as const;
+    type Name = keyof typeof collection;
+    const pathsIn = (order: Name[]) => {
+      const links = parseLinkwardenExport(
+        JSON.stringify({
+          collections: order.map((name) => ({
+            id: collection[name][0],
+            name,
+            parentId: collection[name][1],
+            links: [{ id: 9, url: `https://example.com/${name}`, tags: [] }],
+          })),
+        }),
+      );
+      return Object.fromEntries(
+        links.map((link) => [new URL(link.url).pathname.slice(1), link.folderPath]),
+      );
+    };
+    const minted = (paths: Record<string, string[]>) => {
+      let next = 0;
+      const resolver = new ListResolver([], 0, () => `list-${next++}`);
+      for (const path of Object.values(paths)) resolver.resolve(path);
+      return resolver.created.length;
+    };
+
+    const fromA = pathsIn(['A', 'B', 'C', 'T']);
+    expect(fromA).toEqual({ A: ['C', 'B', 'A'], B: ['C', 'B'], C: ['C'], T: ['C', 'B', 'T'] });
+    expect(minted(fromA)).toBe(4);
+
+    const fromB = pathsIn(['B', 'C', 'A', 'T']);
+    expect(fromB).toEqual({
+      A: ['A'],
+      C: ['A', 'C'],
+      B: ['A', 'C', 'B'],
+      T: ['A', 'C', 'B', 'T'],
+    });
+    expect(minted(fromB)).toBe(4);
+
+    // A climb that starts BELOW the loop cuts it where it came in: T enters at
+    // B, so this is the listing from B again however the rest are ordered.
+    expect(pathsIn(['T', 'A', 'B', 'C'])).toEqual(fromB);
   });
 
   // A chain of collections, each the parent of the next. `name` null leaves a

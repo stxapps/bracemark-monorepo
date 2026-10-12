@@ -529,6 +529,23 @@ The policy, decided once:
   nested empty collections — half a megabyte — took 25 seconds to parse before
   there was a row to refuse. It settles each collection's path once now, from
   its parent's, and stops extending one that is already past the limit.
+
+  **A `parentId` loop is cut once, and the file's order picks where.** A loop —
+  a hand-edited file, or a restore that reparented two collections into each
+  other — has no depth to measure, so the walk cuts it before the rule reads
+  anything. Settling each collection once takes exactly one edge out of a loop:
+  the collection whose parent is where the first climb entered the loop is filed
+  at the top level and the rest nest under it in order, so every collection
+  still has one path and a loop mints one list per collection. Which climb is
+  first is the order the file lists its collections in, so the same loop listed
+  in another order is cut at another edge. The rule then reads the paths as cut
+  — the app's rows and the converter's folders both come from this one parser —
+  so such a file is refused when one of them is past the limit, and not for
+  looping. The walk this replaced gave every member the whole loop, rotated to
+  end in itself — the same answer in any order, and a separate copy of the loop
+  minted for each member that held a link. `import/linkwarden.spec.ts` holds the
+  cut and its dependence on order.
+
 - **The plan's link cap is enforced up front**, _before anything is written_ —
   see _the import's quota gate_ below for the shape, which differs between an
   interop file and a backup. This is one of the places that enforce the cap at
@@ -624,11 +641,24 @@ anything was drawn — so the app launched, and the bill came when a picker open
 paths under the same bound, and both platforms' guide lines stop at 32. It is a
 bound on what a row **shows** — the row keeps its true `depth`, and the forest
 is untouched, which is where [locks.md](./locks.md) says a display limit has to
-live — and 32 guide lines are 768px of indent, wider than any picker, so nothing
-a person can see moved. What still grows with depth is the export: a folder
-carries its whole path in the CSV and a Netscape line its indent, each once per
-folder, so a single long chain costs the square of its depth there — an export
-the user asked for, not a screen that opens on its own.
+live — and 32 guide lines are 768px of indent, wider than any picker, so a row
+with 32 ancestors or fewer looks as it did. A deeper row does read differently.
+Its path label — a filtered picker row, `ListSelect`'s trigger and the
+accessibility label on it — names the first 32 ancestors and then the cut, so
+the names left out are the ones NEAREST the row, its parent's among them, and
+two lists with one name under the same deep ancestor carry one label. Its indent
+stops at 32 guide lines, so it sits level with every other row that deep.
+Display is all the bound reaches: a row is keyed and picked by its id, and the
+picker's filter matches a list's own name, never the label.
+
+What still grows with depth, each by up to the square of one long chain: the two
+exports — the CSV writes a folder's whole path on every link row in it, and a
+Netscape file indents every line by its folder's depth — which are an export the
+user asked for, not a screen that opens on its own; the web Lists settings
+table, which is a screen, and works out `forbiddenParentIds` for every row it
+shows on every render, each call walking the forest to the row and then the
+row's whole subtree; and the marketing site's converter, which copies a path per
+folder of a backup's list tree before its depth rule can refuse it.
 
 **A list's identity is its path, and a forest holds one node per id.** Depth was
 one number the data chose; the node count was the other. `buildTree` resolves
@@ -675,9 +705,12 @@ locking the list again does not re-cover ([locks.md](./locks.md), _Keying_, has
 the whole of it). Nothing is rewritten on read; the next edit of the record
 writes the path's id into its plaintext, and until then a client on an older
 build still goes by the copy. A pin and an extraction carry the same kind of
-copy: an extraction is fetched by path, and a pin's link is still resolved
-through the pin's own copy — the one reader left that goes by it, and not part
-of this rule.
+copy, and neither is part of this rule — the backup reader compares the two ids
+of a list or a tag and of nothing else. An extraction is fetched by path. A pin
+is still read by its copy, in three places on each platform: the pinned overlay
+resolves the pin's link through it (`readPinnedOverlay`), pin reordering finds
+the moved pin and its neighbour by it (`usePinMutations`), and the bulk-edit bar
+splits a selection into pinned and unpinned by it.
 
 Only the platform-bound half of that lives in each orchestrator (the store
 reads, the zip library, the file API). The rest is shared, so the two can't
