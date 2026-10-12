@@ -9,10 +9,11 @@ that one before changing anything.
 
 ## staging Release runs
 
-`npm run e2e:web:staging`, `e2e:mobile:staging`, and `e2e:contract:staging`
+`npm run e2e:web:staging`, `e2e:<ios|android>:staging`, and
+`e2e:contract:<ios|android>:staging`
 test deployed dryrunbase.com services. Mobile needs an installed Release artifact
-and its build receipt, produced by `npm run e2e:build:staging:android` or
-`e2e:build:staging:ios`. No local stack or Metro is used. Commands, admitted cases, CSP
+and its build receipt, produced by `npm run e2e:build:android:staging` or
+`e2e:build:ios:staging`. No local stack or Metro is used. Commands, admitted cases, CSP
 requirements, and coverage limits: [STAGING.md](./STAGING.md).
 
 ## running locally
@@ -63,7 +64,9 @@ not prove Chrome's real toolbar-created `activeTab` grant; release checks live i
 `--suite smoke` selects only smoke cases; `full` includes smoke and full (never
 release qualification). Narrow any
 runner with repeatable/comma-separated `--case`, `--include-trait`, and
-`--exclude-trait`. The registry is [`cases.json`](./cases.json); its ids and tags
+`--exclude-trait`. After a native run fails, `--from <case-id>` (`e2e-mobile`
+and `e2e-contract` only) restarts at that case and runs the rest:
+`npm run e2e:android -- --from TAXONOMY-DND-002`. The registry is [`cases.json`](./cases.json); its ids and tags
 are checked against the specs and flows by `npm run check:registry -w
 @stxapps/e2e`.
 
@@ -74,9 +77,9 @@ checkpoints, and a hierarchy dump on failure. A pass that needed Playwright's
 retry exits non-zero.
 
 The six run-it targets also have root scripts: `npm run e2e:web`,
-`e2e:extension`, `e2e:pwa`, `e2e:mobile`, `e2e:contract`, `e2e:visual` — the
-last three also as `:ios` / `:android` (and `e2e:visual:web`), which carry the
-platform. There is no bare `npm run e2e` —
+`e2e:extension`, `e2e:pwa`, and — carrying the platform the other three need —
+`e2e:ios` / `e2e:android` (the `e2e-mobile` target), `e2e:contract:ios` /
+`:android`, `e2e:visual:web` / `:ios` / `:android`. There is no bare `npm run e2e` —
 see `docs/e2e.md`, _running_.
 
 ## seeding a dev account
@@ -127,7 +130,7 @@ Android has completed boot with all three reverse mappings. Web e2e is platform-
 ```sh
 npm run expo:ios                    # or: npm run expo:android
 npm run expo:android:reverse        # Android only, once per emulator boot
-npm run e2e:mobile:ios              # or e2e:mobile:android
+npm run e2e:ios                     # or e2e:android
 npm run e2e:contract:ios            # or e2e:contract:android
 ```
 

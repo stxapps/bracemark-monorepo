@@ -441,7 +441,8 @@ what `bracemark-web` can do from a phone — is
 
 **Comment it back out when you are done — any pair, not just the iPhone one.** The
 switch has no per-target scope, so one left in place takes the simulator, the
-emulator and `npm run e2e:mobile` off loopback too, and the `--clear` above is
+emulator and `npm run e2e:ios` / `e2e:android` off loopback too, and the
+`--clear` above is
 what decides when the fix takes effect. The failure that produces, and why it is
 intermittent rather than reliable, is [device-testing.md](./device-testing.md),
 _one bundle, one set of origins_.
@@ -673,7 +674,7 @@ account it is used against comes from `apps/bracemark-api/.env.staging.local`,
 which wrangler reads for `--env staging` as it does on a deploy. Every other
 staging run reads no credential at all.
 
-`e2e:build:staging` pins `EXPO_PUBLIC_API_URL=https://api.dryrunbase.com` and
+`e2e:build:<platform>:staging` pins `EXPO_PUBLIC_API_URL=https://api.dryrunbase.com` and
 `EXPO_PUBLIC_SITE_URL=https://dryrunbase.com` in the native build's environment,
 above Nx/Expo dotenv precedence. Release compilation uses `NODE_ENV=production`;
 staging is a service tier, not a Node mode. It disables the measurement probe,

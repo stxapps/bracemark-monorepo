@@ -71,6 +71,7 @@ interface RunManifest {
     cases: string[];
     includeTraits: string[];
     excludeTraits: string[];
+    from?: string;
   };
   environment: 'local' | 'staging';
   buildVariant: 'debug' | 'release';
@@ -498,6 +499,7 @@ export async function prepareNativeRun(
       cases: options.cases,
       includeTraits: options.includeTraits,
       excludeTraits: options.excludeTraits,
+      from: options.from,
     },
     devClientLink,
     origins: { web: WEB_URL, api: API_URL, extractor: EXTRACTOR_URL, metro },

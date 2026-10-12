@@ -5,7 +5,7 @@
 # each that photographs the screen in every appearance (runner/visual-native.ts).
 # Nothing here asserts what a screen looks like; the accepted baseline does.
 #
-# Run it through `npm run e2e:visual -- --platform <ios|android> --device <id>`;
+# Run it through `npm run e2e:visual:<ios|android> -- --device <id>`;
 # alone it only navigates.
 appId: com.bracemark.app
 tags: [VISUAL-APP-001, full, online, visual, baseline, destructive, ios, android]

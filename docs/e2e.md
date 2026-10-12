@@ -1969,8 +1969,8 @@ build. With no `--release-receipt` it uses the newest receipt of that platform
 under `.artifacts/releases/` and prints its path; with no `--device`, the one
 device that platform has up. A stale receipt or the wrong device cannot pass on
 a default: the installed app is still hashed against whichever receipt was
-chosen before an account exists. So `npm run e2e:mobile:staging:ios` and its
-three siblings run with nothing after them, once `e2e:build:staging:<platform>`
+chosen before an account exists. So `npm run e2e:ios:staging` and its
+three siblings run with nothing after them, once `e2e:build:<platform>:staging`
 has built and the artifact it printed is installed.
 
 Run manifests record environment, origins, exclusions and, for mobile, the
@@ -2039,13 +2039,13 @@ npx nx e2e-extension @stxapps/e2e
 npx nx e2e-pwa @stxapps/e2e   # builds the production export itself; needs :3001 free
 
 # The one booted simulator, or the one attached Android device.
-npm run e2e:mobile:ios
+npm run e2e:ios
 npm run e2e:contract:ios
-npm run e2e:mobile:android
+npm run e2e:android
 npm run e2e:contract:android
 
 # With two up, name one: ids come from `xcrun simctl list devices booted` or `adb devices`.
-npm run e2e:mobile:ios -- --device <udid> --suite full
+npm run e2e:ios -- --device <udid> --suite full
 npx nx e2e-contract @stxapps/e2e -- --platform android --device <serial>
 ```
 
@@ -2059,11 +2059,13 @@ serially because they share the local stack and are intentionally expensive.
 The vectors case remains first in a full contract run. Run it alone with
 `--case CONTRACT-VECTORS-001`.
 
-The six targets also have root scripts — `npm run e2e:web`, `e2e:extension`,
-`e2e:pwa`, `e2e:mobile`, `e2e:contract`, and `e2e:visual`. The last three need a
-platform, so each also has a script that carries it — `e2e:mobile:ios`,
-`e2e:contract:android`, `e2e:visual:web` and so on — which is the bare script
-plus `--platform`, not a target of its own, the way `e2e:web:headed` is. There
+The six targets also have root scripts. `npm run e2e:web`, `e2e:extension` and
+`e2e:pwa` are the target as it stands. The other three need a platform, so their
+scripts carry it and there is no bare one — `e2e:ios` and `e2e:android` for
+`e2e-mobile`, then `e2e:contract:android`, `e2e:visual:web` and so on — each the
+target plus `--platform`, not a target of its own, the way `e2e:web:headed` is.
+The staging scripts put the mode last: `e2e:ios:staging`,
+`e2e:contract:android:staging`, `e2e:build:ios:staging`. There
 is deliberately no bare `npm run e2e`: no honest fan-out
 can boot, build, select, and prepare both native platforms. `expo:ios` and
 `expo:android` are prerequisites, not tests; see [expo-build.md](./expo-build.md).
@@ -2108,8 +2110,21 @@ comma-separated and work across the wrappers:
 npm run e2e:web -- --suite smoke
 npm run e2e:web -- --case WEB-LINK-001
 npm run e2e:extension -- --case EXT-AUTH-001
-npm run e2e:mobile -- --platform ios --device <udid> --exclude-trait destructive
+npm run e2e:ios -- --device <udid> --exclude-trait destructive
+npm run e2e:android -- --from TAXONOMY-DND-002
 ```
+
+`--from <case-id>` picks a native run back up where one failed: it drops every
+selected case ahead of the named one and runs that case and the rest. It is
+applied last, to what the other filters left, and refuses an id they dropped
+rather than run everything (`runner/registry.ts`). The unit is the **case**, not
+the flow: a case the runner drives as a chain — `taxonomy-dnd.yaml`, a host-side
+drag, then a part under `mobile/flows/parts/` — restarts at its first flow on a
+fresh account, because each part stands on the state the ones before it left.
+`e2e-mobile` and `e2e-contract` only: they take the selection one case at a
+time, in registry order, so "ahead of" is the order the run had. Playwright
+orders and parallelises its own, so the web wrappers pass the flag through and
+Playwright refuses it by name; `e2e-visual` refuses it itself.
 
 ⚠ **On web the selection is applied per Playwright project, not as `--grep`**
 (`runner/web.ts` passes it as `E2E_GREP`; `playwright.config.ts` gives it to both

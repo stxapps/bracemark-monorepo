@@ -43,6 +43,9 @@ export interface CaseFilters {
   // pixel claim — SKELETON-*, VIEWPORT-* — and selects nothing special.)
   baseline?: boolean;
   environment?: E2EEnvironment;
+  // Start at this case: applied LAST, to what every other filter left, so the
+  // id is one of the cases the run would have reached (runner/cli.ts, `from`).
+  from?: string;
 }
 
 const REGISTRY_PATH = join(E2E_ROOT, 'cases.json');
@@ -177,7 +180,21 @@ export function selectCases(surface: E2ESurface, filters: CaseFilters = {}): E2E
   });
 
   if (selected.length === 0) throw new Error(`no ${surface} E2E cases match the requested filters`);
-  return selected;
+  return startingFrom(selected, filters.from);
+}
+
+// Refuses an id the selection does not hold rather than running everything: a
+// mistyped `--from` would otherwise repeat the very cases it was meant to skip.
+function startingFrom(selected: E2ECase[], from: string | undefined): E2ECase[] {
+  if (from === undefined) return selected;
+  const index = selected.findIndex((testCase) => testCase.id === from);
+  if (index === -1) {
+    throw new Error(
+      `--from ${from} is not one of the ${selected.length} selected cases: ` +
+        'the id is unknown here, or another filter leaves it out',
+    );
+  }
+  return selected.slice(index);
 }
 
 export function selectCasesForPlatform(
@@ -185,7 +202,8 @@ export function selectCasesForPlatform(
   platform: 'ios' | 'android',
   filters: CaseFilters = {},
 ): E2ECase[] {
-  const selected = selectCases(surface, filters);
+  // `from` waits for the platform filter: its case has to support the platform.
+  const selected = selectCases(surface, { ...filters, from: undefined });
   const requested = new Set(filters.cases ?? []);
   const supported = selected.filter((testCase) => testCase.traits.includes(platform));
   const incompatible = selected.filter(
@@ -199,7 +217,7 @@ export function selectCasesForPlatform(
   if (supported.length === 0) {
     throw new Error(`no ${surface} E2E cases support ${platform} with the requested filters`);
   }
-  return supported;
+  return startingFrom(supported, filters.from);
 }
 
 function isMain(): boolean {

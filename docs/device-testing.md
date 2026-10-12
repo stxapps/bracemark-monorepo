@@ -221,7 +221,7 @@ these two vars do not touch — while everything that reaches the api fails as a
 network error. So it reads as the api being down, not as an env file being one
 comment character short. Sign-in says "Could not sign in. Please try again.",
 while `curl` from the Mac to `:8787` answers 200 and the api log shows no
-request from the device at all. `npm run e2e:mobile` and `e2e:contract` no
+request from the device at all. The `e2e-mobile` and `e2e-contract` runs no
 longer fail the same way one layer further from the cause: their preflight
 reads the api origin out of the bundle Metro serves and refuses to start on any
 but the local one ([e2e.md](./e2e.md), _driving the native apps_). Driving the
@@ -320,7 +320,7 @@ _how_ and the alternative stays here as the record of why it wasn't taken.
 ### automated staging Release runs
 
 For repeatable Release automation, use the receipt-producing build and
-`e2e:mobile:staging` / `e2e:contract:staging` targets described in
+`e2e-mobile:staging` / `e2e-contract:staging` targets described in
 [e2e/STAGING.md](../e2e/STAGING.md). They pin the build's staging URLs without
 changing the device domain switch, verify the installed binary, and need no
 Metro or reverse mappings. Android works through ADB on an emulator or physical

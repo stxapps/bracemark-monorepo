@@ -19,7 +19,8 @@ and how to diff a prebuild on demand when you do want the native delta.
 
 #### staging Release E2E artifacts
 
-`npm run e2e:build:staging -- --platform android|ios` is a finite Nx build task
+`npm run e2e:build:android:staging` (or `e2e:build:ios:staging`) is a finite Nx
+build task
 owned by `@stxapps/e2e`. It regenerates the selected native directory, pins the
 staging API/site above dotenv precedence, and runs Gradle `assembleRelease` with
 R8/resource shrinking or Xcode Release for `iphonesimulator`, with ad hoc
@@ -152,8 +153,8 @@ bracemark://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081%2F%3Fdisa
 that link turn off the two screens it otherwise puts in front of the app. `url`
 says which bundle to load, so it skips the launcher's "enter the dev server URL"
 home screen — which it shows whenever it has no bundle to remember, i.e. after
-anything clears app data (a Maestro `clearState`, so any `npm run e2e:mobile`) or
-after its 3-day registry TTL. `disableOnboarding=1` sets the dev **menu**'s
+anything clears app data (a Maestro `clearState`, so any `npm run e2e:ios` /
+`e2e:android`) or after its 3-day registry TTL. `disableOnboarding=1` sets the dev **menu**'s
 `isOnboardingFinished`, the flag behind the sheet that slides up over the loaded
 app. Both flags live in cleared-with-everything-else storage
 (`expo.modules.devlauncher.recentyopenedapps` and

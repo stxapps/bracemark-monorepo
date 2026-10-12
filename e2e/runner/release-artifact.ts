@@ -134,7 +134,7 @@ export async function latestReleaseReceipt(
   if (!latest) {
     throw new Error(
       `no staging Release receipt for ${platform} under ${releasesDir}. ` +
-        `Build one with \`npm run e2e:build:staging:${platform}\`, install the artifact it ` +
+        `Build one with \`npm run e2e:build:${platform}:staging\`, install the artifact it ` +
         'prints, and retry — or pass --release-receipt <release.json>.',
     );
   }

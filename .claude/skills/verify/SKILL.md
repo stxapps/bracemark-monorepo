@@ -335,8 +335,9 @@ chromium` (~550 MB into `~/Library/Caches/ms-playwright/`) if it is absent.
 device when the change is native, visual, or layout/safe-area shaped, i.e. when
 you need to _look_ at it.
 
-For **suite** runs (`npm run e2e:mobile`, `npm run e2e:contract`) stop here and
-read `e2e/README.md` — this section is the ad-hoc "show me my change" loop.
+For **suite** runs (`npm run e2e:ios` / `e2e:android`, `e2e:contract:ios` /
+`e2e:contract:android`) stop here and read `e2e/README.md` — this section is the
+ad-hoc "show me my change" loop.
 
 - **The prerequisite is an installed dev build**, and nothing installs it for
   you: `npm run expo:android` or `npm run expo:ios` (from the root; both hold the
@@ -351,8 +352,9 @@ read `e2e/README.md` — this section is the ad-hoc "show me my change" loop.
 - **Launch with `npm run expo:ios:open` / `expo:android:open`, not the app icon**
   (both platforms — same code path, not an Android quirk). The dev build only
   opens straight into the app while expo-dev-client's own prefs survive; anything
-  that clears app data (a Maestro `clearState`, so any `npm run e2e:mobile`, or a
-  remembered-bundle entry older than 3 days) leaves it showing the dev-launcher
+  that clears app data (a Maestro `clearState`, so any `npm run e2e:ios` /
+  `e2e:android`, or a remembered-bundle entry older than 3 days) leaves it
+  showing the dev-launcher
   home screen — "enter the dev server URL" — and then the dev-menu sheet on top
   of the loaded bundle, both of which have to be dismissed by hand before the app
   can be driven. Those two scripts are the dev-client deep link with the bundle
@@ -494,7 +496,7 @@ HardwareKeyboardLastSeen` prints `1`. Write it `false` the same way and
 
   Commenting the pair back out is the user's call, and needs the same restart —
   a reload replays the old value. The suite runs name all of this for you: the
-  `e2e:mobile` / `e2e:contract` preflight reads the api origin out of the bundle
+  `e2e-mobile` / `e2e-contract` preflight reads the api origin out of the bundle
   Metro serves and refuses a wrong one, printing that command. A hand-driven
   session has no such guard. → `docs/device-testing.md`
 

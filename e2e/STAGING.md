@@ -122,8 +122,8 @@ biometric, and share checks remain in [mobile/RELEASE.md](./mobile/RELEASE.md).
 Build one platform at a time:
 
 ```sh
-npm run e2e:build:staging:android
-npm run e2e:build:staging:ios
+npm run e2e:build:android:staging
+npm run e2e:build:ios:staging
 ```
 
 The build target regenerates that platform's generated native directory through
@@ -156,10 +156,10 @@ Uninstall that test-device app before installing Release; this clears its data.
 Then run:
 
 ```sh
-npm run e2e:mobile:staging:android -- --suite smoke
-npm run e2e:contract:staging:android
-npm run e2e:mobile:staging:ios -- --suite smoke
-npm run e2e:contract:staging:ios
+npm run e2e:android:staging -- --suite smoke
+npm run e2e:contract:android:staging
+npm run e2e:ios:staging -- --suite smoke
+npm run e2e:contract:ios:staging
 ```
 
 With nothing more, a run uses the newest receipt of that platform under
@@ -167,7 +167,7 @@ With nothing more, a run uses the newest receipt of that platform under
 device), and prints both. Name either to override:
 
 ```sh
-npm run e2e:mobile:staging:android -- --device <serial> --release-receipt <release.json>
+npm run e2e:android:staging -- --device <serial> --release-receipt <release.json>
 ```
 
 Pass the receipt as the absolute path the build printed: Nx runs the native

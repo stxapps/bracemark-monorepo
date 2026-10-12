@@ -15,6 +15,12 @@ export interface NativeCliOptions extends CommonFilters {
   // Optional: the run takes the one booted device (runner/device.ts).
   deviceId?: string;
   releaseReceipt?: string;
+  // `--from <case-id>`: drop every selected case ahead of this one, to pick a
+  // run back up at the case that failed. Native only — these runners take the
+  // selection one case at a time, in registry order, so "ahead of" is the order
+  // the run would have had. Playwright orders and parallelises its own, so the
+  // web wrappers leave the flag a passthrough and Playwright refuses it by name.
+  from?: string;
 }
 
 interface ParsedArguments {
@@ -81,7 +87,7 @@ const FILTER_FLAGS = new Set(['suite', 'case', 'include-trait', 'exclude-trait']
 export function parseNativeCli(argv = process.argv.slice(2)): NativeCliOptions {
   const parsed = parseArguments(
     argv,
-    new Set([...FILTER_FLAGS, 'platform', 'device', 'release-receipt']),
+    new Set([...FILTER_FLAGS, 'platform', 'device', 'release-receipt', 'from']),
   );
   if (parsed.passthrough.length > 0) {
     throw new Error(`unknown native E2E arguments: ${parsed.passthrough.join(' ')}`);
@@ -92,10 +98,9 @@ export function parseNativeCli(argv = process.argv.slice(2)): NativeCliOptions {
     throw new Error(
       '--platform is required: ios or android. The root scripts carry it — ' +
         (IS_STAGING
-          ? '`npm run e2e:mobile:staging:ios`, `e2e:mobile:staging:android`, ' +
-            '`e2e:contract:staging:ios`, `e2e:contract:staging:android`.'
-          : '`npm run e2e:mobile:ios`, `e2e:mobile:android`, ' +
-            '`e2e:contract:ios`, `e2e:contract:android`.'),
+          ? '`npm run e2e:ios:staging`, `e2e:android:staging`, ' +
+            '`e2e:contract:ios:staging`, `e2e:contract:android:staging`.'
+          : '`npm run e2e:ios`, `e2e:android`, `e2e:contract:ios`, `e2e:contract:android`.'),
     );
   }
   if (platform !== 'ios' && platform !== 'android') {
@@ -110,6 +115,7 @@ export function parseNativeCli(argv = process.argv.slice(2)): NativeCliOptions {
     platform,
     deviceId: one(parsed.values, 'device'),
     releaseReceipt,
+    from: one(parsed.values, 'from'),
   };
 }
 

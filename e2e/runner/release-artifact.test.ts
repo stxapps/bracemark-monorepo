@@ -113,7 +113,7 @@ test('the default receipt is the newest build of the requested platform only', a
       join(root, 'staging-ios-a', 'release.json'),
     );
     await rm(join(root, 'staging-ios-a'), { recursive: true });
-    await assert.rejects(latestReleaseReceipt(root, 'ios'), /e2e:build:staging:ios/);
+    await assert.rejects(latestReleaseReceipt(root, 'ios'), /e2e:build:ios:staging/);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
