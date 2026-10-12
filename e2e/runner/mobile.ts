@@ -477,8 +477,9 @@ function assertClosedOver(
   };
 }
 
-// Standalone native journeys. Platform and device are deliberately mandatory:
-// a result that does not say which runtime it exercised is not a baseline.
+// Standalone native journeys. The platform is deliberately mandatory, and the
+// device is either named or the only one booted (runner/device.ts): a result
+// that does not say which runtime it exercised is not a baseline.
 async function main(): Promise<void> {
   validateCaseRegistry();
   const options = parseNativeCli();

@@ -32,7 +32,8 @@ async function processCwd(pid: string): Promise<string | undefined> {
 export async function assertOriginOwnedByRepo(
   origin: string,
   label: string,
-  options: { required?: boolean } = {},
+  // `start` names what brings a required listener up, for the message.
+  options: { required?: boolean; start?: string } = {},
 ): Promise<void> {
   const port = localPort(origin);
   if (!port) return;
@@ -41,7 +42,8 @@ export async function assertOriginOwnedByRepo(
   if (pids.length === 0) {
     if (options.required) {
       throw new Error(
-        `${label} has no listener at ${origin}. Start the stack with \`npm run dev\` and retry.`,
+        `${label} has no listener at ${origin}. ` +
+          `${options.start ?? 'Start the stack with `npm run dev`'} and retry.`,
       );
     }
     return;

@@ -19,9 +19,9 @@ import { runVisualNativeCase } from './visual-native';
 // named checkpoint e2e/visual.json owes the selected cases on one platform, then
 // compare them with this machine's accepted baseline and write a report.
 //
-//   npm run e2e:visual -- --platform web
-//   npm run e2e:visual -- --platform ios --device <udid>
-//   npm run e2e:visual -- --platform android --device <serial> --accept
+//   npm run e2e:visual:web
+//   npm run e2e:visual:ios                       (the one booted simulator)
+//   npm run e2e:visual:android -- --device <serial> --accept
 //
 // Review-only: a changed capture is reported, not failed, unless its checkpoint
 // is gated. `--accept` makes a passing run's captures the baseline.
@@ -102,12 +102,11 @@ async function runWeb(options: VisualCliOptions): Promise<void> {
 }
 
 async function runNative(options: VisualCliOptions & { platform: 'ios' | 'android' }) {
-  const deviceId = options.deviceId as string;
   const selected = selectCasesForPlatform('native', options.platform, {
     ...options,
     baseline: true,
   });
-  const run = await prepareNativeRun('visual', { ...options, deviceId }, selected);
+  const run = await prepareNativeRun('visual', options, selected);
 
   // Put the device the way every capture assumes — frozen status bar, light,
   // the found text size — and back the way it was found, whatever happens.

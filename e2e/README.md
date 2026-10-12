@@ -11,8 +11,8 @@ that one before changing anything.
 
 `npm run e2e:web:staging`, `e2e:mobile:staging`, and `e2e:contract:staging`
 test deployed dryrunbase.com services. Mobile needs an installed Release artifact
-and its build receipt, produced by `npm run e2e:build:staging -- --platform
-android|ios`. No local stack or Metro is used. Commands, admitted cases, CSP
+and its build receipt, produced by `npm run e2e:build:staging:android` or
+`e2e:build:staging:ios`. No local stack or Metro is used. Commands, admitted cases, CSP
 requirements, and coverage limits: [STAGING.md](./STAGING.md).
 
 ## running locally
@@ -74,7 +74,9 @@ checkpoints, and a hierarchy dump on failure. A pass that needed Playwright's
 retry exits non-zero.
 
 The six run-it targets also have root scripts: `npm run e2e:web`,
-`e2e:extension`, `e2e:pwa`, `e2e:mobile`, `e2e:contract`, `e2e:visual`. There is no bare `npm run e2e` —
+`e2e:extension`, `e2e:pwa`, `e2e:mobile`, `e2e:contract`, `e2e:visual` — the
+last three also as `:ios` / `:android` (and `e2e:visual:web`), which carry the
+platform. There is no bare `npm run e2e` —
 see `docs/e2e.md`, _running_.
 
 ## seeding a dev account
@@ -115,7 +117,9 @@ on a booted simulator or emulator**. Nothing here builds the app —
 `npx nx ios @stxapps/bracemark-expo` (or `android`) does, and it is a
 prerequisite, not an e2e step.
 
-Platform and device are mandatory and are passed to Maestro explicitly. The
+The platform is mandatory and the device is passed to Maestro explicitly. Leave
+`--device` out and the run takes the one booted simulator (or attached Android
+device), refusing to choose between two; add `-- --device <id>` to name one. The
 preflight proves that exact device is booted, the dev build is installed, Metro
 belongs to this checkout and serves a bundle whose api is the local one, and
 Android has completed boot with all three reverse mappings. Web e2e is platform-independent — run it once.
@@ -123,8 +127,8 @@ Android has completed boot with all three reverse mappings. Web e2e is platform-
 ```sh
 npm run expo:ios                    # or: npm run expo:android
 npm run expo:android:reverse        # Android only, once per emulator boot
-npm run e2e:mobile -- --platform ios --device <udid>
-npm run e2e:contract -- --platform ios --device <udid>
+npm run e2e:mobile:ios              # or e2e:mobile:android
+npm run e2e:contract:ios            # or e2e:contract:android
 ```
 
 Both build commands hold the foreground running Metro, so the rest wants a second

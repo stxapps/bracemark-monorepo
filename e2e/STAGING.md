@@ -122,8 +122,8 @@ biometric, and share checks remain in [mobile/RELEASE.md](./mobile/RELEASE.md).
 Build one platform at a time:
 
 ```sh
-npm run e2e:build:staging -- --platform android
-npm run e2e:build:staging -- --platform ios
+npm run e2e:build:staging:android
+npm run e2e:build:staging:ios
 ```
 
 The build target regenerates that platform's generated native directory through
@@ -152,17 +152,29 @@ xcrun simctl install <udid> <artifact.app>
 If Android refuses `install -r` with `INSTALL_FAILED_UPDATE_INCOMPATIBLE`, the
 existing app uses a different signing key (for example, a development build).
 Uninstall that test-device app before installing Release; this clears its data.
-Use the printed absolute receipt path below: Nx runs the native runner from
-`e2e/`, so a relative path is resolved there.
 
-Then run, using the matching receipt:
+Then run:
 
 ```sh
-npm run e2e:mobile:staging -- --platform android --device <serial> --release-receipt <release.json> --suite smoke
-npm run e2e:contract:staging -- --platform android --device <serial> --release-receipt <release.json>
-npm run e2e:mobile:staging -- --platform ios --device <udid> --release-receipt <release.json> --suite smoke
-npm run e2e:contract:staging -- --platform ios --device <udid> --release-receipt <release.json>
+npm run e2e:mobile:staging:android -- --suite smoke
+npm run e2e:contract:staging:android
+npm run e2e:mobile:staging:ios -- --suite smoke
+npm run e2e:contract:staging:ios
 ```
+
+With nothing more, a run uses the newest receipt of that platform under
+`.artifacts/releases/` and the one booted simulator (or attached Android
+device), and prints both. Name either to override:
+
+```sh
+npm run e2e:mobile:staging:android -- --device <serial> --release-receipt <release.json>
+```
+
+Pass the receipt as the absolute path the build printed: Nx runs the native
+runner from `e2e/`, so a relative path is resolved there. The defaults cannot
+admit the wrong build — the preflight below hashes the installed app against
+the chosen receipt either way — and with two devices up the run refuses to
+choose.
 
 No Metro or `adb reverse` is needed. Cold launch uses `launchApp` with cleared
 state, rather than an Expo development-client link. Native preflight hashes the

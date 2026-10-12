@@ -15,8 +15,8 @@
           }
         },
         "outputs": [
-          "{projectRoot}/.next/!(cache)/**/*",
-          "{projectRoot}/.next/!(cache)",
+          "{projectRoot}/.next/!(cache|dev)/**/*",
+          "{projectRoot}/.next/!(cache|dev)",
           "{projectRoot}/out"
         ]
       },

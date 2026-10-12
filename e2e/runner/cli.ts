@@ -12,7 +12,8 @@ export interface CommonFilters {
 
 export interface NativeCliOptions extends CommonFilters {
   platform: NativePlatform;
-  deviceId: string;
+  // Optional: the run takes the one booted device (runner/device.ts).
+  deviceId?: string;
   releaseReceipt?: string;
 }
 
@@ -86,17 +87,28 @@ export function parseNativeCli(argv = process.argv.slice(2)): NativeCliOptions {
     throw new Error(`unknown native E2E arguments: ${parsed.passthrough.join(' ')}`);
   }
 
-  const platform = one(parsed.values, 'platform', true);
+  const platform = one(parsed.values, 'platform');
+  if (!platform) {
+    throw new Error(
+      '--platform is required: ios or android. The root scripts carry it — ' +
+        (IS_STAGING
+          ? '`npm run e2e:mobile:staging:ios`, `e2e:mobile:staging:android`, ' +
+            '`e2e:contract:staging:ios`, `e2e:contract:staging:android`.'
+          : '`npm run e2e:mobile:ios`, `e2e:mobile:android`, ' +
+            '`e2e:contract:ios`, `e2e:contract:android`.'),
+    );
+  }
   if (platform !== 'ios' && platform !== 'android') {
     throw new Error(`--platform must be "ios" or "android", got ${platform}`);
   }
 
-  const releaseReceipt = one(parsed.values, 'release-receipt', IS_STAGING);
+  // Optional in staging too: the newest build's receipt (release-artifact.ts).
+  const releaseReceipt = one(parsed.values, 'release-receipt');
   if (!IS_STAGING && releaseReceipt) throw new Error('--release-receipt requires staging mode');
   return {
     ...filters(parsed.values),
     platform,
-    deviceId: one(parsed.values, 'device', true) as string,
+    deviceId: one(parsed.values, 'device'),
     releaseReceipt,
   };
 }
@@ -126,7 +138,8 @@ export function parseWebCli(argv = process.argv.slice(2), watch = false): WebCli
 
 export interface VisualCliOptions extends CommonFilters {
   platform: 'web' | NativePlatform;
-  // Required on a device; the web leg drives the local browser.
+  // The web leg drives the local browser; a native one defaults to the one
+  // booted device (runner/device.ts).
   deviceId?: string;
   // Make this run's captures the baseline, once it has passed.
   accept: boolean;
@@ -141,11 +154,17 @@ export function parseVisualCli(argv = process.argv.slice(2)): VisualCliOptions {
   if (parsed.passthrough.length > 0) {
     throw new Error(`unknown visual E2E arguments: ${parsed.passthrough.join(' ')}`);
   }
-  const platform = one(parsed.values, 'platform', true);
+  const platform = one(parsed.values, 'platform');
+  if (!platform) {
+    throw new Error(
+      '--platform is required: web, ios or android. The root scripts carry it — ' +
+        '`npm run e2e:visual:web`, `e2e:visual:ios`, `e2e:visual:android`.',
+    );
+  }
   if (platform !== 'web' && platform !== 'ios' && platform !== 'android') {
     throw new Error(`--platform must be "web", "ios" or "android", got ${platform}`);
   }
-  const deviceId = one(parsed.values, 'device', platform !== 'web');
+  const deviceId = one(parsed.values, 'device');
   if (platform === 'web' && deviceId) throw new Error('--device is for ios and android only');
   return { ...filters(parsed.values), platform, deviceId, accept };
 }

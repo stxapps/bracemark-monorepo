@@ -8,6 +8,7 @@ import { STAGING_ORIGINS } from './environment';
 import {
   artifactHash,
   assertStagingBundle,
+  latestReleaseReceipt,
   readReleaseReceipt,
   type ReleaseReceipt,
 } from './release-artifact';
@@ -81,6 +82,38 @@ test('app hash survives relocation and detects changes inside the embedded share
       'different extension',
     );
     assert.notEqual(await artifactHash(join(root, 'installed.app')), expected);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('the default receipt is the newest build of the requested platform only', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'bracemark-releases-'));
+  try {
+    await assert.rejects(latestReleaseReceipt(join(root, 'absent'), 'ios'), /no staging Release/);
+    const builds = [
+      ['staging-android-a', 'android', '2026-10-08T13:09:55.305Z'],
+      ['staging-android-b', 'android', '2026-10-09T08:00:00.000Z'],
+      ['staging-ios-a', 'ios', '2026-10-10T08:00:00.000Z'],
+    ];
+    for (const [name, platform, builtAt] of builds) {
+      await mkdir(join(root, name));
+      await writeFile(join(root, name, 'release.json'), JSON.stringify({ platform, builtAt }));
+    }
+    // A build that died before its receipt, and a receipt that is not JSON.
+    await mkdir(join(root, 'staging-android-c'));
+    await mkdir(join(root, 'staging-android-d'));
+    await writeFile(join(root, 'staging-android-d', 'release.json'), 'truncated');
+    assert.equal(
+      await latestReleaseReceipt(root, 'android'),
+      join(root, 'staging-android-b', 'release.json'),
+    );
+    assert.equal(
+      await latestReleaseReceipt(root, 'ios'),
+      join(root, 'staging-ios-a', 'release.json'),
+    );
+    await rm(join(root, 'staging-ios-a'), { recursive: true });
+    await assert.rejects(latestReleaseReceipt(root, 'ios'), /e2e:build:staging:ios/);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

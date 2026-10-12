@@ -112,6 +112,35 @@ export async function readReleaseReceipt(
   return { receipt, artifact };
 }
 
+// The receipt a staging run uses when none is named: the newest build of that
+// platform under `releasesDir` (`.artifacts/releases`, one directory per
+// build-release:staging run). Defaulting it cannot pass a wrong build — the
+// preflight below still hashes the installed app against whichever receipt this
+// returns — it only saves copying a path out of the build's output.
+export async function latestReleaseReceipt(
+  releasesDir: string,
+  platform: NativePlatform,
+): Promise<string> {
+  const builds = await readdir(releasesDir).catch(() => [] as string[]);
+  let latest: { path: string; builtAt: string } | undefined;
+  for (const build of builds) {
+    const path = join(releasesDir, build, 'release.json');
+    const receipt = await readFile(path, 'utf8')
+      .then((text) => JSON.parse(text) as Partial<ReleaseReceipt>)
+      .catch(() => undefined);
+    if (receipt?.platform !== platform || typeof receipt.builtAt !== 'string') continue;
+    if (!latest || receipt.builtAt > latest.builtAt) latest = { path, builtAt: receipt.builtAt };
+  }
+  if (!latest) {
+    throw new Error(
+      `no staging Release receipt for ${platform} under ${releasesDir}. ` +
+        `Build one with \`npm run e2e:build:staging:${platform}\`, install the artifact it ` +
+        'prints, and retry — or pass --release-receipt <release.json>.',
+    );
+  }
+  return latest.path;
+}
+
 export async function assertInstalledRelease(options: {
   receiptPath: string;
   platform: NativePlatform;

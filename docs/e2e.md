@@ -240,6 +240,20 @@ refused connection the case can cause and undo between two steps. The origin is
 `:3001` is the other origin the development api's `CORS_ORIGINS` allows. The
 preflight requires the port free — the marketing site's dev server also wants it.
 
+⚠ **That build runs beside a live `next dev`, and its Nx outputs must not
+include `.next/dev`.** Next 16 keeps the dev server's whole state there —
+`.next/dev/cache/turbopack` included — apart from what `next build` writes,
+which is what lets the two share a checkout. The `build` target's outputs are
+therefore `.next/!(cache|dev)` in both Next apps' `package.json`. They were
+`.next/!(cache)`, which swept the dev directory into every cache entry (507 MB
+of it) and, on a cache **hit**, had Nx restore that stale copy over the one the
+running server was using. Nothing failed in the run that did it: `e2e-pwa`
+passed, and afterwards the dev server answered every route with a bare 500 and
+logged `Failed to restore task data (corrupted database or bug)` /
+`Unable to open static sorted file`. A cache miss does no harm, so the first
+run after a source change was fine and the next one was not. Recovery is to
+stop the server and remove `apps/bracemark-web/.next/dev`.
+
 ⚠ **Chrome installs the app under automation but never opens its standalone
 window, and nothing fails when it doesn't.** CDP `PWA.install` is real — it
 applies Chrome's installability checks and refuses a wrong manifest id — but a
@@ -1712,10 +1726,10 @@ its own target, `e2e-visual`, because what it produces is a comparison, not a
 pass:
 
 ```sh
-npm run e2e:visual -- --platform web
-npm run e2e:visual -- --platform ios --device <udid>
-npm run e2e:visual -- --platform android --device <serial>
-npm run e2e:visual -- --platform web --accept    # this run becomes the baseline
+npm run e2e:visual:web
+npm run e2e:visual:ios                           # the one booted simulator
+npm run e2e:visual:android -- --device <serial>  # or name the device
+npm run e2e:visual:web -- --accept               # this run becomes the baseline
 ```
 
 **The catalog is [`e2e/visual.json`](../e2e/visual.json)**, the visual twin of
@@ -1949,6 +1963,16 @@ a store IPA or real-iPhone qualification. Frozen vectors stay local because the
 screen redirects away in Release; both encrypted cross-client round trips run
 against staging.
 
+A staging native run takes the same two defaults a local one does, and both are
+safe for the same reason — the preflight, not the argument, is what admits the
+build. With no `--release-receipt` it uses the newest receipt of that platform
+under `.artifacts/releases/` and prints its path; with no `--device`, the one
+device that platform has up. A stale receipt or the wrong device cannot pass on
+a default: the installed app is still hashed against whichever receipt was
+chosen before an account exists. So `npm run e2e:mobile:staging:ios` and its
+three siblings run with nothing after them, once `e2e:build:staging:<platform>`
+has built and the artifact it printed is installed.
+
 Run manifests record environment, origins, exclusions and, for mobile, the
 Release receipt independently of the runner checkout. A receipt establishes build
 configuration and identity, while flow results establish runtime behavior. A
@@ -2014,21 +2038,33 @@ npx nx e2e-web:report @stxapps/e2e
 npx nx e2e-extension @stxapps/e2e
 npx nx e2e-pwa @stxapps/e2e   # builds the production export itself; needs :3001 free
 
-# Exact ids come from `xcrun simctl list devices booted` or `adb devices`.
-npx nx e2e-mobile @stxapps/e2e -- --platform ios --device <udid> --suite full
-npx nx e2e-contract @stxapps/e2e -- --platform ios --device <udid>
-npx nx e2e-mobile @stxapps/e2e -- --platform android --device <serial> --suite full
+# The one booted simulator, or the one attached Android device.
+npm run e2e:mobile:ios
+npm run e2e:contract:ios
+npm run e2e:mobile:android
+npm run e2e:contract:android
+
+# With two up, name one: ids come from `xcrun simctl list devices booted` or `adb devices`.
+npm run e2e:mobile:ios -- --device <udid> --suite full
 npx nx e2e-contract @stxapps/e2e -- --platform android --device <serial>
 ```
 
-Platform and device are mandatory and are passed to every Maestro invocation.
-Having both platforms booted is no longer ambiguous, though the full legs should
-still be run serially because they share the local stack and are intentionally
-expensive. The vectors case remains first in a full contract run. Run it alone
-with `--case CONTRACT-VECTORS-001`.
+The platform is mandatory and the device is passed to every Maestro invocation.
+`--device` may be left out locally: the run then takes the **one** device that
+platform has up and says which (`runner/device.ts`), and refuses — listing them —
+rather than choose between two, so having both platforms booted is not
+ambiguous and neither are two simulators. The manifest records the device either
+way. The full legs should still be run
+serially because they share the local stack and are intentionally expensive.
+The vectors case remains first in a full contract run. Run it alone with
+`--case CONTRACT-VECTORS-001`.
 
 The six targets also have root scripts — `npm run e2e:web`, `e2e:extension`,
-`e2e:pwa`, `e2e:mobile`, `e2e:contract`, and `e2e:visual`. There is deliberately no bare `npm run e2e`: no honest fan-out
+`e2e:pwa`, `e2e:mobile`, `e2e:contract`, and `e2e:visual`. The last three need a
+platform, so each also has a script that carries it — `e2e:mobile:ios`,
+`e2e:contract:android`, `e2e:visual:web` and so on — which is the bare script
+plus `--platform`, not a target of its own, the way `e2e:web:headed` is. There
+is deliberately no bare `npm run e2e`: no honest fan-out
 can boot, build, select, and prepare both native platforms. `expo:ios` and
 `expo:android` are prerequisites, not tests; see [expo-build.md](./expo-build.md).
 On Android, run `npm run expo:android:reverse` after each emulator boot.

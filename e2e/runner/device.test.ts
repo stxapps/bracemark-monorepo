@@ -1,0 +1,45 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+
+import { parseAttachedAndroid, parseBootedSimulators, pickDevice } from './device';
+
+const SIMULATORS = JSON.stringify({
+  devices: {
+    'com.apple.CoreSimulator.SimRuntime.iOS-26-5': [
+      { udid: 'AAAA-1', name: 'iPhone 17', state: 'Booted' },
+      { udid: 'AAAA-2', name: 'iPad Air', state: 'Shutdown' },
+    ],
+    'com.apple.CoreSimulator.SimRuntime.iOS-18-0': [],
+  },
+});
+
+const ADB = [
+  'List of devices attached',
+  'emulator-5554          device product:sdk_gphone64_arm64 model:sdk_gphone64_arm64 transport_id:1',
+  'emulator-5556          offline transport_id:2',
+  'R58M123ABC             unauthorized usb:1-1 transport_id:3',
+  '',
+].join('\n');
+
+test('only a booted simulator and a ready adb device count as available', () => {
+  assert.deepEqual(parseBootedSimulators(SIMULATORS), [{ id: 'AAAA-1', name: 'iPhone 17' }]);
+  assert.deepEqual(parseAttachedAndroid(ADB), [
+    { id: 'emulator-5554', name: 'sdk_gphone64_arm64' },
+  ]);
+  assert.deepEqual(parseAttachedAndroid('List of devices attached\n\n'), []);
+});
+
+test('a device is defaulted only when there is exactly one, and never chosen between two', () => {
+  const one = [{ id: 'AAAA-1', name: 'iPhone 17' }];
+  const two = [...one, { id: 'AAAA-2', name: 'iPad Air' }];
+  assert.equal(pickDevice('ios', undefined, one), 'AAAA-1');
+  // An explicit id is passed through even when it is not in the listing: the
+  // preflight owns "is not booted", with the id in its message.
+  assert.equal(pickDevice('ios', 'ZZZZ', two), 'ZZZZ');
+  assert.throws(() => pickDevice('ios', undefined, []), /no booted iOS simulator/);
+  assert.throws(() => pickDevice('android', undefined, []), /no attached Android device/);
+  assert.throws(
+    () => pickDevice('ios', undefined, two),
+    /pass --device <id>[\s\S]*AAAA-2 {2}iPad Air/,
+  );
+});

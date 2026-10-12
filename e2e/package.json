@@ -9,13 +9,22 @@
       "platform:agnostic"
     ],
     "targets": {
+      "check:runner": {
+        "cache": false
+      },
+      "check:browser": {
+        "cache": false
+      },
+      "check:headers": {
+        "cache": false
+      },
       "e2e-web": {
         "cache": false
       },
-      "e2e-extension": {
+      "e2e-pwa": {
         "cache": false
       },
-      "e2e-pwa": {
+      "e2e-extension": {
         "cache": false
       },
       "e2e-mobile": {
@@ -25,6 +34,18 @@
         "cache": false
       },
       "e2e-visual": {
+        "cache": false
+      },
+      "build-release:staging": {
+        "cache": false
+      },
+      "e2e-web:staging": {
+        "cache": false
+      },
+      "e2e-mobile:staging": {
+        "cache": false
+      },
+      "e2e-contract:staging": {
         "cache": false
       },
       "seed:fixtures": {
@@ -53,27 +74,6 @@
       },
       "measure:native": {
         "cache": false
-      },
-      "e2e-web:staging": {
-        "cache": false
-      },
-      "e2e-mobile:staging": {
-        "cache": false
-      },
-      "e2e-contract:staging": {
-        "cache": false
-      },
-      "build-release:staging": {
-        "cache": false
-      },
-      "check:runner": {
-        "cache": false
-      },
-      "check:browser": {
-        "cache": false
-      },
-      "check:headers": {
-        "cache": false
       }
     }
   },
@@ -84,16 +84,16 @@
     "check:browser": "node --import tsx --test staging/*.test.ts",
     "check:headers": "tsx staging/headers.ts",
     "e2e-web": "tsx runner/web.ts",
-    "e2e-extension": "tsx runner/extension.ts",
-    "e2e-pwa": "tsx runner/pwa.ts",
     "e2e-web:report": "tsx runner/web-report.ts",
+    "e2e-pwa": "tsx runner/pwa.ts",
+    "e2e-extension": "tsx runner/extension.ts",
     "e2e-mobile": "tsx runner/mobile.ts",
     "e2e-contract": "tsx runner/contract.ts",
     "e2e-visual": "tsx runner/visual.ts",
+    "build-release:staging": "tsx runner/release-build.ts",
     "e2e-web:staging": "E2E_ENVIRONMENT=staging tsx runner/web.ts",
     "e2e-mobile:staging": "E2E_ENVIRONMENT=staging tsx runner/mobile.ts",
     "e2e-contract:staging": "E2E_ENVIRONMENT=staging tsx runner/contract.ts",
-    "build-release:staging": "tsx runner/release-build.ts",
     "seed:fixtures": "tsx seed/fixtures.ts",
     "seed:accounts": "tsx seed/accounts.ts",
     "shot:preflight": "tsx shot/preflight.ts",

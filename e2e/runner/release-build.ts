@@ -16,7 +16,10 @@ import {
 
 const argv = process.argv.slice(2);
 if (argv.length !== 2 || argv[0] !== '--platform' || !['ios', 'android'].includes(argv[1])) {
-  throw new Error('usage: build-release:staging --platform ios|android');
+  throw new Error(
+    'usage: build-release:staging --platform ios|android ' +
+      '(`npm run e2e:build:staging:ios`, `e2e:build:staging:android`)',
+  );
 }
 const platform = argv[1] as 'ios' | 'android';
 const root = join(E2E_ROOT, '..');

@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { E2E_ROOT, runArtifactDir } from '../paths';
 import { API_URL, EXTRACTOR_URL, SITE_URL, WEB_URL } from '../web/fixtures/env';
 import { type NativeCliOptions, type NativePlatform } from './cli';
+import { resolveDevice } from './device';
 import { E2E_ENVIRONMENT, IS_STAGING } from './environment';
 import {
   createRunId,
@@ -17,7 +18,11 @@ import {
 } from './lib';
 import { capture } from './process';
 import { type E2ECase, readCaseRegistry } from './registry';
-import { assertInstalledRelease, type ReleaseReceipt } from './release-artifact';
+import {
+  assertInstalledRelease,
+  latestReleaseReceipt,
+  type ReleaseReceipt,
+} from './release-artifact';
 import { assertOriginOwnedByRepo, assertStackOwnedByRepo } from './stack';
 
 const APP_ID = 'com.bracemark.app';
@@ -143,7 +148,10 @@ function metroOrigin(devClientLink: string): string {
 }
 
 async function probeMetro(origin: string): Promise<void> {
-  await assertOriginOwnedByRepo(origin, 'Metro', { required: true });
+  await assertOriginOwnedByRepo(origin, 'Metro', {
+    required: true,
+    start: 'Start it with `npm run expo:start`',
+  });
   const response = await fetch(`${origin}/status`);
   const body = await response.text();
   if (!response.ok || !body.includes('packager-status:running')) {
@@ -404,13 +412,20 @@ export async function prepareNativeRun(
   options: NativeCliOptions,
   selectedCases: E2ECase[],
 ): Promise<NativeRun> {
+  // Receipt before device: a build comes before the device it is installed on.
+  const releasesDir = join(E2E_ROOT, '.artifacts', 'releases');
+  const receiptPath = !IS_STAGING
+    ? undefined
+    : (options.releaseReceipt ?? (await latestReleaseReceipt(releasesDir, options.platform)));
+  if (receiptPath && !options.releaseReceipt) {
+    console.log(`using the newest staging Release receipt: ${receiptPath}`);
+  }
+  const deviceId = await resolveDevice(options.platform, options.deviceId);
   const runId = createRunId(`${IS_STAGING ? 'staging-' : ''}${kind}-${options.platform}`);
   process.env.E2E_RUN_ID = runId;
   const runDir = runArtifactDir(runId);
   await mkdir(runDir, { recursive: true });
 
-  if (IS_STAGING && !options.releaseReceipt)
-    throw new Error('staging native runs require --release-receipt');
   const devClientLink = IS_STAGING
     ? undefined
     : (process.env.EXPO_DEV_CLIENT_LINK ?? DEFAULT_DEV_CLIENT_LINK);
@@ -434,16 +449,16 @@ export async function prepareNativeRun(
 
   const identity =
     options.platform === 'ios'
-      ? await iosDevice(options.deviceId)
+      ? await iosDevice(deviceId)
       : await androidDevice(
-          options.deviceId,
+          deviceId,
           IS_STAGING ? [] : requiresOnlineStack ? [8081, 8787, 8788] : [8081],
         );
   const release = IS_STAGING
     ? await assertInstalledRelease({
-        receiptPath: options.releaseReceipt as string,
+        receiptPath: receiptPath as string,
         platform: options.platform,
-        deviceId: options.deviceId,
+        deviceId,
         installPath: identity.app.installPath,
         workDir: runDir,
       })
@@ -504,7 +519,7 @@ export async function prepareNativeRun(
     runId,
     runDir,
     platform: options.platform,
-    deviceId: options.deviceId,
+    deviceId,
     device: identity.device,
     devClientLink,
     async runCase(testCase, env = {}, secretValues = [], steps = [testCase.path]) {
@@ -519,8 +534,7 @@ export async function prepareNativeRun(
       await writeJson(manifestPath, manifest);
 
       const caseDir = join(runDir, 'cases', testCase.id);
-      const hierarchy = () =>
-        maestroHierarchy({ platform: options.platform, deviceId: options.deviceId });
+      const hierarchy = () => maestroHierarchy({ platform: options.platform, deviceId });
 
       // One Maestro invocation per flow step. A single-flow case keeps the
       // original artifact names; a multi-step case numbers them. Only the
@@ -530,7 +544,7 @@ export async function prepareNativeRun(
         const suffix = steps.length === 1 ? '' : `-${index}`;
         const maestroOptions: MaestroOptions = {
           platform: options.platform,
-          deviceId: options.deviceId,
+          deviceId,
           env: {
             ...env,
             ...stepEnv,
@@ -573,7 +587,7 @@ export async function prepareNativeRun(
               ? step
               : await step({
                   platform: options.platform,
-                  deviceId: options.deviceId,
+                  deviceId,
                   caseDir,
                   index,
                   hierarchy,
@@ -587,7 +601,7 @@ export async function prepareNativeRun(
         try {
           const hierarchy = await maestroHierarchy({
             platform: options.platform,
-            deviceId: options.deviceId,
+            deviceId,
           });
           await writeFile(join(caseDir, 'hierarchy.txt'), hierarchy, 'utf8');
         } catch (hierarchyError) {
