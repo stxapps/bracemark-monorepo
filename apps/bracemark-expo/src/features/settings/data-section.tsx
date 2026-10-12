@@ -646,7 +646,8 @@ function ExportView({ onBack }: { onBack: () => void }) {
 // The one-line receipt under the delete button: a single spinner while running
 // (the wipe is one server call — no per-item progress to show), the count when
 // done, the failure when errored (the endpoint is idempotent, so the retry is
-// just tapping again).
+// just tapping again). `account-changed` is not that failure and does not borrow
+// its line — the web twin carries the note.
 function DeleteStatus({ state }: { state: DeleteAllState }) {
   if (state.phase === 'idle') return null;
 
@@ -667,6 +668,16 @@ function DeleteStatus({ state }: { state: DeleteAllState }) {
     return (
       <ErrorText className="mt-3" icon={CircleAlert}>
         Delete failed: {state.message} Nothing was removed from this device — please try again.
+      </ErrorText>
+    );
+  }
+
+  if (state.phase === 'account-changed') {
+    return (
+      <ErrorText className="mt-3" icon={CircleAlert}>
+        {state.serverWiped
+          ? 'All data was deleted for the account this screen was opened for. This device is no longer signed in to that account, so nothing stored on it was changed.'
+          : 'Nothing was deleted — the account signed in on this device changed while this screen was open. To delete this account’s data, go back and open this screen again.'}
       </ErrorText>
     );
   }
@@ -692,7 +703,8 @@ function DeleteView({ onBack }: { onBack: () => void }) {
   // Reveal the "tick the box first" nudge only after a tap without the box.
   const [nudge, setNudge] = useState(false);
   const running = state.phase === 'running';
-  const done = state.phase === 'done';
+  // Both end the view — the web twin carries the note.
+  const done = state.phase === 'done' || state.phase === 'account-changed';
 
   const onDelete = () => {
     if (!confirmed) {

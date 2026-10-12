@@ -93,6 +93,28 @@ export async function claimIfStillSignedIn(username: string): Promise<void> {
   });
 }
 
+// The delete-all-data reset (delete-all-data.ts), for a caller already inside a
+// transaction that includes db.syncMeta: back to the row seedNewAccount writes —
+// cursor `(0, '')`, `firstSyncDoneAt` now. NOT seedNewAccount itself, though the
+// row it leaves is the same: that one CREATES the row, and creating it is a claim,
+// which belongs under the lifecycle lock (beginInitialSync, above). This one
+// requires the row first — but its write is still a `put`, an upsert, so "rewrites,
+// never creates" holds ONLY inside the caller's transaction, where no teardown can
+// land between the check and the put. Called bare it is a check-then-put across two
+// transactions, and can create the row. The flow reaches it after a server call
+// that can be out for minutes, and a put from there would hand the store's
+// ownership back to an account another context had torn down meanwhile — after
+// which every fence keyed on that row accepts its stale writers again.
+export async function resetToSeededState(username: string): Promise<void> {
+  await assertAccountStillOwnsStore(username);
+  await db.syncMeta.put({
+    username,
+    syncCursorUpdatedAt: 0,
+    syncCursorPath: '',
+    firstSyncDoneAt: Date.now(),
+  });
+}
+
 // Sign-in path: call once the initial full pull has finished (all blobs
 // downloaded, decrypted, written). Atomic on purpose — only flip the flag after
 // the snapshot is complete, so an interrupted first sync stays "not done" and

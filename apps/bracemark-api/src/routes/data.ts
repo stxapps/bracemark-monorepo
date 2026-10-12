@@ -6,6 +6,7 @@ import { dataDeleteAllEndpoint, type DataDeleteAllResponse } from '@stxapps/shar
 import type { AppEnv } from '../lib/env';
 import { requireAuth } from '../middleware/auth';
 import { rateLimit, userRateLimitKey } from '../middleware/rate-limit';
+import { assertSessionAccount } from '../services/account';
 import { deleteAllUserData } from '../services/sync';
 
 // Data-lifecycle routes — the destructive whole-namespace actions beside the
@@ -22,7 +23,12 @@ export const dataRoutes = new Hono<AppEnv>()
     rateLimit('tight', userRateLimitKey),
     zValidator('json', dataDeleteAllEndpoint.request),
     async (c) => {
-      const { userId } = c.get('session');
+      const session = c.get('session');
+      const { userId } = session;
+      // The bind, BEFORE anything is touched: wipe only if this token's account
+      // is the one the client says it means (409 `account_mismatch` otherwise).
+      // The namespace below is still the token's, never one read from the body.
+      await assertSessionAccount(c.env, session, c.req.valid('json').username);
       // DO wipe first, then the paged R2 prefix delete — the ordering (and why
       // other devices converge via the fallback) is documented on the service.
       // The session, account rows, and subscription are untouched: this deletes

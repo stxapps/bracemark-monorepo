@@ -399,3 +399,81 @@ describe('the drain ends with the provider', () => {
     expect(mockPutFaviconNone).toHaveBeenCalledWith('alice', 'example.com');
   });
 });
+
+// The provider is NOT always unmounted between two accounts. Another tab signs out and
+// signs in as someone else, and this tab adopts the new session in place: one render hands
+// the same provider instance a different username, queue and all. The reset that drops the
+// previous account's queue is an effect, so it runs AFTER that render, and the pump can run
+// in between. In the app that is a timer (the drain's stagger, a row's settle); here it is
+// the asker's effect in the same commit (children first), which hands the pump the same
+// inputs. An owner read when a host LEAVES the queue is therefore the new account's, the store's
+// fence finds that account's ownership row, and the previous account's host is written
+// into the next account's cache — after the wipe that was meant to remove it, with nothing
+// reporting it. The store is mocked here, so what is pinned is what the provider ASKS the
+// store for and under whose name; the refusal itself is favicon-store.spec.ts's.
+describe('a queued host belongs to the account that asked for it', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+    mockReadFavicon.mockReset();
+    mockReadFavicon.mockResolvedValue(undefined);
+    mockUsername = 'alice';
+    mockServerExtraction = true;
+    mockFetchImage.mockReset();
+    mockFetchImage.mockImplementation(() => Promise.resolve(iconBytes));
+    mockPutFavicon.mockClear();
+    mockPutFaviconNone.mockClear();
+  });
+
+  afterEach(() => {
+    jest.clearAllTimers();
+    jest.useRealTimers();
+  });
+
+  // Every write the provider asked the store for, as [account, host].
+  const writes = () =>
+    [...mockPutFavicon.mock.calls, ...mockPutFaviconNone.mock.calls].map(([username, host]) => [
+      username,
+      host,
+    ]);
+
+  it('neither fetches nor writes the previous account’s queue for the next one', async () => {
+    const { rerender } = await mount(HOSTS);
+    const burst = fetched();
+    // The first burst is answered and written, and the cap held a tail back: still queued,
+    // admitted by alice, with slots free. That is the state the switch has to find.
+    expect(burst.length).toBeGreaterThan(0);
+    expect(burst.length).toBeLessThan(HOSTS.length);
+    expect(writes()).toEqual(burst.map((host) => ['alice', host]));
+
+    // The switch, and in the same commit a row of the new account's asks for its own host —
+    // which pumps before the provider's effect has dropped alice's tail.
+    mockUsername = 'bob';
+    await act(async () => void rerender(tree([...HOSTS, 'bobs.example'])));
+    await drain();
+
+    // Not one of alice's queued hosts went to the extractor after she was gone, and bob's
+    // own request was not lost behind them: it is the positive control for both lines.
+    expect(fetched()).toEqual([...burst, 'bobs.example']);
+    expect(writes().filter(([username]) => username !== 'alice')).toEqual([
+      ['bob', 'bobs.example'],
+    ]);
+  });
+
+  // The other half of the same rule: a fetch already out when the account changes is still
+  // the asker's. Its write has to carry the account that admitted it, because that is the
+  // name the store's fence refuses — handed the account signed in when the answer lands,
+  // the fence would wave it through.
+  it('addresses a write to the account that asked, not the one signed in when it lands', async () => {
+    const answers: ((bytes: typeof iconBytes) => void)[] = [];
+    mockFetchImage.mockImplementation(() => new Promise((resolve) => void answers.push(resolve)));
+    const { rerender } = await mount(['example.com']);
+    expect(answers).toHaveLength(1);
+
+    mockUsername = 'bob';
+    await act(async () => void rerender(tree(['example.com'])));
+    answers[0]?.(iconBytes);
+    await drain();
+
+    expect(writes().map(([username]) => username)).toEqual(['alice']);
+  });
+});

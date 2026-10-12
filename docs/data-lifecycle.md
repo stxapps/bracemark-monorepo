@@ -1343,7 +1343,8 @@ may sync back afterward").
    user-blocking action, not of waiting. `awaitInflightSync` itself never
    rejects, and it also serves the browser extension's background worker, which
    has no UI to report a timeout to.
-2. Call the endpoint. Nothing local is touched until the server confirms.
+2. Call the endpoint, **naming the account** (below). Nothing local is touched
+   until the server confirms.
 3. Wipe the local **synced** stores: `items`, the decode cache, and `locks`
    (they guard lists that no longer exist — the same reset sign-out applies).
    On expo, the bare whole-table deletes then explicitly invalidate the affected
@@ -1353,10 +1354,103 @@ may sync back afterward").
    above), and deliberately does **not** sweep the cache directory. The successful hook also calls
    `requestSync`, whose local-write nonce makes a links screen still mounted and
    scrolled behind Settings promote the empty result immediately.
-4. `seedNewAccount` — cursor back to `(0, '')` with `firstSyncDoneAt` now.
-   Semantically exact: an empty local store _is_ the complete snapshot of the
-   wiped namespace, the same reasoning that lets create-account seed instead of
-   pulling.
+4. Reset the sync bookkeeping — cursor back to `(0, '')` with `firstSyncDoneAt`
+   now, the row `seedNewAccount` writes. Semantically exact: an empty local
+   store _is_ the complete snapshot of the wiped namespace, the same reasoning
+   that lets create-account seed instead of pulling.
+
+**⚠ The table deletes of step 3 and the reset of step 4 are one transaction,
+fenced on the account, and the reset runs first because it is the fence.** The
+transaction holds the reset and the deletes of `items`, `locks` and the
+`favicons` cache (on expo the two junction tables too); the rest of step 3 — the
+decode cache, and on expo the invalidation, the scrub and the file sweeps — runs
+after it, and only if it committed. Step 2 pages the whole namespace and can be out for minutes, and
+the session can end under it — on web another tab signs out, or signs in as
+someone else. `items`, `locks` and `favicons` have no owner column,
+so a local half that ran blind would empty the **next** account's library while
+that account's cursor still said the store was complete (on expo, sweep its
+files too), and then write the previous account's ownership row back beside the
+new one — the row every stale writer of that account is fenced on
+([sessions.md](./sessions.md), _concurrent requests and shared local state_).
+So the reset is not `seedNewAccount`, which _creates_ the row: it is
+`resetToSeededState` (`resetToSeededStateTx` on expo), which only rewrites a row
+that is still there and throws `AccountFencedError` otherwise, run first inside
+the transaction that wipes the tables. That transaction shares its scope with
+the teardown's, so the two are ordered: this one lands first and the teardown
+wipes what it left, or the teardown's clear lands first and this one finds no
+row and throws with nothing touched — and on expo the file sweeps after it never
+run. Nothing reports the unfenced version: the delete "succeeds", and the damage
+is in an account that was not on screen.
+
+The fence is the row, and the row is keyed on the username, not on the session.
+Two orderings therefore still pass it, both on the starting account's own data
+and neither reaching another account: the **same** username signs out and back
+in while the call is out (the run wipes what the new session has pulled and
+marks its first sync done), and a teardown whose clear failed after the session
+record was gone, which leaves the row (the run wipes the leftovers; the next
+sign-in must complete that clear before it claims, so the row cannot outlive
+it). And `resetToSeededState` on web is a check followed by a `put`: "rewrites,
+never creates" is a property of the transaction it is called in, not of the
+function, where expo's is an `UPDATE` and holds on its own.
+
+**⚠ The request names the account, and the server checks the name.** The body
+is `{ username }` — the account the run was started for, captured at the click.
+It does not pick the namespace: that is still the bearer token's, and the server
+never takes a user id from a body. It is there because the token cannot say
+whose data the user _meant_. The client attaches whichever session is current
+when a request **leaves** (`lib/auth-api-client.ts` reads it then), and step 1
+can wait two minutes before step 2 sends — long enough for the account to change
+under the flow (on web another tab signs in as someone else and this one adopts
+the session in place). Unbound, that request would carry the **next** account's
+token and empty its namespace, irreversibly, on a confirmation the previous
+account gave; the fence above would then refuse the local half, and that
+account's devices would converge to empty through the fallback. So the route
+resolves the name through the username directory and wipes only when it is the
+session's own account (`assertSessionAccount`, `services/account.ts` — the
+comparison the door rotations make, minus the proof), answering 409
+`account_mismatch` otherwise with nothing touched. One answer for every way it
+can fail — no such name, a deleted account's, somebody else's — so it says
+nothing about which usernames exist.
+
+The check is on the server because that is where the wipe is. A client-side
+"compare the session, then send" is correct only while nothing between the
+comparison and the token read awaits — a property of three files that no test
+states and nothing would report the day one of them gains an `await`. A body
+with no name is refused (400): a client from before the field fails closed
+rather than wiping unbound. Two consequences of putting it in the contract: the
+bind exists only on a server that has the route, so **the API deploys before the
+clients** (an older server drops the field and wipes unbound, and the client
+cannot tell); and the field is `usernameSchema`, the rule sign-in already
+applies, so a name that rule rejects cannot send the request at all.
+
+**An account change is its own outcome, not a failed delete.** Both flows throw
+shared's `DeleteAllAccountChangedError` for the two ways a run can find the
+account gone, and the hook turns it into the `account-changed` state:
+
+| `serverWiped` | what happened                                                                                                                                   | what the view says                                    |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| `false`       | the server refused the name (the token at dispatch was another account's), or the hook refused the run before sending (the view's guard, below) | nothing was deleted; open the view again              |
+| `true`        | the server wiped the account that asked, then the fence refused the local half                                                                  | that account's data is deleted; this device untouched |
+
+"Nothing" in both rows is about the wipe: step 1 has already abandoned the
+account's unsynced queue by the time either can happen.
+
+It is terminal, like `done`: the button and the tick are disabled. The ordinary
+`error` line — "nothing was removed from this device, please try again" — is
+false for the second row and dangerous for both, because "again" would act on
+whoever is signed in now.
+
+The view carries a second, weaker guard of its own: the hook remembers the
+account it was **opened** for and refuses a run while `username` is any other,
+so a tick given under one account, or a retry offered to it, does not start a
+wipe for the account that replaced it. Captured at mount rather than at the
+first run — by then the tick may already be the previous account's. It is a
+guard on the view, **not the bind**, and it is weaker in two ways: it compares
+names, so a view opened for A is live again after A → B → A with whatever tick
+it held; and it reads React state, which trails the session the request is
+signed with, so a click in that gap starts a run the server then refuses. On
+expo it is defensive: every account change there passes through a teardown that
+unmounts the view.
 
 What survives, and why: the **session** (staying signed in is the point — this
 is the "start over" action, not the "leave" action), the **cached subscription

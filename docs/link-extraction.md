@@ -483,7 +483,15 @@ decisions, each deliberate:
   are **fenced on the account** (the table has no owner column to notice with),
   and the provider's **drain ends when it unmounts** — it used to run on through
   its queue after a sign-out, requesting the signed-out account's hosts and
-  writing them back. On every client, though a browser tab never showed it:
+  writing them back. A third, for the account switch that does **not** unmount
+  the provider (on web, another tab signs in as someone else and this one
+  adopts the session in place): each queued host carries **the account signed
+  in when it was admitted**, stamped as it joins the queue. The queue's reset on a new username is
+  an effect, so it runs after the render that already changed the account, and
+  an owner read as a host _left_ the queue was the new account's — which the
+  store's fence accepts. A leftover entry is now dropped unfetched, and a fetch
+  already out is written under the name the fence refuses. The unmount half
+  holds on every client, though a browser tab never showed it:
   sign-out there leaves the origin and the document goes with the queue, where
   the installed app and expo both stay
   ([data-lifecycle.md](./data-lifecycle.md), _what an empty table does not

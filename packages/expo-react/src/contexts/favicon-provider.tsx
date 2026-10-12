@@ -108,7 +108,10 @@ export function FaviconProvider({ children }: { children: ReactNode }) {
   // Each entry carries WHY it was queued, because that's what decides whether the
   // opt-in still applies when it reaches the front (see the header's two entry
   // points) — a gestured host must survive an opt-in that is, and stays, off.
-  const queueRef = useRef<{ host: string; gestured: boolean }[]>([]);
+  // And the account signed in when the host was ADMITTED, which is the only
+  // account it may be fetched or written for (the pump below) — this provider's
+  // account as of its latest render, not the account whose link the caller holds.
+  const queueRef = useRef<{ host: string; gestured: boolean; owner: string }[]>([]);
   // Queued or in flight — the single-flight guard, shared by both entry points so
   // a host asked for twice is fetched once. A host stays here after it resolves:
   // the row (`ok` or `none`) is the durable answer, so re-asking is pointless, and
@@ -132,8 +135,9 @@ export function FaviconProvider({ children }: { children: ReactNode }) {
     handledRef.current.clear();
   }, [username]);
 
-  // The account the drain writes for, read at write time (the pump below is
-  // identity-stable, so it can't close over a render's value).
+  // The account signed in as of the latest render: stamped onto a host as it is
+  // admitted, and compared with that stamp as its entry reaches the front (the
+  // pump below is identity-stable, so it can't close over a render's value).
   const usernameRef = useRef(username);
   usernameRef.current = username;
 
@@ -177,14 +181,32 @@ export function FaviconProvider({ children }: { children: ReactNode }) {
     while (inFlightRef.current < MAX_IN_FLIGHT && queueRef.current.length > 0) {
       const entry = queueRef.current.shift();
       if (entry === undefined) return;
-      const { host, gestured } = entry;
+      // `owner` is the account that ADMITTED this host — not whoever is signed
+      // in as it reaches the front, and not whoever is signed in when the answer
+      // lands. A render can hand this provider a different account without an
+      // unmount, and the reset above is an EFFECT: it runs after the render that
+      // already moved `usernameRef`, and a timer can pump in between — this
+      // drain's own stagger, or a row's settle (use-favicon-uri.ts). An owner
+      // read HERE would be the new account's, whose ownership row the store's
+      // fence accepts
+      // (data/favicon-store.ts): the previous account's host, fetched from this
+      // device and written into the next account's cache.
+      const { host, gestured, owner } = entry;
       inFlightRef.current += 1;
-      // The account this entry is fetched for: whoever is signed in as it
-      // reaches the front. Captured before the request so the write is fenced
-      // on THAT account, not on whoever is signed in when the answer lands.
-      const owner = usernameRef.current;
       void (async () => {
         try {
+          if (usernameRef.current !== owner) {
+            // Left over from the previous account (above). A gestured entry is
+            // NOT exempt — its licence was a save by the account that made it.
+            // Dropped at once, ahead of the cache read, so it holds its slot no
+            // longer than this call: with slots free, a request the new account
+            // makes before the reset runs is pumped now, where it would otherwise
+            // wait behind a full burst of these and be swept by the reset. (With
+            // every slot held by requests still out, it is swept all the same.)
+            // Forgotten, so that account can ask for the host itself.
+            handledRef.current.delete(host);
+            return;
+          }
           if (!gestured && !enabledRef.current) {
             // Switched off mid-queue: forget the host so turning the opt-in
             // back on can re-ask, and write no row (a `none` here would be a
@@ -194,7 +216,7 @@ export function FaviconProvider({ children }: { children: ReactNode }) {
             handledRef.current.delete(host);
             return;
           }
-          if (stoppedRef.current || !owner) return;
+          if (stoppedRef.current) return;
           // Re-check under the single-flight guard: an earlier request may have
           // resolved this host since it was queued.
           const existing = await readFavicon(host);
@@ -233,9 +255,11 @@ export function FaviconProvider({ children }: { children: ReactNode }) {
   const requestFavicon = useCallback(
     (host: string) => {
       if (!enabled || host === '') return;
+      const owner = usernameRef.current;
+      if (!owner) return;
       if (handledRef.current.has(host)) return;
       handledRef.current.add(host);
-      queueRef.current.push({ host, gestured: false });
+      queueRef.current.push({ host, gestured: false, owner });
       pump();
     },
     [enabled, pump],
@@ -246,12 +270,13 @@ export function FaviconProvider({ children }: { children: ReactNode }) {
   // usable from ShareBridge's effect deps.
   const requestFaviconNow = useCallback(
     (hosts: string[]) => {
-      if (offRef.current) return;
+      const owner = usernameRef.current;
+      if (offRef.current || !owner) return;
       let queued = false;
       for (const host of hosts) {
         if (host === '' || handledRef.current.has(host)) continue;
         handledRef.current.add(host);
-        queueRef.current.push({ host, gestured: true });
+        queueRef.current.push({ host, gestured: true, owner });
         queued = true;
       }
       if (queued) pump();

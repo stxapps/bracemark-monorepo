@@ -9,6 +9,11 @@
 // deleted library's preview images on disk — plaintext, with no rows pointing at them, on a
 // device the user believes they have just emptied.
 //
+// And a fifth, web's fourth: WHOSE STORE IT IS BY THE TIME THE SERVER ANSWERS. The call can
+// be out for minutes and the session can end under it. Neither the tables nor the files have
+// an owner, so the local half has to ask before it wipes, and must never be what puts a
+// departed account's ownership row back.
+//
 // The survivor set is the interesting half here: the session, the cached subscription, the
 // device settings AND the sidebar view all live through this, because it deletes the user's
 // DATA, not their account or this device's preferences. clear-data.spec.ts asserts the same
@@ -18,12 +23,16 @@ import { sql } from 'drizzle-orm';
 
 import {
   type ApiClient,
+  ApiError,
+  DATA_DELETE_ALL_ERROR,
   dataDeleteAllEndpoint,
+  DeleteAllAccountChangedError,
   LINKS_PREFIX,
   pathFromId,
   utf8,
 } from '@stxapps/shared';
 
+import { clearData } from './clear-data';
 import { getDb } from './db';
 import { deleteAllData } from './delete-all-data';
 import { faviconFileFor, putFavicon } from './favicon-store';
@@ -36,7 +45,13 @@ import { toItemRecord } from './projection';
 import { readReviewPromptState, writeReviewPromptState } from './review-prompt-store';
 import { readSidebarCollapsedIds, writeSidebarCollapsedIds } from './sidebar-view-store';
 import { readCachedStatus, writeCachedStatus } from './subscription-store';
-import { beginInitialSync, getSyncMeta, isFirstSyncDone, markFirstSyncDone } from './sync-store';
+import {
+  beginInitialSync,
+  getSyncMeta,
+  isFirstSyncDone,
+  markFirstSyncDone,
+  seedNewAccount,
+} from './sync-store';
 
 jest.mock('expo-sqlite', () => require('../testing/node-sqlite'));
 jest.mock('expo-file-system', () => require('../testing/memory-file-system'));
@@ -61,6 +76,9 @@ jest.mock('../sync/engine', () => ({
 jest.mock('./live-read-invalidation', () => ({
   invalidateLiveReads: (tables: readonly string[]) => mockInvalidateLiveReads(tables),
 }));
+// The teardown's native half (the App Group artifacts): the account-switch cases below run
+// the real clearData, and this is the one member of it with no stand-in under jest.
+jest.mock('./share-store', () => ({ clearShareData: () => undefined }));
 
 const { resetFileSystem, listFileUris } = require('../testing/memory-file-system') as {
   resetFileSystem: () => void;
@@ -68,7 +86,9 @@ const { resetFileSystem, listFileUris } = require('../testing/memory-file-system
 };
 
 const USER = 'alice';
+const NEXT_USER = 'bob';
 const LINK_PATH = pathFromId('l_1', LINKS_PREFIX);
+const NEXT_LINK_PATH = pathFromId('l_2', LINKS_PREFIX);
 
 function apiThat(answer: () => Promise<{ deletedCount: number }>): ApiClient {
   return {
@@ -144,6 +164,7 @@ beforeEach(() => {
 
 describe('deleteAllData', () => {
   it('reports the server’s receipt, zero included', async () => {
+    await seedNewAccount(USER);
     expect(
       await deleteAllData({ username: USER, api: apiThat(async () => ({ deletedCount: 42 })) }),
     ).toEqual({ deletedCount: 42 });
@@ -172,6 +193,7 @@ describe('deleteAllData', () => {
 
   it('reports the safety wait separately from the server and local wipe', async () => {
     const steps: string[] = [];
+    await seedNewAccount(USER);
     mockAwaitInflightSync.mockImplementation(async (_username, onWait) => {
       onWait?.();
     });
@@ -289,5 +311,151 @@ describe('deleteAllData', () => {
     const meta = await getSyncMeta(USER);
     expect(await isFirstSyncDone(USER)).toBe(true);
     expect([meta?.syncCursorUpdatedAt, meta?.syncCursorPath]).toEqual([0, '']);
+  });
+
+  // The request carries a NAME because the token cannot say whose data the user meant: the
+  // client attaches whichever session is current as the request leaves, and this flow waits
+  // on a sync before it sends. With the name in the body the server wipes only for the
+  // account that asked (shared's data/endpoints.ts; the route's own spec pins the refusal).
+  describe('the account the request names', () => {
+    it('names the account the run was started for', async () => {
+      await seedSignedInAccountWithData();
+      const api = apiThat(async () => ({ deletedCount: 1 }));
+
+      await deleteAllData({ username: USER, api });
+
+      expect(api.call).toHaveBeenCalledWith(dataDeleteAllEndpoint, { username: USER });
+    });
+
+    // The account changed before the request left, so it went out under another account's
+    // token and the server refused it. Nothing was wiped, on the server or here — which is a
+    // different thing to tell the user than "the delete failed, try again".
+    it('reports a refused name as an account change with nothing deleted', async () => {
+      await seedSignedInAccountWithData();
+      const api = apiThat(() =>
+        Promise.reject(
+          new ApiError(409, JSON.stringify({ error: DATA_DELETE_ALL_ERROR.accountMismatch })),
+        ),
+      );
+
+      const err = await deleteAllData({ username: USER, api }).catch((e: unknown) => e);
+
+      expect(err).toBeInstanceOf(DeleteAllAccountChangedError);
+      expect((err as DeleteAllAccountChangedError).serverWiped).toBe(false);
+      expect(countOf('items')).toBe(1);
+      expect(countOf('locks')).toBe(1);
+      const meta = await getSyncMeta(USER);
+      expect([meta?.syncCursorUpdatedAt, meta?.syncCursorPath]).toEqual([500, LINK_PATH]);
+    });
+
+    // The CODE decides, not the status: any other 409 is an ordinary failed call, which the
+    // user may retry.
+    it('leaves any other refusal an ordinary failure', async () => {
+      await seedSignedInAccountWithData();
+      const api = apiThat(() =>
+        Promise.reject(new ApiError(409, JSON.stringify({ error: 'something_else' }))),
+      );
+
+      const err = await deleteAllData({ username: USER, api }).catch((e: unknown) => e);
+
+      expect(err).toBeInstanceOf(ApiError);
+    });
+  });
+
+  // THE ACCOUNT SWITCH UNDER THE SERVER CALL — web's sibling carries the case. The session
+  // ends while the request is still paging the namespace and someone else signs in; then the
+  // answer arrives and the local half runs in a store that is no longer this account's. Run
+  // blind it empties the NEXT account's library while that account's cursor still says the
+  // store is complete, sweeps its files, and writes the previous account's ownership row
+  // back beside the new one — the row every stale writer of that account is fenced on. The
+  // wipe, file and reset cases above are the positive control: the same flow, with the
+  // account still there, does all three.
+  describe('when the account was switched while the server call was out', () => {
+    const switchedUnderTheCall = (): ApiClient =>
+      apiThat(async () => {
+        // What a sign-out and the next sign-in leave behind, in their order: the teardown,
+        // then the next account's claim, its first pulled row and what this device made
+        // of it.
+        await clearData();
+        await beginInitialSync(NEXT_USER);
+        await markFirstSyncDone(NEXT_USER, 700, NEXT_LINK_PATH);
+        getDb().transaction((tx) => {
+          putItemsTx(tx, [
+            toItemRecord(
+              NEXT_LINK_PATH,
+              2,
+              utf8(
+                JSON.stringify({
+                  url: 'https://next.example/a',
+                  listId: 'my-list',
+                  tagIds: ['t_2'],
+                  createdAt: 2,
+                  updatedAt: 2,
+                }),
+              ),
+            ),
+          ]);
+        });
+        await putLock({ id: 'app', kind: 'app', salt: 'cc', hash: 'dd' });
+        await putFavicon(NEXT_USER, 'next.example', new Uint8Array([4, 5, 6]));
+        ensureDataFilesDir();
+        dataFileFor('files/f_2.enc').write('the next account’s preview bytes');
+        return { deletedCount: 1 };
+      });
+
+    // And says which refusal it was: by now the server HAS wiped the account that asked, so
+    // this is neither a finished delete nor a failed one, and the fence's own error (a sync
+    // error) would read as the second.
+    it('refuses the local half, as an account change after the server wipe', async () => {
+      await seedSignedInAccountWithData();
+
+      const err = await deleteAllData({ username: USER, api: switchedUnderTheCall() }).catch(
+        (e: unknown) => e,
+      );
+
+      expect(err).toBeInstanceOf(DeleteAllAccountChangedError);
+      expect((err as DeleteAllAccountChangedError).serverWiped).toBe(true);
+    });
+
+    it('does not put the departed account’s ownership row back', async () => {
+      await seedSignedInAccountWithData();
+
+      await deleteAllData({ username: USER, api: switchedUnderTheCall() }).catch(() => undefined);
+
+      expect(await getSyncMeta(USER)).toBeUndefined();
+      expect(countOf('sync_meta')).toBe(1);
+    });
+
+    it('leaves the next account’s rows, files and cursor as they were', async () => {
+      await seedSignedInAccountWithData();
+
+      await deleteAllData({ username: USER, api: switchedUnderTheCall() }).catch(() => undefined);
+
+      expect(countOf('items')).toBe(1);
+      expect(countOf('item_tag_ids')).toBe(1);
+      expect(countOf('locks')).toBe(1);
+      expect(countOf('favicons')).toBe(1);
+      // The file sweeps are no more account-scoped than the tables.
+      expect(dataFileFor('files/f_2.enc').exists).toBe(true);
+      expect(faviconFileFor('next.example').exists).toBe(true);
+      const meta = await getSyncMeta(NEXT_USER);
+      expect([meta?.syncCursorUpdatedAt, meta?.syncCursorPath]).toEqual([700, NEXT_LINK_PATH]);
+    });
+
+    // A sign-out with nobody signing in after it is the same question with one fewer row:
+    // the store belongs to no one, and this flow must not be what claims it.
+    it('claims nothing when the account only signed out', async () => {
+      await seedSignedInAccountWithData();
+      const api = apiThat(async () => {
+        await clearData();
+        return { deletedCount: 1 };
+      });
+
+      await expect(deleteAllData({ username: USER, api })).rejects.toBeInstanceOf(
+        DeleteAllAccountChangedError,
+      );
+
+      expect(countOf('sync_meta')).toBe(0);
+    });
   });
 });

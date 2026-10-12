@@ -39,7 +39,7 @@ function putSyncMeta(record: SyncMetaRecord): void {
 // Account-creation path: no server data to pull (a brand-new account is empty
 // by definition), so the first sync is marked done immediately with an empty
 // `(0, '')` cursor — what lets create-account render instantly with no network
-// round-trip (see web-react sync-store.ts). Also the delete-all-data reset.
+// round-trip (see web-react sync-store.ts).
 export async function seedNewAccount(username: string): Promise<void> {
   putSyncMeta({
     username,
@@ -101,6 +101,22 @@ export async function claimIfStillSignedIn(username: string): Promise<void> {
     const persisted = await loadSession();
     if (persisted?.username === username) await beginInitialSync(username);
   });
+}
+
+// The delete-all-data reset, inside the caller's transaction (delete-all-data.ts,
+// which wipes the synced tables in the same one): back to the row seedNewAccount
+// writes — cursor `(0, '')`, `firstSyncDoneAt` now. NOT seedNewAccount itself: that
+// one CREATES the row, which is a claim and belongs under the lifecycle lock. This
+// only rewrites a row that is still there (an UPDATE cannot insert), so a run whose
+// account was torn down under its server call throws instead of handing the store
+// back to it (web's sync-store carries the reasoning). The row is keyed on the
+// username, not the session: the SAME account signing back in meanwhile passes.
+export function resetToSeededStateTx(tx: DbTx, username: string): void {
+  assertAccountOwnsStoreTx(tx, username);
+  tx.update(syncMeta)
+    .set({ syncCursorUpdatedAt: 0, syncCursorPath: '', firstSyncDoneAt: Date.now() })
+    .where(eq(syncMeta.username, username))
+    .run();
 }
 
 // Sign-in path: call once the initial full pull has finished (all blobs

@@ -412,7 +412,12 @@ In-flight completions are fenced **in the database**, not by
 aborting fetches: every pulled write re-checks, inside its own transaction, that
 the account's sync bookkeeping row still exists (`AccountFencedError`,
 `data/sync-store.ts`). Local entity writes, imports, and commit restamps check
-the same ownership. The row is claimed only under the lifecycle lock and only
+the same ownership, and so does the local half of delete-all-data, which runs
+after a server call long enough for the account to have changed under it: it
+wipes and resets the bookkeeping in one transaction that first requires the row,
+and it rewrites that row rather than creating it
+([data-lifecycle.md](./data-lifecycle.md), _delete all data_). The row is
+claimed only under the lifecycle lock and only
 for the persisted account: by `setSession` before it exposes the session, and —
 for a session an older build adopted without one — by the sync provider just
 before a first pull (`claimIfStillSignedIn`), which re-reads the record and

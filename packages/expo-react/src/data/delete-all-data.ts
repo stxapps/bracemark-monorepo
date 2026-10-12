@@ -10,10 +10,13 @@
 
 import {
   type ApiClient,
+  apiErrorCode,
   clearDecodeCache,
+  DATA_DELETE_ALL_ERROR,
   dataDeleteAllEndpoint,
   DEFAULT_CALL_TIMEOUT_MS,
   DEFAULT_RETRY_MAX_DELAY_MS,
+  DeleteAllAccountChangedError,
   withTimeout,
 } from '@stxapps/shared';
 
@@ -31,7 +34,7 @@ import { clearFaviconFiles } from './favicon-store';
 import { clearDataFiles } from './file-store';
 import { invalidateLiveReads } from './live-read-invalidation';
 import { clearPendingOps } from './pending-store';
-import { seedNewAccount } from './sync-store';
+import { AccountFencedError, resetToSeededStateTx } from './sync-store';
 
 export type DeleteAllOutcome = {
   // R2 objects the server removed — the receipt line. 0 is a valid outcome.
@@ -82,7 +85,21 @@ export async function deleteAllData(args: {
   // The server wipe — idempotent, so a failure here leaves everything retryable
   // and nothing local has been touched yet (the local wipe below only runs after
   // the server confirms).
-  const { deletedCount } = await api.call(dataDeleteAllEndpoint, {});
+  //
+  // It NAMES the account, and that is what binds it: `username` was captured at
+  // the tap, the bearer token is attached as the request leaves, and the server
+  // wipes only if the token's account is the one named — so a session that became
+  // someone else's during the waits above is refused instead of losing its
+  // namespace (the web sibling and shared's data/endpoints.ts carry the reasoning).
+  let deletedCount: number;
+  try {
+    ({ deletedCount } = await api.call(dataDeleteAllEndpoint, { username }));
+  } catch (e) {
+    if (apiErrorCode(e) === DATA_DELETE_ALL_ERROR.accountMismatch) {
+      throw new DeleteAllAccountChangedError(false);
+    }
+    throw e;
+  }
 
   // Local synced state, wiped to match the (now empty) server: the decrypted
   // items (rows + their junction tables + the on-disk plaintext blobs), their
@@ -90,13 +107,37 @@ export async function deleteAllData(args: {
   // exist — same reset clearData applies). The favicon cache goes too: it isn't
   // synced state, but it's derived FROM the wiped links, so leaving it would
   // let the deleted library's hosts be read back off the device (web's rule).
-  getDb().transaction((tx) => {
-    tx.delete(items).run();
-    tx.delete(itemTagIds).run();
-    tx.delete(itemFacetStatuses).run();
-    tx.delete(locks).run();
-    tx.delete(favicons).run();
-  });
+  //
+  // And the sync bookkeeping, reset to the seeded-new-account state: cursor
+  // (0, '') with firstSyncDoneAt now — semantically exact, because an empty local
+  // store IS the complete snapshot of the wiped namespace (the same reasoning
+  // that lets create-account seed instead of pulling). The next cycle is one
+  // empty ops/list call, not a re-download.
+  //
+  // ONE TRANSACTION, FENCED ON THE ACCOUNT, and the reset goes first because it
+  // is the fence (sync-store.ts): the call above can be out for minutes, and a
+  // session that ended under it may have been followed by another account's
+  // sign-in. None of these tables has an owner column, so run blind this would
+  // empty the NEXT account's library and then write the previous account's
+  // ownership row back beside the new one (the web sibling spells it out). A
+  // throw here also skips everything below, which is the point: the file sweeps
+  // are no more account-scoped than the tables.
+  //
+  // A refusal is reported as what it is: by here the server HAS wiped the account
+  // that asked, and the fence's own error is a sync error (the web sibling).
+  try {
+    getDb().transaction((tx) => {
+      resetToSeededStateTx(tx, username);
+      tx.delete(items).run();
+      tx.delete(itemTagIds).run();
+      tx.delete(itemFacetStatuses).run();
+      tx.delete(locks).run();
+      tx.delete(favicons).run();
+    });
+  } catch (e) {
+    if (e instanceof AccountFencedError) throw new DeleteAllAccountChangedError(true);
+    throw e;
+  }
   // "Delete all data" has to mean the file too, not just the tables (db.ts).
   scrubFreedPages();
   clearDataFiles();
@@ -115,13 +156,6 @@ export async function deleteAllData(args: {
   // invalidate once after the transaction instead of turning a large wipe
   // into one native event per deleted row.
   invalidateLiveReads(['items', 'item_tag_ids', 'item_facet_statuses', 'locks', 'favicons']);
-
-  // Reset the sync bookkeeping to the seeded-new-account state: cursor (0, '')
-  // with firstSyncDoneAt now — semantically exact, because an empty local store
-  // IS the complete snapshot of the wiped namespace (the same reasoning that
-  // lets create-account seed instead of pulling). The next cycle is one empty
-  // ops/list call, not a re-download.
-  await seedNewAccount(username);
 
   return { deletedCount };
 }

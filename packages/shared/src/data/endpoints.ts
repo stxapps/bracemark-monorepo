@@ -1,4 +1,5 @@
 import { API_V1, defineEndpoint } from '../api/endpoint';
+import { usernameSchema } from '../auth/credentials';
 import { z } from '../zod';
 
 // Data-lifecycle endpoint contracts — the destructive, whole-namespace actions
@@ -21,11 +22,33 @@ import { z } from '../zod';
 // authoritative fallback against the now-empty R2 listing (see the routing
 // table in docs/local-first-sync.md — "the ops/list endpoint").
 //
-// No request fields: the namespace to wipe is the authenticated user's (the
-// bearer token names it), so the body is empty. An object schema (rather than
-// nothing) keeps the contract uniform — the client still sends `{}` as JSON.
-export const dataDeleteAllRequestSchema = z.object({});
+// One request field, and it is not what picks the namespace: that is still the
+// authenticated user's (the bearer token names it — the server never takes a
+// user id from a body). `username` is the account the caller MEANS, and the
+// server wipes only when the token's account is that one, answering 409
+// `account_mismatch` otherwise with nothing touched.
+//
+// The token alone can't say that. A client attaches whichever session is current
+// when the request LEAVES, and the flow that sends this one decided to delete
+// for the account on screen at the click — then waits on an in-flight sync
+// before it sends, long enough for the account to change under it (on web
+// another tab signs in as someone else and this one adopts the session in
+// place). Unbound, that request carries the NEXT account's token and empties its
+// namespace, irreversibly, on a confirmation the previous account gave. So the
+// name travels with the request and the check sits where the wipe is — not in
+// the client, where "compare, then send" is only safe while nothing between the
+// two ever awaits. docs/data-lifecycle.md, _delete all data_.
+export const dataDeleteAllRequestSchema = z.object({
+  username: usernameSchema,
+});
 export type DataDeleteAllRequest = z.infer<typeof dataDeleteAllRequestSchema>;
+
+// The one code of its own this endpoint answers (409): the token's account is
+// not the one the body names. Clients branch on the CODE, never the status
+// (`apiErrorCode`, api/client.ts).
+export const DATA_DELETE_ALL_ERROR = {
+  accountMismatch: 'account_mismatch',
+} as const;
 
 // `deletedCount` is the number of R2 objects removed — the receipt line the
 // settings UI shows. 0 is a valid outcome (nothing stored), not an error.

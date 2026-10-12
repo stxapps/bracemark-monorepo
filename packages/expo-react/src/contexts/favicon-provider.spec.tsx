@@ -389,3 +389,96 @@ describe('the drain ends with the provider', () => {
     expect(mockPutFaviconNone).not.toHaveBeenCalled();
   });
 });
+
+// Nothing in the provider requires an unmount between two accounts: a render can hand the
+// same instance a different username, queue and all. On web another tab produces that
+// (web's spec carries the case). Whether expo's own auth flow ever does is not shown —
+// its teardown passes through a signed-out state, and the signed-in form locks the
+// username — so this holds the same shape to the same rule rather than reproducing a path.
+// The reset that drops the previous account's queue is an effect, so it runs AFTER that
+// render, and the pump can run in between: a timer in the app, the asker's effect in the
+// same commit (children first) here. An owner read when a host LEAVES the queue would then
+// be the new account's, the store's fence would find that account's ownership row, and the
+// previous account's host would be fetched from this device and written into the next
+// account's cache, file and all. The store is mocked here, so what is pinned is what the
+// provider ASKS the store for and under whose name; the refusal is favicon-store.spec.ts's.
+describe('a queued host belongs to the account that asked for it', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+    mockReadFavicon.mockReset();
+    mockReadFavicon.mockResolvedValue(undefined);
+    mockUsername = 'alice';
+    mockMode = 'all';
+    mockFetchFaviconBytes.mockReset();
+    mockFetchFaviconBytes.mockImplementation(() => Promise.resolve(iconBytes));
+    mockPutFavicon.mockClear();
+    mockPutFaviconNone.mockClear();
+  });
+
+  afterEach(() => {
+    jest.clearAllTimers();
+    jest.useRealTimers();
+  });
+
+  // Every write the provider asked the store for, as [account, host].
+  const writes = () =>
+    [...mockPutFavicon.mock.calls, ...mockPutFaviconNone.mock.calls].map(([username, host]) => [
+      username,
+      host,
+    ]);
+
+  // Both entry points, because they share the queue and the gestured one is exempt from
+  // the OTHER guard at the front of it: a save's licence outlives a lowered mode, and must
+  // not be read as outliving the account that made the save.
+  it.each([
+    ['a row scrolled past', (hosts: string[]) => tree(hosts, NONE)],
+    ['a save', (hosts: string[]) => tree(NONE, hosts)],
+  ])(
+    'neither fetches nor writes the previous account’s queue for the next one — %s',
+    async (_entryPoint, asking) => {
+      const result = render(tree(NONE, NONE));
+      await settle();
+      result.rerender(asking(HOSTS));
+      await settle();
+      const burst = fetched();
+      // The first burst is answered and written, and the cap held a tail back: still
+      // queued, admitted by alice, with slots free. That is the state the switch has to find.
+      expect(burst.length).toBeGreaterThan(0);
+      expect(burst.length).toBeLessThan(HOSTS.length);
+      expect(writes()).toEqual(burst.map((host) => ['alice', host]));
+
+      // The switch, and in the same commit the new account asks for a host of its own —
+      // which pumps before the provider's effect has dropped alice's tail.
+      mockUsername = 'bob';
+      result.rerender(asking([...HOSTS, 'bobs.example']));
+      await drain();
+
+      // Not one of alice's queued hosts was contacted after she was gone, and bob's own
+      // request was not lost behind them: it is the positive control for both lines.
+      expect(fetched()).toEqual([...burst, 'bobs.example']);
+      expect(writes().filter(([username]) => username !== 'alice')).toEqual([
+        ['bob', 'bobs.example'],
+      ]);
+    },
+  );
+
+  // The other half of the same rule: a fetch already out when the account changes is still
+  // the asker's. Its write has to carry the account that admitted it, because that is the
+  // name the store's fence refuses — handed the account signed in when the answer lands,
+  // the fence would wave it through.
+  it('addresses a write to the account that asked, not the one signed in when it lands', async () => {
+    const answers: ((bytes: Uint8Array | undefined) => void)[] = [];
+    mockFetchFaviconBytes.mockImplementation(
+      () => new Promise((resolve) => void answers.push(resolve)),
+    );
+    const result = await mount(['example.com']);
+    expect(answers).toHaveLength(1);
+
+    mockUsername = 'bob';
+    result.rerender(tree(['example.com'], NONE));
+    answers[0]?.(iconBytes);
+    await drain();
+
+    expect(writes().map(([username]) => username)).toEqual(['alice']);
+  });
+});

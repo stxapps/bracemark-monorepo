@@ -231,11 +231,11 @@ describe('the auth-aware fetch', () => {
     const api = createAuthApiClient({ baseUrl: BASE_URL });
     fetchMock.mockResolvedValue(Response.json({ deletedCount: 0 }));
 
-    await api.call(dataDeleteAllEndpoint, {});
+    await api.call(dataDeleteAllEndpoint, { username: 'alice' });
 
     const init = fetchMock.mock.calls[0][1] as RequestInit;
     expect(init.method).toBe('POST');
-    expect(init.body).toBe('{}');
+    expect(init.body).toBe('{"username":"alice"}');
     expect(new Headers(init.headers).get('content-type')).toBe('application/json');
     expect(sentAuthHeader()).toBe('Bearer tok_live');
   });

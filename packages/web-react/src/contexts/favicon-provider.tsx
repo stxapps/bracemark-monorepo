@@ -99,7 +99,11 @@ export function FaviconProvider({ children }: { children: ReactNode }) {
   const enabledRef = useRef(enabled);
   enabledRef.current = enabled;
 
-  const queueRef = useRef<string[]>([]);
+  // Each entry carries the account signed in when its host was ADMITTED, which
+  // is the only account it may be fetched or written for (the pump below). That
+  // is this provider's account as of its latest render — not the account whose
+  // link the asking row is showing.
+  const queueRef = useRef<{ host: string; owner: string }[]>([]);
   // Queued or in flight — the single-flight guard. A host stays here after it
   // resolves: the Dexie row (`ok` or `none`) is the durable answer, so re-asking is
   // pointless, and the hook won't anyway once its liveQuery sees the row.
@@ -122,7 +126,8 @@ export function FaviconProvider({ children }: { children: ReactNode }) {
     handledRef.current.clear();
   }, [username]);
 
-  // The account the drain writes for, read as each entry reaches the front (the
+  // The account signed in as of the latest render: stamped onto a host as it is
+  // admitted, and compared with that stamp as its entry reaches the front (the
   // pump below is identity-stable, so it can't close over a render's value).
   const usernameRef = useRef(username);
   usernameRef.current = username;
@@ -166,14 +171,33 @@ export function FaviconProvider({ children }: { children: ReactNode }) {
 
   const pump = useCallback(() => {
     while (inFlightRef.current < MAX_IN_FLIGHT && queueRef.current.length > 0) {
-      const host = queueRef.current.shift();
-      if (host === undefined) return;
+      const entry = queueRef.current.shift();
+      if (entry === undefined) return;
+      // The account that ADMITTED this host — not whoever is signed in as it
+      // reaches the front, and not whoever is signed in when the answer lands.
+      // The account can change under the queue without an unmount: another tab
+      // signs in as someone else and this one adopts the session in place. The
+      // reset above is an EFFECT, so it runs after the render that already
+      // moved `usernameRef`, and a timer can pump in between: this drain's own
+      // stagger, or a row's settle (use-favicon-url.ts). An owner read HERE
+      // would be the new account's, whose ownership row the store's fence accepts
+      // (data/favicon-store.ts): the previous account's host, fetched and then
+      // written into the next account's cache.
+      const { host, owner } = entry;
       inFlightRef.current += 1;
-      // Captured before the request, so the write is fenced on the account this
-      // entry was fetched for, not on whoever is signed in when the answer lands.
-      const owner = usernameRef.current;
       void (async () => {
         try {
+          if (usernameRef.current !== owner) {
+            // Left over from the previous account (above). Dropped at once,
+            // ahead of the cache read, so it holds its slot no longer than this
+            // call: with slots free, a request the new account makes before the
+            // reset runs is pumped now, where it would otherwise wait behind a
+            // full burst of these and be swept by the reset. (With every slot
+            // held by requests still out, it is swept all the same.) Forgotten,
+            // so that account can ask for the host itself.
+            handledRef.current.delete(host);
+            return;
+          }
           const client = clientRef.current;
           if (!enabledRef.current || !client) {
             // Switched off mid-queue: forget the host so turning the opt-in back
@@ -182,7 +206,7 @@ export function FaviconProvider({ children }: { children: ReactNode }) {
             handledRef.current.delete(host);
             return;
           }
-          if (stoppedRef.current || !owner) return;
+          if (stoppedRef.current) return;
           // Re-check under the single-flight guard: another tab or an earlier
           // request may have resolved this host since it was queued.
           const existing = await readFavicon(host);
@@ -229,9 +253,11 @@ export function FaviconProvider({ children }: { children: ReactNode }) {
   const requestFavicon = useCallback(
     (host: string) => {
       if (!enabled || host === '') return;
+      const owner = usernameRef.current;
+      if (!owner) return;
       if (handledRef.current.has(host)) return;
       handledRef.current.add(host);
-      queueRef.current.push(host);
+      queueRef.current.push({ host, owner });
       pump();
     },
     [enabled, pump],

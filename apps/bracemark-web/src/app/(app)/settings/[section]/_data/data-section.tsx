@@ -574,6 +574,11 @@ function ExportView({ onBack }: { onBack: () => void }) {
 // (the wipe is one server call — no per-item progress to show), the count when
 // done, the failure when errored (the endpoint is idempotent, so the retry is
 // just clicking again).
+//
+// `account-changed` is NOT that failure and must not borrow its line: "nothing
+// was removed, try again" is false when the server already wiped the account
+// that asked, and "again" would act on whoever is signed in now. Each of its two
+// outcomes says what was deleted and where, and the view offers no retry.
 function DeleteStatus({ state }: { state: DeleteAllState }) {
   if (state.phase === 'idle') return null;
 
@@ -599,6 +604,19 @@ function DeleteStatus({ state }: { state: DeleteAllState }) {
     );
   }
 
+  if (state.phase === 'account-changed') {
+    return (
+      <p role="alert" className="flex items-start gap-2 text-sm text-destructive">
+        <CircleAlert className="mt-0.5 size-4 shrink-0" />
+        <span className="wrap-break-words">
+          {state.serverWiped
+            ? 'All data was deleted for the account this page was opened for. This device is no longer signed in to that account, so nothing stored on it was changed.'
+            : 'Nothing was deleted — the account signed in on this device changed while this page was open. To delete this account’s data, go back and open this page again.'}
+        </span>
+      </p>
+    );
+  }
+
   const { deletedCount } = state.outcome;
   return (
     <p className="flex items-start gap-2 text-sm text-muted-foreground">
@@ -618,7 +636,9 @@ function DeleteView({ onBack }: { onBack: () => void }) {
   // Reveal the "tick the box first" nudge only after a click without the box.
   const [nudge, setNudge] = useState(false);
   const running = state.phase === 'running';
-  const done = state.phase === 'done';
+  // Both end the view: there is nothing left to delete, or the account it was
+  // opened for is no longer the one signed in (DeleteStatus says which).
+  const done = state.phase === 'done' || state.phase === 'account-changed';
 
   const onDelete = () => {
     if (!confirmed) {

@@ -1,4 +1,9 @@
-import { DOOR_PASSWORD, DOOR_RECOVERY, type DoorType } from '@stxapps/shared';
+import {
+  DATA_DELETE_ALL_ERROR,
+  DOOR_PASSWORD,
+  DOOR_RECOVERY,
+  type DoorType,
+} from '@stxapps/shared';
 
 import { accountsDb, assignAccountDbId } from '../db/db-routes';
 import { accountKeysRepo } from '../db/repositories/account-keys';
@@ -176,6 +181,33 @@ export async function getRecoveryDoor(
   if (!recovery) throw new HttpError(404, 'not_found', 'No recovery door for that account');
 
   return { wrappedDek: recovery.wrappedDek, iv: recovery.iv };
+}
+
+// The delete-all-data bind (routes/data.ts): the account the client NAMED must be
+// the session's own. Not an authorization check — the bearer token already
+// authorizes wiping its own namespace, and that is all the wipe ever touches.
+// It is a check on which account the client MEANT: a client attaches whichever
+// session is current when a request leaves, and its flow can have decided to
+// delete while a different account was signed in (the contract carries the
+// reasoning, shared's data/endpoints.ts). The directory comparison the door
+// rotations below make, minus the proof — tombstone refused, unlike
+// delete-account, whose resumed teardown has to get past one.
+//
+// One answer for every way it can fail — no such name, a tombstone, somebody
+// else's — so the code says nothing about which usernames exist.
+export async function assertSessionAccount(
+  env: Bindings,
+  session: { userId: string },
+  username: string,
+): Promise<void> {
+  const entry = await usernamesRepo(env.DIRECTORY_DB).findByUsername(username);
+  if (!entry || entry.deletedAt !== null || entry.userId !== session.userId) {
+    throw new HttpError(
+      409,
+      DATA_DELETE_ALL_ERROR.accountMismatch,
+      'The signed-in account is not the one this request names',
+    );
+  }
 }
 
 // Shared guard for the tier-1 door rotations (change password, put recovery

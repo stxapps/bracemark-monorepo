@@ -20,17 +20,20 @@
 
 import {
   type ApiClient,
+  apiErrorCode,
   clearDecodeCache,
+  DATA_DELETE_ALL_ERROR,
   dataDeleteAllEndpoint,
   DEFAULT_CALL_TIMEOUT_MS,
   DEFAULT_RETRY_MAX_DELAY_MS,
+  DeleteAllAccountChangedError,
   withTimeout,
 } from '@stxapps/shared';
 
 import { awaitInflightSync } from '../sync/engine';
 import { db } from './db';
 import { clearPendingOps } from './pending-store';
-import { seedNewAccount } from './sync-store';
+import { AccountFencedError, resetToSeededState } from './sync-store';
 
 export type DeleteAllOutcome = {
   // R2 objects the server removed — the receipt line. 0 is a valid outcome.
@@ -86,7 +89,25 @@ export async function deleteAllData(args: {
   // The server wipe — idempotent, so a failure here leaves everything retryable
   // and nothing local has been touched yet (the local wipe below only runs after
   // the server confirms).
-  const { deletedCount } = await api.call(dataDeleteAllEndpoint, {});
+  //
+  // It NAMES the account, and that is what binds it. `username` was captured at
+  // the click; the bearer token is attached by the client as the request leaves
+  // (lib/auth-api-client.ts reads the session then), and the waits above are long
+  // enough for the session to have become someone else's — another tab signs in
+  // as a different account and this one adopts it in place. The server wipes only
+  // if the token's account is the one named, so that request is refused instead
+  // of emptying the next account's namespace (shared's data/endpoints.ts). No
+  // check HERE can replace it: "compare the session, then send" holds only while
+  // nothing between the two awaits, and nothing would report the day one does.
+  let deletedCount: number;
+  try {
+    ({ deletedCount } = await api.call(dataDeleteAllEndpoint, { username }));
+  } catch (e) {
+    if (apiErrorCode(e) === DATA_DELETE_ALL_ERROR.accountMismatch) {
+      throw new DeleteAllAccountChangedError(false);
+    }
+    throw e;
+  }
 
   // Local synced state, wiped to match the (now empty) server: the decrypted
   // items, their decoded-plaintext cache, and the locks (they guard lists that
@@ -94,15 +115,40 @@ export async function deleteAllData(args: {
   // no shoulder-surfing gate until new locks are set). The favicon cache goes too:
   // it isn't synced state, but it's derived FROM the wiped links, so leaving it
   // would let the deleted library's hosts be read back off the device.
-  await Promise.all([db.items.clear(), db.locks.clear(), db.favicons.clear()]);
+  //
+  // And the sync bookkeeping, reset to the seeded-new-account state: cursor
+  // (0, '') with firstSyncDoneAt now — semantically exact, because an empty local
+  // store IS the complete snapshot of the wiped namespace (the same reasoning
+  // that lets create-account seed instead of pulling). The next cycle is one
+  // empty ops/list call, not a re-download.
+  //
+  // ONE TRANSACTION, FENCED ON THE ACCOUNT, and the reset goes first because it
+  // is the fence (sync-store.ts). The call above pages the whole namespace and
+  // can be out for minutes, and this tab is not the only context that can end
+  // the session meanwhile: another tab signs out, or signs in as someone else.
+  // None of these tables has an owner column, so run blind this would empty the
+  // NEXT account's library, locks and icons, and then write the previous
+  // account's ownership row back beside the new one. Sharing the teardown's
+  // scope (clear-data.ts) is what orders the two: this lands first and the
+  // teardown wipes what it left, or the teardown's clear lands first and this
+  // finds no row and throws with nothing touched. The fence is the ROW, keyed on
+  // the username and not on the session, so two orderings still pass it, both
+  // on the starting account's own data: the same username signed back in while
+  // the call was out, and a teardown whose clear failed and left the row.
+  //
+  // A refusal is reported as what it is. By here the server HAS wiped the account
+  // that asked, so the fence's own error — a sync error, about a sync that
+  // stopped — would read as a delete that failed and could be tried again.
+  try {
+    await db.transaction('rw', [db.syncMeta, db.items, db.locks, db.favicons], async () => {
+      await resetToSeededState(username);
+      await Promise.all([db.items.clear(), db.locks.clear(), db.favicons.clear()]);
+    });
+  } catch (e) {
+    if (e instanceof AccountFencedError) throw new DeleteAllAccountChangedError(true);
+    throw e;
+  }
   clearDecodeCache();
-
-  // Reset the sync bookkeeping to the seeded-new-account state: cursor (0, '')
-  // with firstSyncDoneAt now — semantically exact, because an empty local store
-  // IS the complete snapshot of the wiped namespace (the same reasoning that
-  // lets create-account seed instead of pulling). The next cycle is one empty
-  // ops/list call, not a re-download.
-  await seedNewAccount(username);
 
   return { deletedCount };
 }
