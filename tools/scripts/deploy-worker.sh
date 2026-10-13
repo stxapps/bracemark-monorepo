@@ -37,8 +37,9 @@
 #   4. Prove the Worker came up. A Worker deploy is instant and returns success
 #      the moment the upload lands; the health check is the only thing that says
 #      the thing now answering that hostname is the thing you just built.
-#   5. Record WHICH COMMIT shipped — a local git tag, and the same commit on the
-#      Worker version itself — and refuse to ship uncommitted work to production
+#   5. Record WHICH COMMIT shipped — on the Worker version itself, and on
+#      production a git tag, pushed to origin — and refuse to ship uncommitted
+#      work to production
 #      (tools/scripts/deploy-commit.sh; docs/hosting.md, _which commit is live_).
 #
 # Requires: macOS (`security`, for the keychain) or a pre-exported
@@ -68,6 +69,7 @@ Options:
                         A warning on staging; required on production.
   --allow-dirty         Deploy with uncommitted changes, untagged.
                         A warning on staging; required on production.
+  --no-push             Tag a production deploy but don't push the tag to origin.
   --yes, -y             Don't prompt before a production deploy.
   -h, --help            Show this message.
 
@@ -111,6 +113,7 @@ DEPLOY=true
 SMOKE=true
 ALLOW_TODO=false
 ALLOW_DIRTY=false
+PUSH_TAGS=true
 ASSUME_YES=false
 
 while [ "$#" -gt 0 ]; do
@@ -121,6 +124,7 @@ while [ "$#" -gt 0 ]; do
     --no-smoke) SMOKE=false ;;
     --allow-todo) ALLOW_TODO=true ;;
     --allow-dirty) ALLOW_DIRTY=true ;;
+    --no-push) PUSH_TAGS=false ;;
     --yes|-y) ASSUME_YES=true ;;
     -h|--help) usage; exit 0 ;;
     *) die "unknown option '$1'" ;;
@@ -417,14 +421,16 @@ step "Deploying $WORKER"
 # <version-id>` is how a bad deploy is undone — in seconds, without a rebuild.
 # What a rollback does NOT undo is a D1 migration; those are additive by rule,
 # which is exactly what makes the older code safe against the newer schema.
+#
+# The message is the git tag's name when there is one, and otherwise says why
+# there is not — staging, or a dirty tree — rather than naming a tag nobody made.
 name_deploy
-if [ "$DEPLOY_DIRTY" = true ]; then
-  DEPLOY_MESSAGE="$DEPLOY_TAG (untagged: dirty tree)"
-else
-  DEPLOY_MESSAGE="$DEPLOY_TAG"
-fi
-(cd "$APP_DIR" && "$WRANGLER" deploy --env "$TIER" --tag "$DEPLOY_STAMP" --message "$DEPLOY_MESSAGE")
+(cd "$APP_DIR" && "$WRANGLER" deploy --env "$TIER" --tag "$DEPLOY_STAMP" \
+  --message "${DEPLOY_TAG:-untagged: $DEPLOY_UNTAGGED}")
 tag_deploy
+# Straight away, unlike the static deploy: the Worker is fully live the moment
+# `wrangler deploy` returns, so a slow push holds up nothing but the health check.
+push_deploy_tags
 
 # --- smoke -----------------------------------------------------------------
 #

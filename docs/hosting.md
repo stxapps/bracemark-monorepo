@@ -694,8 +694,9 @@ committed. `--distribution-id` overrides it for one run; `--dry-run`,
 `--skip-build` and
 `--no-invalidate` are there for the obvious reasons, and a production run
 prompts for the bucket name unless `--yes` is passed. It also records the commit
-it shipped and refuses uncommitted work on production — `--allow-dirty`, and
-_[which commit is live](#which-commit-is-live--deploy-tags)_ below.
+it shipped and refuses uncommitted work on production — `--allow-dirty`,
+`--no-push`, and _[which commit is live](#which-commit-is-live--deploy-tags)_
+below.
 
 **It builds rather than uploading whatever is in `out/`, and then verifies the
 tier.** This is the enforcement half of _built once per tier, never promoted_
@@ -824,8 +825,8 @@ health-checks the custom domain. `--dry-run`, `--skip-migrate`, `--no-deploy`,
 `--no-smoke`, `--allow-todo` and `--yes` are there for the obvious reasons, and a
 production run prompts for the Worker name unless `--yes` is passed. Like the
 static deploy it records the commit it shipped and refuses uncommitted work on
-production — `--allow-dirty`, and _[which commit is live](#which-commit-is-live--deploy-tags)_
-below.
+production — `--allow-dirty`, `--no-push`, and
+_[which commit is live](#which-commit-is-live--deploy-tags)_ below.
 
 **There is no per-tier artifact here, and that is the one way it differs from
 the static deploy.** A Worker bundle bakes nothing: config is read at runtime
@@ -917,40 +918,84 @@ _project versions_), so "which commit is live, and what was live before it" is
 answered by the deploy scripts instead, in `tools/scripts/deploy-commit.sh`,
 which both source.
 
-**Every successful deploy tags the commit it shipped:**
+**Every successful production deploy tags the commit it shipped:**
 
 ```
-deploy/<app>/<tier>/<utc time>      deploy/web/production/2026-10-13T091500Z
+<app>/<utc date>-<utc time>         web/20261013-091500
 ```
 
 ```bash
-git tag -l 'deploy/web/production/*'              # every production deploy of web
+git tag -l 'web/*'                                # every production deploy of web
 git diff <tag> HEAD -- apps packages              # what is not out yet
 ```
+
+The name is short on purpose — it is read in a git client's ref column, where a
+long one is cut off — so it says neither "deploy" nor "production". A tag under
+`web/`, `site/`, `api/` or `extractor/` **is** a production deploy, by this
+convention and nothing else: keep every other tag out of those four namespaces.
+The time is UTC, to the second — a Worker deploys in under a minute, and two
+deploys of one app must not want the same name.
 
 The tag is created when the deploy becomes real — after the S3 syncs, after
 `wrangler deploy` returns — not at the end of the script, because a failed
 invalidation or health check leaves the new code live all the same. It is
-lightweight and **local**: nothing pushes it, and a second clone sees it only
-once it has been pushed and fetched (`git push origin <tag>`; the script prints
-the line).
+lightweight, not annotated: an annotated tag needs an identity and may ask to be
+signed.
+
+**The script then pushes it to `origin`**, because a step left to memory is a
+step that gets skipped, and a tag that never leaves one clone is a history the
+other clone cannot see. Three things bound that push:
+
+- **Only a tag whose commit `origin` already has.** Pushing a tag uploads the
+  commit it points at, so a deploy made from unpushed commits would otherwise
+  publish them — to a public repo, ahead of the push that was going to — as a
+  side effect of deploying. "Already has" is read from this clone's
+  remote-tracking branches, without a fetch. A tag held back this way is not
+  lost: every production deploy pushes **all** deploy tags of the four apps that
+  `origin` can now take, not only its own, so it goes out with the next one —
+  or by hand, with the `git push origin <tag>` line the script prints.
+- **Never fatal, never a prompt.** By then the deploy is live, so a failed push
+  is a warning (and is retried by the next production deploy, the same way). It
+  runs with `GIT_TERMINAL_PROMPT=0`: a missing credential fails rather than
+  asking for one. The static deploy pushes last, after the invalidation, so a
+  push that stalls is never standing between an updated bucket and its CDN.
+- **`--no-push`** tags without pushing, for the run where that is wanted.
+
+A pushed tag is **public and, in practice, permanent** — forks and mirrors keep
+it. It is the same kind of statement as `/deploy.json` below: the operator's
+record of what was shipped, not a claim about the bytes being served.
+
+**Staging is not tagged.** Its tag history could never be trusted to be complete
+— a dirty tree deploys there, untagged, and staging is exactly where uncommitted
+work is tried — and what only a tag can answer (what was live before, what to
+roll back to, what is not out yet) are production questions. What is on staging
+_now_ is answered by the deployed thing itself, below, which covers every deploy,
+dirty ones included, from any clone. The cost is the static apps' staging
+history: `/deploy.json` is overwritten by each deploy, so what was there before
+is not recorded anywhere (a Worker's is, in `wrangler versions list`).
 
 **A deploy builds the working tree, not `HEAD`**, so the tag is only true when
 those are the same thing. Uncommitted or untracked changes anywhere in the repo
 are **fatal on production and a warning on staging** — the same split as the
 `TODO:` check above, for the same reason. A dirty deploy that goes ahead (staging,
-or production with `--allow-dirty`) is stamped `<sha>-dirty` and is **not
-tagged**. Ignored files are outside the check, which is its one limit: the
-per-tier env files are ignored and are inputs too.
+or production with `--allow-dirty`) is stamped `<sha>-dirty` and, on production
+too, is **not tagged**. Ignored files are outside the check, which is its one
+limit: the per-tier env files are ignored and are inputs too.
 
-**Because the tag is local, the deployed thing can also be asked directly:**
+**Because a tag can still be local, and staging has none, the deployed thing can
+also be asked directly:**
 
 | app                       | where                              | read with                             |
 | ------------------------- | ---------------------------------- | ------------------------------------- |
 | bracemark-web, -site      | `/deploy.json` in the bucket       | `curl https://<host>/deploy.json`     |
 | bracemark-api, -extractor | the Worker version's tag + message | `wrangler versions list --env <tier>` |
 
-`/deploy.json` is `{ commit, dirty, deployedAt, tag }`. It is written by the
+The Worker version's tag is the commit (`<sha>` or `<sha>-dirty`); its message is
+the git tag's name, or `untagged: staging` / `untagged: dirty tree` when there is
+no git tag to name.
+
+`/deploy.json` is `{ commit, dirty, deployedAt, tag }` — `tag` only when the
+deploy was tagged, so never on staging. It is written by the
 script straight to the bucket at **deploy** time and is deliberately not a field
 of the build — not of bracemark-web's `/build.json`, say. `nx build` is cached
 and `--skip-build` exists, so a commit baked in at build time names the commit of
@@ -968,9 +1013,9 @@ about the bytes served beside it, so it does not move the boundary in
 
 **Rolling back.**
 
-- **A static app:** check out the previous `deploy/<app>/<tier>/…` tag, `npm ci`,
-  and run the same deploy command. It is a rebuild, so the result is a new build
-  id and a new tag pointing at the old commit — which is the truth.
+- **A static app:** check out the previous `<app>/…` tag, `npm ci`, and run the
+  same deploy command. It is a rebuild, so the result is a new build id and a new
+  tag pointing at the old commit — which is the truth.
 - **A Worker:** `wrangler rollback <version-id> --env <tier>` puts a previous
   version back in seconds, no rebuild; find the id by its commit in
   `wrangler versions list`. It does **not** undo a D1 migration — those are

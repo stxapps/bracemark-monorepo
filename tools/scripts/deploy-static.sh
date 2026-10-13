@@ -25,9 +25,10 @@
 # verifies the tier afterwards regardless of who built it (see `verify_tier`),
 # which is also what makes `--skip-build` safe.
 #
-# It also records WHICH COMMIT it shipped — a local git tag, and `/deploy.json`
-# in the bucket — and refuses to ship uncommitted work to production, because a
-# tag on a commit the build did not come from is worse than no tag
+# It also records WHICH COMMIT it shipped — `/deploy.json` in the bucket, and on
+# production a git tag, pushed to origin — and refuses to ship uncommitted work
+# to production, because a tag on a commit the build did not come from is worse
+# than no tag
 # (tools/scripts/deploy-commit.sh; docs/hosting.md, _which commit is live_).
 #
 # Requires: aws-cli v2, git, and this tier's AWS credentials.
@@ -69,6 +70,7 @@ Options:
   --distribution-id ID  Override the distribution id for this run.
   --allow-dirty         Deploy with uncommitted changes, untagged.
                         A warning on staging; required on production.
+  --no-push             Tag a production deploy but don't push the tag to origin.
   --yes, -y             Don't prompt before a production deploy.
   -h, --help            Show this message.
 
@@ -106,6 +108,7 @@ DRY_RUN=false
 INVALIDATE=true
 WAIT_FOR_INVALIDATION=true
 ALLOW_DIRTY=false
+PUSH_TAGS=true
 ASSUME_YES=false
 DISTRIBUTION_ID=""
 
@@ -117,6 +120,7 @@ while [ "$#" -gt 0 ]; do
     --no-wait) WAIT_FOR_INVALIDATION=false ;;
     --distribution-id) shift; [ "$#" -gt 0 ] || die "--distribution-id needs a value"; DISTRIBUTION_ID="$1" ;;
     --allow-dirty) ALLOW_DIRTY=true ;;
+    --no-push) PUSH_TAGS=false ;;
     --yes|-y) ASSUME_YES=true ;;
     -h|--help) usage; exit 0 ;;
     *) die "unknown option '$1'" ;;
@@ -438,9 +442,11 @@ fi
 # changes — before the invalidation, not after it: a failed invalidation or a
 # failed worker check below leaves the bucket updated all the same.
 #
-# Recorded twice, because the two answer different questions. The TAG is the
-# history, and lives in this clone until it is pushed. `/deploy.json` is the
-# deployed site's own answer, readable from anywhere with a `curl`.
+# Recorded twice on production, because the two answer different questions. The
+# TAG is the history; it is pushed at the very end (`push_deploy_tags`), once
+# nothing below is waiting on this script. `/deploy.json` is the deployed site's
+# own answer, readable from anywhere with a `curl` — and on staging, which is
+# never tagged, the only one.
 #
 # It is a deploy-time file rather than a field in the build (bracemark-web's
 # `/build.json`, say), deliberately. `nx build` is cached and `--skip-build`
@@ -459,7 +465,7 @@ record_deploy() {
   name_deploy
   step "Recording the deploy"
   tag_deploy
-  [ "$DEPLOY_DIRTY" = true ] || tag_field="$(printf ',"tag":"%s"' "$DEPLOY_TAG")"
+  [ -z "$DEPLOY_TAG" ] || tag_field="$(printf ',"tag":"%s"' "$DEPLOY_TAG")"
   printf '{"commit":"%s","dirty":%s,"deployedAt":"%s"%s}\n' \
     "$DEPLOY_COMMIT" "$DEPLOY_DIRTY" "$DEPLOY_AT" "$tag_field" \
     | aws s3 cp - "$S3_URI/deploy.json" --no-progress \
@@ -486,6 +492,7 @@ if [ "$INVALIDATE" = false ]; then
     note "deployed service worker NOT checked — once the CDN serves this build:"
     note "  node tools/scripts/check-service-worker.mjs $OUT_DIR --origin $(app_origin)"
   fi
+  push_deploy_tags
   exit 0
 fi
 
@@ -509,5 +516,7 @@ elif [ "$APP" = "web" ]; then
   note "deployed service worker NOT checked (--no-wait) — once the invalidation completes:"
   note "  node tools/scripts/check-service-worker.mjs $OUT_DIR --origin $(app_origin)"
 fi
+
+push_deploy_tags
 
 step "Deployed bracemark-$APP to $TIER"
