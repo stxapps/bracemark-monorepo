@@ -111,7 +111,7 @@ export const metadata: Metadata = {
 //       person's browser. It is usually not a separate request at all: an
 //       interactive save sends `inlineImage`, so the extractor fetches the image
 //       and returns the bytes in the SAME extract response (routes/extract.ts);
-//       only a bulk import gets a URL string and makes the second GET /v1/image.
+//       only a bulk import gets a URL string and makes the second POST /v1/fetch-image.
 //       Two is the number either way, and the clause that used to do the
 //       miscounting now spends itself on WHY the second one is ours — the
 //       cross-origin wall — which is the question an operator actually has.

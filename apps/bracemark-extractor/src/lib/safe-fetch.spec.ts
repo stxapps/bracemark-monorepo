@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { EXTRACT_TIMEOUT_MS, IMAGE_PROXY_TIMEOUT_MS } from '@stxapps/shared';
+import { EXTRACT_TIMEOUT_MS, FETCH_IMAGE_TIMEOUT_MS } from '@stxapps/shared';
 
 import {
   FETCH_TIMEOUT_MS,
@@ -180,8 +180,8 @@ describe('safeFetch', () => {
 
 // HTML truncates at the cap (the og tags are in <head>, so a partial read is
 // still useful); the inline-image path throws instead (a partial image is not).
-// The client gives POST /v1/extract and GET /v1/image deadlines sized from these
-// caps (EXTRACT_TIMEOUT_MS and IMAGE_PROXY_TIMEOUT_MS, @stxapps/shared
+// The client gives POST /v1/extract and POST /v1/fetch-image deadlines sized from these
+// caps (EXTRACT_TIMEOUT_MS and FETCH_IMAGE_TIMEOUT_MS, @stxapps/shared
 // extract/endpoints.ts). Raise a cap here without raising those and a
 // slow-but-healthy call is reported to the client as a timeout while the
 // extractor is still working — no error anywhere else.
@@ -192,10 +192,10 @@ describe('the client’s deadlines', () => {
     expect(EXTRACT_TIMEOUT_MS).toBeGreaterThan(2 * slowestFetch);
   });
 
-  it('/v1/image outlasts the slowest redirect walk, with room left for the body', () => {
+  it('/v1/fetch-image outlasts the slowest redirect walk, with room left for the body', () => {
     // The image deadline covers the streamed body too, so merely clearing the walk
     // isn't enough — at least as long again is left for the bytes.
-    expect(IMAGE_PROXY_TIMEOUT_MS).toBeGreaterThan(2 * slowestFetch);
+    expect(FETCH_IMAGE_TIMEOUT_MS).toBeGreaterThan(2 * slowestFetch);
   });
 });
 

@@ -10,8 +10,8 @@ import {
   changePasswordEndpoint,
   type ChangePasswordPayload,
   hexToBytes,
-  passwordDoorEndpoint,
-  recoveryDoorEndpoint,
+  readPasswordDoorEndpoint,
+  readRecoveryDoorEndpoint,
 } from '@stxapps/shared';
 import { changePasswordDoor, type DoorOpener } from '@stxapps/web-crypto';
 
@@ -47,7 +47,7 @@ export async function openerForProof(
   if (proof.kind === 'password') {
     let door;
     try {
-      door = await api.call(passwordDoorEndpoint, { username });
+      door = await api.call(readPasswordDoorEndpoint, { username });
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) throw new InvalidCredentialsError();
       throw err;
@@ -62,7 +62,7 @@ export async function openerForProof(
 
   let door;
   try {
-    door = await api.call(recoveryDoorEndpoint, { username });
+    door = await api.call(readRecoveryDoorEndpoint, { username });
   } catch (err) {
     if (err instanceof ApiError && err.status === 404) throw new InvalidRecoveryCodeError();
     throw err;

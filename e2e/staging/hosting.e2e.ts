@@ -157,7 +157,7 @@ test(
         return { status: response.status, body: (await response.json()) as { status: string } };
       }, origin);
       expect(health).toEqual({ status: 200, body: { status: 'ok' } });
-      const endpoint = origin === API_URL ? '/v1/auth/password-door' : '/v1/extract';
+      const endpoint = origin === API_URL ? '/v1/auth/read-password-door' : '/v1/extract';
       const preflight = async (from: string) =>
         request.fetch(`${origin}${endpoint}`, {
           method: 'OPTIONS',

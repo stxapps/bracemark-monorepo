@@ -59,7 +59,7 @@ const EXTRACTED_BY = 'server';
 
 // How many image-proxy fetches run at once during a batch's image pass. The extract call
 // is ONE request (the server fans out), but each discovered image is its own streaming
-// GET /v1/image against the same IP-rate-limited origin — so we pool them at a small
+// POST /v1/fetch-image against the same IP-rate-limited origin — so we pool them at a small
 // width rather than firing one per link: fast enough to fill a page quickly, gentle
 // enough not to trip the limiter into 429s.
 const IMAGE_CONCURRENCY = 3;

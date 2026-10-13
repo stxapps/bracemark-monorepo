@@ -45,9 +45,10 @@ const serwist = new Serwist({
   runtimeCaching: [
     // ⚠ THE WORKER CACHES THE APP, NEVER DATA (docs/offline-mode.md). Every
     // cross-origin request goes to the network and nowhere else — the api's
-    // authenticated reads (ops/list, files/list, iap/status), the pre-auth door
-    // blobs, bracemark-extractor's image proxy (whose URL names a third-party
-    // image from a page the user saved), and presigned R2 downloads. The data
+    // authenticated reads (ops/list, files/list, iap/status) and presigned R2
+    // downloads. (The pre-auth door blobs and bracemark-extractor's image proxy
+    // were on this list while they were GETs; both are POSTs now, which no rule
+    // here matches, so they never reach a cache at all.) The data
     // path already has a per-account, wiped-on-sign-out home in IndexedDB; a
     // copy in Cache Storage keys on the URL rather than the Authorization header,
     // survives sign-out, and turns a failed request into a stale success.

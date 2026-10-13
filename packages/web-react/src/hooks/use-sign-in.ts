@@ -7,7 +7,7 @@ import {
   ApiError,
   canonicalizeUsername,
   hexToBytes,
-  passwordDoorEndpoint,
+  readPasswordDoorEndpoint,
   signInEndpoint,
   type SignInPayload,
   type SignInValues,
@@ -50,7 +50,7 @@ export function useSignIn() {
       // password so this isn't a username-enumeration oracle.
       let door;
       try {
-        door = await api.call(passwordDoorEndpoint, { username });
+        door = await api.call(readPasswordDoorEndpoint, { username });
       } catch (err) {
         if (err instanceof ApiError && err.status === 404) throw new InvalidCredentialsError();
         throw err;

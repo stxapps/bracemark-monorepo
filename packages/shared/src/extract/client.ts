@@ -9,8 +9,8 @@ import { withDeadline } from '../async/with-deadline';
 import {
   extractEndpoint,
   type ExtractResult,
-  imageProxyEndpoint,
-  imageProxyRequestSchema,
+  fetchImageEndpoint,
+  fetchImageRequestSchema,
 } from './endpoints';
 
 // The client binding to `bracemark-extractor` — the web app's server-tier CAPTURE
@@ -30,7 +30,7 @@ import {
 export interface ExtractClient {
   // Interactive single-URL extract with the image inlined — POST /v1/extract,
   // `inlineImage: true` (honored only for a single URL, so the web app skips the
-  // second GET /v1/image round trip when the image fetch succeeds). Returns that
+  // second /v1/fetch-image round trip when the image fetch succeeds). Returns that
   // URL's own per-URL result (partial success, never all-or-nothing).
   extract(url: string, signal?: AbortSignal): Promise<ExtractResult>;
   // Batch extract — POST /v1/extract with the full `urls` array (no inline: the
@@ -44,11 +44,11 @@ export interface ExtractClient {
   // (partial success, order not guaranteed). De-dupe URLs before calling — the server
   // fetches each entry it's given.
   extractMany(urls: string[], signal?: AbortSignal): Promise<ExtractResult[]>;
-  // Pull the discovered og:image's bytes through the streaming image proxy — GET
-  // /v1/image — for the case the extract response carried only `imageUrl` (no inline
-  // bytes). The web app can't read cross-origin image bytes itself (CORS), so the
+  // Pull the discovered og:image's bytes through the streaming image proxy — POST
+  // /v1/fetch-image — for the case the extract response carried only `imageUrl` (no
+  // inline bytes). The web app can't read cross-origin image bytes itself (CORS), so the
   // proxy streams them through; the bytes are encrypted into `files/{id}.enc` here.
-  // Bounded by the contract's deadline (`imageProxyEndpoint.timeoutMs`), rejecting
+  // Bounded by the contract's deadline (`fetchImageEndpoint.timeoutMs`), rejecting
   // with ApiTimeoutError — the same as a JSON call, since this one can't ride
   // `callEndpoint`.
   fetchImage(url: string, signal?: AbortSignal): Promise<Uint8Array>;
@@ -93,16 +93,19 @@ export function createExtractClient({
       // Re-run the contract's front SSRF gate (http(s) + length) before the network,
       // exactly as `callEndpoint` does for the JSON endpoints — the proxy success
       // body is a binary STREAM, not JSON, so it can't ride `callEndpoint`.
-      imageProxyRequestSchema.parse({ url });
-      const target = new URL(imageProxyEndpoint.path, baseUrl);
-      target.searchParams.set('url', url);
+      const request = fetchImageRequestSchema.parse({ url });
+      // The address goes in the BODY, never the query string: it is something a
+      // person saved, and a URL is what logs and caches write down (the contract).
+      const target = new URL(fetchImageEndpoint.path, baseUrl);
       // The deadline `callEndpoint` would have applied, applied here: the whole call,
       // body included, and the fetch gets the deadline's own signal, linked to the
       // caller's.
       return withDeadline(
         async (deadlineSignal) => {
           const res = await fetchImpl(target.toString(), {
-            method: 'GET',
+            method: fetchImageEndpoint.method,
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(request),
             signal: deadlineSignal,
           });
           if (!res.ok) {
@@ -114,7 +117,7 @@ export function createExtractClient({
           }
           return new Uint8Array(await res.arrayBuffer());
         },
-        imageProxyEndpoint.timeoutMs ?? DEFAULT_CALL_TIMEOUT_MS,
+        fetchImageEndpoint.timeoutMs ?? DEFAULT_CALL_TIMEOUT_MS,
         (ms) => new ApiTimeoutError(ms),
         signal,
       );

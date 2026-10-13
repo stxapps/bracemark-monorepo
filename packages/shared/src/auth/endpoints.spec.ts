@@ -1,10 +1,15 @@
 import { DEFAULT_CALL_TIMEOUT_MS } from '../api/client';
 import type { z } from '../zod';
 import {
+  changePasswordEndpoint,
   changePasswordPayloadSchema,
+  createAccountEndpoint,
   createAccountPayloadSchema,
+  deleteAccountEndpoint,
   deleteAccountPayloadSchema,
+  putRecoveryDoorEndpoint,
   putRecoveryDoorPayloadSchema,
+  signInEndpoint,
   signInPayloadSchema,
   signOutEndpoint,
   wireDoorSchema,
@@ -64,6 +69,21 @@ describe('the signed auth payloads', () => {
         });
       }
     }
+  });
+
+  // The word the signature binds and the address the proof is sent to are the
+  // same word, so neither is renamed alone. put-recovery-door was the one that
+  // had drifted: its proof said `put-recovery-door` and its path a bare
+  // `/recovery-door`, which is what forced the read onto a path of its own.
+  it.each([
+    ['create-account', createAccountEndpoint],
+    ['sign-in', signInEndpoint],
+    ['delete-account', deleteAccountEndpoint],
+    ['change-password', changePasswordEndpoint],
+    ['put-recovery-door', putRecoveryDoorEndpoint],
+  ])('%s is POSTed to the path that names it', (action, endpoint) => {
+    expect(endpoint.method).toBe('POST');
+    expect(endpoint.path).toBe(`/v1/auth/${action}`);
   });
 
   it('lets create-account omit the recovery door, but not malform it', () => {

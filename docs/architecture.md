@@ -88,8 +88,8 @@ bounded; the worker is terminated if conversion takes too long.
   Not "someday": the design **needs** it now that the browser extension is
   active-context only (no background bg-fetch), so web/desktop users have no
   other bulk-enrichment path. Two endpoints, contract-typed in `@stxapps/shared` (`extract/endpoints.ts`):
-  `POST /v1/extract` (per-URL `{ title, image }` metadata) and `GET /v1/image` (a
-  stateless, stream-don't-store image proxy). All arbitrary-URL fetches go through
+  `POST /v1/extract` (per-URL `{ title, image }` metadata) and `POST /v1/fetch-image`
+  (a stateless, stream-don't-store image proxy). All arbitrary-URL fetches go through
   one `safeFetch` choke point — SSRF guard re-validated on every redirect hop,
   per-response byte ceiling, timeout, content-type allowlist. See
   [link-extraction.md](./link-extraction.md) — _server extraction_.

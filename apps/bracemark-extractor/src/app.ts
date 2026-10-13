@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 
-import { imageProxyEndpoint } from '@stxapps/shared';
+import { fetchImageEndpoint } from '@stxapps/shared';
 
 import type { AppEnv, Bindings } from './lib/env';
 import { errorHandler } from './lib/errors';
@@ -35,14 +35,16 @@ app.onError(errorHandler);
 // No response of this Worker may be kept by an HTTP cache — bracemark-api's rule
 // (its app.ts; docs/api-contracts.md, _no response is cacheable_), and it bites
 // harder here: every request this origin answers is ABOUT a saved link. The image
-// proxy is a GET whose URL carries the address it fetched, so a cached response is
-// a preview image, or a `…/favicon.ico` naming a saved site's host, sitting in the
-// browser's own storage under that address — outside the app's, and past a
+// proxy was a GET whose URL carried the address it fetched, so a cached response
+// was a preview image, or a `…/favicon.ico` naming a saved site's host, sitting in
+// the browser's own storage under that address — outside the app's, and past a
 // sign-out. The proxy used to ask for exactly that (`public, max-age=86400,
 // immutable`), on the argument that the browser's cache would serve a re-view. No
 // client re-views: each reads the bytes once and stores them itself, encrypted or
 // in the favicon store, so the cache held a second, readable copy and nothing
-// read it.
+// read it. The proxy is a POST now and the address is in its body (the contract,
+// @stxapps/shared extract/endpoints.ts), which caches do not store in practice;
+// the header stays so that it is said rather than relied on.
 //
 // Registered FIRST so it wraps everything below it — the CORS preflight, a 429 the
 // rate limiter throws, a 404, and whatever `onError` builds.
@@ -65,6 +67,15 @@ app.use(
     // Let browser JS read the 429's Retry-After (middleware/rate-limit.ts) — a
     // non-safelisted response header is invisible to a CORS caller otherwise.
     exposeHeaders: ['Retry-After'],
+    // Let a browser reuse a preflight, as bracemark-api does (its app.ts). Both
+    // endpoints are preflighted — a JSON body is what asks — and each is one URL
+    // with no query string, so one answer per endpoint covers every call for the
+    // two hours Chromium allows. That is what makes the image proxy affordable as
+    // a POST: a page of N previews costs one preflight, not N. This is not the
+    // HTTP cache `no-store` above speaks to: a preflight entry is an origin, a
+    // URL, and the methods and header names allowed on it, and neither URL that
+    // gets one here names a saved link.
+    maxAge: 7200,
   }),
 );
 
@@ -74,14 +85,13 @@ app.use(
 // bearing, not a nicety — see middleware/rate-limit.ts and docs "Abuse caps are
 // load-bearing".
 //
-// /v1/image is exempt: it's the per-page fan-out bottleneck (one page → N image
-// fetches), so the 60/60s baseline would throttle honest browsing to ~1 img/s — and
-// since the limiter runs before the edge-cache check, even cache hits would burn the
-// budget. It carries its own wider `image` tier as its sole request cap, with the
+// /v1/fetch-image is exempt: it's the per-page fan-out bottleneck (one page → N
+// image fetches), so the 60/60s baseline would throttle honest browsing to ~1 img/s.
+// It carries its own wider `image` tier as its sole request cap, with the
 // per-response byte ceiling + timeout (in safeFetch) as the real abuse floor.
 const standardRateLimit = rateLimit('standard');
 app.use('*', (c, next) =>
-  c.req.path === imageProxyEndpoint.path ? next() : standardRateLimit(c, next),
+  c.req.path === fetchImageEndpoint.path ? next() : standardRateLimit(c, next),
 );
 
 app.get('/', (c) => {

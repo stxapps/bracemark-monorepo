@@ -60,7 +60,7 @@ export type CreateAccountInput = {
   doors: CreateAccountDoor[];
 };
 
-// Cheap pre-check behind GET /v1/auth/username-available. NOT authoritative: the
+// Cheap pre-check behind POST /v1/auth/check-username. NOT authoritative: the
 // claim in createAccount is the real race guard. The directory lives in
 // DIRECTORY_DB (global), queried directly, not via db-routes.
 export async function isUsernameTaken(env: Bindings, username: string): Promise<boolean> {
@@ -133,7 +133,7 @@ export async function createAccount(
 // the 404-vs-200 still distinguishes which usernames exist.
 //
 // AWARENESS (not a TODO): that existence signal is ACCEPTED, by design. Masking it
-// here in isolation would buy nothing, because GET /v1/auth/username-available
+// here in isolation would buy nothing, because POST /v1/auth/check-username
 // (isUsernameTaken, above) is an intentional existence oracle that signup UX
 // requires — it already leaks the same bit, cheaply. So username existence is
 // observable on purpose; this path is rate-limited to blunt mass-scraping, not

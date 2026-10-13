@@ -59,8 +59,12 @@ describe('bracemark-extractor', () => {
   });
 
   it('sends Retry-After on a rate-limited image fetch (image tier, 10s window)', async () => {
-    // The image tier 429s before query validation, so no ?url= is needed.
-    const res = await app.request('/v1/image', {}, { ...env, API_RATE_LIMIT_IMAGE: deny });
+    // The image tier 429s before body validation, so no `url` is needed.
+    const res = await app.request(
+      '/v1/fetch-image',
+      { method: 'POST' },
+      { ...env, API_RATE_LIMIT_IMAGE: deny },
+    );
 
     expect(res.status).toBe(429);
     expect(res.headers.get('retry-after')).toBe('10');
@@ -72,6 +76,50 @@ describe('bracemark-extractor', () => {
     const res = await app.request('/', {}, env);
 
     expect(res.headers.get('access-control-expose-headers')).toBe('Retry-After');
+  });
+
+  // A preflight with no Access-Control-Max-Age is kept for five seconds, so every
+  // extract costs two requests and nothing says so (app.ts maxAge). The number is
+  // app.ts's to choose; what is pinned is that it is far past that default.
+  //
+  // Both paths, and the image proxy is the one that needs it: it is a POST for the
+  // address's sake (routes/image.ts) and a page fans out to one call per preview,
+  // so without a kept preflight every image would cost two requests.
+  it.each(['/v1/extract', '/v1/fetch-image'])(
+    'lets a browser reuse a preflight: %s',
+    async (path) => {
+      const res = await app.request(
+        path,
+        {
+          method: 'OPTIONS',
+          headers: {
+            origin: 'http://localhost:3000',
+            'access-control-request-method': 'POST',
+            'access-control-request-headers': 'content-type',
+          },
+        },
+        env,
+      );
+
+      expect(res.status).toBe(204);
+      expect(Number(res.headers.get('access-control-max-age'))).toBeGreaterThanOrEqual(600);
+      expect(res.headers.get('access-control-allow-headers')).toBe('content-type');
+    },
+  );
+
+  // The proxy has its own request cap, so a preflight must not spend it: the CORS
+  // layer answers an OPTIONS before any limiter runs.
+  it('answers the image proxy’s preflight without charging its rate limit', async () => {
+    const res = await app.request(
+      '/v1/fetch-image',
+      {
+        method: 'OPTIONS',
+        headers: { origin: 'http://localhost:3000', 'access-control-request-method': 'POST' },
+      },
+      { ...env, API_RATE_LIMIT_IMAGE: deny },
+    );
+
+    expect(res.status).toBe(204);
   });
 
   // /v1/extract carries the tight tier ON TOP of the baseline (routes/extract.ts),
@@ -94,7 +142,7 @@ describe('bracemark-extractor', () => {
   // The image proxy is the per-page fan-out (one page → N image fetches), so the
   // 60/60s baseline would throttle honest browsing to ~1 img/s. It is exempt by
   // PATH in app.ts, and only its own wider tier caps it.
-  it('exempts /v1/image from the baseline tier that governs every other route', async () => {
+  it('exempts /v1/fetch-image from the baseline tier that governs every other route', async () => {
     const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
     vi.stubGlobal('fetch', () =>
       Promise.resolve(
@@ -104,8 +152,12 @@ describe('bracemark-extractor', () => {
     const bindings = { ...env, API_RATE_LIMIT: deny };
 
     const image = await app.request(
-      '/v1/image?url=https%3A%2F%2Fcdn.example.com%2Fi.png',
-      {},
+      '/v1/fetch-image',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ url: 'https://cdn.example.com/i.png' }),
+      },
       bindings,
     );
     expect(image.status).toBe(200);

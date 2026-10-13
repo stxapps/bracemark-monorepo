@@ -41,8 +41,8 @@ function toEntity(r: UsernameRow): UsernameEntity {
 
 export function usernamesRepo(db: D1Database) {
   return {
-    // Authoritative username lookup (the GET /v1/auth/username-available endpoint
-    // is only a cheap pre-check). Canonicalizes so the lookup matches the stored
+    // Authoritative username lookup (the POST /v1/auth/check-username endpoint is
+    // only a cheap pre-check). Canonicalizes so the lookup matches the stored
     // form and the per-user salt input.
     async findByUsername(username: string): Promise<UsernameEntity | null> {
       const r = await db

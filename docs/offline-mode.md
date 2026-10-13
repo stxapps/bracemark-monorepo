@@ -88,14 +88,18 @@ rule would cache:
 
 - the api's authenticated reads: `GET /v1/ops/list`, `GET /v1/files/list`,
   `GET /v1/iap/status`;
-- the door blobs: `GET /v1/auth/password-door`, `GET /v1/auth/recovery-door`;
-- bracemark-extractor's image proxy, `GET /v1/image?url=…`, whose URL **names a
-  third-party image from a page the user saved**;
+- the door blobs, while they were GETs (`/v1/auth/password-door`,
+  `/v1/auth/recovery-door` — POSTs since, which this rule never matched;
+  [api-contracts.md](./api-contracts.md#a-gets-query-string-reaches-the-request-log));
+- bracemark-extractor's image proxy, while it was `GET /v1/image?url=…`, whose
+  URL **named a third-party image from a page the user saved** (a POST since,
+  for the same reason and with the same effect here);
 - presigned R2 downloads.
 
 Cache Storage keys on the URL, not on the `Authorization` header, so sign-out
-would leave the previous account's `iap/status` and a list of image URLs from
-its saved pages on the device, served to the next account when the network is
+would leave the previous account's `iap/status` — and, while the proxy was a
+GET, a list of image URLs from its saved pages — on the device, served to the
+next account when the network is
 slow or down; and `NetworkFirst` with a 10-second timeout answers from the cache
 when the network fails, turning a request that should fail into a stale
 success the sync engine and the entitlement fold aren't built for.

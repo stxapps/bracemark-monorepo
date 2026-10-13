@@ -8,7 +8,7 @@ import {
   deleteAccountEndpoint,
   type DeleteAccountPayload,
   hexToBytes,
-  passwordDoorEndpoint,
+  readPasswordDoorEndpoint,
 } from '@stxapps/shared';
 import { unlockAccount, WrongPasswordError } from '@stxapps/web-crypto';
 
@@ -46,7 +46,7 @@ export function useDeleteAccount() {
       // surface it as the credential error, the form's catch-all.
       let door;
       try {
-        door = await api.call(passwordDoorEndpoint, { username });
+        door = await api.call(readPasswordDoorEndpoint, { username });
       } catch (err) {
         if (err instanceof ApiError && err.status === 404) throw new InvalidCredentialsError();
         throw err;

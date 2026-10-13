@@ -78,7 +78,7 @@ export type ExtractError = z.infer<typeof extractErrorSchema>;
 //   - `imageUrl` — the discovered og:image as a URL STRING, always present when
 //     found. Enough for an extension/mobile client (it fetches the image itself, no
 //     CORS); the web app, which can't read cross-origin image bytes, normally pulls
-//     it through the image proxy (GET /v1/image) in a second round trip.
+//     it through the image proxy (POST /v1/fetch-image) in a second round trip.
 //   - `imageBase64` — the og:image fetched + base64-inlined, set ONLY when the client
 //     asked for `inlineImage` on a SINGLE-URL request and the fetch succeeded. Saves an
 //     interactive web-app save that second round trip; the client base64-decodes,
@@ -88,7 +88,7 @@ export type ExtractError = z.infer<typeof extractErrorSchema>;
 //     client resizes/renders by sniffing them (`<img>` and `createImageBitmap` both
 //     detect the format from the bytes), so a MIME label would be dead weight.
 // `imageUrl` stays populated even when `imageBase64` is, so a client whose inline
-// fetch the server omitted (too large / failed) can still fall back to GET /v1/image.
+// fetch the server omitted (too large / failed) can still fall back to the proxy.
 export const extractResultSchema = z.object({
   url: z.string(),
   ok: z.boolean(),
@@ -121,7 +121,7 @@ export type ExtractResult = z.infer<typeof extractResultSchema>;
 export const extractRequestSchema = z.object({
   urls: z.array(httpUrlSchema).min(1).max(MAX_EXTRACT_URLS),
   // Opt-in: inline the og:image bytes in the result (base64) so an interactive save
-  // skips the second GET /v1/image round trip. HONORED ONLY for a single-URL request
+  // skips the second /v1/fetch-image round trip. HONORED ONLY for a single-URL request
   // — a batch/import gets `imageUrl` only (inlining N images would bloat the JSON and
   // defeat the streaming proxy). The decision is the CLIENT's, never the server's:
   // only the client knows "interactive single save" vs "bulk-import drain"
@@ -156,7 +156,7 @@ export const extractEndpoint = defineEndpoint({
   timeoutMs: EXTRACT_TIMEOUT_MS,
 });
 
-// --- GET /v1/image — stateless image proxy ----------------------------------
+// --- POST /v1/fetch-image — stateless image proxy ---------------------------
 
 // The image proxy streams the remote image bytes THROUGH and persists nothing
 // (docs "stream-don't-store"): the client encrypts the streamed bytes into
@@ -168,12 +168,22 @@ export const extractEndpoint = defineEndpoint({
 // size/time caps, plus a `content-type: image/*` allowlist. Never resizes or
 // transcodes (that would force a full decode + risk OOM and kill the streaming-
 // is-free property) — thumbnailing is a deferred CLIENT step before encrypt.
-export const imageProxyRequestSchema = z.object({
+export const fetchImageRequestSchema = z.object({
   url: httpUrlSchema,
 });
-export type ImageProxyRequest = z.infer<typeof imageProxyRequestSchema>;
+export type FetchImageRequest = z.infer<typeof fetchImageRequestSchema>;
 
-// GET /v1/image?url=… → the raw image bytes (a streamed binary body, NOT JSON).
+// POST /v1/fetch-image { url } → the raw image bytes (a streamed binary body,
+// NOT JSON).
+//
+// A POST although it only reads, for bracemark-api's reason (auth/endpoints.ts,
+// checkUsernameEndpoint) at its sharpest: `url` is an address someone saved, and
+// a query string is part of the request line — which a request log, a firewall
+// event and an HTTP cache all key on or store. It was `GET /v1/image?url=…`, on
+// the argument that an <img> can issue nothing else; no <img> ever pointed here
+// (rendering through the proxy is not how a preview is shown — the client reads
+// the bytes once and stores them itself), so nothing needed the GET.
+// docs/api-contracts.md, _a GET's query string reaches the request log_.
 //
 // Unlike every other endpoint, the success response is a binary STREAM, so the
 // client fetches it directly (`res.body` / `res.arrayBuffer()`) rather than
@@ -191,12 +201,12 @@ export type ImageProxyRequest = z.infer<typeof imageProxyRequestSchema>;
 // idle deadline web-react's R2 getBlob keeps: the body is at most MAX_IMAGE_BYTES
 // (10 MB), and an og:image or a favicon is far under that, so this is a stall
 // detector, not a speed expectation. Raising a cap there means revisiting this.
-export const IMAGE_PROXY_TIMEOUT_MS = 2 * 60_000;
+export const FETCH_IMAGE_TIMEOUT_MS = 2 * 60_000;
 
-export const imageProxyEndpoint = defineEndpoint({
-  method: 'GET',
-  path: `${API_V1}/image`,
-  request: imageProxyRequestSchema,
+export const fetchImageEndpoint = defineEndpoint({
+  method: 'POST',
+  path: `${API_V1}/fetch-image`,
+  request: fetchImageRequestSchema,
   response: z.unknown(),
-  timeoutMs: IMAGE_PROXY_TIMEOUT_MS,
+  timeoutMs: FETCH_IMAGE_TIMEOUT_MS,
 });

@@ -201,7 +201,7 @@ row) — no re-encryption, as long as the DEK itself wasn't exposed.
 > session revoked and keeps the caller's own, and each of those devices erases its
 > local copy the next time it connects.
 > Endpoints POST `/v1/auth/change-password` and POST
-> `/v1/auth/recovery-door` (`routes/auth.ts`, `services/account.ts`), each
+> `/v1/auth/put-recovery-door` (`routes/auth.ts`, `services/account.ts`), each
 > double-guarded like delete-account (bearer token **and** a fresh signed proof, so
 > a stolen session alone can't rotate a door); client crypto
 > `changePasswordDoor` / `regenerateRecoveryDoor` (`web-crypto/derive.ts`), hooks
@@ -662,8 +662,8 @@ than relying on every user to invent a strong secret.
 > **STATUS — ✅ built.** The escape hatch when the password is lost.
 
 Sign-in offers a **"Use a recovery code"** path (`sign-in-form.tsx`,
-`useSignInWithRecovery`): the client fetches the recovery door pre-auth (GET
-`/v1/auth/recovery-door`, the twin of the password-door fetch — 404s when the
+`useSignInWithRecovery`): the client fetches the recovery door pre-auth (POST
+`/v1/auth/read-recovery-door`, the twin of the password-door fetch — 404s when the
 account skipped recovery), HKDFs the recovery-KEK over the normalized code,
 unwraps the **same DEK**, and derives the **same keypair** — so the resulting
 session is indistinguishable from a password sign-in (same `action: 'sign-in'`
@@ -804,12 +804,12 @@ Ed25519 private key at create-account / sign-in.
 > DEK indirection, wrapped-blob storage, and the `users.public_key` column exist
 > (`services/account.ts`); the client derives `publicKey` and signs at both
 > create-account (`use-create-account.ts`) and sign-in (`use-sign-in.ts`). The
-> three-step sign-in check above is implemented: GET `/v1/auth/password-door`
+> three-step sign-in check above is implemented: POST `/v1/auth/read-password-door`
 > serves the blob (step 1), `unlockAccount` unwraps + signs client-side (step 2),
 > and POST `/v1/auth/sign-in` runs `verifyAuthProof` then `signIn`, which compares
 > `payload.publicKey === users.public_key` (step 3). Still open: the
 > **orphan-claim sweeper**. (Username existence is observable **by design** —
-> `GET /v1/auth/username-available` requires it for signup — so the pre-auth blob
+> `POST /v1/auth/check-username` requires it for signup — so the pre-auth blob
 > fetch is rate-limited but deliberately not existence-masked; that's an accepted
 > property, not a gap. See [why the wrapped DEK is served
 > pre-auth](#why-the-wrapped-dek-is-served-pre-auth--the-offline-attack-surface).)
@@ -862,7 +862,7 @@ need a PAKE — offline-attacking a 256-bit secret is infeasible — so a hybrid
 **Decision (pre-launch):** keep the blob served pre-auth; lean on the entropy
 gate + generated passphrase as the real defense; add cheap **rate-limiting** on the
 blob-fetch path to blunt mass-scraping. Username existence stays observable **by
-design** — `GET /v1/auth/username-available` requires it for signup, so masking the
+design** — `POST /v1/auth/check-username` requires it for signup, so masking the
 blob fetch in isolation would buy nothing; it is rate-limited, not existence-masked.
 Treat OPAQUE as the documented upgrade path for the password door, adopted only
 if online-only (or KMS-isolated breach-resistant) password protection becomes a
@@ -1181,8 +1181,8 @@ the data is gone."**
   Storage: `createAccount` claims the username in `DIRECTORY_DB`, writes
   `users.public_key` + `account_keys` (wrapped DEK inline) atomically in the shard,
   and releases the claim on failure. The **create-account contract** (POST
-  `/v1/auth/create-account`) and the **load-bearing sign-in check** (GET
-  `/v1/auth/password-door` → `unlockAccount` client-side → POST `/v1/auth/sign-in`,
+  `/v1/auth/create-account`) and the **load-bearing sign-in check** (POST
+  `/v1/auth/read-password-door` → `unlockAccount` client-side → POST `/v1/auth/sign-in`,
   which verifies the signature then matches `payload.publicKey` against the stored
   key — see [the two identifiers](#the-two-identifiers)) are both wired
   (`services/account.ts`, `routes/auth.ts`). Still open: the **orphan-claim

@@ -15,12 +15,12 @@ import {
   deleteAccountPayloadSchema,
   type DeleteAccountResponse,
   hexToBytes,
-  passwordDoorEndpoint,
   type PasswordDoorResponse,
   putRecoveryDoorEndpoint,
   putRecoveryDoorPayloadSchema,
   type PutRecoveryDoorResponse,
-  recoveryDoorEndpoint,
+  readPasswordDoorEndpoint,
+  readRecoveryDoorEndpoint,
   type RecoveryDoorResponse,
   sessionProbeEndpoint,
   type SessionProbeResponse,
@@ -52,13 +52,15 @@ import { revokeOtherSessions, revokeSession } from '../services/session';
 // All routes carry their own '/v1/auth/…' path (from the shared contract,
 // version prefix and all), so this sub-app is mounted at the root in app.ts.
 export const authRoutes = new Hono<AppEnv>()
-  .get(
+  .post(
     checkUsernameEndpoint.path,
-    // Validates the query against the SAME schema the client used — the contract
-    // is enforced on both ends from one definition in @stxapps/shared.
-    zValidator('query', checkUsernameEndpoint.request),
+    // Validates the body against the SAME schema the client used — the contract
+    // is enforced on both ends from one definition in @stxapps/shared. (A POST
+    // that only reads: the username must not ride in the URL, which the request
+    // log stores — see the contract.)
+    zValidator('json', checkUsernameEndpoint.request),
     async (c) => {
-      const { username } = c.req.valid('query');
+      const { username } = c.req.valid('json');
       // Typing the payload against the contract makes the handler fail to compile
       // if the response shape ever drifts from checkUsernameResponseSchema.
       const body: CheckUsernameResponse = {
@@ -113,16 +115,16 @@ export const authRoutes = new Hono<AppEnv>()
       return c.json(body, 201);
     },
   )
-  .get(
-    passwordDoorEndpoint.path,
+  .post(
+    readPasswordDoorEndpoint.path,
     // Pre-auth and an offline-attack oracle (it hands the wrapped DEK to anyone who
     // names a username), so stack the tight tier to blunt mass-scraping. Rate-limiting
     // is the defense here; username existence stays observable by design (see the
     // AWARENESS note on getPasswordDoor and docs/account.md).
     rateLimit('tight'),
-    zValidator('query', passwordDoorEndpoint.request),
+    zValidator('json', readPasswordDoorEndpoint.request),
     async (c) => {
-      const { username } = c.req.valid('query');
+      const { username } = c.req.valid('json');
       // A missing user/door throws a 404 inside the service; the client maps it to
       // the same "incorrect username or password" as a wrong password, so the UI
       // stays opaque — though the 404-vs-200 is still an existence signal on the
@@ -135,17 +137,17 @@ export const authRoutes = new Hono<AppEnv>()
       return c.json(body);
     },
   )
-  .get(
-    recoveryDoorEndpoint.path,
+  .post(
+    readRecoveryDoorEndpoint.path,
     // Pre-auth, same offline-oracle posture as the password door (tight tier to
     // blunt scraping). Here the code is high-entropy, so the served blob isn't a
     // brute-force target the way the password door is. 404s when the account has
     // no recovery door (skipped at create) — the client treats that like a wrong
     // code, so the "forgot password" UI stays opaque.
     rateLimit('tight'),
-    zValidator('query', recoveryDoorEndpoint.request),
+    zValidator('json', readRecoveryDoorEndpoint.request),
     async (c) => {
-      const { username } = c.req.valid('query');
+      const { username } = c.req.valid('json');
       const door = await getRecoveryDoor(c.env, username);
       const body: RecoveryDoorResponse = {
         wrappedDek: bytesToHex(door.wrappedDek),

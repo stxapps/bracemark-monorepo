@@ -2,7 +2,7 @@
 
 import { queryOptions } from '@tanstack/react-query';
 
-import { type ApiClient, ApiError, recoveryDoorEndpoint } from '@stxapps/shared';
+import { type ApiClient, ApiError, readRecoveryDoorEndpoint } from '@stxapps/shared';
 
 // Does an account have a recovery door? Powers the "no recovery set" nudge in
 // Settings → Account. We reuse the pre-auth recovery-door fetch (it only ever
@@ -29,7 +29,7 @@ export function hasRecoveryDoorQueryOptions(client: ApiClient, username: string 
       // `enabled` gates this on a non-null username; the guard just narrows the type.
       if (!username) return false;
       try {
-        await client.call(recoveryDoorEndpoint, { username });
+        await client.call(readRecoveryDoorEndpoint, { username });
         return true;
       } catch (err) {
         if (err instanceof ApiError && err.status === 404) return false;

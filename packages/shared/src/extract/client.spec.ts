@@ -1,6 +1,6 @@
 import { ApiError, ApiTimeoutError } from '../api/client';
 import { createExtractClient } from './client';
-import { IMAGE_PROXY_TIMEOUT_MS, MAX_EXTRACT_URLS } from './endpoints';
+import { FETCH_IMAGE_TIMEOUT_MS, MAX_EXTRACT_URLS } from './endpoints';
 
 // The client binding to bracemark-extractor. `callEndpoint` already has its own spec
 // (api/client.spec.ts) — what this file pins is the part that is this client's own
@@ -73,7 +73,7 @@ const clientWith = (f: ReturnType<typeof recordingFetch>) =>
 describe('extract — the interactive single save', () => {
   it('POSTs the URL to the contract path as a one-entry batch, asking for the inline image', async () => {
     // `inlineImage` is the whole reason this method is separate from a one-URL
-    // extractMany: it saves the interactive save a second GET /v1/image round trip.
+    // extractMany: it saves the interactive save a second /v1/fetch-image round trip.
     const f = recordingFetch(results([{ url: URL_A, ok: true, title: 'A' }]));
 
     await clientWith(f).extract(URL_A);
@@ -252,29 +252,40 @@ describe('the response, validated against the contract', () => {
 describe('fetchImage — the streaming proxy', () => {
   const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
 
-  it('GETs the contract path with the target as a query param, and no credential', async () => {
+  it('POSTs the target in the body of the contract path, and no credential', async () => {
     const f = recordingFetch(response({ bytes: PNG }));
 
     await clientWith(f).fetchImage('https://cdn.example.com/a.png?v=2&x=1');
 
-    expect(f.url().origin + f.url().pathname).toBe(`${BASE}/v1/image`);
-    expect(f.init().method).toBe('GET');
-    // Read back through searchParams: the target's own `?v=2&x=1` must survive as
-    // ONE encoded param, not leak into the proxy request's query.
-    expect(f.url().searchParams.get('url')).toBe('https://cdn.example.com/a.png?v=2&x=1');
-    expect([...f.url().searchParams.keys()]).toEqual(['url']);
-    expect(f.init().headers).toBeUndefined();
+    expect(f.url().origin + f.url().pathname).toBe(`${BASE}/v1/fetch-image`);
+    expect(f.init().method).toBe('POST');
+    expect(f.body()).toEqual({ url: 'https://cdn.example.com/a.png?v=2&x=1' });
+    // The whole header bag, as for extract: a future `authorization` fails this.
+    expect(f.init().headers).toEqual({ 'content-type': 'application/json' });
+    expect(f.init().credentials).toBeUndefined();
+  });
+
+  it('puts nothing of the target in the request URL', async () => {
+    // The address is something a person saved, and a URL is what a request log, a
+    // firewall event and an HTTP cache write down. This was `GET …?url=<address>`;
+    // the body is the only place it may travel (endpoints.ts, fetchImageEndpoint).
+    const f = recordingFetch(response({ bytes: PNG }));
+
+    await clientWith(f).fetchImage('https://cdn.example.com/a.png?v=2&x=1');
+
+    expect(f.url().search).toBe('');
+    expect(f.url().href).toBe(`${BASE}/v1/fetch-image`);
   });
 
   it('lets the contract path replace a path on the baseUrl, exactly as callEndpoint does', async () => {
     // This URL is hand-built rather than built by callEndpoint, so the two can drift.
-    // `new URL('/v1/image', 'https://…/api')` drops `/api` — same silent rule the
+    // `new URL('/v1/fetch-image', 'https://…/api')` drops `/api` — same silent rule the
     // JSON endpoints live by (docs/api-contracts.md, "url versioning").
     const f = recordingFetch(response({ bytes: PNG }));
 
     await createExtractClient({ baseUrl: `${BASE}/api`, fetch: f.fetch }).fetchImage(URL_A);
 
-    expect(f.url().pathname).toBe('/v1/image');
+    expect(f.url().pathname).toBe('/v1/fetch-image');
   });
 
   it('returns the raw bytes, not a parsed body', async () => {
@@ -381,14 +392,14 @@ describe('fetchImage — deadline', () => {
       .fetchImage(URL_A)
       .catch((err: unknown) => err);
 
-    await jest.advanceTimersByTimeAsync(IMAGE_PROXY_TIMEOUT_MS - 1);
+    await jest.advanceTimersByTimeAsync(FETCH_IMAGE_TIMEOUT_MS - 1);
     await expect(pending(outcome)).resolves.toBe('pending');
     expect(f.signal()?.aborted).toBe(false);
 
     await jest.advanceTimersByTimeAsync(1);
     expect(await outcome).toMatchObject({
       name: 'ApiTimeoutError',
-      timeoutMs: IMAGE_PROXY_TIMEOUT_MS,
+      timeoutMs: FETCH_IMAGE_TIMEOUT_MS,
     });
     expect(f.signal()?.aborted).toBe(true);
     expect(jest.getTimerCount()).toBe(0);
@@ -409,7 +420,7 @@ describe('fetchImage — deadline', () => {
       .fetchImage(URL_A)
       .catch((err: unknown) => err);
 
-    await jest.advanceTimersByTimeAsync(IMAGE_PROXY_TIMEOUT_MS);
+    await jest.advanceTimersByTimeAsync(FETCH_IMAGE_TIMEOUT_MS);
 
     expect(await outcome).toBeInstanceOf(ApiTimeoutError);
   });

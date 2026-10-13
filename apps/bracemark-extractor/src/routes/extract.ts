@@ -28,7 +28,7 @@ import { rateLimit } from '../middleware/rate-limit';
 // done/failed/permanent.
 //
 // `imageUrl` is the discovered og:image as a URL STRING — an extension/mobile client
-// fetches it directly; the web app normally pulls it through GET /v1/image (the
+// fetches it directly; the web app normally pulls it through POST /v1/fetch-image (the
 // proxy). With `inlineImage` on a SINGLE-URL request, the server also fetches that
 // image and returns it base64-inlined (`imageBase64`), saving the web app the second
 // round trip. The extractor still STORES nothing — inline is a one-shot buffer of one
@@ -100,7 +100,7 @@ async function extractOne(requestedUrl: string, inline: boolean): Promise<Extrac
     }
 
     // Opt-in inline: fetch the discovered image's bytes so a single interactive save
-    // skips the second GET /v1/image. `imageUrl` stays set either way, so an omitted
+    // skips the second POST /v1/fetch-image. `imageUrl` stays set either way, so an omitted
     // (failed/too-large) inline still leaves the client a working fallback.
     if (inline && result.imageUrl) {
       const inlined = await fetchInlineImage(result.imageUrl);

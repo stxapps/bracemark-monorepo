@@ -15,7 +15,7 @@
 //  - expo fetches directly, and RN's fetch has no streaming reader — the check
 //    can only run after the body lands, so it bounds what gets CACHED rather
 //    than what crosses the wire.
-//  - web fetches through bracemark-extractor's `GET /v1/image`, whose
+//  - web fetches through bracemark-extractor's `POST /v1/fetch-image`, whose
 //    `MAX_IMAGE_BYTES` ceiling is 10 MB. That is the PROXY's abuse floor, sized
 //    for a hero og:image and shared with that path — it is not, and shouldn't
 //    become, a statement about icons. Without the check below, a host serving a

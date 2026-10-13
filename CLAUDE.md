@@ -79,7 +79,7 @@ that reading comes _before_ the edit; nothing downstream will tell you.
 | **sessions — lifetime, expiry, revocation; anything that wipes a device**      | `sessions.md` ⚠                 |
 | **the service worker — what it caches, when it registers, how it updates**     | `offline-mode.md` ⚠             |
 | server backups — D1 export, R2 replication, **an R2 lifecycle rule**, restores | `server-backups.md` ⚠           |
-| API endpoints (contract-first, typed once in `shared`)                         | `api-contracts.md`              |
+| API endpoints (contract-first, typed once in `shared`); **a new GET**          | `api-contracts.md` ⚠            |
 | link editors, list/tag trees, bulk edit                                        | `editors.md`                    |
 | title/image/screenshot/page-copy capture, `bracemark-extractor`                | `link-extraction.md` ⚠          |
 | import/export, sign-out wipe, delete all data, delete account                  | `data-lifecycle.md` ⚠           |

@@ -79,7 +79,7 @@ Every API path is versioned with a `/v1` prefix, built from the `API_V1`
 constant in `api/endpoint.ts`:
 
 ```ts
-path: `${API_V1}/auth/username-available`, // → /v1/auth/username-available
+path: `${API_V1}/auth/check-username`, // → /v1/auth/check-username
 ```
 
 The version is **part of the wire contract**, so it lives in the contract path
@@ -104,15 +104,18 @@ middleware in `app.ts`, registered first so it also covers a CORS preflight, a
 404, a 429 and anything the error handler builds. It is a rule about the whole
 api rather than a header per route, because the failure it prevents has no
 symptom on the server at all. **bracemark-extractor carries the same
-middleware**, for a sharper version of the same reason: its image proxy is a
-GET whose URL is the address of something the user saved
-([link-extraction.md](./link-extraction.md), _server extraction_).
+middleware**, for a sharper version of the same reason: every response it sends
+is about something the user saved, and its image proxy was for a while a GET
+whose URL _was_ that address ([link-extraction.md](./link-extraction.md),
+_server extraction_; a POST now, [below](#a-gets-query-string-reaches-the-request-log)).
 
 A response that says nothing about caching is one a client's HTTP cache may keep,
 and Android's did: React Native's OkHttp cache (`cache/http-cache/`) stored
 every GET, request URL included. So a device kept
-`/v1/auth/password-door?username=…` — whose account it had been, with the
-response that request got — together with its object keys, **after the account
+`/v1/auth/password-door?username=…` (a GET then; the username lookups are POSTs
+now, [below](#a-gets-query-string-reaches-the-request-log)) — whose account it
+had been, with the response that request got — together with its object keys,
+**after the account
 signed out of it**, in a directory the sign-out teardown never touches
 ([data-lifecycle.md](./data-lifecycle.md), _what an empty table does not mean_).
 A browser's cache and iOS's URL cache are the same kind of place. Most
@@ -122,8 +125,8 @@ reopens it.
 
 `no-store`, not `no-cache`: the point is that nothing is written, not that it is
 revalidated. A route that should one day be cached is exempted in that
-middleware, on purpose — `app.spec.ts` pins the header on a plain route, a URL
-carrying a username, a blob, a 404 and a 429.
+middleware, on purpose — `app.spec.ts` pins the header on a plain route, a GET
+carrying a query, a blob, a 404 and a 429.
 
 ⚠ **On iOS the header's effect cannot be seen in a dev build.** The dev client's
 network inspector (`EX_DEV_CLIENT_NETWORK_INSPECTOR`, Expo's default) routes
@@ -161,6 +164,93 @@ supports; the staging run is what says it does.
 
 ⚠ **What this does not reach: anything a client fetches from a saved site** — a
 page for its title, a preview image, a favicon. Those are the site's headers.
+
+### a GET's query string reaches the request log
+
+The cache rule above is about where a GET's URL ends up on the **client**. This
+is the same URL on the **server** side, and it is not ours to switch off per
+route: `callEndpoint` sends a GET's request as a query string
+([above](#where-the-pieces-live)), and bracemark-api runs with Cloudflare's
+invocation log on (`apps/bracemark-api/wrangler.jsonc`, `observability`), which
+stores the request line whole.
+
+Read back from the stored log of both deployed tiers on 2026-10-13, one entry
+per request holds:
+
+- **in it:** the full URL, query string included; the request headers, with
+  `authorization` stored as `********` (no cookie is ever sent); the client IP
+  (`cf-connecting-ip`) and what Cloudflare derives from it — city, postal code,
+  coordinates, network; the response status; the Worker version and its CPU and
+  wall time.
+- **not in it:** the request body, and the response body.
+
+So a body is invisible to that log and a query string is not, which makes
+**GET-with-a-query the one shape whose arguments are written down off the
+device** — and a request **header** the other, since those are stored as sent.
+
+**Rule: nothing a person chose goes in a URL or a header.** A username, a search
+word, an address, a name — it travels in a POST body, even when the call only
+reads. What may ride in a query is an opaque id, a cursor or a limit: things the
+server already stores, or that say nothing about anyone.
+
+That is why three lookups that only read are POSTs — `check-username`,
+`read-password-door`, `read-recovery-door`. They were GETs with `?username=…`
+until that same read of the log found an account name in a stored entry beside
+the IP it came from, on the three requests made before any session exists. No
+client had shipped, so the GET routes were removed outright rather than kept
+beside the new ones; `routes/auth.spec.ts` pins that a GET to any of the three
+answers 404. The recovery door's write is `put-recovery-door`, so the read and
+the write are two verbs on one noun rather than one of them owning the bare
+path — and its last segment is the `action` its signed payload carries, as it
+is for every endpoint that takes a proof (`auth/endpoints.spec.ts`).
+
+⚠ **/privacy says this in so many words** — _Technical and security data_: the
+api's log is on, and none of its addresses contains a username. Two things hold
+that sentence up, and only one of them is a test:
+
+- **The inventory spec.** `packages/shared/src/api/query-inventory.spec.ts`
+  walks every contract the barrel exports and fails on a new GET or DELETE, or a
+  new field on an existing one, until it is listed there — which is the moment
+  to ask whether a person chose the value. It cannot see a route mounted by hand
+  without a contract, or a header set in a fetch wrapper; those stay silent.
+- **Not Cloudflare's redaction.** The Play push endpoint's
+  `?token=<PLAY_NOTIFY_TOKEN>` was stored as `REDACTED` in every entry sampled
+  and the bearer token as `********`, while an e2e account's username in the
+  same position was stored as typed. That is a pattern match on what looks like
+  a secret, on their release schedule — a reason the one secret-in-a-query
+  endpoint is tolerable, never a reason to add a second.
+
+**The fourth was bracemark-extractor's image proxy**, the last GET that carried
+something a person saved: `GET /v1/image?url=…`, on the argument that an `<img>`
+can issue nothing else, and tolerated because that Worker runs with
+`invocation_logs: false` ([link-extraction.md](./link-extraction.md), _never log
+the URL_). Neither half held:
+
+- **No `<img>` ever pointed at it.** Its one caller is
+  `ExtractClient.fetchImage` (`extract/client.ts`), a `fetch` that reads the
+  bytes once so the client can store them itself — rendering a preview through
+  the proxy is the per-paint leak the design forbids anyway. Nothing needed the
+  GET.
+- **Two neighbours of that log do not obey the setting.** The zone's edge
+  analytics count the same request, and on the zones' current plan they expose
+  the path, the status, the client IP and the user agent but **refuse the query
+  string** as a field. The zone's **security events** do not refuse it: a
+  request the managed firewall blocks is recorded with its query string, so a
+  saved address that tripped a rule would have been kept there beside the
+  caller's IP. The week read on 2026-10-13 held fifteen such events across both
+  tiers, all of them scans for paths nothing answers, none with a query string.
+
+Both of those are properties of a plan and a product rather than decisions of
+ours, which is the reason the rule above is about what the request carries and
+not about which log is switched off. So the proxy is
+`POST /v1/fetch-image { url }` now, the address in its body, and the GET is
+gone outright like the three lookups (`routes/image.spec.ts` in
+bracemark-extractor pins the 404; `query-inventory.spec.ts` pins that the
+inventory has no exception left). The cost is a CORS preflight, which each
+Worker's two-hour `maxAge` reduces to one per endpoint rather than one per
+image ([hosting.md](./hosting.md), _cors & frontend↔backend wiring_). That
+Worker's log stays off all the same: "a body is not in the log" is Cloudflare's
+behaviour, and "the log is off" is ours.
 
 ### assembling the client (the injection seam)
 
@@ -314,7 +404,7 @@ progress (`sync/blob-transfer.ts` in `shared`):
 
 The extractor's image proxy (`ExtractClient.fetchImage`) streams a binary body,
 so it can't ride `callEndpoint` either. It applies the contract's deadline
-itself: `IMAGE_PROXY_TIMEOUT_MS`, 2 min, declared on `imageProxyEndpoint` and
+itself: `FETCH_IMAGE_TIMEOUT_MS`, 2 min, declared on `fetchImageEndpoint` and
 failing with the same `ApiTimeoutError`. That is a total covering the whole
 call, the body included: the extractor's 6 × 8 s redirect walk with over a
 minute to spare for an image capped at 10 MB and usually far smaller, pinned by
@@ -331,14 +421,20 @@ response })` descriptor — prefix `path` with `` `${API_V1}/…` `` (see _url
    versioning_ above). Reuse pure validators from `<area>/credentials.ts`
    (or a sibling) rather than re-declaring field rules. It's exported
    automatically via the barrel — add an `export *` line in `src/index.ts` if the
-   file is new.
+   file is new. **Pick the method by what the request carries, not by whether it
+   writes:** a GET's input becomes a query string and a query string is logged,
+   so anything a person chose makes it a POST
+   ([above](#a-gets-query-string-reaches-the-request-log)); a GET that is added
+   anyway has to be entered in `api/query-inventory.spec.ts`.
 
 2. **Server** — in `apps/bracemark-api/src/routes/<area>.ts`, build a `Hono()`
    sub-app whose route uses the contract's own `endpoint.path`, validates with
    `zValidator('query' | 'json', endpoint.request)`, and types the payload as the
    contract's response type so the handler fails to compile if the shape drifts.
    Mount it in `app.ts` via `app.route('/', <area>Routes)`. (CORS lives in
-   `app.ts` — `CORS_ORIGINS`, default `http://localhost:3000`, the web dev port.)
+   `app.ts` — `CORS_ORIGINS`, default `http://localhost:3000`, the web dev port —
+   with a two-hour `maxAge`, so a browser reuses a preflight rather than sending
+   one before every JSON or authenticated call.)
 
 3. **Client** — call `api.call(endpoint, input)`. `api` is the per-app client
    from `createAuthApiClient` (`apps/bracemark-web/src/lib/api.ts` with

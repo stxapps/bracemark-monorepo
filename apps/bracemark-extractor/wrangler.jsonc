@@ -19,15 +19,19 @@
   // fetch(request, env, ctx) on it.
   "main": "src/worker.ts",
   "compatibility_date": "2026-06-01",
-  // Observability with the INVOCATION LOG OFF — the one config that decides whether
-  // this app keeps its central promise. Cloudflare's automatic per-request log
-  // records the request line, and `GET /v1/image?url=…` carries the user's URL in
-  // its query string, so leaving `invocation_logs` at its default would PERSIST
-  // exactly the URLs docs/link-extraction.md (_never log the URL_) promises stay
-  // transient — and would falsify the claim the privacy policy prints
-  // (apps/bracemark-site/src/app/privacy/page.tsx, _link previews_: "writes none to
-  // its logs"). `/extract` is a POST, so only the proxy leaks this way; the setting
-  // covers both regardless.
+  // Observability with the INVOCATION LOG OFF — and it stays off although no
+  // request line here carries a saved address any more. Cloudflare's automatic
+  // per-request log records the request line, and the image proxy used to be
+  // `GET /v1/image?url=…`, the user's URL in its query string; left at its default,
+  // `invocation_logs` would have PERSISTED exactly the URLs docs/link-extraction.md
+  // (_never log the URL_) promises stay transient. Both endpoints are POSTs now and
+  // the address travels in the body, which the same log on bracemark-api was not
+  // seen to store (docs/api-contracts.md) — but "the body is unlogged" is
+  // Cloudflare's behaviour on Cloudflare's schedule, and "the log is off" is ours.
+  // The privacy policy prints the second one
+  // (apps/bracemark-site/src/app/privacy/page.tsx, _Technical and security data_,
+  // and _link previews_: "writes none to its logs"), so turning this on falsifies
+  // a published sentence whatever the request line holds.
   //
   // What survives: everything we log ON PURPOSE. `lib/errors.ts` and
   // `routes/extract.ts` are already written to this rule — the handler comment says
@@ -44,8 +48,8 @@
   // own log (what `wrangler tail` and the dashboard show), while `logpush` ships
   // this Worker's TRACE EVENTS off Cloudflare to a destination you configure —
   // and a trace event carries the request line, so `invocation_logs: false` does
-  // NOT cover it. The key would persist exactly the `?url=` values the paragraph
-  // above exists to keep transient, except now in third-party storage, and it is
+  // NOT cover it. The key would ship this Worker's requests — the stream the
+  // paragraph above exists to keep unrecorded — into third-party storage, and it is
   // silent in the usual way: no lint error, no type error, nothing either runner
   // can observe. It needs a Workers Paid plan to take effect, so a repo that
   // upgrades its plan later is the case to watch.
@@ -55,10 +59,21 @@
   // anything in this file. It must stay off for the same reason, and nothing in
   // this repo can assert that it is. (Zone datasets are Enterprise-only, which is
   // what keeps it off by default rather than any choice made here.)
+  //
+  // `traces` is pinned OFF for the same reason, and it is the sharper half. A
+  // trace records a span for every outbound `fetch`, and this Worker's outbound
+  // fetch IS the saved address — so tracing could store what `invocation_logs:
+  // false` exists to keep out, by a different door. Today `enabled: true` turns
+  // on logs alone, but only because Cloudflare says so while tracing is in beta;
+  // that default can move on their release with no change here, so the answer is
+  // written down instead of inherited.
   "observability": {
     "enabled": true,
     "logs": {
       "invocation_logs": false,
+    },
+    "traces": {
+      "enabled": false,
     },
   },
   // Pin a distinct local port so it can run alongside bracemark-api (8787) under
@@ -110,7 +125,7 @@
       // anonymous open-fetch endpoint is an open proxy / DDoS reflector by default,
       // so the IP rate limit is load-bearing, not a nicety (the per-response byte
       // ceiling + timeout in the fetch path are the other half). /v1/extract runs on
-      // 'tight' (one batched request per page); /v1/image runs on the higher-burst
+      // 'tight' (one batched request per page); /v1/fetch-image runs on the higher-burst
       // 'image' tier (30/10s) because a page fans out to one image fetch per link —
       // but 'standard' (60/60s) on the same path still governs its sustained egress.
       // namespace_id is any unique positive integer.
@@ -159,12 +174,13 @@
       ],
       "routes": [{ "pattern": "extractor.dryrunbase.com", "custom_domain": true }],
       //
-      // IMPORTANT — never log the URL. The proxy's ?url= lands in the request line,
-      // so default Cloudflare request logs / Logpush would PERSIST exactly the URLs
-      // the design promises not to retain. If Logpush is enabled on this account,
-      // strip the query string at the edge (or disable request-line logging for
-      // this Worker). Observability above is aggregate-only by default; see
-      // docs/link-extraction.md ("Never log the URL").
+      // IMPORTANT — never log the URL. No request line carries one any more (both
+      // endpoints take the address in a POST body), so what is left that could
+      // PERSIST a URL the design promises not to retain is whatever records what
+      // this Worker DOES rather than what it was asked: tracing (a span per
+      // outbound fetch — pinned off above) and a `console.*` call that prints a
+      // request or an error whole. Logpush stays off for its own reason, also
+      // above. See docs/link-extraction.md ("Never log the URL").
     },
     "production": {
       "vars": {
@@ -188,7 +204,7 @@
         },
       ],
       "routes": [{ "pattern": "extractor.bracemark.com", "custom_domain": true }],
-      // See the staging note on stripping ?url= from request logs.
+      // See the staging note on never logging the URL.
     },
   },
 }

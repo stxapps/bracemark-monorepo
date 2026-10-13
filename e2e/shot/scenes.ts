@@ -122,7 +122,7 @@ async function coversDecoded(page: Page): Promise<void> {
 }
 
 // Then let the FAVICONS land. They are fetched per host through the same
-// extractor, one `GET /v1/image` each, bounded to `MAX_IN_FLIGHT` with a stagger
+// extractor, one `POST /v1/fetch-image` each, bounded to `MAX_IN_FLIGHT` with a stagger
 // so they never compete with the previews (web-react's FaviconProvider) — which
 // means they are still arriving for several seconds after every cover has
 // decoded. Capturing on the covers alone caught the page mid-fill: every row

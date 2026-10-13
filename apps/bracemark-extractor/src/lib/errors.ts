@@ -44,9 +44,15 @@ export function errorHandler(err: unknown, c: Context<AppEnv>): Response {
     return c.json({ error: 'http_error', message: err.message }, err.status);
   }
 
-  // Anything else is an unexpected bug. Log it for observability (wrangler tail /
-  // the observability binding) but never leak internals — and never the URL — to
-  // the client.
-  console.error('Unhandled error:', err);
+  // Anything else is an unexpected bug. Log THAT it happened and what kind it was
+  // — the error's name only, exactly as `extractOne` does (routes/extract.ts) —
+  // and never leak internals to the client.
+  //
+  // The name, not the error: this deliberately differs from bracemark-api's
+  // handler, which prints the whole object. An unexpected error's message is not
+  // ours to vouch for — a runtime TypeError can quote the string it choked on,
+  // and in this Worker that string is the URL — and this log is stored, which is
+  // the one thing `invocation_logs: false` in wrangler.jsonc does not cover.
+  console.error('Unhandled error:', err instanceof Error ? err.name : 'unknown');
   return c.json({ error: 'internal_error' }, 500);
 }

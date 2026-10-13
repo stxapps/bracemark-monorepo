@@ -519,7 +519,7 @@ never a favicon-specific setting:**
 
 | client                  | source                                                                                                                     | gate                                                                          |
 | ----------------------- | -------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| **bracemark-web**       | `/favicon.ico` guess, bytes through the extractor's `GET /v1/image` proxy                                                  | the `serverExtraction` opt-in                                                 |
+| **bracemark-web**       | `/favicon.ico` guess, bytes through the extractor's `POST /v1/fetch-image` proxy                                           | the `serverExtraction` opt-in                                                 |
 | **bracemark-expo**      | direct native fetch (no CORS); the real `<link rel="icon">` when it extracts the page anyway                               | `deviceExtractionMode` (`all` to guess; `saves` captures declared icons only) |
 | **bracemark-extension** | **never fetches** — `tab.favIconUrl` in the popup; Chrome's `_favicon` API if a browse UI ever exists; monogram on Firefox | none needed — zero network                                                    |
 
@@ -1533,15 +1533,17 @@ browser that can't fetch for itself. It is a **separate app**, not a route in
   per-paint leak _the preview image is a downloaded blob_ forbids). So
   `bracemark-extractor` doubles as a **stateless image proxy**: a single interactive
   save **inlines** the image bytes in the extraction response (one round trip); a
-  bulk import gets URLs only and the client pulls each image from `GET /image?url=…`,
-  which **streams the remote bytes through and buffers/persists nothing**. The
+  bulk import gets URLs only and the client pulls each image from
+  `POST /v1/fetch-image`, which **streams the remote bytes through and
+  buffers/persists nothing**. The
   client encrypts the streamed bytes into `files/{id}.enc` itself. ⚠ "Persists
   nothing" has to hold on the **receiving** side too, and for a while it did not:
   the proxy answered `Cache-Control: public, max-age=86400, immutable`, on the
   argument that the browser's cache would serve a re-view. No client re-views —
   each reads the bytes once and stores them itself — so what that header bought
   was a second, readable copy in the browser's HTTP cache, keyed by a URL that
-  names the image or the saved site's `favicon.ico`, and outliving a sign-out
+  named the image or the saved site's `favicon.ico` (the proxy was a GET then,
+  the address in its query string), and outliving a sign-out
   (measured in Chrome: one cache entry per proxied image). Every response of this
   Worker is `no-store` now, by one middleware in its `app.ts`, as bracemark-api's
   is ([api-contracts.md](./api-contracts.md), _no response is cacheable_). The
@@ -1583,22 +1585,39 @@ browser that can't fetch for itself. It is a **separate app**, not a route in
   **every hop**, on both the HTML fetch and the image proxy.
 - **Never log the URL.** The extractor's whole reason to exist is that the URL it
   sees stays transient — so observability must be **aggregate-only** (counts,
-  latency, error rates), never the URL itself. This is a config footgun, not a code
-  one: the proxy's `?url=` lands in query strings, so default Cloudflare request
-  logs / Logpush would **persist** exactly the URLs the design promises not to
-  retain. Strip them at the edge; if you can't, don't log the request line.
-  **Configured:** `wrangler.jsonc` sets `observability.logs.invocation_logs: false`,
+  latency, error rates), never the URL itself. It was a config footgun rather
+  than a code one for as long as the proxy was `GET /v1/image?url=…`: the address
+  landed in the request line, so default Cloudflare request logs / Logpush would
+  have **persisted** exactly the URLs the design promises not to retain.
+  **In the code now:** the proxy is `POST /v1/fetch-image { url }`, so — like
+  `/v1/extract` — it takes the address in the body, and no request line this
+  Worker receives names a page
+  ([api-contracts.md](./api-contracts.md#a-gets-query-string-reaches-the-request-log);
+  `routes/image.spec.ts` pins that no GET answers). **Configured, still:**
+  `wrangler.jsonc` sets `observability.logs.invocation_logs: false`,
   which drops the automatic request-line log and keeps the deliberate ones (the
-  error handler and `extractOne` are already written never to log the URL). The
+  error handler and `extractOne` both log an error's **name** and nothing else —
+  the whole error would be one runtime message quoting its input away from
+  storing the URL; `lib/errors.spec.ts` pins the handler). The
   zone's Logpush setting is the other half and lives outside this repo.
   ⚠ **This setting is now published.** /privacy's _Technical and security data_
   section cites it — that the one service handed a page address runs with the log
   that would record its request line switched off — as the answer to "how long do
   you keep request logs", in place of a retention period we do not control and
-  could not keep true. So flipping `invocation_logs` back on, here or on
-  `bracemark-api`, falsifies a live sentence in the privacy policy, and nothing
-  connects the two: no lint rule, no type error, and no test in either runner
-  reads a `wrangler.jsonc` against a page. The claim on that page is scoped to
+  could not keep true. So flipping `invocation_logs` back on here falsifies a
+  live sentence in the privacy policy whatever the request line holds, and
+  nothing connects the two: no lint rule, no type error, and no test in either
+  runner reads a `wrangler.jsonc` against a page. (The sentence used to end
+  "because that line is where the address would appear"; the clause went when
+  the proxy became a POST, and the page claims nothing about the body.)
+  (`bracemark-api` is the other way round and equally published:
+  its invocation log is **on**, and the same section of /privacy says so and
+  says no address it logs contains a username —
+  [api-contracts.md](./api-contracts.md#a-gets-query-string-reaches-the-request-log).
+  What would falsify the page on _either_ Worker is `logpush`, or tracing: both
+  `wrangler.jsonc` files pin `observability.traces.enabled` to `false`, because
+  a trace is a second stored record with a span per outbound fetch, and here
+  that fetch is the saved address.) The claim on that page is scoped to
   **our settings** on purpose and must stay that way — the zone-level channel
   above is exactly what a widened "we do no request logging" would be wrong
   about.
@@ -1739,7 +1758,8 @@ that opt-in.
   _favicons_); nothing else changes, and it covers every path where the web app
   calls `/v1/extract` (web saves, _enrich all_). Step 3, **only if** monograms
   on synced-from-elsewhere links prove visibly common after step 2: a dedicated
-  **`GET /v1/favicon?host=`** endpoint whose cascade is `/favicon.ico` → fetch
+  **`POST /v1/fetch-favicon { host }`** endpoint (a POST: the host is a saved
+  site's, so it stays out of the URL) whose cascade is `/favicon.ico` → fetch
   `https://host/` and scan `link[rel~="icon"]` — the residual it serves is
   hosts that arrive via sync (no extract call on this device) _and_ don't serve
   `/favicon.ico`, a small slice whose failure mode is a monogram, which is why

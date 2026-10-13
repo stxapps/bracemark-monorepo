@@ -1223,7 +1223,8 @@ disk after a sign-out, not by anything the app could observe.
   on a blob ([api-contracts.md](./api-contracts.md), _no response is
   cacheable_, with the before-and-after counts). bracemark-extractor does too:
   its image proxy used to ask the browser to keep each preview and favicon for
-  a day, under a URL naming the saved site.
+  a day, under a URL naming the saved site (it is a POST now, and no URL of
+  that Worker names one).
 - ⚠ **The form history.** A browser keeps what is typed into a field it thinks
   worth completing, and offers it to whoever types there next: the add-link
   dialog's URL and the edit dialog's Title were both in the profile's autofill

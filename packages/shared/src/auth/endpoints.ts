@@ -17,13 +17,19 @@ export const checkUsernameResponseSchema = z.object({
 });
 export type CheckUsernameResponse = z.infer<typeof checkUsernameResponseSchema>;
 
-// GET /v1/auth/username-available?username=… → { available }
+// POST /v1/auth/check-username { username } → { available }
 // Cheap pre-submit check so the create-account form can flag a taken username
 // before the KDF + proof-signing dance. Not authoritative — account creation
 // still re-checks server-side to close the race.
+//
+// A POST although it only reads, and the two door fetches below are the same:
+// the client sends a GET's input as a query string (api/client.ts), and the
+// api's request log stores the request line whole — so as a GET this wrote the
+// username into a stored log entry beside the caller's IP. A body is not in that
+// log. docs/api-contracts.md, _a GET's query string reaches the request log_.
 export const checkUsernameEndpoint = defineEndpoint({
-  method: 'GET',
-  path: `${API_V1}/auth/username-available`,
+  method: 'POST',
+  path: `${API_V1}/auth/check-username`,
   request: checkUsernameRequestSchema,
   response: checkUsernameResponseSchema,
 });
@@ -127,10 +133,11 @@ export type PasswordDoorRequest = z.infer<typeof passwordDoorRequestSchema>;
 // shape the client sends UP at create-account, reused here for the round trip.
 export type PasswordDoorResponse = z.infer<typeof wirePasswordDoorSchema>;
 
-// GET /v1/auth/password-door?username=… → { wrappedDek, iv }
-export const passwordDoorEndpoint = defineEndpoint({
-  method: 'GET',
-  path: `${API_V1}/auth/password-door`,
+// POST /v1/auth/read-password-door { username } → { wrappedDek, iv }
+// (A POST for the username's sake — see checkUsernameEndpoint.)
+export const readPasswordDoorEndpoint = defineEndpoint({
+  method: 'POST',
+  path: `${API_V1}/auth/read-password-door`,
   request: passwordDoorRequestSchema,
   response: wirePasswordDoorSchema,
 });
@@ -149,10 +156,12 @@ export const recoveryDoorRequestSchema = z.object({
 export type RecoveryDoorRequest = z.infer<typeof recoveryDoorRequestSchema>;
 export type RecoveryDoorResponse = z.infer<typeof wireDoorSchema>;
 
-// GET /v1/auth/recovery-door?username=… → { wrappedDek, iv }
-export const recoveryDoorEndpoint = defineEndpoint({
-  method: 'GET',
-  path: `${API_V1}/auth/recovery-door`,
+// POST /v1/auth/read-recovery-door { username } → { wrappedDek, iv }
+// (A POST for the username's sake — see checkUsernameEndpoint. The write is
+// put-recovery-door, below.)
+export const readRecoveryDoorEndpoint = defineEndpoint({
+  method: 'POST',
+  path: `${API_V1}/auth/read-recovery-door`,
   request: recoveryDoorRequestSchema,
   response: wireDoorSchema,
 });
@@ -410,10 +419,12 @@ export type PutRecoveryDoorRequest = z.infer<typeof putRecoveryDoorRequestSchema
 export const putRecoveryDoorResponseSchema = z.object({ ok: z.literal(true) });
 export type PutRecoveryDoorResponse = z.infer<typeof putRecoveryDoorResponseSchema>;
 
-// POST /v1/auth/recovery-door → { ok: true }  (upsert the recovery door)
+// POST /v1/auth/put-recovery-door → { ok: true }  (upsert the recovery door)
+// The path's last segment is the signed payload's `action`, as it is for every
+// endpoint that takes a proof.
 export const putRecoveryDoorEndpoint = defineEndpoint({
   method: 'POST',
-  path: `${API_V1}/auth/recovery-door`,
+  path: `${API_V1}/auth/put-recovery-door`,
   request: putRecoveryDoorRequestSchema,
   response: putRecoveryDoorResponseSchema,
 });

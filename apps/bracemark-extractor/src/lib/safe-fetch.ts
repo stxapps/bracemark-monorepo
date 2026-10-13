@@ -16,9 +16,9 @@ import { assertPublicHttpUrl, SsrfError } from './ssrf';
 // 4 GB file).
 
 // --- caps -------------------------------------------------------------------
-// These two bound how long POST /v1/extract and GET /v1/image can take before
+// These two bound how long POST /v1/extract and POST /v1/fetch-image can take before
 // they answer, and the client's deadlines for them (`EXTRACT_TIMEOUT_MS`,
-// `IMAGE_PROXY_TIMEOUT_MS`, @stxapps/shared extract/endpoints.ts) are sized from
+// `FETCH_IMAGE_TIMEOUT_MS`, @stxapps/shared extract/endpoints.ts) are sized from
 // them — raise either, raise those. MAX_IMAGE_BYTES feeds the image one too.
 export const FETCH_TIMEOUT_MS = 8_000; // per-hop upstream deadline
 export const MAX_REDIRECTS = 5; // total redirect hops to follow

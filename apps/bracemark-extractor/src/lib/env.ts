@@ -27,11 +27,11 @@ export type Bindings = {
   // The native binding's window is 10s or 60s only, so a literal "1 req/sec"
   // is expressed as the tight tier (10 req / 10s). Counters are per-colo. The two
   // fetch endpoints fetch arbitrary URLs but have different load shapes: /v1/extract
-  // is one (batched) request per page → `tight`; /v1/image fans out to one request
+  // is one (batched) request per page → `tight`; /v1/fetch-image fans out to one request
   // per link → its own higher-burst `image` tier (see middleware/rate-limit.ts).
   API_RATE_LIMIT: RateLimit; // standard tier (baseline)
   API_RATE_LIMIT_TIGHT: RateLimit; // tight tier (/v1/extract — HTML fetch)
-  API_RATE_LIMIT_IMAGE: RateLimit; // burst tier (/v1/image — per-link image proxy)
+  API_RATE_LIMIT_IMAGE: RateLimit; // burst tier (/v1/fetch-image — per-link image proxy)
 };
 
 // The extractor has no request-scoped variables (no session — it's anonymous), so

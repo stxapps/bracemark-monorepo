@@ -18,7 +18,7 @@
 // WHY THE PROXY. The web app can't read cross-origin image bytes (CORS / tainted
 // canvas), and pointing an <img> straight at `https://host/favicon.ico` is the
 // per-paint third-party leak the design forbids — the same reason the og:image goes
-// through GET /v1/image (extract/endpoints.ts). So a favicon rides that existing
+// through POST /v1/fetch-image (extract/endpoints.ts). So a favicon rides that existing
 // proxy verbatim: no new endpoint, and POST /v1/extract is untouched, so the
 // metadata path does no extra work.
 //
@@ -62,7 +62,7 @@ import { isFaviconStale, putFavicon, putFaviconNone, readFavicon } from '../data
 import { useSettings } from '../hooks/use-settings';
 import { useAuth } from './auth-provider';
 
-// Favicons have no batch endpoint (one GET /v1/image each), so unlike
+// Favicons have no batch endpoint (one POST /v1/fetch-image each), so unlike
 // FileContentProvider there's nothing to micro-batch — the queue exists only to
 // BOUND FAN-OUT. Scrolling into a run of all-distinct hosts would otherwise fire a
 // request per row at once, tripping the extractor's per-IP rate cap and getting

@@ -31,9 +31,11 @@ app.onError(errorHandler);
 // No response of this api may be kept by an HTTP cache, and it says so itself:
 // a response with no `Cache-Control` is one a client's cache is free to store.
 // React Native's OkHttp cache on Android did — every GET here, request URL
-// included, so a device held `password-door?username=…` and the account's
-// object keys after the account had signed out of it, in a directory no
-// teardown reaches (docs/api-contracts.md, _no response is cacheable_). A
+// included, so a device held `password-door?username=…` (a GET at the time; the
+// username lookups are POSTs now, for the server-side twin of this reason) and
+// the account's object keys after the account had signed out of it, in a
+// directory no teardown reaches (docs/api-contracts.md, _no response is
+// cacheable_). A
 // browser's cache and iOS's URL cache are the same kind of place. `no-store`
 // rather than `no-cache`: the point is that nothing is written, not that it is
 // revalidated.
@@ -60,6 +62,19 @@ app.use(
     // Let browser JS read the 429's Retry-After (middleware/rate-limit.ts) — a
     // non-safelisted response header is invisible to a CORS caller otherwise.
     exposeHeaders: ['Retry-After'],
+    // Let a browser reuse a preflight instead of sending one before every call.
+    // Nearly every request here is preflighted — a JSON body or the
+    // `authorization` header is enough — and since the username lookups became
+    // POSTs that includes the check that fires as someone types a name
+    // (auth/endpoints.ts in @stxapps/shared). Two hours is Chromium's ceiling;
+    // other engines apply their own, lower or higher. The entry is per URL, query
+    // string included, so a GET whose cursor moves (ops/list, files/list) asks
+    // again. The cost is small: an origin REMOVED from CORS_ORIGINS keeps
+    // skipping the preflight for that long in a browser that already asked, so
+    // its requests still arrive — but the answer is refused to it at once,
+    // because the allow-list is read on every response. An origin added works
+    // immediately; a refused preflight is not kept.
+    maxAge: 7200,
   }),
 );
 

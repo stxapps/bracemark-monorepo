@@ -6,7 +6,7 @@ import {
   ApiError,
   canonicalizeUsername,
   hexToBytes,
-  recoveryDoorEndpoint,
+  readRecoveryDoorEndpoint,
   signInEndpoint,
   type SignInPayload,
 } from '@stxapps/shared';
@@ -39,7 +39,7 @@ export function useSignInWithRecovery() {
       // either way (no enumeration oracle).
       let door;
       try {
-        door = await api.call(recoveryDoorEndpoint, { username });
+        door = await api.call(readRecoveryDoorEndpoint, { username });
       } catch (err) {
         if (err instanceof ApiError && err.status === 404) throw new InvalidRecoveryCodeError();
         throw err;

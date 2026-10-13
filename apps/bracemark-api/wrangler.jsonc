@@ -16,6 +16,19 @@
   // because its request line carries a user-supplied URL; this Worker's paths
   // carry opaque ids and its bodies are ciphertext.
   //
+  // ⚠ "Opaque ids" has to stay true of the whole URL, query string included,
+  // because an entry in this log holds the request line whole beside the client
+  // IP and the location Cloudflare derives from it (read back from both deployed
+  // tiers, 2026-10-13: the URL, the request headers with `authorization` masked,
+  // the IP, the response status — no body). It was NOT true for a stretch: three
+  // pre-auth lookups were GETs carrying `?username=…`, so their entries paired a
+  // username with an IP. They are POSTs now, and /privacy's _Technical and
+  // security data_ says in as many words that this log is on and that no address
+  // in it contains a username. A GET whose query carries anything a person chose
+  // falsifies that sentence; `query-inventory.spec.ts` in @stxapps/shared is
+  // what notices. docs/api-contracts.md, _a GET's query string reaches the
+  // request log_.
+  //
   // NEVER add `"logpush": true`. It reads like a sibling of `observability` and
   // is a different CHANNEL: it ships this Worker's TRACE EVENTS — request line,
   // headers, console output — off Cloudflare to a destination you configure, so
@@ -24,8 +37,18 @@
   // no plaintext, kept under someone else's retention policy. Nothing catches
   // the key: no lint error, no type error, no test in either runner.
   // bracemark-extractor's wrangler.jsonc has the sharper version of this.
+  //
+  // `traces` is pinned OFF rather than left unset. Today `enabled: true` turns on
+  // logs alone, but only because Cloudflare says so while tracing is in beta — a
+  // default that can move on their release, with no change here. A trace is a
+  // second stored record of the request, with a span per outbound call, and
+  // nothing above was written with it in mind. Turning it on is a decision that
+  // /privacy has to hear about first, so it is spelled out as one.
   "observability": {
     "enabled": true,
+    "traces": {
+      "enabled": false,
+    },
   },
   // Pin the local `wrangler dev` port. Without this, wrangler treats 8787 as a
   // *default* and silently falls back to a random port (8788, …) when 8787 is

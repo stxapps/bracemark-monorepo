@@ -668,7 +668,7 @@ ceiling, none of which `ssrf.spec.ts` can reach because it only ever sees the
 initial URL. Alongside it: each byte ceiling asserted at its own edge
 (truncate for HTML, throw for an inline image, abort mid-stream for the proxy —
 three different right answers), the CORS allow-list denying when its binding is
-absent, the `/v1/image` exemption from the baseline rate-limit tier, and the
+absent, the `/v1/fetch-image` exemption from the baseline rate-limit tier, and the
 limiter's per-IP-per-path key, which is a **published** fact rather than an
 internal (`/privacy` and `/extractor` both name `cf-connecting-ip`). What the
 suite cannot check is the thing `wrangler.jsonc` decides — that no URL reaches a

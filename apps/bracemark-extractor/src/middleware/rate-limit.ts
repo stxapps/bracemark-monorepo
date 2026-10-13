@@ -22,14 +22,13 @@ export const RATE_LIMIT_TIERS = {
   standard: 'API_RATE_LIMIT',
   // Stricter tier for the HTML-fetch endpoint /v1/extract (~10 req / 10s ≈ 1/s).
   tight: 'API_RATE_LIMIT_TIGHT',
-  // SOLE rate limiter for /v1/image (configured ~30 req / 10s). The image proxy is
-  // the PER-PAGE bottleneck — one page of N links fans out to N image fetches — so it
-  // needs a wider window than /v1/extract (one batched request) to fill a page
-  // without 429ing honest browsing. Unlike /extract, /v1/image is EXEMPT from the
-  // `standard` 60/60s baseline (which would throttle browsing to ~1 img/s — and the
-  // limiter runs before the edge-cache check, so even cache hits would count), so
-  // this tier is its only request cap; the per-response byte ceiling + timeout remain
-  // the real abuse floor.
+  // SOLE rate limiter for /v1/fetch-image (configured ~30 req / 10s). The image
+  // proxy is the PER-PAGE bottleneck — one page of N links fans out to N image
+  // fetches — so it needs a wider window than /v1/extract (one batched request) to
+  // fill a page without 429ing honest browsing. Unlike /extract, it is EXEMPT from
+  // the `standard` 60/60s baseline (which would throttle browsing to ~1 img/s), so
+  // this tier is its only request cap; the per-response byte ceiling + timeout
+  // remain the real abuse floor.
   image: 'API_RATE_LIMIT_IMAGE',
 } as const satisfies Record<string, keyof Bindings>;
 
@@ -56,9 +55,9 @@ export function ipRateLimitKey(c: Context<AppEnv>): string {
 
 // Rate-limit middleware backed by Cloudflare's native Workers Rate Limiting
 // binding. `app.ts` applies the `standard` tier as a baseline on every route except
-// /v1/image; the fetch endpoints set their own tier at the route level
-// (/v1/extract stacks `tight` on top of the baseline, /v1/image uses `image` as its
-// sole limiter — see app.ts).
+// /v1/fetch-image; the fetch endpoints set their own tier at the route level
+// (/v1/extract stacks `tight` on top of the baseline, /v1/fetch-image uses `image`
+// as its sole limiter — see app.ts).
 export function rateLimit(tier: RateLimitTier = 'standard') {
   const bindingName = RATE_LIMIT_TIERS[tier];
 

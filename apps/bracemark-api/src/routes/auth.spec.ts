@@ -8,9 +8,9 @@ import {
   deleteAccountEndpoint,
   DOOR_PASSWORD,
   DOOR_RECOVERY,
-  passwordDoorEndpoint,
   putRecoveryDoorEndpoint,
-  recoveryDoorEndpoint,
+  readPasswordDoorEndpoint,
+  readRecoveryDoorEndpoint,
   SESSION_ERROR,
   sessionProbeEndpoint,
   signInEndpoint,
@@ -33,6 +33,20 @@ import { issueSession } from '../services/session';
 // version-prefix changes (e.g. /v1 → /v2) without editing every literal here.
 const usernamePath = checkUsernameEndpoint.path;
 
+// The three pre-auth lookups are POSTs that only read — the username travels in
+// the body because the request log stores the URL (docs/api-contracts.md, _a
+// GET's query string reaches the request log_).
+const lookup = (path: string, username: string) =>
+  app.request(
+    path,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ username }),
+    },
+    env,
+  );
+
 // What the api now answers this token with — through the probe endpoint, i.e.
 // the guard every protected route runs. `ok` for a live session, otherwise the
 // 401's code: the verdict a client acts on (docs/sessions.md).
@@ -51,9 +65,21 @@ async function verdict(token: string): Promise<string> {
 // limits), so the username routes that query DIRECTORY_DB actually run. Storage
 // is isolated per test (see vitest.config.ts) and seeded with migrations only.
 describe('auth routes', () => {
-  describe(`GET ${checkUsernameEndpoint.path}`, () => {
+  // The old shape — a GET with `?username=` — wrote the username into the stored
+  // request log. Pinned as gone rather than left to the contract alone: a `.get`
+  // re-added here by hand would answer again without the contract noticing.
+  it.each([checkUsernameEndpoint, readPasswordDoorEndpoint, readRecoveryDoorEndpoint])(
+    'does not answer a username in the URL: GET $path',
+    async ({ path }) => {
+      const res = await app.request(`${path}?username=freshname`, {}, env);
+
+      expect(res.status).toBe(404);
+    },
+  );
+
+  describe(`POST ${checkUsernameEndpoint.path}`, () => {
     it('reports an available username', async () => {
-      const res = await app.request(`${usernamePath}?username=freshname`, {}, env);
+      const res = await lookup(usernamePath, 'freshname');
 
       expect(res.status).toBe(200);
       await expect(res.json()).resolves.toEqual({ available: true });
@@ -69,7 +95,7 @@ describe('auth routes', () => {
         accountDbId: '1',
       });
 
-      const res = await app.request(`${usernamePath}?username=Zoe_42`, {}, env);
+      const res = await lookup(usernamePath, 'Zoe_42');
 
       expect(res.status).toBe(200);
       await expect(res.json()).resolves.toEqual({ available: false });
@@ -78,7 +104,7 @@ describe('auth routes', () => {
     // This one needs no DB: it fails at the zValidator (shared schema) before the
     // handler ever touches a binding.
     it('rejects a username that fails the shared validation rules', async () => {
-      const res = await app.request(`${usernamePath}?username=no`, {}, env);
+      const res = await lookup(usernamePath, 'no');
 
       expect(res.status).toBe(400);
     });
@@ -87,7 +113,7 @@ describe('auth routes', () => {
     // enforced at the zValidator server-side too — a reserved handle never reaches
     // the handler (and any casing collapses to the canonical form first).
     it('rejects a reserved username at the server', async () => {
-      const res = await app.request(`${usernamePath}?username=Admin`, {}, env);
+      const res = await lookup(usernamePath, 'Admin');
 
       expect(res.status).toBe(400);
     });
@@ -133,11 +159,11 @@ describe('auth routes', () => {
     return kp;
   }
 
-  describe(`GET ${passwordDoorEndpoint.path}`, () => {
+  describe(`POST ${readPasswordDoorEndpoint.path}`, () => {
     it('returns the password door blob for an existing account', async () => {
       await seedAccount('doorholder');
 
-      const res = await app.request(`${passwordDoorEndpoint.path}?username=doorholder`, {}, env);
+      const res = await lookup(readPasswordDoorEndpoint.path, 'doorholder');
 
       expect(res.status).toBe(200);
       await expect(res.json()).resolves.toEqual({
@@ -147,13 +173,13 @@ describe('auth routes', () => {
     });
 
     it('returns 404 for an unknown username', async () => {
-      const res = await app.request(`${passwordDoorEndpoint.path}?username=ghostuser`, {}, env);
+      const res = await lookup(readPasswordDoorEndpoint.path, 'ghostuser');
 
       expect(res.status).toBe(404);
     });
 
     it('rejects a malformed username at the contract boundary', async () => {
-      const res = await app.request(`${passwordDoorEndpoint.path}?username=no`, {}, env);
+      const res = await lookup(readPasswordDoorEndpoint.path, 'no');
 
       expect(res.status).toBe(400);
     });
@@ -434,14 +460,10 @@ describe('auth routes', () => {
       );
 
       // Availability: taken, forever.
-      const avail = await app.request(`${checkUsernameEndpoint.path}?username=tombstoned`, {}, env);
+      const avail = await lookup(checkUsernameEndpoint.path, 'tombstoned');
       await expect(avail.json()).resolves.toEqual({ available: false });
       // The pre-auth door fetch answers like a name that never existed.
-      const doorRes = await app.request(
-        `${passwordDoorEndpoint.path}?username=tombstoned`,
-        {},
-        env,
-      );
+      const doorRes = await lookup(readPasswordDoorEndpoint.path, 'tombstoned');
       expect(doorRes.status).toBe(404);
       // A re-claim (create-account) loses to the tombstone's PK — clean 409.
       const kp = await newKeyPair();
@@ -647,15 +669,11 @@ describe('auth routes', () => {
     body: JSON.stringify({ payload, signature: await sign(keyPair, payload) }),
   });
 
-  describe(`GET ${recoveryDoorEndpoint.path}`, () => {
+  describe(`POST ${readRecoveryDoorEndpoint.path}`, () => {
     it('returns the recovery door blob when the account has one', async () => {
       await seedSessioned('recoveryholder', true);
 
-      const res = await app.request(
-        `${recoveryDoorEndpoint.path}?username=recoveryholder`,
-        {},
-        env,
-      );
+      const res = await lookup(readRecoveryDoorEndpoint.path, 'recoveryholder');
 
       expect(res.status).toBe(200);
       await expect(res.json()).resolves.toEqual(hexDoor(door));
@@ -664,7 +682,7 @@ describe('auth routes', () => {
     it('returns 404 when the account skipped recovery (password door only)', async () => {
       await seedAccount('norecovery');
 
-      const res = await app.request(`${recoveryDoorEndpoint.path}?username=norecovery`, {}, env);
+      const res = await lookup(readRecoveryDoorEndpoint.path, 'norecovery');
 
       expect(res.status).toBe(404);
     });

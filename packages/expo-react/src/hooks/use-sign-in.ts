@@ -6,7 +6,7 @@ import {
   ApiError,
   canonicalizeUsername,
   hexToBytes,
-  passwordDoorEndpoint,
+  readPasswordDoorEndpoint,
   signInEndpoint,
   type SignInPayload,
   type SignInValues,
@@ -43,7 +43,7 @@ export function useSignIn() {
       // the SAME generic credential error as a wrong password.
       let door;
       try {
-        door = await api.call(passwordDoorEndpoint, { username });
+        door = await api.call(readPasswordDoorEndpoint, { username });
       } catch (err) {
         if (err instanceof ApiError && err.status === 404) throw new InvalidCredentialsError();
         throw err;

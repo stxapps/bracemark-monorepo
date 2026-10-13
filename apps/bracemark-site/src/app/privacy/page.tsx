@@ -194,7 +194,16 @@ export default function Page() {
             the reader the residual and where it is described, rather than waiting
             to be caught with it. The clause that survives ("we do not join it to
             your account") is the one that carries the meaning a reader wanted from
-            the absolute, and unlike the absolute it is true. */}
+            the absolute, and unlike the absolute it is true.
+
+            ⚠ IT IS TRUE OF THE LOG LINES TOO, AND THAT HALF IS HELD UP BY CODE.
+            For a stretch three pre-auth lookups were GETs with the username in
+            the query string, so Cloudflare's log entry for one of them held a
+            username beside an IP with nobody joining anything — and this clause
+            was false of exactly those requests. They are POSTs now. What keeps
+            it that way is described under _Technical and security data_ below
+            and in docs/api-contracts.md, _a GET's query string reaches the
+            request log_. */}
         <p>
           We do not collect an email address, a phone number, a name, or any other identifier when
           you create an account. If you never write to us and never subscribe, the account itself
@@ -260,8 +269,14 @@ export default function Page() {
             sitting in the repository unpublished: Logpush is deliberately off on
             both Workers (it would ship the request line off Cloudflare into
             third-party storage), and bracemark-extractor additionally runs with
-            `invocation_logs: false` because its request line is the one place a
-            saved address would appear. Both are in the two Workers' wrangler.jsonc
+            `invocation_logs: false`. Its request line WAS the one place a saved
+            address would appear, which is where that setting came from and what
+            the sentence used to give as its reason ("because that line is where
+            the address would appear"). It no longer is — both of its endpoints
+            are POSTs and the address is in the body — so the reason clause is
+            gone and the setting is stated bare: the log is off, which is ours
+            to keep true, where "a body is not logged" would be Cloudflare's.
+            Both settings are in the two Workers' wrangler.jsonc
             files with the reasoning written out, so this paragraph cites a
             configuration a reader can open rather than an adjective they have to
             accept. (A glob for those two paths is exactly the thing that cannot be
@@ -290,12 +305,46 @@ export default function Page() {
           destination, so there is no copy of that stream sitting in a third party’s storage under a
           retention period of its own. And the link-preview service — the one part of Bracemark that
           is ever handed a page address — runs with the log that would record its request line
-          switched off, because that line is where the address would appear. Both are settings in
-          the configuration files in{' '}
+          switched off. Both are settings in the configuration files in{' '}
           <a href={SOURCE.url} rel="noreferrer">
             {SOURCE.label}
           </a>
           , with the reasoning written out beside them.
+        </p>
+        {/* THE OTHER WORKER'S LOG IS ON, AND THE PARAGRAPH ABOVE MAKES A READER
+            ASK. Saying the extractor's request-line log is off and stopping there
+            leaves bracemark-api's to be assumed off too — and it is on
+            (apps/bracemark-api/wrangler.jsonc, `observability`), with a reader
+            one click from the file that says so.
+
+            What an entry holds was read back from the stored log of both
+            deployed tiers on 2026-10-13, not inferred from the config: the whole
+            request URL, query string included, beside the client IP. So the
+            claim is about ADDRESSES, which are ours, and it is a rule the code
+            keeps: nothing a person chose rides in a URL. The lookups that name an
+            account are POSTs for exactly this sentence (they were GETs with
+            `?username=` until that read found them), and
+            packages/shared/src/api/query-inventory.spec.ts fails on any new GET
+            field until someone has decided it is not one.
+
+            It claims NOTHING about what Cloudflare leaves out — not that a body
+            is unlogged, not that the bearer token reads back masked. Both were
+            true when read and both are their behaviour on their release
+            schedule, the same reason no retention number is on this page. "In
+            the body of the request" says where WE put the username and stops.
+
+            ⚠ ORDER OF DEPLOY. This is true of a tier once its api and every
+            client calling it carry the POST lookups, and of its stored log about
+            a week after that. Publish this page after them, not before.
+            docs/api-contracts.md, _a GET's query string reaches the request
+            log_. */}
+        <p>
+          Our API — the service behind sign-in, sync, and billing — runs with that log on, so the
+          address of every request it receives is recorded alongside the request data above. None of
+          those addresses contains your username. A request that has to name an account — checking
+          whether a username is free, or the first step of signing in — sends the username in the
+          body of the request instead, and once you’re signed in a request identifies you with a
+          session token.
         </p>
 
         <h3>What Apple and Google tell us</h3>

@@ -9,15 +9,21 @@ function stubFetch(impl: (url: string) => Response): ReturnType<typeof vi.fn> {
   return mock;
 }
 
-async function getImage(url: string): Promise<Response> {
-  return app.request(`/v1/image?url=${encodeURIComponent(url)}`);
+const PATH = '/v1/fetch-image';
+
+async function fetchImage(url: string): Promise<Response> {
+  return app.request(PATH, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ url }),
+  });
 }
 
 afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('GET /v1/image', () => {
+describe('POST /v1/fetch-image', () => {
   it('streams image bytes through with the upstream content-type', async () => {
     const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3, 4]);
     stubFetch(
@@ -28,17 +34,18 @@ describe('GET /v1/image', () => {
         }),
     );
 
-    const res = await getImage('https://cdn.example.com/i.png');
+    const res = await fetchImage('https://cdn.example.com/i.png');
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toBe('image/png');
     expect(new Uint8Array(await res.arrayBuffer())).toEqual(bytes);
   });
 
-  // The proxy's URL carries the address it fetched, so a cached response is a
-  // saved link's preview — or a favicon naming a saved site's host — kept in the
-  // browser's storage under that address, past a sign-out. It used to ask for a
-  // day of exactly that. The upstream's own header must not get through either:
-  // a CDN's `immutable` is about ITS url, not about ours.
+  // A cached response is a saved link's preview — or a saved site's favicon —
+  // kept in the browser's storage past a sign-out. It used to ask for a day of
+  // exactly that, as a GET whose URL carried the address it fetched; it is a POST
+  // now, which caches do not store in practice, and the header is what says so
+  // outright. The upstream's own header must not get through either: a CDN's
+  // `immutable` is about ITS url, not about ours.
   it('tells caches to store nothing, whatever the upstream said', async () => {
     stubFetch(
       () =>
@@ -51,7 +58,7 @@ describe('GET /v1/image', () => {
         }),
     );
 
-    const res = await getImage('https://cdn.example.com/i.png');
+    const res = await fetchImage('https://cdn.example.com/i.png');
 
     expect(res.status).toBe(200);
     expect(res.headers.get('cache-control')).toBe('no-store');
@@ -63,7 +70,7 @@ describe('GET /v1/image', () => {
         new Response('<html></html>', { status: 200, headers: { 'content-type': 'text/html' } }),
     );
 
-    const res = await getImage('https://example.com/not-an-image');
+    const res = await fetchImage('https://example.com/not-an-image');
     expect(res.status).toBe(415);
     await expect(res.json()).resolves.toEqual({ error: 'unsupported_type' });
   });
@@ -77,7 +84,7 @@ describe('GET /v1/image', () => {
         }),
     );
 
-    const res = await getImage('https://cdn.example.com/huge.jpg');
+    const res = await fetchImage('https://cdn.example.com/huge.jpg');
     expect(res.status).toBe(413);
     await expect(res.json()).resolves.toEqual({ error: 'too_large' });
   });
@@ -85,7 +92,7 @@ describe('GET /v1/image', () => {
   it('blocks a private-IP URL with 403 and never fetches it', async () => {
     const mock = stubFetch(() => new Response('nope'));
 
-    const res = await getImage('http://10.0.0.1/secret.png');
+    const res = await fetchImage('http://10.0.0.1/secret.png');
     expect(res.status).toBe(403);
     await expect(res.json()).resolves.toEqual({ error: 'blocked' });
     expect(mock).not.toHaveBeenCalled();
@@ -94,14 +101,30 @@ describe('GET /v1/image', () => {
   it('maps an upstream 404 to 502', async () => {
     stubFetch(() => new Response('nope', { status: 404 }));
 
-    const res = await getImage('https://cdn.example.com/missing.png');
+    const res = await fetchImage('https://cdn.example.com/missing.png');
     expect(res.status).toBe(502);
     await expect(res.json()).resolves.toEqual({ error: 'bad_status' });
   });
 
   it('400s on a non-http(s) url at the contract', async () => {
-    const res = await getImage('ftp://example.com/i.png');
+    const res = await fetchImage('ftp://example.com/i.png');
     expect(res.status).toBe(400);
+  });
+
+  // The address used to ride in the query string, where a request log, a firewall
+  // event and an HTTP cache would each have written it down. No client had
+  // shipped, so the GET was removed outright rather than kept beside the POST —
+  // and its old path answers nothing either.
+  it.each([
+    ['the new path', `${PATH}?url=https%3A%2F%2Fcdn.example.com%2Fi.png`],
+    ['the old one', '/v1/image?url=https%3A%2F%2Fcdn.example.com%2Fi.png'],
+  ])('answers no GET carrying the address in its URL: %s', async (_name, path) => {
+    const mock = stubFetch(() => new Response('nope'));
+
+    const res = await app.request(path);
+
+    expect(res.status).toBe(404);
+    expect(mock).not.toHaveBeenCalled();
   });
 
   it('has no server-side cache — every request fetches upstream', async () => {
@@ -115,11 +138,11 @@ describe('GET /v1/image', () => {
     );
     const url = 'https://cdn.example.com/repeat.webp';
 
-    const first = await getImage(url);
+    const first = await fetchImage(url);
     expect(first.status).toBe(200);
     expect(new Uint8Array(await first.arrayBuffer())).toEqual(bytes);
 
-    const second = await getImage(url);
+    const second = await fetchImage(url);
     expect(second.status).toBe(200);
     expect(new Uint8Array(await second.arrayBuffer())).toEqual(bytes);
 
@@ -131,7 +154,7 @@ describe('GET /v1/image', () => {
       throw new DOMException('The operation timed out', 'TimeoutError');
     });
 
-    const res = await getImage('https://slow.example.com/i.png');
+    const res = await fetchImage('https://slow.example.com/i.png');
     expect(res.status).toBe(504);
     await expect(res.json()).resolves.toEqual({ error: 'timeout' });
   });
@@ -141,7 +164,7 @@ describe('GET /v1/image', () => {
       throw new TypeError('connection reset');
     });
 
-    const res = await getImage('https://dead.example.com/i.png');
+    const res = await fetchImage('https://dead.example.com/i.png');
     expect(res.status).toBe(502);
     await expect(res.json()).resolves.toEqual({ error: 'fetch_failed' });
   });
@@ -151,7 +174,7 @@ describe('GET /v1/image', () => {
       () => new Response(null, { status: 302, headers: { location: 'http://127.0.0.1/' } }),
     );
 
-    const res = await getImage('https://cdn.example.com/i.png');
+    const res = await fetchImage('https://cdn.example.com/i.png');
     expect(res.status).toBe(403);
     await expect(res.json()).resolves.toEqual({ error: 'blocked' });
   });
@@ -173,7 +196,7 @@ describe('GET /v1/image', () => {
         }),
     );
 
-    const res = await getImage('https://cdn.example.com/i.png');
+    const res = await fetchImage('https://cdn.example.com/i.png');
     expect(res.status).toBe(200);
     // The content-type is forwarded WITHOUT its parameters.
     expect(res.headers.get('content-type')).toBe('image/png');
@@ -201,7 +224,7 @@ describe('GET /v1/image', () => {
       () => new Response(endless, { status: 200, headers: { 'content-type': 'image/jpeg' } }),
     );
 
-    const res = await getImage('https://cdn.example.com/undeclared.jpg');
+    const res = await fetchImage('https://cdn.example.com/undeclared.jpg');
     // The status is already sent by the time the ceiling is crossed, so the abort
     // can only show up as a failed body read.
     expect(res.status).toBe(200);

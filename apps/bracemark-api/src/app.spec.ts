@@ -45,14 +45,15 @@ describe('bracemark-api', () => {
 
   // A response that says nothing about caching may be stored, and Android's
   // HTTP cache did store every GET — request URL and all, so a device kept
-  // `password-door?username=…` after the account signed out of it, where no
-  // teardown reaches. Nothing here fails without the header: the api behaves the
-  // same, and the residue is on someone's phone. The paths are the shapes a
-  // response takes, not an inventory — a plain route, one whose URL carries the
-  // username, a blob body, and the two the framework builds itself.
+  // `password-door?username=…` (a GET then, a POST now) after the account signed
+  // out of it, where no teardown reaches. Nothing here fails without the header:
+  // the api behaves the same, and the residue is on someone's phone. The paths
+  // are the shapes a response takes, not an inventory — a plain route, a GET
+  // whose URL carries a query, a blob body, and the two the framework builds
+  // itself.
   it.each([
     ['a plain route', '/health', 200],
-    ['a URL that carries the username', '/v1/auth/password-door?username=nobody_here', 404],
+    ['a GET whose URL carries a query', '/v1/ops/list?since=0&limit=1', 401],
     ['a path nothing answers', '/v1/nothing-here', 404],
   ])('tells caches to store nothing: %s', async (_name, path, status) => {
     const res = await app.request(path, {}, env);
@@ -91,5 +92,23 @@ describe('bracemark-api', () => {
     const res = await app.request('/', {}, env);
 
     expect(res.headers.get('access-control-expose-headers')).toBe('Retry-After');
+  });
+
+  // A preflight with no Access-Control-Max-Age is kept for five seconds, so
+  // nearly every call costs two requests and nothing says so (app.ts maxAge).
+  // The number is app.ts's to choose; what is pinned is that it is far past
+  // that default.
+  it('lets a browser reuse a preflight', async () => {
+    const res = await app.request(
+      '/',
+      {
+        method: 'OPTIONS',
+        headers: { origin: 'http://localhost:3000', 'access-control-request-method': 'POST' },
+      },
+      env,
+    );
+
+    expect(res.status).toBe(204);
+    expect(Number(res.headers.get('access-control-max-age'))).toBeGreaterThanOrEqual(600);
   });
 });

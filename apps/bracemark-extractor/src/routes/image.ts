@@ -1,18 +1,22 @@
 import { zValidator } from '@hono/zod-validator';
 import { Hono } from 'hono';
 
-import { imageProxyEndpoint } from '@stxapps/shared';
+import { fetchImageEndpoint } from '@stxapps/shared';
 
 import type { AppEnv } from '../lib/env';
 import { HttpError } from '../lib/errors';
 import { MAX_IMAGE_BYTES, safeFetch, SafeFetchError, streamWithLimit } from '../lib/safe-fetch';
 import { rateLimit } from '../middleware/rate-limit';
 
-// GET /v1/image?url=… — the stateless image proxy (docs "stream-don't-store"). The
-// web app can't read cross-origin image bytes (CORS / tainted-canvas) and rendering
-// the remote URL directly is the per-paint leak the design forbids — so this STREAMS
-// the remote bytes THROUGH and buffers/persists nothing. The client encrypts the
-// streamed bytes into `files/{id}.enc` itself.
+// POST /v1/fetch-image { url } — the stateless image proxy (docs "stream-don't-
+// store"). The web app can't read cross-origin image bytes (CORS / tainted-canvas)
+// and rendering the remote URL directly is the per-paint leak the design forbids —
+// so this STREAMS the remote bytes THROUGH and buffers/persists nothing. The client
+// encrypts the streamed bytes into `files/{id}.enc` itself.
+//
+// A POST although it only reads: the address is in the body, never the query
+// string, because a URL is what a request log, a firewall event and an HTTP cache
+// write down (the contract, @stxapps/shared extract/endpoints.ts).
 //
 // Same arbitrary-URL fetch as /extract, so it carries the SAME SSRF guard + timeout
 // + redirect re-validation (all in safeFetch), plus an `image/*` content-type
@@ -21,8 +25,8 @@ import { rateLimit } from '../middleware/rate-limit';
 // isolate) and kill the streaming-is-free property; thumbnailing is a deferred
 // CLIENT step before encrypt.
 
-// Map an internal fetch failure to a clean HTTP status for this single-resource GET
-// (unlike /extract, which records per-URL errors in a 200 body).
+// Map an internal fetch failure to a clean HTTP status for this single-resource
+// fetch (unlike /extract, which records per-URL errors in a 200 body).
 function statusForError(code: SafeFetchError['code']): number {
   switch (code) {
     case 'blocked':
@@ -41,12 +45,12 @@ function statusForError(code: SafeFetchError['code']): number {
   }
 }
 
-export const imageRoutes = new Hono<AppEnv>().get(
-  imageProxyEndpoint.path,
+export const imageRoutes = new Hono<AppEnv>().post(
+  fetchImageEndpoint.path,
   rateLimit('image'),
-  zValidator('query', imageProxyEndpoint.request),
+  zValidator('json', fetchImageEndpoint.request),
   async (c) => {
-    const { url } = c.req.valid('query');
+    const { url } = c.req.valid('json');
 
     let response: Response;
     try {
@@ -80,7 +84,7 @@ export const imageRoutes = new Hono<AppEnv>().get(
     // Stream the bytes through, hard-aborting past the ceiling. Forward ONLY safe,
     // relevant headers — never upstream cookies/auth, and never the upstream's
     // caching headers: app.ts marks every response `no-store`, this one above all
-    // (its URL names what the user saved). CORS headers are added by the global
+    // (it IS what the user saved, as bytes). CORS headers are added by the global
     // cors() middleware. There's no server-side edge cache either: an anonymous
     // proxy buffering bytes for a rarely-read shared cache would undercut the
     // stream-don't-store property — the per-response byte ceiling + timeout in

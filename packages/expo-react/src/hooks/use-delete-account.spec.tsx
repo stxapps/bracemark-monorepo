@@ -9,7 +9,7 @@ import type { ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 
-import { ApiError, deleteAccountEndpoint, passwordDoorEndpoint } from '@stxapps/shared';
+import { ApiError, deleteAccountEndpoint, readPasswordDoorEndpoint } from '@stxapps/shared';
 
 import { SubscriptionActiveError, useDeleteAccount } from './use-delete-account';
 
@@ -18,7 +18,7 @@ let releaseDelete: (() => void) | undefined;
 let mockDeleteFailure: Error | undefined;
 const mockEndSession = jest.fn((..._args: unknown[]) => Promise.resolve());
 const mockCall = jest.fn((endpoint: unknown) => {
-  if (endpoint === passwordDoorEndpoint) return Promise.resolve({ wrappedDek: '00', iv: '00' });
+  if (endpoint === readPasswordDoorEndpoint) return Promise.resolve({ wrappedDek: '00', iv: '00' });
   if (endpoint === deleteAccountEndpoint) {
     if (mockDeleteFailure) return Promise.reject(mockDeleteFailure);
     return new Promise<void>((resolve) => {

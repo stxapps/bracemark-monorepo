@@ -901,6 +901,32 @@ value; two of the api's secrets are multiline PEMs. A deploy never deletes a
 secret. It **does** replace `vars` from `wrangler.jsonc`, which is intended —
 that file is their source of truth, so `--keep-vars` is deliberately absent.
 
+⚠ **The converse is the one that bites: setting a secret does not apply
+`vars`.** `wrangler secret put` and `secret bulk` each create a new Worker
+version, and that version carries the `vars` of the one before it — it never
+reads `wrangler.jsonc`. So a credential whose two halves sit on either side of
+that line is half-configured until the next **deploy**, and nothing says so: the
+secret command succeeds, the tree is correct, and the `TODO:` gate above reads
+the config about to ship, not the one already running. Play's service account
+is exactly that pair — `PLAY_SA_PRIVATE_KEY` is a secret, `PLAY_SA_EMAIL` a var
+— and it ran that way: the address was committed and the Worker's secrets set
+within minutes of each other, no deploy followed on either tier, and the
+placeholder stayed live. The
+first real Play notification then had its token exchange refused
+(`playAccessToken: token endpoint 400`), the notify route answered 500 as
+designed for a store-side failure ([iap.md](./iap.md)), and Pub/Sub redelivered
+into it for days — about one request every fifteen seconds per tier, every one
+logged, none of it visible from the client. Staging recovered on its next
+deploy and the notifications still being redelivered were then accepted;
+production's stopped arriving, never accepted, days before it got one.
+
+Two readings tell a config-only version from a real deploy, and both are worth
+a look after setting a secret: `wrangler versions list --env <tier> --json`
+carries `annotations["workers/triggered_by"]` — `secret` or `version_upload` —
+and `wrangler versions view <version-id> --env <tier>` prints the `vars` that
+version actually runs with. **A var and a secret that belong together ship
+together: set the secret, then deploy.**
+
 **Per-Worker secrets, not Secrets Store.** `wrangler secret` sets an encrypted
 variable on one Worker, arriving as `c.env.NAME`; Cloudflare's Secrets Store is a
 separate account-level product bound through `secrets_store_secrets`, for a
@@ -1031,6 +1057,18 @@ and the apex, per _the hosts_ above. The full table lives in
 [env-files.md](./env-files.md#wiring-the-frontends-to-the-backend); keep the two
 in sync.
 
+Both Workers answer a preflight with a two-hour `Access-Control-Max-Age` (`maxAge`
+in each `app.ts`), so a browser asks once per URL rather than before every call —
+the default it replaces is five seconds. Two hours is Chromium's ceiling; a longer
+value would only reach Firefox. The entry is per URL, query string included, which
+is why it pays in full on the extractor (`POST /v1/extract` and
+`POST /v1/fetch-image` are one URL each — and the second is a POST only because
+this makes it affordable: a page of previews costs one preflight, not one per
+image) and on the api's POSTs, and not on a GET whose cursor moves. It delays nothing that matters:
+an origin added to `CORS_ORIGINS` works at once, and one removed loses the
+response at once, because the allow-list is read on every response and not only
+on the preflight.
+
 **R2 needs a CORS policy of its own, and `CORS_ORIGINS` is not it.** The blob
 PUT/GET in `packages/web-react/src/sync/r2.ts` goes from the browser straight to
 `<account-id>.r2.cloudflarestorage.com` over a presigned URL, so the api's CORS
@@ -1065,6 +1103,10 @@ npx wrangler r2 bucket cors list bracemark-user-files-<tier> --env <tier>
   preflight asks for none. If the client starts sending one, add it here in the
   same change.
 - **No `exposeHeaders`.** The client reads only the status and the body.
+- **`maxAgeSeconds` buys almost nothing here.** A preflight is remembered per URL,
+  and every presigned URL is its own — so each PUT is preflighted whatever the
+  value, and only a retry of the same URL reuses one. The GET sends no header and
+  is never preflighted.
 
 Deploy artifacts are **built once per tier**, never promoted: `NEXT_PUBLIC_API_URL`
 and `NEXT_PUBLIC_APP_URL` are baked at build time, so staging and production are
