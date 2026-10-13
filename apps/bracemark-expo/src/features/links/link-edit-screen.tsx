@@ -427,7 +427,16 @@ function LinkEditForm({ link, focus }: { link: LinkItem; focus?: EditFocus }) {
               </Text>
             </View>
           )}
-          <View className="flex-row gap-1.5">
+          {/* `flex-wrap`, web's fix for web's reason — neither button can give
+              (Button is `shrink-0`) — but what triggers it here is the text
+              size rather than the screen: the pair is 316pt at 1×, which fits
+              the 328 a 360pt screen leaves inside `p-4`, and 377 at the 1.3
+              ceiling (docs/accessibility.md, _font scaling_), which fits
+              nothing narrower than 409. And native has no scrollbar to give the
+              overflow away: the row just runs past the padding and "Reset to
+              extracted" is cut off at the screen's edge. Wrapped, the two
+              leading icons sit behind the same `pl-2.5` and share an edge. */}
+          <View className="flex-row flex-wrap gap-1.5">
             <Button variant="outline" size="sm" onPress={() => void onPickImage()}>
               <Icon as={ImagePlus} className="size-4" />
               <Text>Choose image</Text>

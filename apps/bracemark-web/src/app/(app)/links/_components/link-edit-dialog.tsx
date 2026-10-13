@@ -406,7 +406,17 @@ function LinkEditForm({
                   </p>
                 </div>
               )}
-              <div className="flex gap-1.5">
+              {/* `flex-wrap`, because the pair doesn't fit side by side in the
+                  body of a narrow phone's dialog, and neither button can give:
+                  Button is `shrink-0 whitespace-nowrap`. Unwrapped, the excess
+                  became a horizontal scrollbar on the whole form — the scroller
+                  above is `overflow-y-auto`, which makes `overflow-x` compute
+                  to `auto` too. Wrapped rather than stacked at a breakpoint:
+                  the fit depends on the labels and the text size, not on a
+                  viewport width, and both buttons carry a leading icon behind
+                  the same `pl-2`, so on two lines the icons and labels still
+                  share an edge. */}
+              <div className="flex flex-wrap gap-1.5">
                 <input
                   ref={fileInputRef}
                   id="edit-image"
