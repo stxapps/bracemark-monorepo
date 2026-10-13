@@ -33,7 +33,15 @@ word is typed by a person and it is a param value (`?text=…`), so wherever the
 page URL travels, it travels. In bracemark-web that includes the network: a page
 load asks the origin first ([offline-mode.md](./offline-mode.md), _what answers a
 navigation_), so loading a results URL — refreshing the tab, or following an
-address someone kept — hands CloudFront the words as part of the request. The
+address someone kept — hands CloudFront the words as part of the request. **A
+page load is not the only request that carries them.** The referrer policy is
+`strict-origin-when-cross-origin` ([hosting.md](./hosting.md), _the other
+security headers_), so a request to the app's own origin made while a results
+URL is showing sends that URL whole, query included, as `Referer`; the api, the
+extractor and R2 are other origins and are sent the origin alone. Which of those
+requests reach the network was not measured in a production build — the service
+worker answers most of them from its precache — so /privacy says they _can_
+carry the words, not that they do. The
 search still **runs** on the
 device; the words that drive it are **seen** off it. Two published sentences
 depend on keeping those apart, and nothing connects either to this file:

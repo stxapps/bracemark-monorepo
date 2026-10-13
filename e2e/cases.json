@@ -114,6 +114,17 @@
     "environments": ["local", "staging"]
   },
   {
+    "id": "WEB-ACCOUNT-005",
+    "title": "No request to the api carries a username in its address or in a header",
+    "surface": "web",
+    "tier": "full",
+    "traits": ["online", "destructive"],
+    "fixture": "empty",
+    "path": "web/account.e2e.ts",
+    "artifacts": ["trace-on-failure", "screenshot-on-failure", "html-report"],
+    "environments": ["local", "staging"]
+  },
+  {
     "id": "VERSION-SKEW-WEB-001",
     "title": "A newer build upgrading the data database closes the old tab's connection at once, keeps an unsaved editor on screen, and offers the reload",
     "surface": "web",

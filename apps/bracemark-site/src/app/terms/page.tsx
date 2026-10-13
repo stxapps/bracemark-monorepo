@@ -181,8 +181,8 @@ export default function Page() {
           </li>
           <li>
             interfere with the operation of the Service, including by automated request volumes that
-            degrade it for others, or by using the link-extraction service to fetch pages at a scale
-            or for a purpose it is not intended for;
+            degrade it for others, or by using the link-preview service to fetch pages at a scale or
+            for a purpose it is not intended for;
           </li>
           <li>
             resell or commercially redistribute access to the Service we operate, or to the accounts

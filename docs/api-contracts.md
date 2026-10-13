@@ -212,7 +212,19 @@ that sentence up, and only one of them is a test:
   walks every contract the barrel exports and fails on a new GET or DELETE, or a
   new field on an existing one, until it is listed there — which is the moment
   to ask whether a person chose the value. It cannot see a route mounted by hand
-  without a contract, or a header set in a fetch wrapper; those stay silent.
+  without a contract, or a header set in a fetch wrapper. Two specs hold those
+  halves. `app.spec.ts` in each Worker lists every GET and DELETE the app
+  answers — the contracts plus the operational roots, and on the extractor the
+  roots alone — so a hand-mounted one fails there (a handler mounted with
+  `.all()` is the shape it still misses: Hono lists it beside path-scoped
+  middleware). And `WEB-ACCOUNT-005` (`e2e/web/account.e2e.ts`) records every
+  request a real profile sends the api across the journeys that name an account
+  — the recovery-door check, a second account's creation, signing back in — and
+  fails on a username in an address or a header; `EXTRACT-WEB-001` does the same
+  for a saved address and the extractor. Both are admitted to staging, which
+  makes them the check on the order of deploy the page depends on: against a
+  tier whose api or web build still carries the GET lookups or the GET proxy
+  they fail, and /privacy is not true of that tier until they pass.
 - **Not Cloudflare's redaction.** The Play push endpoint's
   `?token=<PLAY_NOTIFY_TOKEN>` was stored as `REDACTED` in every entry sampled
   and the bearer token as `********`, while an e2e account's username in the
@@ -229,9 +241,12 @@ body is not logged", which is Cloudflare's behaviour rather than ours. Two
 things beside the rule that the same page now states:
 
 - **The log also holds the lines we write.** `console.*` output is stored with
-  the invocation, and some error lines interpolate a user id or a provider's
-  purchase id (`services/iap.ts`, `services/account.ts`). Those are ids we or a
-  provider mint, so the rule above is not broken by them; the page says they
+  the invocation, and some lines interpolate a user id or a provider's purchase
+  id (`services/iap.ts`, `services/account.ts`) — most of them on a failure, not
+  all: a Play purchase replacing an earlier one logs both on the path that
+  worked, which is why the page says "most of them when something fails". Those
+  are ids we or a provider mint, so the rule above is not broken by them; the
+  page says they
   exist because "we do not join it to your account" would otherwise be read as
   covering them. A new log line that interpolates something a person chose is
   the same leak as a query param, by a door this section's spec cannot see.

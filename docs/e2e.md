@@ -1498,6 +1498,18 @@ them differently:
   persist — which a single-account case never exercises: a seed that lands
   before the wipe fails the second account's first write, and a sign-in that
   leaves the claim to a sync cycle fails the first account's pull.
+- **No username in an address or a header.** `WEB-ACCOUNT-005` takes the same
+  three journeys — Settings → Account's recovery-door check, a second account's
+  creation, the first one signing back in — and records every request the
+  profile sends the api. Neither username may appear in a URL or a header value
+  of any of them, and each lookup's body must have named one, which is the
+  positive control: a client that stopped asking would otherwise pass with
+  nothing to have leaked. It is the browser's half of a published sentence
+  ([api-contracts.md](./api-contracts.md), _a GET's query string reaches the
+  request log_) — a `fetch` built beside the contract client, or a header a
+  wrapper adds, passes every unit spec. Admitted to staging, where it is also
+  the deploy gate for that sentence: a tier still running the GET lookups never
+  sends the POSTs the positive controls wait for.
 - **A newer build takes the database.** `VERSION-SKEW-WEB-001`/`002` open each
   local database one version up from a second tab, under an open editor with a
   typed title: the upgrade must not block, the old tab shows the update-required

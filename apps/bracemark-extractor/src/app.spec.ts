@@ -168,6 +168,34 @@ describe('bracemark-extractor', () => {
     expect(other.status).toBe(429);
   });
 
+  // No URL this Worker answers may carry a saved address, and since the image
+  // proxy became a POST none can: both endpoints take theirs in a body
+  // (docs/api-contracts.md, _a GET's query string reaches the request log_).
+  // routes/image.spec.ts pins that the OLD shape is gone; this pins that there is
+  // no new one. A GET added here — `/v1/favicon?host=…` is the obvious next — puts
+  // a saved site in a request line, which the zone's firewall events record
+  // whatever `invocation_logs` says, and nothing else fails: the contract
+  // inventory in @stxapps/shared only sees a route that has a contract.
+  //
+  // DELETE rides with GET: the client sends its input as a query string too
+  // (api/client.ts). A handler mounted with `.all()` is the one shape this does
+  // not see — Hono lists it under ALL, beside the middleware in app.ts.
+  it('answers a GET on the two operational roots and nothing else', () => {
+    const urlMethods = new Set(['GET', 'DELETE']);
+    const mounted = new Set(
+      app.routes
+        .filter((route) => urlMethods.has(route.method))
+        .map((route) => `${route.method} ${route.path}`),
+    );
+
+    expect([...mounted].sort()).toEqual(['GET /', 'GET /health']);
+    // Positive control: the walk does see the endpoints, so the list above is
+    // short because they are POSTs and not because nothing was read.
+    expect(app.routes.map((route) => `${route.method} ${route.path}`)).toEqual(
+      expect.arrayContaining(['POST /v1/extract', 'POST /v1/fetch-image']),
+    );
+  });
+
   // --- CORS ------------------------------------------------------------------
   // The extractor answers a cross-origin browser caller (bracemark-web), so the
   // allow-list is what stands between it and being anyone's open fetch proxy.

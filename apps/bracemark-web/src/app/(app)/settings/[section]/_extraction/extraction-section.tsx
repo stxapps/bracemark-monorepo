@@ -207,7 +207,7 @@ export function ExtractionSection() {
         // front of an anonymous service could possibly work. /privacy and
         // /extractor already named the IP; the toggle that turns the thing ON is
         // the last place that should be quieter than the policy page.
-        description="Fetch pending links through the preview server to fill in their titles and images. While this is on, links shown on screen are handled automatically and Generate all covers the full library. Each request sends the link’s URL but no account identity. The rate limiter briefly holds the requesting IP address."
+        description="Fetch pending links through the preview service to fill in their titles and images. While this is on, links shown on screen are handled automatically and Generate all covers the full library. Each request sends the link’s URL but no account identity. The rate limiter briefly holds the requesting IP address."
         action={
           <Switch id="server-extraction" checked={serverExtraction} onCheckedChange={setEnabled} />
         }

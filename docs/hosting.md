@@ -459,7 +459,9 @@ switched on. Two things make that more than housekeeping:
 
 - **bracemark-web's page URL can carry words a person typed.** A search is the
   URL ([search.md](./search.md), _the query is the URL_), and a page load goes to
-  the origin first, so CloudFront receives those words in a request line. It
+  the origin first, so CloudFront receives those words in a request line — and
+  again in the `Referer` of any same-origin request made from that page, which a
+  standard log records as a field of its own. It
   **sees** them regardless; whether they are **written down** is this setting.
 - **/privacy says we keep no copy** — "we keep no separate copy of our own" of
   the request data, and of those search words by name

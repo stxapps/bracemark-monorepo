@@ -357,27 +357,44 @@ export default function Page() {
             docs/api-contracts.md, _a GET's query string reaches the request
             log_.
 
-            THE LAST TWO SENTENCES ARE THE LINES WE WRITE OURSELVES. The same
-            log stores the api's `console.*` output, and some of its error lines
+            THE LAST THREE SENTENCES ARE THE LINES WE WRITE OURSELVES. The same
+            log stores the api's `console.*` output, and some of its lines
             interpolate a user id or a provider's purchase id
             (`services/iap.ts`, `services/account.ts`). An id we mint is not a
             username, so nothing above is false of them — but "we do not join it
             to your account" two paragraphs up invites a reader to assume no
             line in that log names an account at all, and a reader with the
-            source open can find the ones that do. "Some of those lines" is
+            source open can find the ones that do. "Some include" is
             deliberately not a closed list: the unexpected-error handler prints
             the error whole (`lib/errors.ts`), and its message is not ours to
-            enumerate. */}
+            enumerate.
+
+            "MOST OF THEM WHEN SOMETHING FAILS", NOT "WHEN SOMETHING FAILS". The
+            sentence opened on that clause for a stretch, and it scoped the
+            lines to failures: a Play purchase that replaces an earlier one
+            logs the account id and both purchase tokens on the path where
+            everything worked (`supersedeLinkedPlayPurchase`), and the nightly
+            session purge logs a count. A true subset presented as the whole,
+            one click from the file that shows the rest.
+
+            "PURCHASE", NOT "SUBSCRIPTION": what is interpolated is whichever id
+            the provider keys the event on — a subscription, a transaction, a
+            purchase token.
+
+            The mechanics, because this paragraph broke both: /privacy writes
+            out every contraction ("you are"), and two things joined by "or"
+            are a pair and take no comma (docs/brand-assets.md, _the
+            mechanics_). */}
         <p>
           Our API — the service behind sign-in, sync, and billing — runs with that log on, so the
           address of every request it receives is recorded alongside the request data above. None of
           those addresses contains your username. A request that has to name an account — checking
-          whether a username is free, or the first step of signing in — sends the username in the
-          body of the request instead, and once you’re signed in a request identifies you with a
-          session token. When something fails, the API also writes a line to that log saying what
-          went wrong, and some of those lines include our internal identifier for the account, or
-          the payment provider’s identifier for the subscription involved — not your username. We
-          read them to find the fault.
+          whether a username is free or the first step of signing in — sends the username in the
+          body of the request instead, and once you are signed in a request identifies you with a
+          session token. The API also writes lines of its own to that log, most of them when
+          something fails. Some include our internal identifier for the account or the payment
+          provider’s identifier for the purchase involved — not your username. We read them to find
+          a fault.
         </p>
         {/* THE THIRD ADDRESS, AND THE ONE THAT IS NOT A WORKER'S. Everything
             above is about what a request to Cloudflare carries. The web app's
@@ -400,13 +417,24 @@ export default function Page() {
             docs/hosting.md, _request logging on the static hosts_, has what was
             read back, when, and the commands that repeat it.
 
+            LOADING IS NOT THE ONLY REQUEST THAT CARRIES IT. The sentence said
+            "loading it sends" and stopped, which names one trigger as the
+            whole. The referrer policy is `strict-origin-when-cross-origin`
+            (docs/hosting.md), so a request to the app's OWN origin made while
+            that address is showing sends it whole, query included, as
+            `Referer`; the api, the extractor and R2 are other origins and get
+            the origin alone. "So can" and not "so does": the service worker
+            answers most of those requests from its precache, and which ones
+            reach the network was not measured in a production build.
+
             Scoped to the web app on purpose: on expo the "URL" is route params
             that never become a request (docs/search.md). */}
         <p>
           The web app’s own address can carry something you typed. A search is kept in that address,
-          so that it survives a reload and the back button, and loading it sends the words you
+          so that it survives a reload and the back button. Loading that address sends the words you
           searched for to <strong>Amazon Web Services</strong>, the provider that serves the app’s
-          files, as part of the request data above. We keep no copy of them, and the search itself
+          files, as part of the request data above, and so can any other request the app makes for
+          its own files while that address is open. We keep no copy of them, and the search itself
           runs on your device.
         </p>
 
@@ -433,14 +461,14 @@ export default function Page() {
         </p>
         <p>
           Browsers do not allow one web page to fetch another site, so the web app has an{' '}
-          <strong>opt-in {PLAN_LABELS.plus} setting</strong> that lets our extraction service do it.
-          It is off unless you turn it on. When it is on, newly saved links and older pending links
-          are sent as they come into view while you browse; Generate all sends every pending link.
-          The service receives the address, fetches the page, returns the title and preview image,
-          and keeps no page data: it stores no URLs, writes none to its logs, holds no key, and is
-          not told which account asked. Its rate limiter briefly holds the requesting IP address so
-          that a single source cannot abuse it. The same service is described from the other side —
-          for the people who run the sites it fetches — on{' '}
+          <strong>opt-in {PLAN_LABELS.plus} setting</strong> that lets our link-preview service do
+          it. It is off unless you turn it on. When it is on, newly saved links and older pending
+          links are sent as they come into view while you browse; Generate all sends every pending
+          link. The service receives the address, fetches the page, returns the title and preview
+          image, and keeps no page data: it stores no URLs, writes none to its logs, holds no key,
+          and is not told which account asked. Its rate limiter briefly holds the requesting IP
+          address so that a single source cannot abuse it. The same service is described from the
+          other side — for the people who run the sites it fetches — on{' '}
           <Link href="/extractor">its own page</Link>, including the caps it holds itself to and how
           to turn it away.
         </p>
@@ -544,7 +572,7 @@ export default function Page() {
           </li>
           <li>
             <strong>Your consent</strong> — the one optional thing, the {PLAN_LABELS.plus} setting
-            that lets our extraction service fetch a page for you. It is off until you turn it on,
+            that lets our link-preview service fetch a page for you. It is off until you turn it on,
             and turning it off again withdraws that consent for everything after.
           </li>
           <li>
@@ -563,8 +591,11 @@ export default function Page() {
               a reader checks who RECEIVES something, and with the opt-in on
               Cloudflare is handed a saved address in readable form — the one
               thing it sees that it does not also store. _How link previews are
-              fetched_ calls it "our extraction service", which is true and does
-              not say whose machines it runs on. Two sentences, not one with a
+              fetched_ says what the service does and does not say whose
+              machines it runs on. (It is "the link-preview service" in all four
+              places on this page; two of them said "our extraction service"
+              for a stretch, and a reader had no way to know that was the same
+              thing.) Two sentences, not one with a
               comma before "and": two predicates are a pair (docs/brand-assets.md,
               _the mechanics_). */}
           <li>

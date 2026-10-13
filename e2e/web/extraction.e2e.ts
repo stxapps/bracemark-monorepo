@@ -61,6 +61,17 @@ test.describe('server extraction', () => {
       const known = knownPage('e2e-web-save');
 
       await grantPlusAndLoad(page, app.credentials.username);
+
+      // Every request this page sends the extractor, from before the opt-in is
+      // on. What they may carry in the ADDRESS is asserted at the end.
+      const sent: { method: string; url: string; body: string | null }[] = [];
+      page.on('request', (request) => {
+        if (!request.url().startsWith(`${EXTRACTOR_URL}/`)) return;
+        // A CORS preflight is the browser's, and names no saved address.
+        if (request.method() === 'OPTIONS') return;
+        sent.push({ method: request.method(), url: request.url(), body: request.postData() });
+      });
+
       await enableServerExtraction(page);
       await page.goto('/links');
 
@@ -84,6 +95,26 @@ test.describe('server extraction', () => {
       // And it was written, not merely rendered: a fresh document reads it back.
       await page.reload();
       await expect(linkRow(page, known.url).getByText(known.title, { exact: true })).toBeVisible();
+
+      // The saved address reached the extractor in a request BODY and in no URL:
+      // a URL is what a request log, a firewall event and an HTTP cache write
+      // down, and the image proxy used to be `GET …?url=<address>`
+      // (docs/api-contracts.md, _a GET's query string reaches the request log_).
+      // The unit specs pin the client and the route apart; this is the browser
+      // sending the real thing. Both endpoints, because the favicon for the saved
+      // host goes through the proxy — which is also the positive control: the
+      // host DID travel, so the bare URLs below are not a page that sent nothing.
+      const host = new URL(known.url).host;
+      await expect
+        .poll(() => sent.filter((request) => request.url.endsWith('/v1/fetch-image')).length)
+        .toBeGreaterThanOrEqual(1);
+      expect(sent.find((request) => request.url.endsWith('/v1/extract'))?.body).toContain(
+        known.url,
+      );
+      expect(sent.find((request) => request.url.endsWith('/v1/fetch-image'))?.body).toContain(host);
+      expect(
+        [...new Set(sent.map((request) => `${request.method} ${request.url}`))].sort(),
+      ).toEqual([`POST ${EXTRACTOR_URL}/v1/extract`, `POST ${EXTRACTOR_URL}/v1/fetch-image`]);
     },
   );
 
@@ -159,10 +190,18 @@ test.describe('server extraction', () => {
       // same failure a down extractor or a dropped connection hands the drain — a
       // transport error, which it must answer with a backed-off retry rather than
       // a per-link verdict.
+      //
+      // Counted by PATH as well as method. "A POST to the extractor" meant the
+      // extract call and nothing else while the image proxy was a GET; it is a
+      // POST now (favicons go through it, one per host), so the method alone
+      // would let a refused favicon stand in for the drain's attempt.
       let refused = 0;
       const extractor = `${EXTRACTOR_URL}/**`;
       await context.route(extractor, (route) => {
-        if (route.request().method() === 'POST') refused++;
+        const request = route.request();
+        if (request.method() === 'POST' && new URL(request.url()).pathname === '/v1/extract') {
+          refused++;
+        }
         return route.abort('internetdisconnected');
       });
 

@@ -5,7 +5,7 @@ import { IS_STAGING } from '../runner/environment';
 import { createAccount, type Credentials, newCredentials, signIn } from './fixtures/account';
 import { expect, test } from './fixtures/app';
 import { unique, unresolvableUrl } from './fixtures/data';
-import { SITE_URL } from './fixtures/env';
+import { API_URL, SITE_URL } from './fixtures/env';
 import { launchApp } from './fixtures/launch';
 import { addLink, addLinkButton, linkRow } from './fixtures/links';
 import { syncAndWait } from './fixtures/sync';
@@ -577,6 +577,80 @@ test.describe('account', () => {
       await addLink(page, back);
       await syncAndWait(page);
       await expect(linkRow(page, back)).toBeVisible();
+    },
+  );
+
+  // /privacy says the api's request log is on and that no address in it contains
+  // a username (_Technical and security data_), and for a stretch that was false:
+  // the three lookups that run before a session exists were GETs with
+  // `?username=…`, so each left the name in a stored log entry beside an IP
+  // (docs/api-contracts.md, _a GET's query string reaches the request log_).
+  // They are POSTs now. The unit layer pins the contracts' methods and the
+  // routes that answer them; what it cannot reach is the request a real browser
+  // sends once the hooks, the auth wrapper and the bundler have all had their
+  // turn — a `fetch` built by hand beside the contract client, or a header a
+  // wrapper adds, type-checks and leaves every one of those specs green.
+  //
+  // So: every request this profile sends the api across the journeys that name
+  // an account — the recovery-door check Settings makes, a second account's
+  // creation, and signing the first back in — and neither username may appear
+  // in an address or a header of any of them. Headers too, because that log
+  // stores them as sent.
+  test(
+    'no request to the api carries a username in its address or in a header',
+    { tag: ['@WEB-ACCOUNT-005', '@full', '@online', '@destructive'] },
+    async ({ isolatedApp: app }) => {
+      const { page, context, credentials } = app;
+      const site = await stubMarketingSite(page);
+      const second = newCredentials();
+
+      const sent: {
+        method: string;
+        url: string;
+        headers: Record<string, string>;
+        body: string | null;
+      }[] = [];
+      context.on('request', (request) => {
+        if (!request.url().startsWith(`${API_URL}/`)) return;
+        sent.push({
+          method: request.method(),
+          url: request.url(),
+          headers: request.headers(),
+          body: request.postData(),
+        });
+      });
+      // The usernames a lookup's BODY named — the positive control for each
+      // journey below. Without it, a client that stopped asking altogether would
+      // pass the negative assertion at the end with nothing to have leaked.
+      const named = (path: string) =>
+        sent
+          .filter((request) => request.method === 'POST' && new URL(request.url).pathname === path)
+          .map((request) => (JSON.parse(request.body ?? '{}') as { username?: string }).username);
+
+      // Signed in: Settings → Account asks whether this account has a recovery
+      // door, through the same pre-auth lookup sign-in uses.
+      await page.goto('/settings/account');
+      await expect.poll(() => named('/v1/auth/read-recovery-door')).toContain(credentials.username);
+
+      // A second account: the availability check fires on the typed name.
+      await signOutToSite(page, site);
+      await createAccount(page, second);
+      expect(named('/v1/auth/check-username')).toContain(second.username);
+
+      // And the first one back: the password-door read is sign-in's first step.
+      await signOutToSite(page, site);
+      await signIn(page, credentials);
+      expect(named('/v1/auth/read-password-door')).toContain(credentials.username);
+
+      const carried = sent.flatMap((request) =>
+        [credentials.username, second.username].flatMap((username) => [
+          ...(request.url.includes(username) ? [`${request.method} ${request.url}`] : []),
+          ...Object.entries(request.headers)
+            .filter(([, value]) => value.includes(username))
+            .map(([name, value]) => `${request.method} ${request.url} — ${name}: ${value}`),
+        ]),
+      );
+      expect(carried, 'a username left the body of a request to the api').toEqual([]);
     },
   );
 
