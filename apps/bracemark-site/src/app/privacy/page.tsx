@@ -203,7 +203,13 @@ export default function Page() {
             was false of exactly those requests. They are POSTs now. What keeps
             it that way is described under _Technical and security data_ below
             and in docs/api-contracts.md, _a GET's query string reaches the
-            request log_. */}
+            request log_.
+
+            ONE RESIDUAL, AND IT IS STATED RATHER THAN COVERED BY THIS CLAUSE:
+            the api's own error lines write an opaque account or purchase id
+            into that same log. "Do not join" is what we do with the data, not
+            a description of every line in it, so the paragraph about the api's
+            log says those lines exist. */}
         <p>
           We do not collect an email address, a phone number, a name, or any other identifier when
           you create an account. If you never write to us and never subscribe, the account itself
@@ -292,6 +298,17 @@ export default function Page() {
             enumeration-that-closes failure the privacy claims were rewritten to
             avoid, one level down in the stack.
 
+            The forwarding sentence shipped wider than that for a stretch, in two
+            ways. It read "do not forward… so there is no copy of that stream",
+            which is an OUTCOME, and the outcome is exactly what the zone-level
+            channel could falsify from a dashboard; it now says what the setting
+            is and what switching it on would do. And it called the destination
+            "a third party's storage under a retention period of its own" one
+            paragraph after naming Cloudflare as the holder of these logs under
+            its own retention — a description of the thing the reader had just
+            been told exists. "Someone else's" is the party that is not already
+            in the sentence.
+
             If either setting changes, this paragraph and /security move with it. */}
         <p>
           That data lives in <strong>Cloudflare</strong>’s and <strong>Amazon Web Services</strong>’
@@ -301,11 +318,12 @@ export default function Page() {
         </p>
         <p>
           Two of the choices that decide what reaches those logs are ours rather than theirs, and we
-          have made both the same way. Our servers do not forward their request logs to any outside
-          destination, so there is no copy of that stream sitting in a third party’s storage under a
-          retention period of its own. And the link-preview service — the one part of Bracemark that
-          is ever handed a page address — runs with the log that would record its request line
-          switched off. Both are settings in the configuration files in{' '}
+          have made both the same way. Neither of the two services we run on Cloudflare is set to
+          forward its request log to another destination, which would put a copy of that stream in
+          someone else’s storage under a retention period of its own. And one of the two, the
+          link-preview service — the one part of Bracemark that is ever handed the address of a page
+          you saved — runs with the log that would record its request line switched off. Both are
+          settings in the configuration files in{' '}
           <a href={SOURCE.url} rel="noreferrer">
             {SOURCE.label}
           </a>
@@ -337,14 +355,59 @@ export default function Page() {
             client calling it carry the POST lookups, and of its stored log about
             a week after that. Publish this page after them, not before.
             docs/api-contracts.md, _a GET's query string reaches the request
-            log_. */}
+            log_.
+
+            THE LAST TWO SENTENCES ARE THE LINES WE WRITE OURSELVES. The same
+            log stores the api's `console.*` output, and some of its error lines
+            interpolate a user id or a provider's purchase id
+            (`services/iap.ts`, `services/account.ts`). An id we mint is not a
+            username, so nothing above is false of them — but "we do not join it
+            to your account" two paragraphs up invites a reader to assume no
+            line in that log names an account at all, and a reader with the
+            source open can find the ones that do. "Some of those lines" is
+            deliberately not a closed list: the unexpected-error handler prints
+            the error whole (`lib/errors.ts`), and its message is not ours to
+            enumerate. */}
         <p>
           Our API — the service behind sign-in, sync, and billing — runs with that log on, so the
           address of every request it receives is recorded alongside the request data above. None of
           those addresses contains your username. A request that has to name an account — checking
           whether a username is free, or the first step of signing in — sends the username in the
           body of the request instead, and once you’re signed in a request identifies you with a
-          session token.
+          session token. When something fails, the API also writes a line to that log saying what
+          went wrong, and some of those lines include our internal identifier for the account, or
+          the payment provider’s identifier for the subscription involved — not your username. We
+          read them to find the fault.
+        </p>
+        {/* THE THIRD ADDRESS, AND THE ONE THAT IS NOT A WORKER'S. Everything
+            above is about what a request to Cloudflare carries. The web app's
+            own page URL goes to AWS, and it is the single source of truth for
+            a search: a plain search word is a param value (docs/search.md,
+            _the query is the URL_). A page load asks the network first
+            (docs/offline-mode.md, _what answers a navigation_), so loading a
+            results URL hands the CDN those words as part of the request.
+
+            THE CLAIM IS "WE KEEP NO COPY", NEVER "IT DOES NOT LEAVE". The CDN
+            terminates the connection, so it sees the address — the same reason
+            the paragraphs above never say Cloudflare cannot see a request body.
+            The landing page's trade row said "no search you type leaves it" for
+            a stretch and was false of exactly this request; it now makes the
+            hold-claim instead (`app/page.tsx`, TRADE).
+
+            ⚠ "NO COPY" IS A SETTING OUTSIDE THIS REPO. It holds while request
+            logging stays off on the distributions and their buckets, which is
+            AWS configuration that no file here declares and no test can read.
+            docs/hosting.md, _request logging on the static hosts_, has what was
+            read back, when, and the two channels that read could not reach.
+
+            Scoped to the web app on purpose: on expo the "URL" is route params
+            that never become a request (docs/search.md). */}
+        <p>
+          The web app’s own address can carry something you typed. A search is kept in that address,
+          so that it survives a reload and the back button, and loading it sends the words you
+          searched for to <strong>Amazon Web Services</strong>, the provider that serves the app’s
+          files, as part of the request data above. We keep no copy of them, and the search itself
+          runs on your device.
         </p>
 
         <h3>What Apple and Google tell us</h3>
@@ -496,9 +559,17 @@ export default function Page() {
           receive only what their function requires.
         </p>
         <ul>
+          {/* The link-preview service is named here because this list is where
+              a reader checks who RECEIVES something, and with the opt-in on
+              Cloudflare is handed a saved address in readable form — the one
+              thing it sees that it does not also store. _How link previews are
+              fetched_ calls it "our extraction service", which is true and does
+              not say whose machines it runs on. Two sentences, not one with a
+              comma before "and": two predicates are a pair (docs/brand-assets.md,
+              _the mechanics_). */}
           <li>
-            <strong>Cloudflare</strong> — hosts the API and stores the encrypted files and the
-            account records.
+            <strong>Cloudflare</strong> — hosts the API and the link-preview service. It stores the
+            encrypted files and the account records.
           </li>
           <li>
             <strong>Amazon Web Services</strong> — serves this website and the web app as static

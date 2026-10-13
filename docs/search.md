@@ -28,6 +28,31 @@ name, which stays encrypted in the local store. That's what keeps plaintext name
 out of the URL, and so out of browser history and anything that captures the
 address bar.
 
+⚠ **A plain search word is the exception, and on web the URL is a request.** The
+word is typed by a person and it is a param value (`?text=…`), so wherever the
+page URL travels, it travels. In bracemark-web that includes the network: a page
+load asks the origin first ([offline-mode.md](./offline-mode.md), _what answers a
+navigation_), so loading a results URL — refreshing the tab, or following an
+address someone kept — hands CloudFront the words as part of the request. The
+search still **runs** on the
+device; the words that drive it are **seen** off it. Two published sentences
+depend on keeping those apart, and nothing connects either to this file:
+
+- **/privacy, _Technical and security data_**, says so in as many words, and
+  says we keep no copy — which holds while request logging stays off on the
+  static hosts ([hosting.md](./hosting.md), _request logging on the static
+  hosts_).
+- **The landing page's trade row** (`apps/bracemark-site/src/app/page.tsx`,
+  `TRADE`) said "no search you type leaves it" until this was read against it.
+  "Runs on your device" and "we hold no index" are the claims that are true on
+  every platform; "does not leave your device" is true only on expo
+  ([below](#on-native-bracemark-expo)), so it is not a line for a surface
+  that describes the product.
+
+Moving the words out of the request line — a fragment instead of a query, say —
+would change what a server sees and is a design change to this section, not a
+copy fix.
+
 `parseLinkQuery` maps the URL onto the grammar. Each filterable field carries its
 relation in the param **name**:
 

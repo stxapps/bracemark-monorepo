@@ -450,6 +450,66 @@ can't be raised. It sits at roughly 8.5 KB, so a long new comment is a real budg
 question rather than a theoretical one; the test asserts the ceiling, so it fails in
 node rather than at `create-function`.
 
+### request logging on the static hosts
+
+⚠ **Off, published, and declared nowhere in this repo.** The four distributions
+and their four buckets are configured in AWS, not in a file here, so nothing —
+no lint rule, no type error, no test in either runner — can notice logging being
+switched on. Two things make that more than housekeeping:
+
+- **bracemark-web's page URL can carry words a person typed.** A search is the
+  URL ([search.md](./search.md), _the query is the URL_), and a page load goes to
+  the origin first, so CloudFront receives those words in a request line. It
+  **sees** them regardless; whether they are **written down** is this setting.
+- **/privacy says we keep no copy** — "we keep no separate copy of our own" of
+  the request data, and of those search words by name
+  (`apps/bracemark-site/src/app/privacy/page.tsx`, _Technical and security
+  data_). A CloudFront standard log delivered to a bucket of ours would be
+  exactly that copy, under a retention period we would then be choosing.
+
+Read back with the AWS CLI on 2026-10-13, both tiers:
+
+| what                                                        | all four                          |
+| ----------------------------------------------------------- | --------------------------------- |
+| distribution `Logging.Enabled` (standard logging to S3)     | `false`, no bucket                |
+| real-time log configs (account-wide list, and per behavior) | none                              |
+| WAF web ACL (its own request log)                           | none attached                     |
+| Lambda@Edge associations                                    | none                              |
+| the viewer-request function, `LIVE` stage                   | byte-identical to the repo's file |
+| bucket server access logging                                | not configured                    |
+
+The function matters because a CloudFront Function's `console.log` is its own
+log channel, to CloudWatch, and `rewrite-url.js` reads the query string to
+rebuild a redirect's `Location`. It logs nothing, and the deployed copy is the
+tracked one. Both bracemark-web distributions use the managed
+`CachingOptimized` cache policy with no origin request policy, which forwards no
+query string to S3, so the words stop at the edge either way.
+
+**Two channels that read could not reach** — the identity it ran under was
+refused the CloudWatch Logs and CloudTrail read actions it tried:
+
+- **Standard logging delivered through CloudWatch Logs** — the newer of
+  CloudFront's two standard-logging mechanisms, set up as a _delivery_ rather
+  than on the distribution, so `get-distribution-config` does not show it.
+  `aws logs describe-delivery-sources --region us-east-1` lists them; an empty
+  list is the answer wanted.
+- **CloudTrail data events on the buckets.** These would record object reads by
+  key, not a viewer's query string, so they bear on the first bullet less than
+  the gap above does.
+
+To repeat the read after any change in the AWS console:
+
+```sh
+aws cloudfront get-distribution-config --id <id> \
+  --query 'DistributionConfig.{log:Logging,waf:WebACLId,rt:DefaultCacheBehavior.RealtimeLogConfigArn}'
+aws cloudfront list-realtime-log-configs
+aws s3api get-bucket-logging --bucket <bucket>   # prints nothing when off
+```
+
+**Turning any of it on is a /privacy change first.** If a fault ever needs
+access logs, the page says so before the setting moves, and the search words in
+the request line are the reason the order matters.
+
 ### `/.well-known/security.txt`
 
 RFC 9116, served from the site only, and the first URL a security researcher

@@ -416,10 +416,21 @@ const LIBRARY: [string, string][] = [
 // reason its own note gives. Insert by that rule, not by severity alone.
 const TRADE: { aspect: string; hosted: string; ours: string }[] = [
   {
+    // "and no search you type leaves it" closed this row for a stretch, and it is
+    // false of the web app: a committed search IS the page URL (docs/search.md,
+    // _the query is the URL_) and a page load asks the network first
+    // (docs/offline-mode.md, _what answers a navigation_), so loading a results
+    // URL hands the CDN the words as part of the request. That was a claim
+    // about what is SEEN, which docs/brand-assets.md (_terminology_) bars
+    // beside what we HOLD. The clause that replaced it is the hold-claim
+    // /security already makes ("no index over your library at our end"), and it
+    // answers the left column directly — their search needs a readable index,
+    // ours has none to offer. /privacy, _Technical and security data_, says what
+    // the address carries and to whom.
     aspect: 'Search',
     hosted:
       'Runs on their servers, over your titles and addresses in readable form. That is what makes it possible.',
-    ours: `Runs on your device, across titles, addresses, and hosts — every link, on every plan, and no search you type leaves it. Searching by field, or across several lists and tags at once, is the ${PLAN_LABELS.plus} editor.`,
+    ours: `Runs on your device, across titles, addresses, and hosts — every link, on every plan, and our servers hold no index of any of it. Searching by field, or across several lists and tags at once, is the ${PLAN_LABELS.plus} editor.`,
   },
   {
     aspect: 'Previews',

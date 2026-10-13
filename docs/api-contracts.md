@@ -220,6 +220,26 @@ that sentence up, and only one of them is a test:
   a secret, on their release schedule — a reason the one secret-in-a-query
   endpoint is tolerable, never a reason to add a second.
 
+**What that rule buys is "not written to a log", never "not seen".** Cloudflare
+terminates TLS, so it reads a POST body in transit exactly as it reads a query
+string; moving the username changed where it is recorded, not who handles it.
+/privacy is written to the narrower of the two on purpose — it says where **we**
+put the username and that no logged address contains it, and stops short of "a
+body is not logged", which is Cloudflare's behaviour rather than ours. Two
+things beside the rule that the same page now states:
+
+- **The log also holds the lines we write.** `console.*` output is stored with
+  the invocation, and some error lines interpolate a user id or a provider's
+  purchase id (`services/iap.ts`, `services/account.ts`). Those are ids we or a
+  provider mint, so the rule above is not broken by them; the page says they
+  exist because "we do not join it to your account" would otherwise be read as
+  covering them. A new log line that interpolates something a person chose is
+  the same leak as a query param, by a door this section's spec cannot see.
+- **The other URL is the web app's own**, which goes to CloudFront rather than
+  to a Worker and can carry a search word
+  ([search.md](./search.md), _the query is the URL_;
+  [hosting.md](./hosting.md), _request logging on the static hosts_).
+
 **The fourth was bracemark-extractor's image proxy**, the last GET that carried
 something a person saved: `GET /v1/image?url=…`, on the argument that an `<img>`
 can issue nothing else, and tolerated because that Worker runs with
