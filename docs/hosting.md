@@ -693,7 +693,9 @@ from the gitignored root `.env.local` the script parses in its preflight
 committed. `--distribution-id` overrides it for one run; `--dry-run`,
 `--skip-build` and
 `--no-invalidate` are there for the obvious reasons, and a production run
-prompts for the bucket name unless `--yes` is passed.
+prompts for the bucket name unless `--yes` is passed. It also records the commit
+it shipped and refuses uncommitted work on production — `--allow-dirty`, and
+_[which commit is live](#which-commit-is-live--deploy-tags)_ below.
 
 **It builds rather than uploading whatever is in `out/`, and then verifies the
 tier.** This is the enforcement half of _built once per tier, never promoted_
@@ -820,7 +822,10 @@ It resolves the tier's credential, proves that credential points at the tier it
 claims to, compiles, applies the D1 migrations remotely, deploys, and then
 health-checks the custom domain. `--dry-run`, `--skip-migrate`, `--no-deploy`,
 `--no-smoke`, `--allow-todo` and `--yes` are there for the obvious reasons, and a
-production run prompts for the Worker name unless `--yes` is passed.
+production run prompts for the Worker name unless `--yes` is passed. Like the
+static deploy it records the commit it shipped and refuses uncommitted work on
+production — `--allow-dirty`, and _[which commit is live](#which-commit-is-live--deploy-tags)_
+below.
 
 **There is no per-tier artifact here, and that is the one way it differs from
 the static deploy.** A Worker bundle bakes nothing: config is read at runtime
@@ -903,6 +908,75 @@ to bracemark-api alone (the extractor has none: v1 is anonymous, with no session
 and no key), and the tiers are already separated by account — so it would buy no
 reuse while adding a `store_id` to this public config and a dependency on a
 product still in open beta.
+
+### which commit is live — deploy tags
+
+The four deployed apps carry no version number
+([architecture.md](./architecture.md#project-versions--000-unless-a-store-reads-it),
+_project versions_), so "which commit is live, and what was live before it" is
+answered by the deploy scripts instead, in `tools/scripts/deploy-commit.sh`,
+which both source.
+
+**Every successful deploy tags the commit it shipped:**
+
+```
+deploy/<app>/<tier>/<utc time>      deploy/web/production/2026-10-13T091500Z
+```
+
+```bash
+git tag -l 'deploy/web/production/*'              # every production deploy of web
+git diff <tag> HEAD -- apps packages              # what is not out yet
+```
+
+The tag is created when the deploy becomes real — after the S3 syncs, after
+`wrangler deploy` returns — not at the end of the script, because a failed
+invalidation or health check leaves the new code live all the same. It is
+lightweight and **local**: nothing pushes it, and a second clone sees it only
+once it has been pushed and fetched (`git push origin <tag>`; the script prints
+the line).
+
+**A deploy builds the working tree, not `HEAD`**, so the tag is only true when
+those are the same thing. Uncommitted or untracked changes anywhere in the repo
+are **fatal on production and a warning on staging** — the same split as the
+`TODO:` check above, for the same reason. A dirty deploy that goes ahead (staging,
+or production with `--allow-dirty`) is stamped `<sha>-dirty` and is **not
+tagged**. Ignored files are outside the check, which is its one limit: the
+per-tier env files are ignored and are inputs too.
+
+**Because the tag is local, the deployed thing can also be asked directly:**
+
+| app                       | where                              | read with                             |
+| ------------------------- | ---------------------------------- | ------------------------------------- |
+| bracemark-web, -site      | `/deploy.json` in the bucket       | `curl https://<host>/deploy.json`     |
+| bracemark-api, -extractor | the Worker version's tag + message | `wrangler versions list --env <tier>` |
+
+`/deploy.json` is `{ commit, dirty, deployedAt, tag }`. It is written by the
+script straight to the bucket at **deploy** time and is deliberately not a field
+of the build — not of bracemark-web's `/build.json`, say. `nx build` is cached
+and `--skip-build` exists, so a commit baked in at build time names the commit of
+the _build_, which need not be the one being deployed; and declaring the commit a
+build input to fix that would mint a new build id — hence a service worker
+update and an update pill — for every deploy that changed nothing in the app
+([offline-mode.md](./offline-mode.md), _which build is this page_). The
+documents pass of the sync excludes `deploy.json` so that `--delete` does not
+remove the previous copy a moment before it is replaced.
+
+It is the **operator's record, not a claim**. A self-reported sha proves nothing
+about the bytes served beside it, so it does not move the boundary in
+[brand-assets.md](./brand-assets.md), _the source — what we may claim_: still
+"see for yourself what we do", never "verify what you are running".
+
+**Rolling back.**
+
+- **A static app:** check out the previous `deploy/<app>/<tier>/…` tag, `npm ci`,
+  and run the same deploy command. It is a rebuild, so the result is a new build
+  id and a new tag pointing at the old commit — which is the truth.
+- **A Worker:** `wrangler rollback <version-id> --env <tier>` puts a previous
+  version back in seconds, no rebuild; find the id by its commit in
+  `wrangler versions list`. It does **not** undo a D1 migration — those are
+  additive by rule, which is precisely what leaves the older code safe against
+  the newer schema. A rollback done this way creates no tag: tag the commit by
+  hand if the history should show it.
 
 ### cors & frontend↔backend wiring
 

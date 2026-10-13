@@ -555,6 +555,42 @@ catches ones that are **supposed** to be and aren't. Neither can see import
 `@noble/hashes` does) still loses if it evaluates first, which is why
 `polyfills.ts` is the first import of both native entries.
 
+### project versions — `0.0.0` unless a store reads it
+
+**A `version` exists only where something reads it and something forces it to
+move.** That is true in exactly two places, and every other `package.json` in
+the workspace says `0.0.0` and is never bumped.
+
+| where                                   | value   | read by                                                            |
+| --------------------------------------- | ------- | ------------------------------------------------------------------ |
+| `apps/bracemark-expo/app.config.ts`     | real    | both stores, the iOS share extension, Settings → About             |
+| `apps/bracemark-extension/package.json` | real    | wxt copies it into `manifest.json`; the stores, the options page   |
+| `apps/bracemark-expo/package.json`      | `0.0.0` | nothing — a number here would be a second opinion on the one above |
+| bracemark-web, -site, -api, -extractor  | `0.0.0` | nothing                                                            |
+| root, every `packages/*`, `e2e`         | `0.0.0` | nothing — all private, consumed as `"*"`                           |
+
+`0.0.0` rather than the `0.0.1` the Nx generators write, because it cannot be
+mistaken for a release and so does not invite a `0.0.2`. **A freshly generated
+project arrives at `0.0.1` — set it to `0.0.0`** in the same edit that fixes its
+sibling ranges to `"*"` (_dependency rules_, above). Nothing fails if you don't;
+it is simply the one manifest that then looks versioned.
+
+The two real ones move because a store refuses an upload that reuses a number —
+the Chrome Web Store and AMO for the browser extension, App Store Connect and
+Play for the app, whose `ios.buildNumber` and `android.versionCode` move
+separately from its `version` ([expo-build.md](./expo-build.md), _versions — one
+key, three consumers_). The two do not track each other: different stores,
+different cadences.
+
+**The four deployed apps are unversioned on purpose.** Nobody is ever "on" an old
+bracemark-web — every visitor gets the last deploy — so a number there would have
+no reader and no reason to move, and would be wrong from the second deploy on.
+What a deploy needs recorded is the **commit**, per app and per tier, and the
+deploy scripts record it themselves: [hosting.md](./hosting.md#which-commit-is-live--deploy-tags),
+_which commit is live_. The things on the server side that genuinely are versions
+— an API contract, a schema, a backup format — are numbered where they live, not
+in a manifest.
+
 ### dependency versions
 
 Where the previous section governs _what_ a project may import, this one governs
@@ -598,10 +634,11 @@ Hence: **a version is chosen in exactly one place, and everyone else defers.**
   `bracemark-api` and `bracemark-extractor` imported `shared`, and `bracemark-web`
   imported `react` and `web-react`, undeclared, for a long stretch. Re-check with
   a scan of `from '@stxapps/…'` against each manifest; there is no rule for it.
-  Note that `npm install <pkg> --workspace <app>` writes `^0.0.1`, NOT `*`: every
-  package here is version `0.0.1`, and a caret on a `0.0.x` version pins to that
-  exact patch, so the first version bump would send npm to the registry looking
-  for a private package. Fix the line to `"*"` after running it.
+  Note that `npm install <pkg> --workspace <app>` writes `^0.0.0`, NOT `*`: every
+  package here is version `0.0.0` (_project versions_, below), and a caret on a
+  `0.0.x` version pins to that exact patch, so a version that ever moved would
+  send npm to the registry looking for a private package. Fix the line to `"*"`
+  after running it.
 - **`react` is pinned _exactly_, not with a caret** — `react`, `react-dom`, and
   `react-test-renderer` are all `19.1.0`, the version `expo/bundledNativeModules.json`
   names for SDK 54. React Native ships its **own** copy of the renderer built for one

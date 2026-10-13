@@ -18,7 +18,7 @@
 # WHY THIS SCRIPT EXISTS RATHER THAN `nx deploy`
 #
 # `wrangler deploy --env <tier>` is one command and the Nx targets already wrap
-# it. What it does not do is any of the four things that make a deploy safe here:
+# it. What it does not do is any of the five things that make a deploy safe here:
 #
 #   1. Resolve THIS TIER'S API token, and only this tier's. Each tier is its own
 #      Cloudflare account (docs/hosting.md, _why staging is a separate
@@ -37,9 +37,12 @@
 #   4. Prove the Worker came up. A Worker deploy is instant and returns success
 #      the moment the upload lands; the health check is the only thing that says
 #      the thing now answering that hostname is the thing you just built.
+#   5. Record WHICH COMMIT shipped — a local git tag, and the same commit on the
+#      Worker version itself — and refuse to ship uncommitted work to production
+#      (tools/scripts/deploy-commit.sh; docs/hosting.md, _which commit is live_).
 #
 # Requires: macOS (`security`, for the keychain) or a pre-exported
-# CLOUDFLARE_API_TOKEN, and this repo's own wrangler — never a global one.
+# CLOUDFLARE_API_TOKEN, git, and this repo's own wrangler — never a global one.
 
 set -euo pipefail
 
@@ -62,6 +65,8 @@ Options:
   --no-deploy           Apply migrations but don't deploy the Worker.
   --no-smoke            Skip the post-deploy /health check.
   --allow-todo          Deploy even though the config still holds TODO values.
+                        A warning on staging; required on production.
+  --allow-dirty         Deploy with uncommitted changes, untagged.
                         A warning on staging; required on production.
   --yes, -y             Don't prompt before a production deploy.
   -h, --help            Show this message.
@@ -105,6 +110,7 @@ SKIP_MIGRATE=false
 DEPLOY=true
 SMOKE=true
 ALLOW_TODO=false
+ALLOW_DIRTY=false
 ASSUME_YES=false
 
 while [ "$#" -gt 0 ]; do
@@ -114,6 +120,7 @@ while [ "$#" -gt 0 ]; do
     --no-deploy) DEPLOY=false ;;
     --no-smoke) SMOKE=false ;;
     --allow-todo) ALLOW_TODO=true ;;
+    --allow-dirty) ALLOW_DIRTY=true ;;
     --yes|-y) ASSUME_YES=true ;;
     -h|--help) usage; exit 0 ;;
     *) die "unknown option '$1'" ;;
@@ -154,6 +161,11 @@ fi
 [ -f "$APP_DIR/wrangler.jsonc" ] || die "missing $APP_DIR/wrangler.jsonc"
 
 step "Deploying $PROJECT → $WORKER ($HOST)"
+
+# Before the credential is asked for: nothing below can make a dirty production
+# deploy acceptable, and the keychain prompt should not be spent finding that out.
+. "$REPO_ROOT/tools/scripts/deploy-commit.sh"
+resolve_deploy_commit
 
 # --- the credential --------------------------------------------------------
 #
@@ -398,7 +410,21 @@ step "Deploying $WORKER"
 # provisions the custom domain: the DNS record and its certificate, in that
 # tier's zone. That is the one part of this script that touches DNS, and it needs
 # the zone to be in the same account as the Worker.
-(cd "$APP_DIR" && "$WRANGLER" deploy --env "$TIER")
+#
+# --tag / --message put the commit on the Worker version itself, which is the
+# half of the record that does not depend on this clone: `wrangler versions list
+# --env <tier>` shows them beside every version id, and `wrangler rollback
+# <version-id>` is how a bad deploy is undone — in seconds, without a rebuild.
+# What a rollback does NOT undo is a D1 migration; those are additive by rule,
+# which is exactly what makes the older code safe against the newer schema.
+name_deploy
+if [ "$DEPLOY_DIRTY" = true ]; then
+  DEPLOY_MESSAGE="$DEPLOY_TAG (untagged: dirty tree)"
+else
+  DEPLOY_MESSAGE="$DEPLOY_TAG"
+fi
+(cd "$APP_DIR" && "$WRANGLER" deploy --env "$TIER" --tag "$DEPLOY_STAMP" --message "$DEPLOY_MESSAGE")
+tag_deploy
 
 # --- smoke -----------------------------------------------------------------
 #

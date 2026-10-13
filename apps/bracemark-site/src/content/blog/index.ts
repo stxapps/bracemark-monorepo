@@ -16,8 +16,7 @@ export const BLOG_POSTS: BlogPost[] = [
     title: 'Introducing Bracemark',
     description:
       'Bracemark’s first release lets you save links across devices. We explain how encrypted sync works and what it costs.',
-    // TODO(launch): Replace this provisional timestamp with the actual publication date and time.
-    publishedAt: '2026-09-25T00:00:00Z',
+    publishedAt: '2026-10-13T00:00:00Z',
   },
 ];
 

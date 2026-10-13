@@ -25,7 +25,12 @@
 # verifies the tier afterwards regardless of who built it (see `verify_tier`),
 # which is also what makes `--skip-build` safe.
 #
-# Requires: aws-cli v2, and this tier's AWS credentials.
+# It also records WHICH COMMIT it shipped — a local git tag, and `/deploy.json`
+# in the bucket — and refuses to ship uncommitted work to production, because a
+# tag on a commit the build did not come from is worse than no tag
+# (tools/scripts/deploy-commit.sh; docs/hosting.md, _which commit is live_).
+#
+# Requires: aws-cli v2, git, and this tier's AWS credentials.
 
 set -euo pipefail
 
@@ -62,6 +67,8 @@ Options:
   --no-wait             Create the invalidation but don't wait for it to finish.
                         Also skips the check of the deployed service worker.
   --distribution-id ID  Override the distribution id for this run.
+  --allow-dirty         Deploy with uncommitted changes, untagged.
+                        A warning on staging; required on production.
   --yes, -y             Don't prompt before a production deploy.
   -h, --help            Show this message.
 
@@ -72,6 +79,7 @@ USAGE
 }
 
 die() { printf '\033[31merror:\033[0m %s\n' "$*" >&2; exit 1; }
+warn() { printf '\033[33mwarning:\033[0m %s\n' "$*" >&2; }
 step() { printf '\n\033[1m==>\033[0m %s\n' "$*"; }
 note() { printf '    %s\n' "$*"; }
 
@@ -97,6 +105,7 @@ SKIP_BUILD=false
 DRY_RUN=false
 INVALIDATE=true
 WAIT_FOR_INVALIDATION=true
+ALLOW_DIRTY=false
 ASSUME_YES=false
 DISTRIBUTION_ID=""
 
@@ -107,6 +116,7 @@ while [ "$#" -gt 0 ]; do
     --no-invalidate) INVALIDATE=false ;;
     --no-wait) WAIT_FOR_INVALIDATION=false ;;
     --distribution-id) shift; [ "$#" -gt 0 ] || die "--distribution-id needs a value"; DISTRIBUTION_ID="$1" ;;
+    --allow-dirty) ALLOW_DIRTY=true ;;
     --yes|-y) ASSUME_YES=true ;;
     -h|--help) usage; exit 0 ;;
     *) die "unknown option '$1'" ;;
@@ -166,6 +176,11 @@ command -v aws >/dev/null 2>&1 || die "aws cli not found — https://aws.amazon.
 [ -f "$ENV_FILE" ] || die "missing $ENV_FILE"
 
 step "Deploying bracemark-$APP → $S3_URI ($TIER)"
+
+# Before any credential is asked for: nothing below can make a dirty production
+# deploy acceptable, so it is the cheapest thing to fail on.
+. "$REPO_ROOT/tools/scripts/deploy-commit.sh"
+resolve_deploy_commit
 
 if ! CALLER="$(aws sts get-caller-identity --query 'Account' --output text 2>/dev/null)"; then
   die "no usable AWS credentials (check AWS_PROFILE / aws configure)"
@@ -368,8 +383,13 @@ MEDIA=(
 # The inverse of the two passes above: HTML, the `.txt` RSC payloads, sw.js,
 # manifest.json, robots.txt, sitemap.xml — everything whose content changes
 # under a stable name.
+#
+# `deploy.json` is excluded because it is not in out/ at all: `record_deploy`
+# below writes it straight to the bucket, and without the exclusion this pass's
+# --delete would remove the previous deploy's copy a moment before it is replaced.
 DOCUMENTS=(
   --exclude "_next/*"
+  --exclude "deploy.json"
   --exclude "*.png" --exclude "*.jpg" --exclude "*.jpeg" --exclude "*.gif"
   --exclude "*.svg" --exclude "*.webp" --exclude "*.avif" --exclude "*.ico"
   --exclude "*.mp4"
@@ -411,6 +431,46 @@ if [ "$APP" = "site" ]; then
     --content-type "application/rss+xml; charset=utf-8" \
     --cache-control "$CACHE_REVALIDATE"
 fi
+
+# --- record ----------------------------------------------------------------
+#
+# The bucket now holds this build, so this is the moment "which commit is live"
+# changes — before the invalidation, not after it: a failed invalidation or a
+# failed worker check below leaves the bucket updated all the same.
+#
+# Recorded twice, because the two answer different questions. The TAG is the
+# history, and lives in this clone until it is pushed. `/deploy.json` is the
+# deployed site's own answer, readable from anywhere with a `curl`.
+#
+# It is a deploy-time file rather than a field in the build (bracemark-web's
+# `/build.json`, say), deliberately. `nx build` is cached and `--skip-build`
+# exists, so a commit baked in at build time names the commit of the BUILD, which
+# need not be this one — and forcing a rebuild per commit to fix that would mint
+# a new build id, and with it a service worker update and an update pill, for
+# every deploy that changed nothing in the app (docs/offline-mode.md, _which
+# build is this page_). Written straight to the bucket for the same reason: out/
+# is the build target's cached output and stays exactly what the build produced.
+#
+# It is the operator's record, NOT a claim to anyone else: a self-reported sha
+# proves nothing about the bytes beside it (docs/brand-assets.md, _the source —
+# what we may claim_).
+record_deploy() {
+  local tag_field=""
+  name_deploy
+  step "Recording the deploy"
+  tag_deploy
+  [ "$DEPLOY_DIRTY" = true ] || tag_field="$(printf ',"tag":"%s"' "$DEPLOY_TAG")"
+  printf '{"commit":"%s","dirty":%s,"deployedAt":"%s"%s}\n' \
+    "$DEPLOY_COMMIT" "$DEPLOY_DIRTY" "$DEPLOY_AT" "$tag_field" \
+    | aws s3 cp - "$S3_URI/deploy.json" --no-progress \
+        --content-type "application/json" \
+        --cache-control "$CACHE_REVALIDATE" \
+    || die "the bucket IS updated, but /deploy.json still names the previous deploy.
+       Re-run the deploy to correct it."
+  note "wrote $S3_URI/deploy.json"
+}
+
+if [ "$DRY_RUN" = false ]; then record_deploy; fi
 
 # --- invalidate ------------------------------------------------------------
 

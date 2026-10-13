@@ -25,7 +25,7 @@
 // artifact whose user can be on a build from months ago (and a store reviewer
 // will ask which), while this app is a static export behind a service worker —
 // every visitor is on whatever the last deploy pushed. A number here would have
-// to be invented (`package.json` says 0.0.1) to answer a question nobody on this
+// to be invented (`package.json` says 0.0.0) to answer a question nobody on this
 // platform has.
 //
 // A server component: static links, no hooks, nothing to hydrate. The copyright
