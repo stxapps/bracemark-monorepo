@@ -57,7 +57,7 @@ const config: ExpoConfig = {
     },
     edgeToEdgeEnabled: true,
     package: 'com.bracemark.app',
-    versionCode: 1,
+    versionCode: 2,
     // The local store holds decrypted data. The manifest-policy plugin also
     // excludes device transfer, which allowBackup alone does not always stop.
     allowBackup: false,
