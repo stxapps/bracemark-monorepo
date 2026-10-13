@@ -218,7 +218,7 @@ export function ExtractionSection() {
       {serverExtraction && !enabled ? (
         <SettingsNotice tone="pending">
           Server previews are on but currently unavailable — they resume once you’re signed in and
-          the server is reachable.
+          the preview service is reachable.
         </SettingsNotice>
       ) : enabled ? (
         <div className="flex flex-col gap-4">
@@ -291,7 +291,8 @@ export function ExtractionSection() {
               >
                 <span id="extract-all-confirm" className="text-sm">
                   Generate previews for all {pendingCount} pending link
-                  {pendingCount === 1 ? '' : 's'}? This sends a request per link to the server.
+                  {pendingCount === 1 ? '' : 's'}? This sends every pending link’s address to the
+                  preview service.
                 </span>
                 <div className="flex gap-2">
                   <Button onClick={startExtractAll}>Confirm</Button>

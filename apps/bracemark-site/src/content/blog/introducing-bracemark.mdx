@@ -8,9 +8,9 @@ In the web and mobile apps, you can browse and search the links already on that 
 
 ## Why we made each link a file
 
-We made each link, list, and tag its own encrypted file. Edits to different links can sync independently. Your device encrypts the files before upload. Our account service coordinates sync, and storage holds the ciphertext. Neither has a key to read your saved links. The account service still holds the details needed to sign you in and run sync, including your username and sessions.
+We made each link, list, and tag its own encrypted file. Edits to different links can sync independently. Your device encrypts the files before upload. Our API — the service behind sign-in, sync, and billing — coordinates sync, and storage holds the ciphertext. Neither has a key to read your saved links. The API still holds the details needed to sign you in and run sync, including your username and sessions.
 
-That choice has a cost when two devices edit the same link before either sees the other change. The later committed edit wins. We have no readable earlier version on our server to merge or restore. [Sync and devices](/docs/sync-and-devices) explains that case in detail.
+That choice has a cost when two devices edit the same link before either sees the other change. The later committed edit wins. We have no readable earlier version on our servers to merge or restore. [Sync and devices](/docs/sync-and-devices) explains that case in detail.
 
 Page previews have a separate boundary. The mobile apps fetch them on the device. If you choose server previews in the web app, our separate preview service receives a link’s address so it can fetch the page’s title or image. The saved link still syncs as encrypted data. [Security](/security) and [link previews](/docs/link-previews) explain both paths.
 

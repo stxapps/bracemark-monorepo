@@ -309,6 +309,14 @@ export const FAQ_GROUPS: FaqGroup[] = [
         // privacy claims were rewritten to — but "the full inventory is over
         // there" is a weaker promise when the list in front of it is visibly
         // short of a field the reader has already seen elsewhere on the site.
+        //
+        // THE QUESTION SAYS "SEE" AND THE ANSWER SAYS "KEPT". The question is the
+        // reader's word and stays. The answer used to close on "Not one title,
+        // address, tag, or note", which as a reply to "see" is false whenever
+        // server previews are on: that service is handed an address in the clear
+        // (the `vs-others` answer above says so). So the negative is about what
+        // is KEPT, and the one thing that is seen and not kept is named beside it
+        // (docs/brand-assets.md, _terminology_).
         id: 'what-we-see',
         q: 'What can your servers actually see?',
         a: (
@@ -316,8 +324,10 @@ export const FAQ_GROUPS: FaqGroup[] = [
             The username you chose, a public key that lets us check a sign-in signature, a session
             record for each device you are signed in on, and a set of encrypted files — each with a
             path, a size, and the time it last changed. If you subscribe, a subscription record too.
-            Not one title, address, tag, or note, and no search index over any of it. The full
-            inventory is in the <PageLink href="/privacy">privacy policy</PageLink>.
+            Not one title, address, tag, or note is kept in readable form, and there is no search
+            index over any of it. The opt-in preview service is handed an address to fetch and
+            stores none. The full inventory is in the{' '}
+            <PageLink href="/privacy">privacy policy</PageLink>.
           </>
         ),
       },
