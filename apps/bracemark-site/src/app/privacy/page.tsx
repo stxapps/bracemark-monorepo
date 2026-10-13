@@ -398,7 +398,7 @@ export default function Page() {
             logging stays off on the distributions and their buckets, which is
             AWS configuration that no file here declares and no test can read.
             docs/hosting.md, _request logging on the static hosts_, has what was
-            read back, when, and the two channels that read could not reach.
+            read back, when, and the commands that repeat it.
 
             Scoped to the web app on purpose: on expo the "URL" is route params
             that never become a request (docs/search.md). */}

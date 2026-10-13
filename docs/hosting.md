@@ -478,24 +478,28 @@ Read back with the AWS CLI on 2026-10-13, both tiers:
 | the viewer-request function, `LIVE` stage                   | byte-identical to the repo's file |
 | bucket server access logging                                | not configured                    |
 
+And three account-wide reads, which are not per distribution:
+
+| what                                                          | the account |
+| ------------------------------------------------------------- | ----------- |
+| CloudWatch log deliveries — sources, deliveries, destinations | none        |
+| a `/aws/cloudfront/function/…` log group                      | none exists |
+| CloudTrail trails, every region                               | none        |
+
 The function matters because a CloudFront Function's `console.log` is its own
 log channel, to CloudWatch, and `rewrite-url.js` reads the query string to
-rebuild a redirect's `Location`. It logs nothing, and the deployed copy is the
-tracked one. Both bracemark-web distributions use the managed
-`CachingOptimized` cache policy with no origin request policy, which forwards no
-query string to S3, so the words stop at the edge either way.
+rebuild a redirect's `Location`. It logs nothing, the deployed copy is the
+tracked one, and the log group such a line would create has never been made.
+Both bracemark-web distributions use the managed `CachingOptimized` cache policy
+with no origin request policy, which forwards no query string to S3, so the
+words stop at the edge either way.
 
-**Two channels that read could not reach** — the identity it ran under was
-refused the CloudWatch Logs and CloudTrail read actions it tried:
-
-- **Standard logging delivered through CloudWatch Logs** — the newer of
-  CloudFront's two standard-logging mechanisms, set up as a _delivery_ rather
-  than on the distribution, so `get-distribution-config` does not show it.
-  `aws logs describe-delivery-sources --region us-east-1` lists them; an empty
-  list is the answer wanted.
-- **CloudTrail data events on the buckets.** These would record object reads by
-  key, not a viewer's query string, so they bear on the first bullet less than
-  the gap above does.
+**The deliveries row is the one a read of the distribution misses.** CloudFront
+has two standard-logging mechanisms, and the newer one is set up as a CloudWatch
+Logs _delivery_ rather than on the distribution, so `Logging.Enabled: false`
+says nothing about it. It is also the one a console walkthrough is likeliest to
+create. No trail means no CloudTrail data events on the buckets either — those
+would have recorded object reads by key, not a viewer's query string.
 
 To repeat the read after any change in the AWS console:
 
@@ -504,7 +508,14 @@ aws cloudfront get-distribution-config --id <id> \
   --query 'DistributionConfig.{log:Logging,waf:WebACLId,rt:DefaultCacheBehavior.RealtimeLogConfigArn}'
 aws cloudfront list-realtime-log-configs
 aws s3api get-bucket-logging --bucket <bucket>   # prints nothing when off
+aws logs describe-delivery-sources --region us-east-1
+aws logs describe-log-groups --region us-east-1 --query 'logGroups[].logGroupName'
+aws cloudtrail list-trails
 ```
+
+The last three need more than the deploy permissions: an identity holding only
+CloudFront and S3 access is refused them, and a refusal is not an empty list.
+`CloudWatchLogsReadOnlyAccess` and `AWSCloudTrail_ReadOnlyAccess` are enough.
 
 **Turning any of it on is a /privacy change first.** If a fault ever needs
 access logs, the page says so before the setting moves, and the search words in
