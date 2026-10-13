@@ -286,7 +286,7 @@ Files in `apps/bracemark-extension/` (all committed — every value is public):
 | ------------------ | ----------------------------------------------------------------------------- |
 | `.env.development` | `nx dev @stxapps/bracemark-extension`                                         |
 | `.env.production`  | `nx build @stxapps/bracemark-extension`                                       |
-| `.env.staging`     | `nx build:staging @stxapps/bracemark-extension` (and `build:firefox:staging`) |
+| `.env.staging`     | `nx build:staging @stxapps/bracemark-extension` (and `build:staging:firefox`) |
 
 Current var: `WXT_PUBLIC_API_URL` → the matching bracemark-api URL.
 
@@ -304,7 +304,7 @@ same `WXT_PUBLIC_API_URL`:
 
 Both throw if the var is unset, mirroring bracemark-web's missing-`NEXT_PUBLIC_API_URL`
 guard. The `staging` build is a plain `--mode staging` npm script + Nx target
-(`build:staging`, `build:firefox:staging`) — no Nx `envFile` needed.
+(`build:staging`, `build:staging:firefox`) — no Nx `envFile` needed.
 
 ### bracemark-expo — Expo / Metro
 

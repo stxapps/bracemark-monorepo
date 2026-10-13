@@ -10,16 +10,6 @@
       "platform:web"
     ],
     "targets": {
-      "build": {
-        "cache": true,
-        "inputs": [
-          "production",
-          "^production"
-        ],
-        "outputs": [
-          "{projectRoot}/.output/chrome-mv3"
-        ]
-      },
       "build:development": {
         "cache": true,
         "inputs": [
@@ -40,6 +30,26 @@
           "{projectRoot}/.output/chrome-mv3-staging"
         ]
       },
+      "build:staging:firefox": {
+        "cache": true,
+        "inputs": [
+          "production",
+          "^production"
+        ],
+        "outputs": [
+          "{projectRoot}/.output/firefox-mv3-staging"
+        ]
+      },
+      "build": {
+        "cache": true,
+        "inputs": [
+          "production",
+          "^production"
+        ],
+        "outputs": [
+          "{projectRoot}/.output/chrome-mv3"
+        ]
+      },
       "build:firefox": {
         "cache": true,
         "inputs": [
@@ -48,16 +58,6 @@
         ],
         "outputs": [
           "{projectRoot}/.output/firefox-mv3"
-        ]
-      },
-      "build:firefox:staging": {
-        "cache": true,
-        "inputs": [
-          "production",
-          "^production"
-        ],
-        "outputs": [
-          "{projectRoot}/.output/firefox-mv3-staging"
         ]
       },
       "zip": {
@@ -86,11 +86,11 @@
   "scripts": {
     "dev": "wxt",
     "dev:firefox": "wxt -b firefox",
-    "build": "wxt build",
     "build:development": "wxt build --mode development",
     "build:staging": "wxt build --mode staging",
+    "build:staging:firefox": "wxt build -b firefox --mode staging",
+    "build": "wxt build",
     "build:firefox": "wxt build -b firefox",
-    "build:firefox:staging": "wxt build -b firefox --mode staging",
     "zip": "wxt zip",
     "zip:firefox": "wxt zip -b firefox",
     "typecheck": "tsc --noEmit",
