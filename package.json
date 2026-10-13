@@ -45,6 +45,7 @@
     "e2e:build:ios:staging": "nx build-release:staging @stxapps/e2e --platform ios",
     "e2e:build:android:staging": "nx build-release:staging @stxapps/e2e --platform android",
     "e2e:web:staging": "nx e2e-web:staging @stxapps/e2e",
+    "e2e:web:headed:staging": "nx e2e-web:staging @stxapps/e2e --headed --slow-mo 250",
     "e2e:ios:staging": "nx e2e-mobile:staging @stxapps/e2e --platform ios",
     "e2e:android:staging": "nx e2e-mobile:staging @stxapps/e2e --platform android",
     "e2e:contract:ios:staging": "nx e2e-contract:staging @stxapps/e2e --platform ios",

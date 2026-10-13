@@ -2084,6 +2084,8 @@ browser Playwright launches; every web case runs in a persistent context that
 `runner/web.ts` turns the two flags into `E2E_HEADED` and `E2E_SLOW_MO`, and
 `launchApp` reads those. A headed run stayed headless before it did, and a bare
 `playwright test --headed` that skips the wrapper still does.
+`npm run e2e:web:headed:staging` is the same pair of flags on `e2e-web:staging`;
+it carries no `--workers 1` because staging already runs one worker.
 
 #### cases, suites and fixtures
 

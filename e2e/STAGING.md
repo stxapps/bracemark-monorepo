@@ -13,6 +13,8 @@ npm run e2e:web:staging -- --include-trait security
 npm run e2e:web:staging -- --case DATA-IMPORT-WEB-001
 # Discover the admitted cases without running them:
 npm run e2e:web:staging -- --list
+# Watch a case in a visible, paced browser window:
+npm run e2e:web:headed:staging -- --case DATA-IMPORT-WEB-001
 ```
 
 These are aliases for `npx nx e2e-web:staging @stxapps/e2e`. The app is
