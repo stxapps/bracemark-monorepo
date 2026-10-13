@@ -222,7 +222,7 @@ export function SignOutProvider({ children }: { children: React.ReactNode }) {
             {(syncing || waitOnly) && (
               // Decorative: the title above is the announcement.
               <LoaderCircle
-                className="size-4 animate-spin text-muted-foreground motion-reduce:animate-none"
+                className="size-4 animate-spin justify-self-center text-muted-foreground motion-reduce:animate-none"
                 aria-hidden="true"
               />
             )}
